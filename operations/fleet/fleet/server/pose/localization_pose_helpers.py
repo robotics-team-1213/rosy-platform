@@ -171,6 +171,9 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
                               anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
     """D-395 rev. 4 §5 follow-up (S1 R1): a LOCALIZED anchor's status carries what its lidar sees."""
     for rid, pose in anchors.items():
+        if svc._overhead_pose is not None and not service_logic.observer_pose_trustworthy(svc._overhead_pose(rid)):
+            svc._objects_seen.pop(rid, None)
+            continue
         frame = map_frame(states[rid])
         if frame is None:
             continue

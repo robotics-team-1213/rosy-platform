@@ -1315,3 +1315,20 @@ def test_spread_reads_cap_in_flight_and_start_each_robot_at_its_own_offset():
     offsets = {read_spread.offset(f"r{i}", 0.05) for i in range(6)}
     assert all(0 <= o < 0.05 for o in offsets) and len(offsets) > 1
     assert read_spread.offset("r0", 0.05) == read_spread.offset("r0", 0.05)
+
+
+def test_bridged_observer_exceeding_drift_or_turn_bounds_cannot_accuse_an_anchor():
+    from types import SimpleNamespace
+
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r1.see([seen_from(ON_A, R2_TRUE)])
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=25.0, dead_reckon_m=0.05) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=2.0, dead_reckon_m=0.40) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []

@@ -38,8 +38,7 @@ class BatteryPublisher(Node):
         )
 
         self.timer_period = 5.0
-        self.percentage_timer = self.create_timer(self.timer_period, self.percentage_callback)
-        self.voltage_timer = self.create_timer(self.timer_period, self.voltage_callback)
+        self.poll_timer = self.create_timer(self.timer_period, self._poll_callback)
         self._ensure_battery()
 
     def _ensure_battery(self):
@@ -79,6 +78,10 @@ class BatteryPublisher(Node):
                             self.timer_period * 2 ** (self._read_failures - 1))
                 self._retry_at = self._monotonic() + delay
             return None
+
+    def _poll_callback(self):
+        self.voltage_callback()
+        self.percentage_callback()
 
     # Fail-closed (sensor_adc pattern): a failed bus transaction publishes
     # nothing. CORE judges freshness by arrival; a zero would read as empty.

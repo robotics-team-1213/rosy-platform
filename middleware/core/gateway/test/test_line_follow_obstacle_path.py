@@ -222,6 +222,24 @@ def test_bridge_feeds_points_in_path_mode_and_distance_in_sector_mode():
     assert calls == [("body", 2), ("points", 2), ("distance", 0.15)]
 
 
+def test_bridge_skips_path_scan_build_when_line_follow_is_idle():
+    calls = []
+    sample = {"ranges": [0.15, 0.15], "angle_min": -0.01, "angle_max": 0.01,
+              "range_min": 0.05, "range_max": 12.0}
+    line = SimpleNamespace(
+        active=False, config=LineFollowConfig(obstacle_mode="path"),
+        wants_body_points=False, wants_return_scan=False, wants_crosswalk_scan=False,
+        observe_body_points=lambda *a, **k: calls.append("body"),
+        observe_scan_points=lambda *a, **k: calls.append("points"),
+        observe_clearance=lambda *a, **k: calls.append("distance"))
+    bridge_observation.front_clearance(SimpleNamespace(line_follow=line, loc_mission=None), sample, received_at=1.0)
+    assert calls == []
+    # D-559: Swarm trail follow reads line_follow.obstacle_gap while line_follow.active is False.
+    bridge_observation.front_clearance(
+        SimpleNamespace(line_follow=line, loc_mission=None, swarm=SimpleNamespace(active=True)), sample, received_at=1.1)
+    assert calls == ["body", "points"]
+
+
 def test_obstacle_config_is_validated_and_parsed():
     for bad in ({"obstacle_mode": "cone"}, {"obstacle_path_horizon_m": 0.25},
                 {"max_angular_follows_manual": "yes"}, {"obstacle_release_s": -0.1},

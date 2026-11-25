@@ -12,18 +12,33 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from core_common.protocol.localization import LocState
 from core_common.protocol.schemas import NavigationState, RobotMode
 from core_features.command.arbitration import Mode
+from core_features.docking.model import DockPhase
 from core_features.localization.assist import LocalizationAssist
 from core_features.localization.mission import LocalizationMission, MissionConfig
 
 SOURCE = "localization"
 
 
-def autonomy_halt(*, nav, line_follow, command, state, modes, swarm, docking) -> Callable[[], None]:
+def _in_local_bay_approach(docking) -> bool:
+    bay = getattr(docking, "_bay_phases", None)
+    return bool(
+        getattr(docking, "active", False)
+        and bay is not None
+        and bay.active()
+        and bay._has_reference()
+        and getattr(docking, "phase", None) in (DockPhase.ALIGNING, DockPhase.SETTLING)
+    )
+
+
+def autonomy_halt(*, nav, line_follow, command, state, modes, swarm, docking,
+                  should_cancel_docking: Optional[Callable[[], bool]] = None) -> Callable[[], None]:
     def halt() -> None:
         swarm.cancel(source=SOURCE, reason=SOURCE)
-        docking.cancel()
+        if should_cancel_docking is None or should_cancel_docking():
+            docking.cancel()
         if line_follow.active:
             state.set_line_follow(line_follow.stop())
             command.clear_navigation()
@@ -49,10 +64,17 @@ def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, comman
         if mission is not None:
             mission.localized()
 
+    def should_cancel_docking() -> bool:
+        if not _in_local_bay_approach(docking):
+            return True
+        st = assist.status()
+        return not (st is not None and st.state is LocState.SUSPECT and st.reason == "fit_drop")
+
     assist = LocalizationAssist(
         events, robot_id=robot_id, on_localized=on_localized,
         on_lost=autonomy_halt(nav=nav, line_follow=line_follow, command=command, state=state,
-                              modes=modes, swarm=swarm, docking=docking))
+                              modes=modes, swarm=swarm, docking=docking,
+                              should_cancel_docking=should_cancel_docking))
     state.set_localization_provider(assist.status)
     line_follow.bind_pose_request(assist.pose_requests.open, assist.pose_requests.clear)  # D-546 5
     assist.on_pose_answered = line_follow.resume_after_pose

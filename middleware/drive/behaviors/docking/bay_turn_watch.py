@@ -32,6 +32,8 @@ class BayTurnMixin:
         self._tw_flipped = False
         self._turn_bad_dir = 0.0                  # the sense this robot failed to turn in (learned for the process): the next dock tries the other first
         self._tw: Optional[dict] = None
+        self._turn_want = math.pi
+        self._turn_passed_pi = True
 
     def note_sample(self, sample, lag_s: float = 0.0) -> None:
         self._last_sample_at = self._h.now()
@@ -134,9 +136,12 @@ class BayTurnMixin:
         self._h._last_event = "turn flipped: %s did not move the body (odometry %.0f deg, LiDAR %.0f deg)" % (
             "cw" if self._turn_dir < 0 else "ccw", math.degrees(tw["lidar_odo"]), math.degrees(tw["lidar"]))
         self._turn_dir = -self._turn_dir
-        self._turn_target = pose[2] + self._turn_dir * (math.pi + lidar_done)
+        want = math.pi + lidar_done
+        self._turn_target = pose[2] + self._turn_dir * want
+        self._turn_want = want
+        self._turn_passed_pi = want <= math.pi
         self._stop()
-        self._tw_start(pose[2], now, want=math.pi + lidar_done)
+        self._tw_start(pose[2], now, want=want)
         return True
 
     def _tick_turning(self, now: float) -> None:
@@ -189,9 +194,14 @@ class BayTurnMixin:
                 h._fail("bay turn not verified by LiDAR after it stopped: stopped")
             return
         error = _wrap(self._turn_target - pose[2])
+        if error * self._turn_dir > 0.0 and abs(error) < math.pi - 0.3:
+            self._turn_passed_pi = True
         if error * self._turn_dir < 0.0:
-            if abs(error) > math.pi - 0.2:
-                error += self._turn_dir * 2.0 * math.pi  # start: near +-pi the wrap flips on noise, keep the sense
+            want = getattr(self, "_turn_want", math.pi)
+            passed = getattr(self, "_turn_passed_pi", True)
+            wrap_floor = (math.pi - 0.2) if passed else (math.tau - max(math.pi, want) - 0.2)
+            if abs(error) > wrap_floor:
+                error += self._turn_dir * 2.0 * math.pi  # start: near +-pi or want > pi unwrap cleanly
             elif abs(error) > h._cfg.bay_turn_overshoot_rad:
                 self._stop()                             # a long way back would swing the tray upstream
                 h._fail("bay turn overshot the target")

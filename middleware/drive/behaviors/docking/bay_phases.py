@@ -254,9 +254,8 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         ang = math.pi
         if bay_heading is not None:
             self._pitin = True
-            # pit-in: turn to the LiDAR bay heading 0 (rear to the bay), not a fixed 180 (b8xy: it stood 13.5 deg short of 180 and ended -13 deg); at most 180, the rest is
-            # left to the in-place heading align the strict pit-in entry window triggers
-            ang = min(math.pi, (-(self._turn_dir or 1.0) * bay_heading) % math.tau)
+            ang = min(math.pi + h._cfg.bay_junction_heading_rad, (-(self._turn_dir or 1.0) * bay_heading) % math.tau)
+        self._turn_want, self._turn_passed_pi = ang, ang <= math.pi
         self._turn_target = pose[2] + (self._turn_dir or 1.0) * ang
         self._tw_start(pose[2], now, want=ang)
         h._enter(DockPhase.TURNING)
@@ -331,8 +330,12 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if self._creep_from is None:
             h.executor.reset_odometry_mark()
             self._creep_from = 0.0
-        if abs(h.executor.travelled_m()) < cfg.bay_settle_creep_m:
-            block = self._forward_block(now, h._phase_since, cfg.bay_settle_creep_m)
+        creep_m = cfg.bay_settle_creep_m
+        rp = self._row_pose
+        if self._in_row and self._has_reference() and rp is not None and now - rp[3] <= cfg.bay_row_pose_fresh_s:
+            creep_m = max(0.0, min(creep_m, (cfg.bay_line_x_m - 0.02) - rp[0]))
+        if abs(h.executor.travelled_m()) < creep_m:
+            block = self._forward_block(now, h._phase_since, creep_m)
             if block is not None:
                 self._stop()
                 if block != "wait":

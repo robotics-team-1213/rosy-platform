@@ -559,3 +559,35 @@ def test_idle_keep_cache_reuses_when_still_and_invalidates_on_change(monkeypatch
     src = (Path(__file__).resolve().parents[1] / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._lane_keeper.reset()\n                    self._idle_keep_cache = None" in src
     assert "reuse_n = max(reuse_n, 2)" not in src
+
+
+def test_idle_keep_cache_ignores_wall_ahead_stamp_jitter_and_handles_same_stamp_still(monkeypatch):
+    import importlib
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    for pkg, names in (("sensor_msgs", ("CompressedImage", "Image", "LaserScan")),
+                       ("std_msgs", ("String", "UInt16MultiArray"))):
+        root_mod = ModuleType(pkg)
+        msg_mod = ModuleType(f"{pkg}.msg")
+        for name in names:
+            setattr(msg_mod, name, type(name, (), {}))
+        monkeypatch.setitem(sys.modules, pkg, root_mod)
+        monkeypatch.setitem(sys.modules, f"{pkg}.msg", msg_mod)
+    monkeypatch.delitem(sys.modules, "control.line_observer_helpers", raising=False)
+    helpers_mod = importlib.import_module("control.line_observer_helpers")
+
+    node = helpers_mod.LineObserverHelpersMixin()
+    node._odom_twist = (0.0, 0.0)
+    node._odom_stamp = 10.0
+    assert node._idle_keep_still(10.0, None) is True
+    node._drivable_steer = None
+    node._lane_guide = SimpleNamespace(generation=0)
+    node._ground_label = lambda: "SIM"
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    node._wall_ahead = (0.0, 10.0, None, None)
+    key1 = node._idle_keep_key(frame, 10.1, 1)
+    node._wall_ahead = (0.0, 10.2, None, None)
+    assert node._idle_keep_key(frame, 10.2, 1) == key1
+    node._wall_ahead = (0.5, 10.3, None, 0.25)
+    assert node._idle_keep_key(frame, 10.3, 1) != key1

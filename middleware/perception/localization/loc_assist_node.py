@@ -56,7 +56,7 @@ from .tf_buffer import RobotTransformBuffer
 PARAMETERS = [
     ('map_yaml', ''), ('lane_rules_file', ''), ('search_resolution', .02), ('wall_tolerance', .04),
     ('robot_radius', URDF_RADIUS), ('scan_stride', 4), ('candidate_minimum_fit', .9),
-    ('search_budget_s', 3.), ('retry_s', 5.), ('rereport_s', 2.), ('hold_s', 3.), ('minimum_fit', .85),
+    ('search_budget_s', 3.), ('retry_s', 5.), ('rereport_s', 2.), ('hold_s', 3.), ('minimum_fit', .85), ('drop_fit', .70), ('fit_drop_s', 2.5),
     # Scan silence the 3 s check tolerates: 1 s rides out executor stalls under load
     # (WSL, a loaded Pi) while a 10 Hz lidar still feeds ~10 fits per second.
     ('max_gap_s', 1.),
@@ -100,9 +100,10 @@ class LocAssistNode(Node):
             self.declare_parameter(name, value)
         ids = iter(range(1, 1 << 62))
         boot = time.strftime('%H%M%S')
-        self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'),
-                              retry_s=self.p('retry_s'), hold_s=self.p('hold_s'),
-                              min_fit=self.p('minimum_fit'), max_gap_s=self.p('max_gap_s'))
+        self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'), retry_s=self.p('retry_s'),
+                              hold_s=self.p('hold_s'), min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'),
+                              max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
+        self._last_settled_scan_s = -math.inf
         self.field = self.clear = self.scan = None
         self.generation = 0
         self.squares = self._squares()
@@ -191,6 +192,9 @@ class LocAssistNode(Node):
         machine = self.core.machine
         if self.field is None or (machine.check is None and not machine.autonomy_allowed):
             return
+        now = self.now()
+        if machine.check is None and machine.autonomy_allowed and self.core._is_settled(now) and 0.0 <= now - self._last_settled_scan_s < 0.5:
+            return
         # odom->sensor at the scan stamp, then AMCL's *latest* map->odom. AMCL stamps
         # map->odom transform_tolerance ahead (1.0 s in sim, 0.3 s on the device), so a
         # map lookup at the scan stamp returns the correction from ~1 s earlier: for that
@@ -207,7 +211,7 @@ class LocAssistNode(Node):
         ranges, angles = self.scan_arrays(msg)
         scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
         fit = scorer(sensor, ranges, angles)
-        now = self.now()
+        self._last_settled_scan_s = now
         self.publish(self.core.on_fit(now, fit))
         if self.core.objects_due(now):
             self.report_objects(now, msg, sensor)

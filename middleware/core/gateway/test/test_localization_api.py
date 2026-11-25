@@ -605,3 +605,36 @@ def test_pose_request_404_until_lane_return_asks_then_200_with_the_evidence(core
         {"request_id": body["request_id"], "accepted": True, "state": "LOCALIZED"}))
     assert client.get("/api/v1/localization/request", headers=OPERATOR).status_code == 404
     assert [e.type for e in _types(services)].count("localization.request_cleared") == 1
+
+
+def test_fit_drop_during_local_bay_approach_keeps_docking_alive_while_fleet_monitor_still_halts(core):
+    from types import SimpleNamespace
+    from core_common.protocol.schemas import DockState
+    from core_features.docking.manager import DockPhase
+
+    _client, services = core
+    services.localization.on_state(_state("LOCALIZED"))
+    cancels = []
+    services.docking._state = DockState.DOCKING
+    services.docking._phase = DockPhase.ALIGNING
+    services.docking._bay_phases = SimpleNamespace(active=lambda: True, _has_reference=lambda: True)
+    assert services.docking.active
+    services.docking.cancel = lambda reason="": cancels.append(reason)
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fit_drop"},
+        "pose": None, "stamp": 2.0,
+    }))
+    assert cancels == []
+    services.localization.on_state(_state("LOCALIZED"))
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fleet_monitor"},
+        "pose": None, "stamp": 3.0,
+    }))
+    assert len(cancels) == 1
+    services.localization.on_state(_state("LOCALIZED"))
+    services.docking._phase = DockPhase.STAGING
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fit_drop"},
+        "pose": None, "stamp": 4.0,
+    }))
+    assert len(cancels) == 2
