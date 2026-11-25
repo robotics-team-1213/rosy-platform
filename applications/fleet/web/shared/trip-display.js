@@ -136,6 +136,8 @@ export function startCheckText(check) {
 }
 
 export function tripErrorText(code, detail = {}) {
+  if (code === "TRIP_POSE_UNTRUSTED" && detail?.reason === "APPROVED_SLAM_POSE_REQUIRED")
+    return "Nav2 출발에 승인된 지도 결속과 최신 CORE SLAM 위치가 필요합니다";
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
   if (/HEADING_CONFLICT|START_HEADING_MISMATCH/.test(code || '') && detail?.heading_err_deg != null)
     return `${base} · ${startCheckText({...detail, code: 'heading'})}`;

@@ -245,6 +245,13 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         res = client.post("/api/fleet/robots/rosy_42/trip",
                           json={"to": "S3", "via": ["S4", "S5"], "repeat": True, "drive_mode": "nav2"},
                           headers={"Authorization": "Bearer op-tok"})
+        if binding_required:
+            assert res.status_code == 409, res.text
+            assert res.json()["detail"] == {
+                "code": "TRIP_POSE_UNTRUSTED", "detail": {"reason": "APPROVED_SLAM_POSE_REQUIRED"},
+            }
+            assert not robot.routes
+            return
         assert res.status_code == 200, res.text
         plan = res.json()
         assert plan["start_check"]["code"] is None
@@ -265,6 +272,74 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
                                 "convoy": {"leader": "rosy_45"}},
                           headers={"Authorization": "Bearer op-tok"})
         assert bad.status_code == 422
+
+
+def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path):
+    from datetime import datetime, timezone
+    from fleet.localization.map_binding import Fit
+
+    store = SiteMapStore(tmp_path / "site.sqlite")
+    store.import_if_empty(_south_loop_map(), source="test")
+    robot = RouteFakeRobot("rosy_42")
+    robot.power_health_value = fresh_power_health()
+    fit = Fit(math.pi / 2, .31, -.22, ())
+    native_x, native_y = fit.inverse((.17, -.48))
+
+    def read_core():
+        stamp = time.time() - .02
+        robot._state.update(
+            map_id="native-slam", map_grid_id="occupancy:0123456789ab", pose_frame="map",
+            localization={"state": "LOCALIZED", "pose_frame": "map"},
+            pose={"x": native_x, "y": native_y, "yaw": -fit.yaw},
+            odom_pose={"x": native_x, "y": native_y, "yaw": -fit.yaw, "stamp": stamp},
+            evidence={"pose": {"evidence": "fresh", "received_at": datetime.fromtimestamp(stamp, timezone.utc).isoformat()}},
+        )
+
+    read_core()
+    site = (store.active()[1].map_id, store.active()[0])
+    pairs = [{"site": list(p), "robot": list(fit.inverse(p))} for p in [(-1., -.5), (1., -.5), (.9, .45)]]
+    holdout = [{"site": [0., 0.], "robot": list(fit.inverse((0., 0.)))}]
+    binding = store.map_bindings.approve("rosy_42", robot._state, site, pairs, holdout, "bob")
+    console = FleetConsole([RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t")], [robot])
+    users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    tasks = FleetTaskStore(tmp_path / "tasks.sqlite")
+    app = create_app(console, site_maps=store, site_users=users,
+                     task_service=FleetTaskService(tasks, robot_ids=["rosy_42"]))
+    runner = app.state.trip_runner
+    read_legacy_pose = []
+
+    async def wrong_camera_pose(_robot_id):
+        read_legacy_pose.append(True)
+        return MapPose(.75, -.21, math.pi, "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
+
+    runner.map_pose = wrong_camera_pose
+    headers = {"Authorization": "Bearer op-tok"}
+    body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
+    with TestClient(app) as client:
+        tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
+        assert not runner.human_hold_fn()
+        assert not runner.config.map_binding_required
+        plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+        assert plan.status_code == 200, plan.text
+        assert plan.json()["nav2_binding_id"] == binding["binding_id"]
+        plan_id = plan.json()["plan_id"]
+        read_core()
+        started = client.post(f"/api/fleet/trips/{plan_id}/start", headers=headers)
+        assert started.status_code == 200, started.text
+        live = runner._live["rosy_42"]
+        pose = client.portal.call(runner._progress_pose, live, "rosy_42")
+        assert pose.source == "approved_slam" and (pose.x, pose.y) == pytest.approx((.17, -.48))
+        client.portal.call(runner.tick)
+        assert robot.routes
+        first = robot.routes[0][0][0]
+        assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
+        assert not read_legacy_pose
+
+        store.map_bindings.revoke("rosy_42", "bob")
+        client.portal.call(runner.tick)
+        assert runner.view(plan_id)["state"] == "stopped"
+        assert any(call[0] == "navigation_cancel" for call in robot.calls)
+        assert len(robot.routes) == 1 and not read_legacy_pose
 
 
 def test_nav2_repeat_trip_rolls_across_multiple_laps_and_reanchors_robot_frame():
