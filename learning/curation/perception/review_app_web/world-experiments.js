@@ -1,4 +1,4 @@
-import "/common/ui.js";
+import {canvasFont, cssColor} from "/common/ui.js";
 import {setOffBy} from "/common/cause-line.js";
 import {accountFetch} from "/account-session.js";
 import {fillSelectOptions, makeUuid} from "/learning-ui.js";
@@ -251,13 +251,11 @@ function setUpMap(record) {
     canvas.height / 2 - (y - (lowY + highY) / 2) * scale];
 
   return frame => {
-    const palette = getComputedStyle(canvas);
-    const color = name => palette.getPropertyValue(name).trim();
-    context.fillStyle = color("--surface-raised");
+    context.fillStyle = cssColor("--surface-raised");
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = color("--text-secondary");
-    context.fillStyle = color("--text-primary");
-    context.font = `12px ${color("--sans") || "sans-serif"}`;
+    context.strokeStyle = cssColor("--text-secondary");
+    context.fillStyle = cssColor("--text-primary");
+    context.font = canvasFont("micro");
     context.textAlign = "center";
     context.textBaseline = "middle";
     for (const {center, size: [width, height], label} of footprints) {
@@ -266,12 +264,12 @@ function setUpMap(record) {
       context.fillText(label, x, y);
     }
     const [x, y] = pixels(frame.box_pose_m_wxyz);
-    context.fillStyle = color("--series-primary");
+    context.fillStyle = cssColor("--series-primary");
     context.fillRect(x - box * scale / 2, y - box * scale / 2, box * scale, box * scale);
     if (frame.tcp_m) {
       context.beginPath();
       context.arc(...pixels(frame.tcp_m), 4, 0, Math.PI * 2);
-      context.fillStyle = color("--signal-go");
+      context.fillStyle = cssColor("--series-secondary");
       context.fill();
     }
   };
@@ -360,6 +358,9 @@ s3("files").addEventListener("change", async event => {
 
 s3("select").addEventListener("change", selectReplay);
 s3("scrub").addEventListener("input", event => { pause(); showFrame(Number(event.target.value)); });
+document.addEventListener("rosy:theme", () => {
+  if (replay) showFrame(Number(s3("scrub").value));
+});
 s3("play").addEventListener("click", () => {
   if (tickId !== undefined) return pause();
   let index = Number(s3("scrub").value);
