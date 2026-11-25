@@ -220,6 +220,20 @@ def test_confirm_without_a_candidate_report_is_refused(tmp_path):
         assert reply.status_code == 409 and reply.json()["detail"]["code"] == "NO_CANDIDATES"
 
 
+def test_localization_view_reports_candidate_rate_limit(tmp_path, monkeypatch):
+    app, robot = _app(tmp_path)
+
+    async def limited():
+        raise RobotApiError("r1", 429, "RATE_LIMITED", "retry later", {"retry_after_s": 15})
+
+    monkeypatch.setattr(robot, "localization_candidates", limited)
+    with TestClient(app) as client:
+        reply = client.get("/api/fleet/robots/r1/localization", headers={"Authorization": f"Bearer {VIEWER}"})
+    assert reply.status_code == 429
+    assert reply.headers["Retry-After"] == "15"
+    assert reply.json()["detail"]["code"] == "RATE_LIMITED"
+
+
 @pytest.mark.parametrize("method", ["localization_candidates", "localization_decision"])
 def test_confirm_reports_receiver_rate_limit(tmp_path, monkeypatch, method):
     app, robot = _app(tmp_path)
