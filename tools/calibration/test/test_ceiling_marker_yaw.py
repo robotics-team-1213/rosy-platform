@@ -90,3 +90,212 @@ def test_retired_development_session_never_contacts_fleet(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "sign in" in captured.err and "ROSY_FLEET_TOKEN" in captured.err
     assert not captured.out
+
+
+def _cargo_rows(distance, *, fixed_prop=False, reverse_cue=False):
+    import ceiling_marker_yaw as tool
+
+    rear = 0.09 if reverse_cue else -0.09
+    return [tool.CueSample(float(i), (x, 0.0, math.pi),
+                           (rear if fixed_prop else x + rear, 0.0))
+            for i in range(8) for x in (distance * i / 7,)]
+
+
+def test_stationary_orange_evidence_is_only_an_unverified_candidate():
+    import ceiling_marker_yaw as tool
+
+    result = tool.estimate_cargo(_cargo_rows(0.0, fixed_prop=True))
+    assert result["association"] == "unverified_stationary"
+    assert result["candidate_offset_deg"] == pytest.approx(180.0)
+    assert result["installation_allowed"] is False
+
+
+def test_short_comotion_supports_candidate_but_stationary_prop_conflicts():
+    import ceiling_marker_yaw as tool
+
+    result = tool.estimate_cargo(_cargo_rows(0.0455), forward_motion=True)
+    assert result["association"] == "co_moves"
+    assert result["forward_cross_check"] is True
+    assert result["installation_allowed"] is False
+    with pytest.raises(EstimateError, match="co-move"):
+        tool.estimate_cargo(_cargo_rows(0.0455, fixed_prop=True))
+    with pytest.raises(EstimateError, match="forward travel"):
+        tool.estimate_cargo(_cargo_rows(0.0455, reverse_cue=True), forward_motion=True)
+
+
+def test_cargo_video_rejects_mismatched_revision_before_reading_frames(monkeypatch, tmp_path):
+    import json
+    import ceiling_marker_yaw as tool
+
+    record = tmp_path / "approved.json"
+    record.write_text(json.dumps({"source_id": "ceiling_north", "map_id": "world",
+                                  "calibration_revision": "new", "approved_by": "operator"}))
+    monkeypatch.setattr(tool, "collect_cargo_video", lambda *args, **kwargs: pytest.fail("opened video"),
+                        raising=False)
+    code = tool.main(["--robot", "rosy_45", "--marker", "45", "--cargo-video", "old.mp4",
+                      "--record", str(record), "--calibration-revision", "old", "--cargo-height-m", "0.10"])
+    assert code == 2
+
+
+def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_candidates(monkeypatch):
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    repo = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(repo / "operations" / "overhead"))
+    from rosy_vision.detect import generate_marker_image
+
+    import ceiling_marker_yaw as tool
+
+    record = {"source_id": "camera", "map_id": "m", "calibration_revision": "v",
+              "map_to_image": [250, 0, 320, 0, -250, 240, 0, 0, 1],
+              "image": {"width": 640, "height": 480},
+              "track_bounds_m": {"min_x": -1.0, "min_y": -0.8, "max_x": 1.0, "max_y": 0.8},
+              "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}}
+    frame = np.full((480, 640, 3), 240, dtype=np.uint8)
+    frame[233:247, 313:327] = cv2.cvtColor(generate_marker_image(45, 14), cv2.COLOR_GRAY2BGR)
+    frame[265:274, 309:332] = (0, 125, 235)
+    frame[212:215, 313:327] = (0, 125, 235)
+
+    def sample(*, height=0.10, transverse=False):
+        jpeg = cv2.imencode(".jpg", frame)[1].tobytes()
+        options = {"transverse": True} if transverse else {}
+        return tool.cargo_frame_sample(record, jpeg, 1.0, source="camera", marker=45,
+                                       heading_edge=(0, 1), cargo_height_m=height, **options)
+
+    assert sample().cargo[1] == pytest.approx(-0.11, abs=0.01)
+    frame[210:219, 309:332] = (0, 125, 235)
+    with pytest.raises(tool.CueUnavailable, match="multiple orange objects"):
+        sample()
+
+    frame[210:219, 309:332] = 240
+    # Slight lateral offset of the cargo biases the centroid ray, but not the transverse edge.
+    frame[265:274, 309:332] = 240
+    frame[265:274, 315:338] = (0, 125, 235)
+    for height in (0.04, 0.14):
+        assert math.degrees(sample(height=height, transverse=True).front_yaw) == pytest.approx(90, abs=1.0)
+
+    # Two tiny edge excursions tilt the enclosing rectangle by several degrees.
+    cv2.line(frame, (317, 267), (315, 262), (0, 125, 235), 1)
+    cv2.line(frame, (321, 271), (321, 274), (0, 125, 235), 1)
+    assert math.degrees(sample(transverse=True).front_yaw) == pytest.approx(90, abs=2.0)
+
+    frame[262:275, 313:340] = 240
+    frame[265:277, 319:331] = (0, 125, 235)
+    assert sample(transverse=True) is None  # nearby orange square, no front axis
+
+
+def test_cargo_cli_keeps_candidate_when_led_unobserved_but_refuses_invalid_evidence(monkeypatch, tmp_path, capsys):
+    import json
+    import ceiling_marker_led_yaw as led
+    import ceiling_marker_yaw as tool
+
+    record = tmp_path / "approved.json"
+    record.write_text(json.dumps({"source_id": "ceiling_north", "map_id": "world",
+                                  "calibration_revision": "v", "approved_by": "operator"}))
+    challenge = tmp_path / "challenge.json"
+    challenge.write_text("{}")
+    monkeypatch.setattr(tool, "collect_offline", lambda *args, **kwargs: _cargo_rows(0.0))
+
+    def missing(*args, **kwargs):
+        raise led.LedUnobserved("no blink")
+
+    def invalid(*args, **kwargs):
+        raise EstimateError("invalid challenge")
+
+    argv = ["--robot", "rosy_45", "--marker", "45", "--frames", str(tmp_path),
+            "--record", str(record), "--calibration-revision", "v", "--cargo-height-m", "0.10",
+            "--led-challenge", str(challenge)]
+    monkeypatch.setattr(led, "estimate_led", missing)
+    assert tool.main(argv) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["led_unavailable"] == "no blink"
+    assert result["installation_allowed"] is False
+    monkeypatch.setattr(led, "estimate_led", invalid)
+    assert tool.main(argv) == 2
+    assert "invalid challenge" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("candidate, installed, difference, outside", [
+    (179, -179, -2, False), (-179, 179, 2, False), (4, -89.8, 93.8, True),
+])
+def test_candidate_cli_reports_wrapped_offset_difference_without_authority(
+        monkeypatch, capsys, candidate, installed, difference, outside):
+    import json
+    import ceiling_marker_yaw as tool
+
+    monkeypatch.setattr(tool, "_candidate", lambda *args: {"candidate_offset_deg": candidate})
+    assert tool.main(["--robot", "rosy_45", "--marker", "45", "--cargo-height-m", "0.10",
+                      "--calibration-revision", "v", "--installed-offset-deg", str(installed)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["candidate_minus_installed_deg"] == pytest.approx(difference)
+    assert result["offset_difference_exceeds_repeatability"] is outside
+    assert result["installation_allowed"] is False
+
+
+def test_candidate_identity_requires_matching_marker_and_prioritizes_live_source(monkeypatch, tmp_path):
+    import ceiling_marker_provenance as tool
+
+    monkeypatch.delenv("ROSY_VISION_SOURCE_TOKEN", raising=False)
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46)
+    assert tool.check_candidate_identity(source="cam", robot="rosy_45", marker=45) == "d562_robot_number"
+    config = tmp_path / "site-cameras.yaml"
+    config.write_text("sources:\n  - source_id: cam\n    robot_markers: {rosy_45: 46}\n")
+    assert tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46,
+                                          site_camera_config=config) == "operator_supplied_site_config"
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46, site_camera_config=config,
+                                      live_markers={"rosy_45": 45})
+
+
+def test_live_frame_requires_approved_size_lens_and_stable_rotation(monkeypatch):
+    import ceiling_marker_provenance as tool
+
+    repo = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(repo / "operations" / "overhead"))
+    record = {"image": {"width": 1280, "height": 720},
+              "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}}
+    headers = {"X-Frame-Rectified": "false", "X-Frame-Captured-At": "42.5", "X-Frame-Age-Ms": "50",
+               "X-Frame-Width": "1280", "X-Frame-Height": "720", "X-Frame-Rotation-Deg": "90",
+               "X-Source-Lens": "kind=standard;focal_mm=5.4;hfov_deg=67.8"}
+    assert tool.live_frame_stamp(headers, record, expected_rotation=90) == pytest.approx(42.5)
+    assert tool.live_frame_stamp({**headers, "X-Frame-Age-Ms": "1200"}, record) is None
+    for key, value in [("X-Frame-Rotation-Deg", "180"), ("X-Frame-Width", "640"),
+                       ("X-Source-Lens", "kind=wide;focal_mm=5.4;hfov_deg=67.8")]:
+        with pytest.raises(EstimateError, match="approved frame geometry"):
+            tool.live_frame_stamp({**headers, key: value}, record, expected_rotation=90)
+
+
+def test_live_source_requires_current_healthy_calibration_and_checks_both_bindings(monkeypatch):
+    import ceiling_marker_yaw as tool
+
+    record = {"source_id": "cam", "map_id": "map", "calibration_revision": "rev", "approved_by": "operator"}
+    source = {**record, "status": "OK", "calibration_health": {"state": "fresh"}}
+    config = {"source_id": "cam", "map_id": "map", "calibration": record, "robot_markers": {"rosy_45": 46}}
+    calls = []
+
+    def request(fleet, path, token, context):
+        calls.append((path, token))
+        return {"/api/fleet/tracking": {"sources": [source]}, "/api/fleet/detections/config": config}[path]
+
+    monkeypatch.setattr(tool, "_approved_record", lambda *args: record)
+    monkeypatch.setattr(tool, "_request", request)
+    monkeypatch.delenv("ROSY_VISION_SOURCE_TOKEN", raising=False)
+    args = {"source": "cam", "robot": "rosy_45", "marker": 45, "revision": "rev"}
+    assert tool.check_candidate_source("fleet", "operator", None, **args)[1] == {
+        "marker_binding_provenance": "d562_robot_number", "capture_provenance": "live_raw_preview_headers",
+        "calibration_health": "fresh",
+    }
+    assert calls == [("/api/fleet/tracking", "operator")]
+    monkeypatch.setenv("ROSY_VISION_SOURCE_TOKEN", "source-token")
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_source("fleet", "operator", None, **args)
+    args["marker"] = 46
+    assert tool.check_candidate_source("fleet", "operator", None, **args)[1]["marker_binding_provenance"] == "fleet_source_config"
+    assert calls[-1] == ("/api/fleet/detections/config", "source-token")
+    config["calibration"] = {**record, "calibration_revision": "old"}
+    with pytest.raises(EstimateError, match="incompatible with the approved record"):
+        tool.check_candidate_source("fleet", "operator", None, **args)
+    source["calibration_health"] = {"state": "mismatch"}
+    with pytest.raises(EstimateError, match="incompatible calibration health"):
+        tool.check_candidate_source("fleet", "operator", None, **args)
