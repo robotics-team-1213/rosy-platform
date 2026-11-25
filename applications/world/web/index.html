@@ -120,6 +120,9 @@
         <header id="map-provenance" class="world-provenance">
           <ui-status id="map-status" state="pending">보관 지도를 읽는 중…</ui-status>
           <dl id="map-readout" class="ui-readout" hidden></dl>
+          <label id="map-active-place-control" hidden>지도 위치
+            <select id="map-active-place" class="ui-field" aria-controls="map-active-canvas"></select>
+          </label>
         </header>
         <div class="world-viewbar" role="group" aria-label="지도 보기">
           <ui-button id="map-mode-field" kind="segment" type="button" aria-pressed="false" hidden>현장 사진</ui-button>
