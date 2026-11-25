@@ -118,7 +118,7 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
     @app.post("/api/fleet/workcell-observations/{workcell_id}/intake-readings", tags=["workcell-observations"])
     async def reading(workcell_id: str, request: Request, response: Response,
                       token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
-        """D-996 3: a tag id read at the conveyor end or the wrist; this Fleet turns it into port events."""
+        """D-996 3: Fleet translates intake RFID or camera tag readings into port events."""
         response.headers["Cache-Control"] = "no-store"
         data = await machine_body(workcell_id, request, token)
         try:
@@ -128,6 +128,8 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
         intake, arms = getattr(app.state, "intake", None), getattr(app.state, "arm_transfer_job_store", None)
         if store is None or intake is None or arms is None:
             raise HTTPException(503, detail={"code": "INTAKE_READINGS_UNAVAILABLE"})
+        if parsed.point == "rfid_intake" and not intake.get("container_epcs"):
+            raise HTTPException(503, detail={"code": "RFID_INTAKE_NOT_CONFIGURED"})
         from .intake_readings import record
         try:
             seqs = await asyncio.to_thread(record, arms, store, intake, workcell_id, parsed)

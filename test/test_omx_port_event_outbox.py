@@ -33,11 +33,29 @@ class Link:
         self.sent.append(item)
 
 
-def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path):
-    item = po.reading("conveyor_end", {"state": "read", "tag": 100}, observed_at=T)
+@pytest.mark.parametrize(("point", "identity"), [
+    ("conveyor_end", {"tag": 100}),
+    ("rfid_intake", {"epc": "432d35000000000000000000"}),
+])
+def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path, point, identity):
+    item = po.reading(point, {"state": "read", **identity}, observed_at=T)
     po.queue(item, tmp_path)
-    po.queue(item.model_copy(update={"tag": 101}), tmp_path)  # the first stored bytes win
+    po.queue(item.model_copy(update={"observed_at": datetime(2026, 11, 9, tzinfo=timezone.utc)}), tmp_path)
     assert po.send(Link(fail=True), tmp_path) is False and len(list(tmp_path.glob("*.json"))) == 1
     link = Link()
     assert po.send(link, tmp_path) is True
     assert link.sent == [item] and not list(tmp_path.glob("*.json"))
+
+
+def test_concurrent_drain_does_not_fail_after_fleet_acknowledges(tmp_path):
+    item = po.reading("rfid_intake", {"state": "read", "epc": "432D3100"}, observed_at=T)
+    path = po.queue(item, tmp_path)
+
+    class OtherDrain(Link):
+        def post_intake_reading(self, reading):
+            super().post_intake_reading(reading)
+            path.unlink()
+
+    link = OtherDrain()
+    assert po.send(link, tmp_path)
+    assert link.sent == [item]
