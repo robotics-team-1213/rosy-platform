@@ -1,6 +1,7 @@
 """PR-2 regression tests: D-430 safety tags, :8781 token split/gates, worker 3-state, upkeep, depth lock, zone verification."""
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
@@ -34,6 +35,24 @@ def _make_workdir(tmp_path: Path) -> Path:
         (tmp_path / name).write_text("{}", encoding="utf-8")
     (tmp_path / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc1234/deploy/robot/omx\n", encoding="utf-8")
     return tmp_path
+
+
+def test_job_log_tail_is_bounded_when_a_writer_appends():
+    class GrowingLog(io.BytesIO):
+        def seek(self, offset, whence=os.SEEK_SET):
+            position = super().seek(offset, whence)
+            if whence == os.SEEK_END:
+                self.write(b"more")
+                super().seek(position)
+            return position
+
+    class LogPath:
+        def open(self, mode):
+            assert mode == "rb"
+            return GrowingLog(b"old-tail")
+
+    assert api.read_tail_bytes(LogPath(), 4) == b"tail"
+    assert api.read_tail_bytes(LogPath(), 0) == b""
 
 
 def test_platform_parts_registers_d1072_safety_review_paths():
@@ -71,6 +90,7 @@ def test_dual_token_auth_machine_commissioning_ban_and_proposer_binding(tmp_path
         api.make_server("127.0.0.1", 0, human_tok, runner, machine_token=human_tok)
 
     srv = api.make_server("127.0.0.1", 0, human_tok, runner, machine_token=machine_tok)
+    assert srv.RequestHandlerClass.timeout == 10
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         mclient = client_mod.CellJobClient(f"http://127.0.0.1:{srv.server_port}", machine_tok)
