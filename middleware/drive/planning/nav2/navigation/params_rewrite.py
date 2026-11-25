@@ -20,8 +20,16 @@ def write_prefixed_nav2_params(
     directory: str | Path = "/tmp",
     footprint_points: Sequence[Sequence[float]] | None = None,
     speed: tuple[float, float] | None = None,
+    amcl_laser_model: str = "configured",
 ) -> str:
     params = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
+    if amcl_laser_model not in {"configured", "beam"}:
+        raise ValueError("AMCL laser model must be configured or beam")
+    if amcl_laser_model == "beam":
+        amcl = params.get("amcl", {}).get("ros__parameters")
+        if not isinstance(amcl, dict):
+            raise ValueError("beam AMCL requires an AMCL parameter section")
+        amcl["laser_model_type"] = "beam"
     if speed is not None:
         derive_slow_speed_params(params, *speed)
     prefix = f"{namespace}/" if namespace else ""

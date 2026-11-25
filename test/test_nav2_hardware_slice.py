@@ -466,6 +466,7 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         encoding="utf-8",
     )
     monkeypatch.setenv("ROSY_PROFILE", str(profile))
+    monkeypatch.delenv("ROSY_AMCL_LASER_MODEL", raising=False)
 
     (tmp_path / "site.pgm").write_bytes(b"P5\n2 2\n255\n" + bytes([254, 254, 254, 254]))
     site_yaml = tmp_path / "site.yaml"
@@ -488,6 +489,11 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         e.name: e.default_value for e in ld.entities if isinstance(e, _DeclareArg)
     }
     assert declared["enable_loc_assist"] == "true"
+    assert declared["amcl_laser_model"] == "configured"
+    monkeypatch.setenv("ROSY_AMCL_LASER_MODEL", "beam")
+    configured = {e.name: e.default_value for e in hw.generate_launch_description().entities
+                  if isinstance(e, _DeclareArg)}
+    assert configured["amcl_laser_model"] == "beam"
     includes = {Path(e.source.path).name: e for e in ld.entities if isinstance(e, _Include)}
     bringup_ir = includes["bringup_robot.launch.py"].launch_arguments["enable_ir"]
     legacy_line = includes["line_follow.launch.py"]
@@ -505,6 +511,7 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     base_ctx = {
         "namespace": "pinky1",
         "params_file": str(NAV_PARAMS),
+        "amcl_laser_model": declared["amcl_laser_model"],
         "profile_file": str(profile),
         "footprint_profile_file": "",
         "footprint_state": "unknown",
@@ -525,6 +532,18 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     assert Path(loc_assist.source.path).name == "loc_assist.launch.py"
     assert isinstance(loc_assist.condition, _IfCond)
     assert loc_assist.condition.predicate.name == "enable_loc_assist"
+
+    default = yaml.safe_load(Path(bringup.launch_arguments["params_file"]).read_text(encoding="utf-8"))
+    beam, *_ = hw._include_nav2({**base_ctx, "navigation_backend": "localization", "amcl_laser_model": "beam"})
+    revised = yaml.safe_load(Path(beam.launch_arguments["params_file"]).read_text(encoding="utf-8"))
+    amcl = default["/pinky1/amcl"]["ros__parameters"]
+    assert amcl["laser_model_type"] == "likelihood_field"
+    amcl["laser_model_type"] = "beam"
+    assert revised == default
+    with pytest.raises(ValueError, match="saved-map localization"):
+        hw._include_nav2({**base_ctx, "navigation_backend": "slam", "amcl_laser_model": "beam"})
+    with pytest.raises(ValueError, match="configured or beam"):
+        hw._include_nav2({**base_ctx, "navigation_backend": "localization", "amcl_laser_model": "invalid"})
 
     slam_actions = hw._include_nav2({**base_ctx, "navigation_backend": "slam"})
     assert [Path(a.source.path).name for a in slam_actions] == [
