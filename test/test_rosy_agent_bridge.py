@@ -7,6 +7,7 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -347,6 +348,16 @@ def test_bridge_schemas_match_cell_job_specs():
     assert set(area_schema["properties"].keys()) == (set(area["params"].keys()) | set(area["optional"].keys())) - {"dry_run", "operator", "proposer"}
 
 
+@pytest.mark.parametrize("entrypoint", [
+    ("tools/remote/rosy_agent_bridge.py",),
+    ("-m", "tools.remote.rosy_agent_bridge"),
+])
+def test_bridge_help_runs_from_both_entrypoints(entrypoint):
+    result = subprocess.run([sys.executable, "-B", *entrypoint, "--help"],
+                            cwd=ROOT, capture_output=True, text=True, check=True)
+    assert "mcp-stdio" in result.stdout
+
+
 def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():
     bridge_path = ROOT / "tools/remote/rosy_agent_bridge.py"
     context_path = bridge_path.with_name("rosy_agent_proposal_context.py")
@@ -359,5 +370,8 @@ def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():
             if isinstance(node, ast.Import):
                 assert {a.name.split(".")[0] for a in node.names} <= allowed
             elif isinstance(node, ast.ImportFrom):
-                assert node.level == 0 and node.module and node.module.split(".")[0] in allowed
+                if node.level:
+                    assert path == bridge_path and node.level == 1 and node.module == context_path.stem
+                else:
+                    assert node.module and node.module.split(".")[0] in allowed
     assert scan_files([bridge_path, context_path, Path(__file__)], root=ROOT) == []

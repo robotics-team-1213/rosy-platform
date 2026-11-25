@@ -16,7 +16,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
+if __package__:
+    from .rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
+else:
+    from rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_ERROR_BYTES = 65_536
