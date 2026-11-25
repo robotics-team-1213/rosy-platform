@@ -42,16 +42,13 @@ from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
-SESSION = {
-    "arm_a": "./with-session-arm-a-par.sh",
-    "arm_b": "./with-session-arm-b-par.sh",
-    "arm_s": "./with-session-arm-s-live.sh",
-}
+SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
 AB_ARMS = {"arm_a", "arm_b"}
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 _BELT_SITES = frozenset({"belt", "not_places:belt"})
 PY = 'exec ~/rosy-omx/current-env/bin/python "$OMX/$0" "$@"'
 ENV = "set -a; . ~/.config/rosy/omx-observation-bridge.env; set +a; . ./tools-env-current.sh; "
+S_DRY_RUN_ENV = 'export TOOLS_ROOT="$1"; shift; . "$TOOLS_ROOT/deploy/robot/omx/session-wrappers/tools-env.sh" && '
 
 
 def _goal_site(v):
@@ -396,4 +393,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             raise ValueError("a moving job needs person_at_switch: true")
         tail = ["--commissioning", "--person-at-switch"] if job.get("commissioning", True) else ["--person-at-switch"]
         return [*prefix, "bash", "-c", PY, job["script"], *args, *tail]
+    if job["script"] == "cell_policy_drive.py" and params.get("arm") == "arm_s" and opt_checked.get("dry_run"):
+        release = (Path.home() / ".local/share/rosy/omx-devices/current").resolve()
+        return ["bash", "-c", S_DRY_RUN_ENV + PY, job["script"], str(release), *args]
     return ["bash", "-c", ENV + PY, job["script"], *args]
