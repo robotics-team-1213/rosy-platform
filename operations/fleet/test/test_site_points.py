@@ -25,7 +25,7 @@ FORBIDDEN_PORT_KEYS = frozenset({
     "x", "y", "yaw", "pose", "edges", "edges_in", "edges_out", "polyline",
     "stop_zone", "approach_m", "approach_pose", "pinned", "width_m", "speed_cap_mps",
     "turn_bans", "drive_mode", "junction", "workcell_id", "instance_id", "marker_id",
-    "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases",
+    "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases", "slots", "hold_boundary",
     "berth", "nav2_berth_ready", "berth_missing", "repark_cap_m", "align_tol_deg",
     "intake_cell", "flow", "waypoints", "stand_ref", "zone_rules",
     "coordinate_frames", "conveyor_transfer", "end_to_end_stages", "arm_frame", "belt_end",
@@ -123,6 +123,16 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     assert by_id["S_OUT"]["status"] == "planned_unverified"
     assert by_id["S_OUT"]["dispatchable"] is False
     assert full["arm_zones"]["count"] == 37
+    arm_zones = {zone["id"]: zone for zone in full["arm_zones"]["zones"]}
+    assert {key: len(zone["slots"]) for key, zone in arm_zones.items()} == {
+        "yard": 6, "temp_a": 3, "temp_b": 3, "stand": 1,
+    }
+    yard = arm_zones["yard"]
+    assert yard["hold_boundary"] == {"columns": [3, 4]}
+    assert yard["slots"][0]["columns"] == [1, 3]
+    assert yard["slots"][0]["tiers"][0] == {"id": "yard:r1-s1-t1", "tier": 1}
+    assert all(slot["status"] == "planned_unverified"
+               for zone in arm_zones.values() for slot in zone["slots"])
     handoffs = {h["id"]: h for h in full["handoffs"]}
     assert handoffs["outbound_stand_load"]["vehicle_stop_resolved"] is False
     assert handoffs["outbound_stand_load"]["dispatchable"] is False
