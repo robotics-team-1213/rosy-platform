@@ -49,13 +49,14 @@ def test_stop_has_persistent_intent_and_waits_for_children(tmp_path, monkeypatch
             'ActiveState=active', 'SubState=running', 'Result=success')))
 
     monkeypatch.setattr(world, '_systemctl', systemctl)
+    monkeypatch.setattr(world.Unit, 'stop', lambda unit, receipt: requests.append(('verified-stop', unit.name)))
     row = dict(id=rid, status='stopping', created_at=0, steps=4)
     receipt = dict(invocation_id='a' * 32, cgroup=f'/app.slice/{unit.name}')
     output = tmp_path / 'output'
     output.mkdir()
     world.refresh(row, receipt, output)
     assert row['status'] == 'stopping'
-    assert any(command[0] == 'stop' for command in requests)
+    assert any(command[0] == 'verified-stop' for command in requests)
     events.write_text('populated 0\nfrozen 0\n')
     world.refresh(row, receipt, output)
     assert row['status'] == 'stopping'  # empty group with active unit is still stopping
@@ -120,7 +121,7 @@ def test_center_run_retry_shared_slot_and_stop_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(world, 'check_resources', lambda *args: None)
     monkeypatch.setattr(world.Unit, 'launch', launch)
     monkeypatch.setattr(world.Unit, 'observe', observe)
-    monkeypatch.setattr(world.Unit, 'stop', lambda unit: stopped.append(unit.name))
+    monkeypatch.setattr(world.Unit, 'stop', lambda unit, receipt: stopped.append(unit.name))
     body = dict(preset_id=world.PRESET_ID, request_id=str(uuid.uuid4()))
     monkeypatch.setattr(owner.canonical, 'has_active_runs', lambda: True)
     with pytest.raises(ValueError, match='Canonical'):
@@ -164,3 +165,49 @@ def test_result_checkpoint_hash_must_match_actual_weights(tmp_path):
     world._finish(row, tmp_path)
     assert row['status'] == 'succeeded'
     assert row['result'] == result
+
+
+def test_pidfd_stop_rechecks_invocation_and_process_identity(monkeypatch):
+    unit = world.Unit(str(uuid.uuid4()))
+    receipt = dict(invocation_id='a' * 32, pid=22000, pid_start='77', uid=1000,
+                   cgroup=f'/app.slice/{unit.name}')
+    observed = [dict(receipt, pid_start='78')]
+    closed, sent = [], []
+    monkeypatch.setattr(world.os, 'pidfd_open', lambda pid: 21)
+    monkeypatch.setattr(world.os, 'close', closed.append)
+    monkeypatch.setattr(world.signal, 'pidfd_send_signal', lambda fd, sig: sent.append((fd, sig)))
+    monkeypatch.setattr(world.Unit, 'observe', lambda *args: ('running', False))
+    monkeypatch.setattr(world, '_process_identity', lambda pid: {k: v for k, v in observed[0].items()
+                                                               if k != 'invocation_id'})
+    with pytest.raises(ValueError, match='identity changed'):
+        unit.stop(receipt)
+    assert sent == [] and closed == [21]
+    observed[0] = receipt
+    unit.stop(receipt)
+    assert sent == [(21, world.signal.SIGUSR1)] and closed == [21, 21]
+
+
+def test_missing_unit_after_indeterminate_launch_stays_owned(tmp_path, monkeypatch):
+    row = dict(id=str(uuid.uuid4()), status='launching', created_at=0, steps=4)
+    monkeypatch.setattr(world.Unit, 'observe', lambda *args: ('gone', True))
+    world.refresh(row, {}, tmp_path / 'output')
+    assert row['status'] == 'launching' and row['status_uncertain'] is True
+
+
+def test_worker_refuses_concurrent_host_world_lease(tmp_path, monkeypatch):
+    import fcntl
+
+    home = tmp_path / 'home'
+    lease = home / '.cache/rosy-learning/world-act.lock'
+    lease.parent.mkdir(parents=True)
+    root = tmp_path / str(uuid.uuid4())
+    root.mkdir()
+    unit = world.Unit(root.name)
+    monkeypatch.setattr(world.Path, 'home', classmethod(lambda cls: home))
+    monkeypatch.setattr(world, '_process_identity', lambda pid: {'cgroup': f'/app.slice/{unit.name}'})
+    monkeypatch.setattr(world.signal, 'signal', lambda *args: None)
+    monkeypatch.setenv('INVOCATION_ID', 'a' * 32)
+    with lease.open('wb') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert world.run_worker(root) == 1
+    assert json.loads((root/'worker-exit.json').read_text())['reason'] == 'host_busy'

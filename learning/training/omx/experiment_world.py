@@ -1,22 +1,28 @@
 """One fixed, offline MuJoCo dataset preset owned by the Learning Center."""
+import argparse
+from contextlib import suppress
 import json
 import hashlib
 import math
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 
-from experiment_io import identifier, read_json
+from experiment_io import identifier, read_json, write_json
 
 MODE = 'world_offline_act'
 PRESET_ID = 'mujoco-act-cpu'
 ACTIVE = ('launching', 'running', 'stopping')
 CGROUP_ROOT = Path('/sys/fs/cgroup')
 SHA256 = re.compile(r'[0-9a-f]{64}')
+INVOCATION_ID = re.compile(r'[0-9a-f]{32}')
 LAUNCH_TIMEOUT = 15
 MAX_CHECKPOINT_BYTES = 512 * 1024 * 1024
 
@@ -51,6 +57,10 @@ def check_resources(root, jobs_dir):
     from experiment_cuda_train import check_job_locks
 
     try:
+        if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
+            raise ValueError('verified Linux worker stop is unavailable')
+        if not shutil.which('systemd-run') or _systemctl('show', '--property=Version', '--value').returncode:
+            raise ValueError('model host user service manager is unavailable')
         subprocess.run(['/usr/local/bin/rosy-storage', 'check'], check=True,
                        capture_output=True, timeout=10)
         check_job_locks(jobs_dir)
@@ -66,6 +76,16 @@ def _systemctl(*args):
                           capture_output=True, text=True, timeout=5)
 
 
+def _process_identity(pid):
+    proc = Path('/proc') / str(pid)
+    stamp = (proc / 'stat').read_text().rsplit(') ', 1)[1].split()[19]
+    group = next((line[3:] for line in (proc / 'cgroup').read_text().splitlines()
+                  if line.startswith('0::')), None)
+    if not group:
+        raise ValueError('unified Linux cgroup required')
+    return dict(pid=pid, pid_start=stamp, uid=proc.stat().st_uid, cgroup=group)
+
+
 class Unit:
     def __init__(self, rid):
         identifier(rid)
@@ -74,9 +94,9 @@ class Unit:
 
     def launch(self, python, root):
         subprocess.run([
-            'systemd-run', '--user', '--quiet', f'--unit={self.name}',
+            'systemd-run', '--user', '--quiet', '--collect', f'--unit={self.name}',
             f'--description={self.description}', '--property=Type=exec',
-            '--property=RemainAfterExit=yes', '--property=KillMode=control-group',
+            '--property=KillMode=control-group', '--property=PrivateTmp=yes',
             '--property=TimeoutStopSec=10', '--property=RuntimeMaxSec=900',
             '--property=MemoryMax=6G', '--property=CPUQuota=300%',
             '--property=TasksMax=128', '--property=UMask=0077',
@@ -86,13 +106,12 @@ class Unit:
             '--setenv=HF_HUB_OFFLINE=1', '--setenv=HF_DATASETS_OFFLINE=1',
             '--setenv=OMP_NUM_THREADS=2', '--setenv=MKL_NUM_THREADS=2',
             '--setenv=OPENBLAS_NUM_THREADS=2', '--setenv=TOKENIZERS_PARALLELISM=false',
-            python, '-B', str(Path(__file__).with_name('experiment_train.py')),
-            '--request', str(root / 'request.json'), '--out', str(root / 'output'),
+            python, '-B', str(Path(__file__)), '--worker', str(root),
         ], capture_output=True, text=True, timeout=LAUNCH_TIMEOUT, check=True)
 
     def observe(self, receipt):
         response = _systemctl('show', '--property=LoadState,Description,ControlGroup,'
-                              'InvocationID,ActiveState,SubState,Result', self.name)
+                              'InvocationID,ActiveState,SubState,Result,MainPID', self.name)
         fields = dict(line.split('=', 1) for line in response.stdout.splitlines() if '=' in line)
         cgroup = fields.get('ControlGroup') or receipt.get('cgroup')
         if fields.get('LoadState') == 'not-found':
@@ -100,7 +119,7 @@ class Unit:
         invocation = fields.get('InvocationID')
         if (response.returncode or fields.get('LoadState') != 'loaded'
                 or fields.get('Description') != self.description
-                or not re.fullmatch(r'[0-9a-f]{32}', invocation or '')
+                or not INVOCATION_ID.fullmatch(invocation or '')
                 or receipt.get('invocation_id', invocation) != invocation
                 or receipt.get('cgroup', cgroup) != cgroup):
             raise ValueError('World learner unit ownership is unconfirmed')
@@ -110,14 +129,32 @@ class Unit:
         else:
             empty = fields.get('SubState') in ('exited', 'dead', 'failed')
         receipt['invocation_id'] = invocation
+        pid = int(fields.get('MainPID', '0'))
+        if pid:
+            owner = _process_identity(pid)
+            if owner['cgroup'] != cgroup or owner['uid'] != os.getuid():
+                raise ValueError('World learner process identity is unconfirmed')
+            receipt.update(owner)
         if fields.get('ActiveState') in ('inactive', 'failed'):
             return ('failed' if fields.get('Result') != 'success' else 'gone'), empty
         return fields.get('SubState'), empty
 
-    def stop(self):
-        response = _systemctl('stop', '--no-block', self.name)
-        if response.returncode:
-            raise ValueError('World learner stop was not accepted')
+    def stop(self, receipt):
+        pid = receipt.get('pid')
+        if type(pid) is not int or pid <= 0 or not receipt.get('pid_start'):
+            raise ValueError('World learner process identity is unconfirmed')
+        fd = os.pidfd_open(pid)
+        try:
+            current = dict(receipt)
+            state, _ = self.observe(current)
+            owner = _process_identity(pid)
+            if (state in ('gone', 'failed', 'exited')
+                    or any(current.get(key) != receipt.get(key) for key in ('invocation_id', *owner))
+                    or any(receipt.get(key) != value for key, value in owner.items())):
+                raise ValueError('World learner process identity changed')
+            signal.pidfd_send_signal(fd, signal.SIGUSR1)
+        finally:
+            os.close(fd)
 
 
 def _empty_cgroup(value, name):
@@ -136,6 +173,58 @@ def _empty_cgroup(value, name):
     if 'populated 1' in states:
         return False
     raise ValueError('World learner cgroup process state is unconfirmed')
+
+
+def run_worker(root):
+    """Retain the host-wide World lease until the owned trainer has stopped."""
+    import fcntl
+
+    unit = Unit(root.name)
+    owner = _process_identity(os.getpid())
+    invocation = os.environ['INVOCATION_ID']
+    if not INVOCATION_ID.fullmatch(invocation) or PurePosixPath(owner['cgroup']).name != unit.name:
+        raise ValueError('World learner must run in its owned service')
+    lease = Path.home() / '.cache' / 'rosy-learning' / 'world-act.lock'
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    if lease.parent.is_symlink():
+        raise ValueError('World learner lease directory must be owned locally')
+    stopping = threading.Event()
+    signal.signal(signal.SIGUSR1, lambda *_: stopping.set())
+    exit_code, reason = 1, 'launch_error'
+    fd = os.open(lease, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            reason = 'host_busy'
+        else:
+            if stopping.is_set():
+                reason = 'stopped'
+            else:
+                child = subprocess.Popen([
+                    sys.executable, '-B', str(Path(__file__).with_name('experiment_train.py')),
+                    '--request', str(root / 'request.json'), '--out', str(root / 'output'),
+                ], pass_fds=(fd,), start_new_session=True, stdin=subprocess.DEVNULL)
+                while child.poll() is None and not stopping.wait(0.25):
+                    pass
+                if child.poll() is None:
+                    with suppress(ProcessLookupError):
+                        os.killpg(child.pid, signal.SIGTERM)
+                    try:
+                        child.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        with suppress(ProcessLookupError):
+                            os.killpg(child.pid, signal.SIGKILL)
+                        child.wait()
+                exit_code = child.returncode
+                reason = 'stopped' if stopping.is_set() else 'finished'
+    finally:
+        try:
+            write_json(root / 'worker-exit.json', dict(invocation_id=invocation,
+                cgroup=owner['cgroup'], code=exit_code, reason=reason))
+        finally:
+            os.close(fd)
+    return int(exit_code != 0)
 
 
 def _progress(row, output):
@@ -176,9 +265,30 @@ def _finish(row, output):
     row.update(status='succeeded', result=result)
 
 
+def _exit_marker(output, receipt, unit):
+    path = output.parent / 'worker-exit.json'
+    if not path.exists():
+        return None
+    marker = read_json(path, max_bytes=4096)
+    if (not isinstance(marker, dict) or set(marker) != {'invocation_id', 'cgroup', 'code', 'reason'}
+            or not isinstance(marker['invocation_id'], str) or not INVOCATION_ID.fullmatch(marker['invocation_id'])
+            or not isinstance(marker['cgroup'], str) or PurePosixPath(marker['cgroup']).name != unit.name
+            or type(marker['code']) is not int
+            or marker['reason'] not in ('launch_error', 'host_busy', 'stopped', 'finished')
+            or any(receipt.get(key, marker[key]) != marker[key] for key in ('invocation_id', 'cgroup'))):
+        raise ValueError('invalid World worker exit proof')
+    receipt.update({key: marker[key] for key in ('invocation_id', 'cgroup')})
+    return marker
+
+
 def refresh(row, receipt, output):
     unit = Unit(row['id'])
     row.pop('status_uncertain', None)
+    marker = None
+    try:
+        marker = _exit_marker(output, receipt, unit)
+    except (OSError, ValueError):
+        pass  # invalid completion evidence cannot prevent a verified stop
     try:
         state, empty = unit.observe(receipt)
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -190,33 +300,32 @@ def refresh(row, receipt, output):
         pass  # a bad sample must not prevent a stop
     if row['status'] == 'stopping':
         if state in ('gone', 'failed') and empty:
-            if receipt.get('invocation_id') or time.time() > row['created_at']+2*LAUNCH_TIMEOUT:
+            if receipt.get('invocation_id'):
                 row['status'] = 'cancelled'
+            else:
+                row['status_uncertain'] = True
         elif state not in ('gone', 'failed', 'stop-sigterm', 'stop-sigkill'):
             try:
-                unit.stop()
+                unit.stop(receipt)
             except (OSError, ValueError, subprocess.SubprocessError):
                 row['status_uncertain'] = True
         return
     if state not in ('gone', 'failed', 'exited'):
         row['status'] = 'running'
         return
-    if not empty or (state == 'gone' and not receipt.get('invocation_id')
-                     and time.time() <= row['created_at']+2*LAUNCH_TIMEOUT):
+    if not empty or not receipt.get('invocation_id'):
+        # A missing unit after an ambiguous RPC is not proof it never started.
         row['status_uncertain'] = True
         return
-    if state == 'failed':
+    if marker and marker['reason'] == 'host_busy':
+        row.update(status='failed', error='모델 호스트에서 다른 World 학습이 실행 중입니다.')
+    elif not marker or marker['reason'] != 'finished' or marker['code'] != 0 or state == 'failed':
         row.update(status='failed', error='학습 프로세스가 오류로 종료되었습니다.')
     else:
         try:
             _finish(row, output)
         except (OSError, ValueError, AttributeError):
             row.update(status='failed', error='학습 결과를 읽을 수 없습니다.')
-    if state == 'exited':
-        try:
-            unit.stop()  # clean up the retained successful transient unit
-        except (OSError, ValueError, subprocess.SubprocessError):
-            row['status_uncertain'] = True
 
 
 def launch(center, db, request_id, request, row):
@@ -262,3 +371,9 @@ def start_supervisor(center):
             time.sleep(2)
 
     threading.Thread(target=supervise, name='world-training-supervisor', daemon=True).start()
+
+
+if __name__ == '__main__':
+    cli = argparse.ArgumentParser(description=__doc__)
+    cli.add_argument('--worker', type=Path, required=True)
+    raise SystemExit(run_worker(cli.parse_args().worker))
