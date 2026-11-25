@@ -13,7 +13,7 @@ import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/a
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
-import {roadOverlayPoints} from '/console/assets/site-layer.js';
+import {roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -96,15 +96,30 @@ function render() {
   }
   for (const place of map.places) if (place.stop_zone) el('polygon', {class: 'stop-zone', points: line(place.stop_zone)}, svg);
   if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
+  const activeSource = $('map-source').value === 'active';
   for (const edge of map.edges) {
-    const points = $('map-source').value === 'active' ? roadOverlayPoints(map.map_id, edge) : edge.polyline;
+    const surveyed = activeSource ? surveyedRoadPoints(map, edge) : null;
+    const points = activeSource ? surveyed ?? roadOverlayPoints(map.map_id, edge) : edge.polyline;
+    const selected = state.selected?.edge === edge.id;
     const path = el('polyline', {points: line(points), 'data-edge': edge.id,
-      class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
-    el('title', {}, path).textContent = `${edge.id} · ${edge.direction === 'two_way' ? '양방' : '일방'} · ${edge.speed_cap_mps} m/s`;
+      class: 'edge ' + edge.drive_mode + (surveyed ? ' surveyed' : '') + (selected ? ' selected' : '')}, svg);
+    const routeLabel = edge.id + ' · ' + (edge.direction === 'two_way' ? '양방' : '일방') + ' · ' + edge.speed_cap_mps + ' m/s';
+    const surveyLabel = edge.id === 'bay_1' ? '영상의 분홍 충전선 중심' : '영상에서 읽은 차선 양쪽 경계의 중점';
+    el('title', {}, path).textContent = surveyed ? edge.id + ' · ' + surveyLabel : routeLabel;
     if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
-    for (const mark of arrowMarks({...edge, polyline: points})) {
+    if (surveyed) {
+      const stored = selected ? edge.polyline : unmeasuredRoadPoints(map, edge);
+      if (stored) {
+        const attrs = {points: line(stored), class: 'stored-road'};
+        attrs[selected ? 'data-stored-road' : 'data-road-prefix'] = edge.id;
+        const overlay = el('polyline', attrs, svg);
+        el('title', {}, overlay).textContent = (selected ? '저장 주행 경로 · ' : '저장 주행 경로 · 영상 기준선 없음 · ') + routeLabel;
+      }
+    }
+    if (surveyed && !selected) continue;
+    for (const mark of arrowMarks({...edge, polyline: surveyed ? edge.polyline : points})) {
       const [px, py] = view.toPx(mark.x, mark.y);
-      el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
+      el('polygon', {class: surveyed ? 'arrow stored-road-arrow' : 'arrow', points: '8,0 -6,-6 -6,6',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);
     }
   }
@@ -443,12 +458,12 @@ $('site-map-svg').addEventListener('click', event => {
     render(); syncButtons();
     return;
   }
-  const target = event.target.closest('[data-place], [data-edge], [data-crosswalk]');
+  const target = event.target.closest('[data-place], [data-edge], [data-road-prefix], [data-crosswalk]');
   if (!target) return;
   // The map is where the operator picks a destination; the list follows the click.
   if (target.dataset.place && $('map-source').value === 'active') { $('trip-place').value = target.dataset.place; clearPlan(); }
   select(target.dataset.place ? {place: target.dataset.place}
-    : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
+    : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge || target.dataset.roadPrefix});
   syncButtons();
   if (screens.current() === 'map-heading') location.hash = '#edit-heading';
 });

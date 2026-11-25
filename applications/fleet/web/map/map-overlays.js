@@ -28,7 +28,7 @@ export function bindLayerToggles({scope, el, view, layerOn, draw}) {
   const toggleLayer = (key) => {
     if (key === "all") {
       const nextVal = !subKeys.some(layerOn);
-      for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
+      for (const k of [...subKeys, "site", "sightings", "tracking", "storedRoutes"]) view.layers[k] = nextVal;
     } else {
       view.layers[key] = !(view.layers[key] !== false);
     }
