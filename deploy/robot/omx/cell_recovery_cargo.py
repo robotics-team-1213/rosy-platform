@@ -5,14 +5,11 @@ import time
 from pathlib import Path
 
 from omx_incident_reading import rows
+from cell_route_check import _finite
 
 
 _FILE = "recovery-grasp.json"
 MAX_HEIGHT_RESIDUAL_MM = 1.5
-
-
-def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def fixed_site(name, arm):
