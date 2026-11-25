@@ -28,7 +28,7 @@ MAX_IMAGE_SIDE = 8192
 MAX_HISTORY_PER_SOURCE = 20
 _LOG = logging.getLogger(__name__)
 _LENS_KEYS = ("kind", "focal_mm", "hfov_deg")
-_METHODS = ("paint", "manual_points", "measured", "rollback")
+_METHODS = ("paint", "manual_points", "measured", "rollback", "auto_recal", "recal_approved")
 
 
 @dataclass(frozen=True)

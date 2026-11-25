@@ -3,7 +3,7 @@ import {
   flatMatrix, invert3, project, projectPolyline, projectTriangles, pickLanes, topDownLayout, fitFromCalibration,
 } from "/console/assets/map-fit.js";
 import { setOffBy } from "/common/cause-line.js";
-import { colorForErrorM, drawLoupe, seedPointsFromFit, snapMapPoint, warpTopDownCanvas } from "/console/assets/manual-fit-math.js";
+import { colorForErrorM, drawLoupe, formatRecalStatus, seedPointsFromFit, snapMapPoint, warpTopDownCanvas } from "/console/assets/manual-fit-math.js";
 import { isOperator } from "/console/assets/authorization.js";
 
 const tone = (name) => window.RosyPalette.cssColor(name);
@@ -36,11 +36,18 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
   const delBtn = el("manual-del-point");
   const clearBtn = el("manual-clear");
   const historyList = el("manual-history");
+  const recalBanner = el("manual-fit-recal-banner");
+  const recalText = el("manual-recal-text");
+  const recalPreviewBtn = el("manual-recal-preview");
+  const recalAcceptBtn = el("manual-recal-accept");
+  const recalDismissBtn = el("manual-recal-dismiss");
   const scratch = document.createElement("canvas");
 
   let lanes = null;
   let calibrations = [];
   let historyMap = {};
+  let recalMap = {};
+  let previewCandidate = null;
   let lastFrame = null;
   let pairs = [];       // [{ imagePx: [u,v]|null, mapM: [x,y]|null }]
   let selectedIdx = -1;
@@ -179,9 +186,10 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
       if (beforeCache.key !== bk) beforeCache = { key: bk, data: warpTopDownCanvas(ctx, img, m2s, layout, scratch, curFit.lensProfile) };
       if (beforeCache.data) ctx.putImageData(beforeCache.data, 0, 0);
     }
-    if (alpha > 0 && solved?.map_to_image) {
-      const ak = JSON.stringify([lastFrame.seq, solved.map_to_image, solved.lens_profile?.D, cw, ch]);
-      if (afterCache.key !== ak) afterCache = { key: ak, data: warpTopDownCanvas(ctx, img, solved.map_to_image, layout, scratch, solved.lens_profile) };
+    const cand = solved?.map_to_image ? solved : previewCandidate;
+    if (alpha > 0 && cand?.map_to_image) {
+      const ak = JSON.stringify([lastFrame.seq, cand.map_to_image, cand.lens_profile?.D, cw, ch]);
+      if (afterCache.key !== ak) afterCache = { key: ak, data: warpTopDownCanvas(ctx, img, cand.map_to_image, layout, scratch, cand.lens_profile) };
       if (afterCache.data) {
         if (alpha >= 1) ctx.putImageData(afterCache.data, 0, 0);
         else {
@@ -237,6 +245,20 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
     if (delBtn) setOffBy(delBtn, selectedIdx < 0 ? "선택된 점 없음" : "");
     if (blendInput) setOffBy(blendInput, (compareMode?.value || "after") !== "blend" ? "겹쳐 비교 모드에서 사용" : "");
     renderHistory();
+    renderRecalBanner();
+  }
+
+  function renderRecalBanner() {
+    if (!recalBanner || !recalText) return;
+    const row = recalMap[currentSource()];
+    const msg = formatRecalStatus(row);
+    recalBanner.hidden = !msg;
+    if (!msg) return;
+    recalText.textContent = msg;
+    const hasPend = Boolean(row?.pending_candidate);
+    if (recalPreviewBtn) setOffBy(recalPreviewBtn, busy ? "처리 중" : !hasPend ? "대기 후보 없음" : "");
+    if (recalAcceptBtn) setOffBy(recalAcceptBtn, busy ? "처리 중" : !operator() ? "운영자 권한 필요" : !hasPend ? "대기 후보 없음" : "");
+    if (recalDismissBtn) setOffBy(recalDismissBtn, busy ? "처리 중" : "");
   }
 
   async function refreshRecords() {
@@ -250,6 +272,7 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
       lanes = lsRes;
       calibrations = Array.isArray(calRes?.calibrations) ? calRes.calibrations : [];
       historyMap = calRes?.history || {};
+      recalMap = calRes?.recalibration || {};
       render();
     } catch (e) { if (e.name !== "AbortError") { /* ignore transient auth/load */ } }
   }
@@ -470,6 +493,33 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
   scope.listen(solveBtn, "click", () => { void runSolve(); });
   scope.listen(applyBtn, "click", () => { void applyManual(); });
   scope.listen(freezeBtn, "click", () => { void toggleFreeze(); });
+  scope.listen(recalPreviewBtn, "click", () => {
+    const cand = recalMap[currentSource()]?.pending_candidate;
+    if (!cand) return;
+    solved = null; previewCandidate = cand;
+    if (compareMode) compareMode.value = "blend";
+    drawComparePane();
+  });
+  scope.listen(recalAcceptBtn, "click", async () => {
+    const src = currentSource(); if (!src || busy) return;
+    const life = scope.capture(); life.check(); busy = true; render();
+    try {
+      const res = await call(`/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/accept`, { method: "POST", signals: [life.signal] });
+      life.check(); previewCandidate = null;
+      summaryEl.textContent = `재보정 후보 적용 완료: ${res.record?.calibration_revision || ""}`;
+      await refreshRecords(); onApplied(res.record);
+    } catch (err) { if (err.name !== "AbortError") summaryEl.textContent = `후보 적용 실패: ${err.message || err}`; }
+    finally { busy = false; render(); }
+  });
+  scope.listen(recalDismissBtn, "click", async () => {
+    const src = currentSource(); if (!src || busy) return;
+    const life = scope.capture(); life.check(); busy = true; render();
+    try {
+      await call(`/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/dismiss`, { method: "POST", signals: [life.signal] });
+      life.check(); previewCandidate = null; await refreshRecords();
+    } catch (err) { if (err.name !== "AbortError") summaryEl.textContent = `무시 실패: ${err.message || err}`; }
+    finally { busy = false; render(); }
+  });
   scope.listen(compareMode, "change", render);
   scope.listen(blendInput, "input", render);
   scope.listen(lensSelect, "change", () => {

@@ -6896,6 +6896,22 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/accept",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/dismiss",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/calibrations",
           "resolution": "literal-or-template",
@@ -7270,6 +7286,57 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/rollback"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "submit_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "accept_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "dismiss_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
         },
         {
           "id": "POST:/api/fleet/teach/confirm",

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { distortImagePoint, warpMesh } from "../../../../applications/fleet/web/map/camera-warp.js";
-import { colorForErrorM, seedPointsFromFit, snapMapPoint } from "../../../../applications/fleet/web/calibration/manual-fit-math.js";
+import { colorForErrorM, formatRecalStatus, seedPointsFromFit, snapMapPoint } from "../../../../applications/fleet/web/calibration/manual-fit-math.js";
 
 test("warpMesh applies forward radial distortion when lensProfile is provided", () => {
   const lp = {
@@ -38,4 +38,16 @@ test("snapMapPoint snaps to nearest polyline vertex within threshold and colors 
     image: { width: 640, height: 360 },
   }, ls, 640, 360);
   assert.equal(seeded.length, 6);
+});
+
+test("formatRecalStatus summarizes pending candidate and rollback states", () => {
+  assert.equal(formatRecalStatus(null), null);
+  assert.equal(formatRecalStatus({ state: "IDLE", pending_candidate: null }), null);
+  const msg = formatRecalStatus({
+    state: "NEEDS_OPERATOR",
+    pending_candidate: { reason: "drift_exceeds_auto_cap", metrics: { move_m: 0.31, rotation_deg: 2.4, rms_m: 0.004 } },
+  });
+  assert.match(msg, /31\.0 cm/);
+  assert.match(msg, /2\.4°/);
+  assert.match(formatRecalStatus({ state: "ROLLED_BACK", reason: "shadow_health_regression" }), /롤백됨/);
 });

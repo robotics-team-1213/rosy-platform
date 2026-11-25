@@ -1472,6 +1472,30 @@
       ],
       "source_revision": "4c4965eddc5b1ad9d8800127bb8219a53f640ccb"
     },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
     "POST:/api/fleet/teach/confirm": {
       "status": 200,
       "test": [

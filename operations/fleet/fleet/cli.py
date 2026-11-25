@@ -252,6 +252,8 @@ def run_console(args: argparse.Namespace) -> None:
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=calibration_store, drift_provider=drift_provider,
             health=getattr(calibration_drift_watch, 'health', None))
+        if calibration_drift_watch is not None:
+            calibration_drift_watch.on_health = tracking_service.observe_recalibration_health
         sighting_service.approved_revision = tracking_service.approved_revision
     if getattr(args, "vision_url", None) and tracking_service is None:
         print("warning: --vision-url set but no --sightings-config; the calibration drift "

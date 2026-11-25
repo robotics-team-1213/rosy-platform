@@ -130,7 +130,7 @@ def test_localization_arbiter_modules_import_no_transport(module):
 TRACKING_IMPORTERS = {"server/app.py", "server/bootstrap/role_builders.py",
                       "server/console/console_routes.py", "server/tracking/tracking.py",
                       "server/tracking/tracking_routes.py", "server/tracking/tracking_anchors.py",
-                      "server/tracking/tracking_drift.py",
+                      "server/tracking/tracking_drift.py", "server/tracking/recalibration.py",
                       "server/tracking/measured_calibration.py", "cli.py"}
 
 
