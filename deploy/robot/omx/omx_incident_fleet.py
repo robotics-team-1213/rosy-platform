@@ -336,6 +336,8 @@ def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=
     cleared = list(answer.incident_ids)
     if only is not None:  # D-1048: the evidence belongs to one incident; never spend it on another
         cleared = [i for i in cleared if i == only]
+        if recovery is not None and not cleared:
+            raise SystemExit("the incident named by the recovery evidence is no longer open")
     for incident_id in cleared:
         # the read names the one incident it clears (D-1040); an older link without the argument still clears
         extra = {"remeasured": {**remeasured, "incident_id": incident_id}} if remeasured else {}
