@@ -95,4 +95,5 @@ def test_only_fresh_map_pose_supersedes_a_previous_recovery_ladder():
     assert trust.badge(no_pose, ladder)["trusted"] is False
     assert trust.badge({**fresh, "localization": loc("LOCALIZED", "odom")}, ladder)["needs_human"] is True
     assert trust.badge({**fresh, "localization": loc(needs_human=True)}, ladder)["needs_human"] is True
-    assert trust.badge(fresh, {**ladder, "pose_request": {"state": "needs_human"}})["needs_human"] is True
+    manual = trust.badge(fresh, {**ladder, "pose_request": {"state": "needs_human"}})
+    assert manual["needs_human"] and manual["pose_request_needs_human"]

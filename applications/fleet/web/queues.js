@@ -143,7 +143,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const localization = localizationAttention(robot.localization, staleS === null ? state.localization : null,
-      view.guideUnavailable ? null : guideRow);
+      view.guideUnavailable ? null : guideRow, staleS !== null);
     if (localization) items.push(localization);
     if (localization?.severity !== "crit" && state.hitl_requested === true) {
       // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는

@@ -143,6 +143,8 @@ def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
     trusted = classify(state) == TRUSTED and pose_fresh is not False and not lapsed
     status = status_of(state)
     view = _without_resolved_ladder(view, trusted and pose_fresh is True)
+    pose_request = (view or {}).get("pose_request") or {}
+    pose_request_needs_human = pose_request.get("state") == "needs_human"
     needs_human = bool((view or {}).get("needs_human")) or bool(status and status.needs_human)
     label = (NEEDS_HUMAN_LABEL if needs_human
              else STATE_LABELS[status.state] if status is not None and (trusted or status.state is not LocState.LOCALIZED)
@@ -150,4 +152,4 @@ def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
     return {"state": status.state.value if status else LocState.UNKNOWN.value,
             "pose_frame": status.pose_frame.value if status else None,
             "trusted": trusted, "legacy": False, "needs_human": needs_human,
-            "label": label}
+            "label": label, **({"pose_request_needs_human": True} if pose_request_needs_human else {})}
