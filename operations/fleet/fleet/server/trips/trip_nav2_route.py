@@ -17,6 +17,7 @@ NAV2_CLOSED_LOOP_SPLIT_M = 0.60
 NAV2_SPLIT_MIN_SPAN_M = 0.25
 NAV2_SPLIT_WALL_CLEAR_M = 0.22
 NAV2_RETRY_S = 5.0
+NAV2_TRANSIENT_RETRY_S = 2.0
 NAV2_RETRIES = 2
 NAV2_MAX_REPLANS = 2
 _NAV_RUNNING = ("NAVIGATING", "PLANNING")
@@ -326,11 +327,13 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         reason = reply.get("reason") or ""
         if robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS:
             live.active_route = None
+            live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
             return
         raise _GoalRefused(reason)
     live.active_route = {"end_index": end_index, "points": len(payload)}
+    live.nav2_retry_at = -math.inf
     live.view["detail"].pop("goal_wait", None)
     live.view["detail"]["nav2_route"] = {"points": len(payload), "end_index": end_index, "lap": live.view.get("lap")}
     runner._fence(robot_id)  # Ensure the next tick reads post-dispatch robot state, never pre-POST ARRIVED.

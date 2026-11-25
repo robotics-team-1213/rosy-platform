@@ -26,6 +26,8 @@ MARKER_SIDE_M = 0.030
 #: D-587 6: corner geometry a robot marker must have to become a sighting.
 MIN_MARKER_SIDE_PX = 6.0
 MARKER_SIDE_BAND = (0.6, 1.4)
+#: Robot ArUco size band in metres, covering legacy 30 mm and enlarged black squares.
+ROBOT_ARUCO_SIDE_BAND_M = (0.018, 0.100)
 #: QR robot sticker black-square size band (18 mm..160 mm, LiDAR puck to top deck).
 QR_SIDE_BAND_M = (0.018, 0.160)
 MAX_MARKER_SIDE_RATIO = 1.33

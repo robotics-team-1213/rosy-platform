@@ -8,6 +8,7 @@ import time
 from hashlib import sha256
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from fakes import FakeClock, FakeRobot, fresh_power_health, run
@@ -19,7 +20,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.server.trip_guard import install_trip_guard
-from fleet.server.trip_nav2_route import NAV2_RETRIES, NAV2_RETRY_S
+from fleet.server.trip_nav2_route import NAV2_RETRIES, NAV2_RETRY_S, NAV2_TRANSIENT_RETRY_S
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripRunner
 from fleet.site_map import SiteMap
@@ -308,9 +309,10 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         assert len(robot.routes) == 2
 
 
-def test_nav2_autonomous_waits_on_transient_conflict_and_fails_closed_on_untrusted():
+@pytest.mark.parametrize("reason", ["ROUTE_CONFLICT", "YIELDING"])
+def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untrusted(reason):
     robot = RouteFakeRobot("rosy_42")
-    _clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
     runner.autonomous_robots = frozenset({"rosy_42"})
     pose["v"] = MapPose(0.5, -0.23, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
     ver = store.active()[0]
@@ -321,24 +323,33 @@ def test_nav2_autonomous_waits_on_transient_conflict_and_fails_closed_on_untrust
                       request={"to": "J_in", "drive_mode": "nav2"}, result={"plan": plan})
 
     orig_route = runner._route
-    reply_box = [{"accepted": False, "queued": False, "reason": "ROUTE_CONFLICT"}]
+    attempts = []
 
-    async def route_fn(_rid, _pts):
-        return reply_box[0]
+    async def route_fn(_rid, pts):
+        attempts.append(pts)
+        return {"accepted": False, "queued": False, "reason": reason}
 
     runner._route = route_fn
     run(runner.start("p-cf", "bob"))
     run(runner.tick())
     view = runner.view("p-cf")
-    assert view["state"] == "running" and view["detail"]["goal_wait"] == "ROUTE_CONFLICT"
-    assert runner._live["rosy_42"].active_route is None
+    assert view["state"] == "running" and view["detail"]["goal_wait"] == reason
+    live = runner._live["rosy_42"]
+    assert live.active_route is None
+    assert live.nav2_retry_at == clock() + NAV2_TRANSIENT_RETRY_S
 
-    # Transient conflict clears -> dispatches successfully.
+    clock.advance(0.5)
+    run(runner.tick())
+    assert len(attempts) == 1
+
+    # Once the cooldown expires, the cleared route can be dispatched.
+    clock.advance(NAV2_TRANSIENT_RETRY_S - 0.5)
     runner._route = orig_route
     run(runner.tick())
     view = runner.view("p-cf")
     assert view["state"] == "running" and runner._live["rosy_42"].active_route is not None
     assert "goal_wait" not in view["detail"]
+    assert live.nav2_retry_at == -math.inf
 
     # Non-transient LOCALIZATION_UNTRUSTED still fails closed as TRIP_GOAL_REFUSED.
     runner._live["rosy_42"].active_route = None

@@ -130,11 +130,12 @@ def test_bad_corner_geometry_is_not_sent(bad):
     assert _sightings({40: bad(_sticker(0.0, 0.0, 0.3))}) == ()
 
 
-def test_a_marker_far_from_the_sticker_size_or_outside_the_track_is_not_sent():
+def test_robot_aruco_accepts_enlarged_stickers_within_the_size_and_track_bounds():
     assert len(_sightings({40: _sticker(0.0, 0.0, 0.0, side=0.036)})) == 1
-    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.06)}) == ()     # 2x the sticker
-    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.012)}) == ()    # also < 6 px
-    assert _sightings({40: _sticker(1.6, 0.0, 0.0)}) == ()                 # beyond track bounds
+    assert len(_sightings({40: _sticker(0.0, 0.0, 0.0, side=0.06)})) == 1
+    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.14)}) == ()
+    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.012)}) == ()
+    assert _sightings({40: _sticker(1.6, 0.0, 0.0)}) == ()
 
 
 def test_qr_robot_marker_uses_qr_side_band_and_still_requires_yaw_offset():
