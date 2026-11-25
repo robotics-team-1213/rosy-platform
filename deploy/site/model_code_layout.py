@@ -6,6 +6,12 @@ LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/pe
 # Only these two policy-registry files: the Learning HF button (D-943) needs them, the rest of the folder stays out.
 HUB_FILES = ("learning/registry/policy/hub_sync.py", "learning/registry/policy/policy_output_paths.py")
 FILE_PICKER_FILES = ("applications/fleet/web/shared/file-picker.css", "applications/fleet/web/shared/file-picker.js")
+WORLD_EXPERIMENT_ENTRY = "learning/curation/perception/world_experiment_web.py"
+WORLD_EXPERIMENT_FILES = (
+    "learning/curation/perception/review_app_web/world-experiments.html",
+    "learning/curation/perception/review_app_web/world-experiments.js",
+    "learning/training/omx/experiment_world.py",
+)
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
                      # D-964: the lane/learned runtime the review and training tools import
                      "integrations/perception/perception_runtime/recording.py",

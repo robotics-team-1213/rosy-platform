@@ -71,6 +71,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from core_common.protocol.account_access import sign_access
     from core_common.protocol.account_client import AccountClient, AccountUnavailable
+    from learning_collaboration import ACCOUNT_DESTINATIONS
     from learning_rosy_accounts import RosyAccounts
     playwright = pytest.importorskip('playwright.sync_api')
     port = free_port()
@@ -104,7 +105,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
 
     receiver = AccountClient(tmp_path/'central.sqlite', issuer=issuer, client_id='learning', resource='project:one',
         callback=callback, public_keys={'key': public}, encryption_key=Fernet.generate_key(),
-        post=authority, destinations=('/accounts', '/'))
+        post=authority, destinations=ACCOUNT_DESTINATIONS)
     config = accounts.config()
     config['account_subjects'] = {'central-alice': 'alice'}
     config['public_origin'] = origin
@@ -134,6 +135,14 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     try:
         with playwright.sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
+            world = browser.new_page(ignore_https_errors=True)
+            try:
+                world.goto(origin + '/learning/world')
+                playwright.expect(world).to_have_url(origin + '/learning/world')
+                playwright.expect(world.locator('#world-experiments-main')).to_be_visible()
+                assert world.request.get(origin + '/api/accounts/session').json()['account_id'] == 'central-alice'
+            finally:
+                world.context.close()
             page = browser.new_page(ignore_https_errors=True)
             navigation_errors = []
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))

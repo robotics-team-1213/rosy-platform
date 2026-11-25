@@ -13,6 +13,24 @@ import class_sets
 import review_sam_assistance
 
 
+def detail_preview(store, index):
+    frame = store.get(index)
+    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or photo.shape[:2] != (frame['source']['height'], frame['source']['width']):
+        raise ValueError('source image dimensions differ')
+    light, a, b = cv2.split(cv2.cvtColor(photo, cv2.COLOR_BGR2LAB))
+    # Preserve flat areas: local sharpening must not invent texture in clipped regions.
+    blurred = cv2.GaussianBlur(light, (0, 0), 3)
+    light = cv2.addWeighted(light, 1.6, blurred, -0.6, 0)
+    curve = np.rint(255 * (np.arange(256) / 255) ** 1.5).astype(np.uint8)
+    light = cv2.LUT(light, curve)
+    enhanced = cv2.cvtColor(cv2.merge((light, a, b)), cv2.COLOR_LAB2BGR)
+    ok, data = cv2.imencode('.png', enhanced)
+    if not ok:
+        raise ValueError('preview encoding failed')
+    return data.tobytes()
+
+
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
