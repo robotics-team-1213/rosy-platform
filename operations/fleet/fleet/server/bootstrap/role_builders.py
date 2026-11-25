@@ -347,6 +347,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_relocalize_routes(
         app, service=getattr(app.state, "localization_service", None), clients=console.clients,
         read_state=map_pose.state, require_named_operator=require_named_operator,
+        read_state_receipt=map_pose.state_with_source, clock=lambda: map_pose._clock(),
         read_guard=read_guard, record_event=site_maps.record_event,
         busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
     if getattr(site_maps, "path", None) is not None:

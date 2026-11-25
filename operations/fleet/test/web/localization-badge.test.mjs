@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
-  localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
+  localizationAttention, localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
 } = await import("../../../../applications/fleet/web/localization-badge.js");
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
@@ -45,6 +45,19 @@ test("an UNKNOWN CORE pose can show a separate Fleet MapPose", () => {
   assert.equal(localizationTag(legacy, { pose: { x: 1, y: 2, state: "DEGRADED" } }).cls, "warn");
   assert.equal(localizationTag(legacy, { pose: null }).text, "위치 모름");
   assert.equal(localizationTag(row(), { pose: { state: "DEGRADED" } }).text, "위치 확정");  // D-395 robot: its own
+});
+
+test("fresh camera and an automatic CORE check are shown without a manual positioning demand", () => {
+  const pending = { state: "CANDIDATES", reason: "checking", needs_human: false };
+  const escalated = row({ state: "CANDIDATES", trusted: false, needs_human: true, label: "위치 확인 필요" });
+  const camera = { pose: { state: "LOCALIZED", source: "bridged", anchor_source: "sighting", last_sighting_age_s: .4 } };
+  assert.match(positionTag(escalated, camera, pending).text, /카메라.*CORE 검증 중/);
+  assert.equal(localizationAttention(escalated, pending, camera).severity, "warn");
+  assert.equal(localizationAttention(escalated, { ...pending, needs_human: true }, camera).severity, "crit");
+  assert.match(localizationAttention(escalated, { ...pending, reason: "inject_rejected" }, camera).text, /CORE 후보/);
+  assert.doesNotMatch(localizationAttention(escalated, pending, {
+    pose: { ...camera.pose, last_sighting_age_s: 10 },
+  }).text, /카메라/);
 });
 
 test("a mission held behind an untrusted robot says why", () => {
