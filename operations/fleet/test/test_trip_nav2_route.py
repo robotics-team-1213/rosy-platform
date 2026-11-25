@@ -499,10 +499,11 @@ def test_degraded_reroute_skips_trip_leased_goal():
     assert degraded == {"rosy_42"} and console._queued == {}
 
 
-def _console_runner(robot: RouteFakeRobot, smap: SiteMap, *, traffic_zones=None):
+def _console_runner(robot: RouteFakeRobot, smap: SiteMap, *, traffic_zones=None, peers=()):
     clock = FakeClock()
-    console = FleetConsole([RobotEndpoint(robot.robot_id, "http://127.0.0.1:8080", "t")],
-                           [robot], clock=clock, goal_lease_ttl_s=4.0)
+    robots = [robot, *peers]
+    console = FleetConsole([RobotEndpoint(r.robot_id, "http://127.0.0.1:8080", "t") for r in robots],
+                           robots, clock=clock, goal_lease_ttl_s=4.0)
     store = SiteMapStore(clock=clock)
     store.import_if_empty(smap, source="test")
     graph = store.active()[2]
