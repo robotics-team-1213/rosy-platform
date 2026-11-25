@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
 import cell_site_target
+from cell_route_check import pick_site
 from cell_task_act import execute_act_policy_task
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
@@ -301,8 +302,9 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     cal_err = cell_site_target.calibration_refusal(cfg_sites, src, dst, htier) if cell_id != "cell_s" else None
     if cal_err:
         return {"arm": arm_id, "error": cal_err, "stop_event": {"command": "stop", "ok": False, "folded": False}}
-    src_site = src.rsplit("-l", 1)[0]
-    roi = (cfg_data.get("sites") or {}).get(src_site, {}).get("auto_roi") or default_roi
+    src_site, roi = pick_site(cfg_data, src, dst, default_roi)
+    if roi is None:
+        return {"arm": arm_id, "error": "ROUTE_DEPTH_INPUTS_MISSING", "stop_event": {"command": "stop", "ok": False, "folded": False}}
     src_roi = roi
     omx_dir = Path(__file__).resolve().parent
     target = (cfg_data.get("sites") or {}).get(src_site, {}).get("dock_target_arm_xy_m")

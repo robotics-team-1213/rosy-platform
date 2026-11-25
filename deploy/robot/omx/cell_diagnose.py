@@ -44,6 +44,9 @@ ASK = {"edge_of_view": "move the box, or aim the top camera, so the box and the 
        "neighbour_clearance": "separate the object from its neighbours to leave the measured finger clearance",
        "out_of_reach": "move the box inside the arm's reach",
        "camera_moved": "the top camera moved since the map's reference: remap (cell_calibrate auto, a person at the switch), then rerun",
+       "camera_map_binding": "compare the deployed site geometry, map and reference image with the saved calibration generation, restore the verified matching set and rerun check",
+       "camera_reference_missing": "restore the verified reference image for this map and rerun check",
+       "camera_shift_unmeasured": "inspect the current and reference images for visibility and usable features, then repeat the camera check",
        "no_session": "start record_session.py --chunks for this arm, then rerun",
        "policy_timing_late": "policy chunks arrived late or missed control cycle: inspect latency before retrying",
        "policy_jaw_gate": "policy jaw gate blocked motion: verify jaw opening and calibration before moving",
@@ -93,6 +96,9 @@ RECOVERY = {
     # named apart so the ledger counts them: 13 calibrate and 35 descent stops in the 110 real attempts up to 2026-11-07
     "calibrate": ["ask_person"],
     "camera_moved": ["ask_person"],  # 2026-11-14 arm_s: a USB replug moved the top camera 109 px; six grasps closed on air
+    "camera_map_binding": ["ask_person"],
+    "camera_reference_missing": ["ask_person"],
+    "camera_shift_unmeasured": ["ask_person"],
     "no_session": ["ask_person"],
     # 2026-11-14 arm_s: park from a far pick overloaded shoulder_lift and the arm sagged onto the box; a moved pile never re-plans it
     "park_contact": ["ask_person"],
@@ -106,6 +112,24 @@ RECOVERY = {
     "policy_missing_calibration": ["ask_person"],
     "other": ["ask_person"],  # a fault, a refusal, an abort: never retried
 }
+
+
+def camera_reference(check: dict, limit_px: float) -> dict:
+    """Explain the camera check while preserving its existing stale-map refusal flag."""
+    shift = check.get("camera_shift")
+    binding = bool(check.get("map_binding_error") or check.get("reference_mismatch"))
+    displaced = bool(shift and shift["ok"] and shift["max_px"] > limit_px)
+    unmeasured = bool(shift and not shift["ok"])
+    if check.get("no_reference"):
+        issue = "camera_reference_missing"
+    elif binding:
+        issue = "camera_map_binding"
+    elif unmeasured:
+        issue = "camera_shift_unmeasured"
+    else:
+        issue = "camera_moved" if displaced else None
+    return {"camera_moved": binding or displaced or unmeasured, "camera_issue": issue,
+            "max_shift_px": limit_px, "camera_advice": ASK.get(issue)}
 
 
 def attempt_cause(result: str, pile_moved: bool = False) -> str:

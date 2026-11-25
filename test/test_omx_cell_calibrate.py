@@ -125,7 +125,8 @@ def test_reference_bytes_must_match_the_bound_calibration_before_camera_check(tm
     found = cc.check(config, calibration, [], np.full((32, 32, 3), 80, np.uint8))
     assert found["camera_moved"] is True
     assert found["map_binding_error"] == "top camera map reference changed"
-    assert cc.stale(found)[:2] == ["remap", "regions"]
+    assert found["camera_issue"] == "camera_map_binding"
+    assert cc.stale(found) == ["review-camera-reference"]
     config["preflight"]["reference_sha256"] = expected
     assert cc.check(config, {"sites": {}}, [], np.full((32, 32, 3), 80, np.uint8))["map_binding_error"]
     config["preflight"].pop("reference_sha256")
@@ -774,7 +775,8 @@ def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
               "calibrate": {"map_sites": ["floor"]}}
     found = cc.check(config, json.loads(cal_path.read_text()), [("floor", (0.0, 0.17))], np.zeros((32, 32, 3), np.uint8))
     assert "max_bias_mm" in found["bias_error"] and found["missing_bias"] == ["floor:0.0,0.17"]
-    assert "pivot-near floor:0.0,0.17" in cc.stale(found)
+    assert found["camera_issue"] == "camera_reference_missing"
+    assert cc.stale(found) == ["review-camera-reference"]
 
 
 PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]], "clear_first": True},

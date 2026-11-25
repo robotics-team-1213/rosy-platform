@@ -336,22 +336,23 @@ def main(argv=None) -> int:
             return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
         if args.task_id:
             config["_fleet_task"] = args.task_id
-        before_top = None
-        if args.dest_site and not args.dry_run and hasattr(cell, "frame_receipt"):
-            try:
-                before_top = cell.frame_receipt("top", max_age_s=2.0)
-            except Exception:
-                before_top = None
         def _execute() -> dict:
+            import cell_route_depth
+            before_top = None
+            if args.dest_site and not args.dry_run:
+                before_top, error = cell_route_depth.policy_before(cell, config, args.site, args.dest_site)
+                if error:
+                    return {"result": "refused", "reason": error}
+            runner = cell_route_depth.motion_cell(cell, before_top)
             if args.mode == "taught":
                 try:
-                    res = run_taught(cell, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
+                    res = run_taught(runner, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
                 except (OSError, ValueError, KeyError) as error:
                     res = {"result": "refused", "reason": str(error)}
             else:
                 import omx_tcp
                 demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
-                res = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
+                res = run_episode(runner, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
                                   log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
                                   max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
                                   params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
@@ -361,11 +362,8 @@ def main(argv=None) -> int:
                 res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
                 if None not in res["source"].values():
                     res["took_one"] = res["source"]["before"] - res["source"]["after"] == 1
-            if args.dest_site and not args.dry_run and res.get("result") in ("released", "chunks_done") and res.get("parked") is True:
-                import cell_zone_verification as czv
-                sites = config.get("sites") or {}
-                dst_roi = (sites.get(args.dest_site) or sites.get(args.dest_site.rsplit("-l", 1)[0]) or {}).get("auto_roi")
-                res["zone_verification"] = czv.measure(cell, before_top, config, args.dest_site, args.site or "pinky", dst_roi)
+            if args.dest_site and not args.dry_run:
+                cell_route_depth.policy_result(cell, before_top, config, args.site or "pinky", args.dest_site, res)
             return res
 
         import cell_bundle_emit
