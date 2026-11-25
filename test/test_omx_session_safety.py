@@ -28,6 +28,44 @@ def test_the_watchdog_is_cleared_then_set_on_every_motor_and_a_failed_write_refu
         bus_watchdog.arm(bus, 1000, write=lambda i, v: (0, 0) if i == 11 else (-1001, 0))
 
 
+@pytest.mark.skipif(os.name != "posix", reason="field wrappers use bash and flock")
+@pytest.mark.parametrize("letter", ["a", "b"])
+@pytest.mark.parametrize("exit_code", [78, 1])
+def test_prestart_refusal_only_restores_observer_when_verified_idle(tmp_path, letter, exit_code):
+    prep = tmp_path / "rosy-test/omx-record-prep-20261019"
+    io = prep / f"chunk-io-{letter}"
+    io.mkdir(parents=True)
+    (io / "chunk-status.jsonl").touch()
+    observer_env = tmp_path / ".config/rosy/omx-observation-bridge.env"
+    observer_env.parent.mkdir(parents=True)
+    observer_env.touch()
+    bin_dir = tmp_path / "rosy-omx/current-env/bin"
+    bin_dir.mkdir(parents=True)
+    for name, script in {
+        "systemctl": 'test "$2" = stop',
+        "python": ('case "$1" in\n'
+                   '  */record_session.py) echo "$2 $3" > "$HOME/selected-config"; exit "$TEST_SESSION_EXIT" ;;\n'
+                   '  */observer_handoff.py) echo "$2 $3" >> "$HOME/handoff" ;;\n'
+                   '  *) exit 99 ;;\nesac'),
+    }.items():
+        exe = bin_dir / name
+        exe.write_text(f"#!/bin/sh\n{script}\n")
+        exe.chmod(0o755)
+    env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}",
+           "TEST_SESSION_EXIT": str(exit_code), "ROSY_BASELINE_RECOVERY_ARM": f"arm_{letter}" if exit_code == 78 else ""}
+    result = subprocess.run(["bash", str(OMX / f"session-wrappers/with-session-arm-{letter}-par.sh"),
+                             "touch", str(tmp_path / "moved")], env=env, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 2 and "session did not start" in result.stdout
+    assert not (tmp_path / "moved").exists()
+    expected_config = "record-config.json" if letter == "a" and exit_code != 78 else f"record-config-arm-{letter}.json"
+    assert (tmp_path / "selected-config").read_text().strip() == f"--config {expected_config}"
+    handoff = tmp_path / "handoff"
+    if exit_code == 78:
+        assert handoff.read_text().splitlines() == [f"release arm_{letter}"]
+    else:
+        assert not handoff.exists()
+
+
 @pytest.mark.skipif(shutil.which("setsid") is None or os.name != "posix", reason="needs setsid (Linux)")
 def test_the_session_starts_in_its_own_process_session_and_is_reused(tmp_path):
     omx = tmp_path / "omx"

@@ -21,6 +21,27 @@ def _make_workdir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.mark.parametrize(("job", "arm", "expected"), [
+    ("remap", "arm_a", "arm_a"), ("remap", "arm_b", "arm_b"),
+    ("remap", "arm_s", None), ("calibrate_check", "arm_a", None),
+])
+def test_baseline_recovery_is_bound_to_supervised_ab_remap(tmp_path, monkeypatch, job, arm, expected):
+    popen = Mock(return_value=Mock(poll=Mock(return_value=0)))
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setenv("ROSY_BASELINE_RECOVERY_ARM", "arm_b")
+    runner = api.Runner(_make_workdir(tmp_path))
+    params = {"config": f"cell-{arm[-1]}.json"}
+    if job == "remap":
+        params.update(arm=arm, person_at_switch=True)
+    assert runner.start(job, params)["code"] == 202
+    assert popen.call_args.kwargs["env"].get("ROSY_BASELINE_RECOVERY_ARM") == expected
+    if expected:
+        wrapper = Path(popen.call_args.args[0][0])
+        assert wrapper == Path(api.__file__).parent / "session-wrappers" / Path(api.SESSION[arm]).name
+        assert wrapper.is_file()
+        assert popen.call_args.kwargs["env"]["TOOLS_ROOT"] == str(wrapper.parents[4])
+
+
 @pytest.mark.parametrize(
     ("job", "site_params", "status"),
     [

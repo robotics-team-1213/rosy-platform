@@ -1456,6 +1456,10 @@ safety_review_paths:
   - deploy/robot/omx/session_caps.py
   - deploy/robot/omx/commissioning_limits.py
   - deploy/robot/omx/record_session.py
+  - deploy/robot/omx/record_session_baseline.py
+  - deploy/robot/omx/record_session_cli.py
+  - deploy/robot/omx/session-wrappers/with-session-arm-a-par.sh
+  - deploy/robot/omx/session-wrappers/with-session-arm-b-par.sh
   - deploy/robot/omx/record_session_helpers.py
   - deploy/robot/omx/cell_auto_safety.py
   - deploy/robot/omx/cell_transfer.py

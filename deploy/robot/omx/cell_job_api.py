@@ -227,6 +227,13 @@ class Runner:
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
             env = {**os.environ, "ROSY_ARM_LEASE_OWNER": self._lease_owner}
+            env.pop("ROSY_BASELINE_RECOVERY_ARM", None)
+            if name == "remap" and arm in AB_ARMS and principal.role == ROLE_HUMAN and eff_params.get("person_at_switch") is True:
+                tools_dir = Path(__file__).resolve().parent
+                argv[0] = str(tools_dir / "session-wrappers" / Path(SESSION[arm]).name)
+                env["TOOLS_ROOT"] = str(tools_dir.parents[2])
+                env.setdefault("ROSY_SESSION_CHUNKS", f"chunks-arm-{arm[-1]}-beltend-ship-t2-canon.json")
+                env["ROSY_BASELINE_RECOVERY_ARM"] = arm
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:

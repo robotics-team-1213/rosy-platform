@@ -23,6 +23,7 @@ from uuid import uuid4  # noqa: F401
 from joint_tune import BASELINE, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock  # noqa: F401
 from record_config import validate_config
 import record_session_cli as _rsc
+import record_session_baseline as resting
 from record_session_helpers import (  # noqa: F401
     CARD_SCHEMA,
     STATIC_RANGE,
@@ -68,6 +69,7 @@ class Session:
         self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
         self.operating_profile, self.skip_leader_finish = operating_profile, bool(skip_leader_finish)
         self.hardware_faults = {}
+        self.baseline_recovery_arm = None
 
     def handover_units(self):
         """Camera units first, then camera-view and readiness; reversed for stopping (dependents first)."""
@@ -102,7 +104,7 @@ class Session:
             raised = raised_profile(bus)  # a killed session's raised servo profile is not the baseline either (commissioning_limits --baseline)
             if raised or any(caps[name] != BASELINE[name] for name in caps):
                 caps = {**caps, **raised}
-                raise SystemExit(
+                raise resting.BaselineMismatch(
                     f"follower {motor} caps {caps} are not the baseline: an earlier session did not restore "
                     "them - commissioning_limits.py --baseline (torque OFF) before recording"
                 )
@@ -262,7 +264,16 @@ class Session:
             record["operating_profile"] = profile["binding"]
         pairs = self.pair_sessions(config)
         for session in pairs.values():
-            session._with_follower(session.check_idle)
+            try:
+                session._with_follower(session.check_idle)
+            except resting.BaselineMismatch:
+                if not (self.baseline_recovery_arm and pairs.get("single") is session and self.operating_profile):
+                    raise
+                if record["operating_profile"]["device_id"] != self.baseline_recovery_arm:
+                    raise SystemExit("REFUSED: baseline recovery arm differs from operating profile")
+                record["baseline_receipt"] = resting.restore(self.baseline_recovery_arm, config["robot"])
+                self.log(step="baseline_restored", receipt=record["baseline_receipt"])
+                session._with_follower(session.check_idle)
         if pairs.get("single") is self and not self.chunks and self.replay is None:
             record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
