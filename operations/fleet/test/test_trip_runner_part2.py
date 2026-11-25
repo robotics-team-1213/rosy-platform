@@ -567,13 +567,16 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
 
 def test_create_app_wires_the_real_trip_providers(tmp_path):
     from test_site_map_trip import _app as plain_app
+    from test_trip_caps import _caps, _robot_caps
 
+    from fleet.server.console_view import TripCaps
     from fleet.server.map_pose_service import MapPoseService
     from fleet.server.trip_ports import HttpLaneJunction
 
-    client, _tasks, _store, _robot = plain_app(tmp_path)
+    client, _tasks, _store, robot = plain_app(tmp_path)
+    _robot_caps(robot, _caps())
     runner = client.app.state.trip_runner
-    assert runner._caps.__name__ == "_trip_caps"  # the planner's capability closure (install_trip_routes)
+    assert run(runner._caps(robot.robot_id)) == TripCaps("pinky_pro", frozenset({"lane"}), 0.1)
     assert isinstance(runner._poses, MapPoseService) and runner._poses is client.app.state.map_pose
     assert isinstance(runner._junction, HttpLaneJunction)
 
