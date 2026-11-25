@@ -182,7 +182,8 @@ class TripReplan:
             await self._caps_checks(robot_id, graph, segments, bool(live.repeat), detail=live.view["detail"], **kw)
             if not current():
                 return
-            await self._pose_checks(robot_id, graph, segments, precision_scope=live.nav2_binding_scope, **kw)
+            pose_options = {**kw, "precision_scope": live.nav2_binding_scope} if live.nav2_binding_scope else kw
+            await self._pose_checks(robot_id, graph, segments, **pose_options)
             if current():
                 self._apply_replan(live, hold, principal_id)
                 return True
@@ -211,7 +212,8 @@ class TripReplan:
         try:
             graph = self._graph_for(live.view["map_version"])
             kw = {"nav2": True} if live.nav2 else {}
-            await self._pose_checks(robot_id, graph, segments[index:], precision_scope=live.nav2_binding_scope, **kw)
+            pose_options = {**kw, "precision_scope": live.nav2_binding_scope} if live.nav2_binding_scope else kw
+            await self._pose_checks(robot_id, graph, segments[index:], **pose_options)
             body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
                 self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
             await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True,
