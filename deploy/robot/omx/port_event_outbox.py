@@ -8,6 +8,11 @@ and the reading is stored before it is sent, so a resend is the same reading (Fl
 
   port_event_outbox.py send --arm ARM     resend every unsent reading (also run before each carry)
   port_event_outbox.py rfid --arm ARM     read one EPC from stdin, queue it, and send it
+
+On a Linux cell PC, rfd40_cell.py can provide the EPC over Bluetooth SPP. Use its RFID
+Serial Port channel, start the command, then pull and release the RFID trigger.
+Pipe its output into the rfid command to use the cell's observation credentials.
+The Fleet intake endpoint must be configured before it can accept the queue.
 """
 from __future__ import annotations
 
@@ -60,10 +65,10 @@ def send(link, directory: Path | None = None) -> bool:
             continue
     for _, path in sorted(pending):
         try:
-            body = path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue  # Another sender already received Fleet's acknowledgement.
-        try:
+            try:
+                body = path.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                continue  # Another sender already received Fleet's acknowledgement.
             link.post_intake_reading(IntakeReading.model_validate_json(body))
         except Exception as exc:  # unreachable, refused or a bad file: it stays for the next send
             print(f"intake reading {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
