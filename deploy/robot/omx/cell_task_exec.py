@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
 import cell_site_target
-from cell_task_act import execute_act_policy_task
+from cell_task_act import preflight_act_policy_task
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 _DEFAULT_URLOPEN = urlopen
@@ -252,7 +252,7 @@ def zone_fix(target, centres, tol_m: float = ZONE_TOL_M) -> dict | None:
 
 
 def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dict[str, Any]:
-    """Execute one Fleet cell handoff via the arm's session wrapper and `cell_auto_pick.py` or `cell_policy_drive.py`."""
+    """Execute one Fleet cell handoff using the guarded pick executor or the read-only ACT preflight."""
     arm_id = resolve_task_arm(handoff)
     hold = check_arm_hold(arm_id)
     if hold.get("held"):
@@ -263,13 +263,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         if handoff.get("displaced_to") not in (None, ""):
             return {"arm": arm_id, "error": "UNCALIBRATED_DISPLACED_SITE",
                     "stop_event": {"command": "stop", "ok": False, "folded": False}}
-        return execute_act_policy_task(
-            handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper, cfg=cfg, cat=cat, default_roi=default_roi,
-            lease_owner=f"{WORKER_LEASE_PREFIX}{os.getpid()}", tools_root_fn=tools_root, run_fn=subprocess.run,
-            last_json_fn=last_json_object, measured_fold_fn=measured_fold, source_clearance_fn=source_clearance,
-            fold_readback_fn=fold_readback, plan_home_fn=plan_home, write_context_fn=write_context,
-            timeout_exc=subprocess.TimeoutExpired,
-        )
+        return preflight_act_policy_task(handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper,
+                                         cfg=cfg, default_roi=default_roi)
     if not wrapper.is_file() or not cfg.is_file():
         return {"arm": arm_id, "error": "CELL_CONFIG_OR_WRAPPER_MISSING",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}

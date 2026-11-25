@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import threading
 import time
@@ -27,7 +26,6 @@ import cell_job_api as api  # noqa: E402
 import cell_job_client as jc  # noqa: E402
 import cell_recovery as rec  # noqa: E402
 import cell_requests as reqs  # noqa: E402
-import cell_task_act as cta  # noqa: E402
 import cell_vlm_facts as vfacts  # noqa: E402
 import cell_vlm_orchestrator as orch  # noqa: E402
 
@@ -300,94 +298,9 @@ def test_verify_job_outcome_rejects_fake_exit_zero_success(tmp_path, monkeypatch
     assert st_unfolded == "failed"
 
 
-def test_cell_executor_and_task_act_failure_metadata(tmp_path):
+def test_cell_executor_records_act_failure_metadata(tmp_path):
     assert ce.EXECUTOR_CANDIDATES == ("ik_chunk", "smolvla", "act_policy")
     assert ce.APPROVED_REAL_EXECUTORS == frozenset({"ik_chunk"})
     ch = cell_choices.Choices(tmp_path / "choices.json")
     rec_row = ce.record_act_outcome(ch, "t-act-1", False, "policy chunk late", failure_class="policy_timing_late")
     assert rec_row["outcome"] == "failed" and ch.data["values"]["exec.act_policy"][0]["tries"] == 1
-
-    prep = tmp_path / "prep"
-    prep.mkdir()
-    wrapper = prep / "wrapper.sh"
-    wrapper.write_text("#!/bin/sh\n", encoding="utf-8")
-    (prep / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
-    cfg = prep / "cfg.json"
-    cfg.write_text(json.dumps({
-        "io": str(prep),
-        "sites": {"pinky": {"auto_roi": [0, 0, 10, 10]}, "belt": {"auto_roi": [20, 20, 40, 40]}},
-        "act_policy": {
-            "execution_allowed": True, "policy_root": "/m", "policy_revision": "a" * 64,
-            "cell_calibration": "c.json", "model_calibration": "m.json",
-        },
-    }), encoding="utf-8")
-    out = cta.execute_act_policy_task(
-        {"task_id": "act-fail-1", "cell_id": "cell_s", "src_site": "pinky", "dst_site": "belt",
-         "presence": {"operator": "livsbittt", "at": time.time() - 2}},
-        arm_id="arm_s", prep_dir=prep, wrapper=wrapper, cfg=cfg, cat=prep / "cat.json",
-        default_roi=(0, 0, 10, 10), lease_owner="w1", tools_root_fn=lambda: prep,
-        run_fn=lambda cmd, **_k: subprocess.CompletedProcess(
-            cmd, 1, stdout=json.dumps({
-                "result": "refused", "reason": "policy chunk is late, all action times passed",
-                "failure_bundle_id": "20261123T050000Z-arm_s-policy_fail",
-                "episode_ref": "ep_closed_001", "source": {"before": 1, "after": 1}, "took_one": False,
-            }) + "\n", stderr=""
-        ),
-        last_json_fn=json.loads,
-        measured_fold_fn=lambda *_a: {"folded": True, "state": [0.0] * 6, "fresh": True},
-        source_clearance_fn=lambda *_a: {"objects": 1},
-        fold_readback_fn=lambda *_a: {"folded": True, "state": [0.0] * 6},
-        plan_home_fn=lambda *_a: [0.0] * 6,
-        write_context_fn=lambda *_a, **_k: None,
-        timeout_exc=subprocess.TimeoutExpired,
-        choices=ch,
-    )
-    assert out["stage_result"]["task_verified"] is False
-    assert out["failure_class"] == "policy_timing_late"
-    assert out["failure_stratum"] == "human_only" and out["requires_named_approval"] is True
-    assert out["episode_ref"] == "ep_closed_001"
-    assert out["failure_bundle_id"] == "20261123T050000Z-arm_s-policy_fail"
-    assert ch.data["values"]["exec.act_policy"][0]["tries"] == 2
-
-    # held stop skips record_act_outcome and does not misclassify as zone_unverified.
-    out_held = cta.execute_act_policy_task(
-        {"task_id": "act-fail-2", "cell_id": "cell_s", "src_site": "pinky", "dst_site": "belt",
-         "presence": {"operator": "livsbittt", "at": time.time() - 2}},
-        arm_id="arm_s", prep_dir=prep, wrapper=wrapper, cfg=cfg, cat=prep / "cat.json",
-        default_roi=(0, 0, 10, 10), lease_owner="w1", tools_root_fn=lambda: prep,
-        run_fn=lambda cmd, **_k: subprocess.CompletedProcess(
-            cmd, 1, stdout=json.dumps({"result": "held", "reason": "operator hold", "took_one": False}) + "\n", stderr=""
-        ),
-        last_json_fn=json.loads,
-        measured_fold_fn=lambda *_a: {"folded": True, "state": [0.0] * 6, "fresh": True},
-        source_clearance_fn=lambda *_a: {"objects": 1},
-        fold_readback_fn=lambda *_a: {"folded": True, "state": [0.0] * 6},
-        plan_home_fn=lambda *_a: [0.0] * 6,
-        write_context_fn=lambda *_a, **_k: None,
-        timeout_exc=subprocess.TimeoutExpired,
-        choices=ch,
-    )
-    assert out_held["failure_class"] == "policy_chunk_refused"
-    assert out_held["failure_stratum"] == "human_only" and out_held["requires_named_approval"] is True
-    assert ch.data["values"]["exec.act_policy"][0]["tries"] == 2
-
-    # released without zone_verification classifies as policy_zone_unverified + human_only.
-    out_unver = cta.execute_act_policy_task(
-        {"task_id": "act-fail-3", "cell_id": "cell_s", "src_site": "pinky", "dst_site": "belt",
-         "presence": {"operator": "livsbittt", "at": time.time() - 2}},
-        arm_id="arm_s", prep_dir=prep, wrapper=wrapper, cfg=cfg, cat=prep / "cat.json",
-        default_roi=(0, 0, 10, 10), lease_owner="w1", tools_root_fn=lambda: prep,
-        run_fn=lambda cmd, **_k: subprocess.CompletedProcess(
-            cmd, 0, stdout=json.dumps({"result": "released", "parked": True, "took_one": True}) + "\n", stderr=""
-        ),
-        last_json_fn=json.loads,
-        measured_fold_fn=lambda *_a: {"folded": True, "state": [0.0] * 6, "fresh": True},
-        source_clearance_fn=lambda *_a: {"objects": 0},
-        fold_readback_fn=lambda *_a: {"folded": True, "state": [0.0] * 6},
-        plan_home_fn=lambda *_a: [0.0] * 6,
-        write_context_fn=lambda *_a, **_k: None,
-        timeout_exc=subprocess.TimeoutExpired,
-        choices=ch,
-    )
-    assert out_unver["failure_class"] == "policy_zone_unverified"
-    assert out_unver["failure_stratum"] == "human_only" and out_unver["requires_named_approval"] is True

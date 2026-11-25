@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 
+from fleet.pipeline.cell_site_targets import ARM_CELL, act_route_refusal
 from core_common.protocol.cell_failure_context import canonical_sha256
 from core_common.protocol.pipeline_recovery_tools import (
     MAX_ACT_FALLBACK_CHUNKS,
@@ -14,7 +15,7 @@ from core_common.protocol.pipeline_recovery_tools import (
 from fleet.server.sitemap import pipeline_auto_events, pipeline_repark
 
 CELL_ARMS = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
-ARM_CELL = {"arm_s": "cell_s", "arm_a": "cell_ab", "arm_b": "cell_ab"}
+
 CAM_CELL = {"arm_s_top": "cell_s", "arm_s_wrist": "cell_s", "top": "cell_ab", "side": "cell_ab",
             "arm_a_wrist": "cell_ab", "arm_b_wrist": "cell_ab"}
 _STAGED_LOCKED = (
@@ -461,8 +462,6 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
             disp_why = vla_why = common_block
         elif depth >= 1:
             disp_why = vla_why = "FALLBACK_DEPTH_EXCEEDED"
-        elif cell_id != "cell_s" or arm_id != "arm_s":
-            disp_why, vla_why = "CELL_S_ONLY", "ACT_POLICY_UNSUPPORTED_ARM"
         elif held_any or not folded:
             disp_why = vla_why = "ARM_NOT_FOLDED_OR_HELD"
         else:
@@ -470,6 +469,17 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
                 disp_why = "RECOVERY_CAP_EXCEEDED"
             if budgets.get("enqueue_vla_act_fallback", 0) >= MAX_RECOVERIES_PER_ROOT:
                 vla_why = "RECOVERY_CAP_EXCEEDED"
+
+        if disp_why is None and (cell_id, arm_id) != ("cell_s", "arm_s"):
+            disp_why = "CELL_S_ONLY"
+        if vla_why is None:
+            if not task or not all(task.get(k) for k in ("arm_id", "src_site", "dst_site", "tier")):
+                vla_why = "ORIGINAL_TASK_ROUTE_REQUIRED"
+            elif task.get("directive"):
+                vla_why = "DIRECTIVE_REQUIRES_NEW_TASK"
+            else:
+                vla_why = act_route_refusal(cell_id, task["arm_id"], task["src_site"], task["dst_site"],
+                                            task["tier"], task.get("displaced_to"))
 
         rp_why = ("PLACEMENT_ALREADY_VERIFIED_HOME_ONLY" if trigger == "FOLD_READBACK_MISSING"
                   else common_block if common_block else "NO_REACH_FIX" if not has_fix

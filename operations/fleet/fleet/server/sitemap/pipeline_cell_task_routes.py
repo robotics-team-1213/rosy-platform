@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
-from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
+from fleet.pipeline.cell_site_targets import cell_task_presets, act_route_refusal, expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled, install_pinky_dispatch
@@ -135,20 +135,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _commit_ledger(bump_stop=True) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_stop_generation())
         return res
 
-    CELL_TASK_PRESETS: dict[str, dict] = {
-        "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
-        "s3_act_policy": {"preset": "s3_act_policy", "label": "S3 ACT 정책 구동 (arm_s · 최신 모델)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "execution_mode": "act_policy", "max_chunks": 4},
-        "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
-        "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
-        "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
-        "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
-        "s5_tier2_arm_b": {"preset": "s5_tier2_arm_b", "label": "S5 적재 2층 (arm_b: Belt -> Pallet L1)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None},
-        "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
-        "export_s3_belt": {"preset": "export_s3_belt", "label": "반출대 3 반출 (EXP_S3_BELT · arm_s)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "zone_id": "EXP_S3_BELT"},
-        "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
-        "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
-        "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
-    }
+    CELL_TASK_PRESETS = cell_task_presets()
 
     @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
     async def report_displaced_detection(request: Request):
@@ -190,8 +177,6 @@ def install_cell_tasks_routes(app, ctx) -> None:
         execution_mode = spec.get("execution_mode")
         if execution_mode is not None and execution_mode not in ("guarded_pick", "act_policy"):
             raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
-        if execution_mode == "act_policy" and (cell_id != "cell_s" or arm_id != "arm_s"):
-            raise HTTPException(422, detail={"code": "ACT_POLICY_UNSUPPORTED_ARM"})
         max_chunks = spec.get("max_chunks")
         if max_chunks is not None and (execution_mode != "act_policy" or type(max_chunks) is not int or not 1 <= max_chunks <= 6):
             raise HTTPException(422, detail={"code": "INVALID_MAX_CHUNKS"})
@@ -202,8 +187,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                       or directive.get("arm_id") != arm_id):
             raise HTTPException(422, detail={"code": "INVALID_CELL_DIRECTIVE"})
         raw_disp = spec.get("displaced_to")
-        if execution_mode == "act_policy" and raw_disp is not None:
-            raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
+        if execution_mode == "act_policy":
+            refusal = act_route_refusal(cell_id, arm_id, targets["src_site"], targets["dst_site"], tier, raw_disp)
+            if refusal:
+                raise HTTPException(422, detail={"code": refusal})
         resolved_robot_id = _resolve_cell_robot_id(cell_id, spec)
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)
