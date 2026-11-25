@@ -166,7 +166,10 @@ class Handler(BaseHTTPRequestHandler):
     def static(self, path):
         if path.startswith("/common/"):
             name = path.removeprefix("/common/")
-            manifest = json.loads((COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+            try:
+                manifest = json.loads((COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+            except FileNotFoundError:
+                return self.json(503, {"error": "배포본에 공통 화면 자산 목록이 없습니다."})
             if name in manifest and (COMMON / name).is_file():  # the manifest is the allowlist
                 return self.send(200, f"{manifest[name]}; charset=utf-8", (COMMON / name).read_bytes())
             return self.json(404, {"error": "없는 파일입니다."})

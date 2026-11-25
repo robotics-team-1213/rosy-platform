@@ -101,6 +101,12 @@ def test_page_and_assets_are_served_but_not_arbitrary_files(open_screen):
         assert call(open_screen, path)[0] == 404
 
 
+def test_missing_common_manifest_returns_service_unavailable(open_screen, monkeypatch, tmp_path):
+    monkeypatch.setattr(web, "COMMON", tmp_path)
+    status, body = call(open_screen, "/common/tokens.css")
+    assert status == 503 and "자산 목록" in json.loads(body)["error"]
+
+
 def test_host_header_must_be_local(open_screen):
     request = Request(open_screen + web.API, headers={"Host": "evil.test"})
     with pytest.raises(HTTPError) as error:

@@ -116,12 +116,14 @@ COMMISSIONING = ["test/test_omx_commissioning_view.py"]
 MONITORING = ["test/test_monitoring_browser.py"]
 RECOVERY = ["test/test_network_recovery_browser.py"]
 WORLD = ["test/test_world_live_ui_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD
+CALIBRATION = ["test/test_calibration_header_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD + CALIBRATION
 
 SERVER = "operations/fleet/fleet/server/"
 WEB = "applications/fleet/web/"
 SCOPE: dict[str, list[str]] = {
     "applications/world/": WORLD,
+    "applications/calibration/": CALIBRATION,
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
@@ -215,7 +217,7 @@ SCOPE: dict[str, list[str]] = {
     **{f"deploy/robot/pinky_pro/native/{name}": RECOVERY for name in
        ("network_recovery.py", "network_recovery_http.py", "recovery_launcher.py", "install-native-runtime.sh")},
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO + RECOVERY,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO + RECOVERY + CALIBRATION,
     "test/browser_harness.py": EVERYTHING,
 }
 
