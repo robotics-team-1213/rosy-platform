@@ -56,6 +56,8 @@ from .sensing.perception.paint_hypothesis import camera_paint_points, paint_scor
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.reference_square import HsvSquareDetector
 from .tf_buffer import RobotTransformBuffer
+from .loc_verify_trace import VerificationTrace
+from .sensing.loc_verify import FAILED, PENDING
 
 WINDOW_START_NS = 5_000_000_000
 
@@ -118,6 +120,7 @@ class LocAssistNode(Node):
                               hold_s=self.p('hold_s'), min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'),
                               max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
         self._last_settled_scan_s = -math.inf
+        self.verification_trace = None
         self.field = self.clear = self.scan = None
         self.generation = 0
         self.squares = self._squares()
@@ -212,7 +215,13 @@ class LocAssistNode(Node):
     def on_scan(self, msg):
         self.scan = msg
         machine = self.core.machine
+        trace = self.verification_trace if machine.check is not None else None
+        stamp = rclpy.time.Time.from_msg(msg.header.stamp) if trace is not None else None
+        if trace is not None:
+            trace.scan(stamp.nanoseconds * 1e-9)
         if self.field is None:
+            if trace is not None:
+                trace.scan_error = "map unavailable"
             return
         now = self.now()
         if machine.check is None and not machine.autonomy_allowed:
@@ -230,16 +239,24 @@ class LocAssistNode(Node):
         # processing of /initialpose; a pose AMCL never applied still fails.
         try:
             tf = self.tf.lookup_transform_full('map', rclpy.time.Time(), msg.header.frame_id,
-                                               rclpy.time.Time.from_msg(msg.header.stamp), 'odom')
-        except Exception:
+                                               (stamp if stamp is not None else
+                                                rclpy.time.Time.from_msg(msg.header.stamp)), 'odom')
+        except Exception as exc:
+            if trace is not None:
+                trace.scan_error = str(exc)[:240]
             return                          # no fit this scan; a long gap fails the check on tick
         tr = tf.transform.translation
         sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
         scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
-        fit = scorer(sensor, ranges, angles)
+        breakdown = (self.field.explain(sensor, ranges, angles)
+                     if trace is not None and hasattr(self.field, 'explain') else None)
+        fit = scorer(sensor, ranges, angles) if breakdown is None else breakdown.robust_score
+        if trace is not None:
+            trace.fit(stamp.nanoseconds * 1e-9, now, sensor, msg.header.frame_id, fit, breakdown)
         self._last_settled_scan_s = now
         self.publish(self.core.on_fit(now, fit))
+        self.log_verification(now)
         if self.core.objects_due(now):
             self.report_objects(now, msg, sensor)
 
@@ -493,6 +510,7 @@ class LocAssistNode(Node):
         if self.search is not None and self.search.done():
             self.finish_search(now)
         self.publish(self.core.tick(now))
+        self.log_verification(now)
         self.sync_camera()
         if self.search is None and self.field is not None and self.scan is not None and self.core.camera_wanted:
             odom = self.odom()
@@ -513,6 +531,28 @@ class LocAssistNode(Node):
             else:
                 self.pub[kind].publish(String(data=json.dumps(payload, sort_keys=True)))
 
+    def log_verification(self, now):
+        trace = self.verification_trace
+        if trace is None:
+            return
+        if trace.check.result == PENDING:
+            if trace.check is not self.core.machine.check:
+                self.verification_trace = None  # pickup or another guard ended the check
+            return
+        self.verification_trace = None
+        mount = None
+        if trace.sample is not None:
+            try:
+                t = self.tf.lookup_transform("base_link", trace.sample["sensor_frame"], rclpy.time.Time()).transform
+                mount = Mount(t.translation.x, t.translation.y, yaw(t.rotation))
+            except Exception:
+                pass  # the sampled map-frame sensor pose is still in the report
+        message = "localization verification " + json.dumps(trace.report(now, mount), sort_keys=True)
+        if trace.check.result == FAILED:
+            self.get_logger().warning(message)
+        else:
+            self.get_logger().info(message)
+
     def inject(self, injection):
         msg = PoseWithCovarianceStamped()
         msg.header.frame_id = 'map'
@@ -523,6 +563,8 @@ class LocAssistNode(Node):
         msg.pose.covariance[0] = msg.pose.covariance[7] = injection.xy_std ** 2
         msg.pose.covariance[35] = injection.yaw_std ** 2
         self.initial_pose.publish(msg)
+        check = self.core.machine.check
+        self.verification_trace = VerificationTrace(check, injection) if check is not None else None
         self.get_logger().info(f'initialpose from {injection.source} decision {injection.request_id}: '
                                f'({x:.3f}, {y:.3f}, {heading:.3f}); 3 s check started')
 

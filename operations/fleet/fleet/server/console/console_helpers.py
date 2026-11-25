@@ -131,9 +131,11 @@ async def snapshot(self) -> dict:
     for row in robots:
         refresh_console_dispatch_fields(self, row)
         view = self._localization_view
+        observed_at = row.get("_state_mono")
+        age_s = max(0.0, self._clock() - observed_at) if observed_at is not None else 0.0
         row["localization"] = trust.badge(
             row["state"], view(row["robot_id"]) if view is not None else None,
-            lapsed=self._lapsed(row["robot_id"]))
+            lapsed=self._lapsed(row["robot_id"]), state_age_s=age_s)
     online = sum(1 for r in robots if r["online"])
     if self._signals is not None:
         # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.

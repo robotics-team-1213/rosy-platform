@@ -11,10 +11,12 @@ Fleet camera/operator MapPose is a separate evidence source (D-494, D-598).
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Mapping, Optional, Sequence
 
 from pydantic import ValidationError
 
+from core_common.protocol.evidence import STALE_POSE_S
 from core_common.protocol.localization import LocalizationStatus, LocState, PoseFrame
 
 TRUSTED = "trusted"
@@ -93,21 +95,59 @@ def blocks(route: Sequence[Point], last_trusted: Optional[Point],
                for i in range(len(route) - 1))
 
 
+def native_pose_freshness(state: Mapping, state_age_s: float = 0.0) -> Optional[bool]:
+    """Use CORE timestamps within one packet and Fleet's packet age, without assuming synchronized clocks."""
+    if not 0.0 <= state_age_s < STALE_POSE_S:
+        return False
+    channels = state.get("evidence")
+    evidence = channels.get("pose") if isinstance(channels, Mapping) else None
+    if evidence is None:
+        return None  # legacy snapshot: insufficient evidence to dismiss an outstanding ladder
+    if not isinstance(evidence, Mapping) or evidence.get("evidence") != "fresh":
+        return False
+    try:
+        snapshot_at = datetime.fromisoformat(state["timestamp"])
+        pose_at = datetime.fromisoformat(evidence["received_at"])
+        pose_age_s = (snapshot_at - pose_at).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        return False
+    xy = _xy(state)
+    return (0.0 <= pose_age_s and pose_age_s + state_age_s < STALE_POSE_S
+            and xy is not None and all(math.isfinite(v) for v in xy))
+
+
+def _without_resolved_ladder(view: Optional[Mapping], localized: bool) -> Optional[Mapping]:
+    if not localized or view is None or view.get("candidates_for_s") is None:
+        return view
+    pose_request = view.get("pose_request") or {}
+    return {**view, "rung": None, "candidates_for_s": None, "rung_missions": [],
+            "needs_human": pose_request.get("state") == "needs_human"}
+
+
+def ladder_for_state(state: Optional[Mapping], view: Optional[Mapping], *, state_age_s: float = 0.0) -> Optional[Mapping]:
+    """Show the recovery ladder as resolved when this read proves current CORE localization."""
+    localized = state is not None and classify(state) == TRUSTED and native_pose_freshness(state, state_age_s) is True
+    return _without_resolved_ladder(view, localized)
+
+
 def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
-          lapsed: bool = False) -> Optional[dict]:
+          lapsed: bool = False, state_age_s: float = 0.0) -> Optional[dict]:
     """Console badge for one robot row; None when the robot is offline (no state).
 
     `view` is the localization service's per-robot view; its `needs_human` (the
     ladder's last rung) or the robot's own flag shows "위치 확인 필요".
-    `lapsed` is retained for callers; missing localization is always untrusted."""
+    A previously escalated ladder clears from the badge once CORE supplies a fresh map pose."""
     if state is None:
         return None
-    verdict = classify(state)
+    pose_fresh = native_pose_freshness(state, state_age_s)
+    trusted = classify(state) == TRUSTED and pose_fresh is not False and not lapsed
     status = status_of(state)
+    view = _without_resolved_ladder(view, trusted and pose_fresh is True)
     needs_human = bool((view or {}).get("needs_human")) or bool(status and status.needs_human)
     label = (NEEDS_HUMAN_LABEL if needs_human
-             else STATE_LABELS[status.state] if status is not None else STATE_LABELS[LocState.UNKNOWN])
+             else STATE_LABELS[status.state] if status is not None and (trusted or status.state is not LocState.LOCALIZED)
+             else STATE_LABELS[LocState.UNKNOWN])
     return {"state": status.state.value if status else LocState.UNKNOWN.value,
             "pose_frame": status.pose_frame.value if status else None,
-            "trusted": verdict == TRUSTED, "legacy": False, "needs_human": needs_human,
+            "trusted": trusted, "legacy": False, "needs_human": needs_human,
             "label": label}

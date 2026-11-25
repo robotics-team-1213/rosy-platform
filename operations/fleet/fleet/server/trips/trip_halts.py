@@ -163,6 +163,8 @@ class TripHalts:
         lane = False if handoff_pending is True else (trip.get("drive_mode") == "lane")
         place = None if handoff_pending is True else trip.get("next_place")
         hp = bool((trip.get("detail") or {}).get("named_stop_handoff_pending")) if handoff_pending is None else handoff_pending
+        if (trip.get("detail") or {}).get("camera_lane_fallback"):
+            lane, place, hp = False, None, True
         try:
             result = await self.halt_robot(rid, lane, place, handoff_pending=hp)
         except Exception:

@@ -2,6 +2,8 @@
 import math
 import time
 
+import numpy as np
+
 import cell_depth_slots
 import cell_route_check
 import cell_zone_verification as zones
@@ -23,9 +25,9 @@ def _binding(config, src, dst):
     return binding
 
 
-def _read(binding, depth, top, tier):
+def _read(binding, depth, top, tier, **alignment):
     return cell_depth_slots.depth_reference(depth, top["image"], binding["roi"], binding["floor"], tier,
-                                           floor_depth_mm=binding["floor_depth_mm"])
+                                           floor_depth_mm=binding["floor_depth_mm"], **alignment)
 
 
 def _located(ref):
@@ -51,6 +53,13 @@ def _receipt(top, side, depth, start, end):
         if not (depth["raw_sha256"] and first <= last and all(
                 first - MAX_RGB_SKEW_S <= stamp <= last + MAX_RGB_SKEW_S for stamp in stamps[2:]) and all(
                 math.isfinite(t) and start <= t <= end and end - t <= zones.MAX_FRAME_AGE_S for t in stamps)):
+            return None
+        image = side.get("image")
+        if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3 or not image.size:
+            return None
+        # A covered lens can deliver fresh RGB frames. Ignore isolated hot pixels and JPEG noise.
+        low, high = np.percentile(image, (1, 99), axis=(0, 1))
+        if not np.isfinite(high - low).all() or (high - low).max() <= 2:
             return None
         return {"depth_sha256": depth["raw_sha256"], "first_stamp": first, "last_stamp": last,
                 "top": zones._stamp(top), "side": zones._stamp(side), "judged_at": end}
@@ -111,9 +120,13 @@ def capture_before(cell, config, src, dst, previous=None):
             return None, error
     paired = _receipt(top, side, receipt, started, time.time())
     if paired is None:
-        return None, "unpaired or stale before depth and camera frames"
-    src_ref = _read(binding["source"], depth, top, 2)
-    dst_ref = _read(binding["destination"], depth, top, 1)
+        return None, "unusable side image or unpaired or stale before depth and camera frames"
+    try:
+        transform, error_px = cell_depth_slots.frame_alignment(depth, top["image"])
+    except (ValueError, TypeError, IndexError):
+        return None, "source depth did not confirm tier 2"
+    src_ref = _read(binding["source"], depth, top, 2, to_depth=transform, align_edge_px=error_px)
+    dst_ref = _read(binding["destination"], depth, top, 1, to_depth=transform, align_edge_px=error_px)
     if not _tier(src_ref, 2):
         return None, "source depth did not confirm tier 2"
     if not _empty(dst_ref):

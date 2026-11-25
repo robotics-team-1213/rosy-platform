@@ -494,3 +494,37 @@ def test_open_cell_binds_operating_profile_onto_fifo_cell(tmp_path, monkeypatch)
     assert bound_cfg["_operating_profile_binding"]["device_id"] == "arm_s"
     assert seen["kwargs"].get("operating_profile") == bound_cfg["_operating_profile_binding"]
 
+
+
+@pytest.mark.parametrize("changed", ["before", "after", "success"])
+def test_bound_usb_fold_rechecks_identity_before_session_and_before_clear(tmp_path, monkeypatch, changed):
+    import time
+    import omx_incident
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    incident = "a" * 32
+    ids = [incident] if changed != "before" else ["b" * 32]
+    conf, cwd = _conf(tmp_path)
+    calls, clears = [], []
+    link = SimpleNamespace(hold=lambda: SimpleNamespace(incident_ids=list(ids), held=True, reason=HOME_RECOVERY_REASON))
+
+    def run_fn(command, **kw):
+        assert kw["env"]["ROSY_RECOVERY_INCIDENT"] == command[command.index("--expected-incident-id") + 1] == incident
+        calls.append(command)
+        Path(command[command.index("--out") + 1]).write_text(json.dumps(
+            {"result": "folded", "candidate": "park", "state": HOME, "home": HOME, "incident_id": incident}))
+        (cwd / "session.json").write_text(json.dumps({"torque_after": TORQUE0}))
+        if changed == "after":
+            ids[:] = ["c" * 32]
+        return SimpleNamespace(stdout="", stderr="")
+
+    out = af.launch("arm_s", conf, link=link, run=run_fn, sleep=lambda _: None, clear=lambda *a, **k: clears.append(k),
+                    expected_incident_id=incident, request_id="bound-r", expires_at=time.time() + 60)
+    assert len(calls) == int(changed != "before")
+    if changed == "success":
+        assert out["result"] == "cleared" and out["bound_incident_id"] == incident and clears[0]["only"] == incident
+    else:
+        assert not clears and out["why"] == "HOME_RECOVERY_INCIDENT_MISMATCH"
+
+    monkeypatch.setattr(omx_incident, "_probe_hold", lambda *_: (False, None))
+    with pytest.raises(SystemExit):
+        omx_incident.refuse_if_held("arm_s", Link([]), allow_incident=incident)
