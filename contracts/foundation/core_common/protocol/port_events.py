@@ -6,13 +6,14 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from .arm_transfer_preflight import ArmPhysicalRef
 
-PortEventKind = Literal["container.received_at_intake", "container.stored", "container.handling_failed",
-                        "vehicle.release_permitted"]
+PortEventKind = Literal["container.received_at_intake", "container.stored", "container.loaded_for_outbound",
+                        "container.handling_failed", "vehicle.release_permitted"]
 _Ref = Annotated[ArmPhysicalRef, Field(max_length=128)]
 
 #: kind -> the optional fields it must carry; every other optional field must be null (object_ref is checked apart)
 REQUIRED = {"container.received_at_intake": {"intake_point", "identity"},
             "container.stored": {"slot_ref", "identity"},
+            "container.loaded_for_outbound": {"vehicle_id", "identity"},
             "container.handling_failed": {"reason"},
             "vehicle.release_permitted": {"vehicle_id"}}
 _OPTIONAL = {"intake_point", "slot_ref", "vehicle_id", "reason", "identity"}
@@ -43,7 +44,7 @@ class PortEvent(BaseModel):
         forbidden = sorted(f for f in _OPTIONAL - required if getattr(self, f) is not None)
         if missing or forbidden:
             raise ValueError(f"{self.kind}: missing {missing}, forbidden {forbidden}")
-        if self.kind in {"container.received_at_intake", "container.stored"} and self.object_ref is None:
+        if self.kind in {"container.received_at_intake", "container.stored", "container.loaded_for_outbound"} and self.object_ref is None:
             raise ValueError(f"{self.kind} names its container")
         if self.kind == "vehicle.release_permitted" and self.object_ref is not None:
             raise ValueError("vehicle.release_permitted names no container")

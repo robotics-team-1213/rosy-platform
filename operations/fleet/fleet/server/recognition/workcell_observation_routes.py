@@ -19,6 +19,8 @@ def assert_workcell_observation_credentials_isolated(service, *, console, princi
 
 def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None,
                                        authorize=None):
+    from .cell_site_recognition_routes import install_cell_site_recognition_routes
+    install_cell_site_recognition_routes(app, service=service, require_viewer=require_viewer, authorize=authorize)
     if authorize is not None:  # D-996 2/7: port events ride the same workcell machine tokens
         from fleet.server.port_event_routes import install_port_event_routes
         install_port_event_routes(app, service, task_service, authorize=authorize, require_viewer=require_viewer)

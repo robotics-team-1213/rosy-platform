@@ -40,6 +40,8 @@ INLINE_AUTH = {
         "X-Workcell-Observation-Token (workcell ingress)",
     ("POST", "/api/fleet/workcell-observations/{workcell_id}/port-events"):
         "X-Workcell-Observation-Token (workcell ingress)",
+    ("POST", "/api/fleet/cell-site-recognition"):
+        "X-Workcell-Observation-Token (service.uses_token) or authorize + permits_site('fleet.operate', operator/service)",
     ("POST", "/api/fleet/workcell-observations/arms/{source_id}"):
         "X-Workcell-Observation-Token (arm ingress, intake.authorize)",
     ("POST", "/api/fleet/device-profiles/{device_id}/load-reports/{source_id}"):
