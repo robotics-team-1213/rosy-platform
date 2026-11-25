@@ -17,12 +17,16 @@
 <body class="ui-template">
   <a class="skip-link" href="#world-experiments-main">학습 실험으로 이동</a>
   <ui-shell grammar="procedure" class="ui-app-shell">
-    <ui-topbar role="banner">
-      <ui-brand href="/learning" aria-label="Rosy Learning 홈"><b>Rosy World</b></ui-brand>
-      <span data-spacer></span>
-      <a class="ui-action-link" data-kind="quiet" data-learning-account-entry href="/accounts">로그인·계정</a>
-      <ui-button kind="quiet" type="button" data-theme-cycle>테마 전환</ui-button>
-    </ui-topbar>
+    <!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+    <div class="ui-app-body">
+    <div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="Learning">
+      <!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행" aria-current="true">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end -->
+    </nav></div>
     <main id="world-experiments-main" class="ui-app-main learning-main ui-task-page" tabindex="-1">
       <div class="ui-pathbar">
         <nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a></nav>
@@ -93,6 +97,7 @@
         </div>
       </section>
     </main>
+    </div>
   </ui-shell>
 </body>
 </html>
