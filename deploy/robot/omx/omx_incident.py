@@ -33,7 +33,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_decisions  # noqa: E402
-from cell_recovery_placement_context import remember_cargo
 import omx_incident_reassess  # noqa: E402
 import push_replay  # noqa: E402
 from omx_incident_fleet import (  # noqa: E402
@@ -51,6 +50,7 @@ from omx_incident_fleet import (  # noqa: E402
     link_for,
     outbox,
     report_for,
+    remember_report_cargo,
     send,
     upload_evidence,
 )
@@ -270,7 +270,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
-            remember_cargo(incidents_dir(), arm, sid, session.get("recovery_cargo") if d["hold"] else None)
+            remember_report_cargo(arm, sid, session.get("recovery_cargo") if d["hold"] else None)
             box = incidents_dir() / ("outbox" if d["hold"] else "labels")  # a label-only report never blocks a start
             box.mkdir(parents=True, exist_ok=True)
             (box / f"{arm}-{sid}.json").write_text(report.model_dump_json())

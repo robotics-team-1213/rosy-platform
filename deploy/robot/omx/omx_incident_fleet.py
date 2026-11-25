@@ -247,6 +247,12 @@ def latest_failure_summary(arm: str | None, since: float = 0.0, *, bundle_root: 
     return None
 
 
+def remember_report_cargo(arm, session_id, cargo):
+    if cargo:
+        from cell_recovery_placement_context import remember_cargo
+        remember_cargo(incidents_dir(), arm, session_id, cargo)
+
+
 def send(arm: str, link, paths=None) -> bool:
     """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
     from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
@@ -255,8 +261,9 @@ def send(arm: str, link, paths=None) -> bool:
         try:
             report = ArmIncidentReport.model_validate_json(path.read_text())
             reply = link.post(report.model_copy(update={"source_id": link.source_id}))
-            from cell_recovery_placement_context import bind_incident
-            bind_incident(incidents_dir(), arm, report.session_id, getattr(reply, "incident_id", None))
+            if (incidents_dir() / "recovery-cargo.sqlite3").is_file():
+                from cell_recovery_placement_context import bind_incident
+                bind_incident(incidents_dir(), arm, report.session_id, getattr(reply, "incident_id", None))
         except Exception as exc:
             print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             return False
