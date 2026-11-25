@@ -367,7 +367,7 @@
         </section>
         <section id="measured-calibration" class="install-step measured-calibration" aria-labelledby="measured-heading">
           <h3 id="measured-heading">실측 카메라 교정</h3>
-          <p class="hint">촬영·독립 측량 결과로 교정을 승인하고 추적 보정에 적용합니다. 적용한 영상은 <a href="/console/site-map#camera-draft-heading">현장 지도에서 초안으로 만들고 대조</a>할 수 있습니다.</p>
+          <p class="hint">교정 묶음을 승인 저장한 뒤 그 승인본을 추적 보정으로 저장할 수 있습니다. 미리보기 적용 상태는 Vision에서 확인합니다. 영상은 <a href="/console/site-map#camera-draft-heading">현장 지도에서 초안으로 만들고 대조</a>할 수 있습니다.</p>
           <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
           <p id="measured-summary" class="hint"></p>
           <div class="measured-limits">
@@ -376,7 +376,7 @@
           </div>
           <ui-actions>
             <ui-button id="measured-approve" kind="primary" disabled>실측 교정 승인 저장</ui-button>
-            <ui-button id="measured-promote" kind="quiet" disabled>추적 보정에 적용</ui-button>
+            <ui-button id="measured-promote" kind="quiet" disabled>승인본을 추적 보정으로 저장</ui-button>
             <ui-button id="measured-revoke" kind="quiet" disabled>승인 철회</ui-button>
             <ui-button id="measured-refresh" kind="quiet" disabled>적용 상태 확인</ui-button>
           </ui-actions>

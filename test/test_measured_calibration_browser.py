@@ -105,10 +105,12 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-max').fill('0.02')
         # The bundle is parsed asynchronously after the file change; approve stays disabled until it is accepted.
         expect(page.locator('#measured-approve')).to_be_enabled()
+        expect(page.locator('#measured-promote')).to_be_disabled()
         page.locator('#measured-approve').click()
         # The idle text "저장 기록 확인 중" also contains 저장; only "저장됨" means the approve read finished.
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장됨')")
         expect(page.locator('#measured-conditions')).to_be_enabled()
+        expect(page.locator('#measured-promote')).to_be_enabled()
         assert page.locator('#measured-confirm').is_disabled()
         page.locator('#measured-conditions').hover()
         box = page.locator('#measured-conditions').bounding_box()
@@ -174,4 +176,5 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-revoke').click()
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('승인 없음')")
         assert state['revoked'] and not errors
+        expect(page.locator('#measured-promote')).to_be_disabled()
         browser.close()
