@@ -18,10 +18,18 @@
 | 3. 카메라 모델 | `cell_frame.py learn` / `check`([D-933](../../docs/adr/D-933-arm-s-cell-coordinate-frame-markers.md) 마커) | 카메라 자세, 마커 위치 | 집게 마커를 FK 점에 보인다(감독) |
 | 4. 면 | `cell_depth` 결과 → 각 팔 설정의 `surface_z` | 면별 높이(FK) | 없음 |
 | 5. 관절 게인 | 세션 설정 `caps.json`의 `i` | 하중 관절 I 게인 | 정지 시험(감독) |
-| 6. 점검 | `cell_calibrate.py check` | 남은 할 일 없음 | 없음 |
+| 6. 점검 | `cell_calibrate.py check` | 카메라·맵 상태와 남은 작업 목록 | 없음 |
 
 - 사람이 정하는 것: 인쇄물 부착(D-933), 바닥을 낮출 사각형의 승인(`limits.low_zones`), 동작마다 스위치 확인.
 - 숫자를 손으로 고치지 않는다. 다시 재야 하면 그 단계를 다시 돌린다.
+
+### 보정 후 실물 검증
+
+1. 검증할 팔과 필수 좌표 `site:x,y` 목록을 정한다. 각 좌표는 팔 기준 미터로 기록한다.
+2. 맵을 다시 맞출 때는 감독하에 `remap`을 실행한다. `check`의 `camera_moved`와 `missing_map`을 확인한다. 카메라 이동이 감지되거나 맵이 빠지면 해당 맵을 쓰는 좌표의 방문을 보류한다.
+3. [셀 작업 클라이언트](../../deploy/robot/omx/cell_job_client.py)의 `run post_eval --params-json … --wait`로 좌표를 하나씩 관측한다. 요청에 `arm`, `config`, `site`, `x`, `y`를 넣는다. 매 동작 전 스위치 옆 감독자를 확인한다. 운영자 인증으로 `person_at_switch: true`와 `apply: false`를 보낸다. 맵이나 보정값이 바뀌면 영향을 받은 좌표를 다시 관측한다.
+4. 필수 좌표별 작업 ID와 `structured_result.results`를 모은다. 각 결과의 `site`와 `point_m`을 대상 목록과 대조한다. `map_sha`가 같은 설정의 현재 맵 지문과 일치하는지 확인한다. `status: pass`를 확인한다. 맵 지문, 잔차 `residual_mag_mm`, 측정 불확도 `sigma_mm`를 기록한다. 확인을 마치지 못한 좌표는 수용을 보류한다. [구역별 XY 요약](../../deploy/robot/omx/cell_post_eval_summary.py)은 최근 기록을 구역별로 모으며 관측이 없는 구역을 건너뛴다.
+5. `post_eval`은 빈 집게의 XY 잔차를 확인한다. 현장 평균 오차는 [D-951의 수용 기준](../../docs/adr/D-951-rosy-calibration-application.md#consequences)에 따라 별도로 실측한다. 적층 높이는 [측면 Z 수용 절차](#측면-적층-z-기준-설치와-수용)를 따른다.
 
 ## ChArUco 렌즈 보정
 
