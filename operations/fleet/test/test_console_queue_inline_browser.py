@@ -347,7 +347,8 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
         expect(heading).to_contain_text("rosy_01")
         if width < 1024:
             expect(seat).to_be_in_viewport()
-        controls = {name: seat.locator(selector) for name, selector in
+        opened_report = seat.locator(":scope > [data-report-key]")
+        controls = {name: opened_report.locator(selector) for name, selector in
                     (("heading", "h3"), ("cause", "select"), ("note", "input"), ("save", "ui-button[type=submit]"))}
         boxes = {}
         for name, control in controls.items():
