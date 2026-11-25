@@ -18,7 +18,45 @@ from fleet.swarm.transport import RobotApiError
 #: A robot whose read fails within this many seconds of its last answer is shown as
 #: `degraded` (responding late), not `unreachable`; decisions still see online=False.
 LINK_DEGRADED_S = 10.0
+_NAV_TERMINAL_STATES = frozenset({"ARRIVED", "CANCELED", "FAILED"})
 logger = logging.getLogger("fleet.console")
+
+
+def refresh_console_dispatch_fields(console, row: dict) -> None:
+    """Recompute live Fleet-owned goal/queue/hold/yield projections for ``row``."""
+    required = ("_goals", "_queued", "_goal_busy", "goal_leases", "_yielding", "_held")
+    if not all(hasattr(console, attr) for attr in required):
+        return
+    rid = row["robot_id"]
+    row["queued"] = _shown(console._queued.get(rid))
+    row["goal"] = console.goal_leases.view(rid, console._goals.get(rid))
+    if row["goal"] is not None:
+        sent_at = getattr(console, "_goal_sent_at", {}).get(rid)
+        observed = row.get("_state_mono")
+        st = row.get("state")
+        settle_s = max(5.0, float(getattr(console, "_hub_state_max_age_s", 3.0)) + 2.0)
+        retained_terminal = (
+            rid not in console._goal_busy
+            and rid not in console.goal_leases.pending
+            and console.goal_leases.get(rid) is None
+            and isinstance(st, dict)
+            and st.get("mode") == "IDLE"
+            and st.get("navigation") in _NAV_TERMINAL_STATES
+            and sent_at is not None
+            and observed is not None
+            and observed - sent_at >= settle_s
+        )
+        row["goal_in_flight"] = not retained_terminal
+    else:
+        row.pop("goal_in_flight", None)
+    custody = console.goal_leases.custody_view(rid)
+    if custody is not None:
+        row["named_stop_custody"] = custody
+    else:
+        row.pop("named_stop_custody", None)
+    row["yielding"] = console._yielding.get(rid)
+    hold = console._held.get(rid)
+    row["held"] = hold["reason"] if hold is not None else None
 
 
 async def snapshot(self) -> dict:
@@ -89,14 +127,7 @@ async def snapshot(self) -> dict:
     # 교통 정리가 대기 미션을 내려보냈으면 이 스냅샷이 이미 그 뒤다. 행을 다시 읽지
     # 않으면 화면은 방금 출발한 미션을 한 주기 동안 계속 "대기 중"으로 보여 준다.
     for row in robots:
-        row["queued"] = _shown(self._queued.get(row["robot_id"]))
-        row["goal"] = self.goal_leases.view(row["robot_id"], self._goals.get(row["robot_id"]))
-        custody = self.goal_leases.custody_view(row["robot_id"])
-        if custody is not None:
-            row["named_stop_custody"] = custody
-        row["yielding"] = self._yielding.get(row["robot_id"])
-        hold = self._held.get(row["robot_id"])
-        row["held"] = hold["reason"] if hold is not None else None
+        refresh_console_dispatch_fields(self, row)
         view = self._localization_view
         row["localization"] = trust.badge(
             row["state"], view(row["robot_id"]) if view is not None else None,
@@ -284,6 +315,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
     # 않을 곳으로 로봇이 간다고 읽는다.
     self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
+    self.__dict__.setdefault("_goal_sent_at", {})[robot_id] = self._clock()
     self._queued.pop(robot_id, None)
 
     async with self._traffic_lock:
@@ -302,6 +334,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 if not self._cancel_confirmed(cancel_receipt):
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
+                getattr(self, "_goal_sent_at", {}).pop(robot_id, None)
                 self._claims.pop(robot_id, None)
                 getattr(self, "_site_claims", {}).pop(robot_id, None)
                 decision = (admission.route_conflict_hold if conflict else admission.map_frame_hold)(blocker, nav_route)
@@ -328,6 +361,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 if not self._cancel_confirmed(cancel_receipt):
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
+                getattr(self, "_goal_sent_at", {}).pop(robot_id, None)
                 self._claims.pop(robot_id, None)
                 getattr(self, "_site_claims", {}).pop(robot_id, None)
                 decision = admission.untrusted_blocker_hold(untrusted, intended)
@@ -348,6 +382,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                     if not self._cancel_confirmed(cancel_receipt):
                         raise RuntimeError("navigation goal cancellation was not confirmed")
                     self._goals.pop(robot_id, None)
+                    getattr(self, "_goal_sent_at", {}).pop(robot_id, None)
                     self._claims.pop(robot_id, None)
                     getattr(self, "_site_claims", {}).pop(robot_id, None)
                     return {**admission.response_of(
@@ -424,6 +459,7 @@ async def _planned_stop_goal(self, robot_id, client, caps, target, attempt_id, s
                 or operation["correlation_id"] != attempt_id):
             raise HubError("COMMAND_REJECTED", "NAMED_STOP_RECEIPT_UNVERIFIED")
         self._goals[robot_id] = dict(zip(("x", "y", "yaw"), target))
+        self.__dict__.setdefault("_goal_sent_at", {})[robot_id] = self._clock()
         self._queued.pop(robot_id, None)
         self._claims[robot_id] = route
         getattr(self, "_site_claims", {}).pop(robot_id, None)

@@ -31,8 +31,10 @@ else:  # pragma: no cover - installed host CLI
     from verify_candidate import CandidateVerificationError, verified_services
 
 
-_NAV_IDLE_STATES = frozenset({'IDLE', 'ARRIVED', 'CANCELED', 'FAILED'})
-_DOCKING_IDLE_STATES = frozenset({'UNDOCKED', 'DOCKED', 'CHARGING'})
+_NAV_TERMINAL_STATES = frozenset({'ARRIVED', 'CANCELED', 'FAILED'})
+_NAV_IDLE_STATES = frozenset({'IDLE', *_NAV_TERMINAL_STATES})
+# Site container restarts do not restart robot CORE or move robots; DOCK_FAILED is terminal (D-28/D-31).
+_DOCKING_IDLE_STATES = frozenset({'UNDOCKED', 'DOCKED', 'CHARGING', 'DOCK_FAILED'})
 
 
 def _arm_session_busy(root: Path) -> list[str]:
@@ -58,9 +60,18 @@ def _robot_busy_reasons(row: object) -> list[str]:
     if not isinstance(row, dict):
         return ['malformed robot state row']
     rid = str(row.get('robot_id') or 'robot')
-    reasons = [f'{rid}: {key} active' for key in ('goal', 'queued', 'held', 'yielding', 'named_stop_custody')
-               if row.get(key)]
     state = row.get('state')
+    goal = row.get('goal')
+    retained_terminal_goal = (
+        row.get('goal_in_flight') is False
+        and isinstance(state, dict)
+        and state.get('mode') == 'IDLE'
+        and state.get('navigation') in _NAV_TERMINAL_STATES
+        and not (isinstance(goal, dict) and goal.get('goal_lease') is not None)
+    )
+    reasons = [f'{rid}: goal active'] if goal and not retained_terminal_goal else []
+    reasons.extend(f'{rid}: {key} active' for key in ('queued', 'held', 'yielding', 'named_stop_custody')
+                   if row.get(key))
     if not isinstance(state, dict):
         return [*reasons, f'{rid}: state unavailable'] if row.get('online') is True else reasons
     mode = state.get('mode')
