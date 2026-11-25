@@ -21,12 +21,10 @@ from typing import Any
 import urllib.error
 import urllib.request
 
-from world_state import (
-    ACTIVE_SITE_MAP_FILE,
-    ACTIVE_SITE_MAP_PATH,
-    MAX_ACTIVE_SITE_MAP_BYTES,
-    active_site_map_snapshot,
-)
+if __package__:
+    from . import world_state
+else:
+    import world_state
 
 CANONICAL_FLEET_ROBOTS = {
     "pinkys": ["rosy_42", "rosy_45", "rosy_46"],
@@ -417,15 +415,15 @@ def main() -> None:
             map_url = cached_fleet_url
             map_expires_at = time.monotonic() + 30.0
             if active_map and args.world_id == "real-site":
-                map_snapshot = active_site_map_snapshot(active_map, time.time_ns() // 1_000_000)
+                map_snapshot = world_state.active_site_map_snapshot(active_map, time.time_ns() // 1_000_000)
                 if map_snapshot is not None:
                     raw = (json.dumps(map_snapshot, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
-                    if len(raw) > MAX_ACTIVE_SITE_MAP_BYTES:
+                    if len(raw) > world_state.MAX_ACTIVE_SITE_MAP_BYTES:
                         warn("active-map", "display geometry exceeds ingest limit")
                         map_snapshot = None
                     elif worlds_dir is not None:
                         worlds_dir.mkdir(parents=True, exist_ok=True)
-                        _atomic_write(worlds_dir / ACTIVE_SITE_MAP_FILE, raw)
+                        _atomic_write(worlds_dir / world_state.ACTIVE_SITE_MAP_FILE, raw)
         if fleet_payload is None and args.fleet_mdns_host:
             cached_fleet_url = None
         world_payload = fleet_state_to_world_state(
@@ -446,7 +444,7 @@ def main() -> None:
         if cached_world_url:
             if map_snapshot is not None:
                 try:
-                    _push_http(cached_world_url, ACTIVE_SITE_MAP_PATH, map_snapshot, ingest_token)
+                    _push_http(cached_world_url, world_state.ACTIVE_SITE_MAP_PATH, map_snapshot, ingest_token)
                 except (OSError, http.client.HTTPException) as exc:
                     warn("map-push", exc)
                     if world_payload is None:
