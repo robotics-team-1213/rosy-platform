@@ -329,3 +329,31 @@ def test_asymmetric_gazebo_and_l_room_yield_unique_margin_while_symmetric_rooms_
     sqr, sqa = _synth_scan(sq_field, (0.65, 0.80, 0.20))
     sq_found = global_candidates(sq_field, sqr[::2], sqa[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(sqr, sqa))
     assert all(c.unique_margin is None for c in sq_found)
+
+
+def test_window_candidate_uses_the_same_full_fit_and_never_claims_uniqueness():
+    from control.loc_window import window_candidate
+
+    f = field()
+    truth = (-1.26, .49, -math.pi / 2)
+    ranges, angles = scan(truth, beams=640)
+    clear = f.clear_poses(RADIUS)
+    center = (truth[0] + .02, truth[1] - .03, truth[2] + .03)
+    found = window_candidate(f, clear, center, MOUNT, ranges, angles, .90)
+    assert found is not None and near(found, truth, xy=.10, yaw=.12)
+    assert found.scan_fit == pytest.approx(f.robust_score(
+        sensor_from_base((found.x, found.y, found.yaw), MOUNT), ranges, angles))
+    assert found.unique_margin is None
+    assert window_candidate(f, clear, (100., 100., 0.), MOUNT, ranges, angles, .90) is None
+
+
+def test_window_deadline_stops_before_a_robust_evaluation(monkeypatch):
+    from control.loc_window import window_candidate
+
+    f = field()
+    truth = (-1.26, .49, -math.pi / 2)
+    ranges, angles = scan(truth, beams=640)
+    clear = f.clear_poses(RADIUS)
+    times = iter((0., 2.))
+    monkeypatch.setattr(f, "robust_score", lambda *args: pytest.fail("expired window still scored a pose"))
+    assert window_candidate(f, clear, truth, MOUNT, ranges, angles, .90, clock=lambda: next(times)) is None

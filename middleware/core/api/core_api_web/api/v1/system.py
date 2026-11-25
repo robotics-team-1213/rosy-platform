@@ -194,6 +194,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     truth = runtime_truth(svc.config, svc.state, svc.readiness)
     data = withhold_hardware_flags(svc.capability.to_dict(), truth.reasons)
     data.setdefault("navigation", {})["bound_route"] = True
+    loc = getattr(svc, "localization", None)
+    if loc is not None and loc.reporting and loc.search_window_available:
+        data.setdefault("localization", {})["search_window"] = True
     # `runtime` (v1.21 additive): what live evidence says runs right now, so a
     # client does not infer hardware from the configured mode string (D-192:
     # `rosy-io` is started by hand while `runtime.mode` stays `core`). `maps`
