@@ -169,7 +169,14 @@ def attach_site_cross_verify(name: str, is_extra: bool, surface_z, dv_site: dict
                             "message": f"{name}: 외삽 예측 오차 σ={sigma_summary['max_mm']} mm > {sig_lim} mm (D-933 pose 또는 포인트 확장 검토)"})
     if not is_extra:
         if "depth_diff_gt_6mm" in flags:
-            hygiene.append({"level": "warning", "code": f"depth_diff:{name}", "message": f"{name}: D435 depth({depth_z}) vs surface_z({surface_z}) = {depth_diff:+.1f} mm"})
+            relative_diff = dv_site.get("relative_depth_diff_mm")
+            if depth_diff is not None:
+                message = f"D435 depth({depth_z}) vs surface_z({surface_z}) = {depth_diff:+.1f} mm"
+            elif relative_diff is not None:
+                message = f"상대 높이 차이 {relative_diff:+.1f} mm (절대 높이 미측정)"
+            else:
+                message = "높이 차이 초과 (차이값 없음)"
+            hygiene.append({"level": "warning", "code": f"depth_diff:{name}", "message": f"{name}: {message}"})
         if "place_vs_start_step_gt_8mm" in flags:
             hygiene.append({"level": "warning", "code": f"place_step:{name}", "message": f"{name}: place vs start 높이차 {step_mm:+.1f} mm (적재물/단차 의심)"})
         if "touch_diff_gt_5mm" in flags:
