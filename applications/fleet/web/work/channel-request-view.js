@@ -7,22 +7,42 @@ const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비",
 const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: "확인 불가", SUPERSEDED: "대체됨"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
   let receipt = null, review = null, version = 0, busy = false, incidentRows = [], modelState = "";
-  const panel = el("channel-review"), state = el("channel-review-state");
+  const query = new URLSearchParams(location.search), requestIds = query.getAll("channel_request");
+  const incidentRequest = query.get("view") === "records" && query.get("show") === "open"
+    && requestIds.length === 1 && /^[0-9a-f]{24}$/.test(requestIds[0]) ? requestIds[0] : null;
+  let restoring = false;
+  const panel = el(incidentRequest ? "channel-incident" : "channel-review");
+  const state = el(incidentRequest ? "channel-incident-state" : "channel-review-state");
   const path = () => `/api/fleet/channel-requests/${encodeURIComponent(receipt.request_id)}`;
   function reset() {
-    version++; receipt = review = null; modelState = ""; panel.hidden = true;
+    version++; receipt = review = null; modelState = ""; restoring = false; panel.hidden = true;
     el("channel-review-reason").value = "";
+    el("channel-incident-reason").value = "";
+    el("channel-incident-original").textContent = "";
+  }
+  const incidentControls = ["channel-review-incident", "channel-incident-reason", "channel-review-incident-claim"];
+  function restoreRefused(retry = false) {
+    panel.hidden = false;
+    state.textContent = retry ? "대화 요청 조회 실패 · 연결을 다시 확인합니다." : "최근 대화 요청 목록에서 이 요청을 확인할 수 없습니다.";
+    el("channel-review-incident-link-holder").hidden = true;
+    for (const id of incidentControls) setOff(el(id), true, state.textContent, state.id);
   }
   function paint() {
     const reason = busy ? "요청 처리 중입니다" : review.state === "LINKED" ? "이미 작업과 연결된 요청입니다" : !canManage() ? "이름 있는 운영자 로그인이 필요합니다" : "로봇 연결과 안전 상태를 확인하세요";
-    setOff(el("channel-review-incident"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
-    setOff(el("channel-review-incident-claim"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
-    const incident = review.incident;
-    el("channel-review-incident-link-holder").hidden = !incident;
-    if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
+    state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
+    if (incidentRequest) {
+      const locked = busy || review.state === "LINKED" || !canManage();
+      for (const id of incidentControls) setOff(el(id), locked, reason, state.id);
+      const incident = review.incident;
+      el("channel-review-incident-link-holder").hidden = !incident;
+      if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
+      return;
+    }
+    const records = el("channel-review-records");
+    records.hidden = review.state === "LINKED" && review.work_kind !== "incident";
+    records.href = `/console?view=records&show=open&channel_request=${encodeURIComponent(receipt.request_id)}#incident-judgment`;
     el("channel-review-cell-holder").hidden = !owns("arms") || (review.state === "LINKED" && !["cell_job", "mission"].includes(review.work_kind));
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
-    state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
     if (modelState) state.textContent += ` · ${modelState}`;
     for (const name of ["ready", "hold", "reject"])
       setOff(el(`channel-review-${name}`), busy || review.state === "LINKED", reason, "channel-review-state");
@@ -34,6 +54,13 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     try {
       const result = await call(`/api/fleet/channel-requests/${encodeURIComponent(row.request_id)}/review`);
       life.check(); if (current !== version) return;
+      if (incidentRequest) {
+        receipt = row; review = result;
+        el("channel-incident-original").textContent = row.content;
+        el("channel-incident-reason").value = result.reason || "";
+        panel.hidden = false; paint();
+        return;
+      }
       receipt = row; review = result; modelState = "숙고 결과 조회 안 됨 · 실행 승인 아님";
       try {
         const model = await call(`/api/fleet/channel-requests/${encodeURIComponent(row.request_id)}/deliberation`);
@@ -51,11 +78,33 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       panel.hidden = false; paint();
     } catch (error) {
       if (life.current() && current === version) {
-        reset(); el("channel-requests-state").textContent = "요청 검토 조회 실패 · 권한과 최신 요청을 확인하세요.";
+        reset();
+        if (incidentRequest) {
+          restoring = [401, 403, 404].includes(error.status);
+          restoreRefused(!restoring);
+        }
+        else el("channel-requests-state").textContent = "요청 검토 조회 실패 · 권한과 최신 요청을 확인하세요.";
       }
     }
   }
   async function refresh() {
+    if (incidentRequest && !review && !restoring) {
+      const life = scope.capture(), current = version;
+      restoring = true;
+      try {
+        const {rows} = await call("/api/fleet/channel-requests");
+        life.check(); if (current !== version) return;
+        const row = rows.find(item => item.request_id === incidentRequest);
+        if (row) await select(row);
+        else restoreRefused();
+      } catch (error) {
+        if (life.current() && current === version) {
+          restoring = [401, 403, 404].includes(error.status);
+          restoreRefused(!restoring);
+        }
+      }
+      return;
+    }
     if (!receipt || !review || busy) return;
     if (review.state !== "LINKED") { paint(); return; }
     const current = version, snapshot = review, life = scope.capture();
@@ -78,8 +127,8 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     picker.value = previous;
   }
   async function claimIncident() {
-    if (!receipt || !review || busy || review.state === "LINKED" || !canManage()) return;
-    const key = el("channel-review-incident").value, reason = el("channel-review-reason").value.trim();
+    if (!incidentRequest || !receipt || !review || busy || review.state === "LINKED" || !canManage()) return;
+    const key = el("channel-review-incident").value, reason = el("channel-incident-reason").value.trim();
     const incident = incidentRows.find(row => `${row.robot_ids[0]}/${row.stuck_id}` === key);
     if (!incident || !reason) { state.textContent = "현재 열린 사건과 검토 사유를 확인하세요."; return; }
     const current = version, snapshot = review, base = path();

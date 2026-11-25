@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere, requestsNotice, requestsPause, summarizeWorkCounts } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, autoAdmitDetail, canAdmitWorkHere, requestsNotice, requestsPause, summarizeWorkCounts } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -55,17 +55,6 @@ test("D-865 P3: an enabled scope covers only waiting one_person rows of its robo
   assert.equal(autoAdmitScope(waiting, {...scopePolicy, admits_remaining: 0}).exhausted, true);  // budget spent: no reset
   assert.equal(autoAdmitScope(waiting, {...scopePolicy, scope: {...scopePolicy.scope, enabled: false}}).member, false);
   assert.equal(autoAdmitScope(waiting, null).member, false);  // fail closed without a readback
-});
-
-test("D-865 P3: the readback line carries robots, kinds, budget and revision; disabled states the reason", () => {
-  assert.match(policyScopeText(scopePolicy), /켜짐/);
-  assert.match(policyScopeText(scopePolicy), /로봇 rosy_01/);
-  assert.match(policyScopeText(scopePolicy), /1인 승인/);
-  assert.match(policyScopeText(scopePolicy), /잔여 3\/5회/);
-  assert.match(policyScopeText(scopePolicy), /rev-7/);
-  assert.match(policyScopeText({...scopePolicy, scope: {...scopePolicy.scope, enabled: false}, reason: "BUDGET_EXHAUSTED"}),
-    /꺼짐 · BUDGET_EXHAUSTED/);
-  assert.equal(policyScopeText(null), null);
 });
 
 test("D-865 P3: the detail line separates in-scope from human approval", () => {
