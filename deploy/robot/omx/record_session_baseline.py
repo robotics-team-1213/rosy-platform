@@ -13,12 +13,40 @@ from observer_handoff_io import unit_env
 from register_probe import open_readonly_port, read_motors
 
 
+def session_job_env(lease_owner, argv, job, arm, human, params):
+    """Select the release wrapper and its bound recovery scope after job admission."""
+    env = {**os.environ, "ROSY_ARM_LEASE_OWNER": lease_owner}
+    env.pop("ROSY_BASELINE_RECOVERY_ARM", None)
+    if job != "remap" or arm not in ("arm_a", "arm_b") or not human or params.get("person_at_switch") is not True:
+        return env
+    tools_dir = Path(__file__).resolve().parent
+    argv[0] = str(tools_dir / "session-wrappers" / Path(argv[0]).name)
+    env["TOOLS_ROOT"] = str(tools_dir.parents[2])
+    env.setdefault("ROSY_SESSION_CHUNKS", f"chunks-arm-{arm[-1]}-beltend-ship-t2-canon.json")
+    env["ROSY_BASELINE_RECOVERY_ARM"] = arm
+    return env
+
+
 class BaselineMismatch(SystemExit):
     """The idle check stopped before session caps or torque were applied."""
 
 
 class FoldUnconfirmed(ValueError):
     """Registers were idle, but did not confirm the bound arm's folded pose."""
+
+
+def check_session_idle(session, recovery_arm, robot, record):
+    try:
+        session._with_follower(session.check_idle)
+    except BaselineMismatch:
+        profile = record.get("operating_profile")
+        if not recovery_arm or not profile:
+            raise
+        if profile["device_id"] != recovery_arm:
+            raise SystemExit("REFUSED: baseline recovery arm differs from operating profile")
+        record["baseline_receipt"] = restore(recovery_arm, robot)
+        session.log(step="baseline_restored", receipt=record["baseline_receipt"])
+        session._with_follower(session.check_idle)
 
 
 def check_pending(arm):

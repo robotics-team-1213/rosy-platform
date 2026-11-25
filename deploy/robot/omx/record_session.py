@@ -264,16 +264,8 @@ class Session:
             record["operating_profile"] = profile["binding"]
         pairs = self.pair_sessions(config)
         for session in pairs.values():
-            try:
-                session._with_follower(session.check_idle)
-            except resting.BaselineMismatch:
-                if not (self.baseline_recovery_arm and pairs.get("single") is session and self.operating_profile):
-                    raise
-                if record["operating_profile"]["device_id"] != self.baseline_recovery_arm:
-                    raise SystemExit("REFUSED: baseline recovery arm differs from operating profile")
-                record["baseline_receipt"] = resting.restore(self.baseline_recovery_arm, config["robot"])
-                self.log(step="baseline_restored", receipt=record["baseline_receipt"])
-                session._with_follower(session.check_idle)
+            recovery_arm = self.baseline_recovery_arm if pairs.get("single") is session else None
+            resting.check_session_idle(session, recovery_arm, config["robot"], record)
         if pairs.get("single") is self and not self.chunks and self.replay is None:
             record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
