@@ -9,6 +9,8 @@ from rfd40_cell import Reader, choose_epc, retry_link  # noqa: E402
 
 
 HEADER = b"Command:inventory ,Status:OK,EPCId:,Firstseentime:,RSSI:,TagSeenCount:\r\n"
+START = b"Notification:StartOperation\r\n"
+STOP = b"Notification:StopOperation\r\n"
 A = "E200001234567890"
 B = "E200009876543210"
 
@@ -39,7 +41,7 @@ class SelectionTests(unittest.TestCase):
     def test_delayed_abort_acknowledgement_confirms_stop(self):
         reader = Reader(None)
         reader.exchange = Mock(side_effect=[
-            HEADER + report(A, -42, 2),
+            HEADER + START + report(A, -42, 2) + STOP,
             b"",
             b"\r\nNotification:StopOperation\r\nCommand:abort,Status:OK\r\n\r\n",
         ])
@@ -60,9 +62,25 @@ class SelectionTests(unittest.TestCase):
 
     def test_armed_inventory_finishes_on_release_notification(self):
         socket = Mock()
-        report_bytes = HEADER + report(A, -43, 2)
-        socket.recv.side_effect = [report_bytes, b"Notification:StopOperation\r\n",
+        socket.recv.side_effect = [HEADER + START + report(A, -43, 2), STOP,
                                    b"Command:abort,Status:No Radio Operation in Progress\r\n\r\n"]
         reader = Reader(socket)
         self.assertEqual(choose_epc(reader.scan(20)), A)
         self.assertEqual(socket.recv.call_count, 3)
+
+    def test_incomplete_trigger_and_odd_hex_do_not_emit(self):
+        reader = Reader(None)
+        reader.exchange = Mock(side_effect=[
+            HEADER + START + report(A, -42, 2), b"Command:abort,Status:OK\r\n",
+        ])
+        self.assertIsNone(choose_epc(reader.scan(20)))
+        self.assertIsNone(choose_epc(HEADER + report("432D3", -42, 2)))
+
+    def test_immediate_trigger_configuration_is_rejected(self):
+        reader = Reader(None)
+        reader.exchange = Mock(side_effect=[
+            b"Command:setstarttrigger .ignorehandheldtrigger .triggertype 0 ,Status:OK",
+            b"Command:setstoptrigger .stoponhandheldtrigger .triggertype 1 ,Status:OK",
+        ])
+        with self.assertRaises(ConnectionError):
+            reader.verify_trigger()

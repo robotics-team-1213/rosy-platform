@@ -29,7 +29,7 @@ def choose_epc(data, *, minimum_rssi=-60, margin=6):
             rssi, seen = int(columns[rssi_col]), int(columns[count_col])
         except (ValueError, IndexError):
             return None
-        if not re.fullmatch(r"[0-9A-F]{4,128}", epc) or not -120 <= rssi <= 0 or seen < 1:
+        if not re.fullmatch(r"(?:[0-9A-F]{2}){2,64}", epc) or not -120 <= rssi <= 0 or seen < 1:
             return None
         readings[epc].append(rssi)
         counts[epc] = max(counts.get(epc, 0), seen)
@@ -93,7 +93,15 @@ class Reader:
                 raise ConnectionError("could not confirm the RFID inventory stopped")
         if not reports.startswith(b"Command:inventory"):
             raise ConnectionError("RFD40 did not return an inventory header")
-        return reports + tail
+        first_scan, stopped, _ = reports.partition(b"Notification:StopOperation")
+        return first_scan if stopped and b"Notification:StartOperation" in first_scan else b""
+
+    def verify_trigger(self):
+        start = self.exchange(b"st .n", 4)
+        stop = self.exchange(b"ot .n", 4)
+        if not (b"Status:OK" in start and b".startonhandheldtrigger .triggertype 0 " in start
+                and b"Status:OK" in stop and b".stoponhandheldtrigger .triggertype 1 " in stop):
+            raise ConnectionError("RFD40 must be configured to start on trigger press and stop on release")
 
     def beep(self):
         try:
@@ -136,10 +144,11 @@ def main():
                     raise ConnectionError("RFD40 did not answer the version request")
                 print("RFD40 Bluetooth RFID link OK")
                 return 0
+            reader.verify_trigger()
             print("Ready. Aim at the RFID tag, pull the trigger, then release it.", file=sys.stderr, flush=True)
             epc = choose_epc(reader.scan(args.wait), minimum_rssi=args.minimum_rssi, margin=args.margin)
             if epc is None:
-                print("No EPC selected. Aim the reader closer and retry.", file=sys.stderr)
+                print("No EPC selected. Check the trigger cycle and aim at one nearby tag.", file=sys.stderr)
                 return 2
             emitted = True
             print(epc, flush=True)
