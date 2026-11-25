@@ -6,6 +6,7 @@ import asyncio
 import math
 
 from core_common.protocol.evidence import STALE_POSE_S
+from core_common.robot_body import nominal_body_for
 from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.named_stop_map_pose import precision_map_pose
@@ -200,6 +201,15 @@ def camera_finish_segment(live: LiveTrip, index: int, active, along: float) -> s
     return arc.end_place
 
 
+def camera_body_inside(live, index: int, pose) -> bool:
+    arc = live.arc(index)
+    body = nominal_body_for((live.view.get("caps") or {}).get("kind"))
+    if body is None:
+        return False
+    lateral, _, _ = arc.project(pose.x, pose.y)
+    return lateral + body.rotation_radius_m + body.sweep_pad_m <= arc.width_m / 2
+
+
 async def _camera_stationary(runner, live, after: float) -> bool:
     """Require two distinct fresh zero samples newer than the acknowledged stop."""
     previous = None
@@ -253,8 +263,9 @@ async def _start_camera_finish(runner, live, index: int, along: float, active) -
             or type(age_ms) not in (int, float) or not 0 <= age_ms < 1000):
         raise TripError(409, "TRIP_LANE_CAMERA_UNAVAILABLE")
     pose = await precision_map_pose(runner, robot_id, scope)
-    if pose is None or start_check(live.graph, [segment], pose.x, pose.y, pose.yaw,
-                                   runner.config.start_heading_tol_deg)["code"]:
+    if (pose is None or not camera_body_inside(live, index, pose)
+            or start_check(live.graph, [segment], pose.x, pose.y, pose.yaw,
+                           runner.config.start_heading_tol_deg)["code"]):
         raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
     _, fresh_along, _ = live.arc(index).project(pose.x, pose.y)
     if (camera_finish_segment(live, index, active, fresh_along) is None
@@ -280,11 +291,9 @@ async def _start_camera_finish(runner, live, index: int, along: float, active) -
     runner._save(live)
     with dispatch_guard(check, paths={"/api/v1/line-follow/mode"}):
         check()
-        await runner._call(runner._junction.start_camera_line(robot_id))
-    await runner._after_send(live)
+        await runner._start_line(live)
     if live.open:
         phase["phase"] = "running"
-        live.view["detail"]["line_follow_started"] = True
         live.view["traffic_authority"] = "core"
         runner._save(live)
     return True

@@ -26,7 +26,7 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_nav2_route import finish_camera_line, step_nav2_route
+from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
 from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.server.named_stop_confirm import GoalRefused, confirm_free_stop, confirm_lane_stop
@@ -123,6 +123,9 @@ class TripSteps:
             camera = live.view["detail"].get("camera_lane_fallback")
             if camera and live.view["hold"] is not None:
                 await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_HELD")
+                return
+            if camera and not camera_body_inside(live, index, pose):
+                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_BODY_OUTSIDE_LANE")
                 return
             if camera and (not lane or self._clock() - camera["started_at"] > 2 * self.config.stall_s):
                 await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_TIMEOUT")

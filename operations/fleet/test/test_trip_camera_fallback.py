@@ -11,6 +11,7 @@ from fleet.server import trip_nav2_route
 from fleet.server.trip_nav2_route import camera_finish_segment
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_routes import TripRequest
+from fleet.server.trip_runner import TripRunner
 from fleet.swarm.dispatch_guard import check_dispatch
 
 
@@ -24,7 +25,8 @@ def example():
     trip = NS(
         nav2=True, repeat=False, request={"to": "finish", "camera_lane_fallback": True},
         segments=[{"edge_id": "paint", "s_from": 0., "s_to": 1.}],
-        view={"detail": {"nav2_binding_id": "bind-1"}, "map_version": 3, "hold": None},
+        view={"detail": {"nav2_binding_id": "bind-1"}, "map_version": 3, "hold": None,
+              "caps": {"kind": "pinky_pro"}},
         graph=NS(places={"finish": finish}), arc=lambda _index: arc,
     )
     return trip, site, arc, finish, expected
@@ -82,7 +84,8 @@ def test_camera_finish_refuses_uncommissioned_or_unbound_section(change):
     assert camera_finish_segment(trip, 0, (version, site), along) is None
 
 
-@pytest.mark.parametrize("outcome", ["success", "stale_camera", "changed_binding", "stop_unknown"])
+@pytest.mark.parametrize("outcome", ["success", "stale_camera", "changed_binding", "stop_unknown",
+                                     "velocity_repeated", "body_outside"])
 def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monkeypatch, outcome):
     trip, site, arc, *_ = example()
     events = []
@@ -93,7 +96,7 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
     trip.progress = lambda _index, along: along
     trip.graph.arcs = {"paint:fwd": arc}
     trip.segments[0]["forward"] = True
-    arc.project = lambda _x, _y: (0., .5, 0.)
+    arc.project = lambda _x, _y: (.05 if outcome == "body_outside" else 0., .5, 0.)
 
     async def call(value):
         return await value
@@ -104,7 +107,8 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
 
     async def read(_robot):
         events.append("zero")
-        clock[0] += .01
+        if outcome != "velocity_repeated" or events.count("zero") == 1:
+            clock[0] += .01
         return {
             "mode": "IDLE", "navigation": "CANCELED", "line_follow": {"mode": "OFF"},
             "safety": {"estop": False}, "trip_lease": {"lease_id": "lease-1"},
@@ -143,9 +147,10 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
         traffic=NS(holds=lambda *_: False, _signals={}),
         config=NS(start_heading_tol_deg=15., period_s=0., arm_distance_m=.6),
     )
+    runner._start_line = lambda live: TripRunner._start_line(runner, live)
     if outcome == "success":
         assert run(trip_nav2_route._start_camera_finish(runner, trip, 0, .5, (3, site)))
-        assert events == ["cancel", "zero", "zero", "front", "saved", "wire", "camera", "saved"]
+        assert events == ["cancel", "zero", "zero", "front", "saved", "wire", "camera", "saved", "saved"]
         assert trip.view["detail"]["camera_lane_fallback"]["phase"] == "running"
         return
     with pytest.raises(TripError):
@@ -153,3 +158,5 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
     assert "camera" not in events
     if outcome == "stop_unknown":
         assert events == ["cancel"]
+    if outcome == "velocity_repeated":
+        assert events == ["cancel", "zero", "zero", "zero", "zero"]
