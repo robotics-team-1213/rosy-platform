@@ -153,6 +153,7 @@ OWN = {
     },
     "cell.js": {
         "cell-channel-mission.js",
+        "cell-camera-zoom.js",
         "cell-document-editor.js",
         "cell-observation.js",
         "cell-observation-text.js",
