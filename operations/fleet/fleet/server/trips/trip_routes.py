@@ -98,11 +98,14 @@ class TripRequest(BaseModel):
     start_at: Optional[PlaceRef] = None
     #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
     convoy: Optional[TripConvoy] = None
+    camera_lane_fallback: bool = Field(default=False, strict=True)
     #: Optional Nav2 road-following execution mode over site-map edges.
     drive_mode: Optional[Literal["nav2"]] = None
 
     @model_validator(mode="after")
     def _cycle(self) -> "TripRequest":
+        if self.camera_lane_fallback and (not getattr(self, "approved_slam_required", False) or self.repeat):
+            raise ValueError("camera_lane_fallback needs a finite approved SLAM Nav2 trip")
         if self.repeat and (not isinstance(self.to, str) or not self.via):
             raise ValueError("repeat needs a place id in to and at least one via place")
         if self.convoy is not None and not self.repeat:

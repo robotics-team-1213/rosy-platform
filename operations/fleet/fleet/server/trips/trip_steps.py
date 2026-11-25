@@ -118,6 +118,9 @@ class TripSteps:
             remaining = live.segments[index]["s_to"] - s
             lane = live.segment_is_lane(index)
             camera = live.view["detail"].get("camera_lane_fallback")
+            if camera and live.view["hold"] is not None:
+                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_HELD")
+                return
             if camera and (not lane or self._clock() - camera["started_at"] > 2 * self.config.stall_s):
                 await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_TIMEOUT")
                 return
