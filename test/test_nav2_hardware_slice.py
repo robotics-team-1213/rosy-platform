@@ -380,6 +380,20 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         def __init__(self, predicate):
             self.predicate = predicate
 
+    class _Not:
+        def __init__(self, value):
+            self.value = value
+
+        def perform(self, ctx):
+            return str(self.value.perform(ctx) == "false").lower()
+
+    class _And:
+        def __init__(self, left, right):
+            self.left, self.right = left, right
+
+        def perform(self, ctx):
+            return str(self.left.perform(ctx) == self.right.perform(ctx) == "true").lower()
+
     class _Source:
         def __init__(self, path):
             self.path = path
@@ -425,6 +439,8 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     launch_srcs.PythonLaunchDescriptionSource = _Source
     launch_subs = types.ModuleType("launch.substitutions")
     launch_subs.LaunchConfiguration = _LaunchCfg
+    launch_subs.NotSubstitution = _Not
+    launch_subs.AndSubstitution = _And
     launch_ros = types.ModuleType("launch_ros")
     ros_actions = types.ModuleType("launch_ros.actions")
     ros_actions.Node = types.SimpleNamespace
@@ -472,6 +488,19 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         e.name: e.default_value for e in ld.entities if isinstance(e, _DeclareArg)
     }
     assert declared["enable_loc_assist"] == "true"
+    includes = {Path(e.source.path).name: e for e in ld.entities if isinstance(e, _Include)}
+    bringup_ir = includes["bringup_robot.launch.py"].launch_arguments["enable_ir"]
+    legacy_line = includes["line_follow.launch.py"]
+    assert bringup_ir.perform(declared) == "true"
+    assert legacy_line.condition.predicate.perform(declared) == "false"
+    for line_enabled in ("true", "false"):
+        for ir_enabled in ("true", "false"):
+            ctx = {"enable_line_follow": line_enabled, "line_ir_enabled": ir_enabled}
+            publishers = (bringup_ir.perform(ctx) == "true") + (
+                legacy_line.condition.predicate.perform(ctx) == "true"
+                and legacy_line.launch_arguments["start_ir_adc"].perform(ctx) == "true"
+            )
+            assert publishers == int(ir_enabled == "true"), ctx
 
     base_ctx = {
         "namespace": "pinky1",
