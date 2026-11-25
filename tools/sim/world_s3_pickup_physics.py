@@ -8,8 +8,8 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-import arm_s_cell_fixture as fixture
 from omx_cell_sim import ISAAC, JOINTS, URDF, Cell, _parsed_cell_urdf, norm_to_rad
+import arm_s_cell_fixture as fixture
 from omx_mujoco_backend import GRIP_SOLIMP, GRIP_SOLREF, adjacent_links, mjcf_urdf
 import omx_physics as physics
 import palletizing_gripper as jaw
@@ -24,6 +24,8 @@ SAFE_HEIGHT = .125
 class Scene:
     # Reuse the cell's damped tool-down IK with this model's own joints and TCP.
     ik = Cell.ik
+    geometry = {"tray": fixture.TRAY, "belt": fixture.BELT, "pinky_frame": fixture.FRAME,
+                "box_size_m": fixture.BOX}
 
     def __init__(self):
         self.physics = physics.Physics()

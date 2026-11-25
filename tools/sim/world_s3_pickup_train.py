@@ -8,12 +8,6 @@ import json
 import math
 from pathlib import Path
 import random
-import sys
-
-ROOT = Path(__file__).resolve().parents[2]
-ISAAC = ROOT / "learning/envs/isaac"
-sys.path.insert(0, str(ISAAC))
-import arm_s_cell_fixture as fixture  # noqa: E402
 
 REGISTRATION = "unregistered-arm-local-proxy"
 TASK = "omx-s-s3-pickup-alignment"
@@ -121,8 +115,6 @@ def run(out, *, trials=10):
     checkpoint_hash = sha256((out / "checkpoint.json").read_bytes()).hexdigest()
     save(out / "progress.json", dict(binding, phase="evaluation", step=trials, total_steps=trials,
                                      reward=reward, best_reward=best_reward))
-    geometry = {"tray": fixture.TRAY, "belt": fixture.BELT, "pinky_frame": fixture.FRAME,
-                "box_size_m": fixture.BOX}
     pairs = []
     for condition in held_out:
         pair = {}
@@ -133,7 +125,7 @@ def run(out, *, trials=10):
             save(out / name, dict(
                 binding, schema="rosy.world.s3-replay.v1", policy=policy,
                 checkpoint_sha256=checkpoint_hash if policy == "learned" else None,
-                condition=result["condition"], result=result["result"], geometry=geometry, frames=frames,
+                condition=result["condition"], result=result["result"], geometry=scene.geometry, frames=frames,
             ))
         pairs.append(pair)
     report = dict(binding, schema="rosy.world.s3-evaluation.v1",
