@@ -736,3 +736,45 @@ def test_job_client_wait_timeout_and_cli_get_wait_run(monkeypatch, capsys):
         ("start", "pivot_near", {"site": "floor"}, "k1"),
         ("wait", "job-42", 45.0),
     ]
+
+
+def test_calibrate_check_targets_validation_and_non_moving_argv(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    no_targets = api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json"}, wd)
+    assert "--targets" not in no_targets
+    assert no_targets[:2] == ["bash", "-c"] and no_targets[3:] == ["cell_calibrate.py", "--config", "cell-s.json", "check"]
+    with_targets = api.build_argv(
+        api.JOBS["calibrate_check"],
+        {"config": "cell-s.json", "targets": ["floor:-0.06,0.15", "belt:0.115,-0.05"]},
+        wd,
+    )
+    idx = with_targets.index("--targets")
+    assert with_targets[:idx] == no_targets  # the old argv, unchanged, then only the new option
+    assert with_targets[idx + 1 :] == ["floor:-0.06,0.15", "belt:0.115,-0.05"]
+    assert api.moves_arm(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": ["floor:0,0"]}) is False
+    for bad in (
+        [],
+        [f"s{i}:0,0" for i in range(13)],
+        "floor:0,0",
+        ["--only:0,0"],
+        ["-x:0,0"],
+        ["BAD SITE:0,0"],
+        ["floor:0.9,0.0"],
+        ["floor:nan,0.0"],
+        ["floor:inf,0.0"],
+        ["floor:0.1"],
+    ):
+        with pytest.raises(ValueError):
+            api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": bad}, wd)
+
+    # a bad list is refused before any process starts; a good one starts
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    runner = api.Runner(wd, lock_dir=wd)
+    refused = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:nan,0.0"]})
+    assert refused["code"] == 400 and "targets" in refused["error"]
+    popen.assert_not_called()
+    started = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:-0.06,0.15"]})
+    assert started["code"] == 202
+    popen.assert_called_once()
