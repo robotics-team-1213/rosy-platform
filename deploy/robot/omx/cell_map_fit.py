@@ -88,7 +88,8 @@ def repair_record(config: dict, record: dict, kept: list) -> dict:
     z_view = record.get("z_view") if record.get("z_view") is not None else (config.get("coarse") or {}).get("z_view", 0.0)
     repaired = fitted_map(config, kept, z_view)
     base = {k: v for k, v in record.items()
-            if k not in ("homography", "loo_error_mm", "camera_in_base", "rms_px", "upright", "affine_fit", "pose_fit", "pose_refused")}
+            if k not in ("homography", "loo_error_mm", "camera_in_base", "rms_px", "upright",
+                         "affine_fit", "pose_fit", "pose_refused", "fitted_cz_m", "implied_blob_dz_mm")}
     return {
         **base,
         **repaired,
@@ -106,7 +107,6 @@ def _pose_loo_errors(pts: list, z_view: float, config: dict) -> list[tuple[float
         if not lens_path.is_file():
             return None
         import cell_checkerboard as cb
-        import cell_frame
         import cell_intrinsics_frames as cif
 
         lens = __import__("json").loads(lens_path.read_text(encoding="utf-8"))
@@ -114,13 +114,11 @@ def _pose_loo_errors(pts: list, z_view: float, config: dict) -> list[tuple[float
         dist = np.asarray(lens.get("dist", [0.0] * 5), float)
         up = c["up"]
         cam_h = ((config.get("cameras") or {}).get("top") or {}).get("height_m")
-        height = (float(cam_h) - float(z_view)) if cam_h is not None and float(cam_h) > float(z_view) else None
         rows: list[tuple[float, float] | None] = []
         for i, (px, arm) in enumerate(pts):
-            sub = cif.plane_pose_map(pts[:i] + pts[i + 1:], z_view, K, dist, up, height)
-            inv = (np.asarray(sub["camera_in_base"]["R"], float), np.asarray(sub["camera_in_base"]["t"], float))
-            pose = cell_frame.inverse(inv)
-            hit = cb.pixel_to_plane(px, K, dist, pose, float(z_view))
+            sub = cif.fit_pose_for_marks(pts[:i] + pts[i + 1:], z_view, K, dist, up, cam_h)
+            cam_in_base = (np.asarray(sub["camera_in_base"]["R"], float), np.asarray(sub["camera_in_base"]["t"], float))
+            hit = cb.pixel_to_plane(px, K, dist, cam_in_base, float(z_view))
             rows.append((round((float(hit[0]) - arm[0]) * 1000.0, 2), round((float(hit[1]) - arm[1]) * 1000.0, 2)))
         return rows
     except Exception:
@@ -219,15 +217,12 @@ def site_sigma_summary(record: dict | None, points_arm: list, cam_top: dict, tar
     """Max/mean expected map error (mm, AprilCal MERE) across key site coordinates (`start`, `place`)."""
     if not record or not record.get("homography") or not points_arm:
         return None
-    fit_z = record.get("z_view")
     sigmas = []
     for pt in points_arm:
         if not pt or len(pt) < 2:
             continue
         try:
             px = cal.to_pixel(record["homography"], pt[:2])
-            if target_z is not None and fit_z is not None and cam_top.get("center_px") and cam_top.get("height_m"):
-                px = cal.parallax(px, float(fit_z), float(target_z), cam_top)
             sigmas.append(predict_sigma_mm(record, px))
         except Exception:
             continue

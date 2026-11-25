@@ -1289,3 +1289,108 @@ def test_check_emits_advisory_bias_coverage_and_leverage_without_changing_stale(
     assert cc.stale(found) == []
     lev = cell_map_fit.plan_leverage([[0.0, 0.1], [0.04, 0.1], [0.0, 0.14], [0.04, 0.14]], cfg["sites"], limit_mm=5.0)
     assert [w["site"] for w in lev["warnings"]] == ["belt"]
+
+
+def test_wide_pose_fit_keeps_pose_loo_and_pose_loo_errors_and_site_sigma(tmp_path):
+    import cv2
+    import cell_frame as cf
+    import cell_map_fit
+
+    K = np.array([[618.53, 0.0, 322.32], [0.0, 618.67, 236.60], [0.0, 0.0, 1.0]])
+    R_cb = cv2.Rodrigues(np.array([np.pi, 0.0, 0.0]))[0] @ cv2.Rodrigues(np.array([0.14, -0.10, 0.3]))[0]
+    t_cb = np.array([0.12, 0.08, 0.61])
+    cam_pose = (R_cb, t_cb)
+    up = (R_cb.T @ np.array([0.0, 0.0, 1.0])).tolist()
+    z_view = 0.12
+    # Wide XY span (>= 0.10 m x >= 0.05 m), with blobs physically 20 mm above z_view
+    blob_z = z_view + 0.020
+    grid_xy = [(-0.04, 0.10), (0.04, 0.10), (0.12, 0.10), (-0.04, 0.18), (0.04, 0.18), (0.12, 0.18), (0.00, 0.14), (0.08, 0.14)]
+    marks = [(cf.project((x, y, blob_z), K, np.zeros(5), cam_pose), (x, y)) for x, y in grid_xy]
+    lens = tmp_path / "lens.json"
+    lens.write_text(json.dumps({"K": K.tolist(), "dist": [0.0] * 5}), encoding="utf-8")
+    cfg = {"cameras": {"top": {"height_m": 0.61, "center_px": [322.32, 236.60]}},
+           "calibrate": {"intrinsics": str(lens), "up": up}}
+
+    rec = cc.rp.fit_remap_marks(cfg, z_view, tcp_marks=False, marks=marks, seen_jaws=[], write_labels=False, log=lambda _: None)
+    assert rec["upright"] is True
+    assert rec["fitted_cz_m"] == pytest.approx(0.61 - 0.020, abs=0.004)
+    assert rec["implied_blob_dz_mm"] == pytest.approx(20.0, abs=4.0)
+    # Must keep pose loo_error_mm rather than overwriting with affine cal.loo_error_mm
+    assert rec["loo_error_mm"] != rec["affine_fit"]["loo_error_mm"] or rec["loo_error_mm"]["max"] < 1.0
+    assert rec["loo_error_mm"]["max"] < rec["affine_fit"]["loo_error_mm"]["max"]
+
+    # _pose_loo_errors must not double-invert camera_in_base
+    rows = cell_map_fit.loo_residuals(rec, cfg)
+    assert len(rows) == len(grid_xy)
+    assert max(r["loo_dist_mm"] for r in rows) < 1.5
+
+    # site_sigma_summary evaluates leverage at the z_view pixel directly (no target_z parallax shift)
+    pt = [0.04, 0.14]
+    px_zview = cc.cal.to_pixel(rec["homography"], pt)
+    expected_sig = cell_map_fit.predict_sigma_mm(rec, px_zview)
+    summary = cell_map_fit.site_sigma_summary(rec, [pt], cfg["cameras"]["top"], target_z=-0.05)
+    assert summary["max_mm"] == expected_sig and summary["mean_mm"] == expected_sig
+
+    # If free height diverges > 60 mm from cam_h - z_view, fitted_map falls back to fixed height
+    cfg_far = {"cameras": {"top": {"height_m": 0.72}}, "calibrate": {"intrinsics": str(lens), "up": up}}
+    rec_fb = cc.fitted_map(cfg_far, marks, z_view)
+    pose_fb = rec_fb.get("pose_fit", rec_fb)
+    assert pose_fb["fitted_cz_m"] == pytest.approx(0.72, abs=1e-4)
+    assert pose_fb["implied_blob_dz_mm"] == 0.0
+
+
+def test_remap_uses_measured_fk_and_reruns_jaw_labelling_after_outlier_drop(tmp_path, monkeypatch):
+    import types
+
+    def write(c, pose, _place, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], pose["yaw_deg"], 0.0]]}}))
+        return path
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
+    # Live state has true FK position shifted (+3 mm, -2 mm) and yaw=15 deg (different from planned 0 deg)
+    true_yaw = 15.0
+    monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: (s[0] + 0.003, s[1] - 0.002, s[2], true_yaw) if len(s) == 6 else tuple(s[:4]))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    o = (0.054 * math.cos(math.radians(true_yaw + 79.0)), 0.054 * math.sin(math.radians(true_yaw + 79.0)))
+    shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
+    pairs = {0, 3, 6}
+
+    class LiveFkCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            if command == "state" and self.i >= 0:
+                p = points[self.i]
+                return {"ok": True, "state": [p[0], p[1], 0.14, true_yaw, 0.0, 56.0]}
+            return {"ok": True}
+
+    def mark(cell, config, near=None, report=None, **kw):
+        p = points[cell.i]
+        fk_tcp = (p[0] + 0.003, p[1] - 0.002)
+        if cell.i == 1:  # corrupt mark at index 1 (80 px outlier)
+            px = (to_px(fk_tcp)[0] + 80.0, to_px(fk_tcp)[1] - 60.0)
+            report.update(reason=None, side=None, blobs=[[px[0], px[1], 400.0]])
+            return px
+        s = -0.5 if shows[cell.i] == "ref" else 0.5
+        seen = [to_px((fk_tcp[0] + k * o[0], fk_tcp[1] + k * o[1])) for k in ((s, -s) if cell.i in pairs else (s,))]
+        report.update(reason=None, side=None, blobs=[[x, y, 400.0] for x, y in seen])
+        return seen[0]
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    record = cc.remap(LiveFkCell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert len(record["points"]) == 7 and len(record["dropped_marks"]) == 1
+    assert record["loo_error_mm"]["max"] < 0.5
+    # Verify marks recorded measured FK coordinates (+0.003, -0.002), not planned GRID
+    for pt in record["points"]:
+        assert 1000 * math.dist(cc.cal.to_arm(record["homography"], pt["pixel"]), pt["arm_m"]) < 0.5
+    obs = json.loads(next((tmp_path / "remap-frames").iterdir()).joinpath("observations.json").read_text())
+    assert obs["seen_jaws"][0]["yaw"] == true_yaw
+    assert obs["seen_jaws"][0]["tcp"] == pytest.approx([points[0][0] + 0.003, points[0][1] - 0.002], abs=1e-6)

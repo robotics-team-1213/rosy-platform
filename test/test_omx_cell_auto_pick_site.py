@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
 
@@ -180,3 +181,113 @@ def test_finger_room_view_without_surface_lab_uses_site_roi_median_only():
     rmask, mroi = cap.finger_room_view(img, config, "beltend", roi)
     assert not rmask[roi[1] - mroi[1] + 5:roi[1] - mroi[1] + 25, roi[0] - mroi[0] + 5:roi[0] - mroi[0] + 25].any()
     assert rmask[135 - mroi[1], 159 - mroi[0]] > 0
+
+
+def test_feel_hook_uses_limits_workspace_min_site_z_live_fk_and_skips_refused_reach(tmp_path, monkeypatch):
+    import cell_feel
+    import cell_pivot
+    import cell_reach
+
+    # 1. Uses site surface_z, plan.limits.workspace_min_m, live FK yaw, and skips candidate when z_step > 0 and reach refuses
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, **_kw: (0.10, 0.15, 0.02, 90.0))
+    reach_verdicts = iter([{"verdict": "refuse"}, {"verdict": "pass"}])
+    monkeypatch.setattr(cell_reach, "hook", lambda *_a, **_kw: (lambda: next(reach_verdicts)))
+
+    class FakeCell:
+        def act(self, cmd):
+            if cmd == "state":
+                return {"ok": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 56.0]}
+            return {"ok": True}
+
+    picks = []
+    commands = []
+
+    def write_lib(_cfg, pick, _place, path):
+        picks.append(dict(pick))
+        return str(path)
+
+    def run(cmd):
+        commands.append(cmd)
+        if cmd == "run grasp_pick":
+            return {"ok": True, "holding": True}
+        return {"ok": True}
+
+    cfg = {
+        "work_dir": str(tmp_path),
+        "params": {"feel.enabled": 1, "feel.z_step_mm": 5.0, "feel.tries": 2},
+        "sites": {"pinky": {"surface_z": 0.010}},
+        "plan": {"limits": {"workspace_min_m": [-0.28, -0.28, 0.008]}},
+    }
+    target = {
+        "site": "pinky",
+        "pick": {"x": 0.10, "y": 0.15, "z": 0.012, "yaw_deg": 0.0},
+        "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0},
+        "offset": 0.0,
+    }
+    fn = cell_feel.feel_hook(cfg, FakeCell(), target, write_lib)
+    res = fn(run)
+    assert res["holding"] is True
+    # First candidate's reach refused with z_step > 0 -> must NOT run descend_pick/grasp_pick for candidate 0
+    assert commands.count("run descend_pick") == 1 and commands.count("run grasp_pick") == 1
+    # z clamped to plan.limits.workspace_min_m[2] = 0.008 (not descending to 0.012 - 0.008 = 0.004)
+    assert picks[0]["z"] == 0.008 and picks[1]["z"] == 0.008
+
+    # 2. Without workspace_min_m, site surface_z + 0.005 sets z_min, and live FK yaw (90) + offset (0) drives XY step
+    picks.clear()
+    monkeypatch.setattr(cell_reach, "hook", lambda *_a, **_kw: None)
+    cfg2 = {"work_dir": str(tmp_path), "params": {"feel.enabled": 1, "feel.step_mm": 10.0, "feel.tries": 1}, "sites": {"pinky": {"surface_z": 0.020}}}
+    target2 = {"site": "pinky", "pick": {"x": 0.10, "y": 0.15, "z": 0.020, "yaw_deg": 0.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0}, "offset": 0.0}
+    cell_feel.feel_hook(cfg2, FakeCell(), target2, write_lib)(run)
+    assert picks[0]["z"] == 0.025  # surface_z 0.020 + 0.005
+    assert picks[0]["x"] == 0.10 and picks[0]["y"] == pytest.approx(0.160, abs=1e-4)  # yaw 90 -> +y
+
+    # 3. Legacy pick dict without "z" and without site config must not raise KeyError in feel_hook
+    target_no_z = {"pick": {"x": 0.10, "y": 0.15, "yaw_deg": 0.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0}}
+    assert cell_feel.feel_hook({"work_dir": str(tmp_path), "params": {"feel.enabled": 1}}, FakeCell(), target_no_z, write_lib) is not None
+
+
+def test_run_auto_passes_blend_flag_matching_choose(tmp_path, monkeypatch):
+    import cell_auto_pick as cap_main
+    import cell_auto_evidence as cae
+    import cell_choices
+    import cell_pivot
+
+    bias_calls = []
+    orig_bias_at = cell_pivot.bias_at
+
+    def spy_bias_at(data, site, pt, reach_mm=None, params=None, *, pivot_only=False, blend=False):
+        bias_calls.append((pivot_only, blend))
+        return {"site": site, "point_m": list(pt), "bias_mm": [1.0, 2.0], "blended_n": 2}
+
+    monkeypatch.setattr(cell_pivot, "bias_at", spy_bias_at)
+    monkeypatch.setattr(cae, "map_pose_preflight", lambda *a, **kw: None)
+    monkeypatch.setattr(cae, "track_sites", lambda _c, cfg, _cal, _s, _d, r, *_a: (cfg, r, None))
+    monkeypatch.setattr(cae, "source_frame", lambda _c, path: ({"image": None}, {"path": str(path)}, None))
+    monkeypatch.setattr(cae, "destination_view", lambda *a, **kw: (None, None))
+    monkeypatch.setattr(cap_main, "observe", lambda *a, **kw: (None, None, [{"raw_m": [0.1, 0.1], "centre_mm": [100.0, 100.0], "object": "c1", "long_axis_deg": 0.0}], None))
+    monkeypatch.setattr(cap_main, "finger_room_view", lambda *a, **kw: None)
+    choose_calls = []
+
+    def fake_choose(*a, **kw):
+        choose_calls.append(1)
+        return ([{"object": {"raw_m": [0.1, 0.1], "centre_mm": [100.0, 100.0], "object": "c1", "long_axis_deg": 0.0}, "offset": 90,
+                  "bias_region": {"site": "pinky", "point_m": [0.1, 0.1], "bias_mm": [1.0, 2.0], "blended_n": 2},
+                  "bias_mm": [1.0, 2.0], "approach_m": 0.04, "library": tmp_path / "lib.json",
+                  "pick": {"x": 0.1, "y": 0.1, "z": 0.02, "yaw_deg": 0.0},
+                  "place": {"x": 0.1, "y": 0.1, "z": 0.02, "yaw_deg": 0.0}}], [])
+
+    monkeypatch.setattr(cap_main, "choose", fake_choose)
+    monkeypatch.setattr(cap_main, "self_calibrate", lambda *a: (a[8], None))
+    monkeypatch.setattr(cae, "pre_motion_frame", lambda *a, **kw: (None, None, "stop_after_bias_check"))
+    monkeypatch.setattr(cap_main, "Guarded", lambda *a: object())
+    cfg = {
+        "calibrate": {"blend_bias": True},
+        "calibration_path": str(tmp_path / "cal.json"),
+        "sites": {"pinky": {"start": [0.1, 0.1], "place": [0.1, 0.1], "yaw_deg": 0.0}},
+    }
+    cell = type("C", (), {"act": lambda self, cmd: {"ok": True}, "frame": lambda self, cam: None})()
+    cap_main.run_auto(cell, cfg, {"sites": {}}, tmp_path / "cal.json", [], [0, 0, 100, 100],
+                      "pinky", "pinky", tmp_path, cell_choices.Choices(tmp_path / "ch.json"), dry_run=False, attempts=1)
+    assert len(choose_calls) == 1  # blend=True matched target["bias_region"], so choose() was not called twice
+    assert bias_calls == [(False, True), (False, True)]
+    assert orig_bias_at is not None
