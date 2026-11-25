@@ -4,6 +4,10 @@ import math
 from ceiling_marker_yaw import EstimateError, MAX_YAW_SPREAD_DEG, MIN_SAMPLES
 
 
+class LedUnobserved(EstimateError):
+    """The supported lamp observation did not yield an independent heading."""
+
+
 def combine(cargo, led):
     """Retain an independently observed cue; require agreement when both are visible."""
     if cargo is None and led is None:
@@ -77,7 +81,9 @@ def estimate_led(frames, record, *, source, marker, heading_edge, challenge, rob
         samples.append(led_identity.sample_frame(image, captured_at=stamp, calibration_revision=cal.revision,
                                                   blobs=[blob], color="blue"))
         poses.append(pose)
-    if len(poses) < MIN_SAMPLES or any(math.dist(p[:2], poses[0][:2]) > .02 or
+    if len(poses) < MIN_SAMPLES:
+        raise LedUnobserved("too few LED frames in the challenge window")
+    if any(math.dist(p[:2], poses[0][:2]) > .02 or
             abs(math.degrees(math.remainder(p[2] - poses[0][2], 2 * math.pi))) > MAX_YAW_SPREAD_DEG for p in poses):
         raise EstimateError("stationary LED marker observations required")
     verdict = led_identity.decide(samples, not_before=start, not_after=end, now=end)
@@ -85,7 +91,7 @@ def estimate_led(frames, record, *, source, marker, heading_edge, challenge, rob
     angle = evidence.get("yaw_px")
     if (verdict["state"] != "matched" or angle is None or evidence.get("yaw_confidence") != 1
             or evidence.get("mode") == "steady"):
-        raise EstimateError("no unambiguous blinking front/rear LED heading")
+        raise LedUnobserved(f"no blinking front/rear LED heading ({verdict.get('reason') or 'asymmetric peaks missing'})")
     direction = np.array([math.cos(angle), math.sin(angle)])
     rear, front = project([centre, centre + direction])
     heading = math.atan2(front[1] - rear[1], front[0] - rear[0])
