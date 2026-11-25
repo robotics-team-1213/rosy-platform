@@ -193,12 +193,21 @@ def build_readiness(
     return {**core, "readiness_digest": canonical_sha256(core, omit_keys=())}
 
 
+def read_tail_bytes(path: Path, max_bytes: int) -> bytes:
+    if max_bytes <= 0:
+        return b""
+    with path.open("rb") as handle:
+        count = min(handle.seek(0, os.SEEK_END), max_bytes)
+        handle.seek(-count, os.SEEK_CUR)
+        return handle.read(count)
+
+
 def parse_structured_result(log_path: Path) -> tuple[dict[str, Any] | None, str | None]:
     """Extract the final JSON object emitted in a job log even past the 4000-byte log tail."""
     try:
         if not log_path.is_file():
             return None, None
-        raw = log_path.read_bytes()[-_LOG_TAIL_BYTES:].decode("utf-8", errors="replace")
+        raw = read_tail_bytes(log_path, _LOG_TAIL_BYTES).decode("utf-8", errors="replace")
     except OSError:
         return None, None
     decoder = json.JSONDecoder()
