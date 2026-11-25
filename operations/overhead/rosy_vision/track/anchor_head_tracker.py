@@ -11,6 +11,7 @@ from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration, Detection, DetectorResult, ROBOT_TOP_HEIGHT_M
 
 OMX_HEAD_HEIGHT_M, PINKY_HEAD_OFFSET_M, SIGHTING_MIN_INTERVAL_S = 0.11, 0.055, 0.22
+MOBILE_ANCHOR_KIND = "pinky"
 
 
 @dataclass
@@ -146,7 +147,7 @@ class AnchorHeadTracker:
             anchors = list(self._anchors.values())
             enrolled_robots = set(self._enrolled_robots)
         omx_anchors = [a for a in anchors if a.kind == "omx_ai"]
-        pinky_anchors = [a for a in anchors if a.kind == "pinky"]
+        pinky_anchors = [a for a in anchors if a.kind == MOBILE_ANCHOR_KIND]
 
         for anchor in omx_anchors:
             st = self._track_omx_target(image, captured_at, anchor, img_to_map, map_to_img, camera_pose, scale_x, scale_y)

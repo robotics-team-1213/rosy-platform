@@ -3,6 +3,7 @@ import asyncio
 import math
 from rosy_vision.birdview_overlay import overlay_signature, render_map_overlay_jpeg
 from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.track.anchor_head_tracker import MOBILE_ANCHOR_KIND
 
 
 async def rectified_jpeg(ingest, source, frame, settings) -> bytes:
@@ -51,7 +52,7 @@ def _collect_overlay_inputs(ingest, source: str) -> tuple[list[dict], list[dict]
                         "head_x": getattr(st, "head_x", None),
                         "head_y": getattr(st, "head_y", None),
                     })
-                elif kind == "pinky" and seen.get(tid):
+                elif kind == MOBILE_ANCHOR_KIND and seen.get(tid):
                     hx, hy = getattr(st, "base_x", None), getattr(st, "base_y", None)
                     hyaw = getattr(st, "base_yaw", None)
                     if all(isinstance(v, (int, float)) and math.isfinite(v) for v in (hx, hy)):
