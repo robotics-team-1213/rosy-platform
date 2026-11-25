@@ -228,6 +228,18 @@ def saved_review(tmp_path, root, segments):
     return workspace, row['id'], sent[0]
 
 
+def test_review_db_closes_connection_after_transaction(tmp_path):
+    import sqlite3
+    from learning_workspace import Workspace
+    import omx_web
+
+    workspace = Workspace(tmp_path / 'reviews.sqlite3')
+    with omx_web.review_db(workspace) as db:
+        db.execute('SELECT 1').fetchone()
+    with pytest.raises(sqlite3.ProgrammingError, match='closed database'):
+        db.execute('SELECT 1')
+
+
 def test_dataset_step_reads_the_latest_saved_review_read_only_and_refuses_marked_or_missing(
         tmp_path, monkeypatch, capsys):
     import os
