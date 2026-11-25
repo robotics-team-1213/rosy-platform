@@ -1690,11 +1690,12 @@ hand as above; the updater only replaces a running one. Install the updater
 beside the reviewed verifier from a reviewed checkout, never from a candidate:
 
 ```sh
-sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
-  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
+sudo install -d -o root -g root -m 0755 /usr/local/lib/rosy-site
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
   deploy/site/candidate_signing.py deploy/site/site_update_io.py \
   deploy/site/site_update_runtime.py /usr/local/lib/rosy-site/
+sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
+  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
