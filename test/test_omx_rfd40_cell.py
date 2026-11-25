@@ -70,6 +70,22 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(choose_epc(reader.scan(20)), A)
         self.assertEqual(socket.recv.call_count, 3)
 
+    def test_successive_scans_accept_split_abort_and_record_delimiters(self):
+        socket = Mock()
+        ack = b"Command:abort,Status:OK"
+        socket.recv.side_effect = [
+            HEADER + START + report(A, -43, 2) + STOP[:-2],
+            b"\r\n",
+            ack,
+            b"\r\n",
+            b"\r\n" + HEADER + START + report(B, -43, 2) + STOP,
+            ack + b"\r\n\r\n",
+        ]
+        reader = Reader(socket)
+
+        self.assertEqual(choose_epc(reader.scan(20)), A)
+        self.assertEqual(choose_epc(reader.scan(20)), B)
+
     def test_incomplete_trigger_and_odd_hex_do_not_emit(self):
         reader = Reader(None)
         reader.exchange = Mock(side_effect=[

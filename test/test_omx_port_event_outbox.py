@@ -2,6 +2,7 @@
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -59,3 +60,34 @@ def test_concurrent_drain_does_not_fail_after_fleet_acknowledges(tmp_path):
     link = OtherDrain()
     assert po.send(link, tmp_path)
     assert link.sent == [item]
+
+
+def test_listener_queues_multiple_scans_and_retries_without_another_scan(tmp_path, monkeypatch):
+    attempted, recovered, delivered = Event(), Event(), Event()
+    monkeypatch.setattr(po, "RFID_RESEND_SECONDS", 0.02, raising=False)
+
+    class RecoveringLink(Link):
+        first = None
+
+        def post_intake_reading(self, item):
+            if not recovered.is_set():
+                self.first = self.first or item
+                attempted.set()
+                raise OSError("offline")
+            super().post_intake_reading(item)
+            delivered.set()
+
+    link = RecoveringLink()
+
+    def inputs():
+        yield "432D3100\n"
+        assert attempted.wait(3), "listener did not attempt to send the first scan"
+        assert len(list(tmp_path.glob("*.json"))) == 1
+        recovered.set()
+        assert delivered.wait(3), "listener did not retry while the reader was idle"
+        yield "432D3200\n"
+
+    assert po.listen_rfid(link, inputs(), tmp_path)
+    assert [item.epc for item in link.sent] == ["432D3100", "432D3200"]
+    assert link.sent[0] == link.first
+    assert not list(tmp_path.glob("*.json"))
