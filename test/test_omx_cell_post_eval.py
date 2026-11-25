@@ -122,12 +122,14 @@ def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), dro
     def fake_mark_to_arm(rec, cfg, site, px, fz):
         fk_x = 0.10 + droop_mm[0] / 1000.0
         fk_y = 0.18 + droop_mm[1] / 1000.0
-        r_m = 0.0344 if (flip_second_finger and state["idx"] == 1) else 0.022
+        # Keep the bad mark outside the jaw radius even after relabelling.
+        r_m = 0.180 if (flip_second_finger and state["idx"] == 1) else 0.022
         ph = 53.0 + (229.5 if (flip_second_finger and state["idx"] == 1) else 0.0)
         a = math.radians(state["yaw"] + ph)
         x, y = fk_x + true_bias_mm[0] / 1000.0 + r_m * math.cos(a), fk_y + true_bias_mm[1] / 1000.0 + r_m * math.sin(a)
-        if jaw_at and jaw_at[state["idx"]] == "other":  # the other jaw: jaw_side.other_mm at FK yaw + other_deg
-            b = math.radians(state["yaw"] + 79.0)
+        if jaw_at and jaw_at[state["idx"]] == "other":
+            # From the saved reference at 53 degrees, the 79-degree jaw axis points outward.
+            b = math.radians(state["yaw"] + 259.0)
             x, y = x + 0.054 * math.cos(b), y + 0.054 * math.sin(b)
         return x, y
 
@@ -240,7 +242,7 @@ def test_post_eval_twin_yaw_plan_is_no_opposing_pair(tmp_path, monkeypatch):
 
 
 def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monkeypatch):
-    # the other jaw at both yaws: labelled together, its midpoint is the centre (unlabelled: half 74 mm, finger_identity)
+    # Both views see the other jaw. The label correction recovers the reference radius.
     cfg, _, cal_data, _, _, _ = _make_setup(tmp_path, true_bias_mm=(9.0, -4.0), saved_bias_mm=(0.0, 0.0))
     cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), jaw_at=("other", "other"))
     row = cell_post_eval.run_post_eval(cell, cfg, cal_data, commissioning=True, person_at_switch=True, write_library_fn=writer)["results"][0]
