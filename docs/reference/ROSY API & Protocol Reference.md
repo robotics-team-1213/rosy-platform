@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.464
+**Version:** v1.465
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.465 Map binding approval checks the measured frames (Fleet)
+
+POST /api/fleet/robots/{robot_id}/map-binding accepts optional expected_frame with site_map_id, site_map_version, and robot_grid_id. Fleet rejects a changed active site revision (409 MAP_BINDING_SITE_CHANGED) or robot grid (409 MAP_BINDING_GRID_CHANGED) before writing a binding. Omitting expected_frame keeps the existing approval behavior.
 
 ### v1.464 Lane trip junction turn refusal reason (Fleet)
 
@@ -5049,6 +5053,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.465 | 2026-11-25 | [Fleet] Map binding approval checks the measured frames |
 | v1.464 | 2026-11-25 | [Fleet] Keep the CORE junction readiness reason in lane trip refusals |
 | v1.463 | 2026-11-25 | [CORE] Explain the current junction-turn capability refusal |
 | v1.462 | 2026-11-25 | [Fleet] Nav2 trip preview shows frame readiness |
