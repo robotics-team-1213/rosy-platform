@@ -5,7 +5,8 @@
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
-import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
+import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripPoseReason} from "/console/assets/site-map-model.js";
+import {consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason} from "/console/assets/localization-panel-logic.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";

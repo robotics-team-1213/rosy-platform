@@ -1,7 +1,6 @@
 import { OPERATOR_REASON, operatorReason } from "./authorization.js";
 import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
-import {nav2FrameReason, nav2FrameSummary} from '/console/assets/localization-panel-logic.js';
 export {routeAttention} from './route-attention.js';
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'slow', 'turnaround', 'start'];
@@ -187,7 +186,7 @@ export function startTrip(request, planId) { return request(`/api/fleet/trips/${
 export function tripRefusalText(error) { return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error); }
 export function planSummaryText(plan) {
   return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
-    + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '') + nav2FrameSummary(plan.nav2_preflight);
+    + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 export function repeatTripReason({active, running, start}) {
   if (!active) return '활성 지도가 없습니다';
@@ -205,7 +204,7 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
   if (plan.start_check?.code && !plan.start_check.auto_align) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
-  return nav2FrameReason(plan.nav2_preflight?.code, tripErrorText);
+  return '';
 }
 
 export function teachStatusText(view) {

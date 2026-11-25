@@ -4,7 +4,8 @@ import {randomUUID} from "/console/assets/uuid.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill, robotMapPose } from "./localization-badge.js";
 import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { planPolylines, planSummaryText, planTrip, startTrip, tripPoseReason, tripRefusalText, tripStartReason } from "/console/assets/site-map-model.js";
+import { planPolylines, planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
 import { renderHoverCard } from "./map-hover-card.js";
 
