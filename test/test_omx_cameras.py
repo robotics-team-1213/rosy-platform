@@ -40,7 +40,8 @@ def test_bind_writes_changed_roles_waits_for_absent_cameras_and_lists_unregister
     reg = registry(tmp_path, [TOP, WRIST, DEPTH])
     (tmp_path / "omx-camera-top.env").write_text("".join(f"{k}={v}\n" for k, v in oc.role_env(TOP, DEFAULTS).items()))
     nodes = {TOP["device"]: "/dev/video12", WRIST["device"]: "/dev/video6"}
-    plan = oc.bind(reg, tmp_path, lambda d: d in nodes, {"/dev/video12", "/dev/video6", "/dev/video4"},
+    plan = oc.bind(reg, tmp_path, lambda d: d in nodes,
+                   {"/dev/video12": {}, "/dev/video6": {}, "/dev/video4": {}},
                    realpath=lambda d: nodes.get(d, d))
     assert plan["write"] == {"arm_b_wrist": oc.role_env(WRIST, DEFAULTS)} and plan["restart"] == ["arm_b_wrist"]
     assert plan["waiting"] == ["top_depth"] and plan["unregistered"] == ["/dev/video4"]  # top unchanged: left alone
@@ -157,6 +158,56 @@ def test_learn_records_the_model_of_each_present_camera_so_a_later_move_can_foll
     assert reg["cameras"][0]["usb_id"] == U20["id"] and oc.learn(reg, facts, [], present, realpath) == []
 
 
+def test_reused_port_cannot_change_the_registered_camera_model_or_keep_streaming(tmp_path):
+    side = dict(WRIST, role="side", usb_id="4c4a:4a55")
+    reg = registry(tmp_path, [side])
+    facts, names, present, realpath = _bench({
+        "/dev/video2": ({**U20, "id": "8086:0b07"}, [side["device"]]),
+    })
+    assert oc.learn(reg, facts, oc.propose(reg, facts, names, present, realpath), present, realpath) == []
+    assert reg["cameras"][0]["usb_id"] == "4c4a:4a55"
+    plan = oc.bind(reg, tmp_path, present, facts, realpath)
+    assert plan["waiting"] == ["side"] and plan["mismatched"] == ["side"]
+    assert plan["write"] == {} and plan["restart"] == []
+    calls = []
+    oc.apply(plan, tmp_path, lambda role: False, run=lambda argv, **kw: calls.append((argv[-2:], kw["check"])))
+    assert calls == [(["stop", "rosy-omx-camera@side.service"], True)]
+    moved = "/dev/v4l/by-path/pci-usb-0:2.4:1.0-video-index0"
+    facts, names, present, realpath = _bench({
+        "/dev/video2": ({**U20, "id": "8086:0b07"}, [side["device"]]),
+        "/dev/video4": ({**U20, "id": "4c4a:4a55", "usb": "1-3"}, [moved]),
+    })
+    rows = oc.propose(reg, facts, names, present, realpath)
+    assert [(row["node"], row["follow"]) for row in rows] == [("/dev/video4", "side")]
+    oc.learn(reg, facts, rows, present, realpath)
+    assert reg["cameras"][0]["device"] == moved
+    assert oc.bind(reg, tmp_path, present, facts, realpath)["restart"] == ["side"]
+
+
+def test_operator_can_replace_a_model_on_its_own_registered_port(tmp_path):
+    side = dict(WRIST, role="side", usb_id="4C4A:4A55")
+    reg = registry(tmp_path, [side])
+    facts, names, present, realpath = _bench({
+        "/dev/video2": ({**U20, "id": "8086:0b07"}, [side["device"]]),
+    })
+    assert oc.propose(reg, facts, names, present, realpath) == []
+    assert oc.replacement_on_port(reg, "top", "/dev/video2", facts, realpath) is None
+    replacement = oc.replacement_on_port(reg, "side", "/dev/video2", facts, realpath)
+    assert oc.approve(reg, "side", replacement)["cameras"][0]["usb_id"] == "8086:0b07"
+
+
+def test_incomplete_usb_identity_is_neither_relearned_nor_treated_as_a_mismatch(tmp_path):
+    reg = registry(tmp_path, [dict(TOP, usb_id="8086:0B07"), WRIST])
+    facts, _, present, realpath = _bench({
+        "/dev/video2": ({**U20, "id": "8086:0b07"}, [TOP["device"]]),
+        "/dev/video4": ({**U20, "id": "None:None"}, [WRIST["device"]]),
+    })
+    assert oc.bind(reg, tmp_path, present, facts, realpath)["mismatched"] == []
+    assert oc.learn(reg, facts, [], present, realpath) == []
+    facts["/dev/video2"]["id"] = "8086:None"
+    assert oc.bind(reg, tmp_path, present, facts, realpath)["mismatched"] == []
+
+
 def test_approve_gives_a_new_role_the_naming_convention_and_save_refuses_a_device_used_twice(tmp_path):
     path = tmp_path / "omx-cameras.json"
     reg = registry(tmp_path, [TOP])
@@ -221,7 +272,7 @@ def test_disabled_camera_is_skipped_everywhere_and_does_not_block_side_auto_foll
     changes = oc.learn(reg, facts, rows, present, realpath)
     assert changes == [{"role": "side", "from": side["device"], "to": side_live}]
 
-    plan = oc.bind(reg, tmp_path, present, {"/dev/video12", "/dev/video4"}, realpath=realpath)
+    plan = oc.bind(reg, tmp_path, present, facts, realpath=realpath)
     assert plan["disabled"] == ["arm_s_top"] and "arm_s_top" not in plan["waiting"] and "arm_s_top" not in plan["write"]
     ran = []
     done = oc.apply(plan, tmp_path, lambda role: role == "arm_s_top", run=lambda argv, **kw: ran.append(argv))
