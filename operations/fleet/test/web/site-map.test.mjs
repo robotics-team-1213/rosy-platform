@@ -506,6 +506,9 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2'), {
     to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2',
   });
+  assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2_slam'), {
+    to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2', approved_slam_required: true,
+  });
   const withStarts = {
     places: [
       ...stopOnlyMap.places,

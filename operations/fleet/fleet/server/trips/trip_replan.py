@@ -80,7 +80,7 @@ class TripReplan:
                 for edge in blocked_edges:
                     if edge not in known_edges:
                         raise TripError(422, "TRIP_UNKNOWN_EDGE", {"edge": edge})
-                pose = await self.map_pose(robot_id)
+                pose = await self._progress_pose(live, robot_id)
                 if pose is None or pose.state != LOCALIZED or pose.yaw is None:
                     raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None})
                 passed = {live.place(i) for i in range(live.view["segment_index"]) if live.place(i) is not None}
@@ -182,7 +182,8 @@ class TripReplan:
             await self._caps_checks(robot_id, graph, segments, bool(live.repeat), detail=live.view["detail"], **kw)
             if not current():
                 return
-            await self._pose_checks(robot_id, graph, segments, **kw)
+            pose_options = {**kw, "precision_scope": live.nav2_binding_scope} if live.nav2_binding_scope else kw
+            await self._pose_checks(robot_id, graph, segments, **pose_options)
             if current():
                 self._apply_replan(live, hold, principal_id)
                 return True
@@ -211,7 +212,8 @@ class TripReplan:
         try:
             graph = self._graph_for(live.view["map_version"])
             kw = {"nav2": True} if live.nav2 else {}
-            await self._pose_checks(robot_id, graph, segments[index:], **kw)
+            pose_options = {**kw, "precision_scope": live.nav2_binding_scope} if live.nav2_binding_scope else kw
+            await self._pose_checks(robot_id, graph, segments[index:], **pose_options)
             body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
                 self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
             await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True,

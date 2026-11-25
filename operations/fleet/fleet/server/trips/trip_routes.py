@@ -101,10 +101,13 @@ class TripRequest(BaseModel):
     camera_lane_fallback: bool = Field(default=False, strict=True)
     #: Optional Nav2 road-following execution mode over site-map edges.
     drive_mode: Optional[Literal["nav2"]] = None
+    approved_slam_required: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def _cycle(self) -> "TripRequest":
-        if self.camera_lane_fallback and (not getattr(self, "approved_slam_required", False) or self.repeat):
+        if self.approved_slam_required and (self.drive_mode != "nav2" or not isinstance(self.to, str)):
+            raise ValueError("approved_slam_required needs Nav2 and a named destination")
+        if self.camera_lane_fallback and (not self.approved_slam_required or self.repeat):
             raise ValueError("camera_lane_fallback needs a finite approved SLAM Nav2 trip")
         if self.repeat and (not isinstance(self.to, str) or not self.via):
             raise ValueError("repeat needs a place id in to and at least one via place")
@@ -186,7 +189,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
             raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
         binding_id = None
-        if precision is not None:
+        bound_nav2 = nav2 and isinstance(body.to, str) and (body.approved_slam_required
+                                                            or runner.config.map_binding_required)
+        if precision is not None or bound_nav2:
             bound = await read_precision_pose(runner, robot_id, active[0])
             if bound is None:
                 detail = {"reason": "APPROVED_SLAM_POSE_REQUIRED"}
@@ -202,6 +207,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
+        elif bound_nav2:
+            pose = None
         else:
             try:
                 pose = await console.trusted_map_pose(robot_id)
@@ -225,6 +232,10 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
+        if bound_nav2 and (caps is None or not caps.bound_route):
+            detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
+            record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
+            raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
         if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
             detail = {"drive_mode": "free"}
             record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
@@ -250,8 +261,10 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         plan_data = plan_body(plan)
-        if binding_id is not None:
-            if nav2 or not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
+        if bound_nav2:
+            plan_data["nav2_binding_id"] = binding_id
+        elif binding_id is not None:
+            if not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
                 record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
                 raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
             plan_data["precision_binding_id"] = binding_id
@@ -285,7 +298,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
                 "plan": plan_data, "context": context})
         response = {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
-        if nav2:
+        if bound_nav2:
+            response["nav2_preflight"] = {"code": None, "binding_required": True, "binding_status": "MATCHED"}
+        elif nav2:
             state = None
             if runner._robot_state is not None:
                 try:

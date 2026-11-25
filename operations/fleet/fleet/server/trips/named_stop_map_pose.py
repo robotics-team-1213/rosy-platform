@@ -1,4 +1,4 @@
-"""Read the approved SLAM pose specifically for surveyed stop trips."""
+"""Read an approved SLAM pose for surveyed stop and bound Nav2 trips."""
 
 import math
 
@@ -23,8 +23,6 @@ async def read_precision_pose(runner, robot_id, site_version, binding_id=None):
         state = await runner._call(reader(robot_id), "TRIP_POSE_UNTRUSTED")
     except (KeyError, TripError):
         return None
-    if not isinstance(state, dict) or state.get("pose_frame") != "map":
-        return None
     current = runner._store.active()
     if current is None or current[0] != site_version:
         return None
@@ -32,22 +30,32 @@ async def read_precision_pose(runner, robot_id, site_version, binding_id=None):
     chosen = bindings.active(robot_id)
     if chosen is None or (binding_id is not None and chosen["binding_id"] != binding_id):
         return None
+    now = runner._clock()
+    sample = fresh_native_slam(state, now)
+    if sample is None:
+        return None
     fit, _ = bindings.matching_fit(robot_id, state, (active[1].map_id, site_version))
+    if fit is None or bindings.active(robot_id) != chosen:
+        return None
+    native_pose, age_s, odom_stamp = sample
+    x, y, yaw = bound_pose(fit, native_pose)
+    return (MapPose(x, y, yaw, LOCALIZED, "approved_slam", 0., age_s,
+                    anchor_age_s=age_s, map_id=active[1].map_id, odom_stamp=odom_stamp), chosen["binding_id"])
+
+
+def fresh_native_slam(state, now):
+    if not isinstance(state, dict) or state.get("pose_frame") != "map":
+        return None
     pose = state.get("pose") or {}
     evidence = (state.get("evidence") or {}).get("pose") or {}
     stamp = parse_utc(evidence.get("received_at"))
     odom = odom_from_snapshot(state)
-    now = runner._clock()
-    if (fit is None or bindings.active(robot_id) != chosen or evidence.get("evidence") != "fresh"
-            or stamp is None or not 0 <= now - stamp < STALE_POSE_S
+    if (evidence.get("evidence") != "fresh" or stamp is None or not 0 <= now - stamp < STALE_POSE_S
             or odom is None or not 0 <= now - odom.stamp < STALE_POSE_S
             or not all(type(pose.get(axis)) in (int, float) and math.isfinite(pose[axis])
                        for axis in ("x", "y", "yaw"))):
         return None
-    x, y, yaw = bound_pose(fit, (pose["x"], pose["y"], pose["yaw"]))
-    return (MapPose(x, y, yaw, LOCALIZED, "approved_slam", 0., now - stamp,
-                    anchor_age_s=now - stamp, map_id=active[1].map_id, odom_stamp=odom.stamp),
-            chosen["binding_id"])
+    return (pose["x"], pose["y"], pose["yaw"]), now - stamp, odom.stamp
 
 
 async def precision_map_pose(runner, robot_id, scope):

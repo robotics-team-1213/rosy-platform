@@ -4,11 +4,13 @@ from types import SimpleNamespace as NS
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from fakes import run
 from fleet.server import trip_nav2_route
 from fleet.server.trip_nav2_route import camera_finish_segment
 from fleet.server.trip_ports import TripError
+from fleet.server.trip_routes import TripRequest
 from fleet.swarm.dispatch_guard import check_dispatch
 
 
@@ -31,6 +33,17 @@ def example():
 def test_reviewed_straight_with_ordinary_stop_has_bounded_continuation():
     trip, site, *_ = example()
     assert camera_finish_segment(trip, 0, (3, site), .5) == "finish"
+
+
+def test_request_requires_explicit_approved_slam_and_finite_named_trip():
+    baseline = {"to": "finish", "drive_mode": "nav2"}
+    assert TripRequest(**baseline).camera_lane_fallback is False
+    approved = {**baseline, "approved_slam_required": True, "camera_lane_fallback": True}
+    assert TripRequest(**approved).camera_lane_fallback is True
+    for changes in ({"approved_slam_required": False}, {"repeat": True, "via": ["start"]},
+                    {"to": {"x": 1., "y": 0.}}, {"drive_mode": None}):
+        with pytest.raises(ValidationError):
+            TripRequest(**(approved | changes))
 
 
 @pytest.mark.parametrize("change", [
