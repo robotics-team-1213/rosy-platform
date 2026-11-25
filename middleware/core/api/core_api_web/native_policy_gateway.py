@@ -29,6 +29,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 
+from core_common.protocol.native_policy_feedback import native_policy_feedback
 from core_api_web.api.errors import ApiError, register_exception_handlers
 from core_api_web.api.v1.arm import ArmHoldRequest, ArmLeaseGrant, Text, arm_caller
 
@@ -107,8 +108,11 @@ class NativeRelay:
         reason = owner.get("reason")
         if not isinstance(reason, str) or not re.fullmatch(r"[a-z0-9_]{1,96}", reason):
             reason = "owner_not_armed"
-        return dict(workcell_id=self.workcell, arm_id=self.arm, ready=ready, owner_session_id=session,
-                    reason=None if ready else reason)
+        status = dict(workcell_id=self.workcell, arm_id=self.arm, ready=ready, owner_session_id=session,
+                      reason=None if ready else reason)
+        if "hardware_readback" in owner:
+            status["hardware_readback"] = native_policy_feedback(owner["hardware_readback"], now_ns=self.clock())
+        return status
 
     def challenge(self, req):
         with self.lock:

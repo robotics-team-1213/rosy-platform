@@ -23,13 +23,17 @@ def test_gateway_auth_deadline_scope_and_hold(monkeypatch):
     clock = [10_000_000_000]
     calls = []
     ready = [True]
+    feedback = dict(state="fresh", arm_id="arm_b", basis="readonly_motor_registers",
+                    observed_at_unix_ns=1_795_000_000_000_000_000, observed_at_monotonic_ns=9_950_000_000,
+                    motors=[dict(id=i, model_number=1060, position_raw=-1, hardware_error=0, torque_enabled=0)
+                            for i in range(11, 17)])
 
     def owner(path, uid, req):
         assert (path, uid) == (CFG["socket_path"], CFG["owner_uid"])
         calls.append(req)
         if req["op"] == "status":
             return dict(ready=ready[0], arm_id="arm_b", owner_session_id="boot-1",
-                        reason="native_motor_writer_not_enrolled")
+                        reason="native_motor_writer_not_enrolled", hardware_readback=feedback)
         if req["op"] == "hold":
             return {"hold_reason": "core_hold"}
         return {"accepted": True, "lease_expires_at_ns": req["not_after_monotonic_ns"]}
@@ -44,7 +48,12 @@ def test_gateway_auth_deadline_scope_and_hold(monkeypatch):
     assert client.get(BASE + "lease-status").status_code == 401
     assert client.get(BASE + "lease-status", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert client.post(BASE + "actions", headers=HEADERS, json={}).status_code == 404
-    assert client.get(BASE + "lease-status", headers=HEADERS).json()["ready"] is True
+    status = client.get(BASE + "lease-status", headers=HEADERS).json()
+    assert status["ready"] is True and status["hardware_readback"] == {**feedback, "age_ms": 50}
+    feedback["motors"][0]["serial"] = "private"
+    redacted = client.get(BASE + "lease-status", headers=HEADERS).json()["hardware_readback"]
+    assert redacted == {"state": "unavailable", "basis": "readonly_motor_registers", "arm_id": "arm_b"}
+    del feedback["motors"][0]["serial"]
     assert post("lease-challenge", {"scope": "cell-task:t1:arm_a", "workcell_id": "ab-b"}).status_code == 409
     nonce = get_challenge()
     clock[0] += 200_000_000

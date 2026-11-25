@@ -10,6 +10,9 @@ import math
 from pathlib import Path
 import ssl
 import threading
+import time
+
+from core_common.protocol.native_policy_feedback import native_policy_feedback
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
@@ -83,6 +86,7 @@ class CoreLeaseDelivery:
                    owner_verified=False, ready=False)
         if workcell_id not in self._native:
             return {**row, 'reason': 'native_target_not_configured'}
+        started = time.monotonic_ns()
         try:
             ok, reply = self._request(workcell_id, 'lease-status')
         except (OSError, ValueError):
@@ -91,8 +95,12 @@ class CoreLeaseDelivery:
                 or reply.get('arm_id') not in ('arm_a', 'arm_b', 'arm_s') or type(reply.get('ready')) is not bool):
             return {**row, 'reason': 'native_gateway_unverified'}
         owner = isinstance(reply.get('owner_session_id'), str) and bool(reply['owner_session_id'])
-        return {**row, 'arm_id': reply['arm_id'], 'transport_verified': True, 'owner_verified': owner,
-                'ready': owner and reply['ready'], 'reason': reply.get('reason')}
+        status = {**row, 'arm_id': reply['arm_id'], 'transport_verified': True, 'owner_verified': owner,
+                  'ready': owner and reply['ready'], 'reason': reply.get('reason')}
+        if owner and reply['arm_id'] == 'arm_b' and 'hardware_readback' in reply:
+            status['hardware_readback'] = native_policy_feedback(reply['hardware_readback'],
+                                                                 transit_ns=time.monotonic_ns() - started)
+        return status
 
     def challenge(self, workcell_id, scope):
         if workcell_id not in self._native:

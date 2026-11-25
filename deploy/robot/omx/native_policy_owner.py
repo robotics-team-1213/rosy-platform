@@ -13,6 +13,7 @@ import socket
 import stat
 import struct
 import sys
+import time
 
 from native_policy_fence import NativePolicyFence
 
@@ -32,7 +33,7 @@ def load_config(path):
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 8192:
         raise PermissionError("trusted root-owned owner enrollment required")
     cfg = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(cfg, dict) or set(cfg) != {"arm_id", "socket", "journal", "core_uid", "socket_gid", "pins"}:
+    if not isinstance(cfg, dict) or set(cfg) - {"readonly_device"} != {"arm_id", "socket", "journal", "core_uid", "socket_gid", "pins"}:
         raise ValueError("invalid owner configuration")
     owner = os.geteuid()
     if (cfg["arm_id"] != "arm_b" or owner == 0 or type(cfg["core_uid"]) is not int
@@ -66,7 +67,7 @@ def _unique(pairs):
     return obj
 
 
-def handle(conn, cfg, fence):
+def handle(conn, cfg, fence, readback=None):
     peer = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
     _, uid, _ = struct.unpack("3i", peer)
     if uid != cfg["core_uid"]:
@@ -81,7 +82,8 @@ def handle(conn, cfg, fence):
     op = request.get("op")
     if op == "status" and set(request) == {"op"}:
         return {"ready": False, "arm_id": cfg["arm_id"], "owner_session_id": fence.owner_session_id,
-                "reason": "native_motor_writer_not_enrolled", **fence.status()}
+                "reason": "native_motor_writer_not_enrolled", **fence.status(),
+                **({"hardware_readback": readback.snapshot()} if readback is not None else {})}
     if op == "hold" and set(request) == {"op", "reason"}:
         fence.hold("core_hold")
         return {"accepted": False, "reason": "motor_hold_unconfirmed"}
@@ -92,7 +94,7 @@ def handle(conn, cfg, fence):
     raise ValueError("unknown native control request")
 
 
-def serve(cfg):
+def serve(cfg, *, readback=None, deadline=None):
     os.umask(0o077)
     address = Path(cfg["socket"])
     fence = NativePolicyFence(cfg["pins"], cfg["journal"])
@@ -104,12 +106,17 @@ def serve(cfg):
                 os.chown(address, -1, cfg["socket_gid"])
                 address.chmod(0o660)
                 server.listen(8)
-                while True:
-                    conn, _ = server.accept()
+                if deadline is not None:
+                    server.settimeout(.25)
+                while deadline is None or time.monotonic() < deadline:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        continue
                     with conn:
                         conn.settimeout(.25)
                         try:
-                            response = handle(conn, cfg, fence)
+                            response = handle(conn, cfg, fence, readback)
                         except (ValueError, OSError, RecursionError):
                             response = {"accepted": False, "reason": "invalid_control_request"}
                         try:
@@ -125,10 +132,22 @@ def serve(cfg):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--config", "--owner-config", type=Path, required=True)
+    parser.add_argument("--read-only-hardware", action="store_true", help="sample B registers during an exclusive observer handoff")
+    parser.add_argument("--read-only-seconds", type=int, default=60, help="commissioning duration, 1..120 seconds")
     args = parser.parse_args(argv)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    serve(load_config(args.config))
+    cfg = load_config(args.config)
+    if not args.read_only_hardware:
+        serve(cfg)
+        return
+    if not 1 <= args.read_only_seconds <= 120 or not isinstance(cfg.get("readonly_device"), str):
+        parser.error("read-only hardware needs an installed readonly_device and duration 1..120 s")
+    from native_policy_readback import RegisterReadback, check_handoff
+    from register_probe import open_readonly_port
+    check_handoff(cfg["readonly_device"])
+    with open_readonly_port(cfg["readonly_device"]) as port, RegisterReadback(port) as readback:
+        serve(cfg, readback=readback, deadline=time.monotonic()+args.read_only_seconds)
 
 
 if __name__ == "__main__":

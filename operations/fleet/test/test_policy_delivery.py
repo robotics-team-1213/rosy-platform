@@ -390,6 +390,27 @@ def test_read_only_status_distinguishes_gateway_owner_and_motion_readiness():
     assert not delivery.target_status("other")["configured"]
 
 
+def test_target_status_does_not_rejuvenate_or_expand_owner_readback(monkeypatch):
+    import fleet.server.policy_delivery as module
+
+    feedback = dict(arm_id="arm_b", basis="readonly_motor_registers", state="fresh", age_ms=1990,
+                    observed_at_monotonic_ns=10_000_000, observed_at_unix_ns=1_795_000_000_000_000_000,
+                    motors=[dict(id=i, model_number=1200, position_raw=2000, torque_enabled=0, hardware_error=0)
+                            for i in range(11, 17)])
+    reply = dict(workcell_id="b", arm_id="arm_b", owner_session_id="boot", ready=False,
+                 reason="native_motor_writer_not_enrolled", hardware_readback=feedback)
+    delivery = CoreLeaseDelivery({"b": ("https://core.example", "tok", True)},
+                                 opener=lambda *_args, **_kw: Reply(json.dumps(reply).encode()))
+    # The two hosts need not share a monotonic clock: only the HTTPS round-trip duration is added.
+    ticks = iter([10_000_000_000, 10_003_000_001, 12_000_000_000, 12_011_000_000])
+    monkeypatch.setattr(module, 'time', type("Time", (), {"monotonic_ns": lambda: next(ticks)}))
+    fresh = delivery.target_status("b")
+    assert fresh["owner_verified"] and not fresh["ready"]
+    assert fresh["hardware_readback"] == {**feedback, "age_ms": 1994}
+    stale = delivery.target_status("b")["hardware_readback"]
+    assert stale == {"arm_id": "arm_b", "basis": "readonly_motor_registers", "state": "stale"}
+
+
 def test_window_expired_during_challenge_cannot_mint_grant():
     clock = Clock()
     delivered = []
