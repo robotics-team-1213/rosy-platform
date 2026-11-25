@@ -26,7 +26,7 @@ export function createMapSourcesPanel({request, state, shown, calibrations, oper
     $('plane-source').replaceChildren(...calibrations().filter(c => $('map-source').value !== 'profile' && c.map_id === shown()?.map_id)
       .map(c => new Option(c.source_id, c.source_id)));
   }
-  $('map-source').addEventListener('change', () => { updatePlaneSources(); render(); syncButtons(); });
+  $('map-source').addEventListener('change', () => { updatePlaneSources(); select(null); syncButtons(); });
   async function loadProfiles(preferred = $('map-profile').value) {
     profiles = (await request('/api/fleet/site-map/profiles')).profiles;
     $('map-profile').replaceChildren(new Option('지도 설정 선택', ''),

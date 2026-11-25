@@ -31,6 +31,7 @@ html[data-unit-scope-ready][data-unit-children] #cell-channel-mission-approval {
 .cell-ops-fold > summary,
 .profile-unbound-fold > summary { cursor: pointer; font-size: var(--text-label); color: var(--text-secondary); }
 .cell-camera-wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); }
+.cell-camera-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .cell-camera-wall .cell-observation-card { cursor: zoom-in; }
 .cell-camera-wall .cell-observation-card:hover { background: var(--surface-flat); }
 .cell-camera-wall .cell-observation-card.focused { grid-column: 1 / -1; cursor: zoom-out; }

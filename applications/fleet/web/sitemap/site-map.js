@@ -1,4 +1,5 @@
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
+import {mapPoint} from '/console/assets/geometry-edit.js';
 import {setOffBy} from '/common/cause-line.js';
 import {operatorReason as roleReason} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
@@ -23,7 +24,8 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, renderMapInspector,
+  renderSitePointsSummary, sitePointsForActiveMap, svgElement as el, syncMapInspectorTargets} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
@@ -34,6 +36,7 @@ const request = createFleetClient({credential: () => tokenAccess.getToken(), ori
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null, sitePoints: null};
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
+let displayedSitePoints = null;
 const teach = createTeachPanel({request, scope: pageScope, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
@@ -74,6 +77,12 @@ function render() {
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
+  syncMapInspectorTargets(map, state.selected, state.band !== null);
+  const sitePoints = sitePointsForActiveMap(state.sitePoints, state.active, $('map-source').value);
+  if (sitePoints !== displayedSitePoints) {
+    renderSitePointsSummary($('site-points-panel'), $('site-points-body'), sitePoints);
+    displayedSitePoints = sitePoints;
+  }
   if (!sourcePanel.renderStatus(map)) return;
   const {view, point: backgroundPoint} = sourcePanel.drawBackground(svg, map, () => fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs()));
   state.view = view;
@@ -106,7 +115,7 @@ function render() {
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
   drawPlaces(svg, map, view, {selectedPlace: state.selected?.place, kindLabels: PLACE_KIND_LABEL});
   drawFacilities(svg, map, view);
-  if ($('map-source').value === 'active') drawSitePointsOverlay(svg, state.sitePoints, view);
+  drawSitePointsOverlay(svg, sitePoints, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
   svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
@@ -173,39 +182,15 @@ function drawRobots() {
 
 function select(selection) {
   state.selected = selection;
-  const map = state.working;
-  const place = selection?.place && map?.places.find(item => item.id === selection.place);
-  const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
-  const crosswalk = selection?.crosswalk && (map?.crosswalks || []).find(item => item.id === selection.crosswalk);
   const reason = operatorReason() || ($('map-source').value === 'profile' ? '지도 설정은 규칙 JSON으로 고치거나 초안으로 불러오세요' : '');
-  $('place-form').hidden = !place || Boolean(reason);
-  $('edge-form').hidden = !edge || Boolean(reason);
-  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
-  if (!crosswalk && place?.kind !== 'stop') state.band = null;
-  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
-  if (place) {
-    $('selection').textContent = `장소 ${place.id}`;
-    $('place-name').value = place.name;
-    $('place-kind').value = place.kind;
-    $('place-pinned').checked = Boolean(place.pinned);
-    $('place-stop').hidden = place.kind !== 'stop';
-    $('place-approach').value = place.approach_m ?? '';
-  } else if (crosswalk) {
-    $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
-    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
-    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
-      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
-  } else if (edge) {
-    $('selection').textContent = `차로 ${edge.id} · ${edge.from} → ${edge.to}`;
-    $('edge-direction').value = edge.direction;
-    $('edge-mode').value = edge.drive_mode;
-    $('edge-speed').value = edge.speed_cap_mps;
-    $('edge-pinned').checked = Boolean(edge.pinned);
-  } else {
-    $('selection').textContent = selection ? '초안에 없는 항목입니다 · 초안 보기에서 고르세요' : '선택 없음';
-  }
+  if (!renderMapInspector(selection, shown(), state.working, reason)) state.band = null;
   render();
 }
+$('map-inspector-target').addEventListener('change', event => {
+  const value = event.target.value, separator = value.indexOf(':');
+  select(separator < 0 ? null : {[value.slice(0, separator)]: value.slice(separator + 1)});
+  syncButtons();
+});
 
 function syncButtons() {
   authoring.sync();
@@ -309,7 +294,7 @@ async function load() {
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
   catch { calibrations = []; }
-  state.sitePoints = await loadSitePointsOverlay(request, active, $('site-points-panel'), $('site-points-body'));
+  state.sitePoints = await loadSitePointsOverlay(request, active);
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
@@ -439,21 +424,22 @@ function clearPlan() {
   syncButtons();
 }
 
+const isTripPicking = () => $('trip-pick').checked && $('map-source').value === 'active' && state.view;
+function pickTripPoint(x, y) {
+  state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
+  $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
+  clearPlan();
+}
+
 $('site-map-svg').addEventListener('click', event => {
   if (survey.pick(event)) return;
   if (sourcePanel.pick(event)) return;
-  if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
-    const svg = event.currentTarget;
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    const [x, y] = state.view.toMap(at.x, at.y);
-    state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
-    $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
-    clearPlan();
+  if (isTripPicking()) {
+    pickTripPoint(...mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     return;
   }
   if (state.band !== null && state.view) {  // D-573: drawing a waiting band on the draft
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
-    state.band.push(state.view.toMap(at.x, at.y));
+    state.band.push(mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     render(); syncButtons();
     return;
   }
@@ -464,6 +450,7 @@ $('site-map-svg').addEventListener('click', event => {
   select(target.dataset.place ? {place: target.dataset.place}
     : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
   syncButtons();
+  if (screens.current() === 'map-heading') location.hash = '#edit-heading';
 });
 
 installBandEditing({request, guarded, state, select, render, syncButtons, notice});
@@ -564,17 +551,22 @@ const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home
   groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
     'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
   label: document.getElementById('site-map-screen')});
-// The map legend promises that picking a place or lane on the view screen opens it for editing.
-$('site-map-svg').addEventListener('click', event => {
-  if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
-});
-// Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
+// Pick the focused marker's world point without a round trip through integer mouse coordinates.
 $('site-map-svg').addEventListener('keydown', event => {
   const dot = event.target.closest?.('[data-place]');
-  if (!dot || !['Enter', ' '].includes(event.key)) return;
+  if (event.defaultPrevented || !dot || !['Enter', ' '].includes(event.key)) return;
   event.preventDefault();
   const id = dot.dataset.place;
-  dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+  if (isTripPicking() && !$('plane-pick').checked) {
+    const place = state.active.map.places.find(item => item.id === id);
+    if (place) pickTripPoint(place.x, place.y);
+  } else {
+    const circle = dot.querySelector('circle.place'), matrix = circle?.getScreenCTM();
+    if (matrix) {
+      const point = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value).matrixTransform(matrix);
+      dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, clientX: point.x, clientY: point.y}));
+    }
+  }
   $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
 pageScope.onResume(() => { void connect(); });

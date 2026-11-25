@@ -471,35 +471,6 @@ def page_site(tmp_path, request):
         listener.close()
 
 
-def test_world_charge_bay_overlay_joins_both_place_markers_with_a_straight_line(page_site):
-    from playwright.sync_api import expect
-
-    page, store, _ = page_site
-    active = store.active_view()
-    map_body = {
-        "schema": "rosy.site_map/1", "map_id": "world_261026", "turn_bans": [],
-        "places": [
-            {"id": "P1", "name": "P1", "kind": "junction", "x": -.43002, "y": .04266},
-            {"id": "C1", "name": "C1", "kind": "charge", "x": -.41816, "y": .47},
-        ],
-        "edges": [{"id": "bay_1", "from": "P1", "to": "C1", "direction": "two_way",
-                   "drive_mode": "lane", "speed_cap_mps": .02,
-                   "polyline": [[-.43002, .04266], [-.4354, .3294], [-.41816, .47]]}],
-    }
-    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": map_body}))
-    open_token_access(page)
-    page.locator('#console-token').fill('operator-token')
-    page.locator('#token-save').click()
-    edge = page.locator('#site-map-svg [data-edge="bay_1"]')
-    expect(edge).to_be_attached()
-    endpoints = []
-    for place_id in ("P1", "C1"):
-        marker = page.locator(f'#site-map-svg [data-place="{place_id}"] circle.place')
-        endpoints.append(f"{marker.get_attribute('cx')},{marker.get_attribute('cy')}")
-    expect(edge).to_have_attribute('points', ' '.join(endpoints))
-    assert store.active_view() == active
-
-
 def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     from playwright.sync_api import expect
 

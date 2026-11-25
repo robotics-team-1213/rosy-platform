@@ -23,11 +23,16 @@ export function bindScreens({nav, home, stage = null, groups = {}, mark = 'page'
     if (label && active) label.replaceChildren(active.textContent.trim());
   };
   addEventListener('hashchange', show);
-  // The same link again changes no hash; it still reopens a step the operator folded.
-  for (const link of links) link.addEventListener('click', () => {
-    if (link.hash === location.hash) show();
-    const heading = document.getElementById(link.hash.slice(1));
-    if (heading) { if (heading.tabIndex < 0) heading.tabIndex = -1; heading.focus({preventScroll: true}); }
+  for (const link of links) link.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    event.preventDefault();
+    if (link.hash !== location.hash) location.hash = link.hash;
+    // Open the selected screen before focusing its heading, even when the hash stays the same.
+    show();
+    const heading = document.getElementById(current());
+    if (!heading || heading.closest('[hidden], [inert]')) return;
+    if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1;
+    heading.focus({preventScroll: true});
   });
   show();
   return {current};

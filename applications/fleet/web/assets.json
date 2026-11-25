@@ -78,6 +78,10 @@
       "path": "cell/cell-observation-text.js",
       "media_type": "application/javascript"
     },
+    "cell-camera-zoom.js": {
+      "path": "cell/cell-camera-zoom.js",
+      "media_type": "application/javascript"
+    },
     "cell-observation.js": {
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"

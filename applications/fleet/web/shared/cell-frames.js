@@ -59,27 +59,6 @@ export async function issueVisionLease(callFn, source, {
   };
 }
 
-export function bindFocusZoom(target, { trigger = target, onToggle = null } = {}) {
-  const setZoom = (on) => {
-    if (!target?.classList) return;
-    target.classList.toggle('focused', Boolean(on));
-    onToggle?.(Boolean(on));
-  };
-  trigger?.addEventListener('click', (ev) => {
-    ev.stopPropagation?.();
-    setZoom(!target.classList.contains('focused'));
-  });
-  trigger?.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      setZoom(!target.classList.contains('focused'));
-    } else if (ev.key === 'Escape') {
-      setZoom(false);
-    }
-  });
-  return setZoom;
-}
-
 const defaultVisible = (el, n = el?.hidden && el.parentElement ? el.parentElement : el) =>
   !n?.closest?.('details:not([open]), [hidden]')
   && (typeof n?.getClientRects !== 'function' || (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || '')) || n.getClientRects().length > 0);
