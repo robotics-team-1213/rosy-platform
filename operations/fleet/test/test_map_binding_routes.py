@@ -125,6 +125,23 @@ def test_a_bad_holdout_is_refused_with_its_code(tmp_path):
     assert res.status_code == 409 and res.json()["detail"]["code"] == "HOLDOUT"
 
 
+def test_approval_checks_expected_frame_before_saving(tmp_path):
+    client = _client(tmp_path)
+    path = "/api/fleet/robots/rosy_42/map-binding"
+    active = client.get("/api/fleet/site-map/active", headers=OP).json()
+    frame = {"site_map_id": active["map"]["map_id"], "site_map_version": active["version"], "robot_grid_id": GRID_ID}
+    body = {"pairs": _pairs([(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]), "holdout": _pairs([(0.0, 0.0)])}
+    for key, value, code in (
+        ("site_map_version", frame["site_map_version"] + 1, "MAP_BINDING_SITE_CHANGED"),
+        ("robot_grid_id", "occupancy:changed", "MAP_BINDING_GRID_CHANGED"),
+    ):
+        res = client.post(path, headers=OP, json={**body, "expected_frame": {**frame, key: value}})
+        assert res.status_code == 409 and res.json()["detail"]["code"] == code
+        assert client.get(path, headers=OP).json()["reason"] == "MAP_BINDING_REQUIRED"
+    res = client.post(path, headers=OP, json={**body, "expected_frame": frame})
+    assert res.status_code == 200, res.text
+
+
 def test_the_walls_propose_pairs_that_then_approve_without_markers(tmp_path):
     client = _client(tmp_path)
     prop = client.post("/api/fleet/robots/rosy_42/map-binding/propose", headers=OP,
