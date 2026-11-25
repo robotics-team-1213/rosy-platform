@@ -1,6 +1,8 @@
 """Dual-mode Fleet cell-plan HTTP routes (/api/fleet/pipeline/cell-plans*)."""
 from __future__ import annotations
 
+from core_common.cell_failure_reason import persisted_abort_reason
+
 from contextlib import nullcontext
 import json
 import time
@@ -98,37 +100,39 @@ def install_cell_plan_routes(app, ctx) -> None:
     def _enriched_plan_task(tid: str, request: Request | None = None) -> dict[str, Any]:
         raw_task = _enrich_task_health(app.state.omx_cell_tasks[tid])
         refusals = getattr(app.state, "cell_task_refusals", None) or {}
-        if tid in refusals and refusals[tid] is not None:
+        if reason := persisted_abort_reason(raw_task):
+            raw_task = {**raw_task, "last_refusal": {"code": reason, "op": "complete"}}
+        elif tid in refusals and refusals[tid] is not None:
             raw_task = {**raw_task, "last_refusal": refusals[tid]}
         return task_view_for_request(raw_task, request) if request is not None else raw_task
 
     def _plan_view(plan_id: str, request: Request | None = None) -> dict[str, Any]:
         rec = app.state.omx_cell_plans[plan_id]
         raw_tasks = [
-            _enrich_task_health(app.state.omx_cell_tasks[tid])
+            _enriched_plan_task(tid)
             for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
         ]
         completed = sum(1 for t in raw_tasks if t.get("status") == "COMPLETED")
         status = _aggregate_plan_status(raw_tasks)
-        refusals = getattr(app.state, "cell_task_refusals", None) or {}
         cell_state = (getattr(app.state, "omx_cell_states", None) or {}).get(rec["cell_id"])
         cell_phase = (cell_state.get("phase") or cell_state.get("cell_phase")) if isinstance(cell_state, dict) else None
-        hold_reason: str | None = None
+        hold_reason = next((t["last_refusal"]["code"] for t in raw_tasks if t.get("status") == "ABORTED"), None)
         for t in raw_tasks:
-            for field in ("cancel_reason", "abort_reason"):
-                if isinstance(t.get(field), str) and t[field].strip():
-                    hold_reason = t[field].strip()
-                    break
             if hold_reason:
                 break
-            refusal = refusals.get(t["task_id"])
+            cancel = t.get("cancel_reason")
+            if isinstance(cancel, str) and cancel.strip():
+                hold_reason = cancel.strip()
+                break
+            refusal = t.get("last_refusal")
             if isinstance(refusal, dict) and refusal.get("code"):
                 hold_reason = str(refusal["code"])
                 break
             if isinstance(refusal, str) and refusal.strip():
                 hold_reason = refusal.strip()
                 break
-        if hold_reason is None and status in ("PAUSED_HUMAN", "ABORTED", "CANCELLED") and isinstance(cell_state, dict):
+        if (hold_reason is None and status in ("PAUSED_HUMAN", "CANCELLED") and isinstance(cell_state, dict)
+                and cell_state.get("stage_id") in rec["task_ids"]):
             if isinstance(cell_state.get("reason"), str) and cell_state["reason"].strip():
                 hold_reason = cell_state["reason"].strip()
         principal = getattr(getattr(request, "state", None), "site_principal", None)

@@ -246,6 +246,9 @@ def test_outbox_abort_reason_codes():
     assert outbox_mod.abort_reason({"review_required": True, "error": "FOLD_READBACK_MISSING"}) == "REVIEW_REQUIRED"
     assert outbox_mod.abort_reason({"error": "FOLD_READBACK_MISSING"}) == "FOLD_READBACK_MISSING"
     assert outbox_mod.abort_reason({"error": "UNCALIBRATED_DISPLACED_SITE"}) == "UNCALIBRATED_DISPLACED_SITE"
+    assert outbox_mod.abort_reason({"error": "SITE_NOT_CALIBRATED"}) == "SITE_NOT_CALIBRATED"
+    assert outbox_mod.abort_reason({"error": "STAND_REQUIRES_ARM_A"}) == "STAND_REQUIRES_ARM_A"
+    assert outbox_mod.abort_reason({"error": "untrusted USB diagnostic"}) == "MEASURED_PLACEMENT_MISSING"
     assert outbox_mod.abort_reason({}) == "MEASURED_PLACEMENT_MISSING"
 
 
