@@ -304,7 +304,7 @@ services:
       - --prune-audit
       - "90"
       - --prune-api-audit
-      - "90"
+      - "14"
       - --prune-sightings
       - "90"
     user: "10001:10001"

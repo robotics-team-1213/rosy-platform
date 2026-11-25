@@ -17,7 +17,7 @@ from rosy_vision.map_register import MapPaint, RegistrationResult, register_map_
 
 # OpenCV threads inside the worker: the coarse search is many small calls, so more
 # threads buy little and would compete with the Vision worker's ArUco detection.
-WORKER_CV_THREADS = 2
+WORKER_CV_THREADS = 1
 # Added to the worker's nice value where the OS supports it (Linux site PC).
 WORKER_NICENESS = 10
 

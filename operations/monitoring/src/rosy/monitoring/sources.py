@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 import json
 import math
 import os
@@ -124,6 +125,21 @@ class SourceReader:
         self.cache, self.credentials, self.transport = cache, credentials, transport
         self.verify = ssl.create_default_context(cafile=cache.config.ca_bundle)
         self._files = {}
+        self._client = None
+
+    def _http_client(self):
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                verify=self.verify, trust_env=False, follow_redirects=False,
+                timeout=3.0, transport=self.transport,
+                cookies=CookieJar(policy=DefaultCookiePolicy(allowed_domains=())),
+            )
+        return self._client
+
+    async def aclose(self):
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def _file(self, source):
         task = self._files.get(source.id)
@@ -139,8 +155,8 @@ class SourceReader:
             if task.done():
                 self._files.pop(source.id, None)
 
-    async def _get(self, client, url):
-        async with client.stream('GET', url) as response:
+    async def _get(self, client, url, headers=None):
+        async with client.stream('GET', url, headers=headers) as response:
             if response.status_code in {401, 403}:
                 raise SourceFailure('auth')
             if response.status_code != 200:
@@ -256,28 +272,27 @@ class SourceReader:
                     headers = {'Accept': 'application/json', 'Accept-Encoding': 'identity'}
                     if token is not None:
                         headers['Authorization'] = f'Bearer {token}'
-                    async with httpx.AsyncClient(verify=self.verify, trust_env=False, follow_redirects=False,
-                                                timeout=3.0, headers=headers, transport=self.transport) as client:
-                        base = source.url.rstrip('/')
-                        if source.kind == 'peer':
-                            data = await self._get(client, base + '/api/monitoring/v1/snapshot')
-                            snapshot = MonitoringSnapshot.model_validate(data)
-                            self.cache.receive_peer(source.id, snapshot, request_started_at=wall,
-                                                    elapsed_s=time.monotonic() - started)
-                        elif source.kind == 'core':
-                            identity = await self._get(client, base + '/api/v1/system/info')
-                            data = await self._get(client, base + '/api/v1/diagnostics')
-                            health = data.get('health')
-                            if (identity.get('robot_id') != source.id or not isinstance(health, str)
-                                    or health not in {'OK', 'WARNING', 'ERROR', 'UNKNOWN'}):
-                                raise SourceFailure('protocol')
-                            nodes = [self._node(source, health, self._metadata(source))]
-                        elif source.kind == 'fleet':
-                            nodes, links, complete = self._fleet(
-                                source, await self._get(client, base + '/api/fleet/monitoring'))
-                        else:
-                            await self._get(client, source.url)
-                            nodes = [self._node(source, 'UNKNOWN', self._metadata(source))]
+                    client = self._http_client()
+                    base = source.url.rstrip('/')
+                    if source.kind == 'peer':
+                        data = await self._get(client, base + '/api/monitoring/v1/snapshot', headers=headers)
+                        snapshot = MonitoringSnapshot.model_validate(data)
+                        self.cache.receive_peer(source.id, snapshot, request_started_at=wall,
+                                                elapsed_s=time.monotonic() - started)
+                    elif source.kind == 'core':
+                        identity = await self._get(client, base + '/api/v1/system/info', headers=headers)
+                        data = await self._get(client, base + '/api/v1/diagnostics', headers=headers)
+                        health = data.get('health')
+                        if (identity.get('robot_id') != source.id or not isinstance(health, str)
+                                or health not in {'OK', 'WARNING', 'ERROR', 'UNKNOWN'}):
+                            raise SourceFailure('protocol')
+                        nodes = [self._node(source, health, self._metadata(source))]
+                    elif source.kind == 'fleet':
+                        nodes, links, complete = self._fleet(
+                            source, await self._get(client, base + '/api/fleet/monitoring', headers=headers))
+                    else:
+                        await self._get(client, source.url, headers=headers)
+                        nodes = [self._node(source, 'UNKNOWN', self._metadata(source))]
                 if source.kind not in {'peer', 'fleet'}:
                     complete = True
         except (StoreUnavailable, ObservationRejected):

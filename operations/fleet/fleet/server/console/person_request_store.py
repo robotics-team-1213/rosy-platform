@@ -57,8 +57,9 @@ class PersonRequestStore:
         with self._lock, self._db:
             rows = self._db.execute("SELECT * FROM person_requests WHERE state='open' AND expires_at<=?",
                                     (now,)).fetchall()
-            self._db.execute("UPDATE person_requests SET state='expired' WHERE state='open' AND expires_at<=?",
-                             (now,))
+            if rows:
+                self._db.execute("UPDATE person_requests SET state='expired' WHERE state='open' AND expires_at<=?",
+                                 (now,))
         return [{**self._row(r), "state": "expired"} for r in rows]
 
     def get(self, request_id: str) -> Optional[dict]:
@@ -67,8 +68,9 @@ class PersonRequestStore:
             row = self._db.execute("SELECT * FROM person_requests WHERE id=?", (request_id,)).fetchone()
         return self._row(row) if row else None
 
-    def list(self, *, state: Optional[str] = None, robot_id: Optional[str] = None) -> list[dict]:
-        self.expire_due()
+    def list(self, *, state: Optional[str] = None, robot_id: Optional[str] = None, expire: bool = True) -> list[dict]:
+        if expire:
+            self.expire_due()
         where, args = [], []
         for column, value in (("state", state), ("robot_id", robot_id)):
             if value is not None:

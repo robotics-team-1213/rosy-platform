@@ -71,10 +71,10 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
         except Exception as exc:  # noqa: BLE001 - a robot that cannot be reached is shown as not delivered
             logger.warning("person request %s not delivered to %s: %s", record["id"], record["robot_id"],
                            type(exc).__name__)
-            store.set_delivery(record["id"], "not_delivered", type(exc).__name__)
+            await asyncio.to_thread(store.set_delivery, record["id"], "not_delivered", type(exc).__name__)
             return False
-        store.set_delivery(record["id"], "delivered")
-        current = store.get(record["id"])   # answered or withdrawn while the PUT was in flight: take it back
+        await asyncio.to_thread(store.set_delivery, record["id"], "delivered")
+        current = await asyncio.to_thread(store.get, record["id"])   # answered or withdrawn while the PUT was in flight: take it back
         if current["state"] != "open":
             await clear(current)
             return False
@@ -83,15 +83,15 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
     async def clear(record: dict) -> None:
         try:
             await robots.clear(record["robot_id"], record["id"])
-            store.set_delivery(record["id"], "cleared")
+            await asyncio.to_thread(store.set_delivery, record["id"], "cleared")
         except Exception as exc:  # noqa: BLE001 - CORE drops it at its expiry; the next reconcile retries
-            store.set_delivery(record["id"], "clear_failed", type(exc).__name__)
+            await asyncio.to_thread(store.set_delivery, record["id"], "clear_failed", type(exc).__name__)
 
     async def show_newest(robot_id: str) -> None:
         """One request per robot is on its screen: the newest open one. Older open ones wait."""
-        opens = store.open_for(robot_id)
+        opens = await asyncio.to_thread(store.open_for, robot_id)
         for older in opens[1:]:
-            store.set_delivery(older["id"], "waiting")
+            await asyncio.to_thread(store.set_delivery, older["id"], "waiting")
         if opens:
             await put(opens[0])
 
@@ -101,6 +101,13 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
         await clear(record)
         await show_newest(record["robot_id"])
 
+    def _reconcile_inputs() -> tuple[list[dict], list[str]]:
+        store.expire_due()
+        stuck = [r for r in store.list(expire=False) if r["delivery"]["state"] == "clear_failed" and r["robot_id"]]
+        ids = ({r["robot_id"] for r in store.list(state="open", expire=False) if r["robot_id"]}
+               | {r["robot_id"] for r in stuck})
+        return stuck, sorted(ids)
+
     async def reconcile() -> None:
         if robots is None:
             return
@@ -108,23 +115,26 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
         if last["at"] is not None and now - last["at"] < RECONCILE_EVERY_S:
             return
         last["at"] = now
-        store.expire_due()
-        stuck = [r for r in store.list() if r["delivery"]["state"] == "clear_failed" and r["robot_id"]]
-        ids = {r["robot_id"] for r in store.list(state="open") if r["robot_id"]} | {r["robot_id"] for r in stuck}
+        stuck, robot_ids = await asyncio.to_thread(_reconcile_inputs)
+        if not robot_ids:
+            return
         # Robots in parallel: an offline robot's read timeout must not delay the others or the bay loop.
-        await asyncio.gather(*(reconcile_robot(robot_id, stuck) for robot_id in sorted(ids)))
+        await asyncio.gather(*(reconcile_robot(robot_id, stuck) for robot_id in robot_ids))
 
     async def reconcile_robot(robot_id: str, stuck: list) -> None:
-        opens = store.open_for(robot_id)
+        opens = await asyncio.to_thread(store.open_for, robot_id)
         try:
             held = await robots.read(robot_id)
         except Exception as exc:  # noqa: BLE001 - what the robot shows is unknown, and the console says so
-            for record in opens:
-                store.set_delivery(record["id"], "not_delivered", type(exc).__name__)
+            def _mark_undelivered():
+                for record in opens:
+                    store.set_delivery(record["id"], "not_delivered", type(exc).__name__)
+            if opens:
+                await asyncio.to_thread(_mark_undelivered)
             return
         held_id = (held or {}).get("id")
         for older in opens[1:]:
-            store.set_delivery(older["id"], "waiting")
+            await asyncio.to_thread(store.set_delivery, older["id"], "waiting")
         if not opens:
             if held_id:   # CORE still shows a request Fleet has closed or lost: take it away
                 try:
@@ -134,13 +144,14 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
                     return
                 held_id = None
         elif held_id == opens[0]["id"]:
-            store.set_delivery(opens[0]["id"], "delivered")   # read back just now
+            await asyncio.to_thread(store.set_delivery, opens[0]["id"], "delivered")   # read back just now
             said = held.get("answer")
             if isinstance(said, dict) and said.get("answer") in ("done", "cannot"):
                 # CORE took it only from a person logged in with an account; the robot is named with them.
                 who = str(said.get("by") or "")[:96]
                 who = "unknown" if not who or CONTROL.search(who) else who
-                record = store.close(held_id, said["answer"], by=f"robot:{robot_id}/{who}", note="로봇 화면에서 답함")
+                record = await asyncio.to_thread(
+                    store.close, held_id, said["answer"], by=f"robot:{robot_id}/{who}", note="로봇 화면에서 답함")
                 if record is not None:
                     await after_close(record)
                     held_id = None
@@ -148,7 +159,7 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
             await put(opens[0])   # missing (a CORE restart) or an older one: show the newest
         for record in stuck:
             if record["robot_id"] == robot_id and record["id"] != held_id:
-                store.set_delivery(record["id"], "cleared")
+                await asyncio.to_thread(store.set_delivery, record["id"], "cleared")
     app.state.person_request_reconcile = reconcile
     tick = getattr(app.state, "charge_bays_tick", None)   # Fleet's existing one-second loop carries it
     if tick is not None and robots is not None:

@@ -298,14 +298,15 @@ def _write_local(worlds_dir: Path, world_id: str, payload: dict[str, Any]) -> No
     _atomic_write(worlds_dir / f"{world_id}.json", raw)
 
 
-def _atomic_write(path: Path, raw: bytes) -> None:
+def _atomic_write(path: Path, raw: bytes, *, sync: bool = True) -> None:
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as h:
             temp_path = Path(h.name)
             h.write(raw)
             h.flush()
-            os.fsync(h.fileno())
+            if sync:
+                os.fsync(h.fileno())
         os.replace(temp_path, path)
         temp_path = None
     finally:
@@ -399,7 +400,7 @@ def main() -> None:
             return False
         if args.heartbeat_file is not None:
             try:
-                _atomic_write(args.heartbeat_file, f"{time.time()}\n".encode("ascii"))
+                _atomic_write(args.heartbeat_file, f"{time.time()}\n".encode("ascii"), sync=False)
             except OSError as exc:
                 warn("heartbeat", exc)
         cell_tasks = _fetch_optional(cached_fleet_url, "/api/fleet/pipeline/cell-tasks", fleet_token, ca_file)

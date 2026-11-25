@@ -55,7 +55,7 @@ def test_compose_backup_command_pins_every_retention_group():
         (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
     command = service["command"]
     expected = {"--prune-history": "30", "--prune-audit": "90",
-                "--prune-api-audit": "90", "--prune-sightings": "90"}
+                "--prune-api-audit": "14", "--prune-sightings": "90"}
     for flag, days in expected.items():
         assert command[command.index(flag) + 1] == days
 
