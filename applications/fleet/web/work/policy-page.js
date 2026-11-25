@@ -9,9 +9,10 @@ import { renderActiveHistoryList } from "/console/assets/disclosure-list.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet } from "/console/assets/fleet-header.js";
 import { bindTokenAccess, classifyAuthFailure, writeStoredToken } from "/console/assets/fleet-session.js";
 import { loginHref } from "/console/assets/login-return.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
-  errorText, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
+  errorText, executionVerdict, formatFleetAdmissionScope, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from "/console/assets/policy-model.js";
 
 const $ = (id) => document.getElementById(id);
@@ -31,6 +32,8 @@ pageScope.interval(tickClock, 1000);
 watchFleet(request, { scope: pageScope });
 
 let who = roles(null), state = null, busy = false, refreshing = false, authRoleKey = null;
+let fleetAdmit = null, fleetAdmitBusy = false, fleetAdmitNotice = "";
+const fleetAdmitGate = createPollGate();
 const workcell = () => $("policy-workcell").value;
 const base = () => `/api/fleet/workcells/${encodeURIComponent(workcell())}/policy`;
 const renderedSigs = new Map();
@@ -295,6 +298,7 @@ function render() {
 }
 
 async function refresh() {
+  void refreshFleetAdmit(pageScope.capture());
   if (!workcell() || refreshing) return;
   refreshing = true;
   const life = pageScope.capture();
@@ -345,6 +349,59 @@ for (const form of ["policy-incident-form", "policy-window-form", "policy-propos
 }
 $("policy-workcell").addEventListener("change", refresh);
 
+function paintFleetAdmit() {
+  const section = $("policy-fleet-admission"), toggle = $("policy-fleet-admission-toggle");
+  if (!section || !toggle) return;
+  if (fleetAdmitGate.absent || (!fleetAdmit && !fleetAdmitNotice)) {
+    patchHidden(section, true);
+    return;
+  }
+  patchHidden(section, false);
+  patchText($("policy-fleet-admission-status"),
+    fleetAdmitNotice || formatFleetAdmissionScope(fleetAdmit) || "자동 승인 범위를 확인하지 못했습니다.");
+  patchHidden(toggle, false);
+  patchText(toggle, fleetAdmit?.scope?.enabled ? "자동 승인 끄기" : "자동 승인 켜기");
+  setOffBy(toggle, fleetAdmitBusy ? "전환 요청 처리 중입니다" : who.operator ? "" : OPERATOR_REASON);
+}
+
+async function refreshFleetAdmit(life) {
+  if (!fleetAdmitGate.due()) return;
+  try {
+    const read = await request("/api/fleet/policy-admission", { signals: [life.signal] });
+    life.check();
+    fleetAdmitGate.ok(); fleetAdmit = read.status ?? null; fleetAdmitNotice = "";
+  } catch (error) {
+    if (error?.name === "AbortError" || !life.current()) return;
+    if (error.status === 404 || error.status === 401 || error.status === 403) {
+      fleetAdmitGate.fail(error.status, error.code); fleetAdmit = null; fleetAdmitNotice = "";
+    } else {
+      fleetAdmitNotice = "자동 승인 범위를 확인하지 못했습니다.";
+    }
+  }
+  if (life.current()) paintFleetAdmit();
+}
+
+async function toggleFleetAdmit() {
+  if (fleetAdmitBusy || !who.operator) return;
+  const life = pageScope.capture();
+  fleetAdmitBusy = true; fleetAdmitNotice = ""; paintFleetAdmit();
+  try {
+    const result = await request("/api/fleet/policy-admission", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !fleetAdmit?.scope?.enabled }), signals: [life.signal],
+    });
+    life.check();
+    fleetAdmit = result.status ?? fleetAdmit; fleetAdmitNotice = "";
+  } catch (error) {
+    if (error?.name === "AbortError" || !life.current()) return;
+    fleetAdmitNotice = error.status === 409
+      ? "범위가 설정되지 않아 전환하지 못했습니다. 사이트 설정을 먼저 확인하세요."
+      : `전환 결과 미확인 · ${error.message || "다시 보내지 않았습니다. readback을 확인하세요."}`;
+  } finally { fleetAdmitBusy = false; }
+  if (life.current()) paintFleetAdmit();
+}
+$("policy-fleet-admission-toggle")?.addEventListener("click", () => { void toggleFleetAdmit(); });
+
 async function connect(credentialChange = false) {
   const life = pageScope.capture();
   try {
@@ -355,8 +412,10 @@ async function connect(credentialChange = false) {
     patchHidden($("policy-login"), true);
     showSession(session, { credentialChange });
     access.refreshLogin(false);
+    fleetAdmitGate.reset(); fleetAdmitNotice = "";
     const { workcells } = await request("/api/fleet/policy-governance/workcells", { signals: [life.signal] });
     life.check();
+    await refreshFleetAdmit(life);
     $("policy-workcell").replaceChildren(...workcells.map((id) => {
       const opt = node("option", id); opt.value = id; return opt;
     }));
@@ -373,6 +432,7 @@ async function connect(credentialChange = false) {
     if (error?.name === "AbortError" || !life.current()) return;
     const failure = classifyAuthFailure(error);
     patchHidden($("policy-content"), true);
+    patchHidden($("policy-fleet-admission"), true);
     patchText($("policy-verdict"), errorText(error));
     patchAttr($("policy-verdict"), "state", "unavailable");
     patchHidden($("policy-login"), !failure.offerLogin);
@@ -391,7 +451,9 @@ void access.bootstrap({
   developmentToken,
   connect: (changed) => connect(changed),
   onSignedOut: () => {
+    fleetAdmit = null; fleetAdmitNotice = "";
     patchHidden($("policy-content"), true);
+    patchHidden($("policy-fleet-admission"), true);
     patchHidden($("policy-login"), false);
     showSignedOut();
     access.refreshLogin(true);

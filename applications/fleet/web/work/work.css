@@ -45,9 +45,11 @@
 #work-policy-link { min-height: var(--target-secondary); }
 
 #fleet-main:has([data-raised]:is(#work-overview, #work-new)) .context-tabs { display: none; }
-#fleet-main:has([data-raised]:is(#work-overview, #work-new)) #dispatch-control:not([data-state="latched"], [data-state="restarted"], [data-state="error"]) { display: none; }
+#fleet-main:has([data-raised]:is(#work-overview, #work-new, .incident-panel, #log-panel)) #dispatch-control:not([data-state="latched"], [data-state="restarted"], [data-state="error"]) { display: none; }
 #work-context:not([hidden]), #work-move:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
 #work-context > :is(h2, p, dl) { margin: 0; }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side > :is(h2, p) { margin: 0; }
 .work-move-guide { display: none; margin: 0; padding: var(--space-4); border: 1px solid var(--line-06); border-radius: var(--radius-panel); background: var(--surface-recessed); }
 #fleet-main:has(#work-new:not([hidden])):has(#work-move[hidden]) .work-move-guide { display: block; }
 
