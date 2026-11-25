@@ -127,6 +127,30 @@ def test_a_timed_out_refresh_keeps_capabilities_and_a_robot_refusal_clears_them(
     asyncio.run(exercise())
 
 
+def test_trip_admission_reads_junction_capability_from_core_again():
+    from fleet.server.app import create_app
+    from fleet.server.trip_runner import TripError
+
+    async def exercise():
+        robot = CapRobot('one')
+        base = {'kind': 'base_velocity', 'robot_kind': 'pinky_pro',
+                'drive_modes': ['lane'], 'trip_max_linear': 0.1}
+        robot.caps = {'controls': {'items': [{**base, 'junction_turn': False}]}}
+        fleet = console(robot)
+        runner = create_app(fleet, console_token='op').state.trip_runner
+        try:
+            assert (await fleet._shown_capabilities('one'))['controls']['items'][0]['junction_turn'] is False
+            robot.caps = {'controls': {'items': [{**base, 'junction_turn': True}]}}
+            assert (await runner._caps('one')).junction_turn is True
+            robot.cap_error = httpx.ReadTimeout('no fresh CORE response')
+            with pytest.raises(TripError, match='TRIP_ROBOT_CAPS_UNKNOWN'):
+                await runner._call(runner._caps('one'), 'TRIP_ROBOT_CAPS_UNKNOWN')
+        finally:
+            await fleet.aclose()
+
+    asyncio.run(exercise())
+
+
 def test_cached_display_is_not_permission_to_dispatch_after_runtime_change():
     robot = CapRobot('one')
     fleet = console(robot)
