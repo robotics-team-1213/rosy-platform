@@ -91,3 +91,30 @@ def test_listener_queues_multiple_scans_and_retries_without_another_scan(tmp_pat
     assert [item.epc for item in link.sent] == ["432D3100", "432D3200"]
     assert link.sent[0] == link.first
     assert not list(tmp_path.glob("*.json"))
+
+
+def test_listener_keeps_retrying_if_a_send_pass_hits_a_filesystem_error(tmp_path, monkeypatch):
+    failed, delivered = Event(), Event()
+    send = po.send
+    monkeypatch.setattr(po, "RFID_RESEND_SECONDS", 0.02)
+
+    class RecordingLink(Link):
+        def post_intake_reading(self, item):
+            super().post_intake_reading(item)
+            delivered.set()
+
+    def flaky_send(link, directory):
+        if not failed.is_set():
+            failed.set()
+            raise PermissionError("outbox temporarily unavailable")
+        return send(link, directory)
+
+    def inputs():
+        assert failed.wait(3), "worker did not begin sending"
+        yield "432D3100\n"
+        assert delivered.wait(3), "worker did not recover from the failed pass"
+
+    link = RecordingLink()
+    monkeypatch.setattr(po, "send", flaky_send)
+    assert po.listen_rfid(link, inputs(), tmp_path)
+    assert [item.epc for item in link.sent] == ["432D3100"]
