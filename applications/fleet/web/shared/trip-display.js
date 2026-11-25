@@ -1,5 +1,3 @@
-// Fleet trip display vocabulary and explanations; no DOM, geometry or requests.
-
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 /** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
 export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
@@ -36,7 +34,6 @@ export const TRIP_ERROR_LABEL = {
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   TRIP_JOB_NOT_FOUND: '해당하는 이송 작업이 없습니다 · 접수 키와 권한을 확인하세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
-  // D-494 5 trip start / control
   TRIP_PLAN_UNKNOWN: '저장된 경로가 없습니다 · 다시 계산하세요',
   TRIP_PLAN_EXPIRED: '계산한 지 30초가 지났습니다 · 다시 계산하세요',
   TRIP_MAP_CHANGED: '계산 뒤 활성 지도가 바뀌었습니다 · 다시 계산하세요',
@@ -46,10 +43,15 @@ export const TRIP_ERROR_LABEL = {
   // D-601: 꺼져 있으면 관제가 출발 때 카메라 차선 주행을 켠다; 남는 거절은 IR 차선 주행이나 모르는 상태
   TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇이 IR 차선 주행 중이거나 차선 주행 상태를 알 수 없습니다 · 차선 주행을 끈 뒤 다시 출발하세요',
   TRIP_LANE_CAMERA_UNAVAILABLE: '로봇 앞 카메라 영상이 들어오지 않아 차선 주행을 할 수 없습니다 · 카메라를 확인하세요',
+  TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED: '카메라 전환 중 로봇 정지를 확인하지 못했습니다 · 현장에서 정지 상태를 확인하세요',
+  TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED: '로봇 위치를 확인할 수 없어 카메라로 주행을 이어갈 수 없습니다',
+  TRIP_CAMERA_FALLBACK_ADMISSION_CHANGED: '카메라 전환 조건이 달라져 주행을 이어갈 수 없습니다',
+  TRIP_CAMERA_FALLBACK_HELD: '정지 요청이 있어 카메라 차선 주행을 중단했습니다',
+  TRIP_CAMERA_FALLBACK_BODY_OUTSIDE_LANE: '로봇 차체가 검토된 차로 경계를 넘었습니다 · 현장을 확인하세요',
+  TRIP_CAMERA_FALLBACK_TIMEOUT: '카메라 차선 주행 시간 안에 도착하지 못했습니다 · 현장을 확인하세요',
   TRIP_START_HEADING_MISMATCH: '로봇이 첫 차로 방향과 다르게 서 있습니다 · 차로 방향으로 돌려 세우세요',
   TRIP_START_OFF_LANE: '로봇이 첫 차로 밖에 있습니다 · 차로 위로 옮기세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
-  // D-603 출발 자동 정렬
   TRIP_ALIGN_REFUSED: '로봇이 제자리 회전을 거절했습니다 · 주변을 비우거나 직접 돌려 세우세요',
   TRIP_ALIGN_ABORTED: '제자리 회전이 중간에 멈췄습니다 · 로봇 주변을 확인하세요',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다', TRIP_OWNER_KIND_INVALID: '운행을 요청한 작업을 확인할 수 없습니다',
@@ -65,7 +67,6 @@ export const TRIP_ERROR_LABEL = {
   // D-517 4 통행권: 현장 설정과 로봇 CORE 설정이 맞아야 출발한다
   TRIP_AUTHORITY_SITE_OFF: '이 로봇 CORE는 통행권이 있어야 움직이는데 현장 통행권이 꺼져 있습니다 · 현장 설정을 켜거나 로봇의 통행권 필수를 끄세요',
   TRIP_AUTHORITY_NOT_REQUIRED: '현장은 통행권을 보내는데 이 로봇 CORE는 통행권 없이 움직입니다 · 로봇 설정에서 통행권 필수를 켜세요',
-  // D-525 가상 신호
   TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
   // D-517 3: 구역 안에서는 서지 않는다
   TRIP_STOP_IN_ZONE: '경로 위에 구역(교차로) 밖에 설 장소가 없습니다 · 다른 목적지를 고르세요',
@@ -100,9 +101,7 @@ const LEASE_END_LABEL = {
   mode_left: '로봇이 운행 모드를 떠남(멈춤·수동·도킹·막힘 중단)', estop: '비상 정지', released: '점유를 놓음',
   core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
-const TRIP_STATE_LABEL = {
-  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기',
-};
+const TRIP_STATE_LABEL = {started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기'};
 const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
 const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
@@ -162,7 +161,8 @@ function leaseEndText(trip) {
 /** D-540 (d): why a trip stopped or failed, for the card line and the queue; '' for any other state. */
 export function tripEndText(trip) {
   if (trip?.state !== 'stopped' && trip?.state !== 'failed') return '';
-  const why = trip.reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[trip.reason] || trip.reason;
+  const {reason} = trip;
+  const why = reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[reason] || TRIP_ERROR_LABEL[reason] || reason;
   return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
 }
 
