@@ -21,8 +21,28 @@ const stateOf = run => String(run?.status ?? "").toLowerCase();
 const statusOf = run => Object.hasOwn(statuses, stateOf(run)) ? statuses[stateOf(run)] : ["확인 필요", "warning"];
 const terminal = new Set(["succeeded", "failed", "stopped", "cancelled"]);
 const stoppable = new Set(["pending", "launching", "starting", "running"]);
+const pendingKey = "rosy.world-experiments.pending-start";
 let snapshot, current = new URL(location.href).searchParams.get("run"), fresh = false;
-let pendingStart, refreshing = false, mutating = false, revision = 0;
+let pendingStart = restorePending(), refreshing = false, mutating = false, revision = 0;
+
+function restorePending() {
+  try {
+    const body = JSON.parse(sessionStorage.getItem(pendingKey));
+    if (body?.preset_id === "mujoco-act-cpu" && typeof body.request_id === "string"
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.request_id)) {
+      return {preset_id: body.preset_id, request_id: body.request_id};
+    }
+  } catch { /* Storage may be unavailable in private browsing. */ }
+  return null;
+}
+
+function storePending(value) {
+  pendingStart = value;
+  try {
+    if (value) sessionStorage.setItem(pendingKey, JSON.stringify(value));
+    else sessionStorage.removeItem(pendingKey);
+  } catch { /* Keep the same request in memory while the page is open. */ }
+}
 
 function status(id, state, text) {
   const element = $(id);
@@ -77,7 +97,7 @@ function render() {
   }
   const blocked = mutating ? "요청을 처리하는 중입니다." : !fresh ? "실행 상태를 확인하세요."
     : !snapshot.can_manage ? "프로젝트 관리 권한이 필요합니다." : "";
-  setOffBy($("start"), blocked || (!preset ? "등록된 실험이 없습니다." : active && !pendingStart ? "진행 중인 실행이 있습니다." : ""));
+  setOffBy($("start"), blocked || (pendingStart ? "" : !preset ? "등록된 실험이 없습니다." : active ? "진행 중인 실행이 있습니다." : ""));
   const retryStop = selected?.status_uncertain && ["stopping", "stop_requested"].includes(stateOf(selected));
   setOffBy($("stop"), blocked || (!stoppable.has(stateOf(selected)) && !retryStop ? "중지할 수 있는 실행을 선택하세요." : ""));
   $("stop-label").textContent = retryStop ? "이 실행 중지 다시 요청" : "이 실행 중지";
@@ -118,7 +138,7 @@ async function change(action, body) {
       "Content-Type": "application/json", "X-Pinky-Token": session.token,
     }, body: JSON.stringify(body)});
     if (typeof row.id !== "string" || !row.id) throw new Error("요청 상태를 실행 기록에서 확인하세요.");
-    if (action === "start") pendingStart = null;
+    if (action === "start") storePending(null);
     snapshot.runs = [row, ...snapshot.runs.filter(item => item.id !== row.id)];
     select(row.id);
   } catch (failure) {
@@ -133,7 +153,7 @@ async function change(action, body) {
 $("run").addEventListener("change", () => { select($("run").value); render(); });
 $("start").addEventListener("click", () => {
   if ($("start").disabled) return;
-  pendingStart ??= {preset_id: snapshot.preset.id, request_id: makeUuid()};
+  if (!pendingStart) storePending({preset_id: snapshot.preset.id, request_id: makeUuid()});
   void change("start", pendingStart);
 });
 $("stop").addEventListener("click", () => {
@@ -163,6 +183,13 @@ const sameCondition = (left, right) => validCondition(left) && validCondition(ri
   && conditionFields.every(key => left[key] === right[key]);
 const vector = (value, length) => Array.isArray(value) && value.length === length && value.every(Number.isFinite);
 const sameBinding = (left, right) => ["run_id", "scene_sha256", "task", "registration", "engine"].every(key => left[key] === right[key]);
+const surfaces = {tray: "트레이", belt: "벨트", pinky_frame: "Pinky 프레임"};
+const position = (value, length) => vector(value, length) && value.every(item => Math.abs(item) <= 10);
+const validLength = value => Number.isFinite(value) && value >= 0.000001 && value <= 10;
+const validGeometry = value => value && validLength(value.box_size_m) && Object.keys(surfaces).every(key => {
+  const item = value[key];
+  return item && position(item.center, 2) && vector(item.size, 2) && item.size.every(validLength) && Number.isFinite(item.top);
+});
 
 async function localJson(file) {
   if (!file || file.size > 2 * 1024 * 1024) throw new Error("2 MB 이하의 JSON 파일을 선택하세요.");
@@ -193,15 +220,64 @@ function replayFor(file, value, report) {
   if (!row || value?.schema !== "rosy.world.s3-replay.v1" || !sameBinding(value, report.value) || value.policy !== row.policy
       || value.checkpoint_sha256 !== (row.policy === "learned" ? report.value.checkpoint_sha256 : null)
       || value.result !== row.result || !sameCondition(value.condition, row.condition)
+      || (value.geometry !== undefined && !validGeometry(value.geometry))
       || !Array.isArray(value.frames) || !value.frames.length || value.frames.length > 1000
       || !value.frames.every((frame, index, frames) => frame && Number.isFinite(frame.sim_time_s)
         && frame.sim_time_s >= 0 && (!index || frame.sim_time_s > frames[index - 1].sim_time_s)
-        && Object.hasOwn(phases, frame.phase) && vector(frame.arm_joints_rad, 6) && vector(frame.box_pose_m_wxyz, 7))) {
+        && Object.hasOwn(phases, frame.phase) && vector(frame.arm_joints_rad, 6) && position(frame.box_pose_m_wxyz, 7)
+        && (frame.tcp_m === undefined || position(frame.tcp_m, 3)))) {
     throw new Error("실행, 장면, 모델 및 자세가 평가 보고서와 일치하는 에피소드만 열 수 있습니다.");
   }
   return value;
 }
 
+function setUpMap(record) {
+  const canvas = s3("canvas");
+  const context = canvas.getContext("2d");
+  const geometry = record.geometry;
+  s3("map").hidden = !geometry || !context;
+  if (!geometry || !context) return null;
+  const footprints = Object.entries(surfaces).map(([key, label]) => ({...geometry[key], label}));
+  const box = geometry.box_size_m;
+  const extents = [...footprints, ...record.frames.flatMap(frame => [
+    {center: frame.box_pose_m_wxyz, size: [box, box]},
+    ...(frame.tcp_m ? [{center: frame.tcp_m, size: [0, 0]}] : []),
+  ])];
+  const min = axis => Math.min(...extents.map(({center, size}) => center[axis] - size[axis] / 2));
+  const max = axis => Math.max(...extents.map(({center, size}) => center[axis] + size[axis] / 2));
+  const lowX = min(0), highX = max(0), lowY = min(1), highY = max(1);
+  const scale = Math.min((canvas.width - 28) / (highX - lowX), (canvas.height - 28) / (highY - lowY));
+  const pixels = ([x, y]) => [canvas.width / 2 + (x - (lowX + highX) / 2) * scale,
+    canvas.height / 2 - (y - (lowY + highY) / 2) * scale];
+
+  return frame => {
+    const palette = getComputedStyle(canvas);
+    const color = name => palette.getPropertyValue(name).trim();
+    context.fillStyle = color("--surface-raised");
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = color("--text-secondary");
+    context.fillStyle = color("--text-primary");
+    context.font = `12px ${color("--sans") || "sans-serif"}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    for (const {center, size: [width, height], label} of footprints) {
+      const [x, y] = pixels(center);
+      context.strokeRect(x - width * scale / 2, y - height * scale / 2, width * scale, height * scale);
+      context.fillText(label, x, y);
+    }
+    const [x, y] = pixels(frame.box_pose_m_wxyz);
+    context.fillStyle = color("--series-primary");
+    context.fillRect(x - box * scale / 2, y - box * scale / 2, box * scale, box * scale);
+    if (frame.tcp_m) {
+      context.beginPath();
+      context.arc(...pixels(frame.tcp_m), 4, 0, Math.PI * 2);
+      context.fillStyle = color("--signal-go");
+      context.fill();
+    }
+  };
+}
+
+let drawReplay;
 function showFrame(index) {
   const frame = replay.frames[index];
   s3("scrub").value = index;
@@ -210,6 +286,7 @@ function showFrame(index) {
   s3("box").textContent = coordinates(frame.box_pose_m_wxyz.slice(0, 3));
   s3("rotation").textContent = coordinates(frame.box_pose_m_wxyz.slice(3));
   s3("arm").textContent = coordinates(frame.arm_joints_rad);
+  drawReplay?.(frame);
 }
 
 function pause() {
@@ -222,6 +299,7 @@ function selectReplay() {
   pause();
   replay = episodes.get(s3("select").value);
   s3("player").hidden = !replay;
+  drawReplay = replay ? setUpMap(replay) : null;
   if (replay) {
     s3("scrub").max = replay.frames.length - 1;
     showFrame(0);

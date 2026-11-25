@@ -60,6 +60,8 @@ def test_manager_retries_same_run_and_reader_can_only_watch(tmp_path):
             start.click()
             expect(start).to_contain_text('다시 확인')
             expect(manager.locator('#experiment-error')).to_be_visible()
+            manager.reload(wait_until='domcontentloaded')
+            expect(start).to_contain_text('다시 확인')
             start.click()
             expect(manager.locator('#experiment-state')).to_have_text('학습 중')
             expect(manager.locator('#experiment-step')).to_have_text('2 / 5')
@@ -104,9 +106,14 @@ def test_s3_replay_only_opens_matching_saved_episodes(tmp_path):
         'learned': dict(condition=condition, replay='episode-1000-learned.json', result='placed'),
     }])
     episode = dict(binding, schema='rosy.world.s3-replay.v1', policy='learned', checkpoint_sha256='b'*64,
-                   condition=condition, result='placed', frames=[
-                       dict(sim_time_s=0, phase='ready', arm_joints_rad=[0]*6, box_pose_m_wxyz=[.1, 0, .02, 1, 0, 0, 0]),
-                       dict(sim_time_s=.2, phase='lift', arm_joints_rad=[.1]*6, box_pose_m_wxyz=[.1, 0, .09, 1, 0, 0, 0]),
+                   condition=condition, result='placed', geometry={
+                       'tray': dict(center=[.072, .106], size=[.06, .06], top=.035),
+                       'belt': dict(center=[.15, 0], size=[.08, .14], top=.039),
+                       'pinky_frame': dict(center=[.072, .168], size=[.08, .034], top=.06),
+                       'box_size_m': .04,
+                   }, frames=[
+                       dict(sim_time_s=0, phase='ready', arm_joints_rad=[0]*6, box_pose_m_wxyz=[.1, 0, .02, 1, 0, 0, 0], tcp_m=[.08, 0, .04]),
+                       dict(sim_time_s=.2, phase='lift', arm_joints_rad=[.1]*6, box_pose_m_wxyz=[.1, 0, .09, 1, 0, 0, 0], tcp_m=[.09, .11, .08]),
                    ])
 
     def file(name, value):
@@ -128,9 +135,13 @@ def test_s3_replay_only_opens_matching_saved_episodes(tmp_path):
             expect(page.locator('#experiment-s3-player')).to_be_hidden()
             target.set_input_files(file('episode-1000-learned.json', episode))
             expect(page.locator('#experiment-s3-time')).to_have_text('0.00초 · 준비')
+            canvas = page.locator('#experiment-s3-canvas')
+            expect(canvas).to_be_visible()
+            first_frame = canvas.evaluate('(el) => el.toDataURL()')
             page.locator('#experiment-s3-play').click()
             expect(page.locator('#experiment-s3-time')).to_have_text('0.20초 · 들기')
             expect(page.locator('#experiment-s3-box')).to_have_text('0.1000, 0.0000, 0.0900')
+            assert canvas.evaluate('(el) => el.toDataURL()') != first_frame
             page.locator('#experiment-s3-scrub').press('Home')
             expect(page.locator('#experiment-s3-time')).to_have_text('0.00초 · 준비')
         finally:

@@ -79,6 +79,10 @@
           <div id="experiment-s3-player" hidden>
             <div class="ui-workspace-bar"><ui-button id="experiment-s3-play" kind="quiet" type="button"><span id="experiment-s3-play-label">재생</span></ui-button></div>
             <label class="ui-field-label">재생 위치 <input class="ui-field" id="experiment-s3-scrub" type="range" min="0" max="0" value="0"></label>
+            <div id="experiment-s3-map" hidden>
+              <canvas id="experiment-s3-canvas" width="240" height="190" role="img" aria-label="위에서 본 화물과 팔 끝 위치"></canvas>
+              <p class="quiet">사각형은 화물, 원은 기록된 팔 끝(TCP)입니다.</p>
+            </div>
             <dl class="ui-readout">
               <dt>시뮬레이션 시간 · 동작 단계</dt><dd id="experiment-s3-time"></dd>
               <dt>화물 XYZ (m)</dt><dd id="experiment-s3-box"></dd>
