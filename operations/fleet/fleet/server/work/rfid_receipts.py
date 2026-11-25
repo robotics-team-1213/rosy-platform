@@ -9,6 +9,7 @@ import re
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from core_common.profile import LEGACY_VEHICLE_SITE
 from core_common.protocol.arm_transfer_preflight import ArmPhysicalRef
 from core_common.protocol.port_events import Epc, IntakeCandidate, IntakeCandidatePage, PortEvent, event_id
 from .port_event_store import PortEventConflict
@@ -295,7 +296,7 @@ def _physical_delivery(task):
 
 def is_inbound_supply(task):
     return (task.get("cell_id") == "cell_s" and task.get("arm_id") == "arm_s"
-            and task.get("dst_site") == "belt" and task.get("src_site") in ("vehicle", "pinky")
+            and task.get("dst_site") == "belt" and task.get("src_site") in ("vehicle", LEGACY_VEHICLE_SITE)
             and not task.get("auto_recovered") and not task.get("displaced_to")
             and task.get("preset") != "export_s3_belt" and task.get("zone_id") != "EXP_S3_BELT")
 

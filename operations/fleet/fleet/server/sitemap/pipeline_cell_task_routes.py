@@ -16,6 +16,7 @@ from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pin
 from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity,
 )
+from core_common.profile import LEGACY_VEHICLE_SITE
 from .pipeline_cell_task_presets import cell_task_presets
 from .pipeline_governance_store import (
     admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id, is_named_operator,
@@ -29,8 +30,6 @@ from fleet.server.sitemap.pipeline_unload_release import (
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
 from fleet.server.rfid_receipts import is_inbound_supply
 
-
-_LEGACY_VEHICLE_SITE = "pinky"
 #: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
 PLACE_OF_ACTION = {"dock_s3": "S3", "dock_and_unload_s3": "S3", "dock_s5": "S5", "charge_c1": "C1",
                    "charge_c2": "C2", "depart_s1": "S1"}
@@ -165,8 +164,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         web_common = getattr(app.state, "web_common", None)
         try:
             targets = resolve_cell_task_targets(
-                cell_id, spec, web_common=web_common, default_cell_s_src=_LEGACY_VEHICLE_SITE,
-                legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
+                legacy_sites=("belt", LEGACY_VEHICLE_SITE),
             )
             identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
@@ -207,7 +206,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             cell_id=cell_id, src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
             active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
             is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
-            vehicle_sites=(_LEGACY_VEHICLE_SITE,),
+            vehicle_sites=(LEGACY_VEHICLE_SITE,),
         )
         if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
             resolved_disp = app.state.detected_displaced_site or "belt_far"
@@ -324,7 +323,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 try:
                     specs = expand_multi_tier_specs(
                         body, base_id=base_id, web_common=getattr(app.state, "web_common", None),
-                        legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                        legacy_sites=("belt", LEGACY_VEHICLE_SITE),
                     )
                 except ValueError as exc:
                     raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
