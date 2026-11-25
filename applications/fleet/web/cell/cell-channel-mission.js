@@ -60,7 +60,7 @@ export function createChannelMission({$, scope, api, post, action, channelPath, 
     const control = await api('/api/fleet/dispatch-control', {signals});
     life.check();
     if (control.dispatch_enabled !== true) throw new Error('사이트 정지 상태와 현재 작업을 확인하세요.');
-    const allowed = await confirmIrreversible({message: `팔 작업 ${snapshot.work_id}의 실행을 승인할까요?`,
+    const allowed = await confirmIrreversible({message: `팔 작업 "${snapshot.work_id}"의 실행을 승인할까요?`,
       action: '실행 승인', opener: $('cell-channel-mission-admit'), signal: life.signal});
     if (!allowed || !life.current() || state().epoch !== epoch || state().review !== snapshot || lockReason() || relays()) {
       $('notice').textContent = '현재 팔 작업의 승인 상태를 확인하세요.';
