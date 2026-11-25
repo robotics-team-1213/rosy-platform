@@ -27,7 +27,7 @@ SVC = {"Authorization": "Bearer harbor-svc"}
 OP = {"Authorization": "Bearer operator"}
 
 
-def _recognition_app(tmp_path):
+def _recognition_app(tmp_path, *, web_common=None):
     principals = {
         hashlib.sha256(t.encode()).hexdigest(): SitePrincipal(p, r)
         for t, p, r in (
@@ -57,6 +57,7 @@ def _recognition_app(tmp_path):
             return {"read_only": True, "physical_acceptance": False, "workcells": []}
 
     app = FastAPI()
+    app.state.web_common = web_common
     app.state.control_unit = SimpleNamespace(
         unit=SimpleNamespace(unit_id="cell-a", parent="R"),
         topology=SimpleNamespace(units={}),
@@ -202,6 +203,41 @@ def test_wave4_cell_site_recognition_auth_validation_and_roundtrip(tmp_path):
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["snapshot_id"] == "snap-wave4-1"
     assert [s["site_ref"] for s in fetched.json()["sites"]] == ["yard-r1-c1-l1", "stand-r1-c1-l1"]
+
+
+def test_wave4_cell_site_recognition_uses_app_state_web_common(tmp_path):
+    custom_dir = tmp_path / "web_common"
+    custom_dir.mkdir()
+    (custom_dir / "cell-site-map.json").write_text(
+        '{"schema":"rosy.cell-site-map.v1","revision":9,"status":"verified","tier_height_mm":32.4,'
+        '"zones":[{"id":"yard","slots":[{"id":"yard:r1-s1","row":1,"slot":1,"columns":[1,1],"arms":["arm_a"],'
+        '"tiers":[{"tier":1,"id":"yard:r1-s1-t1","item":"ship-h1r0-l0"}]}]}]}\n',
+        encoding="utf-8",
+    )
+    client = _recognition_app(tmp_path, web_common=custom_dir)
+
+    rejected = client.post(
+        "/api/fleet/cell-site-recognition",
+        headers=OP,
+        json=_sample_recognition_snapshot(),  # includes stand-r1-c1-l1, absent from custom map
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"]["code"] == "UNKNOWN_SITE_REF"
+
+    accepted = client.post(
+        "/api/fleet/cell-site-recognition",
+        headers=OP,
+        json=_sample_recognition_snapshot(
+            sites=[{
+                "site_ref": "yard-r1-c1-l1",
+                "state": "OCCUPIED",
+                "object_class": "orange",
+                "object_ref_read": "CNTR-CUSTOM",
+                "confidence": 0.95,
+            }]
+        ),
+    )
+    assert accepted.status_code == 200, accepted.text
 
 
 def test_wave4_cell_plan_batch_admit_and_cancel_roundtrip(monkeypatch):

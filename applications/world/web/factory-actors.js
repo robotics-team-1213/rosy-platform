@@ -226,11 +226,19 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
     const list = Array.isArray(state.pinkys) && state.pinkys.length ? state.pinkys : (
       state.pinky?.pose_m ? [{ id: state.pinky.id ?? "rosy_45", ...state.pinky }] : []
     );
+    const hasRoster = Array.isArray(state.pinkys) && state.pinkys.length > 0;
+    const activePinkyIds = new Set(list.map((p) => p?.id).filter(Boolean));
     const c = state.cargo;
     const cargoVisible = Boolean(c?.pose_m && c.observed !== false && c.zone !== "unknown");
     for (const p of list) {
-      const actor = pinkys.get(p.id);
+      let actor = p?.id ? pinkys.get(p.id) : undefined;
+      if (!actor && p?.id && Array.isArray(p?.pose_m)) {
+        actor = createPinkyActor(three, p.id, extractedPinky, addLabel, trayGeometry);
+        pinkys.set(p.id, actor);
+        root.add(actor.group);
+      }
       if (!actor || !p?.pose_m) continue;
+      actor.group.visible = true;
       actor.group.position.set(p.pose_m[0], p.pose_m[1], Math.max(p.pose_m[2], 0.002));
       actor.group.rotation.z = p.yaw_rad ?? 0;
       actor.ghost(p.observed === false);
@@ -239,6 +247,11 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
       const color = p.s3_in_bounds ? 0x3dd68c : hasObservedCargo ? 0xd96b27 : 0x58a6ff;
       actor.haloMat.color.setHex(color);
       actor.haloMat.opacity = p.s3_in_bounds || hasObservedCargo ? pulse : 0.28;
+    }
+    if (hasRoster) {
+      for (const [id, actor] of pinkys) {
+        if (!activePinkyIds.has(id)) actor.group.visible = false;
+      }
     }
 
     for (const [key, arm] of arms) {
