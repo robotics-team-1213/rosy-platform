@@ -112,7 +112,7 @@ test("refusal codes are said as the missing evidence", () => {
   const rows = cellTaskRows({tasks: [queued({last_refusal: {code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}, status: "RUNNING"})]});
   assert.match(rows[0][5], /완료 거부/);
   const [card] = visualCardSpecs({tasks: [queued({last_refusal: {code: "AMR_BRAKE_BED_VELOCITY_UNMEASURED", op: "claim"}})]});
-  assert.match(card.folded_state, /시작 거부/);
+  assert.match(card.fieldStatus.refusal, /시작 거부/);
 });
 
 test("destinations come only from the server's presets and export stations for the cell", () => {
