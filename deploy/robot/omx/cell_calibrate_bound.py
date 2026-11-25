@@ -18,6 +18,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts  # noqa: E402
 
 
+_REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
+
+
+def _load_ref_gray(path: Path):
+    import cv2
+
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = str(path)
+    cached = _REF_GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return cached[2]
+    img = cv2.imread(key, cv2.IMREAD_GRAYSCALE)
+    if img is not None:
+        _REF_GRAY_CACHE[key] = (st.st_mtime_ns, st.st_size, img)
+    return img
+
+
 def _finite_float(value) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None

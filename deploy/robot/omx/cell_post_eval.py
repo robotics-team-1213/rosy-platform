@@ -313,6 +313,9 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
         if not s.get("tier_of") and isinstance(s.get("place") or s.get("start"), (list, tuple)) and len(s.get("place") or s.get("start")) >= 2
     ]
     chk = cell_calibrate.check(config, calibration, resolved, cell.frame("top"), params)
+    if cell_calibrate.stale(chk) == ["review-camera-reference"]:
+        return {"schema": SCHEMA, "verdict": "escalate", "todo": ["review-camera-reference"],
+                "reason": chk["camera_issue"], "check": chk}
     if chk.get("camera_moved"):
         return {"schema": SCHEMA, "verdict": "escalate", "todo": ["remap"], "reason": "camera_moved", "check": chk}
 

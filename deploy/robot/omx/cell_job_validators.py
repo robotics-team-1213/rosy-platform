@@ -145,6 +145,12 @@ def _roi(v):
 METRE = _num(-0.5, 0.5)
 
 
+def _route(v):
+    if not isinstance(v, list) or len(v) != 2:
+        raise ValueError("route requires [source, destination]")
+    return [_match(NAME)(site) for site in v]
+
+
 def _targets(v):
     if not isinstance(v, list) or not (1 <= len(v) <= 12):
         raise ValueError("1..12 'site:x,y' target entries")
