@@ -28,6 +28,15 @@ Both `joint_tune.py` and `record_session.py` correctly refuse to start from rais
 - `cell_check.py` reports raised caps per motor together with the exact command, before any motion tool runs.
 
 ## Recovery
+For a supervised Cell Job API remap on arm A or B, the admitted session can
+restore raised caps once before startup. It checks the selected follower,
+folded pose, torque and registers, records the write receipt, and rereads the
+bus before continuing the same remap. A pending restoration under
+`~/.local/state/rosy/session-baseline/<arm>/pending` requires inspection.
+Compare its last write intent and acknowledgement with an independent
+torque-off register probe. Preserve the journal for the operator's recovery
+decision if the result is uncertain.
+
 1. Confirm torque OFF (`register_probe.py` or `cell_check.py`).
 2. Run `commissioning_limits.py --device <follower by-id> --baseline --output <new dir>`. Success means `"configuration_verified": true`.
 3. Run `cell_check.py` again. The caps checks must read `resting`.
@@ -36,4 +45,12 @@ Both `joint_tune.py` and `record_session.py` correctly refuse to start from rais
 In `joint_tune.py` a `hold: did not settle` on a loaded joint (12 at PWM 150: 732↔733) is not this problem. A one-tick oscillation at torque ON deliberately counts as not stable (`test_startup_never_sends_a_move_until_the_hold_is_observed_stable[jitter]`). It means the joint is barely holding. Raise its PWM while searching for caps. Do not loosen the stability rule.
 
 ## Evidence
+On 2026-11-26 the Cell Job API reported only that arm A's session did not start.
+The session log identified motor 11 at PWM 885. The failed start had stopped the
+observer. Under an exclusive observer handoff the commissioning tool recorded
+21 verified reductions. An independent register probe found PWM 20 on IDs
+11–16, current 50 on IDs 14–16 and torque off on all six. The observer resumed.
+Consult the session log when the job reports this generic refusal. Recheck the
+observer after a failed start before relying on its folded-pose observation.
+
 Fleet PC 2026-10-24 20:34 refusal, then the `commissioning_limits.py` receipt in `~/rosy-test/omx-record-prep-20261019/limits-restore-*` (`configuration_verified: true`). After that, ID 15 moved +40 of +50 ticks and both caps read 20/50. Workspace record: `Rosy/docs/workspace-records/2026-10-24/omx-arm-s-first-check.md` (outside git).

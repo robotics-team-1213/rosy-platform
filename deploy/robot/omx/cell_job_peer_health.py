@@ -78,8 +78,17 @@ def passive_motor_health_folded(
     cal = read_json_fn(cal_dir / f"{peer}_follower.json")
     if not isinstance(cal, dict):
         return False
+    if any(m.get("torque_enabled") is not False or m.get("fault") is not False
+           or type(m.get("hardware_error")) is not int or m["hardware_error"] != 0 for m in motors):
+        return False
+    return calibrated_positions_folded([m.get("present_raw") for m in motors], cal)
+
+
+def calibrated_positions_folded(positions, cal) -> bool:
+    if len(positions) != 6 or not isinstance(cal, dict):
+        return False
     pose: list[float] = []
-    for idx, (jname, motor) in enumerate(zip(FOLLOWER_JOINTS, motors)):
+    for idx, (jname, position) in enumerate(zip(FOLLOWER_JOINTS, positions)):
         jcal = cal.get(jname)
         if not isinstance(jcal, dict):
             return False
@@ -92,10 +101,7 @@ def passive_motor_health_folded(
         lo, hi = jcal.get("range_min"), jcal.get("range_max")
         if type(lo) is not int or type(hi) is not int or not (0 <= lo < hi <= 4095):
             return False
-        if (motor.get("torque_enabled") is not False or motor.get("fault") is not False
-                or type(motor.get("hardware_error")) is not int or motor["hardware_error"] != 0):
-            return False
-        rval = finite_float(motor.get("present_raw"))
+        rval = finite_float(position)
         if rval is None or not 0.0 <= rval <= 4095.0:
             return False
         frac = (rval - lo) / (hi - lo)

@@ -209,7 +209,12 @@ def test_sample_nav2_route_splits_closed_loop_and_keeps_open_path_single_stop():
     assert math.dist(open_path[-1][:2], (-0.68, -0.25)) < 1e-6
 
 
-def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
+@pytest.mark.parametrize(("binding_required", "loc_state", "refusal"), [
+    (False, "LOCALIZED", None),
+    (True, "LOCALIZED", "MAP_BINDING_REQUIRED"),
+    (False, "CANDIDATES", "ROBOT_POSE_UNTRUSTED"),
+])
+def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, binding_required, loc_state, refusal):
     clock = FakeClock()
     store = SiteMapStore(tmp_path / "site.sqlite", clock=clock)
     store.import_if_empty(_south_loop_map(), source="test")
@@ -218,6 +223,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
     for r in (robot, motor):
         r.power_health_value = fresh_power_health()
         r._state["odom_pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": time.time()}
+    robot._state["localization"] = {"state": loc_state, "pose_frame": "map"}
     console = FleetConsole(
         [RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t"),
          RobotEndpoint("rosy_45", "http://127.0.0.1:8082", "t")],
@@ -226,7 +232,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
     users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
     app = create_app(
         console, task_service=FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42", "rosy_45"]),
-        site_maps=store, site_users=users,
+        site_maps=store, site_users=users, trip_config=TripConfig(map_binding_required=binding_required),
     )
     with TestClient(app) as client:
         # Anchor both robots on the south loop (rosy_42 33 deg off loop_left: past lane 20 deg tol, under 90 deg conflict).
@@ -242,6 +248,9 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
         assert res.status_code == 200, res.text
         plan = res.json()
         assert plan["start_check"]["code"] is None
+        assert plan["nav2_preflight"] == {"code": refusal, "binding_required": binding_required,
+                                             "binding_status": "MAP_BINDING_REQUIRED"}
+        assert not robot.routes
         assert plan["segments"][-1]["s_to"] == pytest.approx(store.active()[2].arcs["loop_right:fwd"].length_m, abs=1e-4)
 
         # Motor-only robot (no "free" mode) cannot plan a nav2 trip.

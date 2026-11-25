@@ -27,6 +27,7 @@ from cell_job_guards import (  # noqa: E402
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
+from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
 )
@@ -226,7 +227,7 @@ class Runner:
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
-            env = {**os.environ, "ROSY_ARM_LEASE_OWNER": self._lease_owner}
+            env = session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params)
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:

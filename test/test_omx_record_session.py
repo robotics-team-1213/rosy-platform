@@ -298,6 +298,40 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
 
 
+@pytest.mark.parametrize("mode", ["unapproved", "wrong_profile", "stale_readback", "restored"])
+def test_approved_chunk_session_repairs_once_before_applying_caps(tmp_path, monkeypatch, mode):
+    monkeypatch.syspath_prepend(str(DIRECTORY))
+    from cell_robot_profile import SCHEMA, digest
+
+    path = config(tmp_path)
+    robot = json.loads(path.read_text())["robot"]
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps(dict(schema=SCHEMA, device_id="arm_b" if mode == "wrong_profile" else "arm_a",
+                                       instance_id=robot["id"], robot_config_sha256=digest(robot),
+                                       work_dir="work", operating_envelope_path="work/review.json")))
+    arm = follower({11: {"pwm_limit": 885}})
+    s, _ = session(arm, leader_arm())
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "fixture"}
+    s.operating_profile = profile
+    s.baseline_recovery_arm = None if mode == "unapproved" else "arm_a"
+    calls = []
+    def repair(arm_id, robot_config):
+        calls.append(arm_id)
+        assert robot_config == robot and not arm.writes and arm.closed == 1
+        if mode == "restored":
+            arm.motors[11]["pwm_limit"] = 20
+        return "receipt"
+    monkeypatch.setattr(m.resting, "restore", repair)
+    if mode == "restored":
+        result = s.execute(path, CAPS, teleop_only=False)
+        assert result["baseline_receipt"] == "receipt" and result["safe_end"]
+    else:
+        with pytest.raises(SystemExit):
+            s.execute(path, CAPS, teleop_only=False)
+        assert not arm.writes
+    assert calls == (["arm_a"] if mode in ("restored", "stale_readback") else [])
+
+
 def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
     """2026-10-26: the wrist at its factory P 400 trailed 4.8 deg under load; the guard stops at 5."""
     arm, leader = follower({14: {"p_gain": 380}}), leader_arm()
