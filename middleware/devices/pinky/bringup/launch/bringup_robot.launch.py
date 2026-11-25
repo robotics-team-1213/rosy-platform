@@ -48,9 +48,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_battery', default_value='false',
                               description='Enable the rosylib I2C-1 ADC battery publisher'),
         DeclareLaunchArgument('enable_ir', default_value='false',
-                              description='Start control ir_adc_node (ir_sensor/range) for the '
-                                          'rosy-io graph. Keep false when line_follow.launch '
-                                          'already starts it (navigation hardware graph).'),
+                              description='Start control ir_adc_node (ir_sensor/range). '
+                                          'Keep false when line_follow.launch owns IR.'),
         DeclareLaunchArgument(
             'drive_enabled', default_value='true',
             description='false = no-motion mode: torque off, no cmd_vel '
@@ -151,10 +150,9 @@ def generate_launch_description():
                 parameters=[{'use_sim_time': use_sim_time}],
                 condition=IfCondition(enable_battery),
             ),
-            # ir_sensor/range single-publisher rule: ir_adc_node here is for the
-            # rosy-io graph only (D-344 §12 lane-departure guard). The navigation
-            # hardware graph leaves enable_ir false and starts it via line_follow;
-            # the C++ sensor_adc bench reader never runs beside it.
+            # ir_sensor/range single-publisher rule: rosy-io and native navigation
+            # use this source in their mutually exclusive graphs. The combined
+            # line-follow graph enables its own publisher instead.
             Node(
                 package='control',
                 executable='ir_adc_node',
