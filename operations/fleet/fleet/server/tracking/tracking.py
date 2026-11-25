@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Mapping, Optional, Sequence
 
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload
+from fleet.server.recalibration import RecalibrationPipeline
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking_anchors import (
     _finite,
@@ -91,6 +92,7 @@ class TrackingService:
         self._anchor_states: dict[str, dict] = {}
         self._omx_cells: dict[str, dict] = {}
         self._prev_revisions: dict[str, tuple[str, str, float]] = {}
+        self.recalibration = RecalibrationPipeline(clock=self._clock)
 
     @property
     def enabled(self) -> bool:
@@ -241,7 +243,46 @@ class TrackingService:
         out = {"calibrations": [record.to_dict() for record in self.calibrations.all()], "use": "display-only"}
         if include_history:
             out["history"] = {s.source_id: self.calibrations.history(s.source_id, limit=10) for s in self.sources}
+            out["recalibration"] = {s.source_id: self.recalibration.status(s.source_id) for s in self.sources}
         return out
+
+    def submit_recalibration_candidate(self, source_id: str, body: Mapping, *, principal_id: str) -> dict:
+        source = self._by_id.get(source_id)
+        if source is None:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        map_id = body.get("map_id") or source.map_id
+        if map_id != source.map_id:
+            raise TrackingError(409, "MAP_MISMATCH", "calibration map does not match source configuration")
+        return self.recalibration.submit_candidate(
+            source_id,
+            {**body, "source_id": source_id, "map_id": map_id},
+            approved=self.calibrations.get(source_id),
+            route_active=bool(body.get("route_active", False)),
+            approve_fn=lambda p: self.approve(p, approved_by=principal_id),
+        )
+
+    def accept_recalibration_candidate(self, source_id: str, *, approved_by: str) -> dict:
+        if source_id not in self._by_id:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        try:
+            return self.recalibration.accept_pending(
+                source_id, approved_by=approved_by, approve_fn=lambda p: self.approve(p, approved_by=approved_by))
+        except LookupError as exc:
+            raise TrackingError(404, "NO_PENDING_CANDIDATE", str(exc)) from exc
+
+    def dismiss_recalibration_candidate(self, source_id: str, *, principal_id: str) -> dict:
+        if source_id not in self._by_id:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        return self.recalibration.dismiss_pending(source_id, principal_id=principal_id)
+
+    def observe_recalibration_health(self, source_id: str, health_view: Mapping) -> Optional[dict]:
+        return self.recalibration.observe_health(
+            source_id,
+            health_state=str(health_view.get("state") or "unknown"),
+            move_m=(health_view.get("last") or {}).get("move_m"),
+            current_revision=health_view.get("calibration_revision"),
+            rollback_fn=lambda sid, rev: self.rollback(sid, target_revision=rev, principal_id="recalibration-shadow"),
+        )
 
     def request_relearn(self, source_id: str) -> dict:
         if source_id not in self._by_id:

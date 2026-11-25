@@ -391,6 +391,14 @@
         <section id="calibration-workbench" class="install-step calibration-workbench" aria-labelledby="workbench-heading">
           <h3 id="workbench-heading">수동 N점 정밀 보정 워크벤치</h3>
           <p class="hint">좌측 카메라 영상(휠 줌·Shift 드래그 팬·4× 확대 루페)과 우측 사이트 지도에서 4개 이상 대응점을 찍어 SE(3)+왜곡 보정을 계산하고 전후를 비교한 뒤 적용·잠금·복원합니다.</p>
+          <div id="manual-fit-recal-banner" class="workbench-recal-banner" hidden>
+            <p class="hint" id="manual-recal-text" role="status"></p>
+            <ui-actions>
+              <ui-button kind="quiet" id="manual-recal-preview" type="button">비교 미리보기</ui-button>
+              <ui-button kind="primary" id="manual-recal-accept" type="button">후보 바로 적용</ui-button>
+              <ui-button kind="quiet" id="manual-recal-dismiss" type="button">무시</ui-button>
+            </ui-actions>
+          </div>
           <div class="workbench-lens-row">
             <label>렌즈 프로파일 <select class="ui-field" id="manual-lens-mode">
               <option value="active">현재 적용 렌즈 프로파일</option>

@@ -388,6 +388,31 @@ print(json.dumps(out))
     return sh_json("rosy-site-fleet-1", "rosy", apply_code)
 
 
+def submit_recal_candidate(token: str, solved: dict, *, reason: str, spread_m: float, route_active: bool = False) -> dict:
+    """Best-effort stage held candidate in Fleet recalibration banner for 1-click operator review."""
+    score = max(0.95, min(0.995, round(1.0 - solved["rms_m"] * 8.0, 3)))
+    body = {
+        "map_id": "world_261026", "map_to_image": solved["map_to_image"],
+        "image": {"width": solved["width"], "height": solved["height"]},
+        "track_bounds_m": {"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61},
+        "fit_score": score, "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8},
+        "frame_seq": solved.get("frame_seq"), "lens_profile": solved.get("lens_profile"),
+        "rms_m": solved["rms_m"], "spread_m": round(float(spread_m), 5),
+        "hold_reason": reason, "route_active": bool(route_active),
+    }
+    code = f"""
+import json, httpx
+headers = {{"Authorization": f"Bearer {{{repr(token)}}}"}}
+with httpx.Client(verify='/run/secrets/site_ca', timeout=10.0) as client:
+    r = client.post('https://fleet:8090/api/fleet/calibrations/ceiling_north/recalibrate/candidate', headers=headers, json={repr(body)})
+    print(json.dumps({{"submitted": r.status_code == 200, "status": r.status_code}}))
+"""
+    try:
+        return sh_json("rosy-site-fleet-1", "rosy", code)
+    except Exception as exc:
+        return {"submitted": False, "error": str(exc)}
+
+
 def _load_state(state_file: Path) -> dict:
     if not state_file.exists():
         return {}
@@ -484,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if outcome["decision"] != "approve":
+        if outcome.get("reason") in ("drift_exceeds_auto_cap", "calibration_frozen", "active_trips") and solved["rms_m"] <= 0.008:
+            submit_recal_candidate(token, solved, reason=outcome["reason"], spread_m=outcome.get("spread", 0.0), route_active=bool((cur_map or {}).get("route_active")))
         _save_state(STATE_FILE, {
             "map_sync_refused_runs": int(state.get("map_sync_refused_runs", 0)),  # holds between tries keep the count
             "checked_at": now,

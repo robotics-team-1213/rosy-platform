@@ -105,3 +105,29 @@ export function drawLoupe(ctx, image, imgX, imgY, canvasW, zoom = 4, size = 112)
   ctx.strokeRect(x0, y0, size, size);
   ctx.restore();
 }
+
+const RECAL_REASON_KO = {
+  drift_exceeds_auto_cap: "허용 자동 한도(>25cm) 초과",
+  calibration_frozen: "자동 보정 잠금(Freeze) 상태",
+  active_trips: "주행 중인 로봇이 있어 보류됨",
+  shadow_health_regression: "자동 적용 후 이상 감지로 자동 복원됨",
+  cooldown: "자동 보정 쿨다운 중",
+  rms_exceeds_auto_cap: "자동 RMS 상한 초과",
+  spread_exceeds_auto_cap: "연속 프레임 편차 초과",
+};
+
+export function formatRecalStatus(row) {
+  if (!row) return null;
+  const pend = row.pending_candidate;
+  if (!pend && row.state !== "ROLLED_BACK") return null;
+  const m = (pend?.metrics || row.metrics || {});
+  const reason = RECAL_REASON_KO[pend?.reason || row.reason] || pend?.reason || row.reason || "검토 필요";
+  if (row.state === "ROLLED_BACK" && !pend) {
+    return `자동 재보정 롤백됨 (${reason})`;
+  }
+  const parts = [`재보정 후보 대기 (${reason})`];
+  if (m.move_m != null) parts.push(`이동 ${(m.move_m * 100).toFixed(1)} cm`);
+  if (m.rotation_deg != null) parts.push(`회전 ${Number(m.rotation_deg).toFixed(1)}°`);
+  if (m.rms_m != null) parts.push(`RMS ${(m.rms_m * 100).toFixed(2)} cm`);
+  return parts.join(" · ");
+}

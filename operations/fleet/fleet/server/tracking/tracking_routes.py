@@ -101,6 +101,23 @@ class CalibrationFreezeRequest(BaseModel):
     frozen: bool
 
 
+class RecalibrationCandidateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    map_id: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    map_to_image: list[float] = Field(min_length=9, max_length=9)
+    image: _ImageSize
+    track_bounds_m: _Bounds
+    fit_score: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    lens: Optional[_Lens] = None
+    frame_seq: Optional[int] = Field(default=None, ge=0)
+    lens_profile: Optional[dict] = None
+    rms_m: float = Field(default=0.0, ge=0.0, allow_inf_nan=False)
+    spread_m: float = Field(default=0.0, ge=0.0, allow_inf_nan=False)
+    hold_reason: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    route_active: bool = False
+
+
 class RelearnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -285,6 +302,30 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
                                  principal: SitePrincipal = Depends(require_operator)) -> dict:
         try:
             return tracking.set_frozen(source_id, body.frozen, principal_id=principal.principal_id)
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
+    @app.post("/api/fleet/calibrations/{source_id}/recalibrate/candidate", tags=["tracking"])
+    async def submit_recal_candidate(source_id: str, body: RecalibrationCandidateRequest,
+                                     principal: SitePrincipal = Depends(require_operator)) -> dict:
+        try:
+            return tracking.submit_recalibration_candidate(source_id, body.model_dump(), principal_id=principal.principal_id)
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
+    @app.post("/api/fleet/calibrations/{source_id}/recalibrate/accept", tags=["tracking"])
+    async def accept_recal_candidate(source_id: str,
+                                     principal: SitePrincipal = Depends(require_operator)) -> dict:
+        try:
+            return tracking.accept_recalibration_candidate(source_id, approved_by=principal.principal_id)
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
+    @app.post("/api/fleet/calibrations/{source_id}/recalibrate/dismiss", tags=["tracking"])
+    async def dismiss_recal_candidate(source_id: str,
+                                      principal: SitePrincipal = Depends(require_operator)) -> dict:
+        try:
+            return tracking.dismiss_recalibration_candidate(source_id, principal_id=principal.principal_id)
         except TrackingError as exc:
             raise _http(exc) from exc
 

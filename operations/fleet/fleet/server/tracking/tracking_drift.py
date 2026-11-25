@@ -23,8 +23,10 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from core_common.calibration_math import distort_point
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.calibration_health import CalibrationHealth
+from fleet.server.recalibration import apply3 as _apply3, invert3 as _invert3, linear_relative as _linear_relative, matrix33 as _matrix33
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking_calibration import CalibrationRecord, TrackingCalibrationStore
 
@@ -92,6 +94,8 @@ def calibration_drift_verdict(approved: CalibrationRecord, body: Mapping) -> Opt
     min_x, min_y, max_x, max_y = approved.track_bounds_m
     for corner in ((min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)):
         pixel = _apply3(approved.map_to_image, *corner)
+        if pixel is not None and approved.lens_profile is not None:
+            pixel = distort_point(pixel[0], pixel[1], approved.lens_profile)
         moved = _apply3(proposal_i2m, *pixel) if pixel is not None else None
         if pixel is None or moved is None:
             return None  # a corner at or beyond the proposal's horizon: incomparable
@@ -124,7 +128,8 @@ class CalibrationDriftWatch:
                  fetch_proposal: Callable[[str], Awaitable[Optional[Mapping]]],
                  clock: Callable[[], float] = time.time,
                  interval_s: float = DEFAULT_INTERVAL_S,
-                 health: Optional[CalibrationHealth] = None) -> None:
+                 health: Optional[CalibrationHealth] = None,
+                 on_health: Optional[Callable[[str, dict], None]] = None) -> None:
         if not math.isfinite(interval_s) or interval_s <= 0:
             raise ValueError("calibration drift interval must be positive and finite")
         self.sources = tuple(sources)
@@ -133,6 +138,7 @@ class CalibrationDriftWatch:
         self._fetch_proposal = fetch_proposal
         self._clock = clock
         self._verdicts: dict[str, dict] = {}
+        self.on_health = on_health
         #: D-1006: every poll (rejected and missing ones too) feeds the health state machine.
         self.health = health if health is not None else CalibrationHealth(
             clock=clock, journal_path=calibrations.path,
@@ -156,6 +162,8 @@ class CalibrationDriftWatch:
             metrics = calibration_drift_verdict(record, body) if body is not None else None
             try:
                 self.health.observe(source.source_id, record.calibration_revision, body, metrics)
+                if self.on_health is not None and (view := self.health.view(source.source_id)) is not None:
+                    self.on_health(source.source_id, view)
             except Exception:  # noqa: BLE001 - health is observation only; the drift verdict must still update
                 _LOG.exception("calibration health observation failed for %s", source.source_id)
             if body is None or metrics is None:
@@ -244,50 +252,3 @@ class VisionMapProposalReader:
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
-
-
-# -- small matrix helpers (fleet stays numpy-free) ----------------------------
-
-def _matrix33(raw) -> tuple[float, ...]:
-    rows = [float(value) for row in raw for value in row]
-    if len(rows) != 9 or not all(math.isfinite(value) for value in rows):
-        raise ValueError("matrix must be nine finite numbers")
-    return tuple(rows)
-
-
-def _apply3(matrix: Sequence[float], x: float, y: float) -> Optional[tuple[float, float]]:
-    a, b, c, d, e, f, g, h, i = matrix
-    w = g * x + h * y + i
-    if not math.isfinite(w) or abs(w) < 1e-9:
-        return None  # at the horizon: the projection is undefined here
-    return ((a * x + b * y + c) / w, (d * x + e * y + f) / w)
-
-
-def _invert3(m: Sequence[float]) -> Optional[tuple[float, ...]]:
-    a, b, c, d, e, f, g, h, i = m
-    det = (a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g))
-    if not math.isfinite(det) or abs(det) < 1e-12:
-        return None
-    inverse = ((e * i - f * h) / det, -(b * i - c * h) / det, (b * f - c * e) / det,
-               -(d * i - f * g) / det, (a * i - c * g) / det, -(a * f - c * d) / det,
-               (d * h - e * g) / det, -(a * h - b * g) / det, (a * e - b * d) / det)
-    return inverse
-
-
-def _linear_relative(approved_i2m: Sequence[float],
-                     proposal_i2m: Sequence[float]) -> Optional[tuple[tuple[float, float], ...]]:
-    """``B @ inv(A)`` for the 2x2 linear parts, as the map-plane relative transform.
-
-    The 2x2 part of a row-major 3x3 sits at indices 0, 1, 3, 4 (m00, m01, m10, m11).
-    """
-    a = (approved_i2m[0], approved_i2m[1], approved_i2m[3], approved_i2m[4])
-    det = a[0] * a[3] - a[1] * a[2]
-    if not math.isfinite(det) or abs(det) < 1e-12:
-        return None
-    inv_a = ((a[3] / det, -a[1] / det), (-a[2] / det, a[0] / det))
-    b = (proposal_i2m[0], proposal_i2m[1], proposal_i2m[3], proposal_i2m[4])
-    relative = ((b[0] * inv_a[0][0] + b[1] * inv_a[1][0], b[0] * inv_a[0][1] + b[1] * inv_a[1][1]),
-                (b[2] * inv_a[0][0] + b[3] * inv_a[1][0], b[2] * inv_a[0][1] + b[3] * inv_a[1][1]))
-    if not all(math.isfinite(value) for row in relative for value in row):
-        return None
-    return relative

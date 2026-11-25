@@ -588,3 +588,30 @@ def test_frozen_calibration_and_large_drift_are_held():
 
     forced = mod.decide(huge, has_current_cal=True, cur_frozen=True, force=True, now=100_000.0)
     assert forced["decision"] == "approve" and forced["reason"] == "forced"
+
+
+def test_held_large_drift_submits_recalibration_candidate(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 22, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.40, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.40, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.50, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"route_active": False, "map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    submitted = []
+    monkeypatch.setattr(mod, "submit_recal_candidate", lambda *_a, **kw: submitted.append(kw["reason"]) or {"submitted": True})
+    for _ in range(5):
+        assert mod.main([]) == 0
+        line = json.loads(capsys.readouterr().out.strip())
+    assert line["decision"] == "hold" and line["reason"] == "drift_exceeds_auto_cap"
+    assert submitted == ["drift_exceeds_auto_cap"]
