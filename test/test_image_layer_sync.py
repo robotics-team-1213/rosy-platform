@@ -1427,6 +1427,7 @@ def test_a_rollback_to_026_restores_the_old_display_unit(device):
     result = _sync(device, OLD_ID, runner, dry_run=False)
 
     assert "/etc/systemd/system/rosy-face.service" in result["removed"]
+    assert "rosy-face.service" not in result["units_affected"] and "rosy-face.service" not in result["restart_units"]
     assert runner.mutating()[0] == ["systemctl", "disable", "--now", FACE_UNIT]
     assert (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8") == old_unit
     # The restored unit is enabled but not running: the updater starts it (D-433 Q5).
@@ -1439,3 +1440,26 @@ def test_script_run_as_main_prints_a_json_result(tmp_path):
                          capture_output=True, text=True, timeout=60)
     assert json.loads(run.stdout.strip().splitlines()[-1])["ok"] in (True, False)
     assert run.returncode in (0, 1)
+
+
+def test_sibling_python_import_change_marks_unit_affected_and_restarted(device):
+    runner = Runner(active={"rosy-face.service"})
+    rt = device / "opt/rosy/native-runtime"
+    new_dir = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    unit_txt = "[Service]\nExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-face.py\n"
+    (device / "etc/systemd/system/rosy-face.service").write_text(unit_txt, encoding="utf-8")
+    (new_dir / "rosy-face.service").write_text(unit_txt, encoding="utf-8")
+    (rt / "rosy-face.py").write_text("import rosy_face_display\n", encoding="utf-8")
+    (new_dir / "rosy-face.py").write_text("import rosy_face_display\n", encoding="utf-8")
+    (rt / "rosy_face_display.py").write_text("V = 1\n", encoding="utf-8")
+    (new_dir / "rosy_face_display.py").write_text("V = 2\n", encoding="utf-8")
+    dry = _sync(device, NEW_ID, runner, dry_run=True)
+    assert "/opt/rosy/native-runtime/rosy_face_display.py" in dry["changed"]
+    assert "/etc/systemd/system/rosy-face.service" not in dry["changed"]
+    assert "rosy-face.service" in dry["units_affected"] and "rosy-face.service" in dry["restart_units"]
+    applied = _sync(device, NEW_ID, runner, dry_run=False)
+    assert "rosy-face.service" in applied["units_affected"] and "rosy-face.service" in applied["restart_units"]
+    # Rollback restoring old rosy_face_display.py via cleanup also marks rosy-face.service
+    (new_dir / "rosy_face_display.py").unlink()
+    back_dry = _sync(device, NEW_ID, runner, dry_run=True)
+    assert "rosy-face.service" in back_dry["units_affected"] and "rosy-face.service" in back_dry["restart_units"]

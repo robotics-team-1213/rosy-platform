@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable
+import ast
 import os
 import re
 import subprocess
@@ -309,19 +310,71 @@ def plan(root: Path, native: Path) -> dict:
     return result
 
 
+def _safe_runtime_file(root: Path, script: str, rt_root: Path) -> Path | None:
+    if ".." in PurePosixPath(script).parts or not script.startswith("/" + NATIVE_RUNTIME + "/"):
+        return None
+    candidate = root / script.lstrip("/")
+    if candidate.is_symlink() or not candidate.is_file() or not candidate.resolve().is_relative_to(rt_root):
+        return None
+    return candidate
+
+
+def _runtime_python_closure(root: Path, start_scripts: list[str], staged: dict[str, Path]) -> set[str]:
+    """Transitive /opt/rosy/native-runtime/*.py files imported by a unit's Python entrypoints."""
+    seen: set[str] = set()
+    queue = list(start_scripts)
+    prefix = "/" + NATIVE_RUNTIME + "/"
+    rt_root = (root / NATIVE_RUNTIME).resolve()
+    while queue:
+        script = queue.pop()
+        if script in seen or not script.startswith(prefix) or ".." in PurePosixPath(script).parts:
+            continue
+        src = staged.get(script) or _safe_runtime_file(root, script, rt_root)
+        if src is None or src.is_symlink() or not src.is_file():
+            continue
+        seen.add(script)
+        try:
+            tree = ast.parse(src.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        mods |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module and n.level == 0}
+        for mod in mods:
+            cand = f"{prefix}{mod}.py"
+            if cand not in seen and (cand in staged or _safe_runtime_file(root, cand, rt_root) is not None):
+                queue.append(cand)
+    return seen
+
+
 def affected_units(root: Path, work: list[dict]) -> list[str]:
-    """Units whose file changed, or whose unit file runs a changed runtime script."""
-    touched_units = {Path(item["destination"]).name for item in work if item["kind"] == "unit"}
+    """Units whose file changed, or whose unit file runs or imports a changed runtime script."""
+    removed_units = {
+        Path(item["destination"]).name
+        for item in work
+        if item["kind"] == "unit" and item.get("state") == "removed"
+    }
+    touched_units = {
+        Path(item["destination"]).name
+        for item in work
+        if item["kind"] == "unit" and item.get("state") != "removed"
+    }
     touched_scripts = {
         "/" + item["destination"] for item in work if item["kind"] == "runtime"
     }
+    staged = {
+        "/" + item["destination"]: item["source"]
+        for item in work
+        if item["kind"] == "runtime" and item.get("source") is not None
+    }
+    py_pat = re.compile(rf"(?m)^(?:Exec\w+|Condition\w+)=.*?(/{re.escape(NATIVE_RUNTIME)}/[^\s\"';]+\.py)(?=[\s\"';]|$)")
     affected = set(touched_units)
     for unit in UNITS:
         installed = root / UNIT_DIR / unit
-        if unit in affected or installed.is_symlink() or not installed.is_file():
+        if unit in affected or unit in removed_units or installed.is_symlink() or not installed.is_file():
             continue
         text = installed.read_text(encoding="utf-8", errors="replace")
-        if any(re.search(re.escape(script) + r"(\s|$)", text) for script in touched_scripts):
+        if (any(re.search(re.escape(script) + r"(\s|$)", text) for script in touched_scripts)
+                or (_runtime_python_closure(root, py_pat.findall(text), staged) & touched_scripts)):
             affected.add(unit)
     return sorted(affected)
 
