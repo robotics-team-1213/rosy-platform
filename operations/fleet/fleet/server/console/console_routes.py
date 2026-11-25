@@ -175,10 +175,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         for row in snapshot["robots"]:
             row = {**row, "line_stuck": board.view(row["robot_id"]),
                    "judgment": board.judgment_view(row["robot_id"])}
-            refresh_console_dispatch_fields(console, row)
             if lane is not None:   # D-511 M0: the monitor's latest result, read only
                 row["lane_compliance"] = lane.view(row["robot_id"])
-            observed = row.pop("_state_mono", None)
+            observed = row.get("_state_mono")
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
         power, motors = await asyncio.gather(
@@ -200,6 +199,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         runner = getattr(app.state, "trip_runner", None)
         trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}
         for row in rows:
+            refresh_console_dispatch_fields(console, row)
+            row.pop("_state_mono", None)
             robot_id = row["robot_id"]
             if row["online"]:  # an offline row already says the link is down
                 row["rule_m"] = rule_m.verdict(

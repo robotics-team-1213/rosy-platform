@@ -3892,12 +3892,13 @@ holds: CORE traffic authority or a held trip lease for a trip, a goal lease for 
 Fleet `GET /api/fleet/state` robot rows also emit `goal_in_flight` (`bool`) whenever `goal` is non-null
 (omitted when `goal` is `null` and absent on older Fleet versions). Even when `SharedGather` returns a
 cached snapshot, `GET /api/fleet/state` recomputes `goal`, `goal_in_flight`, `queued`,
-`named_stop_custody`, `yielding`, and `held` per response from live console dispatch state. `false`
-means Fleet proved the reported goal is retained terminal display (`_goal_busy` and `goal_leases`
-clear, `state.mode == "IDLE"`, `state.navigation` in `ARRIVED|CANCELED|FAILED`, and
-`_state_mono - _goal_sent_at >= max(5.0, hub_state_max_age_s + 2.0)`). `rosy-site-autoupdate` fails
-closed on any non-null `goal` whose row omits `goal_in_flight` (older Fleet) or sets `goal_in_flight: true`,
-blocking as `<robot>: goal active`.
+`named_stop_custody`, `yielding`, and `held` after telemetry awaits from live console dispatch state.
+`false` is Fleet's classification of the reported goal as retained terminal display when `_goal_busy`
+and `goal_leases` are clear, `state.mode == "IDLE"`, `state.navigation` is in `ARRIVED|CANCELED|FAILED`,
+and `_state_mono - _goal_sent_at >= max(5.0, hub_state_max_age_s + 2.0)` (it does not match the
+observation to a specific goal attempt ID). `rosy-site-autoupdate` fails closed on any non-null `goal`
+whose row omits `goal_in_flight` (older Fleet) or sets `goal_in_flight: true`, blocking as
+`<robot>: goal active`.
 The robot's link and SAF-003 policy are not counted. `reason` is null unless `state` is `unbounded`:
 `hold_back` (lane trip with neither), `no_goal_lease`, `leg_unknown`. A row with `online: false` has
 no `rule_m`. Stage 1 covers two of the three D-550 item 7 violations: a line follow Fleet opens

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import sys
 
 from fakes import FakeClock, FakeRobot, run
 from fastapi.testclient import TestClient
+import httpx
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -158,3 +160,62 @@ def test_state_route_cached_gather_defers_immediately_after_redispatch(tmp_path)
     assert site_busy_reasons({"health_url": "https://fleet.local:8443/healthz"}, _SiteHttp(), root=tmp_path) == [
         "rosy_45: goal active"
     ]
+
+
+def test_state_route_refreshes_goal_in_flight_after_telemetry_await():
+    async def scenario():
+        clock = FakeClock()
+        clock.now = 10.0
+        robot = FakeRobot("rosy_45")
+        console = FleetConsole(
+            [RobotEndpoint(robot_id="rosy_45", base_url="http://127.0.0.1:8080", token="t")],
+            [robot],
+            clock=clock,
+            hub_state_max_age_s=3.0,
+            goal_lease_ttl_s=0.0,
+        )
+        hub_row = console.hub.registry.record("rosy_45")
+        hub_row.online = True
+        hub_row.snapshot = _terminal_snapshot("rosy_45", NavigationState.CANCELED)
+        hub_row.last_heartbeat_monotonic = 10.0
+
+        clock.now = 11.0
+        assert (await console.goal("rosy_45", 0.45, 0.22, 0.01))["accepted"] is True
+
+        clock.now = 16.5
+        hub_row.snapshot = _terminal_snapshot("rosy_45", NavigationState.CANCELED)
+        hub_row.last_heartbeat_monotonic = 16.5
+
+        app = create_app(console, console_token="viewer", start_task_dispatcher=False)
+        app.state.fleet_gather._clock = clock
+
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def paused_shown(robot_id: str, wait_s: float = 0.5):
+            entered.set()
+            await release.wait()
+            return None
+
+        app.state.power_health_display.shown = paused_shown
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as async_client:
+            req_task = asyncio.create_task(
+                async_client.get("/api/fleet/state", headers={"Authorization": "Bearer viewer"})
+            )
+            await entered.wait()
+            clock.now = 16.8
+            assert (await console.goal("rosy_45", 0.45, 0.22, 0.01))["accepted"] is True
+            release.set()
+            res = await req_task
+
+        assert res.status_code == 200
+        row = res.json()["robots"][0]
+        assert "_state_mono" not in row
+        assert row["goal_in_flight"] is True
+        assert _robot_busy_reasons(row) == ["rosy_45: goal active"]
+
+    asyncio.run(scenario())
