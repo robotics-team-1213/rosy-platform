@@ -99,3 +99,14 @@ test("defaultTripDriveMode picks nav2 only when free is supported and junction_t
   assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane"], junction_turn: false }])), "");
   assert.equal(defaultTripDriveMode({ robot_id: "r1" }), "");
 });
+
+test("Nav2 preview blocks a required binding and displays optional binding evidence", async () => {
+  const { consolePlanSummaryText, consoleTripStartReason } = await import("/console/assets/localization-panel-logic.js");
+  const plan = { map_version: ACTIVE.version, segments: [], length_m: 0, eta_s: 0,
+    nav2_preflight: { code: "MAP_BINDING_REQUIRED", binding_required: true, binding_status: "MAP_BINDING_REQUIRED" } };
+  const check = { role: "operator", plan, active: ACTIVE };
+  assert.match(consoleTripStartReason(check), /지도 결속/);
+  plan.nav2_preflight = { ...plan.nav2_preflight, code: null, binding_required: false };
+  assert.equal(consoleTripStartReason(check), "");
+  assert.match(consolePlanSummaryText(plan), /Nav2.*지도 결속 미확인/);
+});

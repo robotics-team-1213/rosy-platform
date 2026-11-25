@@ -21,6 +21,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
+from fleet.localization import trust
 from fleet.routing.brief import route_context
 from fleet.routing.execute import arc_id, plan_body
 from fleet.routing.snap import PlanError
@@ -280,7 +281,26 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         })
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
                 "plan": plan_data, "context": context})
-        return {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+        response = {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+        if nav2:
+            state = None
+            if runner._robot_state is not None:
+                try:
+                    state = await runner._call(runner._robot_state(robot_id), "ROBOT_POSE_UNTRUSTED")
+                except TripError:
+                    pass
+            fit, binding_status = site_maps.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+            required = runner.config.map_binding_required
+            code = None
+            if trust.classify(state) != trust.TRUSTED:
+                code = "ROBOT_POSE_UNTRUSTED"
+            elif caps is None:
+                code = "TRIP_ROBOT_CAPS_UNKNOWN"
+            elif required and fit is None:
+                code = binding_status
+            response["nav2_preflight"] = {"code": code, "binding_required": required,
+                                          "binding_status": "MATCHED" if fit is not None else binding_status}
+        return response
 
     app.state.trip_plan = plan
 
