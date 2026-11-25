@@ -284,6 +284,9 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
                     "/api/fleet/calibrations/{source_id}",
                     "/api/fleet/calibrations/{source_id}/rollback",
                     "/api/fleet/calibrations/{source_id}/freeze",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/accept",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
                     "/api/fleet/detections/identity", "/api/fleet/tracking/identity",
                     "/api/fleet/detections/preview-status",  # D-472, D-775 numeric readback
                     "/api/fleet/detections/anchors"}  # display-only head-tracker states (source token)

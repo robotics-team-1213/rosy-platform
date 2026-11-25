@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
+from fastapi.testclient import TestClient
+
+from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.recalibration import RecalibrationPipeline, evaluate_candidate_drift
-from fleet.server.sightings import SightingSource
+from fleet.server.sightings import SightingService, SightingSource
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.server.tracking import TrackingService
 from fleet.server.tracking_calibration import TrackingCalibrationStore, build_record
-from fastapi.testclient import TestClient
-
-from fleet.server.auth import Role
+from fleet.swarm.robots import RobotEndpoint
 
 BOUNDS = {"min_x": -1.2, "min_y": -0.6, "max_x": 1.2, "max_y": 0.6}
 BASE_M2I = [320.0, 0.0, 640.0, 0.0, -320.0, 360.0, 0.0, 0.0, 1.0]
@@ -102,24 +107,30 @@ def test_recalibration_shadow_verifies_after_two_fresh_polls():
     assert svc.recalibration.status("ceiling_north")["state"] == "IDLE"
 
 
-def test_recalibration_candidate_accept_dismiss_and_listing_routes():
-    svc = _tracking_service()
+def test_recalibration_candidate_accept_dismiss_and_listing_routes(tmp_path):
+    src = SightingSource(source_id="ceiling_north", token="tok-src", map_id="world_261026",
+                         robot_ids=("rosy_45",), robot_markers={"rosy_45": 45})
+    robot = FakeRobot("rosy_45", state={"robot_id": "rosy_45", "map_id": "world_261026", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}})
+    console = FleetConsole([RobotEndpoint("rosy_45", "http://127.0.0.1:8080", "robot-rest")], [robot])
+    sightings = SightingService([src], known_robot_ids=console.robot_ids, clock=lambda: 1000.0)
+    svc = TrackingService(sightings.sources, calibrations=TrackingCalibrationStore(), clock=lambda: 1000.0)
     svc.calibrations.put(_make_record(frozen=True))
-    app = create_app(FleetConsole([], []), tracking=svc, operator_tokens={"op-tok": ("op", Role.OPERATOR)})
-    client = TestClient(app)
-    h = {"Authorization": "Bearer op-tok"}
+    task_svc = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_45"})
+    users = {sha256(b"op-tok").hexdigest(): {"principal_id": "op", "role": "operator"}}
+    app = create_app(console, sightings=sightings, tracking=svc, task_service=task_svc, start_task_dispatcher=False, site_users=users)
+    with TestClient(app) as client:
+        h = {"Authorization": "Bearer op-tok"}
+        r1 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/candidate", headers=h, json=_cand(_shifted_m2i(0.04)))
+        assert r1.status_code == 200 and r1.json()["action"] == "held"
+        assert r1.json()["reason"] == "calibration_frozen"
 
-    r1 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/candidate", headers=h, json=_cand(_shifted_m2i(0.04)))
-    assert r1.status_code == 200 and r1.json()["action"] == "held"
-    assert r1.json()["reason"] == "calibration_frozen"
+        listing = client.get("/api/fleet/calibrations?include_history=true", headers=h).json()
+        assert listing["recalibration"]["ceiling_north"]["pending_candidate"] is not None
 
-    listing = client.get("/api/fleet/calibrations?include_history=true", headers=h).json()
-    assert listing["recalibration"]["ceiling_north"]["pending_candidate"] is not None
+        r2 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/accept", headers=h)
+        assert r2.status_code == 200 and r2.json()["record"]["method"] == "recal_approved"
+        assert client.get("/api/fleet/calibrations?include_history=true", headers=h).json()["recalibration"]["ceiling_north"]["pending_candidate"] is None
 
-    r2 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/accept", headers=h)
-    assert r2.status_code == 200 and r2.json()["record"]["method"] == "recal_approved"
-    assert client.get("/api/fleet/calibrations?include_history=true", headers=h).json()["recalibration"]["ceiling_north"]["pending_candidate"] is None
-
-    client.post("/api/fleet/calibrations/ceiling_north/recalibrate/candidate", headers=h, json=_cand(_shifted_m2i(0.40)))
-    r3 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/dismiss", headers=h)
-    assert r3.status_code == 200 and r3.json()["state"] == "IDLE" and r3.json()["pending_candidate"] is None
+        client.post("/api/fleet/calibrations/ceiling_north/recalibrate/candidate", headers=h, json=_cand(_shifted_m2i(0.40)))
+        r3 = client.post("/api/fleet/calibrations/ceiling_north/recalibrate/dismiss", headers=h)
+        assert r3.status_code == 200 and r3.json()["state"] == "IDLE" and r3.json()["pending_candidate"] is None
