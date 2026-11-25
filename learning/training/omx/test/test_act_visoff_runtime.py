@@ -20,6 +20,7 @@ cv2 = pytest.importorskip("cv2")
 LEARN_OMX = Path(__file__).resolve().parents[1]
 SERVER_PATH = LEARN_OMX / "act_policy_http_server.py"
 RUNTIME_PATH = LEARN_OMX / "act_visoff_runtime.py"
+SPEC_PATH = LEARN_OMX / "act_visoff_spec.py"
 sys.path.insert(0, str(LEARN_OMX))
 try:
     import act_policy_http_server as srv  # noqa: E402
@@ -101,7 +102,7 @@ def _http_json(url: str, *, method: str = "GET", body: dict | None = None, token
 
 def test_no_forbidden_top_level_imports():
     forbidden = {"torch", "lerobot", "mujoco", "deploy", "tools"}
-    for path in (RUNTIME_PATH, SERVER_PATH):
+    for path in (RUNTIME_PATH, SPEC_PATH, SERVER_PATH):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in tree.body:
             names = (

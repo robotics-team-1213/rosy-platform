@@ -28,11 +28,10 @@ try:
     from act_gpu_lock import gpu_training_status
 except ImportError:
     from learning.training.omx.act_gpu_lock import gpu_training_status
-
 try:
-    from act_visoff_runtime import build_visoff_controller, read_visoff_spec
+    import act_visoff_runtime as visoff
 except ImportError:
-    from learning.training.omx.act_visoff_runtime import build_visoff_controller, read_visoff_spec
+    from learning.training.omx import act_visoff_runtime as visoff
 
 SCHEMA = "rosy.omx-act-http.v1"
 WEIGHTS = "model.safetensors"
@@ -265,25 +264,10 @@ class PolicyRegistry:
             if actual != revision:
                 raise ValueError(f"{arm_id}: {WEIGHTS} sha256 {actual} != pinned {revision}")
             views, _dim, goal_size, n_steps, chunk_sz = read_policy_spec(pdir)
-            visoff_spec = read_visoff_spec(pdir, chunk_size=chunk_sz)
-            if visoff_spec is not None and visoff_spec.get("n_action_steps") is not None:
-                n_steps = int(visoff_spec["n_action_steps"])
+            n_steps = int(spec["n_action_steps"]) if (spec := visoff.read_visoff_spec(pdir, chunk_size=chunk_sz) or {}) and spec.get("n_action_steps") is not None else n_steps
             predict = load_fn(pdir, views, n_steps, goal_size, device)
-            visoff_meta: dict[str, Any] | None = None
-            if visoff_spec is not None:
-                if visoff_builder is not None:
-                    predict = visoff_builder(pdir, visoff_spec, predict, n_steps, device)
-                elif loader is None:
-                    predict = build_visoff_controller(pdir, visoff_spec, predict, n_steps, device)
-                visoff_meta = {
-                    "version": visoff_spec["version"],
-                    "weights_sha256": visoff_spec["weights_sha256"],
-                    "cam_mode": visoff_spec.get("cam_mode") if visoff_spec["version"] == "v8" else None,
-                    "lock_steps": list(visoff_spec["lock_steps"]),
-                }
-            entries.append(
-                ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict, visoff_meta=visoff_meta)
-            )
+            predict, visoff_meta = visoff.visoff_entry(pdir, spec, predict, n_steps, device, loader is None, visoff_builder)
+            entries.append(ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict, visoff_meta=visoff_meta))
         return cls(
             entries,
             gpu_lock_file=gpu_lock_file,
@@ -305,8 +289,7 @@ class PolicyRegistry:
                     "views": {role: [hw[0], hw[1]] for role, hw in e.views.items()},
                     "n_action_steps": e.n_action_steps,
                     "chunk_size": e.chunk_size,
-                    "goal_size": e.goal_size,
-                    **({"visoff": e.visoff_meta} if e.visoff_meta is not None else {}),
+                    "goal_size": e.goal_size, **({"visoff": e.visoff_meta} if e.visoff_meta is not None else {}),
                 }
                 for arm_id, e in self._arms.items()
             },
@@ -373,37 +356,23 @@ class PolicyRegistry:
             except Exception as exc:
                 return 400, {"ok": False, "error": f"invalid JPEG frame {role!r}: {type(exc).__name__}"}
 
-        episode_id = req.get("episode_id")
-        if episode_id is not None and (not isinstance(episode_id, str) or not (1 <= len(episode_id) <= 128) or not episode_id.strip()):
-            return 400, {"ok": False, "error": "episode_id must be a non-empty string (<=128 chars)"}
-        step_idx = req.get("step_idx")
-        if step_idx is not None and (isinstance(step_idx, bool) or not isinstance(step_idx, int) or step_idx < 0):
-            return 400, {"ok": False, "error": "step_idx must be a non-negative integer"}
-        reset = req.get("reset")
-        if reset is not None and not isinstance(reset, bool):
-            return 400, {"ok": False, "error": "reset must be a boolean"}
+        fields, bad = visoff.parse_episode_fields(req)
+        if bad:
+            return 400, {"ok": False, "error": bad}
 
         t0 = time.perf_counter()
-        visoff_diag: dict[str, Any] | None = None
         try:
             with self.infer_lock:
                 raw_out = entry.predict({
                     "arm_id": arm_id,
                     "state": state,
                     "frames_rgb": decoded,
-                    "goal": goal,
-                    **({"episode_id": episode_id} if episode_id is not None else {}),
-                    **({"step_idx": step_idx} if step_idx is not None else {}),
-                    **({"reset": reset} if reset is not None else {}),
+                    "goal": goal, **fields,
                 })
         except Exception as exc:
             return 500, {"ok": False, "error": f"inference failed: {type(exc).__name__}"}
 
-        if isinstance(raw_out, tuple) and len(raw_out) == 2 and isinstance(raw_out[1], dict):
-            raw_chunk, visoff_diag = raw_out
-        else:
-            raw_chunk = raw_out
-
+        raw_chunk, visoff_diag = visoff.visoff_output(raw_out)
         if not isinstance(raw_chunk, (list, tuple)) or not (1 <= len(raw_chunk) <= entry.chunk_size):
             return 500, {"ok": False, "error": "invalid predicted chunk length"}
         validated: list[list[float]] = []
@@ -419,8 +388,7 @@ class PolicyRegistry:
             "arm_id": arm_id,
             "revision": entry.revision,
             "chunk": validated,
-            "infer_ms": round((time.perf_counter() - t0) * 1000.0, 2),
-            **({"visoff": visoff_diag} if visoff_diag is not None else {}),
+            "infer_ms": round((time.perf_counter() - t0) * 1000.0, 2), **({"visoff": visoff_diag} if visoff_diag is not None else {}),
         }
 
 
