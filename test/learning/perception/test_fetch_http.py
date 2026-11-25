@@ -6,10 +6,12 @@ import io
 import json
 import os
 import shutil
+import socket
 import ssl
 import subprocess
 import tarfile
 import threading
+import urllib.error
 
 import pytest
 
@@ -528,3 +530,18 @@ def test_download_pacing_sleeps_down_to_the_limit(monkeypatch):
     fetch_http._pace(10.0, 250_000, 2e6)
     fetch_http._pace(10.0, 250_000, 0)
     assert slept == [1.0] and fetch_http.DEFAULT_LIMIT_MBPS == 2.0
+
+
+@pytest.mark.parametrize("exc", [
+    urllib.error.URLError(socket.gaierror(-2, "Name or service not known")),
+    socket.gaierror(-2, "Name or service not known"),
+])
+def test_unresolved_robot_host_exits_77(tmp_path, monkeypatch, capsys, exc):
+    class OfflineOpener:
+        def open(self, *_args, **_kwargs):
+            raise exc
+
+    monkeypatch.setattr(fetch_http, "build_opener", lambda *_args: OfflineOpener())
+    rc = _main("http://rosy-pinky-1.local:8080", tmp_path, lambda *a: pytest.fail("must not convert"))
+    assert rc == fetch_http.EXIT_DNS == 77
+    assert "skipped (robot not on the network):" in capsys.readouterr().err

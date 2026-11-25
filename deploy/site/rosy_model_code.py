@@ -502,6 +502,11 @@ def execute(config, script, args):
                                 pass_fds=(lock_fd,))
         job.update(exit_code=result.returncode, finished=time.time())
         atomic_json(receipt, job)
+        for old in sorted((root / "jobs").glob("*.json"))[:-500]:
+            try:
+                old.unlink(missing_ok=True)
+            except OSError:
+                pass
         return result.returncode
 
 

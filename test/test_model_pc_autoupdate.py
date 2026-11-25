@@ -770,6 +770,28 @@ def test_real_job_records_pinned_source_and_redacts_arguments(tmp_path, keys, mo
     assert obj["environment_sha256"] == env and obj["exit_code"] == 0
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Linux job receipt and flock")
+def test_execute_prunes_completed_job_receipts_beyond_500(tmp_path, keys, monkeypatch):
+    m = module()
+    env = m.Updater(tmp_path, "test", keys[1], sys.executable).probe_environment()
+    candidate(m, tmp_path, keys, env=env)
+    m.Updater(tmp_path, "test", keys[1], sys.executable,
+              environment=lambda: env, busy=lambda: None, health=lambda p: None).run()
+    jobs = tmp_path / "jobs"
+    jobs.mkdir(parents=True, exist_ok=True)
+    for i in range(505):
+        (jobs / f"{i:019d}-0.json").write_text("{}\n")
+    config = {"root": str(tmp_path), "key_id": "test", "public_key": str(keys[1]),
+              "python": sys.executable, "work_dir": str(tmp_path), "legacy_roots": []}
+    monkeypatch.setattr(m, "gpu_busy", lambda: None)
+    monkeypatch.setattr(m, "legacy_busy", lambda roots: None)
+    assert m.execute(config, "rosy_ml.py", []) == 0
+    kept = sorted(p.name for p in jobs.glob("*.json"))
+    assert len(kept) == 500
+    assert f"{0:019d}-0.json" not in kept and f"{5:019d}-0.json" not in kept
+    assert f"{6:019d}-0.json" in kept
+
+
 @pytest.mark.skipif(os.name == "nt", reason="Linux unmanaged work admission")
 @pytest.mark.parametrize("kind", ["gpu", "legacy"])
 def test_job_does_not_start_while_unmanaged_work_is_running(tmp_path, keys, monkeypatch, kind):

@@ -37,6 +37,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import ssl
 import sys
 import tarfile
@@ -52,6 +53,7 @@ from pilot_conversion import default_convert  # noqa: E402
 
 EXIT_NOT_IDLE = 4
 EXIT_TOKEN = 2
+EXIT_DNS = 77
 TOKEN_ENV = "ROSY_CORE_OPERATOR_TOKEN_FILE"
 # core_common.protocol.recording (not imported: this tool runs without the robot tree).
 MANIFEST_SCHEMA = "rosy.pilot.recording.manifest/1"
@@ -79,6 +81,10 @@ class NotIdle(FetchError):
 
 class TokenRefused(FetchError):
     """401/403: the token is wrong or not an Operator's — every further request fails too."""
+
+
+class HostUnresolved(FetchError):
+    """Robot hostname could not be resolved (e.g. mDNS offline)."""
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -142,6 +148,10 @@ def list_recordings(base: str, token: str, timeout: float, opener=None) -> dict:
     except urllib.error.HTTPError as exc:
         raise _http_error("listing", exc) from exc
     except (OSError, ValueError) as exc:
+        if isinstance(exc, socket.gaierror) or (
+            isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, socket.gaierror)
+        ):
+            raise HostUnresolved(f"listing: {exc}") from exc
         raise FetchError(f"listing: {exc}") from exc
     if not isinstance(listing, dict) or not isinstance(listing.get("items"), list):
         raise FetchError("listing: not a recordings listing")
@@ -411,6 +421,9 @@ def main(argv=None, *, convert=default_convert) -> int:
     try:
         if listing is None:
             listing = list_recordings(args.base, token, args.list_timeout, args.opener)
+    except HostUnresolved as exc:
+        print(f"skipped (robot not on the network): {exc}", file=sys.stderr)
+        return EXIT_DNS
     except TokenRefused as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return EXIT_TOKEN
