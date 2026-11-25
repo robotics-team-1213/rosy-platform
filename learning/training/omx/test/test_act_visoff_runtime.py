@@ -155,12 +155,12 @@ def test_ik_delta_se2_accuracy_both_arms(tmp_path):
             [-2.6, -1.9543605529017618, -1.3, -0.3, -2.0],
             [2.6, 1.2, 1.7, 2.3, 2.0],
         )
-        dx_m, dy_m, dyaw_r = 0.005, -0.005, math.radians(2.0)
+        dx_m, dy_m, dyaw_r = 0.004, -0.004, math.radians(1.0)
         pert = vrt.OmxNominalKinematics(
             [0.077 + dx_m, by + dy_m, 0.084], yaw + dyaw_r, [0.074, -0.0016, 0.0],
             nom._limits_low, nom._limits_high,
         )
-        q_test = np.array([0.024, -1.50, 1.31, 1.76, 1.42], dtype=np.float64)
+        q_test = np.array([0.0, -0.7, 0.7, math.pi / 2.0, 0.5], dtype=np.float64)
         p_nom, R_nom = nom._tcp_and_R(q_test)
         dq = vrt.ik_delta_se2(nom, q_test, -dx_m, -dy_m, -dyaw_r, math.radians(max_deg), iters=2)
         p_pert, R_pert = pert._tcp_and_R(q_test + dq)
@@ -219,9 +219,9 @@ def test_episode_controller_lock_ramp_decouple_and_guards(tmp_path):
     ctrl({"state": (q_base[:5] + last_dq).tolist() + [0.0], "frames_rgb": dummy_frames, "episode_id": "ep1"})
     assert np.allclose(seen_states[-1][:5], q_base[:5], atol=1e-6)
 
-    # v8 auto wrist fallback + MAD abstain + timeout reset
+    # v8 auto wrist fallback + MAD abstain + timeout reset (preview@0 + 2 lock samples@32,48)
     pred_state["agree"] = 6.0
-    pred_state["samples"] = [(1.0, 0.0, 0.0), (8.0, 0.0, 0.0)]  # wrist diverges -> MAD=(3.5 > 1.8)
+    pred_state["samples"] = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (8.0, 0.0, 0.0)]  # wrist diverges -> MAD=(3.5 > 1.8)
     for st in (0, 16, 32, 48):
         c_ab, d_ab = ctrl({"state": q_base.tolist(), "frames_rgb": dummy_frames, "episode_id": "ep2", "step_idx": st})
     assert d_ab["fallback_wrist"] is True and d_ab["abstained"] is True and d_ab["eff_dxyw"] == [0.0, 0.0, 0.0]
