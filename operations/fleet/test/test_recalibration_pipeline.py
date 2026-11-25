@@ -50,12 +50,16 @@ def _cand(m2i, *, rms_m=0.003, spread_m=0.004, lens_profile=None, hold_reason=No
     }
 
 
-def _tracking_service():
-    src = SightingSource(
+def _source():
+    return SightingSource(
         source_id="ceiling_north", token="tok-src", map_id="world_261026",
-        robot_ids=("rosy_45",), robot_markers={"rosy_45": 45},
+        calibration_revision="cal-v3", corner_marker_ids=(30, 31, 32, 33),
+        robot_ids=("rosy_45",), robot_markers=(("rosy_45", 45),),
     )
-    return TrackingService([src], calibrations=TrackingCalibrationStore(), clock=lambda: 1000.0)
+
+
+def _tracking_service():
+    return TrackingService([_source()], calibrations=TrackingCalibrationStore(), clock=lambda: 1000.0)
 
 
 def test_evaluate_candidate_drift_supports_lens_profile():
@@ -108,8 +112,7 @@ def test_recalibration_shadow_verifies_after_two_fresh_polls():
 
 
 def test_recalibration_candidate_accept_dismiss_and_listing_routes(tmp_path):
-    src = SightingSource(source_id="ceiling_north", token="tok-src", map_id="world_261026",
-                         robot_ids=("rosy_45",), robot_markers={"rosy_45": 45})
+    src = _source()
     robot = FakeRobot("rosy_45", state={"robot_id": "rosy_45", "map_id": "world_261026", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}})
     console = FleetConsole([RobotEndpoint("rosy_45", "http://127.0.0.1:8080", "robot-rest")], [robot])
     sightings = SightingService([src], known_robot_ids=console.robot_ids, clock=lambda: 1000.0)
