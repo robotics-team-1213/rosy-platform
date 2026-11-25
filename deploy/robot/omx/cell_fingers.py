@@ -81,11 +81,12 @@ def _dark_pads(img, dark: int = 60):
 def _white_pads(img):
     import cv2
 
+    h, w = img.shape[:2]
     try:
         from cell_camera_invariant_wrist import detect_wrist_fingers_anchor
 
         anchor = detect_wrist_fingers_anchor(img, finger_color="white")
-        if anchor.get("found"):
+        if anchor.get("found") and max(32.0, 0.05 * w) <= float(anchor["gap_px"]) <= 0.78 * w:
             return (
                 np.array(anchor["left_inner_px"], dtype=float),
                 np.array(anchor["right_inner_px"], dtype=float),
@@ -94,7 +95,6 @@ def _white_pads(img):
     except Exception:
         pass
 
-    h, w = img.shape[:2]
     y0 = 2 * h // 3
     band_bgr = img[y0:]
     band_hsv = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
@@ -123,7 +123,7 @@ def _white_pads(img):
         xl = float(stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
         xr = float(stats[right, cv2.CC_STAT_LEFT])
         gap = xr - xl
-        if gap >= 4:
+        if max(32.0, 0.05 * w) <= gap <= 0.78 * w:
             return np.array([xl, float(cents[left][1] + y0)]), np.array([xr, float(cents[right][1] + y0)]), float(gap)
     return None
 
@@ -155,6 +155,9 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     if pads is None:
         return {"found": False, "why": "finger pads not seen"}
     a, b, gap_px = pads
+    w_img = int(img.shape[1]) if hasattr(img, "shape") else 640
+    if not (max(32.0, 0.05 * w_img) <= float(gap_px) <= 0.78 * w_img):
+        return {"found": False, "why": "wrist_sanity_rejected: implausible gap_px", "gap_px": round(float(gap_px), 1)}
     target = on_surface_blob(img, hsv, params)
     if target is None or target[2] > 55000 or not (float(a[0]) <= target[0] <= float(b[0])):
         face = top_face_between_fingers(img, a, b)
@@ -165,6 +168,8 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
             ref_x = 0.5 * (a[0] + b[0]) - float(p_px)
             along_mm = round(float(cx - ref_x) * s_face, 1)
             across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
+            if not (0.06 <= s_face <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
+                return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s_face, 3)}
             return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
                     "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face", "finger_color": mode}
     if target is None:
@@ -174,7 +179,10 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     across_dir = np.array([-axis[1], axis[0]])
     d = np.array([seen["cx"], seen["cy"]]) - (a + b) / 2
     s = gap_mm / gap_px
-    return {"found": True, "along_mm": round(float(d @ axis) * s, 1), "across_mm": round(float(d @ across_dir) * s, 1),
+    along_mm, across_mm = round(float(d @ axis) * s, 1), round(float(d @ across_dir) * s, 1)
+    if not (0.06 <= s <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
+        return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s, 3)}
+    return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
             "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3), "finger_color": mode}
 
 
@@ -260,12 +268,17 @@ def resolve_wrist_servo_offset(
         return obs
 
     if not obs.get("found") and obb_obs and obb_obs.get("found"):
+        anc = obb_obs.get("finger_anchor") or {}
+        gpx, mpx = anc.get("gap_px"), obb_obs.get("mm_per_px")
+        if ((gpx is not None and float(gpx) < 32.0) or (mpx is not None and not (0.06 <= float(mpx) <= 0.35))
+                or abs(float(obb_obs["along_mm"])) > 35.0 or abs(float(obb_obs["across_mm"])) > 55.0):
+            return {"found": False, "why": "wrist_sanity_rejected"}
         return {
             **obb_obs,
             "dx_mm": obb_obs["along_mm"],
             "dy_mm": obb_obs["across_mm"],
             "mode": "invariant_obb",
-            "finger_color": (obb_obs.get("finger_anchor") or {}).get("finger_color", f_color),
+            "finger_color": anc.get("finger_color", f_color),
         }
     return obs
 

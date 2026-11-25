@@ -62,7 +62,11 @@ def build_plan_from_directive(
     approach_m = float(exec_cfg.get("approach_m", 0.032 if float(pz) < 0.020 else 0.028))
     place_approach_m = min(approach_m, 0.025 if float(qz) >= 0.060 else 0.028)
 
-    safe_pick_yaw = normalize_pick_yaw_deg(float(pick.get("yaw_deg", -90.0)), px, py)
+    if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
+        plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
+    q5_lim = (plan.get("limits") or {}).get("joints_rad", {}).get("joint5")
+    q5_bounds = tuple(q5_lim) if isinstance(q5_lim, (list, tuple)) and len(q5_lim) == 2 else None
+    safe_pick_yaw = normalize_pick_yaw_deg(float(pick.get("yaw_deg", -90.0)), px, py, q5_bounds_rad=q5_bounds)
     default_lift_m = round(max(approach_m, float(qz) + approach_m - float(pz)), 4)
     if float(pz) >= 0.0 and float(px) >= 0.185:
         default_lift_m = min(default_lift_m, 0.036 if float(px) >= 0.215 else 0.058)
@@ -118,8 +122,6 @@ def build_plan_from_directive(
                 "descend_near_m"):  # opt-in two-stage descent (descend_profile.py)
         if key in exec_cfg:
             plan[key] = float(exec_cfg[key])
-    if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
-        plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
     if exec_cfg.get("keep_out"):
         plan["keep_out"] = _clone(exec_cfg["keep_out"])
     rl_speed_scale = max(0.70, min(1.25, float(exec_cfg.get("rl_speed_scale", 1.0))))
@@ -216,7 +218,9 @@ def sim_precheck_and_optimize_directive(
     opt["place"] = coerce_area_xyz(opt["place"])
     px, py, _ = opt["pick"]["effective_xyz_m"]
     raw_yaw = float(opt["pick"].get("yaw_deg", -90.0))
-    safe_yaw = normalize_pick_yaw_deg(raw_yaw, px, py)
+    q5_lim = [0.16, 2.89] if opt.get("arm_id") == "arm_b" else (base_plan.get("limits") or {}).get("joints_rad", {}).get("joint5")
+    q5_bounds = tuple(q5_lim) if isinstance(q5_lim, (list, tuple)) and len(q5_lim) == 2 else None
+    safe_yaw = normalize_pick_yaw_deg(raw_yaw, px, py, q5_bounds_rad=q5_bounds)
     opt["pick"]["yaw_deg"] = safe_yaw
 
     lib, plan, cal = plan_library_from_directive(opt, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)

@@ -212,3 +212,18 @@ def test_finger_hook_uses_live_fk_yaw_and_respects_target_offset(tmp_path, monke
     assert seen_closing == [45.0]  # live FK yaw 45 + target offset 0, not planned -135 + 90
 
 
+def test_finger_offset_rejects_implausible_gap_px_and_mm_per_px(monkeypatch):
+    # Narrow 5 px white seam at bottom must not produce white-pad detections.
+    seam = np.full((480, 640, 3), 120, np.uint8)
+    cv2.rectangle(seam, (250, 340), (310, 479), (240, 240, 240), -1)
+    cv2.rectangle(seam, (316, 340), (376, 479), (240, 240, 240), -1)
+    assert cf.finger_pads(seam, color="white") is None
+
+    # Even if an upstream pad detector emits gap_px=6.0 (mm_per_px=7.333, along_mm=1698), sanity check rejects it.
+    img = frame(cx=320, cy=280)
+    monkeypatch.setattr(cf, "finger_pads", lambda *_a, **_kw: (np.array([150.0, 440.0]), np.array([156.0, 440.0]), 6.0))
+    res = cf.finger_offset_mm(img, HSV, 44.0, color="white")
+    assert res["found"] is False and res["why"].startswith("wrist_sanity_rejected")
+
+
+

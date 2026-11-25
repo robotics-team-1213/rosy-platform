@@ -567,3 +567,98 @@ def test_pr2_cli_guarded_abort_gate_hold_and_apply_site_bias(tmp_path: Path, mon
     assert emitted[-1]["mode"] == "recovery" and emitted[-1]["calibration"] == {"site": "floor"}
 
 
+def test_area_pick_cli_binds_catalog_payload_and_refuses_impossible_jaw_angle(tmp_path: Path, monkeypatch, capsys) -> None:
+    wd, cfg_path = _make_workdir(tmp_path)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["tcp_x_m"] = 0.077
+    cfg["closing_axis_offset_deg"] = 90.0
+    cfg["operating_conditions"] = {"payload_max_kg": 0.15}
+    cfg["plan"] = {
+        "fps": 30,
+        "tcp_x_m": 0.077,
+        "grip_open": 57.4,
+        "grip_closed": 48.8,
+        "limits": {
+            "park_reach_m": 0.24,
+            "singularity_radius_m": 0.02,
+            "workspace_min_m": [-0.30, -0.30, 0.0],
+            "workspace_max_m": [0.30, 0.30, 0.35],
+            "joints_rad": {
+                "joint1": [-2.2, 2.2], "joint2": [-1.8, 1.8], "joint3": [-1.8, 2.2],
+                "joint4": [-1.8, 2.1], "joint5": [-2.0, 2.0],
+            },
+        },
+    }
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+    cat_path = wd / "catalog.json"
+    cat_path.write_text(json.dumps({
+        "schema": "rosy.omx-object-catalog.v1",
+        "objects": [{
+            "id": "container-2", "width_mm": 30.7, "length_mm": 67.6, "top_height_mm": 32.0,
+            "tolerance_mm": 6.0, "grasp": {"jaw_axis_deg_from_long": 90.0}, "mass_kg": 0.04,
+        }]
+    }), encoding="utf-8")
+
+    class _FakeCell:
+        frame = staticmethod(lambda *_a: None)
+
+    monkeypatch.setattr(cli.cp, "FifoCell", lambda *_a, **_kw: _FakeCell())
+    monkeypatch.setattr(cli.cell_preflight, "ready", lambda *_a, **_kw: [])
+    monkeypatch.setattr(cli.cell_area_xyz, "plan_library_from_directive", lambda d, bp, work_dir=None: ({"chunks": {}}, {"pick": d["pick"], "place": d["place"]}, {}))
+
+    base = [
+        "--arm", "arm_s", "--config", str(cfg_path), "--catalog", str(cat_path), "--object", "container-2",
+        "--pick-area", "floor", "--pick-x", "0.0804", "--pick-y", "0.1249", "--pick-z", "0.028",
+        "--place-area", "belt", "--place-x", "0.095", "--place-y", "-0.130", "--place-z", "0.052",
+        "--place-yaw-deg", "-96.5", "--dry-run",
+    ]
+    # Force an impossible wide span via explicit check_area_pick_feasibility long-axis yaw mismatch -> refusal
+    monkeypatch.setattr(cli.cell_auto_setup, "load_config", lambda _p: cfg)
+    import cell_grasp_plan_tool
+    orig_check = cell_grasp_plan_tool.check_area_pick_feasibility
+    monkeypatch.setattr(cell_grasp_plan_tool, "check_area_pick_feasibility", lambda **kw: {
+        "feasible": False, "refusal_reasons": ["jaw_span_exceeds_max: test"], "warnings": [], "metrics": {},
+    })
+    assert cli.main([*base, "--pick-yaw-deg", "1.4"]) == 1
+    bad_out = json.loads(capsys.readouterr().out)
+    assert bad_out["result"] == "refused" and "jaw_span_exceeds_max" in bad_out["error"]
+
+    monkeypatch.setattr(cell_grasp_plan_tool, "check_area_pick_feasibility", orig_check)
+    assert cli.main([*base, "--pick-yaw-deg", "91.4"]) == 0
+    ok_out = json.loads(capsys.readouterr().out)
+    assert ok_out["result"] == "planned" and ok_out["feasibility"]["feasible"] is True
+
+
+def test_refine_pick_pose_rejects_implausible_wrist_gap_px(tmp_path: Path, monkeypatch) -> None:
+    import cell_area_vision_align as align
+    import cell_fingers
+
+    monkeypatch.setattr(cell_fingers, "resolve_wrist_servo_offset", lambda *_a, **_kw: {
+        "found": True, "gap_px": 6.0, "mm_per_px": 7.333, "along_mm": 1698.3, "across_mm": 0.0,
+    })
+    img = np.zeros((480, 640, 3), np.uint8)
+    plan = {"pick": {"xyz_m": [0.08, 0.12, 0.03], "yaw_deg": 91.4}, "grip_open": 57.4}
+    wrist_log: list[dict] = []
+    _lib, _plan, _cal, last_obs, vision_refined = align.refine_pick_pose_at_hover(
+        cur_directive={"pick": {"area": "floor", "effective_xyz_m": [0.08, 0.12, 0.03], "yaw_deg": 91.4}},
+        base_plan={},
+        lib={"chunks": {}},
+        plan=plan,
+        cal={"finger_color": "white"},
+        lib_path=tmp_path / "lib.json",
+        work_dir=tmp_path,
+        kinematics_root=None,
+        arm_id="arm_s",
+        exec_cfg={"vision_refine": True, "wrist_passes": 1},
+        frame_fn=lambda v: img if v == "wrist" else None,
+        before_side=None,
+        above_shaking=False,
+        run_cmd=lambda _cmd: {"ok": True, "state": [0, 0, 0, 0, 0, 57.4]},
+        wrist_log=wrist_log,
+    )
+    assert vision_refined is False
+    assert last_obs is not None and last_obs["found"] is False and last_obs["why"] == "wrist_sanity_rejected"
+    assert wrist_log[0]["why"] == "wrist_sanity_rejected"
+
+
+

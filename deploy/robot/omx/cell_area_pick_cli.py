@@ -43,6 +43,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--stay-in-hover", action="store_true")
     ap.add_argument("--no-vision-refine", action="store_true")
     ap.add_argument("--apply-site-bias", action="store_true")
+    ap.add_argument("--catalog", type=Path, default=None)
+    ap.add_argument("--object", default=None)
     ap.add_argument("--commissioning", action="store_true")
     ap.add_argument("--person-at-switch", action="store_true")
     ap.add_argument("--operator", default=None)
@@ -198,6 +200,30 @@ def main(argv: list[str] | None = None) -> int:
 
     directive = _build_directive(args, config, raw_config=raw_config)
     frame_fn = lambda view: None if view not in cameras else cell.frame(view)
+    feas = None
+    if args.catalog is not None:
+        import cell_grasp_plan_tool
+        import cell_objects
+
+        try:
+            cat = cell_objects.load_catalog(args.catalog)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"result": "refused", "error": f"invalid catalog: {exc}"}))
+            return 1
+        if args.object is None and len(cat) != 1:
+            print(json.dumps({"result": "refused", "error": "--object is required unless catalog contains exactly one object"}))
+            return 1
+        obj_id = args.object or cat[0]["id"]
+        if pay := cell_objects.payload(cat, obj_id):
+            config = dict(config, _payload=pay)
+        feas = cell_grasp_plan_tool.check_area_pick_feasibility(
+            arm_id=args.arm, config=config, catalog=cat, object_id=obj_id,
+            pick_xyz=directive["pick"]["effective_xyz_m"], pick_yaw_deg=directive["pick"]["yaw_deg"],
+            place_xyz=directive["place"]["effective_xyz_m"], place_yaw_deg=directive["place"]["yaw_deg"],
+        )
+        if not feas["feasible"]:
+            print(json.dumps({"result": "refused", "error": "; ".join(feas["refusal_reasons"]), "feasibility": feas}, default=str))
+            return 1
 
     if args.dry_run:
         try:
@@ -217,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
             "finger_color": cal.get("finger_color"),
             "vision_refine": directive["execution"]["vision_refine"],
             "side_zone_snap": directive["execution"]["side_zone_snap"],
+            **({"feasibility": feas} if feas is not None else {}),
         }, indent=1, default=str))
         return 0
 
