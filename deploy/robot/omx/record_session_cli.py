@@ -335,6 +335,10 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_owner=monitor_owner,
                     motor_health_session=monitor_session,
                 )
+                from cell_recovery_cargo import interrupted_cargo
+
+                if cargo := interrupted_cargo(record, args.arm):
+                    record["recovery_cargo"] = cargo
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
                 if record.get("runner_held"):
                     raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read

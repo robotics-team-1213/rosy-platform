@@ -17,6 +17,7 @@ from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
 import cell_release_evidence  # noqa: E402
 import cell_route_depth  # noqa: E402
+import cell_recovery_cargo  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
@@ -207,6 +208,7 @@ def _run_auto_core(
             row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])
             if dry_run:
                 return {**out, "result": "planned"}
+            source_tier = cell_recovery_cargo.source_base_tier(cell, config, target, source, calibration, catalog, roi)
             before_frame, frame_record, evidence_error = cell_auto_evidence.pre_motion_frame(
                 cell, config, calibration, catalog, source, roi, box_centre(o), o["object"],
                 dest_site, droi, place_xy, bias_data, source_frame,
@@ -225,6 +227,8 @@ def _run_auto_core(
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(cell_route_depth.motion_cell(guarded, before_frame), config, calibration, sequence=sequence)
+            gate.on_grasp = lambda status: cell_recovery_cargo.record_grasp(
+                config, catalog, target, source, dest_site, status, calibration=calibration, source_tier=source_tier)
             cap["gate"] = gate
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None

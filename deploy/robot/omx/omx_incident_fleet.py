@@ -255,6 +255,8 @@ def send(arm: str, link, paths=None) -> bool:
         try:
             report = ArmIncidentReport.model_validate_json(path.read_text())
             reply = link.post(report.model_copy(update={"source_id": link.source_id}))
+            from cell_recovery_placement_context import bind_incident
+            bind_incident(incidents_dir(), arm, report.session_id, getattr(reply, "incident_id", None))
         except Exception as exc:
             print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             return False

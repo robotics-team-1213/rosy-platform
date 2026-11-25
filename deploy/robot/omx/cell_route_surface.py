@@ -61,4 +61,6 @@ def contact_evidence(config, site, calibration):
             or max(samples) - min(samples) > 0.001500001 or z != config["sites"][site].get("surface_z")):
         return {**candidate, "reason": "missing, inconsistent or unapplied repeated contact"}
     return {"status": "matched_contact", "reason": "repeated descent contact at configured arm point",
-            "source": path.name, "measured_z_m": z}
+            "source": path.name, "measured_z_m": z, "contact_binding": expected,
+            "min_z_m": min(samples), "max_z_m": max(samples),
+            "repeatability_m": max(abs(z - min(samples)), abs(z - max(samples))) + 0.00005}
