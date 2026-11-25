@@ -4,7 +4,7 @@ import {randomUUID} from "/console/assets/uuid.js";
 import { capabilityReason, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill, robotMapPose } from "./localization-badge.js";
 import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { flattenPlanPoints, planMetrics } from "/console/assets/trip-geometry.js";
+import { canvasWorld, distToSegment, flattenPlanPoints, planMetrics } from "/console/assets/trip-geometry.js";
 import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
 import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
@@ -309,26 +309,6 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
 
   // D-593 운영자 핀: 누른 점 = 위치, 끈 방향 = 로봇 앞(3 px 미만이면 지금 지도 자세의 방향, 없으면 0).
   let pinStart = null;
-  function canvasWorld(event) {
-    const rect = el("map-canvas").getBoundingClientRect();
-    if (!view.map) {
-      const world = view.siteToWorld?.(event.clientX - rect.left, event.clientY - rect.top);
-      return world ? { ...world, px: event.clientX, py: event.clientY } : null;
-    }
-    const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
-    const offX = (rect.width - view.map.width * scale) / 2, offY = (rect.height - view.map.height * scale) / 2;
-    const col = (event.clientX - rect.left - offX) / scale, rowFromTop = (event.clientY - rect.top - offY) / scale;
-    if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) return null;
-    const row = view.map.height - rowFromTop;
-    return { x: view.map.origin.x + col * view.map.resolution, y: view.map.origin.y + row * view.map.resolution,
-      px: event.clientX, py: event.clientY };
-  }
-  function distToSegment(px, py, x0, y0, x1, y1) {
-    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
-    const t = len2 > 1e-12 ? Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / len2)) : 0;
-    return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
-  }
-
   function clearMapHover() {
     if (!view.pointerWorld && !view.hoverWorld && !view.hoverEntity) return;
     view.pointerWorld = view.hoverWorld = view.hoverEntity = null;
@@ -339,7 +319,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   }
 
   pageScope.listen(el("map-canvas"), "pointermove", (event) => {
-    const world = (view.map || view.siteMap) && canvasWorld(event);
+    const world = (view.map || view.siteMap) && canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
     if (!world) { clearMapHover(); return; }
     const { x, y } = world;
     view.pointerWorld = { x, y };
@@ -372,10 +352,10 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   });
   pageScope.listen(el("map-canvas"), "pointerleave", clearMapHover);
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-    if (view.pinning && (view.map || view.siteMap)) pinStart = canvasWorld(event);
+    if (view.pinning && (view.map || view.siteMap)) pinStart = canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
   });
   pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
-    const life = pageScope.capture(), start = pinStart, end = canvasWorld(event), robotId = view.pinning;
+    const life = pageScope.capture(), start = pinStart, end = canvasWorld(event, view, el("map-canvas").getBoundingClientRect()), robotId = view.pinning;
     pinStart = null;
     if (!robotId || !start) return;
     suppressClickUntil = Date.now() + 250;
@@ -406,7 +386,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const life = pageScope.capture(); life.check();
     if (view.pinning || Date.now() < suppressClickUntil) { suppressClickUntil = 0; return; }
     if (!view.map && view.siteMap) {
-      const world = canvasWorld(event);
+      const world = canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
       if (!world) return;
       const pickFocus = (id, msg) => { view.focusAnchorId = id; selection?.set?.(id, { source: "map" }); log(msg, "good"); render(); };
       for (const r of view.guide?.robots || []) {

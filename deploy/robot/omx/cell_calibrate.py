@@ -276,11 +276,12 @@ def main(argv=None):
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     work = Path(config["work_dir"]).expanduser() / "calibrate"
-    work.mkdir(parents=True, exist_ok=True)
+    if args.step != "check":
+        work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     if args.route:
-        from cell_route_check import route_check
-        found["route"] = route_check(config, *args.route)
+        from cell_route_calibration import route_calibration_report
+        found["route"] = route_calibration_report(config, calibration, found, *args.route)
     todo = stale(found)
     if todo == ["review-camera-reference"]:
         print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)

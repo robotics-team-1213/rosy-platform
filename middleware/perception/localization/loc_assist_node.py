@@ -42,7 +42,11 @@ from tf2_ros import TransformListener
 
 from . import executor_choice
 from .calibrated_values import calibrated
+from core_common.protocol.map_grid import occupancy_map_id
+
 from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
+from .loc_window import (WINDOW_EXPIRY_NS, WINDOW_RETRY_NS, confirm_window_candidate,
+                         decode_window, window_candidate)
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
 from .sensing.localization import MapAgreement, planar_yaw, valid_beams
@@ -54,6 +58,8 @@ from .sensing.perception.reference_square import HsvSquareDetector
 from .tf_buffer import RobotTransformBuffer
 from .loc_verify_trace import VerificationTrace
 from .sensing.loc_verify import FAILED, PENDING
+
+WINDOW_START_NS = 5_000_000_000
 
 PARAMETERS = [
     ('map_yaml', ''), ('lane_rules_file', ''), ('search_resolution', .02), ('wall_tolerance', .04),
@@ -74,7 +80,8 @@ def yaw(q):
     return planar_yaw(q.x, q.y, q.z, q.w)
 
 
-def search_job(stopping, bundle, generation, field, *search_args):
+def search_job(stopping, bundle, generation, field, clear, squares, ranges, angles,
+               radius, mount, minimum, full, *, window=None):
     """Worker thread: the one-time paint map load, then the candidate search.
 
     No logging here: notes go back to `finish_search` on the executor. A stop
@@ -89,7 +96,14 @@ def search_job(stopping, bundle, generation, field, *search_args):
         return [], [], None, -1, 0., notes, paint_map
     started = time.monotonic()
     diagnostics = []
-    found, objects, mask = search(field, *search_args, diagnostics=diagnostics)
+    found, objects, mask = search(field, clear, squares, ranges, angles, radius, mount,
+                                  minimum, full, diagnostics=diagnostics)
+    if not found and window is not None and not stopping.is_set():
+        center, issued_ns = window
+        if time.monotonic_ns() - issued_ns <= WINDOW_EXPIRY_NS:
+            candidate = window_candidate(field, mask, center, mount, *full, minimum)
+            if candidate is not None:
+                found = [candidate]
     if not found:
         notes.extend(diagnostics)
     return found, objects, mask, generation, time.monotonic() - started, notes, paint_map
@@ -116,6 +130,8 @@ class LocAssistNode(Node):
         self.ground_key = self.ground = self.nominal = None
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.search = None
+        self.grid_id = self.window = self.active_window = None
+        self.last_window_ns = -WINDOW_RETRY_NS
         self.tf = RobotTransformBuffer(self)
         self.listener = TransformListener(self.tf, self)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -134,6 +150,7 @@ class LocAssistNode(Node):
         self.create_subscription(Bool, 'safety/pickup', self.on_pickup, 1)
         self.create_subscription(String, 'localization/decision', self.on_decision, 5)
         self.create_subscription(String, 'localization/suspect', self.on_suspect, 5)
+        self.create_subscription(String, 'localization/search_window', self.on_search_window, 1)
         self.create_subscription(String, 'localization/mission', self.on_mission, 5)
         self.sync_camera()
         self.create_timer(.1, self.tick)
@@ -165,7 +182,7 @@ class LocAssistNode(Node):
 
     # --- inputs -------------------------------------------------------------
     def on_map(self, msg):
-        self.field = self.clear = None
+        self.field = self.clear = self.grid_id = self.window = None
         self.generation += 1
         self.core.on_map_changed()
         info = msg.info
@@ -179,6 +196,11 @@ class LocAssistNode(Node):
                 abs(rotation) > 1e-6):
             self.get_logger().warning('map rejected: needs an unrotated finite map-frame grid')
             return
+        self.grid_id = occupancy_map_id({
+            "width": int(info.width), "height": int(info.height), "resolution": float(info.resolution),
+            "origin": {"x": float(info.origin.position.x), "y": float(info.origin.position.y), "yaw": rotation},
+            "data": list(msg.data),
+        })
         grid, resolution = pooled_grid(np.array(msg.data, dtype=np.int8).reshape(info.height, info.width),
                                        info.resolution, self.p('search_resolution'))
         self.field = MapAgreement(grid, resolution, (info.origin.position.x, info.origin.position.y),
@@ -248,7 +270,9 @@ class LocAssistNode(Node):
             return
         candidates = self.core.machine.candidates
         sensor = [sensor_from_base((c.x, c.y, c.yaw), mount) for c in candidates]
-        fits = [self.field.robust_score(pose, ranges, angles) for pose in sensor]
+        full = self.scan_arrays(scan, 1) if any(c.origin == "window" for c in candidates) else None
+        fits = [self.field.robust_score(pose, *(full if c.origin == "window" else (ranges, angles)))
+                for c, pose in zip(candidates, sensor)]
         objects = None
         if all(fit >= self.core.machine.min_fit for fit in fits):
             objects = localized_objects(self.field, sensor[0], *self.scan_arrays(scan, 1), mount,
@@ -343,6 +367,13 @@ class LocAssistNode(Node):
         if payload is not None:
             self.publish(self.core.on_suspect(self.now(), payload))
 
+    def on_search_window(self, msg):
+        payload = self._json(msg, "localization/search_window")
+        window = decode_window(payload, self.grid_id, self.last_window_ns, time.monotonic_ns())
+        if window is not None and self.core.search_window_ready(self.now()):
+            self.window = window
+            self.last_window_ns = window[1]
+
     def on_mission(self, msg):
         payload = self._json(msg, 'localization/mission')
         if payload is not None:
@@ -413,16 +444,19 @@ class LocAssistNode(Node):
             return
         ranges, angles = self.scan_arrays(self.scan)
         full = self.scan_arrays(self.scan, 1)   # peer objects: every beam (S1 finding 2)
+        window, self.window = self.window, None
+        self.active_window = (scan_stamp, window[1]) if window is not None else None
         self.core.search_started(now, odom, scan_stamp=scan_stamp)
         field, clear, generation = self.field, self.clear, self.generation
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
         bundle, self.paint_tried = (None if self.paint_tried else self.bundle), True
         self.search = self.pool.submit(search_job, self.stopping, bundle, generation, field, clear, squares,
-                                       ranges, angles, radius, mount, minimum, full)
+                                       ranges, angles, radius, mount, minimum, full, window=window)
 
     def finish_search(self, now):
         future, self.search = self.search, None
+        window, self.active_window = self.active_window, None
         try:
             found, objects, mask, generation, elapsed, notes, paint_map = future.result()
         except Exception as exc:
@@ -433,6 +467,8 @@ class LocAssistNode(Node):
         self.paint_map = paint_map or self.paint_map
         if generation == self.generation:
             self.clear = mask
+        if found and found[0].origin == "window":
+            found, objects = self.confirm_window_candidate(found[0], window, now, generation)
         budget = self.p('search_budget_s')
         message = f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates'
         # rclpy fixes the severity at each logging call site.
@@ -448,7 +484,11 @@ class LocAssistNode(Node):
         odom = self.odom() if generation in (self.generation, -1) else None
         # The core drops camera evidence seen before the search started (evidence_s).
         self.publish(self.core.search_finished(now, odom, found, objects, self.sightings if recent else [],
-                                               scores, evidence_s=self.sighted_at if recent else None))
+                                               scores, evidence_s=self.sighted_at if recent else None,
+                                               allow_unique=window is None))
+
+    def confirm_window_candidate(self, candidate, window, now, generation):
+        return confirm_window_candidate(self, candidate, window, now, generation)
 
     def _ground_configured(self):
         source = str(self.p('camera_ground_source')).strip().upper()
@@ -474,7 +514,10 @@ class LocAssistNode(Node):
         self.sync_camera()
         if self.search is None and self.field is not None and self.scan is not None and self.core.camera_wanted:
             odom = self.odom()
-            if odom is not None and self.core.search_due(now, odom):
+            if self.window is not None and (time.monotonic_ns() - self.window[1] > WINDOW_START_NS
+                                            or not self.core.search_window_ready(now)):
+                self.window = None
+            if odom is not None and (self.window is not None or self.core.search_due(now, odom)):
                 if self.core.settle_timed_out:
                     self.get_logger().warning(f'search after the settle cap ({self.core.settle_timed_out}): '
                                               'the robot was not seen still; searching anyway')

@@ -155,7 +155,8 @@ function summarizeRobot(robot, view, attentionItems) {
   const power = rosterPower(view, robot, now);
   const heat = stateCurrent ? heatChip(state) : null;
   const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
-  const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow, stateCurrent ? state.localization : null);
+  const loc = view.stateUnavailable ? null
+    : positionTag(robot.localization, guideRow, stateCurrent ? state.localization : null, !stateCurrent);
   const locTitle = loc ? [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ") : undefined;
   const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
   const role = formation?.leader === robot.robot_id ? "대형 리더"
