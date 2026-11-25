@@ -27,11 +27,25 @@ import cell_place_fit  # noqa: E402
 import cell_recovery_advisor as cra  # noqa: E402
 import cell_space  # noqa: E402
 import chunk_runner as m  # noqa: E402
+from chunk_runner_recover import ensure_live_unlatch  # noqa: E402
 import judge_seat  # noqa: E402
 
 HOME = [0.0, -60.0, 50.0, 45.0, 10.0, 46.6]
 REACH = [20.0, -20.0, 20.0, 45.0, -5.0, 54.0]
 MOTORS = [n.split(".")[0] for n in m.NAMES]
+
+
+@pytest.mark.parametrize("fields", [{}, {"human_hold_latched": None}, {"human_hold_latched": 0},
+                                    {"human_hold_latched": True}, {"human_hold_latched": False}])
+def test_unlatch_requires_explicit_release(fields):
+    cell = Mock()
+    cell.act.return_value = {"ok": True, **fields}
+    latched = {"active": True}
+    ok, error = ensure_live_unlatch(cell, latched, Mock())
+    released = fields.get("human_hold_latched") is False
+    assert ok is released
+    assert latched["active"] is (not released)
+    assert bool(error) is (not released)
 
 
 class _FakeBus:

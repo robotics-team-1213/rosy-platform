@@ -13,7 +13,9 @@ def request_live_unlatch(cell) -> tuple[bool, dict]:
     ack = cell.act("recover-unlatch")
     if not isinstance(ack, dict):
         return False, {"ok": False, "error": "invalid recover-unlatch reply"}
-    return (ack.get("ok") is True and ack.get("human_hold_latched") is not True), ack
+    if ack.get("ok") is True and ack.get("human_hold_latched") is not False:
+        return False, {**ack, "ok": False, "error": "runner did not confirm hold release"}
+    return ack.get("ok") is True, ack
 
 
 def ensure_live_unlatch(cell, latched: dict, note_fn) -> tuple[bool, str | None]:
