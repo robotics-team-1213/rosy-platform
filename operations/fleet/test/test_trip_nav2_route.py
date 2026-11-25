@@ -36,6 +36,8 @@ class RouteFakeRobot(FakeRobot):
         self.modes = list(modes)
         self.lease = lease
         self.routes: list[tuple] = []
+        self.route_grids: list[str | None] = []
+        self.bound_route_supported = False
         self.renewals: list[tuple] = []
         self.active_cid: str | None = None
         self._state = {
@@ -46,7 +48,7 @@ class RouteFakeRobot(FakeRobot):
 
     async def capabilities(self) -> dict:
         return {
-            "navigation": {"goal_navigation": True},
+            "navigation": {"goal_navigation": True, "bound_route": self.bound_route_supported},
             "controls": {
                 "schema": "rosy.controls/1",
                 "items": [{
@@ -60,6 +62,7 @@ class RouteFakeRobot(FakeRobot):
     async def navigation_route(self, points, *, correlation_id=None, lease_ttl_s=None, **kwargs) -> dict:
         self._record("navigation_route", points, correlation_id, lease_ttl_s)
         self.routes.append((points, correlation_id, lease_ttl_s))
+        self.route_grids.append(kwargs.get("expected_map_grid_id"))
         self.active_cid = correlation_id
         self._state["navigation"] = "NAVIGATING"
         return {"accepted": True}
@@ -121,6 +124,8 @@ def test_navigation_transport_posts_and_validates_route():
     reply = run(t.navigation_route(pts, correlation_id="cid-1", lease_ttl_s=4.0))
     assert reply == {"accepted": True}
     assert t.posts == [("/api/v1/navigation/route", {"points": pts, "correlation_id": "cid-1", "lease_ttl_s": 4.0})]
+    run(t.navigation_route(pts, expected_map_grid_id="occupancy:abcd"))
+    assert t.posts[-1] == ("/api/v1/navigation/bound-route", {"points": pts, "expected_map_grid_id": "occupancy:abcd"})
     with pytest.raises(ValueError, match="ROUTE_POINTS_REQUIRED"):
         run(t.navigation_route([]))
     with pytest.raises(ValueError, match="NATIVE_OWNER_EPOCH_PAIR_REQUIRED"):
@@ -274,7 +279,8 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path):
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid"])
+def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
 
@@ -282,6 +288,7 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     store.import_if_empty(_south_loop_map(), source="test")
     robot = RouteFakeRobot("rosy_42")
     robot.power_health_value = fresh_power_health()
+    robot.bound_route_supported = case != "older_core"
     fit = Fit(math.pi / 2, .31, -.22, ())
     native_x, native_y = fit.inverse((.17, -.48))
 
@@ -320,6 +327,10 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         assert not runner.human_hold_fn()
         assert not runner.config.map_binding_required
         plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+        if case == "older_core":
+            assert plan.status_code == 409 and plan.json()["detail"]["code"] == "NAV2_BOUND_ROUTE_UNSUPPORTED"
+            assert not robot.routes and not read_legacy_pose
+            return
         assert plan.status_code == 200, plan.text
         assert plan.json()["nav2_binding_id"] == binding["binding_id"]
         plan_id = plan.json()["plan_id"]
@@ -329,8 +340,23 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         live = runner._live["rosy_42"]
         pose = client.portal.call(runner._progress_pose, live, "rosy_42")
         assert pose.source == "approved_slam" and (pose.x, pose.y) == pytest.approx((.17, -.48))
+        if case == "changed_grid":
+            prepare = console.goal_leases.prepare_send
+
+            async def change_grid(*args):
+                guard = await prepare(*args)
+                robot._state["map_grid_id"] = "occupancy:0fedcba98765"
+                return guard
+
+            console.goal_leases.prepare_send = change_grid
         client.portal.call(runner.tick)
-        assert robot.routes
+        if case == "changed_grid":
+            stopped = runner.view(plan_id)
+            assert stopped["state"] in {"failed", "stopped"}
+            assert not robot.routes and not read_legacy_pose
+            return
+        assert robot.routes and robot.route_grids == ["occupancy:0123456789ab"]
+        assert console._site_claims["rosy_42"][0] == site[0]
         first = robot.routes[0][0][0]
         assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
         assert not read_legacy_pose

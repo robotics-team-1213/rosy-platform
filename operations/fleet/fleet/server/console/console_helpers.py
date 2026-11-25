@@ -309,15 +309,30 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     if route_points is not None and route_binding is not None:
         from fleet.server.named_stop_map_pose import fresh_native_slam
 
+        if (caps.get("navigation") or {}).get("bound_route") is not True:
+            raise HubError("COMMAND_REJECTED", "NAV2_BOUND_ROUTE_UNSUPPORTED")
+
         def check_route_binding():
+            self.goal_leases.check_stop(robot_id, stop)
             fit = _check_stop_binding(self, robot_id, state, route_binding, road_route=True)
             if fresh_native_slam(state, time.time()) is None:
                 raise HubError("COMMAND_REJECTED", "APPROVED_SLAM_POSE_REQUIRED")
             return fit
 
-        route_fit = check_route_binding()
-        with dispatch_guard(check_route_binding, paths={"/api/v1/navigation/route"}):
-            result = await self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id)
+        async def refresh_route_binding():
+            nonlocal state, route_fit
+            state = await client.state()
+            if self._clients.get(robot_id) is not client:
+                raise RuntimeError("robot connection changed during bound route admission")
+            route_fit = check_route_binding()
+            self._remember([{"robot_id": robot_id, "state": state}])
+
+        check_route_binding()
+        with dispatch_guard(check_route_binding, paths={"/api/v1/navigation/bound-route"}):
+            result = await self.goal_leases.send_route(
+                robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
+                expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding,
+            )
     elif route_points is not None:
         result = await self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id)
     else:
@@ -331,15 +346,16 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     self._queued.pop(robot_id, None)
 
     def site_route_of(route):
-        if route_fit is not None and route:
-            return route_binding["site_map_id"], [route_fit.apply(point) for point in route]
+        if route_fit is not None:
+            return (route_binding["site_map_id"], [route_fit.apply(point) for point in route]) if route else None
         return self._site_route(robot_id, route)
 
     async with self._traffic_lock:
         try:
             nav_route = await self._route_of(robot_id)
             if not nav_route and route_points is not None:
-                here = self._pose_of(robot_id)
+                here = ((state["pose"]["x"], state["pose"]["y"]) if route_fit is not None
+                        else self._pose_of(robot_id))
                 nav_route = traffic.thin(([here] if here is not None else []) + [(float(p["x"]), float(p["y"])) for p in route_points])
             self.goal_leases.check_stop(robot_id, stop)
             claim_site_route = site_route_of(nav_route)

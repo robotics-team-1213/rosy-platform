@@ -229,6 +229,10 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
+        if bound_nav2 and (caps is None or not caps.bound_route):
+            detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
+            record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
+            raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
         if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
             detail = {"drive_mode": "free"}
             record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})

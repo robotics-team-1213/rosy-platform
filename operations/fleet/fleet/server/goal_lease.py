@@ -32,6 +32,7 @@ from fleet.server.named_stop_motion import (NamedStopMotion, _is_unreachable, cu
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
+from fleet.swarm.navigation_transport import goal_lease_supported
 
 logger = logging.getLogger("fleet.goal_lease")
 
@@ -50,14 +51,6 @@ class CustodyReleaseRefused(RuntimeError):
 
 class NavigationStopped(RuntimeError):
     """A changed stop token invalidated this navigation continuation."""
-
-
-def goal_lease_supported(caps: Optional[dict]) -> bool:
-    """The robot's rosy.controls/1 base announces ``goal_lease: true``. An older CORE would
-    ignore ``lease_ttl_s``, so without it a Fleet goal is unbounded."""
-    items = (((caps or {}).get("controls") or {}).get("items") or []) if isinstance(caps, dict) else []
-    return any(isinstance(item, dict) and item.get("kind") == "base_velocity"
-               and item.get("goal_lease") is True for item in items)
 
 
 class GoalLeases(dict):
@@ -418,11 +411,16 @@ class GoalLeases(dict):
 
     async def send_route(self, robot_id: str, client, caps: Optional[dict], points: list[dict],
                          correlation_id: Optional[str] = None, source: Optional[str] = None,
-                         task_id: Optional[str] = None) -> dict:
-        """Send one D-1009 pass/stop route with the exact same goal lease, stop-fence and cancellation rules."""
-        return await self._dispatch(
-            robot_id, client, caps, lambda options: client.navigation_route(points, **options),
-            correlation_id, source, task_id)
+                         task_id: Optional[str] = None, *, expected_map_grid_id: str | None = None,
+                         recheck=None) -> dict:
+        """Send one D-1009 pass/stop route under the goal lease."""
+        async def send(options):
+            if recheck is not None:
+                await recheck()
+            return await client.navigation_route(points, **options)
+
+        return await self._dispatch(robot_id, client, caps, send, correlation_id, source, task_id,
+                                    expected_map_grid_id=expected_map_grid_id)
 
     async def _dispatch(self, robot_id: str, client, caps: Optional[dict], sender: Callable[[dict], object],
                         correlation_id: Optional[str], source: Optional[str] = None,
@@ -442,7 +440,9 @@ class GoalLeases(dict):
         prev = self.pop(robot_id, None)
         options = {}
         if expected_map_grid_id is not None:
-            options.update(expected_map_grid_id=expected_map_grid_id, plan_id=plan_id)
+            options["expected_map_grid_id"] = expected_map_grid_id
+        if plan_id is not None:
+            options["plan_id"] = plan_id
         if owner_epoch is not None:
             options.update(owner_epoch)
         if line_handoff is not None:
@@ -485,7 +485,8 @@ class GoalLeases(dict):
         try:
             try:
                 with guard, dispatch_guard(admit_wire, paths={
-                        "/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/navigation/line-handoff-goal"}):
+                        "/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/navigation/line-handoff-goal",
+                        "/api/v1/navigation/bound-route"}):
                     result = await sender(options)
                     if claim is not None and self._named_stop_motion is claim:
                         if not isinstance(result, dict) or result.get("accepted") is not True:

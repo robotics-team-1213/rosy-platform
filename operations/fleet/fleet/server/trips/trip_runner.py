@@ -176,6 +176,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             notes = {"drive_mode": "nav2"} if nav2 else {}
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
                                            plan["actions"][-1]["place_id"], detail=notes, nav2=nav2)
+            if nav2_scope is not None and not caps.bound_route:
+                raise TripError(409, "NAV2_BOUND_ROUTE_UNSUPPORTED")
             body = nominal_body_for(caps.kind)
             pending = self.halts.pending_handoffs.get(robot_id)
             if pending is not None:

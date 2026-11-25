@@ -408,6 +408,23 @@ def test_route_endpoint_rejects_bad_requests_before_moving(robot, body):
     assert svc.nav.nav_state is NavigationState.IDLE
 
 
+def test_bound_route_requires_current_grid_before_admitting_nav2(robot):
+    tc, svc = robot
+    svc.state.set_map_id("robot-slam", "occupancy:actual")
+    caps = tc.get("/api/v1/system/capabilities", headers=OPERATOR).json()
+    assert caps["navigation"]["bound_route"] is True
+    body = {"points": [{"x": 0.2, "y": 0.0}], "expected_map_grid_id": "occupancy:former"}
+    endpoint = "/api/v1/navigation/bound-route"
+    refused = tc.post(endpoint, json=body, headers=OPERATOR)
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["error"]["code"] == "NAVIGATION_MAP_GRID_CHANGED"
+    assert svc.nav.nav_state is NavigationState.IDLE and not svc.nav.executor.sent
+    response = tc.post(endpoint, json={**body, "expected_map_grid_id": "occupancy:actual"}, headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert response.json()["map_grid_id"] == "occupancy:actual"
+    assert svc.nav.executor.sent
+
+
 def test_route_lease_is_one_lease_for_the_route(robot):
     tc, svc = robot
     assert _route(tc, [{"x": 0.2, "y": 0}, {"x": 0.4, "y": 0}], correlation_id="L", lease_ttl_s=2.0).status_code == 200
