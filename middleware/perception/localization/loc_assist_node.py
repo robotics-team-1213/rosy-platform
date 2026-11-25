@@ -34,7 +34,6 @@ import rclpy
 import yaml
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
-from pydantic import ValidationError
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import Image, LaserScan
@@ -44,12 +43,12 @@ from tf2_ros import TransformListener
 from . import executor_choice
 from .calibrated_values import calibrated
 from core_common.protocol.map_grid import occupancy_map_id
-from core_common.protocol.localization import LocalizationSearchWindow
 
 from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
-from .loc_window import window_candidate
+from .loc_window import (WINDOW_EXPIRY_NS, WINDOW_RETRY_NS, confirm_window_candidate,
+                         decode_window, window_candidate)
 from .sensing.body import URDF_RADIUS
-from .sensing.loc_candidates import Mount, PoseCandidate, reference_squares, sensor_from_base
+from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
 from .sensing.localization import MapAgreement, planar_yaw, valid_beams
 from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from perception_runtime.perception.lane_bev import BirdsEye
@@ -58,10 +57,7 @@ from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.reference_square import HsvSquareDetector
 from .tf_buffer import RobotTransformBuffer
 
-WINDOW_DELIVERY_NS = 1_000_000_000
 WINDOW_START_NS = 5_000_000_000
-WINDOW_EXPIRY_NS = 8_000_000_000
-WINDOW_RETRY_NS = 15_000_000_000
 
 PARAMETERS = [
     ('map_yaml', ''), ('lane_rules_file', ''), ('search_resolution', .02), ('wall_tolerance', .04),
@@ -356,20 +352,10 @@ class LocAssistNode(Node):
 
     def on_search_window(self, msg):
         payload = self._json(msg, "localization/search_window")
-        if not isinstance(payload, dict):
-            return
-        issued_ns = payload.get("issued_ns")
-        if (type(issued_ns) is not int or not 0 <= time.monotonic_ns() - issued_ns <= WINDOW_DELIVERY_NS
-                or issued_ns - self.last_window_ns < WINDOW_RETRY_NS):
-            return
-        try:
-            window = LocalizationSearchWindow.model_validate(payload.get("window"))
-        except ValidationError:
-            return
-        if window.expected_map_grid_id == self.grid_id and self.core.search_window_ready(self.now()):
-            center = window.center
-            self.window = ((center.x, center.y, center.yaw), issued_ns)
-            self.last_window_ns = issued_ns
+        window = decode_window(payload, self.grid_id, self.last_window_ns, time.monotonic_ns())
+        if window is not None and self.core.search_window_ready(self.now()):
+            self.window = window
+            self.last_window_ns = window[1]
 
     def on_mission(self, msg):
         payload = self._json(msg, 'localization/mission')
@@ -485,24 +471,7 @@ class LocAssistNode(Node):
                                                allow_unique=window is None))
 
     def confirm_window_candidate(self, candidate, window, now, generation):
-        if (window is None or generation != self.generation or not self.core.search_window_ready(now)
-                or time.monotonic_ns() - window[1] > WINDOW_EXPIRY_NS or self.scan is None):
-            return [], []
-        scan = self.scan
-        stamp = rclpy.time.Time.from_msg(scan.header.stamp).nanoseconds * 1e-9
-        if stamp <= window[0] or not 0. <= now - stamp <= SETTLE_S:
-            return [], []
-        try:
-            mount = self.scan_mount(scan)
-        except Exception:
-            return [], []
-        ranges, angles = self.scan_arrays(scan, 1)
-        sensor = sensor_from_base((candidate.x, candidate.y, candidate.yaw), mount)
-        fit = self.field.robust_score(sensor, ranges, angles)
-        if fit < self.p("candidate_minimum_fit"):
-            return [], []
-        candidate = PoseCandidate(candidate.x, candidate.y, candidate.yaw, min(candidate.scan_fit, fit), "window")
-        return [candidate], localized_objects(self.field, sensor, ranges, angles, mount, self.p("robot_radius"))
+        return confirm_window_candidate(self, candidate, window, now, generation)
 
     def _ground_configured(self):
         source = str(self.p('camera_ground_source')).strip().upper()
