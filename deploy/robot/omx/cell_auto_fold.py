@@ -77,7 +77,8 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             release_unmoved: bool = False, moved_out: list | None = None, latched_out: list | None = None,
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
-            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full") -> dict:
+            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
+            require_empty_gripper: bool = False) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
     if stage not in ("full", "release_and_lift", "park_only"):
@@ -125,9 +126,11 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     is_holding = bool(
         holding(state, target, closed)
         or ((latched["started"] or at_home or stage in ("park_only", "release_and_lift")) and status.get("holding"))
-        or ((at_home or stage in ("park_only", "release_and_lift"))
+        or ((require_empty_gripper or at_home or stage in ("park_only", "release_and_lift"))
             and target[5] <= closed + 1.0 and state[5] > target[5] + 2.0)
     )
+    if require_empty_gripper and (status.get("holding") is not False or is_holding):
+        return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if at_home:
         from cell_auto_fold_stages import resolve_folded_at_home
 

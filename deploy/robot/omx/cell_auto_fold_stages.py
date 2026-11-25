@@ -281,6 +281,8 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
             return {"schema": schema, "result": "held", "reason": fence_bad,
                     "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
         with FencedCell(cell, lambda: _safety_fence_error(args)) as fenced:
+            if args.expected_incident_id is not None:
+                kw["require_empty_gripper"] = True
             out = recover_fn(fenced, home, closed, stage=args.stage, **kw)
             if fenced.tripped_reason is not None:
                 if out.get("result") != "held":
