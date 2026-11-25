@@ -4,7 +4,19 @@ import assert from "node:assert/strict";
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
+  roadOverlayPoints,
 } from "../../../../applications/fleet/web/map/site-layer.js";
+
+test("world_261026 charging bay overlays draw straight, leaving source geometry intact", () => {
+  const polyline = [[-0.43002, 0.04266], [-0.4354, 0.3294], [-0.41816, 0.47]];
+  for (const bay of [1, 2, 3]) {
+    const edge = {id: `bay_${bay}`, from: `P${bay}`, to: `C${bay}`, polyline};
+    assert.deepEqual(roadOverlayPoints("world_261026", edge), [polyline[0], polyline[2]]);
+    assert.equal(roadOverlayPoints("other_site", edge), polyline);
+    assert.equal(roadOverlayPoints("world_261026", {...edge, id: "ring"}), polyline);
+    assert.equal(polyline.length, 3);
+  }
+});
 
 const row = (changes) => ({
   robot_id: "rosy-pinky-8kcn", x: 1, y: 0.5, yaw: 0, captured_at: 10, age_ms: 200,

@@ -156,3 +156,12 @@ export function mapUpTurn(record) {
   const up = Math.atan2(c[1] - a[1], c[0] - a[0]) * 180 / Math.PI; // map +y on the raw picture, clockwise
   return ((Math.round((-90 - up) / 90) * 90) % 360 + 360) % 360;
 }
+// The physical charging lead-ins are straight (D-1013). Preserve stored geometry for routing and editing.
+export function roadOverlayPoints(mapId, edge) {
+  const bay = /^bay_([123])$/.exec(edge.id)?.[1];
+  const points = edge.polyline;
+  if (mapId === "world_261026" && bay && edge.from === `P${bay}` && edge.to === `C${bay}` && points.length > 2) {
+    return [points[0], points.at(-1)];
+  }
+  return points;
+}

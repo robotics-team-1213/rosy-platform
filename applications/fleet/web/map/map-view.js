@@ -8,7 +8,7 @@
 
 import {
   siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, quarterTurn,
+  streamEvidence, quarterTurn, roadOverlayPoints,
 } from "./site-layer.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { createMapOverlays } from "./map-overlays.js";
@@ -362,7 +362,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       for (const edge of activeMap.edges || []) {
         ctx.setLineDash(edge.drive_mode === "free" ? [6, 4] : []);
         ctx.beginPath();
-        edge.polyline.forEach(([x, y], index) => {
+        roadOverlayPoints(activeMap.map_id, edge).forEach(([x, y], index) => {
           const p = toPx(x, y);
           if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
         });
