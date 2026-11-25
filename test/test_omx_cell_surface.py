@@ -53,6 +53,15 @@ def test_approach_contact_does_not_record_a_surface():
     assert cell.sent[-2:] == ["retreat", "park"] and "run descend_probe" not in cell.sent
 
 
+def test_route_surface_recognizes_canonical_linux_receipt_and_rejects_traversal(tmp_path):
+    from cell_route_surface import contact_evidence
+
+    name = "yard:r3-s2-t1"
+    (tmp_path / f"surface-{name}.json").write_text(json.dumps({"result": "no contact"}))
+    assert contact_evidence({"work_dir": str(tmp_path)}, name, {})["status"] == "candidate"
+    assert contact_evidence({"work_dir": str(tmp_path)}, "../" + name, {})["status"] == "missing"
+
+
 def test_reuse_repeated_contact_only_with_its_original_setup(tmp_path):
     from cell_route_surface import contact_evidence
 

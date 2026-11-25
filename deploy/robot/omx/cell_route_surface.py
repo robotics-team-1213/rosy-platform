@@ -40,7 +40,7 @@ def probe_binding(config, site, tcp):
 
 def contact_evidence(config, site, calibration):
     work = config.get("work_dir")
-    if not work or not re.fullmatch(r"[A-Za-z0-9_-]+", site):
+    if not work or not re.fullmatch(r"[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?", site):
         return {"status": "missing", "reason": "no site receipt"}
     path = Path(work).expanduser() / f"surface-{site}.json"
     try:

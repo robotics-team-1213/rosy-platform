@@ -1,5 +1,7 @@
 """Reuse post-eval visits at their measured height. A hover cannot measure a slot's support XYZ."""
+import json
 import math
+import uuid
 import time
 from pathlib import Path
 
@@ -17,6 +19,62 @@ import omx_tcp
 def _vector(values, size):
     return (isinstance(values, (list, tuple)) and len(values) == size
             and all(type(v) in (int, float) and math.isfinite(v) for v in values))
+
+
+def _map(config, calibration, site):
+    specs, maps = config.get("sites") or {}, calibration.get("sites") or {}
+    spec = specs.get(site) or {}
+    parent = spec.get("tier_of", site)
+    if not isinstance(parent, str):
+        return None
+    parent_spec = specs.get(parent) or {}
+    base = parent_spec.get("map_from", parent)
+    if not isinstance(base, str) or spec.get("map_from", base) != base:
+        return None
+    record = cell_pivot.map_record(calibration, base)
+    if not record or any(k in maps and maps[k] != record for k in (parent, site)):
+        return None
+    return record
+
+
+def _bound_calibration(config, calibration, site):
+    """A runtime tier alias is an in-memory copy; validate the persisted reference against its own maps."""
+    path = config.get("calibration_path")
+    if not path:
+        return calibration
+    try:
+        stored = json.loads(Path(path).expanduser().read_bytes())
+    except (OSError, TypeError, ValueError):
+        return {}
+    if (not isinstance(stored, dict) or any(stored.get(k) != calibration.get(k)
+            for k in ("reference_top_sha256", "reference_map_sha", "reference_geometry_sha"))
+            or _map(config, stored, site) != _map(config, calibration, site)):
+        return {}
+    return stored
+
+
+def _attempt_path(config, site, xy, map_sha):
+    wd = config.get("work_dir")
+    if not wd:
+        return None
+    key = cell_attempts.digest([config["arm_id"], site, list(xy), map_sha])
+    return Path(wd).expanduser() / "route-visit-attempts" / (key + ".json")
+
+
+def begin_visit(config, calibration, site, xy):
+    """Invalidate a previous visit even if this attempt stops before it obtains a jaw observation."""
+    if not _context(config, calibration, site):
+        return None
+    record = _map(config, calibration, site)
+    path = _attempt_path(config, site, xy, cell_attempts.digest(record)) if record else None
+    if path is None:
+        return None
+    token = uuid.uuid4().hex
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix("." + token + ".tmp")
+    tmp.write_text(json.dumps({"source": "visit_attempt", "id": token}), encoding="utf-8")
+    tmp.replace(path)
+    return token
 
 
 def _context(config, calibration, site):
@@ -44,7 +102,7 @@ def visit_evidence(config, calibration, site, before, point_m, pixels, fks):
     if not context or not path or len(pixels) != 2 or len(fks) != 2:
         return {}
     from cell_auto_evidence import bound_reference_image
-    ref, error = bound_reference_image(calibration, config, Path(path).expanduser())
+    ref, error = bound_reference_image(_bound_calibration(config, calibration, site), config, Path(path).expanduser())
     if error:
         return {}
     try:
@@ -52,7 +110,7 @@ def visit_evidence(config, calibration, site, before, point_m, pixels, fks):
         shift = cell_preflight.camera_shift_px(cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY), current)
     except (cv2.error, AttributeError, ValueError):
         return {}
-    return {"route_visit": {"context": context, "shift": shift, "requested_xy_m": list(point_m),
+    return {"route_visit": {"attempt_id": config.get("_route_visit_id"), "context": context, "shift": shift, "requested_xy_m": list(point_m),
                             "jaw_pixels": [list(map(float, p)) for p in pixels],
                             "fk_xyzyaw": [list(map(float, v)) for v in fks]}}
 
@@ -63,14 +121,19 @@ def exact_visit(config, calibration, name, xy):
               "reason": "missing exact visit target"}
     if not _vector(xy, 2) or not config.get("arm_id"):
         return result
-    record = cell_pivot.map_record(calibration or {}, name)
+    specs = config.get("sites") or {}
+    if name not in specs and "surface_z" in (specs.get(name.rsplit("-l", 1)[0]) or {}):
+        from cell_place_fit import with_tiers
+        config, _ = with_tiers(config)
+    record = _map(config, calibration or {}, name)
     if not record:
         return {**result, "reason": "missing site map"}
     sha = cell_attempts.digest(record)
     rows = cell_cal_monitor.load_observations(cell_cal_monitor.monitor_path(config), arm_id=config["arm_id"])
     point = [round(v, 4) for v in xy]  # precision of the legacy monitor's place_xy
     exact = [r for r in rows if r.get("schema") == cell_cal_monitor.SCHEMA and r.get("source") == "visit"
-             and r.get("site") == name and r.get("map_sha") == sha and r.get("place_xy") == point]
+             and r.get("site") == name and r.get("map_sha") == sha and r.get("place_xy") == point
+             and r.get("post_apply") is not True]
     if not exact:
         return {**result, "reason": "no visit for this site, point and map"}
     row = exact[-1]  # an old success cannot replace the latest exact visit's refusal
@@ -85,6 +148,13 @@ def exact_visit(config, calibration, name, xy):
     data = row.get("route_visit")
     if not isinstance(data, dict):
         return {**result, "reason": "legacy visit lacks bound jaw pixels, settled FK and slot footprint"}
+    attempt = _attempt_path(config, name, xy, sha)
+    try:
+        latest = json.loads(attempt.read_bytes()) if attempt else {}
+    except (OSError, TypeError, ValueError):
+        latest = {}
+    if not isinstance(latest, dict) or not latest.get("id") or data.get("attempt_id") != latest["id"]:
+        return {**result, "reason": "latest visit attempt has no matching completed observation"}
     residual, sigma = row.get("residual_mm"), row.get("sigma_mm")
     if (not _vector(residual, 2) or not _vector([sigma], 1) or sigma <= 0
             or math.hypot(*residual) > max(prm.get(params, "post.tol_mm"), 2 * sigma)):
@@ -98,7 +168,7 @@ def exact_visit(config, calibration, name, xy):
         reference = Path(ref_path).expanduser().read_bytes()
     except (OSError, TypeError):
         return {**result, "reason": "current map reference unavailable"}
-    if error := bound_map_error(calibration, config, reference):
+    if error := bound_map_error(_bound_calibration(config, calibration, name), config, reference):
         return {**result, "reason": error}
     shift = data.get("shift") or {}
     if (not isinstance(shift, dict) or shift.get("ok") is not True or not _vector([shift.get("max_px")], 1)

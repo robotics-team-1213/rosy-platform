@@ -37,6 +37,7 @@ def setup(tmp_path):
            "reference_map_sha": cell_attempts.digest(maps),
            "reference_geometry_sha": cell_attempts.digest({SITE: dict(auto_roi=None, surface_px=None, map_from=None)})}
     fk = [(*POINT, .1, 0), (*POINT, .1, 180)]
+    cfg["_route_visit_id"] = visit.begin_visit(cfg, cal, SITE, POINT)
     extra = visit.visit_evidence(cfg, cal, SITE, frame, POINT, [[130, 100], [170, 100]], fk)
     assert extra.get("route_visit")
     extra.update(place_xy=POINT, yaw_pair=True, geometry_dependent=False, finger_ok=True,
@@ -91,3 +92,63 @@ def test_refuses_incomplete_or_mismatched_evidence(setup, change):
     ledger.write_text(json.dumps(row) + "\n")
     result = visit.exact_visit(cfg, cal, SITE, POINT)
     assert not result["verified_at_visit_height"] and not result["verified"]
+
+
+
+def test_post_apply_is_not_a_visit_and_later_refusal_wins(setup):
+    cfg, cal = setup
+    ledger = cell_cal_monitor.monitor_path(cfg)
+    original = json.loads(ledger.read_text())
+    derived = dict(original, post_apply=True)
+    derived.pop("route_visit")
+    def append(row):
+        with ledger.open("a") as fh:
+            fh.write(json.dumps(row) + "\n")
+    append(derived)
+    assert visit.exact_visit(cfg, cal, SITE, POINT)["verified_at_visit_height"]
+    append(dict(original, accepted=False))
+    append(derived)
+    assert not visit.exact_visit(cfg, cal, SITE, POINT)["verified_at_visit_height"]
+    ledger.write_text(json.dumps(derived) + "\n")
+    assert visit.exact_visit(cfg, cal, SITE, POINT)["status"] == "unavailable"
+
+
+def test_attempt_without_completed_measurement_supersedes_old_success(setup):
+    cfg, cal = setup
+    visit.begin_visit(cfg, cal, SITE, [.16, .10])
+    assert visit.exact_visit(cfg, cal, SITE, POINT)["verified_at_visit_height"]
+    # Same point: early no_ik, missing mark, failed monitor append or interrupted visit.
+    visit.begin_visit(cfg, cal, SITE, POINT)
+    assert "no matching completed" in visit.exact_visit(cfg, cal, SITE, POINT)["reason"]
+
+
+def test_inherited_runtime_alias_matches_disk_and_conflicting_copy_refuses(setup):
+    from cell_place_fit import with_tiers
+    from cell_pivot import with_site_maps
+
+    cfg, cal = setup
+    target = cfg["sites"].pop(SITE)
+    cfg["sites"]["tmp-b-2"] = dict(target, map_from="temp_plate_b", surface_z=0.0)
+    rec = cal["sites"].pop(SITE)
+    cal["sites"]["temp_plate_b"] = rec
+    cal["reference_map_sha"] = cell_attempts.digest(cal["sites"])
+    cal["reference_geometry_sha"] = cell_attempts.digest({
+        "tmp-b-2": dict(auto_roi=None, surface_px=None, map_from="temp_plate_b")})
+    path = Path(cfg["work_dir"]) / "calibration.json"
+    path.write_text(json.dumps(cal))
+    cfg["calibration_path"] = str(path)
+    expanded, maps = with_tiers(cfg, with_site_maps(cfg, cal))
+    token = visit.begin_visit(expanded, maps, SITE, POINT)
+    expanded["_route_visit_id"] = token
+    frame = cv2.imread(cfg["preflight"]["reference_top"])
+    fk = [(*POINT, .1, 0), (*POINT, .1, 180)]
+    evidence = visit.visit_evidence(expanded, maps, SITE, frame, POINT, [[130, 100], [170, 100]], fk)
+    assert evidence["route_visit"]["attempt_id"] == token
+    ledger = cell_cal_monitor.monitor_path(cfg)
+    row = json.loads(ledger.read_text())
+    row.update(evidence)
+    ledger.write_text(json.dumps(row) + "\n")
+    for c, m in ((expanded, maps), (cfg, cal)):
+        assert visit.exact_visit(c, m, SITE, POINT)["verified_at_visit_height"]
+    maps["sites"][SITE] = dict(rec, z_view=.2)
+    assert not visit.exact_visit(expanded, maps, SITE, POINT)["verified_at_visit_height"]

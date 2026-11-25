@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, omx_tcp  # noqa: E402
+import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, cell_route_visit, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_post_eval_summary import lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
 
@@ -243,11 +243,10 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     tol_mm = float(prm.get(params, "post.tol_mm"))
     status = "rejected" if not accepted else ("advisory" if geom_dep else ("pass" if resid_mag <= max(tol_mm, 2.0 * sigma_mm) else "drift"))
     pt_r = [round(float(point_m[0]), 4), round(float(point_m[1]), 4)]
-    from cell_route_visit import visit_evidence
     cell_cal_monitor.record_observation(
         config, site=site, map_sha=map_sha, source="visit", raw_mm=raw_bias, residual_mm=resid,
         sigma_mm=sigma_mm, accepted=accepted, reason=reason,
-        extra={**visit_evidence(config, calibration, site, before, point_m, pixels, fks), "place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
+        extra={**cell_route_visit.visit_evidence(config, calibration, site, before, point_m, pixels, fks), "place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
                "geometry_dependent": geom_dep, **({"droop_mm": droop_mm} if droop_mm is not None else {}),
                **({"droop_z_mm": droop_z_mm} if droop_z_mm is not None else {}),
                **({"jaw_sides": jaw_sides} if jaw_sides else {})},
@@ -330,11 +329,12 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
 
     rows = []
     for site, pt in resolved:
+        attempt = cell_route_visit.begin_visit(config, calibration, site, pt)
         ok_track, track_rep = _track_ok(cell, config, calibration, site)
         if not ok_track:
             rows.append({"site": site, "point_m": list(pt), "status": "site_moved", "reason": "site_moved", "track": track_rep})
         else:
-            rows.append(measure_point(cell, config, calibration, bias_data, site, pt, work=work_dir, sleep=sleep,
+            rows.append(measure_point(cell, dict(config, _route_visit_id=attempt), calibration, bias_data, site, pt, work=work_dir, sleep=sleep,
                                       write_library_fn=write_library_fn, bias_err=bias_err))
 
     drift = cell_cal_monitor.summarize(config, calibration)
