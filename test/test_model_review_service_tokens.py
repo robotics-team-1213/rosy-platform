@@ -13,8 +13,13 @@ from test_model_review_release import release, source_tree
 
 @pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks and permissions')
 @pytest.mark.parametrize('retained', [False, True], ids=['install', 'reactivate'])
-@pytest.mark.parametrize('supported', [False, True], ids=['refuse', 'preserve'])
-def test_external_service_token_binding(tmp_path, monkeypatch, capsys, retained, supported):
+@pytest.mark.parametrize(('supported', 'directive', 'separator'), [
+    pytest.param(False, 'ExecStart=', ' ', id='unsupported-cli'),
+    pytest.param(True, 'ExecStart=', ' ', id='preserve'),
+    pytest.param(True, 'ExecStart=', ' ' + '\\' + '\n    ', id='continued-command'),
+    pytest.param(True, 'ExecStart = ', ' ', id='spaced-directive'),
+])
+def test_external_service_token_binding(tmp_path, monkeypatch, capsys, retained, supported, directive, separator):
     root, state = tmp_path / 'releases-root', tmp_path / 'state'
     current = root / 'releases' / 'current-release'
     source_tree(current)
@@ -28,8 +33,8 @@ def test_external_service_token_binding(tmp_path, monkeypatch, capsys, retained,
     token_file.chmod(0o600)
     service = 'rosy-edge-review.service'
     unit = tmp_path / service
-    unit.write_text(f'[Service]\nExecStart={sys.executable} {root / "current" / release.APP} '
-                    f'--host 127.0.0.1 --port 8768 --state {state} --service-tokens {token_file}\n')
+    unit.write_text(f'[Service]\n{directive}{sys.executable} {root / "current" / release.APP} '
+                    f'--host 127.0.0.1 --port 8768 --state {state}{separator}--service-tokens {token_file}\n')
     before = unit.read_bytes()
     source = root / 'releases' / 'candidate' if retained else tmp_path / 'source'
     source_tree(source)
@@ -41,7 +46,7 @@ def test_external_service_token_binding(tmp_path, monkeypatch, capsys, retained,
     monkeypatch.setattr(release, 'check_live', lambda *args: None)
     args = (None if retained else source, 'candidate', root, None if retained else state,
             None if retained else Path(sys.executable), '127.0.0.1', 8768, unit, service)
-    if supported:
+    if supported and directive == 'ExecStart=' and separator == ' ':
         selected = release.install(*args)
         assert (root / 'current').resolve() == selected
         command, = (line.removeprefix('ExecStart=') for line in unit.read_text().splitlines()

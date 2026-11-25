@@ -1,7 +1,4 @@
-"""Install or reactivate a versioned Model PC review app without moving review state.
-
-Run as the same user that owns rosy-review-v13.service. See README.md.
-"""
+"""Install or reactivate the review app as the service owner, preserving review state."""
 
 from __future__ import annotations
 
@@ -407,6 +404,8 @@ def _install_locked(source: Path | None, release: str, root: Path, state: Path |
     old_unit = unit.read_bytes()
     service_tokens = None
     for line in old_unit.decode('utf-8').splitlines():
+        if '--service-tokens' in line and not line.lstrip().startswith(('#', ';')) and not line.startswith('ExecStart='):
+            raise ValueError('cannot preserve bound --service-tokens outside a single ExecStart line')
         if line.startswith('ExecStart='):
             if '--service-tokens' in line:
                 matches = re.findall(r' --service-tokens[ =](/[^\s"\'\\$%]+)(?=\s|$)', line)
