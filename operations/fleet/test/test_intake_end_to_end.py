@@ -18,6 +18,7 @@ from test_cell_job_store import _stores
 from test_intake_transfer import _trips
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401 - pytest fixtures
 from test_physical_transfer_store import NOW, PROPOSER, admit, api, installation  # noqa: F401
+from test_port_events import control as relay_control
 
 T = datetime(2026, 11, 8, 3, 0, tzinfo=timezone.utc)
 CELL = "supply"
@@ -118,6 +119,10 @@ def test_rfid_epc_delivers_one_existing_intake_event(tmp_path, cell):
     assert len(received) == 1
     assert received[0]["object_ref"] == "CNTR-1" and received[0]["identity"] == "observed"
     assert "epc" not in received[0]
+    peer = relay_control({"cell-a": [(row["seq"], row["event"]) for row in ports.after(0, 50)], "cell-b": []})
+    relayed = asyncio.run(read_page(None, peer, None, 50))
+    assert relayed["complete"] and received[0] in relayed["events"]
+    assert asyncio.run(read_page(None, peer, relayed["cursor"], 50))["events"] == []
 
 
 @pytest.mark.parametrize("point,fields", [

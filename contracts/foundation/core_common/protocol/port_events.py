@@ -2,13 +2,15 @@
 from hashlib import sha256
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .arm_transfer_preflight import ArmPhysicalRef
 
 PortEventKind = Literal["container.received_at_intake", "container.stored", "container.loaded_for_outbound",
                         "container.handling_failed", "vehicle.release_permitted"]
 _Ref = Annotated[ArmPhysicalRef, Field(max_length=128)]
+EPC_PATTERN = r"^(?:[0-9A-Fa-f]{2}){2,64}$"
+Epc = Annotated[str, StringConstraints(pattern=EPC_PATTERN, to_upper=True)]
 
 #: kind -> the optional fields it must carry; every other optional field must be null (object_ref is checked apart)
 REQUIRED = {"container.received_at_intake": {"intake_point", "identity"},
@@ -78,23 +80,27 @@ class PortEventLedgerPage(BaseModel):
 
 
 class IntakeReading(BaseModel):
-    """D-996 2-3: what a cell PC read at one point. Only the tag id: the cell Fleet maps it to an object_ref and
+    """D-996 2-3: what a cell PC read at one point. The cell Fleet maps the marker ID or EPC to an object_ref and
     compares it with what the trip declared, so the PC never holds the app's cargo codes."""
     model_config = ConfigDict(extra="forbid", frozen=True)
     observation_ref: _Ref
-    point: Literal["conveyor_end", "wrist"]
+    point: Literal["conveyor_end", "wrist", "rfid_intake"]
     state: Literal["read", "unreadable", "mismatch"]
     tag: Annotated[int, Field(ge=0, le=999)] | None = None
+    epc: Epc | None = None
     #: wrist only: the A/B ARM_TRANSFER job placing this container; its target is the slot
     arm_mission_id: ArmPhysicalRef | None = None
     observed_at: AwareDatetime
 
     @model_validator(mode="after")
     def _shape(self):
-        if (self.state == "read") != (self.tag is not None):
-            raise ValueError("a tag is given exactly when the state is read")
-        if self.point == "conveyor_end" and self.arm_mission_id is not None:
-            raise ValueError("a conveyor-end reading names no arm job")
+        rfid = self.point == "rfid_intake"
+        if (rfid and self.tag is not None) or (not rfid and self.epc is not None):
+            raise ValueError("RFID intake uses an EPC; camera readings use a marker ID")
+        if (self.state == "read") != ((self.epc if rfid else self.tag) is not None):
+            raise ValueError("a tag or EPC is given exactly when the state is read")
+        if self.point != "wrist" and self.arm_mission_id is not None:
+            raise ValueError("only a wrist reading names an arm job")
         if self.observed_at.utcoffset().total_seconds() != 0:
             raise ValueError("observed_at is UTC")
         return self

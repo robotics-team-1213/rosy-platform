@@ -33,10 +33,14 @@ class Link:
         self.sent.append(item)
 
 
-def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path):
-    item = po.reading("conveyor_end", {"state": "read", "tag": 100}, observed_at=T)
+@pytest.mark.parametrize(("point", "identity"), [
+    ("conveyor_end", {"tag": 100}),
+    ("rfid_intake", {"epc": "432d35000000000000000000"}),
+])
+def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path, point, identity):
+    item = po.reading(point, {"state": "read", **identity}, observed_at=T)
     po.queue(item, tmp_path)
-    po.queue(item.model_copy(update={"tag": 101}), tmp_path)  # the first stored bytes win
+    po.queue(item.model_copy(update={"observed_at": datetime(2026, 11, 9, tzinfo=timezone.utc)}), tmp_path)
     assert po.send(Link(fail=True), tmp_path) is False and len(list(tmp_path.glob("*.json"))) == 1
     link = Link()
     assert po.send(link, tmp_path) is True
