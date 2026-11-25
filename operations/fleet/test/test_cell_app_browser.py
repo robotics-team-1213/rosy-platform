@@ -108,10 +108,14 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page, _, _ = browser_site
     real2sim = {"snapshots": [], "active": {"id": "browser-r2s"}, "physics_candidates": [], "sysid_summary": {}, "stages": []}
     cell_tasks = {
-        "tasks": [],
+        "tasks": [{
+            "task_id": "cell-s-waiting", "arm_id": "arm_s", "cell_id": "cell_s", "status": "QUEUED", "robot_id": "rosy_42",
+            "last_refusal": {"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "missing": ["pose", "bed_ready"]},
+        }],
+        "arm_live_states": {"arm_s": {"observed": True, "fresh": False, "folded": True, "age_s": 28491.8}},
         "cameras": [{"id": "top", "label": "S5 top", "topic": "/top_camera/image_raw", "fresh": True, "sequence": 7}],
-        "cells": {"cell_s": {"gate": {}}, "cell_ab": {"gate": {}}},
-        "summary": {"total": 0, "queued": 0, "running": 0, "completed": 0},
+        "cells": {"cell_s": {"gate": {}, "station": {"station_place": "S3"}}, "cell_ab": {"gate": {}}},
+        "summary": {"total": 1, "queued": 1, "running": 0, "completed": 0},
     }
 
     seen = set()
@@ -129,6 +133,11 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
 
     page.route("**/api/fleet/cell-app/real2sim-pipeline**", serve_real2sim)
     page.route("**/api/fleet/pipeline/cell-tasks**", serve_cell_tasks)
+    page.route("**/api/fleet/workcell-observations", lambda route: route.fulfill(json={"workcells": [{
+        "workcell_id": "test-cell", "label": "Test cell", "cameras": [],
+        "arms": [{"arm_id": "arm_s", "source_id": "omx_arm_s", "label": "Arm S", "fresh": True,
+                  "positions": {"joint1": 0}, "source_age_s": 0.1, "receipt_age_s": 0.1}],
+    }]}))
     page.route("**/api/fleet/vision/sources**", lambda route: route.fulfill(json={"sources": []}))
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
@@ -137,6 +146,11 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
     expect(page.locator("#cell-visual-cards .cell-visual-card")).to_have_count(3)
+    s_card = page.locator('#cell-visual-cards [data-card-id="cell_s"]')
+    expect(s_card).to_contain_text("마지막 화면 갱신 시 관절 관측 · 작업 상태 갱신 필요")
+    expect(s_card).to_contain_text("승인 대기 0건 · 실행 대기 1건")
+    expect(s_card.locator(".cell-pipeline-banner")).to_contain_text("측정되지 않음: 정차 위치, 적재함 확인")
+    expect(s_card.locator(".cell-pipeline-banner")).to_contain_text("rosy_42 S3 정차")
     expect(page.locator("#cell-camera-matrix .cell-observation-card img[alt='S5 상단(top)']")).to_have_count(1)
     page.locator('#omx-right-inspector [data-inspect-target="arm_b"]').click()
     expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")

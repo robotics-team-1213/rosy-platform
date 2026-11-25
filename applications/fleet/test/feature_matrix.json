@@ -2376,6 +2376,14 @@
           "expression": "/api/fleet/policy-admission",
           "resolution": "literal-or-template",
           "request_ids": [
+            "GET:/api/fleet/policy-admission"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/policy-page.js",
+          "expression": "/api/fleet/policy-admission",
+          "resolution": "literal-or-template",
+          "request_ids": [
             "GET:/api/fleet/policy-admission",
             "POST:/api/fleet/policy-admission"
           ]
@@ -2983,15 +2991,23 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/cell/cell.js",
         "applications/fleet/web/console-refresh.js",
         "applications/fleet/web/shared/cell-context-panel.js",
         "applications/fleet/web/shared/fleet-header.js",
-        "applications/fleet/web/work/channel-request-view.js",
         "applications/fleet/web/work/work-view.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
+          "expression": "/api/fleet/dispatch-control",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/dispatch-control"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/cell/cell.js",
           "expression": "/api/fleet/dispatch-control",
@@ -3038,14 +3054,6 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/estop"
-          ]
-        },
-        {
-          "consumer": "applications/fleet/web/work/channel-request-view.js",
-          "expression": "/api/fleet/dispatch-control",
-          "resolution": "literal-or-template",
-          "request_ids": [
-            "GET:/api/fleet/dispatch-control"
           ]
         },
         {
@@ -3194,6 +3202,7 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/map/trail-view.js",
         "applications/fleet/web/roster.js",
@@ -3206,6 +3215,14 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
+          "expression": "/api/fleet/work",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/work"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/shared/cell-context-panel.js",
           "expression": "/api/fleet/work",
@@ -3512,9 +3529,11 @@
       "id": "mission",
       "title": "제안·Mission·채널",
       "entrypoints": [
+        "applications/fleet/web/cell/cell.html",
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/cell/cell.js",
         "applications/fleet/web/shared/cell-context-panel.js",
         "applications/fleet/web/work/channel-request-view.js",
@@ -3564,6 +3583,14 @@
         },
         {
           "consumer": "applications/fleet/web/work/channel-request-view.js",
+          "expression": "/api/fleet/channel-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/channel-requests"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/channel-request-view.js",
           "expression": "/api/fleet/channel-requests/${encodeURIComponent(receipt.request_id)}",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -3596,7 +3623,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/work/channel-request-view.js",
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
           "expression": "/api/fleet/proposals/${encodeURIComponent(sourceId)}",
           "resolution": "literal-or-template",
           "request_ids": [

@@ -354,6 +354,8 @@ FENCED = [
     ("post", "/api/v1/navigation/bound-plan", {"x": 1.0, "y": 0.0, "expected_map_grid_id": "occupancy:lease",
                                                "correlation_id": "s3-plan"}),
     ("post", "/api/v1/navigation/route", {"points": [{"x": 1.0, "y": 0.0}]}),  # D-1009
+    ("post", "/api/v1/navigation/bound-route",
+     {"points": [{"x": 1.0, "y": 0.0}], "expected_map_grid_id": "occupancy:lease"}),
     ('post', '/api/v1/navigation/handover', dict(expected_boot_id='00000000-0000-0000-0000-000000000001',
         run_id='00000000-0000-0000-0000-000000000001', expected_owner_generation=0, correlation_id='work-attempt')),
     ("post", "/api/v1/navigation/home", None),

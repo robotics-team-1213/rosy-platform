@@ -1,12 +1,17 @@
 import { isOperator } from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
-import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
+import { capabilityReason, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill, robotMapPose } from "./localization-badge.js";
 import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { planPolylines, planSummaryText, planTrip, startTrip, tripPoseReason, tripRefusalText, tripStartReason } from "/console/assets/site-map-model.js";
+import { planPolylines, planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
 import { renderHoverCard } from "./map-hover-card.js";
+
+function tripDispatchRefusal(error) {
+  return junctionTurnRefusalText(error) || tripRefusalText(error);
+}
 
 function flattenPlanPoints(map, plan) {
   if (!map?.edges || !Array.isArray(plan?.segments)) return null;
@@ -148,7 +153,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         life.check();
       } catch (err) {
         if (err?.name === "AbortError" || seq !== goalPlanSeq) return;
-        const refusal = tripRefusalText(err);
+        const refusal = tripDispatchRefusal(err);
         setGoal({ status: "BLOCKED", statusText: refusal });
         log(`${robotId} 차로 주행 거절 — ${refusal}`, "bad");
         return;
@@ -227,9 +232,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad");
+      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripDispatchRefusal(err) : err.message}`, "bad");
     }
-      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad"),
+      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripDispatchRefusal(err) : err.message}`, "bad"),
     });
     if (viaTrip && !started && seq === goalPlanSeq && view.selectedGoal?.planId === prePlanned?.plan_id) {
       setGoal({ statusText: "서버 경로 미리보기 (출발 취소)" });

@@ -13,6 +13,7 @@ from core_common.protocol.arm_incident.arm_incidents import (
     machine_clearable, software_stop,
 )
 from fleet.server.sqlite_policy import configure_connection, enable_wal
+from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON, is_home_recovery
 
 
 LISTED_MAX_AGE_S = 2.0  # backstop only; this store's own writes drop the shared list at once
@@ -101,8 +102,11 @@ class ArmIncidentStore:
         rows = [r for r in rows if _holds(r[1]) and not software_stop(_facts(r[2]))]
         if not rows:
             return ArmIncidentHold(held=False, incident_ids=[])
+        physical_or_unknown = next((row for row in rows if not is_home_recovery(_facts(row[2]))), None)
+        if physical_or_unknown is None:
+            return ArmIncidentHold(held=True, incident_ids=[r[0] for r in rows[:64]], reason=HOME_RECOVERY_REASON)
         try:
-            why = json.loads(rows[0][1]).get("reason")
+            why = json.loads(physical_or_unknown[1]).get("reason")
         except ValueError:
             why = None
         why = CONTROL.sub(" ", why)[:300] if isinstance(why, str) and why.strip() else "arm incident not cleared"
@@ -254,6 +258,9 @@ class ArmIncidentStore:
                                                            "kind": kind or "person",
                                                            "remeasured": json.loads(remeasured) if remeasured else None,
                                                            **({"risk": json.loads(clear_risk)} if clear_risk else {})}}
+        if is_home_recovery(out["facts"]):
+            out["event_kind"] = "home_recovery"
+            out["decision"]["reason"] = HOME_RECOVERY_REASON
         out["frames"] = [({"role": r, "sha256": h, "jpeg_b64": base64.b64encode(j).decode()} if with_bytes
                           else {"role": r, "sha256": h, "bytes": j}) for r, h, j in frames]
         out["evidence"] = [{"seq": s, "camera": c, "t_rel_s": t, "kind": k, "sha256": h, "bytes": n} for s, c, t, k, h, n in

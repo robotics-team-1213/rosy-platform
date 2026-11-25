@@ -20,7 +20,7 @@ from launch.launch_description_sources import (
     AnyLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
 )
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import AndSubstitution, LaunchConfiguration, NotSubstitution
 from launch_ros.actions import Node
 
 from navigation.footprint_profile import load_footprint_profile
@@ -162,12 +162,15 @@ def generate_launch_description():
 
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    enable_line_follow = LaunchConfiguration("enable_line_follow")
+    line_ir_enabled = LaunchConfiguration("line_ir_enabled")
 
     robot_args = {
         "namespace": namespace,
         "use_sim_time": use_sim_time,
         "enable_battery": LaunchConfiguration("enable_battery"),
         "enable_lidar": LaunchConfiguration("enable_lidar"),
+        "enable_ir": AndSubstitution(line_ir_enabled, NotSubstitution(enable_line_follow)),
         "cmd_vel_timeout_s": LaunchConfiguration("cmd_vel_timeout_s"),
         "motor_device": LaunchConfiguration("motor_device"),
         "motor_baudrate": LaunchConfiguration("motor_baudrate"),
@@ -238,19 +241,18 @@ def generate_launch_description():
             ),
             launch_arguments=robot_args.items(),
         ),
-        # ir_sensor/range single-publisher rule: in this OS hardware graph the
-        # IR source is control's ir_adc_node (via line_follow). The C++
-        # sensor_adc node is a legacy-bench reader of the same bus and must
-        # never run beside it — two readers interleave ir_sensor/range arrays.
+        # ir_sensor/range single-publisher rule: bringup owns IR when native
+        # navigation uses the separate camera service. The combined line-follow
+        # graph owns it instead when that graph is enabled.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(control_share, "launch", "line_follow.launch.py")
             ),
-            condition=IfCondition(LaunchConfiguration("enable_line_follow")),
+            condition=IfCondition(enable_line_follow),
             launch_arguments={
                 "namespace": namespace,
                 "start_camera": LaunchConfiguration("line_camera_enabled"),
-                "start_ir_adc": LaunchConfiguration("line_ir_enabled"),
+                "start_ir_adc": line_ir_enabled,
                 "camera_backend": LaunchConfiguration("camera_backend"),
                 "camera_device": LaunchConfiguration("camera_device"),
                 "ir_interface": LaunchConfiguration("ir_interface"),

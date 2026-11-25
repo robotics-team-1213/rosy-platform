@@ -163,8 +163,12 @@ def record(row: dict, tried: dict, cell, before_frame, config, dest_site, source
     """Measure, then put verify, transfer and zone_verification on the attempt row: cell_task_exec reads that row, which
     kept none of them before (they went only to the attempts ledger)."""
     # Fleet tasks and `--verify-zones` `:8781` runs record zone verification; other carries skip the extra reads.
-    tried["zone_verification"] = (measure(cell, before_frame, config, dest_site, source_site, roi) if zone_check_enabled(config)
+    from cell_route_check import temp_to_ship
+    named = temp_to_ship(source_site, dest_site)
+    tried["zone_verification"] = (measure(cell, before_frame, config, dest_site, source_site, roi) if named or zone_check_enabled(config)
                                   else {"basis": "unverified: not a Fleet task", "verified": False})
+    if named and not tried["zone_verification"].get("verified"):
+        tried["verify"]["verified"] = False
     row.update(verify=tried["verify"], zone_verification=tried["zone_verification"], transfer=tried["transfer"])
 
 
@@ -250,11 +254,17 @@ def _top_target(config: dict, dest_site: str, roi):
 
 def measure(cell, before_frame: dict | None, config: dict, dest_site: str, source_site: str, roi) -> dict:
     """The zone verification record for the placement that just finished at `dest_site`."""
+    import cell_route_check
+    import cell_route_depth
+
     placed_at = time.time()  # the release finished before this call: a frame captured after it shows the placed result
     source = getattr(cell, "cell", cell)
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": None, "top": None,
                            "before_frames": _save_before(config, before_frame),
                            "side": {"available": False, "reason": "no side camera in this cell"}}
+    named = cell_route_check.temp_to_ship(source_site, dest_site)
+    if named and not (before_frame or {}).get("route_depth"):
+        return {**out, "basis": "unverified: missing pre-motion route depth"}
     # The Z16 capture (slow, so it goes first and the RGB frames taken after it stay fresh) is taken only when the cell config
     # has floor ROIs: that is the one case where the zone check uses it.
     rois, bad_rois = _zone_rois(config)
@@ -290,6 +300,8 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     no_slot_roi = (f"zone_rois.top has no cell-specific ROI for {slot_key}"
                    if has_side and rois is not None and rois.get("floor") and target and cell_site_target.top_slot_roi(rois, target) is None else None)
     failure = why or side_why or depth_why or bad_target or bad_rois or no_slot_roi or stale or missing_before
+    if named and (not has_side or depth is None):
+        failure = failure or "named route requires paired side, top and depth observations"
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
     canon_fields = ("area", "col", "row", "tier", "base_site", "site") if "site_id" in target else ("area", "col", "row", "tier")
@@ -313,6 +325,9 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         extra["zone_rois"] = out["zone_rois"] = rois  # the cell's own zone table, for this check only
     stack = verify(before_side=before_side_frame["image"], after_side=side["image"], before_top=before_frame["image"],
                    after_top=top["image"], pick=pick, place=place, strict_target=True, **extra)
+    if named:
+        stack = cell_route_depth.verify(config, source_site, dest_site, before_frame, top, side, depth,
+                                        depth_receipt, placed_at, judged_at, stack)
     top_zone = (stack.get("place_slot") or {}).get("top_zone")
     # verify_stack_outcome leaves top_orientation_ok True when it measured nothing on top: an unmeasured top zone is not verified.
     top_ok = bool(isinstance(top_zone, dict) and top_zone.get("within_zone") and top_zone.get("orientation_ok") is True)

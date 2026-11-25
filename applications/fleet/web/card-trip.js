@@ -5,9 +5,10 @@
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
-import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
+import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripNav2Body, tripRefusalText, tripPoseReason} from "/console/assets/site-map-model.js";
+import {consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason} from "/console/assets/localization-panel-logic.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
+import { chooseConvoyLeader, estopText, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { setOffBy } from "/common/cause-line.js";
 import { patchText } from "/common/control-dom.js";
@@ -79,7 +80,8 @@ function line(className, text) {
 export function createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason = () => "" }) {
   let form = null;  // { robotId, to, start, plan, busy, note }: one form open at a time
   const tripGate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
-  const ready = (robot) => tripGate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
+  const ready = (robot) => tripGate(robot) || (form?.driveMode === "nav2_slam" ? ""
+    : view.guideUnavailable ? "현장 지도 위치 확인 불가"
     : tripPoseReason(view.guide, robot?.robot_id, view.activeSiteMap, robotMapPose(robot)));
   const places = () => view.activeSiteMap?.map?.places || [];
   function checkReady(robotId) {
@@ -110,7 +112,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       if (holder === form) form = null;
     } catch (err) {
       if (err.name === "AbortError") return;
-      holder.note = `운행 거절 · ${tripRefusalText(err)}`;
+      holder.note = `운행 거절 · ${junctionTurnRefusalText(err) || tripRefusalText(err)}`;
       log(`${robotId} ${holder.note}`, "bad");
     } finally {
       if (life.current()) { holder.busy = false; render(); }
@@ -166,8 +168,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
 
     const canNav2 = (robot.capabilities?.controls?.items || []).some(
       (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
-    if (!canNav2 && mine.driveMode === "nav2") mine.driveMode = "";
-    const driveModeBody = () => (mine.driveMode === "nav2" ? { drive_mode: "nav2" } : {});
+    const driveModeBody = () => tripNav2Body(mine.driveMode);
 
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
     // drops the previewed plan from the buttons on screen now.
@@ -269,12 +270,12 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     lapSummary.setAttribute("role", "status");
 
     box.append(kind.wrap);
-    if (canNav2) {
+    if (canNav2 || mine.driveMode) {
       const modePick = pick("주행 방식", (value) => {
         mine.driveMode = value; mine.plan = null; mine.lapPlan = null; render();
       });
       modePick.select.dataset.tripDriveMode = id;
-      for (const [value, name] of [["", "기본 (지도 설정)"], ["nav2", "Nav2 (도로 추종)"]]) {
+      for (const [value, name] of [["", "기본 (지도 설정)"], ["nav2", "Nav2 (도로 추종)"], ["nav2_slam", "Nav2 (승인 SLAM 위치)"]]) {
         const option = document.createElement("option"); option.value = value; option.textContent = name;
         modePick.select.append(option);
       }

@@ -240,6 +240,16 @@ def test_a_moved_camera_stops_the_carry_before_any_pick():
     assert not picked and out["result"] == "ask a person: camera_moved" and out["ask"] == dg.ASK["camera_moved"]
 
 
+def test_map_binding_stops_pick_and_preserves_the_specific_cause():
+    def no_motion(*args):
+        pytest.fail("motion on map binding failure")
+
+    out = rc.carry(lambda: CLEAN, no_motion, no_motion, expected_px=lambda _: [], emit=lambda *args: None,
+                   camera=lambda frame: {"camera_issue": "camera_map_binding", "ok": True, "max_px": 2.5})
+    assert out["rounds"][0]["cause"] == "camera_map_binding"
+    assert out["ask"] == dg.ASK["camera_map_binding"]
+
+
 def test_no_session_and_a_park_overload_are_named_and_never_retried():
     assert dg.attempt_cause("refused") == "no_session" and dg.attempt_cause("refused: source 'x' has no site") == "other"
     assert dg.attempt_cause("stopped: contact at park: contact in park: lag", pile_moved=True) == "park_contact"

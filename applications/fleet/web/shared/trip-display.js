@@ -30,6 +30,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NO_ROUTE: '갈 수 있는 길이 없습니다',
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
+  NAV2_BOUND_ROUTE_UNSUPPORTED: '로봇 CORE가 지도 격자 검사 기능을 지원해야 Nav2로 출발할 수 있습니다',
   TRIP_POSE_UNTRUSTED: '현장 지도 위치를 확인할 수 없습니다 · 위치와 관측 갱신을 확인하세요',
   TRIP_BATTERY_UNCONFIRMED: '배터리 상태를 확인할 수 없거나 너무 낮아 출발할 수 없습니다 · 배터리 근거와 충전을 확인하세요',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
@@ -136,6 +137,8 @@ export function startCheckText(check) {
 }
 
 export function tripErrorText(code, detail = {}) {
+  if (code === "TRIP_POSE_UNTRUSTED" && detail?.reason === "APPROVED_SLAM_POSE_REQUIRED")
+    return "Nav2 출발에 승인된 지도 결속과 최신 CORE SLAM 위치가 필요합니다";
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
   if (/HEADING_CONFLICT|START_HEADING_MISMATCH/.test(code || '') && detail?.heading_err_deg != null)
     return `${base} · ${startCheckText({...detail, code: 'heading'})}`;

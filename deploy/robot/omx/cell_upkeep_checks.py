@@ -291,6 +291,10 @@ def check_map(config, params, top, io):
         f"y={g['uncovered_y_m'][0]}..{g['uncovered_y_m'][1]} m)"
         for g in gaps
     )
+    if result["todo"] == ["review-camera-reference"]:
+        found = result["check"]
+        return row("map", "warn", found["camera_advice"], motion=False, steps=result["todo"],
+                   found=found, low_zone_gaps=gaps)
     if not result["todo"] and not gaps:
         return row("map", "ok", "map, camera pose and surfaces agree")
     if not result["todo"]:

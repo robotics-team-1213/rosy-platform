@@ -25,7 +25,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from rosy.world.state.projections.map_pose import MapPose
-from fleet.server.console_view import TripCaps
+from fleet.server.console_view import TripCaps, trip_caps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
 from fleet.server import trip_runner
 from core_features.line_follow.recovery.junction.gate import MANEUVER as CORE_MANEUVER
@@ -465,6 +465,21 @@ def test_plans_a_lane_robot_cannot_run_are_refused(site_map, arc, s, to, caps, r
     with pytest.raises(TripError) as err:
         run(runner.start("p1", "bob"))
     assert err.value.code == "TRIP_MODE_UNSUPPORTED" and err.value.detail["reason"] == reason
+    assert "junction_turn_reason" not in err.value.detail
+
+
+def test_lane_start_surfaces_core_junction_turn_reason_from_capabilities():
+    caps = trip_caps({"controls": {"items": [{
+        "kind": "base_velocity", "robot_kind": "pinky_pro", "drive_modes": ["lane"],
+        "trip_max_linear": 0.2, "junction_turn": False, "junction_turn_reason": "ir_centre",
+    }]}})
+    runner, store, ports = _setup(_free_map("lane"), caps=caps)
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.code == "TRIP_MODE_UNSUPPORTED"
+    assert err.value.detail == {"edge_id": "ab", "reason": "JUNCTION_TURN_UNSUPPORTED",
+                                "junction_turn_reason": "ir_centre"}
 
 
 def test_a_turn_sharper_than_the_bound_is_refused_for_lane_robots():

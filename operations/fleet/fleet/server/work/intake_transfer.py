@@ -9,8 +9,9 @@ import asyncio
 from contextlib import closing
 from datetime import datetime
 import json
+import re
 
-from core_common.protocol.port_events import PortEvent, event_id
+from core_common.protocol.port_events import EPC_PATTERN, PortEvent, event_id
 from .mission_store import MissionConflict
 from .port_event_store import PortEventConflict
 
@@ -101,12 +102,18 @@ def release_vehicles(trip_store, arm_store, port_store) -> list[int]:
 
 def validate_intake(intake, arm_store) -> None:
     names = ("supply_place", "instance_id", "intake_point")
-    if (not isinstance(intake, dict) or set(intake) - {*names, "container_tags"} or not all(
+    if (not isinstance(intake, dict) or set(intake) - {*names, "container_tags", "container_epcs"} or not all(
             isinstance(intake.get(name), str) and intake[name] for name in names)):
-        raise ValueError("intake needs supply_place, instance_id, intake_point and optional container_tags")
+        raise ValueError("intake needs supply_place, instance_id, intake_point and optional tags or EPCs")
     tags = intake.get("container_tags", {})
     if not isinstance(tags, dict) or not all(k.isdigit() and isinstance(v, str) and v for k, v in tags.items()):
         raise ValueError("container_tags maps tag ids to object_refs (the site marker profile's table)")
+    epcs = intake.get("container_epcs", {})
+    if not isinstance(epcs, dict) or not all(
+        isinstance(k, str) and k == k.upper() and re.fullmatch(EPC_PATTERN, k) and isinstance(v, str) and v
+        for k, v in epcs.items()
+    ):
+        raise ValueError("container_epcs maps uppercase hexadecimal EPCs to object_refs")
     if arm_store is None or intake["instance_id"] not in {
             p.instance_id for p in arm_store.installation.policy.participants}:
         raise ValueError("intake instance_id is not an installed ARM transfer participant")

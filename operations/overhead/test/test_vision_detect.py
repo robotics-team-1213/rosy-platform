@@ -63,6 +63,43 @@ def test_detect_markers_rereads_an_eight_pixel_sticker_the_full_frame_pass_rejec
     assert np.allclose(center, (604, 304), atol=1.0)
 
 
+def test_aruco_reread_accepts_up_to_32_px_rejected_candidates(monkeypatch):
+    from rosy_vision import detect as detect_mod
+
+    image = np.full((100, 100, 3), 255, dtype=np.uint8)
+    rejected = [np.array([[10, 10], [10 + side, 10], [10 + side, 10 + side], [10, 10 + side]])
+                for side in (33, 24, 32)]
+    crops = []
+
+    def record_crop(crop):
+        crops.append(crop.shape[:2])
+        return (), None, ()
+
+    monkeypatch.setattr(detect_mod, "_DETECT_MARKERS", record_crop)
+    monkeypatch.setattr(detect_mod.time, "monotonic", lambda: 0.0)
+    detect_mod._reread_small(image, rejected, {})
+
+    assert crops == [(216, 216), (184, 184)]  # Larger square first.
+
+
+def test_aruco_reread_prioritizes_square_after_elongated_candidates(monkeypatch):
+    from rosy_vision import detect as detect_mod
+
+    image = np.full((100, 320, 3), 255, dtype=np.uint8)
+    rejected = [
+        np.array([[x, 10], [x + 30, 10], [x + 30, 25], [x, 25]], dtype=float)
+        for x in range(10, 290, 40)
+    ]
+    image[50:74, 50:74] = cv2.cvtColor(generate_marker_image(41, 24), cv2.COLOR_GRAY2BGR)
+    rejected.append(np.array([[50, 50], [73, 50], [73, 73], [50, 73]], dtype=float))
+
+    monkeypatch.setattr(detect_mod.time, "monotonic", lambda: 0.0)
+    found = {}
+    detect_mod._reread_small(image, rejected, found)
+
+    assert set(found) == {41}
+
+
 @pytest.mark.parametrize("text, expected", [
     ("ROSY-42", 42),
     ("ROSY-45", 45),

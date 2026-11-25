@@ -105,9 +105,11 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
             before = frame()
             shift = camera(before) if camera else None
             if shift:
-                rows.append({"result": "camera moved", "cause": "camera_moved", "camera_shift": shift, "action": "ask_person"})
-                emit("recovery", rows[-1], cell_diagnose.RECOVERY["camera_moved"], "ask_person", "rule", "camera moved")
-                return {"result": "ask a person: camera_moved", "rounds": rows, "ask": cell_diagnose.ASK["camera_moved"]}
+                cause = shift.get("camera_issue") or "camera_moved"
+                result = "camera moved" if cause == "camera_moved" else "camera check refused"
+                rows.append({"result": result, "cause": cause, "camera_shift": shift, "action": "ask_person"})
+                emit("recovery", rows[-1], cell_diagnose.RECOVERY[cause], "ask_person", "rule", result)
+                return {"result": f"ask a person: {cause}", "rounds": rows, "ask": cell_diagnose.ASK[cause]}
             out = pick()
             attempt = (out.get("attempts") or [{}])[-1]
             moved = away_from(scene_moved(before, frame(), ignore), expected_px(attempt))
@@ -213,9 +215,10 @@ def main(argv=None) -> int:
 
     def moved_camera(frame):
         found = cell_calibrate.check(config, calibration, [], frame, config.get("params"))
-        if found.get("no_reference"):
-            return {"why": "the reference frame is missing"}
-        return found["camera_shift"] if found["camera_moved"] else None
+        if found.get("no_reference") or found["camera_moved"]:
+            return {**(found.get("camera_shift") or {}), "camera_issue": found["camera_issue"],
+                    "map_binding_error": found.get("map_binding_error")}
+        return None
 
     evidence = config.get("evidence_camera")
     observe = (lambda: cell_site_camera.fleet_frame(evidence, work / "evidence")) if evidence else None

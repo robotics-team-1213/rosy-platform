@@ -16,6 +16,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_bound import _load_ref_gray
+import cell_diagnose
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
@@ -35,28 +37,11 @@ def depth_capture():
     return cell_depth.capture_top_depth_z16()
 
 
-_REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
-
-
-def _load_ref_gray(path: Path):
-    import cv2
-
-    try:
-        st = path.stat()
-    except OSError:
-        return None
-    key = str(path)
-    cached = _REF_GRAY_CACHE.get(key)
-    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
-        return cached[2]
-    img = cv2.imread(key, cv2.IMREAD_GRAYSCALE)
-    if img is not None:
-        _REF_GRAY_CACHE[key] = (st.st_mtime_ns, st.st_size, img)
-    return img
-
-
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order."""
+    bootstrap = check.get("initial_commissioning") and check.get("missing_map")
+    if check.get("camera_issue") not in (None, "camera_moved") and not bootstrap:
+        return ["review-camera-reference"]
     if check.get("camera_moved") or check.get("missing_map"):
         steps = ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
     else:
@@ -94,11 +79,13 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
             frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
         out["camera_shift"] = shift
-        out["camera_moved"] = (bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
-                               or not shift["ok"] or shift["max_px"] > prm.get(params, "calibrate.max_shift_px"))
     else:
-        out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
+        out["initial_commissioning"] = (calibration.get("sites") == {} and set(calibration) <= {"schema", "sites"}
+                                       and calibration.get("schema") in (None, cal.SCHEMA)
+                                       and not (config.get("preflight") or {}).get("reference_sha256")
+                                       and not (ref_path and (ref_path.exists() or ref_path.is_symlink())))
+    out.update(cell_diagnose.camera_reference(out, prm.get(params, "calibrate.max_shift_px")))
     try:
         bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
         for site, xy in targets:
@@ -249,6 +236,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("step", choices=["check", "auto"])
+    ap.add_argument("--route", nargs=2, metavar=("SOURCE", "DEST"), help="check named A/B depth inputs")
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
@@ -260,7 +248,10 @@ def main(argv=None):
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     ap.add_argument("--obstacle-mm", type=float, default=None, help="override obstacle height (mm above table) for remap z_view clearance")
     args = ap.parse_args(argv)
-    if args.obstacle_mm is not None and not 0 < args.obstacle_mm < float("inf"): ap.error("--obstacle-mm must be a positive finite number of mm")
+    if args.obstacle_mm is not None and not 0 < args.obstacle_mm < float("inf"):
+        ap.error("--obstacle-mm must be a positive finite number of mm")
+    if args.route and (args.step != "check" or args.plan_only or args.replay_frames):
+        ap.error("--route requires a live read-only check")
     import cv2
     import cell_pipeline as cp
 
@@ -287,7 +278,13 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     top_frame = cell.frame("top")
     found = check(config, calibration, targets, top_frame, config["params"])
+    if args.route:
+        from cell_route_check import route_check
+        found["route"] = route_check(config, *args.route)
     todo = stale(found)
+    if todo == ["review-camera-reference"]:
+        print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)
+        return 0 if args.step == "check" else 2
     if args.verify:
         for vstep in ("post-eval", "depth-verify"):
             if vstep not in todo:

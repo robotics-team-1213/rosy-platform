@@ -199,7 +199,7 @@ class LineObserverHelpersMixin:
         return min(0.45, float(self.get_parameter('learned_paint_stale_s').value) * 0.75)
 
     def _idle_keep_still(self, image_stamp: float, cmd) -> bool:
-        odom_fresh = self._odom_stamp is not None and 0.0 <= image_stamp - self._odom_stamp <= 0.5
+        odom_fresh = self._odom_stamp is not None and abs(image_stamp - self._odom_stamp) <= 0.5
         return bool(
             odom_fresh
             and self._odom_twist is not None
@@ -208,10 +208,20 @@ class LineObserverHelpersMixin:
             and (cmd is None or (abs(cmd[0]) < 1e-3 and abs(cmd[1]) < 1e-3))
         )
 
+    def _wall_ahead_key(self, image_stamp: float):
+        wa = self._wall_ahead
+        if wa is None or wa[1] is None or abs(image_stamp - wa[1]) > 0.5:
+            return None
+        ahead, _, side, front = wa
+        side_key = None if not isinstance(side, dict) else tuple(
+            (k, None if v is None else round(float(v), 2)) for k, v in sorted(side.items()))
+        return (None if ahead is None else round(float(ahead), 2), side_key,
+                None if front is None else round(float(front), 2))
+
     def _idle_keep_key(self, frame, image_stamp: float, route_context_seq):
         lg = self._lane_guide
         guide = lg.for_frame(image_stamp) if hasattr(lg, 'for_frame') else None
-        return (frame.shape, route_context_seq, self._wall_ahead, lg.generation,
+        return (frame.shape, route_context_seq, self._wall_ahead_key(image_stamp), lg.generation,
                 getattr(lg, '_epoch', None), getattr(lg, '_seq', None),
                 guide is not None, self._drivable_steer, self._ground_label())
 

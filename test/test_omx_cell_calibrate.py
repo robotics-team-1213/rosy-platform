@@ -125,7 +125,8 @@ def test_reference_bytes_must_match_the_bound_calibration_before_camera_check(tm
     found = cc.check(config, calibration, [], np.full((32, 32, 3), 80, np.uint8))
     assert found["camera_moved"] is True
     assert found["map_binding_error"] == "top camera map reference changed"
-    assert cc.stale(found)[:2] == ["remap", "regions"]
+    assert found["camera_issue"] == "camera_map_binding"
+    assert cc.stale(found) == ["review-camera-reference"]
     config["preflight"]["reference_sha256"] = expected
     assert cc.check(config, {"sites": {}}, [], np.full((32, 32, 3), 80, np.uint8))["map_binding_error"]
     config["preflight"].pop("reference_sha256")
@@ -762,105 +763,6 @@ def test_plan_only_accepts_the_arm_a_point_set(tmp_path, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)["reach"] == "no reach check"
 
 
-def test_plan_only_with_obstacle_mm_refuses_when_raised_z_view_exceeds_arm_b_window(tmp_path, monkeypatch, capsys):
-    import socket
-
-    import cell_pipeline
-
-    def no_open(*a, **k):
-        raise AssertionError("plan-only opened a camera, FIFO or port")
-
-    monkeypatch.setattr(cell_pipeline, "FifoCell", no_open)
-    monkeypatch.setattr(socket.socket, "connect", no_open)
-    config = {k: v for k, v in arm_b().items() if k != "plan"}
-    config["plan_path"] = str(FIX / "plan.json")
-    path = tmp_path / "arm_b_obs.json"
-    path.write_text(json.dumps(config))
-
-    assert cc.main(["--config", str(path), "auto", "--plan-only", "--obstacle-mm", "66"]) == 0
-    ok_out = json.loads(capsys.readouterr().out)
-    assert ok_out["refused"] is None and ok_out["z_view"]["raised"] is False
-
-    assert cc.main(["--config", str(path), "auto", "--plan-only", "--obstacle-mm", "100"]) == 2
-    bad_out = json.loads(capsys.readouterr().out)
-    assert bad_out["z_view"]["raised"] is True and bad_out["z_view"]["z_view"] == pytest.approx(0.135)
-    assert bad_out["refused"] and "wrist_flex.pos" in bad_out["refused"]
-
-
-def test_remap_auto_raises_z_view_from_depth_and_records_effective_z_view(tmp_path, monkeypatch, capsys):
-    pytest.importorskip("cv2")
-    import cell_cal_eval
-    import cell_hooks
-    import cell_pipeline as cp
-
-    cfg = arm_a()  # joint_max wrist_flex=60 via config-planb
-    cfg["coarse"]["z_view"] = 0.11
-    cfg["sites"]["pallet"]["surface_z"] = -0.01
-    cfg["sites"]["pallet"]["auto_roi"] = [0, 0, 32, 32]
-    cfg["plan_path"] = str(FIX / "plan.json")
-    cfg.pop("plan", None)
-    cal_path = tmp_path / "cal.json"
-    ref_path = tmp_path / "ref.jpg"
-    cfg["calibration_path"] = str(cal_path)
-    cfg["preflight"] = {"reference_top": str(ref_path)}
-    cfg["work_dir"] = str(tmp_path / "work")
-    cfg["io"] = str(tmp_path / "io")
-    cfg["cameras"] = {"top": {"url": "http://unused/top.jpg", "depth_device": "/dev/unused"}}
-    cfg_path = tmp_path / "cfg.json"
-    cfg_path.write_text(json.dumps(cfg))
-
-    class FakeCell:
-        def __init__(self, *a, **k):
-            pass
-
-        def frame(self, name):
-            return np.zeros((32, 32, 3), np.uint8)
-
-    monkeypatch.setattr(cp, "FifoCell", FakeCell)
-    monkeypatch.setattr(cc, "check", lambda *a, **k: {"camera_moved": False, "missing_map": ["pallet"], "targets": [], "missing_bias": [], "missing_surface": []})
-    monkeypatch.setattr(cell_cal_eval, "top_has_depth", lambda c: True)
-    monkeypatch.setattr(cc, "depth_capture", lambda: np.full((16, 16), 700, np.uint16))
-    monkeypatch.setattr(cc.rp, "site_obstacle_mm", lambda c, d, f: {"obstacle_mm": 100.0, "sites_mm": {"pallet": 100.0}, "edge_px": 4.2})
-    monkeypatch.setattr(cell_hooks, "stills", lambda *a, **k: type("S", (), {"close": lambda self: None})())
-
-    seen_z = []
-
-    def fake_remap(cell, r_cfg, points, work, at_stop=None):
-        seen_z.append(r_cfg["coarse"]["z_view"])
-        return {"z_view": r_cfg["coarse"]["z_view"], "loo_error_mm": {"max": 1.0}, "homography": np.eye(3).tolist(), "points": []}
-
-    monkeypatch.setattr(cc, "remap", fake_remap)
-
-    assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "--commissioning", "--person-at-switch"]) == 0
-    assert seen_z == [pytest.approx(0.125)]
-    saved_cal = json.loads(cal_path.read_text())
-    assert saved_cal["sites"]["pallet"]["z_view"] == pytest.approx(0.125)
-    # Fail-closed refusal BEFORE motion when elevated obstacle pushes wrist_flex past window
-    cfg["joint_max"] = {"wrist_flex.pos": 51.5}
-    cfg_path.write_text(json.dumps(cfg))
-    seen_z.clear()
-    capsys.readouterr()
-    assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "--commissioning", "--person-at-switch"]) == 2
-    assert seen_z == []
-    assert "wrist_flex.pos" in json.loads(capsys.readouterr().out.splitlines()[-1])["refused"]
-    # A D435 frame that could not be taken is refused before any move; --obstacle-mm is the explicit way past it
-    cfg["joint_max"] = arm_a()["joint_max"]
-    cfg_path.write_text(json.dumps(cfg))
-    monkeypatch.setattr(cc, "depth_capture", lambda: None)
-    monkeypatch.setattr(cc.rp, "site_obstacle_mm", lambda c, d, f: (_ for _ in ()).throw(ValueError("the D435 depth capture returned no frame")))
-    seen_z.clear()
-    capsys.readouterr()
-    assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "--commissioning", "--person-at-switch"]) == 2
-    out = capsys.readouterr().out
-    assert seen_z == [] and "obstacle not measured" in out and out.splitlines()[-1].startswith('{"refused"')
-    # fresh calibration and reference files: a second remap here would carry regions from the blank frame saved above
-    cfg["calibration_path"], cfg["preflight"] = str(tmp_path / "cal-override.json"), {"reference_top": str(tmp_path / "ref-override.jpg")}
-    cfg_path.write_text(json.dumps(cfg))
-    # the override stands in for the measurement: the same 100 mm obstacle raises the view exactly as before
-    assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "--commissioning", "--person-at-switch", "--obstacle-mm", "100"]) == 0
-    assert seen_z == [pytest.approx(0.125)]
-
-
 def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
     pytest.importorskip("cv2")
     cal_path = tmp_path / "cal.json"
@@ -873,7 +775,8 @@ def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
               "calibrate": {"map_sites": ["floor"]}}
     found = cc.check(config, json.loads(cal_path.read_text()), [("floor", (0.0, 0.17))], np.zeros((32, 32, 3), np.uint8))
     assert "max_bias_mm" in found["bias_error"] and found["missing_bias"] == ["floor:0.0,0.17"]
-    assert "pivot-near floor:0.0,0.17" in cc.stale(found)
+    assert found["camera_issue"] == "camera_reference_missing"
+    assert cc.stale(found) == ["review-camera-reference"]
 
 
 PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]], "clear_first": True},

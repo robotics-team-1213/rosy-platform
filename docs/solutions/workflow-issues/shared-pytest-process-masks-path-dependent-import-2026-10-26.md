@@ -1,7 +1,7 @@
 ---
 module: learning/training/omx + deploy/robot/pinky_pro/image
 date: 2026-10-26
-last_updated: 2026-11-03
+last_updated: 2026-11-25
 problem_type: workflow_issue
 component: testing_framework
 severity: high
@@ -112,6 +112,12 @@ commit `7047306026`은 실행 fixture 안에서 필요한 경로를
 중단·정리 receipt는 `rosy-full-fixture-isolation-20261103/`에 보존했다.
 새 fixture가 원본 폴더의 형제 모듈을 직접 import하면, 원본 loader에서 경로를
 준비했는지만 보지 말고 그 fixture가 실제로 실행되는 파일 단독 게이트까지 확인한다.
+
+## 패키지와 독립 스크립트로 쓰는 World 브리지 (2026-11-25)
+
+PR #799의 묶음 원격 시험은 통과했다. GitHub의 [affected-12](https://github.com/robotics-team-1213/rosy-platform/actions/runs/45618952616/job/139221936737)는 `test_site_world_deploy.py`를 수집할 때 `ModuleNotFoundError: world_state`를 냈다. 같은 묶음의 다른 World 시험이 먼저 World 폴더를 `sys.path`에 넣어 문제를 가리고 있었다.
+
+`bridge_real_fleet.py`는 패키지에서 형제 모듈을 상대 임포트한다. 번들·컨테이너에서 직접 실행할 때는 스크립트와 같은 폴더에서 읽는다. 배포 시험 파일의 단독 실행을 AI 시험 PC에서 확인했다. 회귀 시험은 별도 프로세스에서 `PYTHONPATH`를 무시하고 패키지로 브리지를 불러온다. 같은 모듈을 패키지와 CLI로 제공하면 두 진입점을 각각 확인한다.
 
 ## 다음에 적용할 조건
 

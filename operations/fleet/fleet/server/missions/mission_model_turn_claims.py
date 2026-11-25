@@ -61,6 +61,10 @@ class MissionModelTurnClaimMixin:
         now = _now()
         lease = _stamp(now + timedelta(seconds=self.claim_lease_seconds))
         with closing(self._connect()) as connection:
+            if connection.execute(
+                "SELECT 1 FROM fleet_mission_model_turns WHERE state='PENDING' LIMIT 1"
+            ).fetchone() is None:
+                return None
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """SELECT turn_id FROM fleet_mission_model_turns
@@ -195,6 +199,12 @@ class MissionModelTurnClaimMixin:
         """Requeue expired pre-invocation claims; make expired POSTs UNKNOWN."""
         current = _stamp(now or _now())
         with closing(self._connect()) as connection:
+            if connection.execute(
+                "SELECT 1 FROM fleet_mission_model_turns "
+                "WHERE state IN ('CLAIMED','SUBMITTING') AND lease_until<=? LIMIT 1",
+                (current,),
+            ).fetchone() is None:
+                return 0
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """UPDATE fleet_mission_model_turns SET state='PENDING', claimed_by=NULL,

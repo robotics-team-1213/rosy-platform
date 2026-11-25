@@ -288,7 +288,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_map_binding_routes(app, console=console, site_maps=site_maps, read_guard=read_guard,
                                require_named_operator=require_named_operator)
 
-    async def _trip_caps(robot_id: str):
+    async def _preview_trip_caps(robot_id: str):
         display = console._capability_display
         caps = trip_caps(await display.shown(robot_id, wait_s=2.0))
         age = display.age(robot_id)
@@ -296,11 +296,20 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
             caps = dataclasses.replace(caps, line_camera=None)
         return caps
 
+    async def _read_trip_caps(robot_id: str):
+        client = console.clients().get(robot_id)
+        if client is None:
+            return None
+        capabilities = await client.capabilities()
+        if console.clients().get(robot_id) is client:
+            return trip_caps(capabilities)
+        return None
+
     if (trip_lease or {}).get("required") and console_token and console.uses_rest_token(console_token):
         raise ValueError("D-541: a robot REST token must be Fleet's own, not the console token")
     trip_runner = TripRunner(
         store=site_maps, routing_config=routing_config or site_maps.routing_config,
-        caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
+        caps=trip_caps_port or _read_trip_caps, poses=map_pose_port or map_pose,
         junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state, map_pose.read_number),
         goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
         route=lambda *args, **kwargs: console.route(*args, trip=True, **kwargs),
@@ -338,6 +347,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_relocalize_routes(
         app, service=getattr(app.state, "localization_service", None), clients=console.clients,
         read_state=map_pose.state, require_named_operator=require_named_operator,
+        read_state_receipt=map_pose.state_with_source, clock=lambda: map_pose._clock(),
         read_guard=read_guard, record_event=site_maps.record_event,
         busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
     if getattr(site_maps, "path", None) is not None:
@@ -398,7 +408,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         tracking=tracking if tracking is not None and tracking.enabled else None,
         trips=trip_runner.open_trips, formation=console.formation_status)
     install_path_routes(app, paths=app.state.paths, read_guard=read_guard)
-    install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
+    install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_preview_trip_caps,
                         routing_config=routing_config or site_maps.routing_config, require_operator=require_operator,
                         require_named_operator=require_named_operator, runner=trip_runner, read_guard=read_guard)
     app.state.guide = GuideService(

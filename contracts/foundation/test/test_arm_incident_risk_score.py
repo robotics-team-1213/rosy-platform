@@ -201,3 +201,24 @@ def test_cold_subprocess_import_of_arm_incident_risk_has_no_cycle():
         text=True,
     )
     assert out.strip() == "95 True"
+
+
+def test_park_windup_scores_99_auto_clear_with_remeasure_and_escalates_without():
+    iid = "e" * 32
+    facts = {
+        **SAFE,
+        "flagged_total": 2, "fault_records_total": 0, "fault_record_kinds": [],
+        "windup_hits": [{"reason": "elbow_flex still 1.8 units short, PWM winding up 151 -> 249 of 600: pushing against something"}],
+        "flagged": [
+            {"command": "run park", "error": "contact in park: elbow_flex still 0.7 units short, PWM winding up 204 -> 262 of 600: pushing against something",
+             "fault": "contact in park: elbow_flex still 0.7 units short, PWM winding up 204 -> 262 of 600: pushing against something", "caught": None, "person_needed": None},
+        ],
+        "flagged_total": 1,
+    }
+    no_read = evaluate_clear_safety(facts, since=1000.0, now=2000.0, incident_id=iid, binding=("arm_b", BOARD_B))
+    assert no_read["allowed"] is False and no_read["safety_score"] == 0 and no_read["hard_vetoes"][0]["code"] == "POLICY_NOT_CLEARABLE"
+    with_read = evaluate_clear_safety(
+        facts, remeasured={**_remeasure(iid), "fault_records": []},
+        since=1000.0, now=2000.0, incident_id=iid, binding=("arm_b", BOARD_B),
+    )
+    assert with_read["allowed"] is True and with_read["safety_score"] == 99 and with_read["decision"] == "auto_clear"

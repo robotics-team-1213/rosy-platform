@@ -54,6 +54,7 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
         "arm_id": "arm_b",
         "cell_id": "cell_ab",
         "executor_mode": "act_paced",
+        "correlation": {"fleet_task_id": "t-original"},
         "context_sha256": "b" * 64,
         "freshness": {"still_valid_for_action": True},
         "measurement": {
@@ -70,17 +71,20 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
             ],
         },
     }
-    cell_srv, cell_url, _ = _serve_mock({
+    context_route = ("GET", f"/failures/{bundle['bundle_id']}")
+    cell_routes = {
         ("GET", "/readiness"): (200, {"cell_state_gen": 12, "allowed_tiers_now": [0, 1], "blocking_refusals": [], "arms": {"arm_b": {"folded": False, "fault": "contact"}}}, {}),
         ("GET", "/queue"): (200, {"active": []}, {}),
         ("GET", "/jobs"): (200, [], {}),
         ("GET", "/failures"): (200, {"bundles": [{"bundle_id": bundle["bundle_id"], "arm_id": "arm_b", "kind": "fault"}]}, {}),
         ("GET", "/failures/latest"): (200, bundle, {}),
+        context_route: (200, bundle, {}),
         ("GET", f"/failures/{bundle['bundle_id']}/assets/wrist-00.jpg"): (200, jpg, {"Content-Type": "image/jpeg"}),
         ("GET", f"/failures/{bundle['bundle_id']}/assets/top-01.jpg"): (200, jpg, {"Content-Type": "image/jpeg"}),
         ("GET", f"/failures/{bundle['bundle_id']}/assets/trace-tail.jsonl"): (200, b'{"a":1}\n{"b":2}\n', {"Content-Type": "application/x-ndjson"}),
         ("GET", "/frame/top.jpg"): (200, jpg, {"X-Frame-Seq": "77"}),
-    })
+    }
+    cell_srv, cell_url, _ = _serve_mock(cell_routes)
     fleet_srv, fleet_url, fleet_log = _serve_mock({
         ("GET", "/api/fleet/state"): (200, {"fleet": {"name": "rosy-site", "online": 1, "total": 2}, "robots": [{"robot_id": "rosy_45", "online": True}]}, {}),
         ("GET", "/api/fleet/pipeline/cells/cell_s/readiness"): (200, {"cell_id": "cell_s", "cell_phase": "IDLE", "readiness_digest": "d-s", "authority_epoch": 3, "dispatch_generation": 4, "stop_generation": 1}, {}),
@@ -135,6 +139,7 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
         assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), "--verb", "propose_ik_fallback_for_policy", "--dry-run"]) == 0
         dry = json.loads(capsys.readouterr().out)
         assert dry["dry_run"] and dry["payload"]["expected_readiness_digest"] == "d-ab"
+        assert dry["payload"]["fallback_from_task_id"] == "t-original"
         assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), "--verb", "propose_ik_fallback_for_policy", "--tier", "2", "--dry-run"]) == 0
         dry_t2 = json.loads(capsys.readouterr().out)
         assert dry_t2["payload"]["request_key"] != dry["payload"]["request_key"]
@@ -144,6 +149,24 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
         assert prop["ok"]
         sent = fleet_log[-1][2]
         assert sent["propose"] is True and sent["expected_dispatch_generation"] == 8 and sent["expected_context_sha256"] == "b" * 64
+        assert sent["fallback_from_task_id"] == "t-original"
+
+        # The bundle can expire after diagnose, even while the saved digests still match.
+        cell_routes[context_route] = (200, {**bundle, "freshness": {"still_valid_for_action": False}}, {})
+        request_count = len(fleet_log)
+        for extra in (["--dry-run"], []):
+            assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), *extra]) == 1
+            assert json.loads(capsys.readouterr().out)["error_code"] == "STALE_FAILURE_CONTEXT"
+        assert len(fleet_log) == request_count
+        cell_routes[context_route] = (200, {**bundle, "context_sha256": "c" * 64}, {})
+        assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir)]) == 1
+        assert json.loads(capsys.readouterr().out)["error_code"] == "STALE_FAILURE_CONTEXT"
+        cell_routes[context_route] = (200, bundle, {})
+        refused = {**dry["payload"], "fallback_verb": "home_unwedge"}
+        assert cli.main(["--config", str(cfg_path), "call", "fleet_propose_cell_task",
+                         "--args-json", json.dumps(refused)]) == 1
+        assert json.loads(capsys.readouterr().out)["error_code"] == "VERB_NOT_ALLOWED"
+        assert len(fleet_log) == request_count
 
         # 6b. diagnose ROSY_SCRATCH fallback & unset fail-closed + unsafe bundle_id guard
         monkeypatch.delenv("ROSY_SCRATCH", raising=False)

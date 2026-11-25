@@ -21,7 +21,7 @@ MAX_FUTURE_S = 0.05
 #: re-measured at this spacing, not per frame.
 FIELD_INTERVAL_S = 1.0
 #: Minimum spacing between paint registrations while orientation stays unresolved.
-PAINT_RETRY_S = 5.0
+PAINT_RETRY_S = 30.0
 #: D-564: place markers do not move; Fleet's teach freshness is 2 s.
 PLACE_MARKER_INTERVAL_S = 0.5
 QR_REREAD_IDLE_INTERVAL_S = 1.0

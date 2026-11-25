@@ -105,6 +105,7 @@ def execute_directive(
         return recover_hover(_run_cmd, grip_open_val, steps_log, park_after=park_after)
 
     def _recovery_hold(at: str = "recovery") -> dict[str, Any]:
+        _run_cmd("human-hold")
         return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
                 "result": "held", "task_verified": False, "at": at, "steps": steps_log}
 
@@ -301,8 +302,6 @@ def execute_directive(
                     if stay_hover and attempt + 1 < max_attempts:
                         return _recovery_hold("slip_stay_hover")
                     if not stay_hover:
-                        if chunk_cmd != "goto above_place" and not _run_cmd("goto above_place").get("ok"):
-                            return _recovery_hold("slip_above_place")
                         if not _run_cmd("park").get("ok"):
                             return _recovery_hold("slip_park")
                     break

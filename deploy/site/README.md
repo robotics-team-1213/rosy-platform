@@ -1690,11 +1690,12 @@ hand as above; the updater only replaces a running one. Install the updater
 beside the reviewed verifier from a reviewed checkout, never from a candidate:
 
 ```sh
-sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
-  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
+sudo install -d -o root -g root -m 0755 /usr/local/lib/rosy-site
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
   deploy/site/candidate_signing.py deploy/site/site_update_io.py \
   deploy/site/site_update_runtime.py /usr/local/lib/rosy-site/
+sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
+  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
@@ -1967,9 +1968,12 @@ sudo systemctl enable --now rosy-site-ledger-backup.timer
 After each backup the same run applies ledger retention to the live volume
 (also explicit in the compose `fleet-backup` command): terminal-task history
 `--prune-history 30`, pairing and CORE event audit `--prune-audit 90`, site
-API request audit `--prune-api-audit 90`, accepted-sighting audit
-`--prune-sightings 90` — every flag accepts `0` to disable that group, and
-tables missing from an older schema are skipped. The timer's backup copy is
+API request audit `--prune-api-audit 14`, accepted-sighting audit
+`--prune-sightings 90`. Set any group to `0` to disable pruning for that group.
+The API audit default applies unless a ledger setting overrides it. API audit
+pruning respects the archive watermark. A ledger with no watermark table keeps
+API audit rows for at least 90 days. Tables missing from an older schema are
+skipped. The timer's backup copy is
 VACUUMed after the copy completes, so the 14 kept backups track the retained
 data instead of the source file's high-water mark; the live volume keeps its
 size until the quarterly maintenance window, when a stopped-service

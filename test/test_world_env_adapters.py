@@ -348,9 +348,10 @@ def test_observers_and_real_fleet_bridge_translations_and_fail_closed() -> None:
     real_state = bridge_real_fleet.fleet_state_to_world_state(online_fleet, site_map_sha256=site_sha)
     assert real_state is not None
     assert real_state["adapter"] == "real" and real_state["stream_mode"] == "live"
-    assert real_state["pinky"]["id"] == "rosy_45" and real_state["stage"] == "s3_stop"
+    assert real_state["pinky"]["id"] == "rosy_45" and real_state["stage"] == "observing"
+    assert real_state["pinky"]["s3_in_bounds"] is None
     assert real_state["pinky"]["observed"] is True and real_state["pinky"]["has_cargo"] is False
-    assert serve.verify_world_parity(canonical, real_state)["ok"]
+    assert serve.verify_world_parity(canonical, real_state)["reasons"] == ["live_site_map_unavailable"]
 
 
 def test_real_bridge_keeps_unlocalized_pinky_and_accepts_arm_only_observations() -> None:
@@ -404,7 +405,11 @@ def test_world_map_parity_prefers_body_hash_and_reports_versions(tmp_path: Path)
     assert not serve.verify_world_parity(canonical, {
         **snapshot, "site_map_body_sha256": "12" * 32, "parity": canonical,
     })["map_match"]
-    assert serve.verify_world_parity(canonical, {**snapshot, "site_map_body_sha256": "invalid", "parity": canonical})["map_match"]
+    unavailable = serve.verify_world_parity(
+        canonical, {**snapshot, "site_map_body_sha256": "invalid", "parity": canonical},
+    )
+    assert not unavailable["map_match"]
+    assert unavailable["reasons"] == ["live_site_map_unavailable"]
 
 
 @pytest.mark.parametrize(("args", "timeout"), [([], 10.0), (["--fleet-timeout", "4.5"], 4.5),
@@ -437,6 +442,71 @@ def test_real_bridge_cli_timeout_and_optional_fleet_reads(tmp_path: Path, monkey
     snapshot = json.loads((tmp_path / "real-site.json").read_bytes())
     assert snapshot["site_map_body_sha256"] is None
     assert not any(snapshot["arms_observed"].values())
+
+
+def test_active_site_map_is_available_without_robot_frames(tmp_path: Path, monkeypatch) -> None:
+    bundle = _make_bundle(tmp_path)
+    map_view = {
+        "version": 394, "sha256": "ab" * 32, "activated_at": 1_710_000_000,
+        "activated_by": "operator",
+        "map": {
+            "map_id": "track", "places": [{"id": "S4", "x": 0.9, "y": -0.2, "kind": "stop"}],
+            "edges": [{"polyline": [[0.745, -0.207], [0.9, -0.2]], "speed_cap_mps": 0.1}],
+            "survey": {"private": True},
+        },
+    }
+    fleet_reads = {"/api/fleet/site-map/active": map_view, "/api/fleet/state": {"robots": []}}
+    original_urlopen = urllib.request.urlopen
+
+    def urlopen(req, *, timeout, context=None):
+        url = urllib.parse.urlsplit(req.full_url if isinstance(req, urllib.request.Request) else req)
+        if url.hostname == "fleet.test":
+            return io.BytesIO(json.dumps(fleet_reads.get(url.path)).encode())
+        return original_urlopen(req, timeout=timeout)
+
+    with serve.make_server(bundle, "127.0.0.1", 0, ingest_token="map-test") as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        origin = f"http://127.0.0.1:{server.server_port}"
+        endpoint = f"{origin}/api/worlds/real-site/site-map"
+        monkeypatch.setenv("ROSY_WORLD_INGEST_TOKEN", "map-test")
+        monkeypatch.setattr(sys, "argv", [
+            "bridge", "--once", "--fleet-url", "http://fleet.test", "--world-url", origin,
+        ])
+        monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+        try:
+            bridge_real_fleet.main()
+            with urllib.request.urlopen(endpoint, timeout=2) as response:
+                reply = json.load(response)
+                active = reply["site_map"]
+                assert response.headers["Cache-Control"] == "no-store"
+            assert 0 < reply["fresh_for_ms"] <= serve.ACTIVE_SITE_MAP_FRESH_MS
+            assert active["version"] == 394 and active["sha256"] == "ab" * 32
+            assert "activated_by" not in active and "survey" not in active["map"]
+            assert active["map"]["places"][0]["id"] == "S4"
+            assert active["map"]["edges"] == [{"polyline": [[0.745, -0.207], [0.9, -0.2]]}]
+            assert not (bundle / "data/worlds/real-site.json").exists()
+
+            active["observed_at_ms"] -= 90_000
+            request = urllib.request.Request(
+                endpoint, data=json.dumps(active).encode(), method="POST",
+                headers={"Content-Type": "application/json", "Authorization": "Bearer map-test"},
+            )
+            with urllib.request.urlopen(request, timeout=2):
+                pass
+            with urllib.request.urlopen(endpoint, timeout=2) as response:
+                assert json.load(response) == {"site_map": None}
+
+            monkeypatch.setattr(serve, "LOOPBACK_HOSTS", frozenset())
+            with pytest.raises(urllib.error.HTTPError) as denied:
+                urllib.request.urlopen(endpoint, timeout=2)
+            assert denied.value.code == 403
+            server.trusted_map_proxy = True
+            with urllib.request.urlopen(endpoint, timeout=2) as response:
+                assert json.load(response) == {"site_map": None}
+        finally:
+            server.shutdown()
+            worker.join()
 
 
 def test_world_docker_compose_hardening_and_bounded_logs() -> None:

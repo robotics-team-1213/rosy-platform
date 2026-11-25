@@ -77,10 +77,22 @@ class TrafficArbitration:
                 out.append(robot_id)
                 continue
             nearest = bays.nearest_on_route(route, pose)
-            if nearest is None or math.dist(nearest, pose) >= self._yield_keep_out_m:
+            if nearest is None:
                 continue
-            if grid is None and math.dist(pose, goal) >= self._goal_blocked_m:
+            min_dist = math.dist(nearest, pose)
+            if min_dist >= self._yield_keep_out_m:
                 continue
+            start_dist = math.dist(route[0], pose)
+            end_dist = math.dist(route[-1], pose)
+            goal_dist = math.dist(pose, goal)
+            if end_dist >= self._yield_keep_out_m:
+                # A parallel bay exit may start inside the keep-out radius, then pull away.
+                if (0.15 <= start_dist < self._yield_keep_out_m and min_dist >= start_dist - 0.02
+                        and goal_dist >= self._yield_keep_out_m):
+                    continue
+                # Without a grid, keep the pass-through policy for peers farther along the route.
+                if grid is None and start_dist >= self._yield_keep_out_m and goal_dist >= self._goal_blocked_m:
+                    continue
             out.append(robot_id)
         return out
 

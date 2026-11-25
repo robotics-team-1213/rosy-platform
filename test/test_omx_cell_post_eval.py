@@ -122,12 +122,14 @@ def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), dro
     def fake_mark_to_arm(rec, cfg, site, px, fz):
         fk_x = 0.10 + droop_mm[0] / 1000.0
         fk_y = 0.18 + droop_mm[1] / 1000.0
-        r_m = 0.0344 if (flip_second_finger and state["idx"] == 1) else 0.022
+        # Keep the bad mark outside the jaw radius even after relabelling.
+        r_m = 0.180 if (flip_second_finger and state["idx"] == 1) else 0.022
         ph = 53.0 + (229.5 if (flip_second_finger and state["idx"] == 1) else 0.0)
         a = math.radians(state["yaw"] + ph)
         x, y = fk_x + true_bias_mm[0] / 1000.0 + r_m * math.cos(a), fk_y + true_bias_mm[1] / 1000.0 + r_m * math.sin(a)
-        if jaw_at and jaw_at[state["idx"]] == "other":  # the other jaw: jaw_side.other_mm at FK yaw + other_deg
-            b = math.radians(state["yaw"] + 79.0)
+        if jaw_at and jaw_at[state["idx"]] == "other":
+            # From the saved reference at 53 degrees, the 79-degree jaw axis points outward.
+            b = math.radians(state["yaw"] + 259.0)
             x, y = x + 0.054 * math.cos(b), y + 0.054 * math.sin(b)
         return x, y
 
@@ -240,7 +242,7 @@ def test_post_eval_twin_yaw_plan_is_no_opposing_pair(tmp_path, monkeypatch):
 
 
 def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monkeypatch):
-    # the other jaw at both yaws: labelled together, its midpoint is the centre (unlabelled: half 74 mm, finger_identity)
+    # Both views see the other jaw. The label correction recovers the reference radius.
     cfg, _, cal_data, _, _, _ = _make_setup(tmp_path, true_bias_mm=(9.0, -4.0), saved_bias_mm=(0.0, 0.0))
     cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), jaw_at=("other", "other"))
     row = cell_post_eval.run_post_eval(cell, cfg, cal_data, commissioning=True, person_at_switch=True, write_library_fn=writer)["results"][0]
@@ -252,6 +254,29 @@ def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monke
     res_sw = cell_post_eval.run_post_eval(cell_sw, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer_sw)
     assert res_sw["results"][0]["reason"] == "jaw_sides_ambiguous" and res_sw["results"][0]["accepted"] is False
     assert res_sw["applied"] == [] and res_sw["lateral_xy"]["verdict"] == "fail"
+
+
+def test_replayed_pivot_refuses_a_fit_beyond_the_live_bias_limit(tmp_path, monkeypatch):
+    import cell_jaw_side
+    from cell_jaw_side_replay import replay_pivot
+
+    cfg, _, calibration, _, _, _ = _make_setup(tmp_path)
+    yaws = (0.0, 45.0, 90.0, 135.0, 180.0)
+    marks = _synth_marks((0.13, 0.18), yaws, radius_m=0.022)
+    for index, yaw in enumerate(yaws):
+        frame = tmp_path / str(index)
+        frame.mkdir()
+        (frame / "jaws.json").write_text(json.dumps({"fk": (0.10, 0.18, 0.08, yaw)}))
+    monkeypatch.setattr(cell_jaw_side, "jaw_places", lambda *args: None)
+    monkeypatch.setattr(cell_jaw_side, "near_tcp", lambda *args: None)
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda _record, _config, _site, pixel, _z: pixel)
+    monkeypatch.setattr("cell_jaw_side_replay._replay_yaw_tries",
+                        lambda frame, *args: (marks[int(frame.name)], None, None, None))
+
+    result = replay_pivot(tmp_path, cfg, calibration, "beltend")
+
+    assert result["result"] == "bias refused: magnitude is past pivot.max_bias_mm"
+    assert result["bias"]["bias_mm"] == [30.0, 0.0]
 
 
 def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):

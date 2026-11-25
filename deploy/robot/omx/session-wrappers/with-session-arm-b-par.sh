@@ -16,7 +16,8 @@ if ! { [ -p chunk-io-b/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   (
     ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-b.json --caps caps-arm-b-wrist400-20261103.json --arm arm_b --chunks "${ROSY_SESSION_CHUNKS:-chunks-topdown-guard-armb-v21.json}" --io chunk-io-b --params cell-params-floor-1028.json --operating-profile arm-b-robot-profile.json </dev/null
     rc=$?
-    if [ "$rc" -eq 0 ] && flock -n ~/rosy-omx/session-arm_b.lock true; then
+    # record_session exits 78 only after proving a pre-start refusal left the arm idle.
+    if { [ "$rc" -eq 0 ] || [ "$rc" -eq 78 ]; } && flock -n ~/rosy-omx/session-arm_b.lock true; then
       ~/rosy-omx/current-env/bin/python "$OMX/observer_handoff.py" release arm_b
     fi
     exit "$rc"

@@ -112,8 +112,15 @@ class LiveTrip:
         """Whether this trip drives painted lanes via CORE Nav2 ``navigation/route``."""
         return self.request.get("drive_mode") == "nav2"
 
+    @property
+    def nav2_binding_scope(self) -> tuple[int, str] | None:
+        binding_id = self.view["detail"].get("nav2_binding_id")
+        return (self.view["map_version"], binding_id) if binding_id is not None else None
+
     def segment_is_lane(self, index: int) -> bool:
-        return not self.nav2 and self.arc(index).drive_mode == "lane"
+        camera = self.view["detail"].get("camera_lane_fallback") or {}
+        driving_camera = camera.get("phase") == "running" and camera.get("index") == index
+        return (not self.nav2 or driving_camera) and self.arc(index).drive_mode == "lane"
 
     def effective_mode(self, index: int) -> str:
         return "lane" if self.segment_is_lane(index) else "free"

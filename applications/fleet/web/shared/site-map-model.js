@@ -137,6 +137,11 @@ export function repeatPlaces(map) {
   return starts.length >= 2 ? starts : all.filter(place => ['start', 'stop'].includes(place.kind));
 }
 
+export function tripNav2Body(driveMode) {
+  if (driveMode === "nav2_slam") return {drive_mode: "nav2", approved_slam_required: true};
+  return driveMode === "nav2" ? {drive_mode: "nav2"} : {};
+}
+
 export function repeatTripBody(map, start, leader = '', driveMode = '') {
   const starts = repeatPlaces(map).map(place => place.id);
   if (!starts.includes(start)) throw new Error('출발 자리를 고르세요');
@@ -146,7 +151,7 @@ export function repeatTripBody(map, start, leader = '', driveMode = '') {
   return {
     to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true,
     ...(leader ? {convoy: {leader}} : {}),
-    ...(driveMode === 'nav2' ? {drive_mode: 'nav2'} : {}),
+    ...tripNav2Body(driveMode),
   };
 }
 

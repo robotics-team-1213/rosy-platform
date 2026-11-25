@@ -647,7 +647,7 @@ main {
 @media (width < 40rem) { .incident-row form { grid-template-columns: minmax(0, 1fr); } }
 /* D-741 8 — 기록 영역: 연 사건의 원인과 조치는 오른쪽 칸에 서고, 하위 탐색이 사건과 AI 상황 사실 가운데 하나를 고른다. */
 #incident-judgment form { grid-template-columns: minmax(0, 1fr); }
-#incident-judgment:not(:empty) + .hint, .incident-panel[data-show="facts"] #incident-list, .incident-panel[data-show="incidents"] :is(h3, h3 + .hint, #incident-traffic-list) { display: none; }
+#incident-judgment:has(> [data-report-key], > #channel-incident:not([hidden])) + .hint, .incident-panel[data-show="facts"] #incident-list, .incident-panel[data-show="incidents"] :is(h3, h3 + .hint, #incident-traffic-list) { display: none; }
 
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);

@@ -12,6 +12,7 @@ import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/a
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
+import {roadOverlayPoints} from '/console/assets/site-layer.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -87,11 +88,12 @@ function render() {
   for (const place of map.places) if (place.stop_zone) el('polygon', {class: 'stop-zone', points: line(place.stop_zone)}, svg);
   if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
   for (const edge of map.edges) {
-    const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
+    const points = $('map-source').value === 'active' ? roadOverlayPoints(map.map_id, edge) : edge.polyline;
+    const path = el('polyline', {points: line(points), 'data-edge': edge.id,
       class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
     el('title', {}, path).textContent = `${edge.id} · ${edge.direction === 'two_way' ? '양방' : '일방'} · ${edge.speed_cap_mps} m/s`;
     if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
-    for (const mark of arrowMarks(edge)) {
+    for (const mark of arrowMarks({...edge, polyline: points})) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);

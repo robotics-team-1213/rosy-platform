@@ -15,10 +15,10 @@ import math
 from pathlib import Path
 
 import cell_pipeline_io as cio
+import cell_remap_depth as rd
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
 REMAP_CLEAR_MM = 35.0
-REMAP_MIN_RAISED_PX = 20
 
 
 def _target_map_sites(config: dict) -> list[str]:
@@ -28,46 +28,9 @@ def _target_map_sites(config: dict) -> list[str]:
 
 
 def site_obstacle_mm(config: dict, depth, colour) -> dict:
-    """Measure the tallest raised object (p99 mm above table) across the configured remap sites using D435 depth; ValueError
-    without a frame or when the colour/depth alignment is too loose to place the sites."""
-    if depth is None or colour is None:  # capture_top_depth_z16 answers None, it never raises: no frame is not "nothing stands here"
-        raise ValueError("the D435 depth capture returned no frame" if depth is None else "the top camera returned no frame")
-    import numpy as np
-    import cell_depth
-
-    plane = cell_depth.table_plane(depth)
-    if abs(float(plane[0][2])) < 0.99:
-        candidates = [plane, *(cell_depth.table_plane(depth, seed=s) for s in (1, 2, 3))]
-        plane = max(candidates, key=lambda p: abs(float(p[0][2])))
-    heights = cell_depth.height_map(depth, plane)
-    to_depth, edge_px = cell_depth.align_edges(colour, heights)
-    if not math.isfinite(float(edge_px)) or float(edge_px) > 8.0:  # cell_depth_slots' limit for placing regions on the depth
-        raise ValueError(f"colour/depth alignment is loose ({edge_px:.1f} px): the site ROIs cannot be placed on the depth")
-    lo_mm = float(cell_depth.RAISED_MM[0])
-    hi_mm = max(float(cell_depth.RAISED_MM[1]), 220.0)
-    sites_mm: dict[str, float] = {}
-    configured = config.get("sites") or {}
-    for name in _target_map_sites(config):
-        roi = (configured.get(name) or {}).get("auto_roi")
-        if not roi or len(roi) != 4:
-            continue
-        x1, y1, x2, y2 = [float(v) for v in roi]
-        c1 = (to_depth @ [x1, y1, 1.0])[:2]
-        c2 = (to_depth @ [x2, y2, 1.0])[:2]
-        dx1, dx2 = max(0, int(min(c1[0], c2[0]))), min(heights.shape[1], int(math.ceil(max(c1[0], c2[0]))))
-        dy1, dy2 = max(0, int(min(c1[1], c2[1]))), min(heights.shape[0], int(math.ceil(max(c1[1], c2[1]))))
-        if dx2 <= dx1 or dy2 <= dy1:
-            continue
-        patch = heights[dy1:dy2, dx1:dx2]
-        vals = patch[np.isfinite(patch) & (patch >= lo_mm) & (patch <= hi_mm)]
-        if int(vals.size) >= REMAP_MIN_RAISED_PX:
-            sites_mm[name] = round(float(np.percentile(vals, 99)), 1)
-    return {
-        "obstacle_mm": max(sites_mm.values(), default=0.0),
-        "sites_mm": sites_mm,
-        "edge_px": round(float(edge_px), 2),
-        "plane_nz": round(abs(float(plane[0][2])), 4),
-    }
+    """Measure depth against every mapped site's configured ROI."""
+    sites = config.get("calibrate", {}).get("map_sites") or _target_map_sites(config)
+    return rd.site_obstacle_mm(config.get("sites") or {}, sites, depth, colour)
 
 
 def resolve_z_view(
@@ -130,7 +93,7 @@ def plan_only(config: dict, points: list, obstacle_mm: float | None = None) -> d
 def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_capture=None) -> tuple[dict, dict]:
     """The config a remap moves with, and its z_view record: `obstacle_mm` when given, else what the D435 sees above the map sites.
 
-    A depth frame that could not be taken or aligned is recorded as `depth_error` and leaves the configured z_view;
+    Invalid depth or coverage at a remap site is recorded as `depth_error` and leaves the configured z_view;
     cell_calibrate refuses a remap on it before any move unless `--obstacle-mm` was given."""
     extra: dict = {}
     if obstacle_mm is None and depth_capture is not None:

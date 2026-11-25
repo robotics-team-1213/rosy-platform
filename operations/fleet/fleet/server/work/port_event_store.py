@@ -6,6 +6,7 @@ its opaque cursor). The same event_id with the same event is the same row; with 
 from contextlib import closing
 from datetime import datetime, timezone
 import sqlite3
+from threading import Lock
 
 from core_common.protocol.port_events import PortEvent
 
@@ -25,6 +26,7 @@ class PortEventConflict(ValueError):
 class PortEventStore:
     def __init__(self, path) -> None:
         self.path = path
+        self.intake_lock = Lock()
         with closing(self._connect()) as connection:
             connection.execute(_SCHEMA)
             for trigger in _APPEND_ONLY:

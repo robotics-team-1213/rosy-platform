@@ -251,7 +251,35 @@ test("arm joint snapshot states freshness honestly and never invents a home pose
   assert.equal(empty[0].telemetryRows[1][1], visualCardSpecs({})[0].folded_state);
   assert.ok(!empty[0].telemetryRows[1][1].includes("완료 스냅샷"));
   assert.match(inspectorSpecs({cells: {cell_s: {gate: {phase: "IDLE"}}}})[0].telemetryRows[1][1],
-    /folded: true \(홈 대기\)/);
+    /최근 작업의 관절 기록 없음/);
+});
+
+test("field status shows stale joints independently of task history and queue counts", () => {
+  const body = {
+    cells: {cell_s: {station: {station_place: "S3"}}},
+    arm_live_states: {
+      arm_s: {observed: true, fresh: false, folded: true, age_s: 28491.8},
+      arm_a: {observed: true, fresh: true},
+    },
+    tasks: [
+      {cell_id: "cell_s", status: "PROPOSED"},
+      {cell_id: "cell_s", robot_id: "rosy_42", status: "QUEUED", last_refusal: {
+        code: "AMR_BRAKE_BED_VELOCITY_UNMEASURED", missing: ["pose", "bed_ready"],
+      }},
+      {cell_id: "cell_s", robot_id: "rosy_43", status: "QUEUED", last_refusal: {
+        code: "PRESENCE_CONFIRMATION_REQUIRED",
+      }},
+      {cell_id: "cell_ab", status: "QUEUED"},
+    ],
+  };
+  const [s, ab] = visualCardSpecs(body);
+  assert.equal(s.fieldStatus.queue, "승인 대기 1건 · 실행 대기 2건");
+  assert.match(s.fieldStatus.refusal, /시작 거부.*정차 위치.*적재함 확인/);
+  assert.match(s.fieldStatus.next, /rosy_42 S3 정차/);
+  assert.equal(s.fieldStatus.arms, "arm_s 작업 관절 기록 갱신 필요 (7시간 54분 전)");
+  assert.equal(ab.fieldStatus.arms, "arm_a 작업 관절 기록 있음 · arm_b 관절 상태 미수신");
+  const [withObservation] = visualCardSpecs({...body, live_joint_arms: ["arm_s"]});
+  assert.equal(withObservation.fieldStatus.arms, "arm_s 마지막 화면 갱신 시 관절 관측 · 작업 상태 갱신 필요");
 });
 
 test("cell task refresh renders across the main/views module split", async () => {

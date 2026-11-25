@@ -1456,6 +1456,10 @@ safety_review_paths:
   - deploy/robot/omx/session_caps.py
   - deploy/robot/omx/commissioning_limits.py
   - deploy/robot/omx/record_session.py
+  - deploy/robot/omx/record_session_baseline.py
+  - deploy/robot/omx/record_session_cli.py
+  - deploy/robot/omx/session-wrappers/with-session-arm-a-par.sh
+  - deploy/robot/omx/session-wrappers/with-session-arm-b-par.sh
   - deploy/robot/omx/record_session_helpers.py
   - deploy/robot/omx/cell_auto_safety.py
   - deploy/robot/omx/cell_transfer.py
@@ -1467,6 +1471,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
   - deploy/robot/omx/cell_camera_telemetry_sync.py
+  - deploy/robot/omx/cell_bound_home_request.py
+  - deploy/robot/omx/cell_safe_home_receipts.py
   - deploy/robot/omx/cell_recovery_plan.py
   - deploy/robot/omx/cell_recovery_advisor.py
   - deploy/robot/omx/cell_remap_jaws.py
@@ -1497,6 +1503,9 @@ safety_review_paths:
   - deploy/robot/omx/cell_two_arm_guard.py
   - deploy/robot/omx/cell_two_arm_policy.py
   - deploy/robot/omx/cell_two_arm_policy_cli.py
+  - deploy/robot/omx/cell_two_arm_verification.py
+  - deploy/robot/omx/cell_route_check.py
+  - deploy/robot/omx/cell_route_depth.py
   - deploy/robot/omx/cell_stack_guard.py
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
@@ -1531,6 +1540,8 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
+  - operations/fleet/fleet/server/pipeline/pipeline_home_recovery.py
+  - operations/fleet/fleet/server/pipeline/bound_home_receipt.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_tools.py
   - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
   - tools/harness/safety_review.py  # the check itself

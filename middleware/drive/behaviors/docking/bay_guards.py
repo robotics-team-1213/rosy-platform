@@ -39,6 +39,12 @@ def rear_band_gap(points, rear_x: float, half_m: float = 0.03) -> Optional[float
     return min(gaps) if gaps else None
 
 
+def front_band_gap(points, front_x: float, half_m: float) -> Optional[float]:
+    """Nearest point strictly ahead of `front_x` within `|y| <= half_m` (ignores side bay rails)."""
+    gaps = [x - front_x for x, y in points if abs(y) <= half_m and x > front_x]
+    return min(gaps) if gaps else None
+
+
 def rear_blocked(cfg: Any, rear_gap: Optional[float], along: Optional[float]) -> bool:
     """LiDAR 뒤 여유(짐칸 끝~첫 점)가 카메라로 잰 멈춤면까지 남은 거리(along - 짐칸 돌출)보다 확실히 작으면 칸
     안에 뭔가 있다. 멈춤면 자체가 보여도 gap≈남은 거리라 막지 않는다. 여유 = 몸 스캔 지연 0.5 s×0.05 m/s 2.5 cm +

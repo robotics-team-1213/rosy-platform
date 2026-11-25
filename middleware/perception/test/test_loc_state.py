@@ -249,3 +249,23 @@ def test_auto_lock_unique_injects_verifies_and_enforces_guards():
         g = machine()
         g.offer(cands, 0.0)
         assert g.auto_lock_unique(1.0).actions == () and g.check is None
+
+
+def test_localized_tolerates_transient_fit_drop_until_drop_fit_and_hold_window():
+    ids = (f"r1-{n}" for n in itertools.count(1))
+    m = LocalizationStateMachine(lambda: next(ids), fit_drop_s=2.5, drop_fit=0.70)
+    m.offer([TRUE, MIRROR], 0.)
+    m.decide("r1-1", 1., candidate_index=0, cues=SLOT)
+    feed(m, 1.25, 4.5, .95)
+    assert m.state is LocState.LOCALIZED
+    # 0.72 is above drop_fit=0.70 even though below min_fit=0.75: stays LOCALIZED.
+    assert feed(m, 5.0, 8.0, .72).state is LocState.LOCALIZED
+    assert m._low_since is None
+    # Brief dip below 0.70 recovers when fit returns above drop_fit.
+    assert m.observe_fit(8.5, .65).state is LocState.LOCALIZED and m._low_since == 8.5
+    assert m.observe_fit(10.0, .71).state is LocState.LOCALIZED and m._low_since is None
+    # Sustained dip >= 2.5 s transitions to SUSPECT fit_drop.
+    assert m.observe_fit(11.0, .65).state is LocState.LOCALIZED
+    assert m.observe_fit(13.4, .65).state is LocState.LOCALIZED
+    step = m.observe_fit(13.5, .65)
+    assert (step.state, step.reason) == (LocState.SUSPECT, "fit_drop")

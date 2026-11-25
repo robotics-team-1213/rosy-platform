@@ -283,13 +283,31 @@ class RouteRequest(BaseModel):
     expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
 
 
+class BoundRouteRequest(RouteRequest):
+    expected_map_grid_id: str = Field(min_length=1, max_length=128, strict=True)
+
+
 @navigation_router.post("/navigation/route")
 def navigation_route(body: RouteRequest, auth: AuthContext = Depends(operator),
                      svc: CoreServicesLike = Depends(get_services)):
     """NAV-008 (D-1009): an ordered route of pass/stop points as one navigation owner and one lease."""
+    return _navigation_route(body, auth, svc)
+
+
+@navigation_router.post("/navigation/bound-route")
+def bound_navigation_route(body: BoundRouteRequest, auth: AuthContext = Depends(operator),
+                           svc: CoreServicesLike = Depends(get_services)):
+    require_calibration_owner(svc, auth, "navigation")
+    return _navigation_route(body, auth, svc, expected_grid=body.expected_map_grid_id)
+
+
+def _navigation_route(body, auth, svc, *, expected_grid=None):
     _goal_gates(body, auth, svc)
     points = [RoutePoint(p.x, p.y, p.kind, p.yaw) for p in body.points]
-    with localized_start(svc):
+    gate = svc.state.map_grid_gate if expected_grid is not None else nullcontext()
+    with gate, localized_start(svc):
+        if expected_grid is not None and svc.state.map_grid_id != expected_grid:
+            raise ApiError("NAVIGATION_MAP_GRID_CHANGED", 409, "the loaded grid differs from the approved route grid")
         token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
                                      expected_owner_generation=body.expected_owner_generation)
         receipt = []
@@ -305,6 +323,7 @@ def navigation_route(body: RouteRequest, auth: AuthContext = Depends(operator),
         "mode": svc.modes.mode.value,
         "route": svc.nav.route_status(),
         "operation": receipt[0].model_dump(mode="json"),
+        **({"map_grid_id": expected_grid} if expected_grid is not None else {}),
     }
 
 

@@ -42,21 +42,23 @@ from tf2_ros import TransformListener
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from .loc_assist import LocAssist, lane_rules_near, localized_objects, pooled_grid, search
+from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
-from .sensing.localization import MapAgreement, planar_yaw
+from .sensing.localization import MapAgreement, planar_yaw, valid_beams
 from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from perception_runtime.perception.lane_bev import BirdsEye
 from .sensing.perception.paint_hypothesis import camera_paint_points, paint_score
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.reference_square import HsvSquareDetector
 from .tf_buffer import RobotTransformBuffer
+from .loc_verify_trace import VerificationTrace
+from .sensing.loc_verify import FAILED, PENDING
 
 PARAMETERS = [
     ('map_yaml', ''), ('lane_rules_file', ''), ('search_resolution', .02), ('wall_tolerance', .04),
     ('robot_radius', URDF_RADIUS), ('scan_stride', 4), ('candidate_minimum_fit', .9),
-    ('search_budget_s', 3.), ('retry_s', 5.), ('rereport_s', 2.), ('hold_s', 3.), ('minimum_fit', .85),
+    ('search_budget_s', 3.), ('retry_s', 5.), ('rereport_s', 2.), ('hold_s', 3.), ('minimum_fit', .85), ('drop_fit', .70), ('fit_drop_s', 2.5),
     # Scan silence the 3 s check tolerates: 1 s rides out executor stalls under load
     # (WSL, a loaded Pi) while a 10 Hz lidar still feeds ~10 fits per second.
     ('max_gap_s', 1.),
@@ -100,9 +102,11 @@ class LocAssistNode(Node):
             self.declare_parameter(name, value)
         ids = iter(range(1, 1 << 62))
         boot = time.strftime('%H%M%S')
-        self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'),
-                              retry_s=self.p('retry_s'), hold_s=self.p('hold_s'),
-                              min_fit=self.p('minimum_fit'), max_gap_s=self.p('max_gap_s'))
+        self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'), retry_s=self.p('retry_s'),
+                              hold_s=self.p('hold_s'), min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'),
+                              max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
+        self._last_settled_scan_s = -math.inf
+        self.verification_trace = None
         self.field = self.clear = self.scan = None
         self.generation = 0
         self.squares = self._squares()
@@ -189,7 +193,21 @@ class LocAssistNode(Node):
     def on_scan(self, msg):
         self.scan = msg
         machine = self.core.machine
-        if self.field is None or (machine.check is None and not machine.autonomy_allowed):
+        trace = self.verification_trace if machine.check is not None else None
+        stamp = rclpy.time.Time.from_msg(msg.header.stamp) if trace is not None else None
+        if trace is not None:
+            trace.scan(stamp.nanoseconds * 1e-9)
+        if self.field is None:
+            if trace is not None:
+                trace.scan_error = "map unavailable"
+            return
+        now = self.now()
+        if machine.check is None and not machine.autonomy_allowed:
+            scan_stamp = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
+            if self.core.candidate_scan_due(now, scan_stamp):
+                self.recheck_candidates(now, scan_stamp, msg)
+            return
+        if machine.check is None and machine.autonomy_allowed and self.core._is_settled(now) and 0.0 <= now - self._last_settled_scan_s < 0.5:
             return
         # odom->sensor at the scan stamp, then AMCL's *latest* map->odom. AMCL stamps
         # map->odom transform_tolerance ahead (1.0 s in sim, 0.3 s on the device), so a
@@ -199,18 +217,43 @@ class LocAssistNode(Node):
         # processing of /initialpose; a pose AMCL never applied still fails.
         try:
             tf = self.tf.lookup_transform_full('map', rclpy.time.Time(), msg.header.frame_id,
-                                               rclpy.time.Time.from_msg(msg.header.stamp), 'odom')
-        except Exception:
+                                               (stamp if stamp is not None else
+                                                rclpy.time.Time.from_msg(msg.header.stamp)), 'odom')
+        except Exception as exc:
+            if trace is not None:
+                trace.scan_error = str(exc)[:240]
             return                          # no fit this scan; a long gap fails the check on tick
         tr = tf.transform.translation
         sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
         scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
-        fit = scorer(sensor, ranges, angles)
-        now = self.now()
+        breakdown = (self.field.explain(sensor, ranges, angles)
+                     if trace is not None and hasattr(self.field, 'explain') else None)
+        fit = scorer(sensor, ranges, angles) if breakdown is None else breakdown.robust_score
+        if trace is not None:
+            trace.fit(stamp.nanoseconds * 1e-9, now, sensor, msg.header.frame_id, fit, breakdown)
+        self._last_settled_scan_s = now
         self.publish(self.core.on_fit(now, fit))
+        self.log_verification(now)
         if self.core.objects_due(now):
             self.report_objects(now, msg, sensor)
+
+    def recheck_candidates(self, now, scan_stamp, scan):
+        ranges, angles = self.scan_arrays(scan)
+        if len(valid_beams(ranges, angles)[0]) < 30:
+            return
+        try:
+            mount = self.scan_mount(scan)
+        except Exception:
+            return
+        candidates = self.core.machine.candidates
+        sensor = [sensor_from_base((c.x, c.y, c.yaw), mount) for c in candidates]
+        fits = [self.field.robust_score(pose, ranges, angles) for pose in sensor]
+        objects = None
+        if all(fit >= self.core.machine.min_fit for fit in fits):
+            objects = localized_objects(self.field, sensor[0], *self.scan_arrays(scan, 1), mount,
+                                        self.p('robot_radius'))
+        self.publish(self.core.on_candidate_scan(now, scan_stamp, fits, objects))
 
     def report_objects(self, now, msg, sensor):
         """D-395 rev. 4 §5 (S1 R1): a LOCALIZED robot reports what the map does not explain,
@@ -280,13 +323,15 @@ class LocAssistNode(Node):
             self.get_logger().info(f'auto_recovery rejected: {reason}')
         self.publish(out)
 
+    def scan_mount(self, scan):
+        tf = self.tf.lookup_transform('base_link', scan.header.frame_id, rclpy.time.Time()).transform
+        return Mount(tf.translation.x, tf.translation.y, yaw(tf.rotation))
+
     def _auto_recovery_fit(self, candidate_pose):
         if self.field is None or self.scan is None:
             return 0.0
         try:
-            mount_tf = self.tf.lookup_transform('base_link', self.scan.header.frame_id, rclpy.time.Time())
-            t = mount_tf.transform.translation
-            mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+            mount = self.scan_mount(self.scan)
         except Exception:
             return 0.0
         ranges, angles = self.scan_arrays(self.scan)
@@ -359,15 +404,16 @@ class LocAssistNode(Node):
             return None
 
     def start_search(self, now, odom):
+        scan_stamp = rclpy.time.Time.from_msg(self.scan.header.stamp).nanoseconds * 1e-9
+        if not 0. <= now - scan_stamp <= SETTLE_S:
+            return
         try:
-            mount_tf = self.tf.lookup_transform('base_link', self.scan.header.frame_id, rclpy.time.Time())
-            t = mount_tf.transform.translation
-            mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+            mount = self.scan_mount(self.scan)
         except Exception:
             return
         ranges, angles = self.scan_arrays(self.scan)
         full = self.scan_arrays(self.scan, 1)   # peer objects: every beam (S1 finding 2)
-        self.core.search_started(now, odom)
+        self.core.search_started(now, odom, scan_stamp=scan_stamp)
         field, clear, generation = self.field, self.clear, self.generation
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
@@ -424,6 +470,7 @@ class LocAssistNode(Node):
         if self.search is not None and self.search.done():
             self.finish_search(now)
         self.publish(self.core.tick(now))
+        self.log_verification(now)
         self.sync_camera()
         if self.search is None and self.field is not None and self.scan is not None and self.core.camera_wanted:
             odom = self.odom()
@@ -441,6 +488,28 @@ class LocAssistNode(Node):
             else:
                 self.pub[kind].publish(String(data=json.dumps(payload, sort_keys=True)))
 
+    def log_verification(self, now):
+        trace = self.verification_trace
+        if trace is None:
+            return
+        if trace.check.result == PENDING:
+            if trace.check is not self.core.machine.check:
+                self.verification_trace = None  # pickup or another guard ended the check
+            return
+        self.verification_trace = None
+        mount = None
+        if trace.sample is not None:
+            try:
+                t = self.tf.lookup_transform("base_link", trace.sample["sensor_frame"], rclpy.time.Time()).transform
+                mount = Mount(t.translation.x, t.translation.y, yaw(t.rotation))
+            except Exception:
+                pass  # the sampled map-frame sensor pose is still in the report
+        message = "localization verification " + json.dumps(trace.report(now, mount), sort_keys=True)
+        if trace.check.result == FAILED:
+            self.get_logger().warning(message)
+        else:
+            self.get_logger().info(message)
+
     def inject(self, injection):
         msg = PoseWithCovarianceStamped()
         msg.header.frame_id = 'map'
@@ -451,6 +520,8 @@ class LocAssistNode(Node):
         msg.pose.covariance[0] = msg.pose.covariance[7] = injection.xy_std ** 2
         msg.pose.covariance[35] = injection.yaw_std ** 2
         self.initial_pose.publish(msg)
+        check = self.core.machine.check
+        self.verification_trace = VerificationTrace(check, injection) if check is not None else None
         self.get_logger().info(f'initialpose from {injection.source} decision {injection.request_id}: '
                                f'({x:.3f}, {y:.3f}, {heading:.3f}); 3 s check started')
 

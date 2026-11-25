@@ -80,11 +80,11 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None) -> tuple[bool
     import register_probe
 
     stopped_obs = False
-    if read_fn is None:
-        unit = f"rosy-omx-observer@{arm}.service"
-        res = subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True, check=False, timeout=10)
-        stopped_obs = res.returncode == 0
     try:
+        if read_fn is None:
+            import omx_incident_reassess
+
+            stopped_obs = omx_incident_reassess.pause_observer_if_sole_holder(arm, device)
         if read_fn is not None:
             rows = read_fn(device)
         else:

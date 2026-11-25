@@ -259,15 +259,16 @@ def check_runner_idle(runner, cr_attr) -> bool:
         if runner.chunk is not None or runner.queue or runner.pending:
             runner.last_input = runner.clock()
         return False
-    quiet = runner.clock() - runner.last_input
-    idle_retry_s, idle_park_s, idle_stop_s = cr_attr("IDLE_RETRY_S", IDLE_RETRY_S), cr_attr("IDLE_PARK_S", IDLE_PARK_S), cr_attr("IDLE_STOP_S", IDLE_STOP_S)
+    quiet, idle_retry_s = runner.clock() - runner.last_input, cr_attr("IDLE_RETRY_S", IDLE_RETRY_S)
+    idle_park_s, idle_stop_s = cr_attr("IDLE_PARK_S", IDLE_PARK_S), cr_attr("IDLE_STOP_S", IDLE_STOP_S)
     if runner.home_since is None:
         from chunk_runner_commands import _is_policy_lib
         if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library):
             return False
         if runner.idle_parks >= 2:
             if runner.idle_parks == 2:
-                runner.idle_parks, runner.fault = 3, f"idle fold held twice ({runner.fault}): a person must free the arm"
+                runner.idle_parks = 3
+                runner.hold(getattr(runner, "last_present", None) or runner.target, f"idle fold held twice ({runner.fault}): a person must free the arm", human=True)
                 runner.report(command="park", ok=False, error=runner.fault, person_needed=True)
             return False
         wait = prm.get(runner.params, "runner.idle_retry_s", idle_retry_s) if runner.idle_parks else prm.get(runner.params, "runner.idle_park_s", idle_park_s)
@@ -341,15 +342,10 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
                     except Exception:  # noqa: BLE001
                         present = None
                     home = runner.library.get("chunks", {}).get("home")
-                    at_home = (
-                        bool(home)
-                        and runner.target is not None
-                        and present is not None
-                        and folded(present, home[-1])
-                        and folded(runner.target, home[-1])
-                        and not getattr(runner, "jitter", {}).get("shaking")
-                        and getattr(runner, "_release_until", None) is None
-                    )
+                    at_home = (bool(home) and runner.target is not None and present is not None
+                               and folded(present, home[-1]) and folded(runner.target, home[-1])
+                               and not getattr(runner, "jitter", {}).get("shaking")
+                               and getattr(runner, "_release_until", None) is None)
                     if at_home:
                         try:
                             runner.report(command=raw_stop, ok=True, folded=True, present=present)

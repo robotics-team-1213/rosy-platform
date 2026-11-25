@@ -193,6 +193,7 @@ def relabel_token(token_id: str, body: TokenLabelRequest, auth: AuthContext = De
 def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     truth = runtime_truth(svc.config, svc.state, svc.readiness)
     data = withhold_hardware_flags(svc.capability.to_dict(), truth.reasons)
+    data.setdefault("navigation", {})["bound_route"] = True
     # `runtime` (v1.21 additive): what live evidence says runs right now, so a
     # client does not infer hardware from the configured mode string (D-192:
     # `rosy-io` is started by hand while `runtime.mode` stays `core`). `maps`
@@ -247,6 +248,12 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     drive_modes = tuple(mode for mode, on in (
         ("lane", svc.line_follow is not None),
         ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
+    junction_capability = getattr(svc.line_follow, "junction_turn_capability", None)
+    if callable(junction_capability):
+        junction_turn, junction_turn_reason = junction_capability()
+    else:
+        junction_turn = getattr(svc.line_follow, "supports_junction_turn", False) is True
+        junction_turn_reason = None
     data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
                                       max_linear=min(limits.manual_linear, limits.approved_caps()[0]),
                                       max_angular=min(limits.manual_angular, limits.approved_caps()[1]),
@@ -254,8 +261,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       robot_kind=_robot_kind(svc),
                                       drive_modes=drive_modes,
                                       trip_max_linear=max(0.0, trip_max_linear),
-                                      junction_turn=getattr(svc.line_follow, "supports_junction_turn",
-                                                            False) is True,
+                                      junction_turn=junction_turn, junction_turn_reason=junction_turn_reason,
                                       junction_pivot=getattr(svc.line_follow, "supports_junction_pivot",
                                                              False) is True,
                                       lane_arc=getattr(svc.line_follow, "supports_lane_arc",

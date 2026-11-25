@@ -73,6 +73,7 @@ def create_app(collector: Collector, *, web_root: Path | None = None, account=No
                 revocations.cancel()
                 await asyncio.gather(revocations, return_exceptions=True)
             await asyncio.gather(task, return_exceptions=True)
+            await collector.reader.aclose()
             collector.store.close()
 
     # Imported only when configured: the native wheel has no Account dependency.

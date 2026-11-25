@@ -226,4 +226,24 @@ def test_finger_offset_rejects_implausible_gap_px_and_mm_per_px(monkeypatch):
     assert res["found"] is False and res["why"].startswith("wrist_sanity_rejected")
 
 
+def test_right_border_clipped_yellow_box_detected_and_clipped_housing_still_rejected():
+    import cell_finger_container as cfc
+
+    # Border-clipped yellow box on neutral gray floor (right edge at w-1, visible width ~115 px < 140)
+    img_clip = np.full((480, 640, 3), (145, 145, 145), np.uint8)
+    cv2.rectangle(img_clip, (120, 390), (190, 479), (235, 235, 235), -1)
+    cv2.rectangle(img_clip, (420, 390), (490, 479), (235, 235, 235), -1)
+    img_clip[20:360, 520:639] = (30, 195, 215)
+    sc_clip = cfc.structural_container_between_fingers(img_clip, np.array([190.0, 430.0]), np.array([420.0, 430.0]))
+    assert sc_clip is not None and sc_clip["is_container_shape"] is True and sc_clip["clipped_border"] is True
+    blob = cfc.on_surface_blob(img_clip, ([5, 95, 110], [36, 255, 255]), include_bbox=True)
+    assert blob is not None and len(blob) == 4 and blob[3] is True
+
+    # Right-clipped yellow stripe surrounded by dark housing/bracket on unclipped left side stays rejected
+    img_housing = np.full((480, 640, 3), (18, 18, 18), np.uint8)
+    img_housing[20:360, 490:639] = (30, 195, 215)
+    sc_house = cfc.structural_container_between_fingers(img_housing)
+    assert sc_house is None or sc_house["is_container_shape"] is False
+
+
 

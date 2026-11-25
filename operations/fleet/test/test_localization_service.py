@@ -8,12 +8,14 @@ import asyncio
 import logging
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from core_common.protocol.localization import CandidateReport, LocState
 from fakes import FakeClock, FakeRobot, run
 from fleet.localization import cues, service_logic
+from fleet.localization.map_binding import Fit
 from fleet.localization.service_logic import Ladder, Monitor
 from fleet.server.localization_service import CALL_TIMEOUT_S, LocalizationService, load_lane_rules
 from fleet.swarm.transport import RobotApiError
@@ -49,9 +51,9 @@ class FakeSightings:
         self.clock = clock
         self.rows = {}
 
-    def see(self, robot_id, x, y, yaw, age_s=0.1):
+    def see(self, robot_id, x, y, yaw, age_s=0.1, *, map_id="occupancy:123456789012"):
         self.rows[robot_id] = {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw,
-                               "captured_at": self.clock() - age_s}
+                               "captured_at": self.clock() - age_s, "map_id": map_id}
 
     def snapshot(self):
         return {"sightings": list(self.rows.values())}
@@ -61,6 +63,7 @@ def service(*robots, clock, **kwargs):
     clients = {r.robot_id: r for r in robots}
     kwargs.setdefault("slots", SLOTS)
     kwargs.setdefault("squares", [A, B])
+    kwargs.setdefault("reference_map_id", "occupancy:123456789012")
     return LocalizationService(lambda: clients, clock=clock, wall=clock, **kwargs)
 
 
@@ -642,6 +645,36 @@ def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_on_the_sec
     assert r1.suspects == ["fleet_monitor"]
 
 
+@pytest.mark.parametrize(("pose", "scan_fit", "obj"), [
+    ((0.634, -0.117, 1.553), 0.982, (0.170, 1.308)),
+    ((0.105, -0.437, 1.475), 0.944, (0.422, 0.903)),
+])
+def test_single_scan_candidate_without_asymmetric_evidence_cannot_discredit_a_peer(pose, scan_fit, obj):
+    # Field replay: each observer had one unlabeled object within 25 cm of the target's mirror.
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.507, -0.041, 0.0)))
+    r2 = Reporting("r2", clock, pose, [obj])
+    svc = service(r1, r2, clock=clock, slots=[], squares=[])
+    original = r2.localization_candidates
+
+    async def one_candidate():
+        latest = await original()
+        candidate = latest.candidates[0].model_copy(update={"scan_fit": scan_fit})
+        return latest.model_copy(update={"candidates": [candidate]})
+
+    r2.localization_candidates = one_candidate
+    ticks(svc, clock, 1.0)
+    assert r1.suspects == []
+
+
+def test_reference_square_and_slot_from_another_map_cannot_authorize_decision_or_monitor():
+    clock = FakeClock()
+    _, r1, r2, svc = _mirror_locked(clock, reference_map_id="other-map")
+    ticks(svc, clock, 3.0)
+    assert r1.suspects == []
+    assert r2.decisions == []
+
+
 class Periodic(Reporting):
     """Re-reports only every `period_s` of Fleet time (S1: reports 4-7 s apart at RTF ~0.4)."""
 
@@ -884,6 +917,29 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
         sightings.see("r1", 0.0, 0.0, math.radians(90))  # fresh, 90 degrees off
         ticks(svc, clock, 0.5)
     assert r1.suspects == ["fleet_monitor"]
+
+
+@pytest.mark.parametrize("binding", [None, Fit(math.pi / 2, 1.0, -0.5, ())])
+def test_overhead_sighting_cannot_discredit_a_peer_in_a_different_map_frame(binding):
+    clock = FakeClock()
+    sightings = FakeSightings(clock)
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED"))
+    svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "site-map")
+    if binding is not None:
+        svc.set_site_maps(SimpleNamespace(
+            active=lambda: (3, SimpleNamespace(map_id="site-map")),
+            map_bindings=SimpleNamespace(binding_for_grid=lambda *_: (binding, None)),
+        ))
+    for _ in range(2):
+        sightings.see("r1", 1.0, -0.5, math.pi / 2, map_id="site-map")
+        ticks(svc, clock, 0.5)
+    assert r1.suspects == []
+    if binding is not None:
+        for _ in range(2):
+            sightings.see("r1", 1.0, -0.5, math.pi, map_id="site-map")
+            ticks(svc, clock, 0.5)
+        assert r1.suspects == ["fleet_monitor"]
 
 
 def test_one_overhead_sighting_re_read_counts_once():
@@ -1315,3 +1371,20 @@ def test_spread_reads_cap_in_flight_and_start_each_robot_at_its_own_offset():
     offsets = {read_spread.offset(f"r{i}", 0.05) for i in range(6)}
     assert all(0 <= o < 0.05 for o in offsets) and len(offsets) > 1
     assert read_spread.offset("r0", 0.05) == read_spread.offset("r0", 0.05)
+
+
+def test_bridged_observer_exceeding_drift_or_turn_bounds_cannot_accuse_an_anchor():
+    from types import SimpleNamespace
+
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r1.see([seen_from(ON_A, R2_TRUE)])
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=25.0, dead_reckon_m=0.05) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=2.0, dead_reckon_m=0.40) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []

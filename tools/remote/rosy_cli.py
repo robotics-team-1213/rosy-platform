@@ -17,6 +17,7 @@ if _DIR not in sys.path:
 import rosy_agent_bridge as br  # noqa: E402
 
 _CAS_KEYS = (
+    "fallback_from_task_id",
     "failure_bundle_id",
     "failure_context_sha256",
     "expected_context_sha256",
@@ -64,7 +65,8 @@ def _summarize_cell_readiness(res: dict[str, Any]) -> dict[str, Any]:
         return _err_summary(res)
     d = res.get("data") or {}
     arms = {
-        arm: {k: info.get(k) for k in ("folded", "incident_held", "human_hold_latched", "fault", "dirty", "active_job_id")}
+        arm: {k: info.get(k) for k in ("folded", "incident_held", "incident_reason", "human_hold_latched",
+                                       "fault", "live_state_age_s", "dirty", "active_job_id")}
         for arm, info in (d.get("arms") or {}).items() if isinstance(info, dict)
     }
     return {
@@ -173,6 +175,7 @@ def cmd_diagnose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[s
     cas = {
         "cell_id": cid,
         "arm_id": arm_id,
+        "fallback_from_task_id": (bundle.get("correlation") or {}).get("fleet_task_id"),
         "failure_bundle_id": bid,
         "failure_context_sha256": bundle.get("context_sha256"),
         "expected_context_sha256": bundle.get("context_sha256"),
@@ -253,6 +256,10 @@ def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[st
         payload["request_key"] = "rosy-cli-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
     if args.dry_run:
+        if err := br._validate_args(br.TOOL_MAP["fleet_propose_cell_task"], payload):
+            return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": err}
+        if refusal := bridge.check_cell_proposal_context(payload):
+            return refusal
         return {"ok": True, "dry_run": True, "payload": payload}
     return bridge.call_tool("fleet_propose_cell_task", payload)
 

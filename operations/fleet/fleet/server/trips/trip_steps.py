@@ -26,8 +26,8 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_nav2_route import step_nav2_route
-from fleet.server.trip_ports import pose_diagnostics
+from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
+from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.server.named_stop_confirm import GoalRefused, confirm_free_stop, confirm_lane_stop
 from fleet.swarm.transport import RobotApiError
@@ -83,8 +83,11 @@ class TripSteps:
         if pose is None or pose.state != LOCALIZED:
             if getattr(pose, "source", None) == "native_gazebo_sim" and await self._link_wait(live, "pose_stale"):
                 return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
-            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=(live.view["detail"].get("precision_binding_id") is not None or self._auto_locate_on(robot_id) or
-                                               self._named_stop_handoff(live, live.view["segment_index"])))
+            detail = live.view["detail"]
+            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)},
+                             halt_free=(detail.get("precision_binding_id") is not None or detail.get("nav2_binding_id") is not None
+                                        or self._auto_locate_on(robot_id)
+                                        or self._named_stop_handoff(live, live.view["segment_index"])))
             return
         try:
             if live.segment_is_lane(live.view["segment_index"]):
@@ -117,6 +120,16 @@ class TripSteps:
             live.at, live.at_stamp = (index, s), getattr(pose, "odom_stamp", None)  # one pose, one assignment
             remaining = live.segments[index]["s_to"] - s
             lane = live.segment_is_lane(index)
+            camera = live.view["detail"].get("camera_lane_fallback")
+            if camera and live.view["hold"] is not None:
+                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_HELD")
+                return
+            if camera and not camera_body_inside(live, index, pose):
+                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_BODY_OUTSIDE_LANE")
+                return
+            if camera and (not lane or self._clock() - camera["started_at"] > 2 * self.config.stall_s):
+                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_TIMEOUT")
+                return
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
                 live.waiting_since = None
             failed = live.junction_end(self._clock(), remaining if lane else None, self.config)
@@ -126,7 +139,7 @@ class TripSteps:
                 await self._stop(live, "stopped", *failed)
                 return
             if off is not None:
-                if live.nav2:
+                if live.nav2 and not lane:
                     live.off_lane_ticks += 1
                     margin = float(getattr(self.config, "nav2_off_lane_margin_m", 0.06))
                     severe = off > live.arc(index).width_m / 2 + 2.0 * margin
@@ -190,10 +203,15 @@ class TripSteps:
                     await self._step_free(live, index + 1, pose, staging=index)
             elif live.nav2:
                 await step_nav2_route(self, live, index, s, pose)
+                if live.view["detail"].get("camera_lane_fallback"):
+                    return  # the next tick must read the replacement lane owner before checking arrival
             else:
                 await self._step_free(live, index, pose)
             if last and live.open and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
-                if self._strict_named_stop(live, index) is None:
+                if camera:
+                    await finish_camera_line(self, live)
+                    arrival_confirmed = live.open
+                elif self._strict_named_stop(live, index) is None:
                     arrival_confirmed = True
                 elif lane:
                     arrival_confirmed = self._confirm_lane_stop(live, index)
@@ -204,7 +222,10 @@ class TripSteps:
                                                            "junction_seq": exc.args[0] if exc.args else None})
             return
         except _GoalRefused as exc:
-            await self._stop(live, "failed", "TRIP_GOAL_REFUSED", {"goal_reason": str(exc) or None})
+            await self._stop(live, "failed", "TRIP_GOAL_REFUSED", exc.detail)
+            return
+        except TripError as exc:
+            await self._stop(live, "failed", exc.code, exc.detail)
             return
         except RobotApiError as exc:
             lane = live.segment_is_lane(live.view["segment_index"])
@@ -228,9 +249,9 @@ class TripSteps:
                 return  # waiting for a fresh sighting, or ended STATION_ALIGN_*
             live.view["detail"].pop("named_stop_handoff_pending", None)
             live.view["state"] = "arrived"
-            if lane and (live.sent or {}).get("action") == STOP:
+            if lane and not camera and (live.sent or {}).get("action") == STOP:
                 self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
-            if not lane:
+            if not lane or camera:
                 self._release_queue(robot_id)
             self._save(live)
             return
@@ -541,7 +562,7 @@ class TripSteps:
         live.last_goal = (x, y)
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
-            raise _GoalRefused(reply.get("reason") or "")
+            raise _GoalRefused(reply.get("reason") or "", reply)
         if attempt_id is not None:
             try:
                 operation = NativeOperation.model_validate(reply.get("operation"))

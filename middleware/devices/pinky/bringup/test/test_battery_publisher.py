@@ -117,3 +117,11 @@ def test_the_injected_clock_does_not_replace_the_rclpy_node_clock(module):
         return 0.0
     node = module.BatteryPublisher(battery_factory=FlakyBus(missing=0), clock=sentinel)
     assert getattr(node, "_clock", None) is not sentinel
+
+
+def test_single_poll_timer_uses_5s_period(module):
+    node = module.BatteryPublisher(battery_factory=FlakyBus(missing=0), clock=lambda: 0.0)
+    assert node.timer_period == 5.0
+    assert hasattr(node, "poll_timer") and not hasattr(node, "percentage_timer")
+    node._poll_callback()
+    assert _published(node) == ([8.67], [100.0])

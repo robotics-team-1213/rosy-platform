@@ -122,7 +122,7 @@ def post_workcell(fleet_url, workcell_id, token, tail, body, *, context, opener_
     url = secure_url(fleet_url, "https") + "/api/fleet/workcell-observations/" + quote(workcell_id, safe="") + "/" + tail
     request = Request(
         url,
-        data=body.model_dump_json().encode(),
+        data=body.model_dump_json(exclude_none=True).encode(),
         method="POST",
         headers={"Content-Type": "application/json", "X-Workcell-Observation-Token": token},
     )

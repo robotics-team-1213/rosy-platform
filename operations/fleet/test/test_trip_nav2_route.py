@@ -36,6 +36,8 @@ class RouteFakeRobot(FakeRobot):
         self.modes = list(modes)
         self.lease = lease
         self.routes: list[tuple] = []
+        self.route_grids: list[str | None] = []
+        self.bound_route_supported = False
         self.renewals: list[tuple] = []
         self.active_cid: str | None = None
         self._state = {
@@ -46,7 +48,7 @@ class RouteFakeRobot(FakeRobot):
 
     async def capabilities(self) -> dict:
         return {
-            "navigation": {"goal_navigation": True},
+            "navigation": {"goal_navigation": True, "bound_route": self.bound_route_supported},
             "controls": {
                 "schema": "rosy.controls/1",
                 "items": [{
@@ -60,6 +62,7 @@ class RouteFakeRobot(FakeRobot):
     async def navigation_route(self, points, *, correlation_id=None, lease_ttl_s=None, **kwargs) -> dict:
         self._record("navigation_route", points, correlation_id, lease_ttl_s)
         self.routes.append((points, correlation_id, lease_ttl_s))
+        self.route_grids.append(kwargs.get("expected_map_grid_id"))
         self.active_cid = correlation_id
         self._state["navigation"] = "NAVIGATING"
         return {"accepted": True}
@@ -121,6 +124,8 @@ def test_navigation_transport_posts_and_validates_route():
     reply = run(t.navigation_route(pts, correlation_id="cid-1", lease_ttl_s=4.0))
     assert reply == {"accepted": True}
     assert t.posts == [("/api/v1/navigation/route", {"points": pts, "correlation_id": "cid-1", "lease_ttl_s": 4.0})]
+    run(t.navigation_route(pts, expected_map_grid_id="occupancy:abcd"))
+    assert t.posts[-1] == ("/api/v1/navigation/bound-route", {"points": pts, "expected_map_grid_id": "occupancy:abcd"})
     with pytest.raises(ValueError, match="ROUTE_POINTS_REQUIRED"):
         run(t.navigation_route([]))
     with pytest.raises(ValueError, match="NATIVE_OWNER_EPOCH_PAIR_REQUIRED"):
@@ -209,7 +214,12 @@ def test_sample_nav2_route_splits_closed_loop_and_keeps_open_path_single_stop():
     assert math.dist(open_path[-1][:2], (-0.68, -0.25)) < 1e-6
 
 
-def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
+@pytest.mark.parametrize(("binding_required", "loc_state", "refusal"), [
+    (False, "LOCALIZED", None),
+    (True, "LOCALIZED", "MAP_BINDING_REQUIRED"),
+    (False, "CANDIDATES", "ROBOT_POSE_UNTRUSTED"),
+])
+def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, binding_required, loc_state, refusal):
     clock = FakeClock()
     store = SiteMapStore(tmp_path / "site.sqlite", clock=clock)
     store.import_if_empty(_south_loop_map(), source="test")
@@ -218,6 +228,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
     for r in (robot, motor):
         r.power_health_value = fresh_power_health()
         r._state["odom_pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": time.time()}
+    robot._state["localization"] = {"state": loc_state, "pose_frame": "map"}
     console = FleetConsole(
         [RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t"),
          RobotEndpoint("rosy_45", "http://127.0.0.1:8082", "t")],
@@ -226,7 +237,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
     users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
     app = create_app(
         console, task_service=FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42", "rosy_45"]),
-        site_maps=store, site_users=users,
+        site_maps=store, site_users=users, trip_config=TripConfig(map_binding_required=binding_required),
     )
     with TestClient(app) as client:
         # Anchor both robots on the south loop (rosy_42 33 deg off loop_left: past lane 20 deg tol, under 90 deg conflict).
@@ -239,9 +250,19 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
         res = client.post("/api/fleet/robots/rosy_42/trip",
                           json={"to": "S3", "via": ["S4", "S5"], "repeat": True, "drive_mode": "nav2"},
                           headers={"Authorization": "Bearer op-tok"})
+        if binding_required:
+            assert res.status_code == 409, res.text
+            assert res.json()["detail"] == {
+                "code": "TRIP_POSE_UNTRUSTED", "detail": {"reason": "APPROVED_SLAM_POSE_REQUIRED"},
+            }
+            assert not robot.routes
+            return
         assert res.status_code == 200, res.text
         plan = res.json()
         assert plan["start_check"]["code"] is None
+        assert plan["nav2_preflight"] == {"code": refusal, "binding_required": binding_required,
+                                             "binding_status": "MAP_BINDING_REQUIRED"}
+        assert not robot.routes
         assert plan["segments"][-1]["s_to"] == pytest.approx(store.active()[2].arcs["loop_right:fwd"].length_m, abs=1e-4)
 
         # Motor-only robot (no "free" mode) cannot plan a nav2 trip.
@@ -256,6 +277,95 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path):
                                 "convoy": {"leader": "rosy_45"}},
                           headers={"Authorization": "Bearer op-tok"})
         assert bad.status_code == 422
+
+
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid"])
+def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
+    from datetime import datetime, timezone
+    from fleet.localization.map_binding import Fit
+
+    store = SiteMapStore(tmp_path / "site.sqlite")
+    store.import_if_empty(_south_loop_map(), source="test")
+    robot = RouteFakeRobot("rosy_42")
+    robot.power_health_value = fresh_power_health()
+    robot.bound_route_supported = case != "older_core"
+    fit = Fit(math.pi / 2, .31, -.22, ())
+    native_x, native_y = fit.inverse((.17, -.48))
+
+    def read_core():
+        stamp = time.time() - .02
+        robot._state.update(
+            map_id="native-slam", map_grid_id="occupancy:0123456789ab", pose_frame="map",
+            localization={"state": "LOCALIZED", "pose_frame": "map"},
+            pose={"x": native_x, "y": native_y, "yaw": -fit.yaw},
+            odom_pose={"x": native_x, "y": native_y, "yaw": -fit.yaw, "stamp": stamp},
+            evidence={"pose": {"evidence": "fresh", "received_at": datetime.fromtimestamp(stamp, timezone.utc).isoformat()}},
+        )
+
+    read_core()
+    site = (store.active()[1].map_id, store.active()[0])
+    pairs = [{"site": list(p), "robot": list(fit.inverse(p))} for p in [(-1., -.5), (1., -.5), (.9, .45)]]
+    holdout = [{"site": [0., 0.], "robot": list(fit.inverse((0., 0.)))}]
+    binding = store.map_bindings.approve("rosy_42", robot._state, site, pairs, holdout, "bob")
+    console = FleetConsole([RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t")], [robot])
+    users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    tasks = FleetTaskStore(tmp_path / "tasks.sqlite")
+    app = create_app(console, site_maps=store, site_users=users,
+                     task_service=FleetTaskService(tasks, robot_ids=["rosy_42"]))
+    runner = app.state.trip_runner
+    read_legacy_pose = []
+
+    async def wrong_camera_pose(_robot_id):
+        read_legacy_pose.append(True)
+        return MapPose(.75, -.21, math.pi, "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
+
+    runner.map_pose = wrong_camera_pose
+    headers = {"Authorization": "Bearer op-tok"}
+    body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
+    with TestClient(app) as client:
+        tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
+        assert not runner.human_hold_fn()
+        assert not runner.config.map_binding_required
+        plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+        if case == "older_core":
+            assert plan.status_code == 409 and plan.json()["detail"]["code"] == "NAV2_BOUND_ROUTE_UNSUPPORTED"
+            assert not robot.routes and not read_legacy_pose
+            return
+        assert plan.status_code == 200, plan.text
+        assert plan.json()["nav2_binding_id"] == binding["binding_id"]
+        plan_id = plan.json()["plan_id"]
+        read_core()
+        started = client.post(f"/api/fleet/trips/{plan_id}/start", headers=headers)
+        assert started.status_code == 200, started.text
+        live = runner._live["rosy_42"]
+        pose = client.portal.call(runner._progress_pose, live, "rosy_42")
+        assert pose.source == "approved_slam" and (pose.x, pose.y) == pytest.approx((.17, -.48))
+        if case == "changed_grid":
+            prepare = console.goal_leases.prepare_send
+
+            async def change_grid(*args):
+                guard = await prepare(*args)
+                robot._state["map_grid_id"] = "occupancy:0fedcba98765"
+                return guard
+
+            console.goal_leases.prepare_send = change_grid
+        client.portal.call(runner.tick)
+        if case == "changed_grid":
+            stopped = runner.view(plan_id)
+            assert stopped["state"] in {"failed", "stopped"}
+            assert not robot.routes and not read_legacy_pose
+            return
+        assert robot.routes and robot.route_grids == ["occupancy:0123456789ab"]
+        assert console._site_claims["rosy_42"][0] == site[0]
+        first = robot.routes[0][0][0]
+        assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
+        assert not read_legacy_pose
+
+        store.map_bindings.revoke("rosy_42", "bob")
+        client.portal.call(runner.tick)
+        assert runner.view(plan_id)["state"] == "stopped"
+        assert any(call[0] == "navigation_cancel" for call in robot.calls)
+        assert len(robot.routes) == 1 and not read_legacy_pose
 
 
 def test_nav2_repeat_trip_rolls_across_multiple_laps_and_reanchors_robot_frame():
@@ -499,10 +609,11 @@ def test_degraded_reroute_skips_trip_leased_goal():
     assert degraded == {"rosy_42"} and console._queued == {}
 
 
-def _console_runner(robot: RouteFakeRobot, smap: SiteMap, *, traffic_zones=None):
+def _console_runner(robot: RouteFakeRobot, smap: SiteMap, *, traffic_zones=None, peers=()):
     clock = FakeClock()
-    console = FleetConsole([RobotEndpoint(robot.robot_id, "http://127.0.0.1:8080", "t")],
-                           [robot], clock=clock, goal_lease_ttl_s=4.0)
+    robots = [robot, *peers]
+    console = FleetConsole([RobotEndpoint(r.robot_id, "http://127.0.0.1:8080", "t") for r in robots],
+                           robots, clock=clock, goal_lease_ttl_s=4.0)
     store = SiteMapStore(clock=clock)
     store.import_if_empty(smap, source="test")
     graph = store.active()[2]

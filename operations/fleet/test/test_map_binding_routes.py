@@ -1,4 +1,5 @@
 """D-1022 map binding HTTP: read, approve with refit, revoke, and the marker-free wall proposal."""
+import base64
 import math
 from hashlib import sha256
 
@@ -12,6 +13,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
+from fleet.swarm.transport import RobotApiError
 from test_charge_bays import _world_261026_charge_graph
 
 TRUTH = Fit(math.radians(15), 0.2, -0.1, ())
@@ -41,7 +43,7 @@ def _walls_grid(res=0.05):
     return {"width": w, "height": h, "resolution": res, "origin": {"x": ox, "y": oy}, "data": data}
 
 
-def _client(tmp_path):
+def _client(tmp_path, *, grid=None):
     site, _ = _world_261026_charge_graph()
     store = SiteMapStore(tmp_path / "tasks.sqlite")
     draft = store.save_draft(site, expected_revision=None, principal_id="op")
@@ -50,8 +52,11 @@ def _client(tmp_path):
     bot = FakeRobot("rosy_42", state={
         "robot_id": "rosy_42", "map_id": "world_261026", "map_grid_id": GRID_ID,
         "pose": {"x": here[0], "y": here[1], "yaw": 0.0},
-        "localization": {"state": "LOCALIZED", "pose_frame": "map"}}, map=_walls_grid())
-    users = {sha256(b"op").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+        "localization": {"state": "LOCALIZED", "pose_frame": "map"}}, map=_walls_grid() if grid is None else grid)
+    users = {
+        sha256(b"op").hexdigest(): {"principal_id": "bob", "role": "operator"},
+        sha256(b"vw").hexdigest(): {"principal_id": "viewer", "role": "viewer"},
+    }
     console = FleetConsole([RobotEndpoint("rosy_42", "http://x", "t")], [bot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_42"})
     return TestClient(create_app(console, task_service=tasks, site_users=users, site_maps=store))
@@ -59,6 +64,45 @@ def _client(tmp_path):
 
 def _pairs(points):
     return [{"site": list(p), "robot": list(TRUTH.inverse(p))} for p in points]
+
+
+def test_viewer_exports_robot_grid_as_a_trinary_map_bundle(tmp_path):
+    grid = {"map_id": "live", "width": 2, "height": 2, "resolution": 0.05000000074505806,
+            "origin": {"x": -0.1, "y": 0.2, "yaw": -0.0}, "data": [0, -1, 100, 50]}
+    client = _client(tmp_path, grid=grid)
+    route = "/api/fleet/robots/rosy_42/map/bundle"
+    assert client.get(route).status_code == 401
+
+    response = client.get(route, headers={"Authorization": "Bearer vw"})
+
+    assert response.status_code == 200, response.text
+    bundle = response.json()
+    pgm = b"P5\n2 2\n255\n" + bytes([0, 205, 254, 205])
+    assert base64.b64decode(bundle["pgm_base64"], validate=True) == pgm
+    assert bundle["sha256"] == sha256(pgm).hexdigest()
+    assert bundle["map_id"] == "live" and bundle["yaml"]["image"] == "robot_rosy_42.pgm"
+    assert bundle["yaml"]["origin"] == [-0.1, 0.2, 0.0]
+    assert bundle["yaml"]["resolution"] == grid["resolution"]
+    assert "grid_id" not in bundle
+
+
+def test_invalid_robot_map_export_returns_upstream_error(tmp_path):
+    client = _client(tmp_path, grid={"width": "invalid", "height": 1, "data": [0]})
+    response = client.get("/api/fleet/robots/rosy_42/map/bundle", headers=OP)
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "INVALID_ROBOT_MAP"
+
+
+def test_robot_map_export_hides_malformed_upstream_body(tmp_path, monkeypatch):
+    async def bad_map(self):
+        raise RobotApiError("rosy_42", 200, "BAD_RESPONSE", "unexpected upstream contents")
+
+    monkeypatch.setattr(FakeRobot, "map", bad_map)
+    response = _client(tmp_path).get("/api/fleet/robots/rosy_42/map/bundle", headers=OP)
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "INVALID_ROBOT_MAP"
+    assert "unexpected upstream contents" not in response.text
 
 
 def test_approve_read_and_revoke(tmp_path):
@@ -79,6 +123,23 @@ def test_a_bad_holdout_is_refused_with_its_code(tmp_path):
         "pairs": _pairs([(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]),
         "holdout": [{"site": [0.2, 0.0], "robot": list(TRUTH.inverse((0.0, 0.0)))}]})
     assert res.status_code == 409 and res.json()["detail"]["code"] == "HOLDOUT"
+
+
+def test_approval_checks_expected_frame_before_saving(tmp_path):
+    client = _client(tmp_path)
+    path = "/api/fleet/robots/rosy_42/map-binding"
+    active = client.get("/api/fleet/site-map/active", headers=OP).json()
+    frame = {"site_map_id": active["map"]["map_id"], "site_map_version": active["version"], "robot_grid_id": GRID_ID}
+    body = {"pairs": _pairs([(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]), "holdout": _pairs([(0.0, 0.0)])}
+    for key, value, code in (
+        ("site_map_version", frame["site_map_version"] + 1, "MAP_BINDING_SITE_CHANGED"),
+        ("robot_grid_id", "occupancy:changed", "MAP_BINDING_GRID_CHANGED"),
+    ):
+        res = client.post(path, headers=OP, json={**body, "expected_frame": {**frame, key: value}})
+        assert res.status_code == 409 and res.json()["detail"]["code"] == code
+        assert client.get(path, headers=OP).json()["reason"] == "MAP_BINDING_REQUIRED"
+    res = client.post(path, headers=OP, json={**body, "expected_frame": frame})
+    assert res.status_code == 200, res.text
 
 
 def test_the_walls_propose_pairs_that_then_approve_without_markers(tmp_path):

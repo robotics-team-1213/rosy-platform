@@ -39,6 +39,8 @@ class BayZoneChecksMixin:
     def _map_verified(self, pose) -> Optional[str]:
         """None = the map pose may be used for a Nav2 staging leg; else why not."""
         h, cfg = self._h, self._h._cfg
+        if not h.localization_ok():
+            return "localization is not LOCALIZED before Nav2 staging"
         if self._site_verified:
             return None
         m = self._scan_match[0] if self._scan_match is not None else None

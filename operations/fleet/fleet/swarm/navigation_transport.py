@@ -4,6 +4,14 @@ from uuid import UUID
 from core_common.protocol.schemas import ScopedNavigationCancelRequest
 
 
+def goal_lease_supported(caps: dict | None) -> bool:
+    """The robot's rosy.controls/1 base announces ``goal_lease: true``. An older CORE would
+    ignore ``lease_ttl_s``, so without it a Fleet goal is unbounded."""
+    items = (((caps or {}).get("controls") or {}).get("items") or []) if isinstance(caps, dict) else []
+    return any(isinstance(item, dict) and item.get("kind") == "base_velocity"
+               and item.get("goal_lease") is True for item in items)
+
+
 class NavigationTransport:
     async def navigation_cancel(self) -> dict:
         return await self._post("/api/v1/navigation/cancel")
@@ -75,6 +83,7 @@ class NavigationTransport:
                                 {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
     async def navigation_route(self, points: list[dict], *,
+                               expected_map_grid_id: str | None = None,
                                correlation_id: str | None = None,
                                lease_ttl_s: float | None = None,
                                expected_boot_id: str | None = None,
@@ -91,6 +100,9 @@ class NavigationTransport:
             if expected_boot_id is None or expected_owner_generation is None:
                 raise ValueError("NATIVE_OWNER_EPOCH_PAIR_REQUIRED")
             body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
+        if expected_map_grid_id is not None:
+            body["expected_map_grid_id"] = expected_map_grid_id
+            return await self._post("/api/v1/navigation/bound-route", body)
         return await self._post("/api/v1/navigation/route", body)
 
     async def navigation_handover(self, *, expected_boot_id, run_id, expected_owner_generation, correlation_id,

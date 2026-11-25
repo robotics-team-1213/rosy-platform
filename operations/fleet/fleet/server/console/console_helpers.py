@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 import logging
+import time
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -12,6 +13,7 @@ from fleet.hub.hub import HubError
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import _error_of, _shown, classify_link, link_reason
+from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.session_arming import require_capability
 from fleet.swarm.transport import RobotApiError
 
@@ -129,9 +131,11 @@ async def snapshot(self) -> dict:
     for row in robots:
         refresh_console_dispatch_fields(self, row)
         view = self._localization_view
+        observed_at = row.get("_state_mono")
+        age_s = max(0.0, self._clock() - observed_at) if observed_at is not None else 0.0
         row["localization"] = trust.badge(
             row["state"], view(row["robot_id"]) if view is not None else None,
-            lapsed=self._lapsed(row["robot_id"]))
+            lapsed=self._lapsed(row["robot_id"]), state_age_s=age_s)
     online = sum(1 for r in robots if r["online"])
     if self._signals is not None:
         # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.
@@ -171,7 +175,7 @@ async def map(self) -> Optional[dict]:
     return None
 
 
-def _check_stop_binding(self, robot_id, state, expected, *, lane_trip=False) -> None:
+def _check_stop_binding(self, robot_id, state, expected, *, lane_trip=False, road_route=False):
     site_maps = getattr(self, "_named_stop_site_maps", None)
     active = site_maps.active() if site_maps is not None else None
     if active is None or (active[1].map_id, active[0]) != (
@@ -179,7 +183,7 @@ def _check_stop_binding(self, robot_id, state, expected, *, lane_trip=False) -> 
         raise HubError("COMMAND_REJECTED", "MAP_BINDING_SITE_CHANGED")
     from fleet.server.task_dispatch_helpers import standalone_named_stop_allowed
 
-    if not lane_trip and not standalone_named_stop_allowed(active, getattr(self, "_named_stop_traffic", None)):
+    if not (lane_trip or road_route) and not standalone_named_stop_allowed(active, getattr(self, "_named_stop_traffic", None)):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_REQUIRES_LANE_TRIP")
     fit, reason = site_maps.map_bindings.matching_fit(
         robot_id, state or {}, (active[1].map_id, active[0]))
@@ -190,6 +194,7 @@ def _check_stop_binding(self, robot_id, state, expected, *, lane_trip=False) -> 
         raise HubError("COMMAND_REJECTED", "MAP_BINDING_CHANGED")
     if state.get("map_grid_id") != expected["map_grid_id"]:
         raise HubError("COMMAND_REJECTED", "MAP_BINDING_GRID_CHANGED")
+    return fit
 
 
 async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
@@ -209,7 +214,7 @@ async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
 
 
 async def route(self, robot_id: str, points: Sequence[dict], *,
-                lease_source: str | None = None) -> dict:
+                lease_source: str | None = None, route_binding: dict | None = None) -> dict:
     """Dispatch one D-1009 pass/stop route under the console's goal admission & traffic arbitration."""
     pts = list(points)
     if not pts:
@@ -222,7 +227,7 @@ async def route(self, robot_id: str, points: Sequence[dict], *,
         return await self._goal(robot_id, float(end["x"]), float(end["y"]),
                                 float(0.0 if end.get("yaw") is None else end["yaw"]),
                                 task_id=None, attempt_id=None, attempt_seq=None, lease_source=lease_source,
-                                route_points=pts)
+                                route_points=pts, route_binding=route_binding)
     finally:
         self._goal_busy.discard(robot_id)
 
@@ -231,7 +236,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 task_id: str | None, attempt_id: str | None,
                 attempt_seq: int | None, lease_source: str | None,
                 stop_binding: dict | None = None, line_handoff=None,
-                route_points: Sequence[dict] | None = None) -> dict:
+                route_points: Sequence[dict] | None = None, route_binding: dict | None = None) -> dict:
     """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
     내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -264,17 +269,15 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     yielding = self._yielding.get(robot_id)
     decision = admission.yield_hold(yielding)
     if decision is not None:
-        if route_points is not None:
+        if route_points is not None or stop_binding is not None:
             return {**admission.response_of(decision), "queued": False}
-        if stop_binding is not None:
-            return {"accepted": False, "reason": decision.reason}
         # 이 로봇은 남을 지나가게 하려고 비켜서는 중이다. 지금 다른 데로 보내면 방금
         # 비운 통로를 다시 막고, 그 통로를 기다리던 미션은 영영 못 나간다. 세워 둔다.
         self._queued[robot_id] = admission.mission_of(
             decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
             attempt_seq=attempt_seq)
         return admission.response_of(decision)
-    if stop_binding is None:
+    if stop_binding is None and route_binding is None:
         state, _source = await self._gather_state(robot_id)
     else:
         state = await client.state()
@@ -291,10 +294,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
         self._claims.pop(robot_id, None)
         getattr(self, "_site_claims", {}).pop(robot_id, None)
         decision = admission.untrusted_self_hold(robot_id)
-        if route_points is not None:
+        if route_points is not None or stop_binding is not None:
             return {**admission.response_of(decision), "queued": False}
-        if stop_binding is not None:
-            return {"accepted": False, "reason": decision.reason}
         self._queued[robot_id] = admission.mission_of(
             decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
             attempt_seq=attempt_seq)
@@ -306,7 +307,35 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     if stop_binding is not None:
         return await _planned_stop_goal(self, robot_id, client, caps, (x, y, yaw), attempt_id, stop,
                                         stop_binding, line_handoff, lease_source, task_id)
-    if route_points is not None:
+    route_fit = None
+    if route_points is not None and route_binding is not None:
+        from fleet.server.named_stop_map_pose import fresh_native_slam
+
+        if (caps.get("navigation") or {}).get("bound_route") is not True:
+            raise HubError("COMMAND_REJECTED", "NAV2_BOUND_ROUTE_UNSUPPORTED")
+
+        def check_route_binding():
+            self.goal_leases.check_stop(robot_id, stop)
+            fit = _check_stop_binding(self, robot_id, state, route_binding, road_route=True)
+            if fresh_native_slam(state, time.time()) is None:
+                raise HubError("COMMAND_REJECTED", "APPROVED_SLAM_POSE_REQUIRED")
+            return fit
+
+        async def refresh_route_binding():
+            nonlocal state, route_fit
+            state = await client.state()
+            if self._clients.get(robot_id) is not client:
+                raise RuntimeError("robot connection changed during bound route admission")
+            route_fit = check_route_binding()
+            self._remember([{"robot_id": robot_id, "state": state}])
+
+        check_route_binding()
+        with dispatch_guard(check_route_binding, paths={"/api/v1/navigation/bound-route"}):
+            result = await self.goal_leases.send_route(
+                robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
+                expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding,
+            )
+    elif route_points is not None:
         result = await self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id)
     else:
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
@@ -318,14 +347,20 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     self.__dict__.setdefault("_goal_sent_at", {})[robot_id] = self._clock()
     self._queued.pop(robot_id, None)
 
+    def site_route_of(route):
+        if route_fit is not None:
+            return (route_binding["site_map_id"], [route_fit.apply(point) for point in route]) if route else None
+        return self._site_route(robot_id, route)
+
     async with self._traffic_lock:
         try:
             nav_route = await self._route_of(robot_id)
             if not nav_route and route_points is not None:
-                here = self._pose_of(robot_id)
+                here = ((state["pose"]["x"], state["pose"]["y"]) if route_fit is not None
+                        else self._pose_of(robot_id))
                 nav_route = traffic.thin(([here] if here is not None else []) + [(float(p["x"]), float(p["y"])) for p in route_points])
             self.goal_leases.check_stop(robot_id, stop)
-            claim_site_route = self._site_route(robot_id, nav_route)
+            claim_site_route = site_route_of(nav_route)
             blocker, conflict = self._claim_blocker(robot_id, nav_route, site_route=claim_site_route)
             if blocker is not None:
                 stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
@@ -350,7 +385,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             await self._observe()
             self.goal_leases.check_stop(robot_id, stop)
             intended = self._intended_route(robot_id, nav_route, x, y)
-            site_route = self._site_route(robot_id, intended)
+            site_route = site_route_of(intended)
             untrusted = next((rid for rid in self._order
                               if rid != robot_id and self._untrusted_blocks(rid, intended, site_route=site_route)), None)
             if untrusted is not None:

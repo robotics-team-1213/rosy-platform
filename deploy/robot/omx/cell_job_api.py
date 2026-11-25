@@ -27,7 +27,10 @@ from cell_job_guards import (  # noqa: E402
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
-from cell_job_readiness import CellStateGen, handle_get_route, parse_structured_result, proxy_frame  # noqa: E402
+from record_session_baseline import session_job_env  # noqa: E402
+from cell_job_readiness import (  # noqa: E402
+    CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
+)
 from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
 try:
@@ -191,7 +194,7 @@ class Runner:
                 if not job.get("recovery_home"):
                     for a in arms:
                         if inc_reason := self._check_incident(a):
-                            return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{a} held: {inc_reason}"}
+                            return held_job_response(a, inc_reason)
                 for a in arms or (None,):
                     fleet_st = self._check_fleet_safety(a)
                     fleet_online = fleet_online or bool(fleet_st.get("online"))
@@ -224,7 +227,7 @@ class Runner:
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
-            env = {**os.environ, "ROSY_ARM_LEASE_OWNER": self._lease_owner}
+            env = session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params)
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
@@ -283,7 +286,7 @@ class Runner:
             code = run["proc"].poll()
             if code is not None:
                 self._audit_locked(jid, run, code)
-        data = run["log"].read_bytes()[-tail:].decode("utf-8", "replace") if tail > 0 else ""
+        data = read_tail_bytes(run["log"], tail).decode("utf-8", "replace")
         if code is not None and "_parsed_result" in run:
             structured_result, failure_bundle_id = run["_parsed_result"]
         elif code is not None or tail > 0:
@@ -305,6 +308,8 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
         raise ValueError("human and machine tokens must differ")
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 10
+
         def log_message(self, fmt, *args):
             pass
 

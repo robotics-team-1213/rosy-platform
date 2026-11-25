@@ -32,9 +32,11 @@ applies_when: "diagnosing OMX goto contact near folded home (shoulder_lift <= -5
 1. **홈 외측 펼침 우선(`chunk_library.py` `transit_path`):**
    - `FOLDED_UNFOLD_ELBOW = 43.0` 추가. `start[1] <= -50.0`이고 `start[2] > 43.5`이며 `transit[2] < 43.0`일 때, `blend=False` 세그먼트로 `[shoulder_pan, shoulder_lift, 43.0, ...]`를 먼저 경유해 팔꿈치를 바깥/위로 펼친 뒤 `transit`으로 이동한다.
 2. **D435 기반 동적 `z_view` 상승(`cell_remap_plan.py`, `cell_calibrate.py`):**
-   - `site_obstacle_mm()`가 D435 `table_plane`(기울어진 평면 시 seed 1..3 중 가장 수평인 평면 선택) + `height_map` + `align_edges`로 `map_sites`의 `auto_roi` 내 `p99` 물체 높이(mm)를 측정한다(팔 기저부는 제외).
+   - `site_obstacle_mm()`가 D435 `table_plane`, `height_map`, `align_edges`로 `map_sites`의 `auto_roi` 내 최대 물체 높이(mm)를 측정한다. 넓은 받침 위에 솟은 작은 장애물도 높이 계산에 남긴다.
    - `resolve_z_view()`가 테이블 기준면(`-0.025 <= surface_z <= 0.0`, 저고도 `beltend=-0.0721` 및 상단 `stack` 제외)에 대해 `max(base_z, table_z + (obstacle_mm + 35.0) / 1000)`로 `z_view`를 올리기만 하며(하향 금지), `cell_calibrate.py main()`이 `rp.plan()`으로 이동 전 IK 한계를 사전 거절(`fail-closed`)한다. `--plan-only` 무카메라 불변식은 `--obstacle-mm`로만 오프라인 검증한다.
 3. **검증:**
    - 원격 pytest (`test/test_omx_cell_calibrate.py`, `test/test_omx_chunk_runner.py`, `middleware/devices/omx/adapter/test/test_chunk_library.py`)로 회귀 확인.
    - 실기 `rosy-arm-cell` D435 깊이 + FK 읽기 전용 검증(배포 전 `omx-tools-current` 심볼릭링크 무변경). 실기 적용은 표준 착지/릴리스 배포 파이프라인으로 진행한다.
 4. **깊이를 잡지 못하면 닫힘(독립 검토 `57c7848c5b` 지적):** `capture_top_depth_z16`은 실패를 예외가 아니라 `None`으로 돌려준다. `cell_remap_plan.site_obstacle_mm()`은 프레임이 없거나 색·깊이 정렬이 8 px 넘게 느슨하면 `ValueError`를 내고, `remap_view()`는 그것을 `depth_error`에 남기며, `cell_calibrate.py`는 `depth_error`가 있으면 움직이기 전에 거절한다(`--obstacle-mm`을 준 경우만 명시적으로 진행). `z_view` 기록은 올라갔을 때뿐 아니라 항상 출력된다.
+5. **부분 깊이 프레임(2026-11-26 독립 검토):** 전체 영상 정합이 통과해도 remap 구역마다 ROI가 색·깊이 영상에 모두 들어오고 유효 깊이가 80% 이상이어야 한다. 유효 표본이 부족하거나, 돌출 표본이 너무 적거나, 측정 높이 범위를 넘으면 remap 전에 보류한다. 회귀시험은 빈 구역, 부분 프레임, 넓은 받침 위 작은 장애물을 각각 확인한다. 실물 수용은 현장 검증을 거친다.
+6. **기준면 표본(2026-11-26 원격 회귀시험):** 프레임에 기준면을 맞출 수 없으면 remap을 보류한다. 기본 기준면이 유효하고 나머지 표본으로 보조 평면을 맞출 수 없으면 기본 기준면을 쓴다. 이때 돌출된 표본은 그대로 높이 판정에 들어간다.

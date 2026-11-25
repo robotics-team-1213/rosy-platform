@@ -103,6 +103,12 @@ def pose_gate(match, cfg, staging_offset_m=None) -> Optional[str]:
     return None
 
 
+def _camera_dock_lateral(observation, facing: float) -> float:
+    lat = rear_errors(observation)[1]
+    # BayLineObserver folds undirected tape to cos(yaw) < 0; facing the bay flips lateral's sign.
+    return -lat if abs(_wrap(facing - math.pi)) < math.pi / 2 and math.cos(observation.yaw) < 0.0 else lat
+
+
 def junction_geometry(match, observation, cfg, facing: float = math.pi):
     """(x, lateral, heading) of a robot standing AT the staging junction FACING the bay (pit-in, case II), from a LiDAR bay pose that is below the row gates
     (b8xy C2: x 0.404, inliers 0.68, margin 0.18). The row gates (inliers 0.70, margin 0.40) stay; this is a separate, narrower acceptance: inliers >= 0.60 and
@@ -119,7 +125,7 @@ def junction_geometry(match, observation, cfg, facing: float = math.pi):
         return None
     if abs(_wrap(match.heading - facing)) > cfg.bay_junction_heading_rad:
         return None
-    if abs(rear_errors(observation)[1] - (-match.y)) > cfg.bay_junction_lateral_agree_m:
+    if abs(_camera_dock_lateral(observation, facing) - (-match.y)) > cfg.bay_junction_lateral_agree_m:
         return None
     return match.x, -match.y, match.heading
 
@@ -136,7 +142,7 @@ def backout_geometry(match, observation, cfg, weak: bool = False):
         # the bay line, and only with the MEASURED camera lateral agreeing within 3 cm; the caller adds the modelled empty-bay depth (front gap) as the second evidence
         if (match.inliers < cfg.bay_junction_inlier_min or match.margin < cfg.bay_junction_margin_min or abs(match.y) > cfg.bay_junction_lateral_m
                 or not cfg.bay_line_x_m <= match.x < cfg.bay_turn_x_min_m or observation is None or not getattr(observation, "lateral_measured", True)
-                or abs(rear_errors(observation)[1] - (-match.y)) > cfg.bay_junction_lateral_agree_m):
+                or abs(_camera_dock_lateral(observation, math.pi) - (-match.y)) > cfg.bay_junction_lateral_agree_m):
             return None
         if abs(_wrap(match.heading - math.pi)) > cfg.bay_junction_heading_rad:
             return None
@@ -145,7 +151,7 @@ def backout_geometry(match, observation, cfg, weak: bool = False):
         return None
     if abs(_wrap(match.heading - math.pi)) > cfg.bay_junction_heading_rad or not -0.05 <= match.x < cfg.bay_turn_x_min_m:
         return None
-    if observation is not None and getattr(observation, "lateral_measured", True) and abs(rear_errors(observation)[1] - (-match.y)) > cfg.bay_zone_agree_m:
+    if observation is not None and getattr(observation, "lateral_measured", True) and abs(_camera_dock_lateral(observation, math.pi) - (-match.y)) > cfg.bay_zone_agree_m:
         return None
     return match.x, -match.y, match.heading
 
@@ -244,8 +250,9 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg, scan=None) -
         o_lat, o_head = lateral, heading
     # Straight enough that the reverse run (along) cannot leave the lane: the rear already faces the bay, so there is
     # no turn and no runway to find, only the line to hold.
-    if abs(o_lat) <= cfg.bay_exit_lateral_m and lane_extent(cfg, o_lat, o_head) <= lane_edge(cfg, dock) and abs(o_head) <= min(
-            cfg.bay_acquire_heading_max_rad, math.atan(cfg.bay_exit_lateral_m / max(along, 0.05))):
+    head_lim = (cfg.bay_entry_heading_max_rad if scan is not None and along >= cfg.bay_first_x_max_m
+                else min(cfg.bay_acquire_heading_max_rad, math.atan(cfg.bay_exit_lateral_m / max(along, 0.05))))
+    if abs(o_lat) <= cfg.bay_exit_lateral_m and lane_extent(cfg, o_lat, o_head) <= lane_edge(cfg, dock) and abs(o_head) <= head_lim:
         return ZoneVerdict("acquire", "straight in the lane: acquire where it stands")
     if lane_extent(cfg, o_lat, o_head) > lane_edge(cfg, dock):      # measured values (the line's, or the LiDAR's when it was used): a footprint check, not a centre limit
         return ZoneVerdict("manual", "inside the bay row but the body (with the tray) overlaps a neighbour lane: not moving in the row")

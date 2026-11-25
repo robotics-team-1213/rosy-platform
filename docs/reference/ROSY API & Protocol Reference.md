@@ -5,9 +5,51 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.460
+**Version:** v1.469
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.469 Camera continuation after a failed Nav2 route (Fleet)
+
+For a finite named Nav2 trip with `approved_slam_required: true`, an operator may request `camera_lane_fallback: true`. Fleet attempts camera lane following after CORE reports a terminal Nav2 `FAILED` with the approved SLAM binding still current. The unfinished section must be a straight painted final lane with reviewed camera evidence on the active survey, ending at a pinned ordinary stop outside signal and crosswalk zones.
+
+The change requires a current CORE trip lease, always-enforced line authority, a fresh camera frame, and two fresh zero-velocity samples after acknowledged cancellation. Fleet checks lease expiry again immediately before asking CORE to start the camera controller. It stops both controllers if the mode change is uncertain and reports arrival after turning the camera controller off and rechecking stationary pose. Precision stops and failures of localization itself stay under their existing recovery contracts.
+
+### v1.468 Approved SLAM for named Nav2 trips (Fleet)
+
+`POST /api/fleet/robots/{robot_id}/trip` accepts `approved_slam_required: true` for a named destination with `drive_mode: "nav2"`. Fleet plans and checks progress with the fresh CORE pose transformed by the active approved binding. The plan records `nav2_binding_id`. Start and execution require that same binding and a fresh pose. Planning responds with `TRIP_POSE_UNTRUSTED` and `reason: APPROVED_SLAM_POSE_REQUIRED` when those inputs are unavailable.
+
+Sites with `fleet.trip.map_binding_required: true` apply this behavior to all named Nav2 trips. On other sites the caller opts in per trip. The robot card exposes the option as Nav2 with an approved SLAM pose.
+
+Bound trips require CORE capability `navigation.bound_route`. Fleet refuses unsupported CORE with `NAV2_BOUND_ROUTE_UNSUPPORTED` and submits eligible points to the grid-checked CORE endpoint.
+
+### v1.467 Nav2 route with expected map grid (CORE)
+
+`GET /api/v1/system/capabilities` advertises `navigation.bound_route: true`. `POST /api/v1/navigation/bound-route` accepts the fields of `/navigation/route` and requires `expected_map_grid_id`. CORE checks the grid under its map-grid gate before taking the navigation owner. A mismatch returns 409 `NAVIGATION_MAP_GRID_CHANGED`. A successful reply includes `map_grid_id`. Existing `/navigation/route` clients keep their request and response format.
+
+### v1.466 Stationary localization candidates retain scan provenance (CORE)
+
+The same `/api/v1/localization/candidates` request retains its `stamp` on transport-only retransmissions. A newer scan supplies a new stamp only when it revalidates the same hypotheses and refreshes their LiDAR evidence. Three recent scans showing disagreement with all candidates can retire the request as `SUSPECT` with reason `candidate_scan_mismatch`, then use the existing bounded search path. A replacement request and any later decision follow the existing localization check.
+
+### v1.465 Map binding approval checks the measured frames (Fleet)
+
+POST /api/fleet/robots/{robot_id}/map-binding accepts optional expected_frame with site_map_id, site_map_version, and robot_grid_id. Fleet rejects a changed active site revision (409 MAP_BINDING_SITE_CHANGED) or robot grid (409 MAP_BINDING_GRID_CHANGED) before writing a binding. Omitting expected_frame keeps the existing approval behavior.
+
+### v1.464 Lane trip junction turn refusal reason (Fleet)
+
+When Fleet refuses a lane trip with `TRIP_MODE_UNSUPPORTED` and `detail.reason: JUNCTION_TURN_UNSUPPORTED`, `detail.junction_turn_reason` carries the optional current CORE reason from `base_velocity`. With older CORE it is omitted. Admission and Nav2 routing continue to use their existing checks.
+
+### v1.463 Junction turn readiness reason (CORE)
+
+The optional base_velocity `junction_turn_reason` field in `GET /api/v1/system/capabilities` explains a false `junction_turn`. It reports `keep_corner_unavailable`, `enforce_unavailable`, `site_floor_unconfigured`, `ir_guard_disabled`, `ir_stale`, `ir_centre`, `ir_not_admissible`, `body_clearance_unconfigured`, or `scan_stale`. If multiple gates fail, it reports the first refusal. Older CORE may omit the field. The capability still changes with live evidence. This field is for diagnosis and grants no motion authority.
+
+### v1.462 Nav2 trip preview shows frame readiness (Fleet)
+
+For `drive_mode: nav2`, the trip planning response includes `nav2_preflight` with `code`, `binding_required`, and `binding_status`. `code` is null when the sampled CORE pose, capabilities, and configured binding policy permit the preview. `binding_status` records `MATCHED` or the reason a binding did not match, including when the site treats bindings as optional. Planning returns route geometry with this readback and issues no motion command.
+
+### v1.461 Read-only robot map bundle export (Fleet)
+
+Exports the configured robot CORE occupancy grid as a trinary P5 PGM and Nav2 YAML metadata. The SHA-256 verifies the PGM bytes; live map binding identifiers and robot configuration are unchanged.
 
 ### v1.460 Fleet 파이프라인 호밍·VLA/LLM 복구 툴 계약 (Fleet)
 
@@ -289,7 +331,8 @@ Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본
 - `POST /api/fleet/workcell-observations/{workcell_id}/intake-readings`: 같은 셀 토큰으로 `IntakeReading`(`observation_ref`, `point` `conveyor_end|wrist`, `state` `read|unreadable|mismatch`, `read`일 때만 `tag`, wrist만 선택 `arm_mission_id`, UTC `observed_at`)을 보낸다. 셀 PC는 태그 번호만 보내고, 셀 Fleet이 태그→`object_ref` 표와 이송 선언으로 사건을 만든다(D4). 컨베이어 끝: 공급 작업이 끝났고 아직 받지 않은 선언값과 같으면 `received_at_intake(observed)`, 다른 태그·표에 없는 태그·두 태그·두 면 불일치는 `handling_failed(MISMATCH)`, 못 읽으면 `UNREADABLE`. wrist: 불일치는 바로 `MISMATCH`, 읽은 태그는 그 A/B 작업이 슬롯 앵커 target에서 `GOAL_CONFIRMED`가 되면 `container.stored(observed)`. 같은 `observation_ref`는 한 번만 번역하고(재전송은 같은 seq), 다른 내용이면 409 `INTAKE_READING_CONFLICT`. 200 `{observation_ref, seqs}`. intake 설정이 없으면 503. 셀 토큰으로 `vehicle.release_permitted`를 보내면 422 `PORT_EVENT_KIND_NOT_ALLOWED`.
 - `GET /api/fleet/control-unit/port-events?after_seq=&limit=1..200`: 직계 부모 관제 단위의 서비스 principal(`control-unit:<parent>`)만 읽는다. 200 `PortEventLedgerPage{rows:[{seq, event}]}`. 다른 principal은 403 `CONTROL_UNIT_PARENT_ONLY`.
 - `GET /api/fleet/port-events?after=<cursor>&limit=1..200`: viewer 인증(업무 앱 service principal). 200 `PortEventPage{events, cursor, complete}`. 이 Fleet의 원장과 workcell을 가진 **직계 자식** 셀만 읽는다(손자 셀은 범위 밖). `cursor`는 불투명 문자열로, 첫 조회에서는 생략하고 받은 값을 그대로 돌려보낸다. 닿지 않은 셀이 있거나 셀 안 seq에 빈 곳이 있으면 `complete:false`이고 그 셀 위치는 빈 곳 앞에 머문다. 잘못된 cursor는 400 `PORT_EVENT_CURSOR_INVALID`.
-- 시뮬레이션 프로필에서 `create_app(intake_supply={supply_place, instance_id, intake_point, container_tags?})`(시뮬레이션 Fleet은 `FLEET_TRIPS_INTAKE` JSON `{intake, arm_transfer_installation}`; 운영 `fleet console`은 끔)이면 `object_ref`가 있는 승인된 이송이 공급 장소에서 `GOAL_CONFIRMED`가 될 때 Fleet(`fleet-intake`)이 S `ARM_TRANSFER`를 **제안**만 한다. 그 작업이 `GOAL_CONFIRMED`가 되면 `vehicle.release_permitted`(이송 로봇)를 원장에 쓴다. 정책 승인 worker는 `fleet-intake`를 승인하지 않는다(`INTAKE_NEEDS_NAMED_APPROVAL`, scope 설정에 넣으면 거절). 승인·인계 확인·가드는 그대로다.
+- RFID 판독은 `point: rfid_intake`를 쓴다. `read`이면 `epc`에 2~64바이트의 16진수 값을 보내고, Fleet은 대문자로 표준화한다. 셀 Fleet의 `container_epcs`가 원본 EPC를 `object_ref`에 매핑한다. 입고 지점에 공급된 미수령 화물과 일치할 때 기존 입고 이벤트를 내보낸다. 일치하지 않는 EPC는 화물 참조 없이 `MISMATCH`로 남긴다. 매핑이 설치되기 전에는 503 `RFID_INTAKE_NOT_CONFIGURED`를 돌려준다. Harbor에는 기존 항만 사건을 전달한다.
+- 시뮬레이션 프로필에서 `create_app(intake_supply={supply_place, instance_id, intake_point, container_tags?, container_epcs?})`(시뮬레이션 Fleet은 `FLEET_TRIPS_INTAKE` JSON `{intake, arm_transfer_installation}`; 운영 `fleet console`은 끔)이면 `object_ref`가 있는 승인된 이송이 공급 장소에서 `GOAL_CONFIRMED`가 될 때 Fleet(`fleet-intake`)이 S `ARM_TRANSFER`를 **제안**만 한다. 그 작업이 `GOAL_CONFIRMED`가 되면 `vehicle.release_permitted`(이송 로봇)를 원장에 쓴다. 정책 승인 worker는 `fleet-intake`를 승인하지 않는다(`INTAKE_NEEDS_NAMED_APPROVAL`, scope 설정에 넣으면 거절). 승인·인계 확인·가드는 그대로다.
 
 ### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
 
@@ -519,7 +562,7 @@ v1.292 limits. No cargo, process or business field exists on the wire.
 | POST /api/fleet/trip-proposals/{proposal_id}/admit | TripProposalAdmit: expected_proposal_digest, expected_generation | named operator different from the proposer; 200 |
 | GET /api/fleet/port-events?after=&limit= | opaque cursor (D-996 7) | viewer (app service principal); 200 PortEventPage; this Fleet and direct workcell child cells only |
 | POST /api/fleet/workcell-observations/{workcell_id}/port-events | PortEvent (closed, kind-specific fields) | X-Workcell-Observation-Token of that workcell; 200 {event_id, seq}; idempotent on event_id |
-| POST /api/fleet/workcell-observations/{workcell_id}/intake-readings | IntakeReading (tag id only) | X-Workcell-Observation-Token of that workcell; 200 {observation_ref, seqs}; translated once |
+| POST /api/fleet/workcell-observations/{workcell_id}/intake-readings | IntakeReading (camera marker ID or intake RFID EPC) | X-Workcell-Observation-Token of that workcell; 200 {observation_ref, seqs}; translated once |
 | GET /api/fleet/control-unit/port-events?after_seq=&limit= | ledger seq | direct parent control-unit service principal only; 200 PortEventLedgerPage |
 
 TripProposalResponse has exactly proposal: TripProposalSnapshot with proposal_id,
@@ -3944,6 +3987,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/robots/{robot_id}/route` | named `operator` (D-540 9, v1.161) + `Idempotency-Key` when durable tasks are configured | D-463 (v1.100): body `{edges: [edge_id, ...]}` of 1 to 8 stored lane-graph edge ids; extra fields 422. Each edge must exist and its `to` must equal the next edge `from`, or 400 `ROUTE_UNKNOWN_EDGE` / `ROUTE_DISCONTINUOUS`. Fleet expands the stored polyline and submits only the next point about 0.20 m ahead, yaw equal to the tangent, through the existing goal path. When that 0.20 m chord would put the nominal body outside the imported lane, the step shortens but stays at least 0.12 m, still past the 0.10 m device goal ball. A remainder of 0.12 m or less keeps the end. The ring's 0.20 m sag stays inside the body clearance, so that step stays 0.20 m. The shorter step is only this point goal. It does not submit the far junction as that goal. The fresh snapshot must be `LOCALIZED` with `pose_frame` `map` and within 0.08 m of the polyline; otherwise 409 `ROUTE_POSE_UNTRUSTED` or `ROUTE_OFF_LANE` and CORE is not called. A snapshot with no localization block is refused. Within 0.05 m of the end the response is 200 `ROUTE_COMPLETE` and no goal. Both 200 bodies carry `context` (D-726, v1.219): `{role: fact, planner: lane_step, supplied: {edges}, holds: {complete, step_m, chord_m, body_clear_m, body_inside, s_m}, planners}`. `context` is a fact for an AI or another system, not a command. `GoalRequest` stays `{x, y, yaw}`. |
 | GET | `/api/fleet/site-map/active` | any configured user bearer | D-488 (v1.111): the active `rosy.site_map/1` (places `{id, name, x, y, yaw?, kind park/charge/stop/junction/turnaround/start/bend/slow (v1.347), exit_yaw?, radius_m?, pinned? (v1.431), stop_zone?, approach_m? (v1.434)}; v1.434: `stop` places only may carry `stop_zone` [[x, y]] (3–32 points, site frame, finite, at least 1 cm² and at most 3 m across like a crosswalk polygon; the place point lies inside; requires `pinned` true, so automatic calibration keeps a drawn zone) — the polygon the robot footprint must end inside — and `approach_m` [0.05, 0.6] with `yaw` set: the approach pose is derived as `(x - approach_m·cos yaw, y - approach_m·sin yaw, yaw)`; otherwise 422 `SITE_MAP_INVALID`; both are absent from the stored body when unset; D-513 (v1.124): a `start` place needs `yaw`, else 422 `SITE_MAP_INVALID`; D-507 addendum (v1.142): a `bend` place is the vertex of two lane centre lines with `yaw` (entering heading as its edge is drawn), `exit_yaw` and `radius_m` (0, 0.5], the arc the robot drives inside the lane, all required and a turn of 15–90°; other kinds may not carry `exit_yaw`/`radius_m`; bends do not split edges``, edges `{id, from, to, polyline, direction one_way/two_way, width_m, speed_cap_mps, drive_mode lane/free, robot_kinds?, pinned? (v1.431)}`, optional `turn_bans {at, from_edge, to_edge}`, optional `view_turn_deg` 0/90/180/270 (D-513 7, v1.130: clockwise screen turn of the plain +y-up map view that every Fleet map and camera view follows; display only, default 0), optional `crosswalks` (D-573 1, v1.174) `[{id, polygon [[x, y]] (3–32 points, map frame), approach [[[x, y]]] (0–4 waiting bands, 3–32 points each), lanes [edge_id], revision}]` at most 50: the polygon is the import lane graph's `crosswalks[].polygon` as is (ids `cw1`.. in file order, `revision` `lane_graph:<sha256[:12]>` of that file), `lanes` is recomputed from the edges the polygon touches on every validation (a submitted value is replaced), waiting bands are drawn in the site map editor. 422 `SITE_MAP_INVALID` when crosswalk ids repeat, a polygon or band is not finite, under 1 cm² or over 3 m across, a crosswalk touches no edge, a band does not reach one of its lanes (within half the lane width) or a band point is off the D-507 9 site floor (farther than half the width + 0.30 m from every edge). Absent when empty; map data only, nothing is sent to a robot) with `version`, `sha256`, `activated_by`, `activated_at`. Places are more than 0.05 m apart and every edge is longer than 0.10 m between its places. 404 `SITE_MAP_NOT_ACTIVE` when the site has none. Errors here and on `/trip` are `{"detail": {"code", "detail"}}`. `GET /api/fleet/site-map` (D-257 camera rectangle) is unchanged. |
 | GET | `/api/fleet/site-map/wall-grid` | any configured user bearer | v1.409 (D-1046): 활성 현장 지도의 벽을 현장 좌표계 Nav2 점유 지도로 만든 것 `{map_id, version, resolution, yaml, pgm_base64, sha256, file_stem, width, height}` — 0.025 m 칸, 벽은 최소 한 칸, 벽 경계 상자 안 free·밖 unknown, P5 PGM(0 점유·254 free·205 unknown), 같은 벽이면 같은 바이트. SLAM이 무너졌을 때 기체가 localization 백엔드로 넘어가며 쓰는 지도. 404 `SITE_MAP_NOT_ACTIVE`·`SITE_MAP_NO_WALLS`. 무변경. |
+| GET | `/api/fleet/robots/{robot_id}/map/bundle` | configured viewer or higher | (v1.next) 기체의 현재 CORE 점유 지도를 `{robot_id, map_id, width, height, yaml, pgm_base64, sha256}`로 내보낸다. P5 PGM은 점유 0, free 254, unknown 205로 저장하고 `sha256`은 그 파일의 바이트를 검증한다. `yaml`은 기체 지도 좌표계의 해상도와 원점을 유지한다. 등록되지 않은 기체와 지도 부재는 404, 형식이 잘못된 기체 지도는 502 `INVALID_ROBOT_MAP`이다. |
 | GET | `/api/fleet/site-map/lane-graph-crosswalks` | any configured user bearer | D-573 1 (v1.174): `{source, crosswalks [{id, polygon, approach: [], lanes: [], revision}]}` read from the configured `--site-map-import` lane graph, for the site map editor to merge into the draft (polygons replaced by id, drawn bands kept); the draft is then saved by a named operator like any edit. 404 `SITE_MAP_NO_LANE_GRAPH` without a configured import, 422 `SITE_MAP_NO_LANE_GRAPH` when the file cannot be read. Writes nothing. |
 | GET / PUT | `/api/fleet/site-map/draft` | GET any user; PUT named `operator` | D-488 (v1.111): one editable draft. PUT `{map, expected_revision}` (body at most 2 MiB, else 413 `SITE_MAP_TOO_LARGE`); the map is validated or 422 `SITE_MAP_INVALID` with `detail.errors [{loc, msg}]` (no submitted values). A stale `expected_revision` is 409 `SITE_MAP_DRAFT_CHANGED`. Each save is a recorded site map event. A draft is never used for planning. |
 | POST | `/api/fleet/site-map/draft-from-camera` | named `operator` | 카메라로 초안 만들기 (v1.385): 브라우저가 lease로 Vision draft-map에서 얻은 후보를 실어 보내면 검증된 초안 본문을 돌려준다. 쓰기 없음 — 저장은 기존 PUT draft. 422 `SITE_MAP_CAMERA_INVALID`. 설계 `docs/plans/2026-11-11-camera-draft-map-design.md` |
@@ -5031,6 +5075,15 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.469 | 2026-11-25 | [Fleet] Camera continuation after a failed Nav2 route |
+| v1.468 | 2026-11-25 | [Fleet] Approved SLAM for named Nav2 trips |
+| v1.467 | 2026-11-25 | [CORE] Nav2 route with expected map grid |
+| v1.466 | 2026-11-25 | [CORE] Retire a stationary candidate set when fresh scans repeatedly disagree |
+| v1.465 | 2026-11-25 | [Fleet] Map binding approval checks the measured frames |
+| v1.464 | 2026-11-25 | [Fleet] Keep the CORE junction readiness reason in lane trip refusals |
+| v1.463 | 2026-11-25 | [CORE] Explain the current junction-turn capability refusal |
+| v1.462 | 2026-11-25 | [Fleet] Nav2 trip preview shows frame readiness |
+| v1.461 | 2026-11-25 | [Fleet] Additive: GET /api/fleet/robots/{robot_id}/map/bundle |
 | v1.460 | 2026-11-24 | [Fleet] Additive: GET /pipeline/recovery-tools, POST /pipeline/recovery-tools/invoke 및 D-1048 단계적 호밍·시각 체크포인트 |
 | v1.459 | 2026-11-24 | [Fleet] Additive: pinky_dispatch_enabled, depart_s3 출구 배차, cell robot_id 해석, repark ABORTED 대체 |
 | v1.458 | 2026-11-24 | [Cell] Additive: GET /readiness cells breakdown and optional ?cell=cell_s\|cell_ab filter |
@@ -5897,3 +5950,7 @@ MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로
 | `POST /api/learning/sim/stop` | manage: `run_id`, 현재 `expected_revision`. 소유 worker pidfd로 중지 요청, 종료 확인과 구분 |
 
 기존 Host·Origin·`X-Pinky-Token`·최대1MiB JSON 검사 뒤 프로젝트 권한을 다시 적용한다. 비협업 로컬 모드의 SIM 제어는403이며 연결 미설정은503이다. 시작 응답 유실은 새 실험을 만들지 않고 같은 요청으로 관찰한다. 입력/revision 충돌은 기존 로컬 HTTP의400 응답으로 거절한다. UNKNOWN은 자동 재시작하지 않는다. 첫 시나리오는 모델 import·관절·120프레임 검사이며 `task_success=null`, seed 미사용·영상 없음 사유를 명시한다. 물리 집기·학습 수용·정책 승격·로봇 명령 권한을 부여하지 않는다.
+
+## World 활성 지도
+
+`GET /api/worlds/real-site/site-map`은 World가 받은 Fleet 활성 지도 스냅샷을 반환한다. 현장에서는 Fleet 세션을 확인하는 `/world/` 아래에 제공한다. 브리지의 `POST`에는 World 적재 권한을 적용한다. 현장 프록시는 외부 쓰기를 거절한다. 스냅샷, 만료, 실시간 상태 필드는 [World 활성 지도 HTTP 계약](../../applications/world/README.md#world-활성-지도-http-계약)을 따른다.

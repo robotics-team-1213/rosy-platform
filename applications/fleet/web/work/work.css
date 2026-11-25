@@ -28,26 +28,26 @@
 #channel-requests p { white-space: pre-wrap; overflow-wrap: anywhere; }
 #channel-review { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
 #channel-review > :is(h3, p) { margin: 0; }
-#channel-review-original { padding: var(--space-3); border-inline-start: var(--selection-edge) solid var(--series-primary); border-radius: var(--radius-control); background: var(--surface-recessed); white-space: pre-wrap; overflow-wrap: anywhere; }
+:is(#channel-review-original, #channel-incident-original) { padding: var(--space-3); border-inline-start: var(--selection-edge) solid var(--series-primary); border-radius: var(--radius-control); background: var(--surface-recessed); white-space: pre-wrap; overflow-wrap: anywhere; }
 .review-group { display: grid; gap: var(--space-2); min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); }
 .review-group > legend { padding-inline: var(--space-1); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--text-primary); }
 .review-coords { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 .review-field { display: grid; gap: var(--space-1); min-width: 0; }
-#channel-review .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+:is(#channel-review, #channel-incident) .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .review-disposition { padding-block-start: var(--space-2); border-block-start: 1px solid var(--line-06); }
 
 .work-ops-zone { display: grid; gap: var(--space-3); margin-block-start: var(--space-5); padding: var(--space-4); border: 1px solid var(--line-06); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
 .work-ops-head { display: grid; gap: var(--space-1); }
 .work-ops-head > :is(h3, p) { margin: 0; overflow-wrap: anywhere; }
-#work-policy-admission-body { display: grid; gap: var(--space-2); padding-block: var(--space-2); }
-#work-policy-admission-body > p { margin: 0; overflow-wrap: anywhere; }
 #work-integrations-content { display: grid; gap: var(--space-4); padding-block: var(--space-3); }
 #work-policy-link { min-height: var(--target-secondary); }
 
 #fleet-main:has([data-raised]:is(#work-overview, #work-new)) .context-tabs { display: none; }
-#fleet-main:has([data-raised]:is(#work-overview, #work-new)) #dispatch-control:not([data-state="latched"], [data-state="restarted"], [data-state="error"]) { display: none; }
+#fleet-main:has([data-raised]:is(#work-overview, #work-new, .incident-panel, #log-panel)) #dispatch-control:not([data-state="latched"], [data-state="restarted"], [data-state="error"]) { display: none; }
 #work-context:not([hidden]), #work-move:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
 #work-context > :is(h2, p, dl) { margin: 0; }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side > :is(h2, p) { margin: 0; }
 .work-move-guide { display: none; margin: 0; padding: var(--space-4); border: 1px solid var(--line-06); border-radius: var(--radius-panel); background: var(--surface-recessed); }
 #fleet-main:has(#work-new:not([hidden])):has(#work-move[hidden]) .work-move-guide { display: block; }
 

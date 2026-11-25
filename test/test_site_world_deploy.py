@@ -24,6 +24,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "deploy/site"
 
 
+def test_world_bridge_imports_in_a_fresh_package_process():
+    subprocess.run(
+        [sys.executable, "-E", "-B", "-c", "from applications.world import bridge_real_fleet"],
+        cwd=ROOT,
+        check=True,
+        timeout=10,
+    )
+
+
 @pytest.mark.parametrize("removed", [(), WORLD_DEPLOYMENT_FILES, (WORLD_DEPLOYMENT_FILES[0],),
                                      (WORLD_DEPLOYMENT_FILES[1],)])
 @pytest.mark.parametrize("inspect_images", [False, True])
@@ -95,7 +104,8 @@ def _check_services(services, image):
     assert world["entrypoint"] == ["python3", "-B", "/opt/rosy/world/serve.py"]
     assert "--data-dir" in world["command"]
     bridge = services["world-real-bridge"]
-    assert "entrypoint" not in bridge  # use secret_exec.py from the signed image
+    # Compose can render an inherited image entrypoint as null.
+    assert bridge.get("entrypoint") is None
     assert bridge["command"][:4] == ["--", "python3", "-B", "/opt/rosy/world/bridge_real_fleet.py"]
     assert set(bridge["cap_add"]) == {"SETUID", "SETGID"}
     assert json.loads(bridge["environment"]["ROSY_CREDENTIAL_PATHS"]) == {

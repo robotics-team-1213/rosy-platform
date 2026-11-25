@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 import time
 
@@ -145,6 +146,50 @@ def _valid_sha256(value: object) -> str | None:
     return value.lower() if isinstance(value, str) and SHA256_RE.fullmatch(value.lower()) else None
 
 
+ACTIVE_SITE_MAP_PATH = "/api/worlds/real-site/site-map"
+ACTIVE_SITE_MAP_FILE = ".active-site-map.snapshot"
+ACTIVE_SITE_MAP_FRESH_MS = 45_000
+# Fleet accepts map drafts up to 2 MiB. The map projection drops metadata.
+MAX_ACTIVE_SITE_MAP_BYTES = 2 * 1024 * 1024
+
+
+def active_site_map_snapshot(view: dict, observed_at_ms: int) -> dict | None:
+    """Project Fleet's active map to the geometry World can display."""
+    version, sha = view.get("version"), _valid_sha256(view.get("sha256"))
+    body = view.get("map")
+    activated_at = view.get("activated_at")
+    if (type(version) is not int or version < 1 or not sha
+            or type(observed_at_ms) is not int or not isinstance(body, dict)
+            or not isinstance(body.get("map_id"), str) or not body["map_id"]
+            or not isinstance(activated_at, (int, float, str))):
+        return None
+
+    def finite(value: object) -> bool:
+        return type(value) in (int, float) and -sys.float_info.max <= value <= sys.float_info.max
+
+    places, edges = body.get("places"), body.get("edges")
+    if not isinstance(places, list) or not isinstance(edges, list) or not (places or edges):
+        return None
+    if isinstance(activated_at, (int, float)) and not finite(activated_at):
+        return None
+    if not all(isinstance(place, dict) and isinstance(place.get("id"), str)
+               and finite(place.get("x")) and finite(place.get("y")) for place in places):
+        return None
+    lines = [edge.get("polyline") if isinstance(edge, dict) else None for edge in edges]
+    if not all(isinstance(line, (list, tuple)) and len(line) >= 2
+               and all(isinstance(point, (list, tuple)) and len(point) == 2 and all(map(finite, point))
+                       for point in line) for line in lines):
+        return None
+    return {
+        "version": version, "sha256": sha, "activated_at": activated_at, "observed_at_ms": observed_at_ms,
+        "map": {
+            "map_id": body["map_id"],
+            "places": [{key: place[key] for key in ("id", "x", "y")} for place in places],
+            "edges": [{"polyline": line} for line in lines],
+        },
+    }
+
+
 def _live_stream_mode(data: dict) -> str:
     return "synthetic_demo" if data.get("stream_mode") == "synthetic_demo" else "live"
 
@@ -190,13 +235,19 @@ def verify_world_parity(canonical: dict, payload: dict | None) -> dict:
     ref_body = _valid_sha256(canonical.get("site_map_body_sha256"))
     cand_body = _valid_sha256(payload.get("site_map_body_sha256"))
     versions = {}
-    if ref_body and cand_body:
-        map_match = ref_body == cand_body
+    if payload.get("adapter") == "real" or (ref_body and cand_body):
         versions = {"bundle_map_version": canonical.get("site_map_version"), "live_map_version": payload.get("site_map_version")}
+        map_match = bool(ref_body and cand_body and ref_body == cand_body)
+        if not cand_body:
+            reasons.append("live_site_map_unavailable")
+        elif not ref_body:
+            reasons.append("bundle_site_map_unavailable")
+        elif not map_match:
+            reasons.append("site_map_sha256_mismatch")
     else:
         map_match = bool(SHA256_RE.fullmatch(ref_map) and cand_map == ref_map)
-    if not map_match:
-        reasons.append("site_map_sha256_mismatch")
+        if not map_match:
+            reasons.append("site_map_sha256_mismatch")
 
     ref_reg = canonical.get("registration_sha256")
     cand_reg = p_src.get("registration_sha256")

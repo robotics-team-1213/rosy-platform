@@ -55,6 +55,13 @@ class CellStateGen:
             return self._value
 
 
+def held_job_response(arm: str, reason: str) -> dict:
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    if reason == HOME_RECOVERY_REASON:
+        return {"code": 409, "error_code": "HOME_RECOVERY_REQUIRED", "error": reason}
+    return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{arm} held: {reason}"}
+
+
 def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reason: str | None, active_job: str | None, cell_fleet: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     suffix = arm.split("_")[-1]
     live = read_json_dict(runner.workdir / f"chunk-io-{suffix}" / "live.json")
@@ -86,7 +93,10 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
     }
     blocks: list[str] = []
     if inc_reason:
-        blocks.append(f"{arm}:incident_held")
+        from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+        blocks.append(f"{arm}:incident_held")  # existing motion fences consume this refusal
+        if inc_reason == HOME_RECOVERY_REASON:
+            blocks.append(f"{arm}:home_recovery_required")
     if fault:
         blocks.append(f"{arm}:fault")
     if hold_latched:
@@ -193,12 +203,21 @@ def build_readiness(
     return {**core, "readiness_digest": canonical_sha256(core, omit_keys=())}
 
 
+def read_tail_bytes(path: Path, max_bytes: int) -> bytes:
+    if max_bytes <= 0:
+        return b""
+    with path.open("rb") as handle:
+        count = min(handle.seek(0, os.SEEK_END), max_bytes)
+        handle.seek(-count, os.SEEK_CUR)
+        return handle.read(count)
+
+
 def parse_structured_result(log_path: Path) -> tuple[dict[str, Any] | None, str | None]:
     """Extract the final JSON object emitted in a job log even past the 4000-byte log tail."""
     try:
         if not log_path.is_file():
             return None, None
-        raw = log_path.read_bytes()[-_LOG_TAIL_BYTES:].decode("utf-8", errors="replace")
+        raw = read_tail_bytes(log_path, _LOG_TAIL_BYTES).decode("utf-8", errors="replace")
     except OSError:
         return None, None
     decoder = json.JSONDecoder()

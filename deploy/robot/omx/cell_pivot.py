@@ -31,7 +31,7 @@ import cell_params as prm  # noqa: E402
 import cell_jaw_side  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
-    BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_circle, fit_pivot_yaw,
+    BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_circle, fit_pivot_yaw, free_fit_refusal,
     load_bias, save_bias, trim_known_centres, validate_bias, yaw_arc_deg as _yaw_arc_deg,
 )
 
@@ -372,7 +372,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
         return {"result": f"circle refused: yaw arc {round(_yaw_arc_deg([t[3] for t in kept_tcps]), 1)} deg < {int(MIN_YAW_ARC_DEG)} deg",
                 "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps]}
     cx, cy = fit["centre_m"]
-    radius, phase, rms, sigma_mm = fit["radius_m"], fit["phase_deg"], fit["rms_m"], fit["centre_sigma_mm"]
+    phase, sigma_mm = fit["phase_deg"], fit["centre_sigma_mm"]
     tx, ty = (float(np.mean([t[i] for t in kept_tcps])) for i in (0, 1))
     why, sides = cell_jaw_side.side_check(marks, tcps, hows, kept_tcps, fit["radius_mm"], phase, params, config.get("arm_id"))
     bias = {"site": site, "kind": "pivot", **({"jaw_sides": sides} if sides else {}), "point_m": [round(tx, 4), round(ty, 4)],
@@ -382,18 +382,5 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             **({"dropped": fit["dropped"]} if fit["dropped"] else {}),
             "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps], "n": len(kept_tcps),
             "map_sha": cell_attempts.digest(record), "measured": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    if len(kept_marks) >= 4:
-        k_cx, k_cy, _, k_rms = fit_circle(kept_marks)
-        k_sig = circle_center_sigma_mm(kept_marks, k_cx, k_cy, k_rms)
-        if k_sig is not None and math.hypot(cx - k_cx, cy - k_cy) * 1000.0 > max(15.0, 3.0 * math.hypot(k_sig, sigma_mm)):
-            return {"result": f"circle refused: yaw/circle mismatch {round(1000 * math.hypot(cx - k_cx, cy - k_cy), 1)} mm", "bias": bias}
-    if rms * 1000 > prm.get(params, "pivot.max_rms_mm") or not (
-            prm.get(params, "pivot.radius_lo_mm") <= radius * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
-        return {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
-    if why:
-        return {"result": why, "bias": bias}
-    try:
-        validate_bias(bias, params)
-    except ValueError as exc:
-        return {"result": str(exc), "bias": bias}
-    return {"result": "calibrated", "bias": bias}
+    refusal = free_fit_refusal(fit, kept_marks, bias, why, params)
+    return {"result": refusal or "calibrated", "bias": bias}

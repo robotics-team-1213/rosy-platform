@@ -113,7 +113,7 @@ class Gate:
                 and all(abs(p - h) <= SETTLE_TOL for p, h in zip(present[:5], home[:5])))
 
     def act(self, command: str) -> dict:
-        if command == "state":
+        if command in ("state", "human-hold"):
             return self.cell.act(command)
         if self.blocked:
             return {"ok": False, "error": "held: audit_transition_incomplete"}

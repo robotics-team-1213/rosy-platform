@@ -759,11 +759,11 @@ def test_refused_reinsert_does_not_start_next_attempt(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
     )
     assert result["result"] == "held" and result["at"] == "reinsert_pick"
-    assert result["task_verified"] is False and commands[-1] == "run reinsert_pick"
+    assert result["task_verified"] is False and commands[-2:] == ["run reinsert_pick", "human-hold"]
     assert len([c for c in commands if c.startswith("load ")]) == 1
 
 
-@pytest.mark.parametrize("failed, at", [("goto above_place", "slip_above_place"), ("park", "slip_park")])
+@pytest.mark.parametrize("failed, at", [("run lift_pick", "slip_run lift_pick"), ("park", "slip_park")])
 def test_refused_slip_recovery_does_not_start_next_attempt(tmp_path, monkeypatch, failed, at):
     directive = build_directive(
         arm_id="arm_b",
@@ -786,7 +786,9 @@ def test_refused_slip_recovery_does_not_start_next_attempt(tmp_path, monkeypatch
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
     )
     assert result["result"] == "held" and result["at"] == at
-    assert result["task_verified"] is False and commands[-1] == failed
+    assert result["task_verified"] is False and commands[-2:] == [failed, "human-hold"]
+    if failed == "park":
+        assert "goto above_place" not in commands
 
 
 def test_refused_above_place_is_not_reissued_after_slip(tmp_path, monkeypatch):
@@ -811,7 +813,7 @@ def test_refused_above_place_is_not_reissued_after_slip(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
     )
     assert result["result"] == "held" and result["at"] == "slip_goto above_place"
-    assert commands.count("goto above_place") == 1 and "park" not in commands
+    assert commands.count("goto above_place") == 1 and "park" not in commands and commands[-1] == "human-hold"
 
 
 def test_slip_retry_parks_before_loading_next_plan(tmp_path, monkeypatch):
@@ -842,7 +844,7 @@ def test_slip_retry_parks_before_loading_next_plan(tmp_path, monkeypatch):
     )
     loads = [i for i, c in enumerate(commands) if c.startswith("load ")]
     assert result["result"] == "held" and len(loads) == 2
-    assert "park" in commands[loads[0]:loads[1]]
+    assert "park" in commands[loads[0]:loads[1]] and "goto above_place" not in commands[loads[0]:loads[1]]
 
 
 def test_empty_grasp_park_refusal_is_held(tmp_path, monkeypatch):
@@ -865,7 +867,7 @@ def test_empty_grasp_park_refusal_is_held(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
     )
     assert result["result"] == "held" and result["at"] == "empty_park"
-    assert result["task_verified"] is False and commands[-1] == "park"
+    assert result["task_verified"] is False and commands[-2:] == ["park", "human-hold"]
 
 
 def test_post_release_z_failure_does_not_repick_empty_source(tmp_path, monkeypatch):

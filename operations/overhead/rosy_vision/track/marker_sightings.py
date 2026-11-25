@@ -18,8 +18,8 @@ from typing import Collection, Mapping, Sequence
 import numpy as np
 
 from core_common.protocol.sightings import SiteSightingPayload
-from rosy_vision.project import (MARKER_HEIGHT_M, QR_SIDE_BAND_M, CameraMap, Point,
-                                 marker_geometry_ok, robot_pose_from_marker)
+from rosy_vision.project import (MARKER_HEIGHT_M, QR_SIDE_BAND_M, ROBOT_ARUCO_SIDE_BAND_M,
+                                 CameraMap, Point, marker_geometry_ok, robot_pose_from_marker)
 from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration
 
@@ -81,7 +81,7 @@ def robot_sightings(camera: CameraMap, approved: Calibration | None,
         offset = camera.marker_yaw_offset_deg.get(robot_id)
         if robot_id in skip or quad is None or offset is None:
             continue
-        side_band_m = QR_SIDE_BAND_M if marker_id in qr_ids else None
+        side_band_m = QR_SIDE_BAND_M if marker_id in qr_ids else ROBOT_ARUCO_SIDE_BAND_M
         pose = marker_pose(approved, quad, camera.heading_edge, camera_pose, side_band_m=side_band_m)
         if pose is None:
             continue

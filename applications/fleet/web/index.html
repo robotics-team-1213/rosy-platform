@@ -90,6 +90,7 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
     <span class="ui-subnav-head">다른 문서</span>
+    <a class="ui-subnav-item" href="/console/policy">정책</a>
     <a class="ui-subnav-item" href="/console/learning">학습</a>
   </nav></div>
   <div class="ui-subnav" data-area="records" hidden><nav class="ui-subnav-nav" aria-label="기록 화면">
@@ -168,7 +169,7 @@
           <h3 id="channel-review-heading">대화 요청 검토</h3>
           <p id="channel-review-original"></p>
           <p id="channel-review-state" class="hint" role="status"></p>
-          <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
+          <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">셀에서 팔 작업 준비·승인</a></span>
           <label for="channel-review-reason">검토 사유</label>
           <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
           <fieldset class="review-group">
@@ -187,26 +188,7 @@
               </span>
             </div>
           </fieldset>
-          <fieldset class="review-group">
-            <legend>열린 위험 사건 인수</legend>
-            <label for="channel-review-incident">현재 열린 위험 사건</label>
-            <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
-            <div class="actions">
-              <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
-              <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
-            </div>
-          </fieldset>
-          <fieldset class="review-group">
-            <legend>팔 작업 준비 · 승인</legend>
-            <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
-            <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
-            <div class="actions">
-              <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
-              <span id="channel-review-mission-admit-holder" hidden>
-                <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
-              </span>
-            </div>
-          </fieldset>
+          <a id="channel-review-records" hidden>기록에서 열린 위험 사건 인수</a>
           <div class="actions review-disposition">
             <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
             <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
@@ -556,7 +538,22 @@
         </div>
       </section>
       <section class="panel" id="incident-side" aria-labelledby="incident-side-heading" hidden>
-        <h2 id="incident-side-heading">원인과 조치</h2><div id="incident-judgment"></div>
+        <h2 id="incident-side-heading">원인과 조치</h2>
+        <div id="incident-judgment">
+          <fieldset id="channel-incident" class="review-group" hidden>
+            <legend>대화 요청의 열린 위험 사건 인수</legend>
+            <p id="channel-incident-original"></p>
+            <p id="channel-incident-state" class="hint" role="status"></p>
+            <label for="channel-review-incident">현재 열린 위험 사건</label>
+            <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
+            <label for="channel-incident-reason">인수 사유</label>
+            <textarea id="channel-incident-reason" class="ui-field" maxlength="256" required></textarea>
+            <div class="actions">
+              <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
+              <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
+            </div>
+          </fieldset>
+        </div>
         <p class="hint">사건을 열면 담당 인수와 사람 검토를 여기에 적습니다.</p>
       </section>
       <section class="panel" aria-labelledby="inbox-messages-heading">

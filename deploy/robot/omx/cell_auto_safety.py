@@ -133,7 +133,7 @@ class Guarded:
             return state
         words, cached = command.split(), self._last_state
         self._last_state = None
-        if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat"):
+        if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat", "human-hold"):
             reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
             if reason:
                 cd.emit(

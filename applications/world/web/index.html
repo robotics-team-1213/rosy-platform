@@ -120,11 +120,15 @@
         <header id="map-provenance" class="world-provenance">
           <ui-status id="map-status" state="pending">보관 지도를 읽는 중…</ui-status>
           <dl id="map-readout" class="ui-readout" hidden></dl>
+          <label id="map-active-place-control" hidden>지도 위치
+            <select id="map-active-place" class="ui-field" aria-controls="map-active-canvas"></select>
+          </label>
         </header>
         <div class="world-viewbar" role="group" aria-label="지도 보기">
           <ui-button id="map-mode-field" kind="segment" type="button" aria-pressed="false" hidden>현장 사진</ui-button>
           <ui-button id="map-mode-birdview" kind="segment" type="button" aria-pressed="false" hidden>보관 버드뷰</ui-button>
-          <ui-button id="map-mode-vector" kind="segment" type="button" aria-pressed="true">차로 그래프</ui-button>
+          <ui-button id="map-mode-active" kind="segment" type="button" aria-pressed="false">현장 활성 지도</ui-button>
+          <ui-button id="map-mode-vector" kind="segment" type="button" aria-pressed="true">보관 차로 그래프</ui-button>
           <ui-button id="map-mode-image" kind="segment" type="button" aria-pressed="false">보관 이미지</ui-button>
           <ui-button id="map-mode-cad" kind="segment" type="button" aria-pressed="false" hidden>보관 CAD 3D</ui-button>
           <ui-button id="pinky-camera-toggle" kind="toggle" type="button" aria-pressed="false" aria-controls="pinky-camera-panel">카메라 보기</ui-button>
@@ -152,6 +156,7 @@
         </div>
         <div class="world-stage">
           <canvas id="map-canvas" role="img" aria-label="보관 지도 벡터 그래프 — 노드와 유도선"></canvas>
+          <canvas id="map-active-canvas" role="img" aria-label="Fleet 활성 지도 — 위치와 차로" hidden></canvas>
           <canvas id="map-cad-canvas" class="world-orbit" role="img" tabindex="0" aria-label="2026-10-26 보관 CAD" aria-describedby="map-cad-note" hidden></canvas>
           <figure id="map-field-figure" class="world-figure" hidden>
             <img id="map-field-photo" alt="Rosy Cam 현장 원본" hidden>

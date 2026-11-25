@@ -53,6 +53,16 @@ def _console(*robots, ttl=0.0, clock=None) -> FleetConsole:
     return FleetConsole(endpoints, list(robots), clock=clock or FakeClock(), goal_lease_ttl_s=ttl)
 
 
+def test_bound_route_wire_tracks_inflight_and_uncertain_motion():
+    robot_id = "rosy_42"
+    leases = _console(LeaseRobot(robot_id)).goal_leases
+    previous = leases.motion_epoch
+    with leases.motion_wire(robot_id, "POST", "/api/v1/navigation/bound-route", {}) as unresolved:
+        assert leases._motion_requests == 1 and leases.motion_epoch > previous
+        unresolved()
+    assert leases._motion_requests == 0 and robot_id in leases._uncertain_motion
+
+
 def _sent(robot):
     return [call for call in robot.calls if call[0] == "navigation_goal"]
 

@@ -21,6 +21,11 @@ from typing import Any
 import urllib.error
 import urllib.request
 
+if __package__:
+    from . import world_state
+else:
+    import world_state
+
 CANONICAL_FLEET_ROBOTS = {
     "pinkys": ["rosy_42", "rosy_45", "rosy_46"],
     "arms": ["arm_s", "arm_a", "arm_b"],
@@ -202,7 +207,6 @@ def fleet_state_to_world_state(
         }
         primary = next((p for p in pinkys if p["online"]), fallback_pinky)
     px, py, _ = primary["pose_m"]
-    s3_in_bounds = bool(primary.get("observed")) and abs(px - 0.745) <= 0.04 and abs(py + 0.207) <= 0.025
     observed_ms = time.time_ns() // 1_000_000 if now_ms is None else now_ms
     gathered_at = _finite_number(fleet_payload.get("gathered_at"))
     gathered_ms = _finite_number(gathered_at * 1000) if gathered_at is not None else None
@@ -232,11 +236,12 @@ def fleet_state_to_world_state(
         "site_map_version": active_map.get("version"),
         "fleet_robots": roster,
         "parity": parity,
-        "stage": "s3_stop" if s3_in_bounds else "c2_departure",
+        "stage": "observing",
         "phase": "real_fleet_live",
         "pinky": {
             **primary,
-            "s3_in_bounds": s3_in_bounds,
+            # Fleet state has no stop receipt bound to this active map version.
+            "s3_in_bounds": None,
             "observed": bool(primary.get("observed")),
         },
         "pinkys": pinkys,
@@ -298,14 +303,15 @@ def _write_local(worlds_dir: Path, world_id: str, payload: dict[str, Any]) -> No
     _atomic_write(worlds_dir / f"{world_id}.json", raw)
 
 
-def _atomic_write(path: Path, raw: bytes) -> None:
+def _atomic_write(path: Path, raw: bytes, *, sync: bool = True) -> None:
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as h:
             temp_path = Path(h.name)
             h.write(raw)
             h.flush()
-            os.fsync(h.fileno())
+            if sync:
+                os.fsync(h.fileno())
         os.replace(temp_path, path)
         temp_path = None
     finally:
@@ -313,12 +319,12 @@ def _atomic_write(path: Path, raw: bytes) -> None:
             temp_path.unlink(missing_ok=True)
 
 
-def _push_http(world_url: str, world_id: str, payload: dict[str, Any], token: str | None) -> None:
+def _push_http(world_url: str, path: str, payload: dict[str, Any], token: str | None) -> None:
     raw = (json.dumps(payload, allow_nan=False, ensure_ascii=False) + "\n").encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(f"{world_url.rstrip('/')}/api/worlds/{world_id}", data=raw, headers=headers, method="POST")
+    req = urllib.request.Request(f"{world_url.rstrip('/')}{path}", data=raw, headers=headers, method="POST")
     urllib.request.urlopen(req, timeout=1.5).close()
 
 
@@ -394,28 +400,40 @@ def main() -> None:
             fleet_payload = _fetch_fleet_state(cached_fleet_url, token=fleet_token, ca_file=ca_file, timeout_s=fleet_timeout)
         except (OSError, http.client.HTTPException, ValueError) as exc:
             warn("fleet-fetch", exc)
-            if args.fleet_mdns_host:
-                cached_fleet_url = None
-            return False
-        if args.heartbeat_file is not None:
+            fleet_payload = None
+        if fleet_payload is not None and args.heartbeat_file is not None:
             try:
-                _atomic_write(args.heartbeat_file, f"{time.time()}\n".encode("ascii"))
+                _atomic_write(args.heartbeat_file, f"{time.time()}\n".encode("ascii"), sync=False)
             except OSError as exc:
                 warn("heartbeat", exc)
-        cell_tasks = _fetch_optional(cached_fleet_url, "/api/fleet/pipeline/cell-tasks", fleet_token, ca_file)
+        cell_tasks = (_fetch_optional(cached_fleet_url, "/api/fleet/pipeline/cell-tasks", fleet_token, ca_file)
+                      if fleet_payload is not None else None)
         arm_live_states = (cell_tasks or {}).get("arm_live_states")
+        map_snapshot = None
         if map_url != cached_fleet_url or time.monotonic() >= map_expires_at:
             active_map = _fetch_active_map(cached_fleet_url, fleet_token, ca_file)
             map_url = cached_fleet_url
             map_expires_at = time.monotonic() + 30.0
+            if active_map and args.world_id == "real-site":
+                map_snapshot = world_state.active_site_map_snapshot(active_map, time.time_ns() // 1_000_000)
+                if map_snapshot is not None:
+                    raw = (json.dumps(map_snapshot, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+                    if len(raw) > world_state.MAX_ACTIVE_SITE_MAP_BYTES:
+                        warn("active-map", "display geometry exceeds ingest limit")
+                        map_snapshot = None
+                    elif worlds_dir is not None:
+                        worlds_dir.mkdir(parents=True, exist_ok=True)
+                        _atomic_write(worlds_dir / world_state.ACTIVE_SITE_MAP_FILE, raw)
+        if fleet_payload is None and args.fleet_mdns_host:
+            cached_fleet_url = None
         world_payload = fleet_state_to_world_state(
             fleet_payload, site_map_sha256=site_map_sha, world_id=args.world_id,
             arm_live_states=arm_live_states if isinstance(arm_live_states, dict) else None,
             active_map=active_map,
         )
-        if world_payload is None:
+        if world_payload is None and map_snapshot is None:
             return False
-        if worlds_dir is not None:
+        if worlds_dir is not None and world_payload is not None:
             _write_local(worlds_dir, args.world_id, world_payload)
         if cached_world_url is None and args.world_mdns_host:
             try:
@@ -424,9 +442,19 @@ def main() -> None:
                 warn("world-mdns", exc)
                 return False
         if cached_world_url:
+            if map_snapshot is not None:
+                try:
+                    _push_http(cached_world_url, world_state.ACTIVE_SITE_MAP_PATH, map_snapshot, ingest_token)
+                except (OSError, http.client.HTTPException) as exc:
+                    warn("map-push", exc)
+                    if world_payload is None:
+                        if args.world_mdns_host:
+                            cached_world_url = None
+                        return False
             try:
-                _push_http(cached_world_url, args.world_id, world_payload, ingest_token)
-            except (OSError, urllib.error.URLError) as exc:
+                if world_payload is not None:
+                    _push_http(cached_world_url, f"/api/worlds/{args.world_id}", world_payload, ingest_token)
+            except (OSError, http.client.HTTPException) as exc:
                 warn("world-push", exc)
                 if args.world_mdns_host:
                     cached_world_url = None
