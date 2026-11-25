@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.462
+**Version:** v1.464
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.464 Lane trip junction turn refusal reason (Fleet)
+
+When Fleet refuses a lane trip with `TRIP_MODE_UNSUPPORTED` and `detail.reason: JUNCTION_TURN_UNSUPPORTED`, `detail.junction_turn_reason` carries the optional current CORE reason from `base_velocity`. With older CORE it is omitted. Admission and Nav2 routing continue to use their existing checks.
+
+### v1.463 Junction turn readiness reason (CORE)
+
+The optional base_velocity `junction_turn_reason` field in `GET /api/v1/system/capabilities` explains a false `junction_turn`. It reports `keep_corner_unavailable`, `enforce_unavailable`, `site_floor_unconfigured`, `ir_guard_disabled`, `ir_stale`, `ir_centre`, `ir_not_admissible`, `body_clearance_unconfigured`, or `scan_stale`. If multiple gates fail, it reports the first refusal. Older CORE may omit the field. The capability still changes with live evidence. This field is for diagnosis and grants no motion authority.
 
 ### v1.462 Nav2 trip preview shows frame readiness (Fleet)
 
@@ -5041,6 +5049,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.464 | 2026-11-25 | [Fleet] Keep the CORE junction readiness reason in lane trip refusals |
+| v1.463 | 2026-11-25 | [CORE] Explain the current junction-turn capability refusal |
 | v1.462 | 2026-11-25 | [Fleet] Nav2 trip preview shows frame readiness |
 | v1.461 | 2026-11-25 | [Fleet] Additive: GET /api/fleet/robots/{robot_id}/map/bundle |
 | v1.460 | 2026-11-24 | [Fleet] Additive: GET /pipeline/recovery-tools, POST /pipeline/recovery-tools/invoke 및 D-1048 단계적 호밍·시각 체크포인트 |
