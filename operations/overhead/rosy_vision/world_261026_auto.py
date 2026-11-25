@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import math
 import time
+from typing import Mapping
+
 import cv2
 import numpy as np
+
+from core_common.calibration_math import default_lens_profile, scale_lens_profile
 
 #: Latest solved (K, D, H_undist_to_map) per source, frame size, and calibration revision.
 _LATEST_LENS_MODEL: dict[tuple[str, int, int, str | None], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
@@ -139,140 +143,184 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return white_mask, green_mask, pink_mask, yellow_mask
 
 
+def _decompose_m2i(m2i: np.ndarray, k: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+    try:
+        b = np.linalg.solve(k, m2i)
+    except np.linalg.LinAlgError:
+        return None
+    n1, n2 = float(np.linalg.norm(b[:, 0])), float(np.linalg.norm(b[:, 1]))
+    s = 0.5 * (n1 + n2)
+    if s < 1e-12:
+        return None
+    r1, r2, t = b[:, 0] / s, b[:, 1] / s, b[:, 2] / s
+    if t[2] < 0.0:
+        r1, r2, t = -r1, -r2, -t
+    u, _, vt = np.linalg.svd(np.column_stack([r1, r2]), full_matrices=False)
+    r1, r2 = (u @ vt).T
+    rot = np.column_stack([r1, r2, np.cross(r1, r2)])
+    rvec, _ = cv2.Rodrigues(rot)
+    return rvec.ravel(), t.ravel()
+
+
+def _h_from_rt(rvec: np.ndarray, tvec: np.ndarray, k: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+    rot, _ = cv2.Rodrigues(rvec.reshape(3, 1))
+    m2i = k @ np.column_stack([rot[:, 0], rot[:, 1], tvec])
+    if abs(m2i[2, 2]) < 1e-12:
+        return None
+    m2i = m2i / m2i[2, 2]
+    try:
+        i2m = np.linalg.inv(m2i)
+        i2m /= i2m[2, 2]
+    except np.linalg.LinAlgError:
+        return None
+    return m2i, i2m
+
+
+def _undistort_cv(pts: np.ndarray, k: np.ndarray, d: np.ndarray, model: str) -> np.ndarray:
+    if len(pts) == 0 or not np.any(np.abs(d) > 1e-12):
+        return pts
+    if model == "fisheye":
+        return cv2.fisheye.undistortPoints(pts.reshape(-1, 1, 2), k, d[:4], P=k).reshape(-1, 2)
+    return cv2.undistortPoints(pts.reshape(-1, 1, 2), k, d, P=k).reshape(-1, 2)
+
+
 def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None,
                                           source_id: str = "",
-                                          seed_map_to_image: np.ndarray | None = None) -> dict | None:
-    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``.
-
-    ``seed_map_to_image`` replaces the first guess (step 1), which assumes the usual camera view;
-    a re-aimed camera or a robot over an outer bay defeats it, while the refinement still converges.
-    """
+                                          seed_map_to_image: np.ndarray | None = None,
+                                          lens_profile: Mapping | None = None) -> dict | None:
+    """Automatic SE(3) + lens-distortion calibration and sub-pixel map tracer for ``world_261026``."""
     if img is None or img.ndim != 3 or img.shape[2] != 3:
         return None
     t0 = time.perf_counter()
     h, w = img.shape[:2]
     white_mask, green_mask, pink_mask, _ = _segment_masks(img)
 
-    # 1. Seed-free initial homography with multi-cue fallback for partial occlusion resilience
-    if int(np.count_nonzero(green_mask)) < 250 or int(np.count_nonzero(pink_mask)) < 250:
-        return None
-    pink_closed = cv2.morphologyEx(pink_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    num_p, labels_p, stats_p, _ = cv2.connectedComponentsWithStats(pink_closed)
-    if num_p < 2:
-        return None
-    pink_idx = 1 + int(np.argmax(stats_p[1:, cv2.CC_STAT_AREA]))
-    if stats_p[pink_idx, cv2.CC_STAT_AREA] < 400:
-        return None
-    p_x0, p_y0, p_w0, p_h0, _ = stats_p[pink_idx]
-    pink_main = (labels_p == pink_idx).astype(np.uint8) * 255
-    # Merge upper bay components split by ceiling fluorescent glare across bays 2 & 3
-    for i in range(1, num_p):
-        if i == pink_idx or stats_p[i, cv2.CC_STAT_AREA] < 100:
-            continue
-        cx0, cy0, cw0, ch0, _ = stats_p[i]
-        if (cx0 >= p_x0 - 40 and cx0 + cw0 <= p_x0 + p_w0 + 40
-                and cy0 + ch0 <= p_y0 + p_h0 + 20 and cy0 > 0.05 * h):
-            pink_main[labels_p == i] = 255
-    py, px = np.nonzero(pink_main)
-    p_umin, p_umax = int(px.min()), int(px.max())
-    p_vmin, p_vmax = int(py.min()), int(py.max())
-
-    white_closed = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, np.ones((3, 5), np.uint8))
-    num_w, labels_w, stats_w, centroids_w = cv2.connectedComponentsWithStats(white_closed)
-    divider_comp = None
-    for i in range(1, num_w):
-        cw = stats_w[i, cv2.CC_STAT_WIDTH]
-        ch = stats_w[i, cv2.CC_STAT_HEIGHT]
-        ca = stats_w[i, cv2.CC_STAT_AREA]
-        _, cv_c = centroids_w[i]
-        if p_vmax + 0.05 * h < cv_c < p_vmax + 0.28 * h and 0.25 * w < cw < 0.72 * w and ch < 0.28 * h and ca > 250:
-            if divider_comp is None or ca > stats_w[divider_comp, cv2.CC_STAT_AREA]:
-                divider_comp = i
-
-    src_seed: list[list[float]] = []
-    dst_seed: list[list[float]] = []
-
-    if divider_comp is not None:
-        dy_div, dx_div = np.nonzero(labels_w == divider_comp)
-        q_l, q_r = np.percentile(dx_div, 1.0), np.percentile(dx_div, 99.0)
-        u_dl, v_dl = float(dx_div[dx_div <= q_l].mean()), float(dy_div[dx_div <= q_l].mean())
-        u_dr, v_dr = float(dx_div[dx_div >= q_r].mean()), float(dy_div[dx_div >= q_r].mean())
-        u_span = max(1.0, u_dr - u_dl)
-        left_leg_ok = (p_umax - p_umin) >= 0.38 * u_span
-        p_umin_eff = p_umin if left_leg_ok else int(round(p_umax - 0.433 * u_span))
-        src_seed.extend([[-0.926, -0.364], [0.926, -0.364], [0.258, -0.045], [0.032, 0.520]])
-        dst_seed.extend([
-            [u_dl, v_dl],
-            [u_dr, v_dr],
-            [float(p_umax), float(np.median(py[px >= p_umax - 12]))],
-            [float(np.median(px[py <= p_vmin + 15])), float(p_vmin)],
-        ])
-        if left_leg_ok:
-            src_seed.append([-0.630, -0.045])
-            dst_seed.append([float(p_umin), float(np.median(py[px <= p_umin + 12]))])
-        else:
-            u_gl_lo, u_gl_hi = max(0, p_umin_eff + int(0.05 * u_span)), min(w, p_umin_eff + int(0.12 * u_span))
-            v_gl_lo, v_gl_hi = max(0, p_vmin + int(0.04 * h)), min(h, p_vmax - int(0.08 * h))
-            ys_gl, xs_gl = np.nonzero(green_mask[v_gl_lo:v_gl_hi, u_gl_lo:u_gl_hi])
-            if len(xs_gl) >= 15:
-                src_seed.append([-0.525, 0.350])
-                dst_seed.append([float(np.median(xs_gl) + u_gl_lo), float(np.median(ys_gl) + v_gl_lo)])
-    else:
-        u_dl, v_dl = float(p_umin - 0.14 * w), float(p_vmax + 0.16 * h)
-        u_dr, v_dr = float(p_umax + 0.30 * w), float(p_vmax + 0.21 * h)
-        p_umin_eff = p_umin
-
-    g_v_lo = max(0, p_vmin - int(0.09 * h))
-    g_v_hi = min(h, p_vmin + int(0.05 * h))
-    u_g_r = int(p_umin_eff + 0.82 * (p_umax - p_umin_eff))
-    ys_g_r = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_r - 20):min(w, u_g_r + 20)])[0]
-    if len(ys_g_r) >= 8:
-        v_g_r = float(np.percentile(ys_g_r, 20) + g_v_lo)
-        src_seed.append([0.08, 0.597])
-        dst_seed.append([float(u_g_r), v_g_r])
-        u_g_l = int(p_umin_eff + 0.22 * (p_umax - p_umin_eff))
-        ys_g_l = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_l - 20):min(w, u_g_l + 20)])[0]
-        if len(ys_g_l) >= 8:
-            v_g_l = float(np.percentile(ys_g_l, 20) + g_v_lo)
-            expected_dv = (v_dl - v_dr) * ((u_g_r - u_g_l) / max(1.0, u_dr - u_dl))
-            if abs((v_g_l - v_g_r) - expected_dv) < 25.0:
-                src_seed.append([-0.45, 0.597])
-                dst_seed.append([float(u_g_l), v_g_l])
-
-    # Fallback anchors if outer borders are heavily occluded
-    if len(src_seed) < 5:
-        src_seed.extend([[-0.630, -0.045], [0.258, -0.045], [0.032, 0.470]])
-        dst_seed.extend([
-            [float(p_umin), float(np.median(py[px <= p_umin + 10]))],
-            [float(p_umax), float(np.median(py[px >= p_umax - 10]))],
-            [float(np.median(px[py <= p_vmin + 15])), float(p_vmin)],
-        ])
-
-    if len(src_seed) < 4:
-        return None
-    map_to_image, _ = cv2.findHomography(np.array(src_seed, np.float64),
-                                         np.array(dst_seed, np.float64), 0)
-    if map_to_image is None or not np.all(np.isfinite(map_to_image)):
-        return None
-    map_to_image /= map_to_image[2, 2]
     if seed_map_to_image is not None:
-        map_to_image = np.asarray(seed_map_to_image, np.float64) / seed_map_to_image[2, 2]
-    try:
-        image_to_map = np.linalg.inv(map_to_image)
-        image_to_map /= image_to_map[2, 2]
-    except np.linalg.LinAlgError:
-        return None
+        map_to_image = np.asarray(seed_map_to_image, np.float64).reshape(3, 3)
+        if not np.all(np.isfinite(map_to_image)) or abs(map_to_image[2, 2]) < 1e-12:
+            return None
+        map_to_image = map_to_image / map_to_image[2, 2]
+    else:
+        if int(np.count_nonzero(green_mask)) < 250 or int(np.count_nonzero(pink_mask)) < 250:
+            return None
+        pink_closed = cv2.morphologyEx(pink_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        num_p, labels_p, stats_p, _ = cv2.connectedComponentsWithStats(pink_closed)
+        if num_p < 2:
+            return None
+        pink_idx = 1 + int(np.argmax(stats_p[1:, cv2.CC_STAT_AREA]))
+        if stats_p[pink_idx, cv2.CC_STAT_AREA] < 400:
+            return None
+        p_x0, p_y0, p_w0, p_h0, _ = stats_p[pink_idx]
+        pink_main = (labels_p == pink_idx).astype(np.uint8) * 255
+        for i in range(1, num_p):
+            if i == pink_idx or stats_p[i, cv2.CC_STAT_AREA] < 100:
+                continue
+            cx0, cy0, cw0, ch0, _ = stats_p[i]
+            if (cx0 >= p_x0 - 40 and cx0 + cw0 <= p_x0 + p_w0 + 40
+                    and cy0 + ch0 <= p_y0 + p_h0 + 20 and cy0 > 0.05 * h):
+                pink_main[labels_p == i] = 255
+        py, px = np.nonzero(pink_main)
+        p_umin, p_umax = int(px.min()), int(px.max())
+        p_vmin, p_vmax = int(py.min()), int(py.max())
+
+        white_closed = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, np.ones((3, 5), np.uint8))
+        num_w, labels_w, stats_w, centroids_w = cv2.connectedComponentsWithStats(white_closed)
+        divider_comp = None
+        for i in range(1, num_w):
+            cw = stats_w[i, cv2.CC_STAT_WIDTH]
+            ch = stats_w[i, cv2.CC_STAT_HEIGHT]
+            ca = stats_w[i, cv2.CC_STAT_AREA]
+            _, cv_c = centroids_w[i]
+            if p_vmax + 0.05 * h < cv_c < p_vmax + 0.28 * h and 0.25 * w < cw < 0.72 * w and ch < 0.28 * h and ca > 250:
+                if divider_comp is None or ca > stats_w[divider_comp, cv2.CC_STAT_AREA]:
+                    divider_comp = i
+
+        src_seed: list[list[float]] = []
+        dst_seed: list[list[float]] = []
+        if divider_comp is not None:
+            dy_div, dx_div = np.nonzero(labels_w == divider_comp)
+            q_l, q_r = np.percentile(dx_div, 1.0), np.percentile(dx_div, 99.0)
+            u_dl, v_dl = float(dx_div[dx_div <= q_l].mean()), float(dy_div[dx_div <= q_l].mean())
+            u_dr, v_dr = float(dx_div[dx_div >= q_r].mean()), float(dy_div[dx_div >= q_r].mean())
+            u_span = max(1.0, u_dr - u_dl)
+            left_leg_ok = (p_umax - p_umin) >= 0.38 * u_span
+            p_umin_eff = p_umin if left_leg_ok else int(round(p_umax - 0.433 * u_span))
+            src_seed.extend([[-0.926, -0.364], [0.926, -0.364], [0.258, -0.045], [0.032, 0.520]])
+            dst_seed.extend([
+                [u_dl, v_dl], [u_dr, v_dr],
+                [float(p_umax), float(np.median(py[px >= p_umax - 12]))],
+                [float(np.median(px[py <= p_vmin + 15])), float(p_vmin)],
+            ])
+            if left_leg_ok:
+                src_seed.append([-0.630, -0.045])
+                dst_seed.append([float(p_umin), float(np.median(py[px <= p_umin + 12]))])
+            else:
+                u_gl_lo, u_gl_hi = max(0, p_umin_eff + int(0.05 * u_span)), min(w, p_umin_eff + int(0.12 * u_span))
+                v_gl_lo, v_gl_hi = max(0, p_vmin + int(0.04 * h)), min(h, p_vmax - int(0.08 * h))
+                ys_gl, xs_gl = np.nonzero(green_mask[v_gl_lo:v_gl_hi, u_gl_lo:u_gl_hi])
+                if len(xs_gl) >= 15:
+                    src_seed.append([-0.525, 0.350])
+                    dst_seed.append([float(np.median(xs_gl) + u_gl_lo), float(np.median(ys_gl) + v_gl_lo)])
+        else:
+            u_dl, v_dl = float(p_umin - 0.14 * w), float(p_vmax + 0.16 * h)
+            u_dr, v_dr = float(p_umax + 0.30 * w), float(p_vmax + 0.21 * h)
+            p_umin_eff = p_umin
+
+        g_v_lo, g_v_hi = max(0, p_vmin - int(0.09 * h)), min(h, p_vmin + int(0.05 * h))
+        u_g_r = int(p_umin_eff + 0.82 * (p_umax - p_umin_eff))
+        ys_g_r = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_r - 20):min(w, u_g_r + 20)])[0]
+        if len(ys_g_r) >= 8:
+            v_g_r = float(np.percentile(ys_g_r, 20) + g_v_lo)
+            src_seed.append([0.08, 0.597])
+            dst_seed.append([float(u_g_r), v_g_r])
+            u_g_l = int(p_umin_eff + 0.22 * (p_umax - p_umin_eff))
+            ys_g_l = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_l - 20):min(w, u_g_l + 20)])[0]
+            if len(ys_g_l) >= 8:
+                v_g_l = float(np.percentile(ys_g_l, 20) + g_v_lo)
+                expected_dv = (v_dl - v_dr) * ((u_g_r - u_g_l) / max(1.0, u_dr - u_dl))
+                if abs((v_g_l - v_g_r) - expected_dv) < 25.0:
+                    src_seed.append([-0.45, 0.597])
+                    dst_seed.append([float(u_g_l), v_g_l])
+        if len(src_seed) < 5:
+            src_seed.extend([[-0.630, -0.045], [0.258, -0.045], [0.032, 0.470]])
+            dst_seed.extend([
+                [float(p_umin), float(np.median(py[px <= p_umin + 10]))],
+                [float(p_umax), float(np.median(py[px >= p_umax - 10]))],
+                [float(np.median(px[py <= p_vmin + 15])), float(p_vmin)],
+            ])
+        if len(src_seed) < 4:
+            return None
+        s_arr, d_arr = np.array(src_seed, np.float64), np.array(dst_seed, np.float64)
+        map_to_image, _ = cv2.findHomography(s_arr, d_arr, 0)
+        if map_to_image is None or not np.all(np.isfinite(map_to_image)):
+            return None
+        map_to_image /= map_to_image[2, 2]
 
     def _stack(arrs):
         nonempty = [a for a in arrs if len(a)]
         return np.vstack(nonempty) if nonempty else np.zeros((0, 2), np.float64)
 
-    # 2. Coarse-to-fine Huber-IRLS Gauss-Newton refinement across 10 track lines
-    #    The divider end points only seed step 1: the painted divider is shorter than +-0.926 (traced
-    #    about -0.90..0.78 on 2026-11-18), and as a residual it doubled the RMS to ~12 mm near the 15 mm cut.
-    #    Final stage jointly optimizes 12-DOF: 8-DOF homography + 4-DOF lens distortion (k1, k2, p1, p2)
-    K = default_camera_matrix(w, h)
-    D = np.zeros(4, dtype=np.float64)
+    lp = scale_lens_profile(lens_profile, (w, h)) if lens_profile is not None else default_lens_profile(w, h)
+    K = np.asarray(lp["K"], dtype=np.float64)
+    D = np.asarray(lp["D"], dtype=np.float64)
+    model_name = lp["model"]
+    fixed_lens = lens_profile is not None
+
+    try:
+        image_to_map = np.linalg.inv(map_to_image)
+        image_to_map /= image_to_map[2, 2]
+    except np.linalg.LinAlgError:
+        return None
+    rvec = tvec = None
+    if fixed_lens:
+        rt = _decompose_m2i(map_to_image, K)
+        if rt is None:
+            return None
+        rvec, tvec = rt
+        pair = _h_from_rt(rvec, tvec, K)
+        if pair is None:
+            return None
+        map_to_image, image_to_map = pair
     final_r = np.zeros(0, np.float64)
     pts_pb1 = pts_pb3 = pts_bot = pts_div = pts_top = np.zeros((0, 2), np.float64)
 
@@ -294,61 +342,73 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
         ])
         pts_left = _sample_strip_centroids(white_mask, (-1.188 - pad, -0.50, -1.188 + pad, -0.22), map_to_image, "y", 12)
         pts_right = _sample_strip_centroids(white_mask, (1.188 - pad, -0.50, 1.188 + pad, -0.22), map_to_image, "y", 12)
-        # Sample lower unoccluded sections of bays 1 & 2 (robots park at y > 0.23)
         pts_pb1 = _sample_strip_centroids(pink_mask, (-0.414 - pad, 0.08, -0.414 + pad, 0.32), map_to_image, "y", 10)
         pts_pb2 = _sample_strip_centroids(pink_mask, (-0.190 - pad, 0.08, -0.190 + pad, 0.32), map_to_image, "y", 10)
         pts_pb3 = _sample_strip_centroids(pink_mask, (0.032 - pad, 0.08, 0.032 + pad, 0.48), map_to_image, "y", 15)
 
-        joint_lens = (stage_idx == 2)
-
-        def _uproj(H: np.ndarray, d_vec: np.ndarray, pts: np.ndarray) -> np.ndarray:
-            if len(pts) == 0:
-                return pts
-            if np.any(np.abs(d_vec) > 1e-9):
-                u_pts = cv2.undistortPoints(pts.reshape(-1, 1, 2), K, d_vec, P=K).reshape(-1, 2)
-                return _proj(H, u_pts)
-            return _proj(H, pts)
+        joint_lens = (stage_idx == 2 and not fixed_lens)
+        y_groups = [(pts_bot, -0.5880), (pts_div, -0.3640), (pts_top, -0.1400),
+                    (pts_stubs, +0.2600), (pts_green_top, +0.5970)]
+        x_groups = [(pts_left, -1.1880), (pts_right, +1.1880),
+                    (pts_pb1, -0.4140), (pts_pb2, -0.1900), (pts_pb3, +0.0320)]
+        if not joint_lens:
+            y_groups = [(_undistort_cv(p, K, D, model_name), t) for p, t in y_groups]
+            x_groups = [(_undistort_cv(p, K, D, model_name), t) for p, t in x_groups]
 
         def residuals(vec: np.ndarray, *, include_reg: bool = True) -> np.ndarray:
-            H = np.append(vec[:8], 1.0).reshape(3, 3)
-            d_vec = np.array([vec[8], 0.0, 0.0, 0.0], np.float64) if len(vec) == 9 else D
+            if fixed_lens:
+                pair_v = _h_from_rt(vec[:3], vec[3:6], K)
+                if pair_v is None:
+                    return np.zeros(0, np.float64)
+                i2m_v, d_vec = pair_v[1], D
+            else:
+                i2m_v = np.append(vec[:8], 1.0).reshape(3, 3)
+                d_vec = np.array([vec[8], 0.0, 0.0, 0.0, 0.0], np.float64) if joint_lens else D
             res = []
-            for pts, y_target in [(pts_bot, -0.5880), (pts_div, -0.3640), (pts_top, -0.1400),
-                                  (pts_stubs, +0.2600), (pts_green_top, +0.5970)]:
+            for pts, y_target in y_groups:
                 if len(pts):
-                    res.append(_uproj(H, d_vec, pts)[:, 1] - y_target)
-            for pts, x_target in [(pts_left, -1.1880), (pts_right, +1.1880),
-                                  (pts_pb1, -0.4140), (pts_pb2, -0.1900), (pts_pb3, +0.0320)]:
+                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if joint_lens else pts
+                    res.append(_proj(i2m_v, u_pts)[:, 1] - y_target)
+            for pts, x_target in x_groups:
                 if len(pts):
-                    res.append(_uproj(H, d_vec, pts)[:, 0] - x_target)
-            if len(vec) == 9 and include_reg:
+                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if joint_lens else pts
+                    res.append(_proj(i2m_v, u_pts)[:, 0] - x_target)
+            if joint_lens and include_reg:
                 res.append(np.array([vec[8] * 0.020]))
             return np.concatenate(res) if res else np.zeros(0, np.float64)
 
-        n_dof = 9 if joint_lens else 8
-        params = np.append(image_to_map.ravel()[:8], D[0]) if joint_lens else image_to_map.ravel()[:8].copy()
-        eps = 1e-6
-        lam = 1e-4
+        if fixed_lens:
+            n_dof, params = 6, np.concatenate([rvec, tvec])
+            eps = np.array([1e-5, 1e-5, 1e-5, 1e-4, 1e-4, 1e-4], np.float64)
+            lam, max_iter, max_lam = 1e-3, 18, 1e4
+        else:
+            n_dof = 9 if joint_lens else 8
+            params = np.append(image_to_map.ravel()[:8], D[0]) if joint_lens else image_to_map.ravel()[:8].copy()
+            eps = np.full(n_dof, 1e-6, np.float64)
+            lam, max_iter, max_lam = 1e-4, 16, 1e2
 
         def _huber_cost(r: np.ndarray) -> float:
             abs_r = np.abs(r)
             return float(np.sum(np.where(abs_r <= 0.015, 0.5 * r * r, 0.015 * (abs_r - 0.5 * 0.015))))
 
-        for _ in range(16):
+        for _ in range(max_iter):
             r0 = residuals(params)
             if len(r0) < 25 or not np.all(np.isfinite(r0)):
                 return None
-            # Huber IRLS weights for outlier rejection (delta = 15 mm)
             abs_r = np.abs(r0)
             weights = np.where(abs_r <= 0.015, 1.0, 0.015 / (abs_r + 1e-9))
             J = np.zeros((len(r0), n_dof), np.float64)
             for j in range(n_dof):
                 dp = params.copy()
-                dp[j] += eps
-                J[:, j] = (residuals(dp) - r0) / eps
+                dp[j] += eps[j]
+                rj = residuals(dp)
+                if len(rj) != len(r0):
+                    return None
+                J[:, j] = (rj - r0) / eps[j]
             Jw = J * weights[:, None]
-            rw = r0 * weights
-            step, _, _, _ = np.linalg.lstsq(Jw.T @ Jw + lam * np.eye(n_dof), -Jw.T @ rw, rcond=None)
+            jtwj = Jw.T @ Jw
+            reg = np.diag(np.maximum(1e-8, np.diag(jtwj))) if fixed_lens else np.eye(n_dof)
+            step, _, _, _ = np.linalg.lstsq(jtwj + lam * reg, -Jw.T @ (r0 * weights), rcond=None)
             cand = params + step
             if joint_lens:
                 cand[8] = float(np.clip(cand[8], -0.25, 0.25))
@@ -359,29 +419,50 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
                 if np.max(np.abs(step)) < 1e-7:
                     break
             else:
-                lam = min(1e2, lam * 4.0)
-                if lam >= 1e2:
+                lam = min(max_lam, lam * 4.0)
+                if lam >= max_lam:
                     break
 
-        image_to_map = np.append(params[:8], 1.0).reshape(3, 3)
-        if joint_lens:
-            D = np.array([float(np.clip(params[8], -0.25, 0.25)), 0.0, 0.0, 0.0], np.float64)
-        try:
-            map_to_image = np.linalg.inv(image_to_map)
-            map_to_image /= map_to_image[2, 2]
-        except np.linalg.LinAlgError:
-            return None
+        if fixed_lens:
+            rvec, tvec = params[:3], params[3:6]
+            pair = _h_from_rt(rvec, tvec, K)
+            if pair is None:
+                return None
+            map_to_image, image_to_map = pair
+        else:
+            image_to_map = np.append(params[:8], 1.0).reshape(3, 3)
+            if joint_lens:
+                D = np.array([float(np.clip(params[8], -0.25, 0.25)), 0.0, 0.0, 0.0, 0.0], np.float64)
+            try:
+                map_to_image = np.linalg.inv(image_to_map)
+                map_to_image /= map_to_image[2, 2]
+            except np.linalg.LinAlgError:
+                return None
         final_r = residuals(params, include_reg=False)
 
-    # Reject 1-bay aliased or under-constrained fits missing outer pink bays or horizontal lines
     if (len(final_r) < 25 or len(pts_pb1) < 4 or len(pts_pb3) < 4
             or len(pts_div) < 10 or len(pts_bot) < 8 or len(pts_top) < 8):
         return None
     rms_m = float(np.sqrt(np.mean(final_r ** 2)))
     if not math.isfinite(rms_m) or rms_m > 0.015:
         return None
-
-    _LATEST_LENS_MODEL[(source_id, int(w), int(h), revision)] = (K.copy(), D.copy(), image_to_map.copy())
+    if fixed_lens and rvec is not None and tvec is not None:
+        rot_m, _ = cv2.Rodrigues(rvec.reshape(3, 1))
+        cam_h = abs(float((-rot_m.T @ tvec)[2]))
+        if not 0.5 <= cam_h <= 6.0:
+            return None
+    corners = np.array([[-1.22, -0.61], [1.22, -0.61], [1.22, 0.61], [-1.22, 0.61]], np.float64)
+    w_c = (np.column_stack([corners, np.ones(4)]) @ map_to_image.T)[:, 2]
+    if np.any(w_c <= 0.1):
+        return None
+    out_profile = {
+        "model": model_name,
+        "K": [[float(v) for v in row] for row in K],
+        "D": [float(v) for v in (D[:4] if model_name == "fisheye" else D[:5])],
+        "image_size": [int(w), int(h)],
+        "source": "measured" if fixed_lens else "auto",
+    }
+    _LATEST_LENS_MODEL[(source_id, int(w), int(h), revision)] = (K.copy(), D[:4].copy(), image_to_map.copy())
 
     # 3. Rectify + lens-undistort to top-down map plane and trace sub-pixel places & edges
     min_x, max_x, min_y, max_y = -1.37, 1.37, -0.76, 0.76
@@ -390,182 +471,16 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     map_to_plane = np.array([[ppm, 0.0, -min_x * ppm - 0.5],
                              [0.0, -ppm, max_y * ppm - 0.5],
                              [0.0, 0.0, 1.0]])
-    plane, _ = warp_undistorted_map_plane(img, map_to_plane @ image_to_map, out_w, out_h, K, D)
+    plane, _ = warp_undistorted_map_plane(img, map_to_plane @ image_to_map, out_w, out_h, K, D[:4])
     white_p, _, pink_p, yellow_p = _segment_masks(plane)
-
-    def px_to_map(u, v):
-        return min_x + (u + 0.5) / ppm, max_y - (v + 0.5) / ppm
-
-    # 3a. Horizontal pink bar y(x) across inter-bay segments
-    v_bar_lo, v_bar_hi = int((max_y - 0.055) * ppm), int((max_y - (-0.005)) * ppm)
-    bar_xs, bar_ys = [], []
-    for x0, x1 in [(-0.56, -0.45), (-0.36, -0.24), (-0.14, -0.02), (0.08, 0.19)]:
-        u0, u1 = int((x0 - min_x) * ppm), int((x1 - min_x) * ppm)
-        ys_b, xs_b = np.nonzero(pink_p[v_bar_lo:v_bar_hi, u0:u1])
-        if len(ys_b) >= 10:
-            mx, my = px_to_map(np.median(xs_b) + u0, np.median(ys_b) + v_bar_lo)
-            bar_xs.append(mx)
-            bar_ys.append(my)
-    poly_bar_y = np.polyfit(bar_xs, bar_ys, 1) if len(bar_xs) >= 2 else np.array([0.0, 0.025])
-
-    # 3b. Sub-pixel centerline fit of the left & right slanted pink legs (y in [-0.10, -0.002])
-    def _fit_pink_leg(x_lo: float, x_hi: float, default_x0: float, default_slope: float) -> np.ndarray:
-        u0, u1 = int((x_lo - min_x) * ppm), int((x_hi - min_x) * ppm)
-        lx, ly = [], []
-        for ym in np.linspace(-0.002, -0.10, 16):
-            v = int(round((max_y - ym) * ppm))
-            xs = np.nonzero(pink_p[max(0, v - 1):min(out_h, v + 2), u0:u1])[1]
-            if len(xs) >= 3:
-                xm = min_x + (float(np.median(xs)) + u0 + 0.5) / ppm
-                lx.append(xm)
-                ly.append(ym)
-        return np.polyfit(ly, lx, 1) if len(ly) >= 4 else np.array([default_slope, default_x0])
-
-    leg_l_poly = _fit_pink_leg(-0.68, -0.56, -0.607, 0.49)   # x(y) = m*y + c
-    leg_r_poly = _fit_pink_leg(0.19, 0.30, 0.238, -0.45)
-
-    # Exact intersection of each slanted leg centerline x(y) with horizontal bar y(x)
-    y_elbow_l = round(float(np.polyval(poly_bar_y, -0.596)), 4)
-    x_elbow_l = round(float(np.polyval(leg_l_poly, y_elbow_l)), 4)
-    y_elbow_l = round(float(np.polyval(poly_bar_y, x_elbow_l)), 4)
-
-    y_elbow_r = round(float(np.polyval(poly_bar_y, 0.228)), 4)
-    x_elbow_r = round(float(np.polyval(leg_r_poly, y_elbow_r)), 4)
-    y_elbow_r = round(float(np.polyval(poly_bar_y, x_elbow_r)), 4)
-
-    y_tip_l = -0.048
-    x_tip_l = round(float(np.polyval(leg_l_poly, y_tip_l)), 4)
-    y_tip_r = -0.048
-    x_tip_r = round(float(np.polyval(leg_r_poly, y_tip_r)), 4)
-
-    # 3c. 3 vertical pink bay lines x(y) (sample unoccluded lower portion y in [0.06, 0.21] for bays 1&2)
-    bay_P, bay_C, bay_polylines = [], [], []
-    for x_nom, y_hi in [(-0.414, 0.21), (-0.190, 0.21), (0.032, 0.46)]:
-        u0, u1 = int((x_nom - 0.040 - min_x) * ppm), int((x_nom + 0.040 - min_x) * ppm)
-        v0, v1 = int((max_y - y_hi) * ppm), int((max_y - 0.06) * ppm)
-        ys_s, xs_s = np.nonzero(pink_p[v0:v1, u0:u1])
-        y_p = round(float(np.polyval(poly_bar_y, x_nom)), 4)
-        if len(xs_s) >= 20:
-            mxs, mys = px_to_map(xs_s + u0, ys_s + v0)
-            # In the lens-undistorted plane, bays are vertical; use robust median x + bounded slope
-            x_med = float(np.median(mxs))
-            p_x = np.polyfit(mys, mxs, 1)
-            slope = float(np.clip(p_x[0], -0.008, 0.008))
-            y_ref = float(np.median(mys))
-            x_p = round(x_med + slope * (y_p - y_ref), 4)
-            x_c = round(x_med + slope * (0.470 - y_ref), 4)
-        else:
-            x_p, x_c = x_nom, x_nom
-        bay_P.append((x_p, y_p))
-        bay_C.append((x_c, 0.470))
-        bay_polylines.append([[round(x_p + (x_c - x_p) * t, 4), round(y_p + (0.470 - y_p) * t, 4)]
-                              for t in (0.0, 0.33, 0.67, 1.0)])
-
-    # 3d. Road curves y_up(x) and y_lo(x) sampled densely along white borders
-    def fit_road_curve(x_samples, y_lo_b, y_hi_b):
-        xs_c, ys_c = [], []
-        v0, v1 = int((max_y - y_hi_b) * ppm), int((max_y - y_lo_b) * ppm)
-        for xs_val in x_samples:
-            u0, u1 = int((xs_val - 0.02 - min_x) * ppm), int((xs_val + 0.02 - min_x) * ppm)
-            ys_w, xs_w = np.nonzero(white_p[v0:v1, u0:u1])
-            if len(ys_w) >= 6:
-                mx, my = px_to_map(np.median(xs_w) + u0, np.median(ys_w) + v0)
-                xs_c.append(mx)
-                ys_c.append(my)
-        return np.polyfit(xs_c, ys_c, 2) if len(xs_c) >= 5 else np.array([0.0, 0.0, 0.5 * (y_lo_b + y_hi_b)])
-
-    poly_top_w = fit_road_curve(
-        [x for x in np.linspace(-1.0, 1.0, 41) if not (-0.82 < x < -0.55 or 0.16 < x < 0.44)],
-        -0.175, -0.105,
-    )
-    poly_div_w = fit_road_curve(np.linspace(-0.88, 0.88, 37), -0.40, -0.33)
-    poly_bot_w = fit_road_curve(np.linspace(-1.0, 1.0, 41), -0.62, -0.55)
-    poly_upper_lane = 0.5 * (poly_top_w + poly_div_w)
-    poly_lower_lane = 0.5 * (poly_div_w + poly_bot_w)
-
-    def y_up(x: float) -> float:
-        return round(float(np.polyval(poly_upper_lane, x)), 4)
-
-    def y_lo(x: float) -> float:
-        return round(float(np.polyval(poly_lower_lane, x)), 4)
-
-    def y_top_line(x: float) -> float:
-        return round(float(np.polyval(poly_top_w, x)), 4)
-
-    s1_y = y_top_line(-0.680)
-    s1_x = round(float(np.polyval(leg_l_poly, s1_y)), 4)
-    s2_y = y_top_line(0.280)
-    s2_x = round(float(np.polyval(leg_r_poly, s2_y)), 4)
-
-    def _stop_x(mask_s: np.ndarray, x0: float, x1: float, y_hi: float, y_lo_b: float, default: float) -> float:
-        u0, u1 = int((x0 - min_x) * ppm), int((x1 - min_x) * ppm)
-        v0, v1 = int((max_y - y_hi) * ppm), int((max_y - y_lo_b) * ppm)
-        xs = np.nonzero(mask_s[v0:v1, u0:u1])[1]
-        return round(float(px_to_map(np.median(xs) + u0, 0)[0]), 4) if len(xs) >= 15 else default
-
-    s3_x = _stop_x(yellow_p, 0.64, 0.75, -0.15, -0.35, 0.6987)
-    s3_y = y_up(s3_x)
-    s4_x = _stop_x(yellow_p, 0.10, 0.22, -0.40, -0.54, 0.1562)
-    s4_y = y_lo(s4_x)
-    s5_x = _stop_x(yellow_p, 0.86, 0.97, -0.41, -0.54, -1.0)
-    if s5_x < 0.0:
-        s5_x = _stop_x(white_p, 0.86, 0.97, -0.41, -0.54, 0.9212)
-    s5_y = y_lo(s5_x)
-
-    places = [
-        {"id": "S1", "kind": "stop", "name": "S1 주차장 출구·수동 적재 정지선", "x": s1_x, "y": s1_y, "yaw": None},
-        {"id": "S2", "kind": "stop", "name": "S2 주차장 입구 정지선", "x": s2_x, "y": s2_y, "yaw": None},
-        {"id": "S3", "kind": "stop", "name": "S3 상단 하역 정지선 (cell_s)", "x": s3_x, "y": s3_y, "yaw": None},
-        {"id": "S4", "kind": "stop", "name": "S4 하단 중앙 대기 정지선", "x": s4_x, "y": s4_y, "yaw": None},
-        {"id": "S5", "kind": "stop", "name": "S5 하단 U턴 전 대기 정지선", "x": s5_x, "y": s5_y, "yaw": None},
-        {"id": "J_in", "kind": "junction", "name": "주차장 입구 분기", "x": s2_x, "y": y_up(s2_x), "yaw": None},
-        {"id": "J_out", "kind": "junction", "name": "주차장 출구 합류", "x": s1_x, "y": y_up(s1_x), "yaw": None},
-        {"id": "P1", "kind": "junction", "name": "칸 1 앞", "x": bay_P[0][0], "y": bay_P[0][1], "yaw": None},
-        {"id": "P2", "kind": "junction", "name": "칸 2 앞", "x": bay_P[1][0], "y": bay_P[1][1], "yaw": None},
-        {"id": "P3", "kind": "junction", "name": "칸 3 앞", "x": bay_P[2][0], "y": bay_P[2][1], "yaw": None},
-        {"id": "C1", "kind": "charge", "name": "충전 칸 1", "x": bay_C[0][0], "y": bay_C[0][1], "yaw": -1.5708},
-        {"id": "C2", "kind": "charge", "name": "충전 칸 2", "x": bay_C[1][0], "y": bay_C[1][1], "yaw": -1.5708},
-        {"id": "C3", "kind": "charge", "name": "충전 칸 3", "x": bay_C[2][0], "y": bay_C[2][1], "yaw": -1.5708},
-    ]
-
-    def _elliptic_arc(cx, cy, rx, ry, start, step, n=12):
-        return [[round(cx + rx * math.cos(start + step * i / n), 4),
-                 round(cy + ry * math.sin(start + step * i / n), 4)] for i in range(n + 1)]
-
-    def _edge(eid, frm, to, name, poly, speed=0.15, width=0.2, direction="one_way"):
-        return {"id": eid, "from": frm, "to": to, "direction": direction, "drive_mode": "lane",
-                "name": name, "polyline": poly, "robot_kinds": None, "speed_cap_mps": speed, "width_m": width}
-
-    y_r_mid, ry_r = round(0.5 * (y_up(0.926) + y_lo(0.926)), 4), round(0.5 * (y_up(0.926) - y_lo(0.926)), 4)
-    y_l_mid, ry_l = round(0.5 * (y_up(-0.926) + y_lo(-0.926)), 4), round(0.5 * (y_up(-0.926) - y_lo(-0.926)), 4)
-    upper_east_xs, upper_west_xs = np.linspace(s3_x, s2_x, 6), np.linspace(s2_x, s1_x, 10)
-    lower_west_xs, lower_east_xs = np.linspace(-0.85, s4_x, 9), np.linspace(s4_x, s5_x, 7)
-
-    edges = [
-        _edge("loop_right", "S5", "S3", "오른쪽 U턴",
-              [[s5_x, s5_y], *_elliptic_arc(0.926, y_r_mid, 0.131, ry_r, -math.pi / 2, math.pi), [s3_x, s3_y]]),
-        _edge("upper_east", "S3", "J_in", "위 차선 (하역 후 분기)", [[round(float(x), 4), y_up(float(x))] for x in upper_east_xs]),
-        _edge("upper_west", "J_in", "J_out", "위 차선 (주차장 앞 순환)", [[round(float(x), 4), y_up(float(x))] for x in upper_west_xs]),
-        _edge("loop_left", "J_out", "S4", "왼쪽 U턴·아래 서쪽 차선 (S4 정지선까지)",
-              [[s1_x, y_up(s1_x)], *_elliptic_arc(-0.926, y_l_mid, 0.131, ry_l, math.pi / 2, math.pi),
-               *[[round(float(x), 4), y_lo(float(x))] for x in lower_west_xs]]),
-        _edge("lower_east", "S4", "S5", "아래 동쪽 차선 (S4 -> S5 정지선)", [[round(float(x), 4), y_lo(float(x))] for x in lower_east_xs]),
-        _edge("park_gate_in", "J_in", "S2", "주차장 진입", [[s2_x, y_up(s2_x)], [s2_x, s2_y]], 0.08, 0.15),
-        _edge("park_in", "S2", "P3", "분홍 유도선 (입구)", [[s2_x, s2_y], [x_tip_r, y_tip_r], [x_elbow_r, y_elbow_r], [bay_P[2][0], bay_P[2][1]]], 0.08, 0.15),
-        _edge("bar_32", "P3", "P2", "분홍 유도선", [[bay_P[2][0], bay_P[2][1]], [bay_P[1][0], bay_P[1][1]]], 0.08, 0.15),
-        _edge("bar_21", "P2", "P1", "분홍 유도선", [[bay_P[1][0], bay_P[1][1]], [bay_P[0][0], bay_P[0][1]]], 0.08, 0.15),
-        _edge("park_out", "P1", "S1", "분홍 유도선 (출구)", [[bay_P[0][0], bay_P[0][1]], [x_elbow_l, y_elbow_l], [x_tip_l, y_tip_l], [s1_x, s1_y]], 0.08, 0.15),
-        _edge("park_gate_out", "S1", "J_out", "주차장 합류", [[s1_x, s1_y], [s1_x, y_up(s1_x)]], 0.08, 0.15),
-        _edge("bay_1", "P1", "C1", "칸 1 (후진 진입)", bay_polylines[0], 0.05, 0.18, "two_way"),
-        _edge("bay_2", "P2", "C2", "칸 2 (후진 진입)", bay_polylines[1], 0.05, 0.18, "two_way"),
-        _edge("bay_3", "P3", "C3", "칸 3 (후진 진입)", bay_polylines[2], 0.05, 0.18, "two_way"),
-    ]
-
+    from rosy_vision.world_261026_trace import trace_world_261026_graph
+    places, edges = trace_world_261026_graph(white_p, pink_p, yellow_p, min_x, max_y, ppm, out_h)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     return {
         "map_to_image": map_to_image,
         "image_to_map": image_to_map,
-        "distortion": [round(float(x), 6) for x in D],
+        "distortion": [round(float(x), 6) for x in D[:4]],
+        "lens_profile": out_profile,
         "rms_m": rms_m,
         "elapsed_ms": elapsed_ms,
         "places": places,

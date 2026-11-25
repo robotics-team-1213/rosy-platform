@@ -13,6 +13,7 @@ import { createUsbCameraPanel } from "./usb-camera.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
+import { createManualFitView } from "/console/assets/manual-fit-view.js";
 import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createInstallLine } from "./install-line.js";
@@ -74,6 +75,7 @@ function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
   startPoints?.updateAuthorization();
   measuredCalibration?.updateAuthorization();
+  manualFit?.updateAuthorization();
   deviceProfiles?.updateAuthorization();
 }
 
@@ -188,8 +190,10 @@ const visionView = createVisionView({ scope: pageScope, el, call,
 let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
+let manualFit = null;
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
-measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth});
+manualFit = createManualFitView({ scope: pageScope, el, call, visionView, auth, onApplied: () => { mapFit.reset(); fieldView.render(); } });
+measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth, onPromoted: () => { manualFit?.refresh(); mapFit.reset(); }});
 // D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
 startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
 const installLine = createInstallLine({ root: el("install-line"), call, scope: pageScope });
@@ -219,6 +223,7 @@ function saveToken() {
   writeStoredToken(auth.token);
   visionView.reset();
   mapFit.reset();
+  manualFit?.reset();
   startPoints.reset();
   relearn.reset();
   refreshAuthorization(false, true);
@@ -360,6 +365,7 @@ pageScope.interval(() => {
 pageScope.onResume(() => {
   visionView.reset();
   mapFit.reset();
+  manualFit?.reset();
   startPoints.reset();
   relearn.reset();
   refreshAuthorization();

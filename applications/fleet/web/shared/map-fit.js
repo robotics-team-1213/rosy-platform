@@ -104,6 +104,7 @@ export function normalizeMapProposal(body, meta = {}) {
         rotation: finite(raw.rotation_deg) ? raw.rotation_deg : null,
         mirrored: raw.mirrored === true,
         margin: finite(raw.orientation_margin) ? raw.orientation_margin : null,
+        lensProfile: raw.lens_profile && typeof raw.lens_profile === "object" ? raw.lens_profile : null,
       };
     }
   }
@@ -296,6 +297,8 @@ export function calibrationRequest(pending, source, laneSet, lens) {
     fit_score: Math.round(fit.score * fit.precision * 1000) / 1000,
     lens: lensBody,
     frame_seq: Number.isInteger(seq) ? seq : null,
+    ...(fit.lensProfile ? { lens_profile: fit.lensProfile } : {}),
+    method: "paint",
   };
 }
 
@@ -323,5 +326,12 @@ export function fitFromCalibration(record, frameLens) {
     map_to_image: record.map_to_image, image: record.image, frame_seq: record.frame_seq ?? null,
     map_id: record.map_id ?? null, use: record.use ?? "display-only",
   }));
-  return fit ? { ...fit, revision: typeof record.calibration_revision === "string" ? record.calibration_revision : null } : null;
+  return fit ? {
+    ...fit,
+    revision: typeof record.calibration_revision === "string" ? record.calibration_revision : null,
+    lensProfile: record.lens_profile && typeof record.lens_profile === "object" ? record.lens_profile : null,
+    frozen: Boolean(record.frozen),
+    method: typeof record.method === "string" ? record.method : "paint",
+    metrics: record.metrics && typeof record.metrics === "object" ? record.metrics : null,
+  } : null;
 }

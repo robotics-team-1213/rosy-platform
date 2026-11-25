@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+from core_common.calibration_math import project_pixel_to_plane, undistort_point
 from core_common.homography import Homography, Point, fit
 from core_common.protocol.place_markers import PlaceMarkerPayload, PlaceMarkerPose
 from core_common.protocol.sightings import SiteSightingPayload
@@ -111,6 +112,8 @@ def project_frame(
     captured_at: float,
     markers: Mapping[int, Sequence[Point]],
     homography: Homography | None = None,
+    lens_profile: Mapping | None = None,
+    camera_pose: tuple[float, float, float] | None = None,
 ) -> tuple[SiteSightingPayload, ...]:
     """Return display-only poses for every configured robot marker in this frame.
 
@@ -128,7 +131,8 @@ def project_frame(
 
     sightings = []
     for robot_id, marker_id in camera.robot_markers.items():
-        pose = _pose(camera, measured, markers.get(marker_id))
+        pose = _pose(camera, measured, markers.get(marker_id),
+                     lens_profile=lens_profile, camera_pose=camera_pose, height_m=MARKER_HEIGHT_M)
         if pose is None:
             continue
         x, y, yaw = robot_pose_from_marker(pose, camera.marker_yaw_offset_deg.get(robot_id, 0.0))
@@ -229,7 +233,15 @@ def _measured(camera: CameraMap, markers, homography):
     return marker_homography(camera, markers)
 
 
-def _pose(camera: CameraMap, measured: Homography, quad) -> tuple[float, float, float] | None:
+def _pose(
+    camera: CameraMap,
+    measured: Homography,
+    quad,
+    *,
+    lens_profile: Mapping | None = None,
+    camera_pose: tuple[float, float, float] | None = None,
+    height_m: float = 0.0,
+) -> tuple[float, float, float] | None:
     """Marker centre and ``heading_edge`` tip through the homography; None when unusable."""
     if quad is None:
         return None
@@ -240,8 +252,17 @@ def _pose(camera: CameraMap, measured: Homography, quad) -> tuple[float, float, 
             (quad[edge_a][0] + quad[edge_b][0]) / 2,
             (quad[edge_a][1] + quad[edge_b][1]) / 2,
         )
-        x, y = measured.apply(*center)
-        yaw = measured.yaw(center, heading_tip)
+        if lens_profile is not None or camera_pose is not None:
+            x, y = project_pixel_to_plane(
+                *center, measured.h, height_m=height_m, lens_profile=lens_profile, camera_pose=camera_pose
+            )
+            hx, hy = project_pixel_to_plane(
+                *heading_tip, measured.h, height_m=height_m, lens_profile=lens_profile, camera_pose=camera_pose
+            )
+            yaw = math.atan2(hy - y, hx - x)
+        else:
+            x, y = measured.apply(*center)
+            yaw = measured.yaw(center, heading_tip)
     except (TypeError, ValueError, ZeroDivisionError):
         return None
     if not all(math.isfinite(value) for value in (x, y, yaw)):

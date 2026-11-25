@@ -18,6 +18,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
+from core_common.calibration_math import scale_lens_profile
 from rosy_vision.project import CameraMap, Point, marker_homography
 from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration
@@ -66,11 +67,18 @@ def from_record(record, *, source_id: str, map_id: str, frame_size: Sequence[int
     if abs(sx / sy - 1.0) > ASPECT_TOLERANCE:
         return None
     image_to_map = geometry.normalized(image_to_map @ geometry.centre_scale(1.0 / sx, 1.0 / sy))
+    raw_lp = record.get("lens_profile")
+    lens_profile = None
+    if raw_lp is not None:
+        try:
+            lens_profile = scale_lens_profile(raw_lp, (int(frame_size[0]), int(frame_size[1])), aspect_tol=ASPECT_TOLERANCE)
+        except (KeyError, TypeError, ValueError):
+            return None
     try:
         return Calibration(source_id=source_id, map_id=map_id, revision=revision,
                            image_to_map=tuple(float(v) for v in image_to_map.reshape(-1)),
                            image_size=(int(frame_size[0]), int(frame_size[1])), track_bounds_m=track,
-                           hfov_deg=_hfov(lens))
+                           hfov_deg=_hfov(lens), lens_profile=lens_profile)
     except (KeyError, TypeError, ValueError):
         return None
 

@@ -101,41 +101,54 @@ def test_the_warp_homography_matches_the_header_formula_exactly():
     assert max_y - (j + 0.5) / plane.px_per_m == pytest.approx(POINT[1], abs=1e-9)
 
 
-def test_map_plane_never_reuses_a_lens_model_from_another_source_or_revision(monkeypatch):
-    from rosy_vision import world_261026_auto as auto
+def test_map_plane_world_261026_never_auto_calibrates_on_the_fly(monkeypatch):
+    from rosy_vision import rectify, world_261026_auto as auto
 
-    map_id = "world_261026"
-    revision = RECORD["calibration_revision"]
-    model = (np.eye(3), np.zeros(4), np.eye(3))
-    monkeypatch.setattr(auto, "_LATEST_LENS_MODEL", {
-        ("another_camera", 640, 360, revision): model,
-        (SOURCE, 640, 360, "old-revision"): model,
-        ("", 640, 360, None): model,
-    })
     calls = []
-    warps = []
+    monkeypatch.setattr(auto, "auto_calibrate_and_trace_world_261026", lambda *a, **kw: calls.append(a))
+    record = {**RECORD, "map_id": "world_261026"}
+    plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id="world_261026", lens=LENS)
+    assert plane is not None
+    assert calls == []
 
-    def no_fit(image, *, source_id, revision, seed_map_to_image):
-        calls.append((source_id, revision))
 
-    def warp(image, matrix, width, height, K, D, **kwargs):
-        warps.append((K, D))
-        return np.zeros((height, width, 3), dtype=np.uint8), np.ones((height, width), dtype=bool)
+@pytest.mark.parametrize("model,d", [
+    ("pinhole", [-0.28, 0.08, 0.002, -0.001, -0.01]),
+    ("fisheye", [-0.08, 0.02, -0.003, 0.001]),
+])
+def test_map_plane_single_pass_undistort_with_lens_profile(model, d):
+    from core_common.calibration_math import distort_point
+    from rosy_vision.rectify import _LUT_CACHE
 
-    monkeypatch.setattr(auto, "auto_calibrate_and_trace_world_261026", no_fit)
-    monkeypatch.setattr(auto, "warp_undistorted_map_plane", warp)
-    record = {**RECORD, "map_id": map_id}
+    _LUT_CACHE.clear()
+    k = [[500.0, 0.0, 320.0], [0.0, 500.0, 180.0], [0.0, 0.0, 1.0]]
+    lp = {"model": model, "K": k, "D": d, "image_size": [640, 360], "source": "measured"}
+    record = {
+        **RECORD,
+        "map_to_image": [100.0, 0.0, 320.0, 0.0, -100.0, 180.0, 0.0, 0.0, 1.0],
+        "image": {"width": 640, "height": 360},
+        "lens_profile": lp,
+    }
+    xu, yu = 320.0 + 100.0 * POINT[0], 180.0 - 100.0 * POINT[1]
+    u_raw, v_raw = distort_point(xu, yu, lp)
+    img = np.full((360, 640, 3), 120, np.uint8)
+    cv2.circle(img, (round(u_raw), round(v_raw)), 3, (255, 255, 255), -1)
+    jpeg = cv2.imencode(".jpg", img)[1].tobytes()
 
-    assert map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=map_id, lens=LENS) is not None
-    assert calls == [(SOURCE, revision)]
-    assert warps == []
-    assert auto.get_latest_lens_model(640, 360) is model
+    plane = map_plane_jpeg(jpeg, record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert plane is not None and len(_LUT_CACHE) == 1
+    out = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
+    vs, us = np.nonzero(out > 180)
+    min_x, _, _, max_y = plane.bounds_m
+    x = min_x + (us.mean() + 0.5) / plane.px_per_m
+    y = max_y - (vs.mean() + 0.5) / plane.px_per_m
+    assert (x, y) == pytest.approx(POINT, abs=0.01)
 
-    auto._LATEST_LENS_MODEL[(SOURCE, 640, 360, revision)] = model
-    assert map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=map_id, lens=LENS) is not None
-    assert calls == [(SOURCE, revision)]
-    assert len(warps) == 1
-    assert warps[0][0] is model[0]
+    # Cached LUT is reused for same revision and rebuilt for a new revision.
+    map_plane_jpeg(jpeg, record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert len(_LUT_CACHE) == 1
+    map_plane_jpeg(jpeg, {**record, "calibration_revision": "paint-next"}, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert len(_LUT_CACHE) == 2
 
 
 def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():

@@ -4970,6 +4970,7 @@
         "applications/fleet/web/site-rules-judge.js",
         "applications/fleet/web/platoon-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
@@ -5001,6 +5002,14 @@
         },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/site-lanes",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-lanes"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
           "expression": "/api/fleet/site-lanes",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -6830,6 +6839,7 @@
         "applications/fleet/web/sitemap/site-map.html"
       ],
       "consumers": [
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/calibration/measured-calibration-view.js",
         "applications/fleet/web/console-goal.js",
@@ -6844,6 +6854,47 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations",
+            "POST:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations?include_history=true",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/fit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/fit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/freeze",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/freeze"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/rollback",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/rollback"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/calibrations",
@@ -7168,6 +7219,57 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/fit",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/fit",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "fit_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/fit"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/freeze",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/freeze",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "freeze_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/freeze"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/rollback",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/rollback",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "rollback_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/rollback"
         },
         {
           "id": "POST:/api/fleet/teach/confirm",

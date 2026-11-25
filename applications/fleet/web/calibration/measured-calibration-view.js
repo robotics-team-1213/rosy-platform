@@ -14,11 +14,22 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
 
 const READING_REASON = '상태 읽는 중';
 
-export function createMeasuredCalibrationView({scope, root, call, visionView, auth}) {
+function invert3x3(rows) {
+  if (!Array.isArray(rows) || rows.length !== 3) return null;
+  const m = rows.flat();
+  if (m.length !== 9 || !m.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-15) return null;
+  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((v) => v / det);
+}
+
+export function createMeasuredCalibrationView({scope, root, call, visionView, auth, onPromoted = () => {}}) {
   const el = id => root.querySelector(`#measured-${id}`);
   const file = el('bundle'), p95 = el('p95'), maximum = el('max'), conditions = el('conditions');
   const message = el('state'), summary = el('summary'), image = el('image');
-  const buttons = Object.fromEntries(['approve','revoke','confirm','read','refresh'].map(id => [id,el(id)]));
+  const buttons = Object.fromEntries(['approve','revoke','confirm','read','refresh','promote'].map(id => [id,el(id)]));
   let source = '', generation = 0, candidate = null, record = null, status = null;
   let busy = false, reading = false, imageURL = null, cancelImageExpiry = null;
   let sourceLifetime = new AbortController();
@@ -84,7 +95,12 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? (reading ? readingReason : '') : why);
     watch(buttons.read,!!current,'현재 교정·촬영 상태를 먼저 확인하세요.');
     watch(buttons.refresh,!!source,'카메라를 먼저 선택하세요.');
-    const b = candidate || record?.bundle;
+    const activeBundle = candidate || record?.bundle;
+    if (buttons.promote) {
+      setOperable(buttons.promote, !!activeBundle && activeBundle.evidence_kind === 'measured' && activeBundle.source_id === source,
+        '선택한 카메라의 실측 교정 묶음이 필요합니다.');
+    }
+    const b = activeBundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }
   async function request(path, body, t, method='POST') {
@@ -194,6 +210,33 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }));
   scope.listen(buttons.read,'click',() => action(t => showFrame(t,false)));
   scope.listen(buttons.refresh,'click',refresh);
+  if (buttons.promote) {
+    scope.listen(buttons.promote,'click',() => action(async t => {
+      const bundle = candidate || record?.bundle;
+      if (!operator() || !bundle || bundle.evidence_kind !== 'measured') return;
+      const mapToImage = invert3x3(bundle.floor.undistorted_to_map);
+      if (!mapToImage) throw new Error('실측 평면 행렬을 뒤집을 수 없습니다.');
+      const [bx0, by0, bx1, by1] = bundle.bounds_m;
+      const [w, h] = bundle.lens.image_size;
+      const fx = bundle.lens.K[0][0];
+      const hfov = 2 * Math.atan(Math.max(w, h) / (2 * fx)) * 180 / Math.PI;
+      const lensProfile = {
+        model: bundle.lens.model, K: bundle.lens.K, D: bundle.lens.D, image_size: [w, h],
+        source: 'measured', revision: bundle.lens.revision, reproj_p95_px: bundle.lens.validation?.p95_px,
+      };
+      const promoted = await request('/api/fleet/calibrations', {
+        source_id: bundle.source_id, map_id: bundle.map_id, map_to_image: mapToImage,
+        image: {width: w, height: h},
+        track_bounds_m: {min_x: bx0, min_y: by0, max_x: bx1, max_y: by1},
+        fit_score: Math.max(0, Math.min(1, Number((1 - bundle.floor.validation.p95_m * 5).toFixed(3)))),
+        lens: {kind: 'measured', focal_mm: Number((fx * 5.4 / w).toFixed(3)), hfov_deg: Number(hfov.toFixed(3))},
+        lens_profile: lensProfile, method: 'measured',
+        metrics: {p95_m: bundle.floor.validation.p95_m, max_m: bundle.floor.validation.max_m},
+      }, t);
+      message.textContent = `추적 보정 승격 완료 (${promoted.calibration_revision}) · 지도/트래킹에 즉시 적용됨`;
+      onPromoted(promoted);
+    }));
+  }
   scope.listen(document.getElementById('vision-source'),'change',() => {syncSource(); render(); return refresh();});
   scope.interval(refresh,2000); scope.onResume(refresh); scope.onDispose(reset);
   syncSource(); render();

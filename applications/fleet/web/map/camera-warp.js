@@ -3,10 +3,34 @@
 // 원본 영상의 같은 삼각형을 아핀 변환으로 옮긴다. 순수 함수만 둔다(DOM 없음, node 시험).
 import { project } from "/console/assets/map-fit.js";
 
+export function distortImagePoint(xu, yu, lensProfile) {
+  if (!lensProfile || !Array.isArray(lensProfile.K) || !Array.isArray(lensProfile.D)) return [xu, yu];
+  const K = lensProfile.K, D = lensProfile.D;
+  if (!D.some((c) => Math.abs(c) > 1e-12)) return [xu, yu];
+  const fx = K[0][0], fy = K[1][1], cx = K[0][2], cy = K[1][2];
+  const xn = (xu - cx) / fx, yn = (yu - cy) / fy;
+  let xd, yd;
+  if (lensProfile.model === "fisheye") {
+    const r = Math.hypot(xn, yn);
+    if (r < 1e-12) return [xu, yu];
+    const th = Math.atan(r), t2 = th * th;
+    const thd = th * (1 + D[0] * t2 + D[1] * t2 * t2 + D[2] * t2 * t2 * t2 + D[3] * t2 * t2 * t2 * t2);
+    const s = thd / r;
+    xd = xn * s; yd = yn * s;
+  } else {
+    const r2 = xn * xn + yn * yn;
+    const [k1, k2, p1, p2, k3 = 0] = D;
+    const rad = 1 + k1 * r2 + k2 * r2 * r2 + k3 * r2 * r2 * r2;
+    xd = xn * rad + 2 * p1 * xn * yn + p2 * (r2 + 2 * xn * xn);
+    yd = yn * rad + p1 * (r2 + 2 * yn * yn) + 2 * p2 * xn * yn;
+  }
+  return [xd * fx + cx, yd * fy + cy];
+}
+
 // 사이트 사각형(지도 m)을 nx×ny 칸으로 나눈 삼각형 목록. 각 삼각형은 지도 꼭짓점(map)과
 // 원본 영상 픽셀 꼭짓점(image)을 같이 갖는다. 지평선 뒤 꼭짓점이 있는 삼각형은 뺀다.
 // 영상 밖으로 나가는 꼭짓점은 남긴다 — 그 부분은 그릴 픽셀이 없어 비어 보인다.
-export function warpMesh(mapToImage, bounds, nx = 24, ny = 12) {
+export function warpMesh(mapToImage, bounds, nx = 24, ny = 12, lensProfile = null) {
   if (!Array.isArray(mapToImage) || mapToImage.length !== 9 || !bounds) return [];
   const { min_x: x0, max_x: x1, min_y: y0, max_y: y1 } = bounds;
   if (![x0, x1, y0, y1].every(Number.isFinite) || !(x1 > x0) || !(y1 > y0)) return [];
@@ -18,7 +42,7 @@ export function warpMesh(mapToImage, bounds, nx = 24, ny = 12) {
   const vertex = (i, j) => {
     const x = x0 + ((x1 - x0) * i) / nx, y = y0 + ((y1 - y0) * j) / ny;
     const p = project(mapToImage, x, y);
-    return { map: [x, y], image: p };
+    return { map: [x, y], image: p && lensProfile ? distortImagePoint(p[0], p[1], lensProfile) : p };
   };
   const grid = [];
   for (let j = 0; j <= ny; j++) {
