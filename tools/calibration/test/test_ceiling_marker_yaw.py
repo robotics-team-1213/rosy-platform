@@ -135,3 +135,31 @@ def test_cargo_video_rejects_mismatched_revision_before_reading_frames(monkeypat
     code = tool.main(["--robot", "rosy_45", "--marker", "45", "--cargo-video", "old.mp4",
                       "--record", str(record), "--calibration-revision", "old", "--cargo-height-m", "0.10"])
     assert code == 2
+
+
+def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_candidates():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from rosy_vision.detect import generate_marker_image
+
+    import ceiling_marker_yaw as tool
+
+    record = {"source_id": "camera", "map_id": "m", "calibration_revision": "v",
+              "map_to_image": [250, 0, 320, 0, -250, 240, 0, 0, 1],
+              "image": {"width": 640, "height": 480},
+              "track_bounds_m": {"min_x": -1.0, "min_y": -0.8, "max_x": 1.0, "max_y": 0.8},
+              "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}}
+    frame = np.full((480, 640, 3), 240, dtype=np.uint8)
+    frame[233:247, 313:327] = cv2.cvtColor(generate_marker_image(45, 14), cv2.COLOR_GRAY2BGR)
+    frame[265:274, 309:332] = (0, 125, 235)
+    frame[212:215, 313:327] = (0, 125, 235)
+
+    def sample():
+        jpeg = cv2.imencode(".jpg", frame)[1].tobytes()
+        return tool.cargo_frame_sample(record, jpeg, 1.0, source="camera", marker=45,
+                                       heading_edge=(0, 1), cargo_height_m=0.10)
+
+    assert sample().cargo[1] == pytest.approx(-0.11, abs=0.01)
+    frame[210:219, 309:332] = (0, 125, 235)
+    with pytest.raises(tool.CueUnavailable, match="multiple orange objects"):
+        sample()
