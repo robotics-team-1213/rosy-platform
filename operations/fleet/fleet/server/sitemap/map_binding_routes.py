@@ -113,6 +113,8 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
         except RobotApiError as exc:
             if exc.status == 404:
                 raise site_map_error(404, "NO_MAP", "robot has no occupancy map") from exc
+            if exc.code == "BAD_RESPONSE":
+                raise site_map_error(502, "INVALID_ROBOT_MAP", "robot returned an invalid occupancy grid") from exc
             raise http_error(exc) from exc
         except (OSError, httpx.RequestError) as exc:
             raise http_error(exc) from exc
