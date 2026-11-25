@@ -112,6 +112,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     status = cell.act("state")
     if isinstance(status, dict) and bool(status.get("human_hold_latched")):
         latched["started"] = latched["active"] = True
+        latched["initial_status"] = status
         if latched_out is not None:
             latched_out.append(True)
     state = _ok_state(status)

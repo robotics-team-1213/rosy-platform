@@ -3,16 +3,32 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 UNSETTLED_FAULTS = ("park-slow did not settle at home", "fold-from-hold did not settle at home")
 
 
-def request_live_unlatch(cell) -> tuple[bool, dict]:
+def request_live_unlatch(cell, initial_status=None) -> tuple[bool, dict]:
     """Send `recover-unlatch` to a latched runner and verify it unlatched without releasing torque."""
     ack = cell.act("recover-unlatch")
     if not isinstance(ack, dict):
         return False, {"ok": False, "error": "invalid recover-unlatch reply"}
+    if ack.get("fault") or ack.get("error"):
+        return False, {**ack, "ok": False, "error": ack.get("error") or ack["fault"]}
+    if ack.get("ok") is True and ack.get("human_hold_latched") is None and initial_status:
+        from cell_envelope import _sha, _state_current
+
+        requested_at = time.time()
+        try:
+            state = cell.act("state")
+        except (OSError, RuntimeError, ValueError):
+            return False, {"ok": False, "error": "runner hold state unavailable"}
+        if (_state_current(state, time.time()) and not state.get("error") and state["t"] >= requested_at
+                and state["operating_context"] == initial_status.get("operating_context")
+                and _sha(state.get("library_sha256")) and state["library_sha256"] == initial_status.get("library_sha256")
+                and state.get("human_hold_latched") is False):
+            return True, state
     if ack.get("ok") is True and ack.get("human_hold_latched") is not False:
         return False, {**ack, "ok": False, "error": "runner did not confirm hold release"}
     return ack.get("ok") is True, ack
@@ -22,7 +38,7 @@ def ensure_live_unlatch(cell, latched: dict, note_fn) -> tuple[bool, str | None]
     """Unlatch an active `human-hold` once (recording an audit step), or return `(True, None)` if already clear."""
     if not latched.get("active"):
         return True, None
-    ok_u, ack_u = request_live_unlatch(cell)
+    ok_u, ack_u = request_live_unlatch(cell, latched.get("initial_status"))
     note_fn({"step": "recover_unlatch", "ok": ok_u, "previous_fault": ack_u.get("previous_fault"),
              "error": ack_u.get("error")})
     if not ok_u:

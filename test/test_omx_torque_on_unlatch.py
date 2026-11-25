@@ -48,6 +48,31 @@ def test_unlatch_requires_explicit_release(fields):
     assert bool(error) is (not released)
 
 
+@pytest.mark.parametrize("case", ["released", "still_held", "new_session", "old_state", "fault", "state_error",
+                                  "ack_error", "ack_fault", "read_failure"])
+def test_unlatch_reads_current_session_after_incomplete_ack(case):
+    context = {"session_id": "session", "scope": "hardware", "sha256": "a" * 64}
+    initial = {"operating_context": context, "library_sha256": "b" * 64}
+
+    def act(command):
+        if command == "recover-unlatch":
+            if case in ("ack_error", "ack_fault"):
+                return {"ok": True, "human_hold_latched": False, case[4:]: "bus fault"}
+            return {"ok": True}
+        assert command == "state"
+        if case == "read_failure":
+            raise OSError("bus offline")
+        return {**initial, "ok": True, "t": time.time() - (60 if case == "old_state" else 0),
+                "error": "bus fault" if case == "state_error" else None,
+                "human_hold_latched": case == "still_held", "fault": "held" if case == "fault" else None,
+                "operating_context": {**context, "session_id": "other"} if case == "new_session" else context}
+
+    latched = {"active": True, "initial_status": initial}
+    ok, _ = ensure_live_unlatch(SimpleNamespace(act=act), latched, Mock())
+    assert ok is (case == "released")
+    assert latched["active"] is (not ok)
+
+
 class _FakeBus:
     def __init__(self, *, hw_err: int = 0, torque: int = 1, sync: bool = True):
         self.model_ctrl_table, self.hw_err, self.torque, self._sync = sync, hw_err, torque, sync
