@@ -24,6 +24,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "deploy/site"
 
 
+def test_world_bridge_imports_in_a_fresh_package_process():
+    subprocess.run(
+        [sys.executable, "-E", "-B", "-c", "from applications.world import bridge_real_fleet"],
+        cwd=ROOT,
+        check=True,
+        timeout=10,
+    )
+
+
 @pytest.mark.parametrize("removed", [(), WORLD_DEPLOYMENT_FILES, (WORLD_DEPLOYMENT_FILES[0],),
                                      (WORLD_DEPLOYMENT_FILES[1],)])
 @pytest.mark.parametrize("inspect_images", [False, True])
