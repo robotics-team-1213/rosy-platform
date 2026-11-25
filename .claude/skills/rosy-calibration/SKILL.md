@@ -40,7 +40,7 @@ a tool. If a step lacks a tool, add it to the engine (`deploy/robot/omx/cell_*`)
    heavy surface. Never touch a light object to measure it: a 16 g container slid away without a contact.
 5. **Joint gains**: loaded joints (wrist, elbow) get I gain 50 through the session caps (`"i"`). Without it
    the left arm's TCP was 12.3 mm off at the belt end; with it 3.3 mm.
-6. **Check**: `cell_calibrate.py check` has an empty todo.
+6. **Check and verify**: Run `cell_calibrate.py check`, then follow the [field verification procedure](../../../applications/calibration/README.md#보정-후-실물-검증) to accept each required target.
 
 ## Before each move
 
