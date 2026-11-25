@@ -1,4 +1,6 @@
 .measured-calibration { min-width: 0; }
+.measured-calibration .measured-group { margin-block-start: var(--space-4); }
+.measured-calibration .measured-group h4 { margin: 0 0 var(--space-2); font-size: var(--text-label); font-weight: var(--weight-label); }
 .measured-calibration input { max-width: 100%; min-width: 0; }
 .measured-calibration p { overflow-wrap: anywhere; }
 .measured-calibration .measured-limits { display: flex; flex-wrap: wrap; gap: var(--space-3); }
