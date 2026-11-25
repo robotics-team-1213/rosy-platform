@@ -137,6 +137,8 @@ export function startCheckText(check) {
 }
 
 export function tripErrorText(code, detail = {}) {
+  if (code === 'TRIP_LANE_CAMERA_UNAVAILABLE' && detail?.error === 'RATE_LIMITED')
+    return '전방 카메라 상태 조회가 요청 한도에 걸렸습니다 · 잠시 뒤 재시도하세요';
   if (code === "TRIP_POSE_UNTRUSTED" && detail?.reason === "APPROVED_SLAM_POSE_REQUIRED")
     return "Nav2 출발에 승인된 지도 결속과 최신 CORE SLAM 위치가 필요합니다";
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;

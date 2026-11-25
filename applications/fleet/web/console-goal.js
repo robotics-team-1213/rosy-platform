@@ -90,13 +90,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const siteMapObj = view.activeSiteMap?.map, localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
     const initialPts = localRoad?.points?.length >= 2 ? localRoad.points : (curPose ? [[curPose.x, curPose.y], [point.x, point.y]] : [[point.x, point.y]]);
     const initialLen = typeof localRoad?.length_m === "number" ? localRoad.length_m : (curPose ? Math.hypot(point.x - curPose.x, point.y - curPose.y) : 0);
+    view.activeRoadPlan = null;
     view.selectedGoal = {
       robotId, x: point.x, y: point.y, yaw, placeId: placeId || null, where, points: initialPts,
       label: placeLabel || `좌표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`,
       places: localRoad?.places || (placeId ? [placeId] : []), length_m: initialLen, eta_s: initialLen / 0.15,
-      status: "SELECTED", statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
+      status: "SELECTED", statusText: "목적지 선택 · 출발 전", at: Date.now(),
     };
-    view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
     const stationArmMap = { S2: "arm_a", S3: "arm_s", S5: "arm_b" };
     const linkedArm = placeId ? stationArmMap[String(placeId).toUpperCase()] : null;
     if (linkedArm) view.focusAnchorId = linkedArm;
@@ -147,6 +147,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         const body = preferNav2 ? { to: tripTarget, drive_mode: "nav2" } : { to: tripTarget };
         try { prePlanned = await planTrip(call, robotId, body); } catch (err) {
           if (!preferNav2 && canNav2 && (err?.code === "TRIP_LANE_CAMERA_UNAVAILABLE" || err?.code === "TRIP_MODE_UNSUPPORTED")) {
+            log(`${robotId} → ${where} 차선 경로 계산 거절 · ${tripDispatchRefusal(err)} · Nav2 경로 계산 요청`, "bad");
             prePlanned = await planTrip(call, robotId, { to: tripTarget, drive_mode: "nav2" });
           } else throw err;
         }
@@ -155,7 +156,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         if (err?.name === "AbortError" || seq !== goalPlanSeq) return;
         const refusal = tripDispatchRefusal(err);
         setGoal({ status: "BLOCKED", statusText: refusal });
-        log(`${robotId} 차로 주행 거절 — ${refusal}`, "bad");
+        log(`${robotId} → ${where} 경로 계획 거절 · ${refusal} · ${err.code || "UNKNOWN"}`, "bad");
         return;
       }
       if (seq !== goalPlanSeq || view.selected !== robotId || !onFrame()) return;
@@ -163,7 +164,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const running = (view.trafficTrips || []).some((row) => row.robot_id === robotId);
       const startBlocked = tripStartReason({ role: isOperator(auth.role) ? "operator" : "viewer", plan: prePlanned, active: view.activeSiteMap, running });
       if (startBlocked) {
-        setGoal({ points: serverPoints, ...planMetrics(prePlanned), status: "BLOCKED", statusText: startBlocked });
+        setGoal({ points: serverPoints, ...planMetrics(prePlanned), planId: prePlanned.plan_id, status: "BLOCKED", statusText: startBlocked });
         log(`${robotId} 출발 보류 · ${startBlocked}`, "bad");
         return;
       }
@@ -198,9 +199,10 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     try {
       if (viaTrip) {
         started = true;
+        setGoal({ status: "STARTING", statusText: "Fleet 출발 접수 확인 중" });
         await startTrip(call, prePlanned.plan_id);
         owner.check();
-        setGoal({ status: "DISPATCHED", statusText: "차로 주행 시작" });
+        setGoal({ status: "DISPATCHED", statusText: "Fleet 출발 접수" });
         log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(prePlanned.plan_id).slice(0, 8)})`, "good");
         refreshGuide();
         return;
@@ -212,27 +214,39 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       owner.check();
       const task = result && result.task ? result.task : null;
       if (task && task.status === "QUEUED") {
+        if (seq === goalPlanSeq) setGoal({status: "QUEUED", statusText: "Fleet 배차 대기"});
         view.pendingTasks[robotId] = task;
         const why = task.reason || result.reason || "READY", blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
         log(`${robotId} task ${task.task_id} QUEUED · ${task.queue_position ? `#${task.queue_position}` : "순번 대기"} · ${why}${blockedBy} · 취소 가능`, "good");
         return;
       }
       if (task && task.status === "UNKNOWN") {
+        if (seq === goalPlanSeq) setGoal({status: "UNCONFIRMED", statusText: "CORE 접수 결과 확인 필요"});
         view.pendingTasks[robotId] = task;
         log(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "bad");
         return;
       }
       if (task && task.status !== "ACCEPTED") {
+        if (seq === goalPlanSeq) setGoal({status: "BLOCKED", statusText: task.reason || task.status});
         log(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
         return;
       }
       if (task) delete view.pendingTasks[robotId];
       const receipt = task ? task.receipt : result;
+      if (seq === goalPlanSeq) setGoal(receipt?.queued
+        ? {status: "QUEUED", statusText: "Fleet 배차 대기"}
+        : {status: "DISPATCHED", statusText: "목표 접수"});
       if (receipt && receipt.queued) log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
       else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripDispatchRefusal(err) : err.message}`, "bad");
+      if (err.name !== "AbortError") {
+        const reason = viaTrip ? tripDispatchRefusal(err) : err.message;
+        const rejected = err.status >= 400 && err.status < 500;
+        if (seq === goalPlanSeq) setGoal({ status: rejected ? "BLOCKED" : "UNCONFIRMED",
+          statusText: `${rejected ? "출발 거절" : "출발 접수 확인 불가"} · ${reason}` });
+        log(`${robotId} → ${where} · ${rejected ? "출발 거절" : "출발 접수 확인 불가"} · ${reason} · ${prePlanned?.plan_id || err.code || ""}`, "bad");
+      }
     }
       }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripDispatchRefusal(err) : err.message}`, "bad"),
     });
