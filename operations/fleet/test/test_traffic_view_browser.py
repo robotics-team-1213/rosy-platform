@@ -238,13 +238,27 @@ def test_console_traffic_layer_card_line_and_queue_row(site, theme):
             page.locator("#map-options > summary").click()
             expect(page.locator('#trail-range')).to_have_value('600')
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
+            layers = page.locator("#map-overlay-toggles")
+            arm_layer = layers.get_by_role("button", name="로봇팔", exact=True)
+            all_layers = layers.locator('[data-layer-toggle="all"]')
+            expect(arm_layer).to_have_attribute("data-action-icon", "arm")
             page.locator("#traffic-toggle").click()
             expect(page.locator("#traffic-toggle")).to_have_attribute("aria-pressed", "false")
             expect(page.locator("#traffic-toggle")).to_have_text("교통 끔")
+            expect(layers.locator('[data-layer-toggle="traffic"]')).to_have_attribute("aria-pressed", "false")
+            expect(all_layers).to_have_attribute("aria-pressed", "mixed")
             expect(page.locator("#legend-traffic")).to_be_hidden()
             assert page.locator("#map-canvas").evaluate("c => c.toDataURL()") != before
             page.locator("#traffic-toggle").click()
             expect(page.locator("#legend-traffic")).to_be_visible()
+            arm_layer.click()
+            expect(arm_layer).to_have_attribute("aria-pressed", "false")
+            expect(all_layers).to_have_text("일부 표시")
+            all_layers.click()
+            expect(all_layers).to_have_attribute("aria-pressed", "false")
+            all_layers.click()
+            expect(all_layers).to_have_attribute("aria-pressed", "true")
+            expect(arm_layer).to_have_attribute("aria-pressed", "true")
             assert not posts, posts
             assert not errors, errors
         finally:

@@ -171,13 +171,6 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
     if (nextSig !== lastTrafficSig) { lastTrafficSig = nextSig; onTrafficChanged(); }
     else onTrafficDraw();
   }
-  scope.listen(el("traffic-toggle"), "click", () => {
-    const on = !layerOn("traffic");
-    view.layers = { ...view.layers, traffic: on };
-    el("traffic-toggle").setAttribute("aria-pressed", String(on));
-    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
-    draw();
-  });
 
   function resetPolling() {
     trafficGate.reset();
