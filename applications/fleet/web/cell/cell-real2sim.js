@@ -30,7 +30,8 @@ import {
 export * from './cell-real2sim-specs.js';
 
 // namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
-export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null}) {
+export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null,
+  freshJointArmIds = () => []}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -365,6 +366,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
       lastPlansBody = plansBody;
       renderCellTasks({
         ...body,
+        live_joint_arms: freshJointArmIds(),
         pinky_robots: ids,
         selected_robot_id: state.selectedRobotId,
       });

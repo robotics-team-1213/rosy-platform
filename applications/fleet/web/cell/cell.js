@@ -112,6 +112,7 @@ function renderExceptions(items) {
 }
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
+  freshJointArmIds: observations.freshJointArmIds,
   namedReason: () => !isOperator(role) || busy ? OPERATOR_REASON
     : principal?.startsWith('development-') ? NAMED_OPERATOR_REASON : namedOperatorReason(role, principal),
   cellFrames: createCellFrameFeed({call: request})});

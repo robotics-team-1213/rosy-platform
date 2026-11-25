@@ -7,20 +7,8 @@ import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {INCIDENT_BASES, INCIDENT_CAUSES, bindFocusZoom, issueVisionLease} from '/console/assets/cell-frames.js';
 import {OBS_BASE, compareCameras, formatIncidentCountSummary, incidentLines, partitionIncidents} from '/console/assets/cell-obs-model.js';
-import {createMotorHealthState, jointLabel, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
-
-// A second joint lagging with the stopped one points at an outside restraint, not that motor (arm_a, 2026-11-01).
-const LAGGING_DEG = 1;
-const faultLine = fault => {
-  const stopped = fault.motors.filter(motor => motor.fault);
-  const lagging = fault.motors.filter(motor => !motor.fault && motor.error_deg >= LAGGING_DEG);
-  return [
-    ...stopped.map(motor => `${jointLabel(motor.joint)}(ID ${motor.id}) 정지 · 오차 ${motor.error_deg.toFixed(1)}° ` +
-      `(목표 ${Math.round(motor.command_raw)} / 현재 ${Math.round(motor.present_raw)} tick, PWM ${Math.round(motor.pwm)}/${Math.round(motor.pwm_limit)})`),
-    fault.stop_reasons.join(', '),
-    lagging.length ? `함께 뒤처진 관절: ${lagging.map(motor => `${jointLabel(motor.joint)} ${motor.error_deg.toFixed(1)}°`).join(', ')}` : '',
-  ].filter(Boolean).join(' · ');
-};
+import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
+import {faultLine} from './cell-observation-text.js';
 
 const staleArm = entry => {
   entry.fresh = false;
@@ -596,5 +584,12 @@ export function createCellObservation({request, root, credential = () => '', onS
     card.focus?.({preventScroll: true});
     return true;
   }
-  return {refresh, clear, focusArm, dispose() { clear(); disposed = true; }};
+  function freshJointArmIds() {
+    if (observedDisconnected) return [];
+    const now = performance.now();
+    return lastWorkcells.flatMap(cell => cell.arms
+      .filter(arm => arm.positions && (arms.get(arm.source_id)?.expires ?? 0) > now)
+      .map(arm => arm.arm_id));
+  }
+  return {refresh, clear, focusArm, freshJointArmIds, dispose() { clear(); disposed = true; }};
 }
