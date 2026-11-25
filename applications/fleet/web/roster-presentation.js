@@ -1,6 +1,8 @@
 import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
 // Robot list presentation and the labels shared with its selected workspace.
 import { NAVIGATION_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { iconSvg } from "/common/ui.js";
+import { BatteryMeter } from "/console/assets/cockpit-telemetry.js";
 import { linkTag } from "./link-tag.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { positionTag, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
@@ -10,6 +12,11 @@ import { cardTripLine } from "./card-trip.js";
 import { estopText } from "./motion-readiness.js";
 import { motionSource } from "./motion-source.js";
 import { planningStalled } from "./planning-stall.js";
+
+export function rosterPower(view, robot, nowMs) {
+  const { receivedAtMs, stateUnavailable, calmPower } = view;
+  return calmPower ? calmPower.read(robot, { receivedAtMs, nowMs, stateUnavailable }) : powerHealthView(robot, receivedAtMs, nowMs);
+}
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -118,23 +125,18 @@ function isInlineTag(text, cls, { calmOffline = false, keepPill = false } = {}) 
   return keepPill ? nominal : nominal || ROUTINE_INLINE.has(text);
 }
 
-function MotorSummaryHost({ node }) {
+function SummaryAdornment({ node, icon }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
-    const host = ref.current;
-    if (!host) return;
-    if (node) {
-      if (host.firstChild !== node || host.childNodes.length !== 1) host.replaceChildren(node);
-    } else if (host.childNodes.length) {
-      host.replaceChildren();
-    }
-  }, [node]);
+    const host = ref.current, child = icon ? iconSvg(icon) : node;
+    if (host && host.firstChild !== (child || null)) host.replaceChildren(...(child ? [child] : []));
+  }, [node, icon]);
   return html`<span ref=${ref} />`;
 }
 
-function FactTag({ text, cls, calmOffline, keepPill = false, ...rest }) {
+function FactTag({ text, cls, calmOffline, keepPill = false, children, ...rest }) {
   const inline = isInlineTag(text, cls, { calmOffline, keepPill });
-  return html`<ui-tag status=${TAG_STATUS[cls] || "neutral"} variant=${inline ? "inline" : undefined} ...${rest}>${text}</ui-tag>`;
+  return html`<ui-tag status=${TAG_STATUS[cls] || "neutral"} variant=${inline ? "inline" : undefined} ...${rest}>${text}${children}</ui-tag>`;
 }
 
 function summarizeRobot(robot, view, attentionItems) {
@@ -150,7 +152,7 @@ function summarizeRobot(robot, view, attentionItems) {
   const safety = !stateCurrent ? "안전 확인 불가"
     : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
   const calmOffline = !view.stateUnavailable && !robot.online;
-  const power = powerHealthView(robot, view.receivedAtMs, now);
+  const power = rosterPower(view, robot, now);
   const heat = stateCurrent ? heatChip(state) : null;
   const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
   const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
@@ -183,7 +185,8 @@ function summarizeRobot(robot, view, attentionItems) {
     name,
     status,
     statusWarn: Boolean(view.stateUnavailable || !robot.online),
-    battery: power.battery,
+    battery: view.stateUnavailable ? "확인 불가" : power.battery,
+    meter: { percent: power.percent, charging: power.chargingConfirmed, online: robot.online && !view.stateUnavailable },
     batteryProblem: Boolean(power.problem),
     safety,
     estopTrue: estop === true,
@@ -201,31 +204,38 @@ function summarizeRobot(robot, view, attentionItems) {
   };
 }
 
-function RosterSummaryBody({ robotId, model, motorNode }) {
+function RosterSummaryBody({ robotId, model, motorNode, expandedMoreIds, wasMoreOpen }) {
   const [firstEvidence, ...otherEvidence] = model.dedupedEvidence;
   return html`
     <div class="robot-line" title=${model.name !== robotId ? `Fleet ID ${robotId}` : undefined}>
       <b class="ui-disclosure-name">${model.name}</b>
       <span class="robot-summary-head-meta">
         <${FactTag} text=${model.status} cls=${model.statusWarn ? "warn" : ""} calmOffline=${model.calmOffline} keepPill=${true} />
-        <${FactTag} text=${`배터리 ${model.battery}`} cls=${model.batteryProblem ? "warn" : ""} calmOffline=${model.calmOffline} data-fact="battery" />
+        <${FactTag} text=${`배터리 ${model.battery}`} cls=${model.batteryProblem ? "warn" : ""} calmOffline=${model.calmOffline} data-fact="battery">
+          <${BatteryMeter} ...${model.meter} />
+        </${FactTag}>
       </span>
     </div>
     <div class="robot-summary-status">
       <${FactTag} text=${model.safety} cls=${model.estopTrue ? "crit" : model.safety === "안전 정상" ? "" : "warn"} calmOffline=${model.calmOffline} keepPill=${model.estopTrue} />
-      <${MotorSummaryHost} node=${motorNode} />
+      <${SummaryAdornment} node=${motorNode} />
       ${model.heat ? html`<${FactTag} text=${model.heat[0]} cls=${model.heat[1]} calmOffline=${model.calmOffline} keepPill=${true} />` : null}
-      <${FactTag} text=${model.loc?.text || "위치 미확인"} cls=${model.loc ? model.loc.cls : "warn"} calmOffline=${model.calmOffline} data-localization="" title=${model.locTitle} />
-      ${model.role ? html`<${FactTag} text=${model.role} cls="nav" calmOffline=${model.calmOffline} />` : null}
+      <${SummaryAdornment} icon="pose" /><${FactTag} text=${model.loc?.text || "위치 미확인"} cls=${model.loc ? model.loc.cls : "warn"} calmOffline=${model.calmOffline} data-localization="" title=${model.locTitle} />
       ${model.showSource ? html`<${FactTag} text=${model.source.text} cls=${model.source.cls} calmOffline=${model.calmOffline} keepPill=${model.source.attention} data-motion-source=${model.source.key} title=${model.source.title} />` : null}
     </div>
     ${model.trip !== "—" ? html`<p class="trip-line">${model.trip}</p>` : null}
     ${model.addressText ? html`<p class="robot-summary-evidence" data-address-reason=${model.addressStatus}>${model.addressText}</p>` : null}
-    ${firstEvidence ? html`<p class="robot-summary-evidence" title=${model.dedupedEvidence.join(" · ")}><span>${firstEvidence}</span>${otherEvidence.length ? ` 외 ${otherEvidence.length}건` : ""}</p>` : null}
+    ${firstEvidence ? html`<p class="robot-summary-evidence">${firstEvidence}</p>` : null}
+    ${model.role || otherEvidence.length ? html`
+      <details data-more open=${wasMoreOpen} onToggle=${({currentTarget}) => currentTarget.open ? expandedMoreIds.add(robotId) : expandedMoreIds.delete(robotId)}>
+        <summary onClick=${(event) => event.stopPropagation()}>자세히</summary>
+        ${model.role ? html`<${FactTag} text=${model.role} cls="nav" />` : null}
+        ${otherEvidence.map(text => html`<p class="robot-summary-evidence" key=${text}>${text}</p>`)}
+      </details>` : null}
   `;
 }
 
-export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
+export function createRosterSummary({view, attentionItems, motorHealth, expandedMoreIds = new Set()}) {
   const cards = new Map();
   return function summary(robot, index) {
     let entry = cards.get(robot.robot_id);
@@ -239,15 +249,15 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const { article } = entry;
     const nextClass = `robot-summary s${index % view.colors.length}${view.focusRobot === robot.robot_id ? " selected" : ""}`;
     if (article.className !== nextClass) article.className = nextClass;
-    if (article.dataset.robotId !== robot.robot_id) article.dataset.robotId = robot.robot_id;
     const model = summarizeRobot(robot, view, attentionItems);
     const motorNode = motorHealth.summary(robot);
-    const sig = JSON.stringify(model);
+    const wasMoreOpen = expandedMoreIds.has(robot.robot_id);
+    const sig = JSON.stringify([model, wasMoreOpen]);
     if (entry.sig !== sig || entry.motorNode !== motorNode) {
       entry.sig = sig;
       entry.motorNode = motorNode;
       renderDom(
-        html`<${RosterSummaryBody} robotId=${robot.robot_id} model=${model} motorNode=${motorNode} />`,
+        html`<${RosterSummaryBody} robotId=${robot.robot_id} model=${model} motorNode=${motorNode} expandedMoreIds=${expandedMoreIds} wasMoreOpen=${wasMoreOpen} />`,
         article,
       );
     }

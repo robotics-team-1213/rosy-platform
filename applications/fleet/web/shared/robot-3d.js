@@ -121,7 +121,7 @@ export function createRobotView(host, options = {}) {
     camera.lookAt(...frame.center);
     renderer.render(scene, camera);
   }
-  const redraw = () => { if (!pending && renderer && !disposed) pending = requestAnimationFrame(draw); }; // one frame per change
+  const redraw = () => { if (!pending && renderer && !disposed && !(typeof document !== "undefined" && document.hidden)) pending = requestAnimationFrame(draw); }; // one frame per change
 
   // the posed robot's vertices plus its ground ring; the camera distance makes them fill ~75% of the view
   function fit() {
@@ -289,7 +289,8 @@ export function createRobotView(host, options = {}) {
       cancelAnimationFrame(pending);
       resize?.disconnect();
       themeWatch?.disconnect();
-      document.removeEventListener("rosy:theme", onTheme);
+      if (typeof document !== "undefined") document.removeEventListener("rosy:theme", onTheme);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", redraw);
       schemeQuery?.removeEventListener?.("change", onTheme);
       rig?.disposables.forEach(item => item.dispose());
       [...parts.materials, ...parts.outlines, ...parts.extra ?? []].forEach(item => item.dispose());
@@ -344,7 +345,8 @@ export function createRobotView(host, options = {}) {
       resize.observe(stage);
       themeWatch = new MutationObserver(onTheme);
       themeWatch.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
-      document.addEventListener("rosy:theme", onTheme);
+      if (typeof document !== "undefined") document.addEventListener("rosy:theme", onTheme);
+      if (typeof document !== "undefined") document.addEventListener("visibilitychange", redraw);
       schemeQuery?.addEventListener?.("change", onTheme);
       figure.dataset.state = "ready";
       applyState();

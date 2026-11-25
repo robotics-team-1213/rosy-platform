@@ -1168,3 +1168,32 @@ def test_face_converter_skips_resize_when_frame_already_matches_panel_size():
     out = face_converter(_Info())(img)
     assert out is img and seen == [FACE_SIZE] and resized == []
 
+
+def test_expressive_idle_face_defaults_to_slow_resting_cadence(tmp_path):
+    import numpy as np
+
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="active", face="basic", robot_mode="IDLE", nav_state="IDLE", expression=None)
+    display, _lcd, clock, _, _, _ = _face_loop(module, tmp_path)
+    calls = []
+    display._faces._render = lambda name, phase, gaze_x, resting: (
+        calls.append((name, round(resting, 2))) or np.zeros((4, 4, 3), dtype=np.uint8)
+    )
+    display.step()
+    assert display.tick() is True
+    clock.now += 1.0  # rest settles to 1.0 (8 s / 10 steps = 0.8 s/step)
+    assert display.tick() is True
+    assert calls[-1][1] == 1.0
+    clock.now += 0.2  # stays in same slow resting step -> skipped
+    assert display.tick() is False
+
+    _face_inputs(tmp_path, power_mode="active", face="basic", robot_mode="NAVIGATION", nav_state="NAVIGATING", expression=None)
+    display.step()
+    assert display.tick() is True
+    clock.now += 1.0  # settles back to resting=0.0 (2 s / 20 steps = 0.1 s/step)
+    assert display.tick() is True
+    assert calls[-1][1] == 0.0
+    clock.now += 0.2
+    assert display.tick() is True
+

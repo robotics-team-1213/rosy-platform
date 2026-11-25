@@ -103,6 +103,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return ctx;
   }
 
+  let gridRaster = null;
   function paintGrid(grid) {
     const canvas = el("map-canvas");
     const { width, height } = grid;
@@ -112,30 +113,38 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
     const ctx = clearCanvas(canvas, width * scale, height * scale);
     ctx.imageSmoothingEnabled = false;
-    const image = ctx.createImageData(width, height);
-    // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
-    const tone = window.RosyPalette.readPalette({
-      unknown: "--raster-unknown", free: "--raster-free",
-      uncertain: "--raster-uncertain", occupied: "--raster-occupied",
-    });
-    for (let row = 0; row < height; row += 1) {
-      for (let col = 0; col < width; col += 1) {
-        const value = grid.data[row * width + col];
-        const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
-          : value >= GRID.OCCUPIED_MIN ? tone.occupied
-            : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
-        const pixel = ((height - 1 - row) * width + col) * 4;
-        image.data[pixel] = rgb[0];
-        image.data[pixel + 1] = rgb[1];
-        image.data[pixel + 2] = rgb[2];
-        image.data[pixel + 3] = 255;
+    const theme = typeof document !== "undefined" ? document.documentElement?.dataset?.theme : undefined;
+    if (!gridRaster || gridRaster.grid !== grid || gridRaster.data !== grid.data
+        || gridRaster.width !== width || gridRaster.height !== height || gridRaster.theme !== theme) {
+      const cells = document.createElement("canvas");
+      cells.width = width;
+      cells.height = height;
+      const cellCtx = cells.getContext?.("2d");
+      if (cellCtx) {
+        const image = ctx.createImageData(width, height);
+        // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
+        const tone = window.RosyPalette.readPalette({
+          unknown: "--raster-unknown", free: "--raster-free",
+          uncertain: "--raster-uncertain", occupied: "--raster-occupied",
+        });
+        for (let row = 0; row < height; row += 1) {
+          for (let col = 0; col < width; col += 1) {
+            const value = grid.data[row * width + col];
+            const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
+              : value >= GRID.OCCUPIED_MIN ? tone.occupied
+                : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
+            const pixel = ((height - 1 - row) * width + col) * 4;
+            image.data[pixel] = rgb[0];
+            image.data[pixel + 1] = rgb[1];
+            image.data[pixel + 2] = rgb[2];
+            image.data[pixel + 3] = 255;
+          }
+        }
+        cellCtx.putImageData(image, 0, 0);
       }
+      gridRaster = { grid, data: grid.data, width, height, theme, cells };
     }
-    const cells = document.createElement("canvas");
-    cells.width = width;
-    cells.height = height;
-    cells.getContext("2d").putImageData(image, 0, 0);
-    ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(gridRaster.cells, 0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
   }
 
@@ -584,7 +593,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   // 사이트 사각형·격자·교통·상황·관측 폴링은 map-polling.js가 가진다. 이 뷰를 다시 그리게 draw를 건넨다.
   const { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling } = createMapPolling({ scope, el, view,
-    auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
+    auth, call, camera, draw, scheduleDraw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
 
   return { draw, scheduleDraw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
     setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };

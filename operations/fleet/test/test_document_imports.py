@@ -84,6 +84,7 @@ OWN = {
         "selection.js",
         "cockpit-telemetry.js",
         "cockpit-hosts.js",
+        "calm-power.js",
         "cell-cockpit-stage.js",
         "cell-context-panel.js",
         "manual-control.js",
@@ -109,6 +110,7 @@ OWN = {
         "camera-warp.js",
         "camera-backdrop.js",
         "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
+        "map-hover-card.js",
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",

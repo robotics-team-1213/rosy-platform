@@ -935,3 +935,24 @@ def test_right_only_fork_reports_the_diverging_branch_near_end():
     branch = min(keeper.last["boundaries"], key=lambda b: b["heading_deg"])
     assert keeper.last["junction_ahead_m"] == pytest.approx(min(p[0] for p in branch["ends_m"]), abs=1e-3)
     assert 0.0 < keeper.last["junction_ahead_m"] < 0.6
+
+
+def test_fit_axis_closed_form_matches_svd():
+    from perception_runtime.perception.lane_keep_lines import _fit_axis
+
+    rng = np.random.default_rng(42)
+    t = np.linspace(-0.5, 0.5, 40)
+    clouds = [
+        np.column_stack((t, np.zeros_like(t))),
+        np.column_stack((np.zeros_like(t), t)),
+        np.column_stack((t, 0.7 * t - 0.1)),
+        np.column_stack((0.2 + t, -0.3 * t + rng.normal(0, 0.02, len(t)))),
+    ]
+    for pts in clouds:
+        c_fast, d_fast = _fit_axis(pts)
+        c_svd = pts.mean(axis=0)
+        d_svd = np.linalg.svd(pts - c_svd, full_matrices=False)[2][0]
+        if d_svd[0] < 0:
+            d_svd = -d_svd
+        assert np.allclose(c_fast, c_svd, atol=1e-12)
+        assert abs(float(np.dot(d_fast, d_svd))) > 1.0 - 1e-12

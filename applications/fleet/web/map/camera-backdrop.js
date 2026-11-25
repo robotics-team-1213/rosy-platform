@@ -84,8 +84,16 @@ function drawCameraTopDown(topDownCache, ctx, frame, calibration, bounds, toPx, 
   ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();
 }
+let lastWarp = null;
 function warpOnto(ctx, image, mapToImage, bounds, toPx, lensProfile = null) {
-  for (const tri of warpMesh(mapToImage, bounds, 24, 12, lensProfile)) {
+  const lpSig = lensProfile ? JSON.stringify([lensProfile.model, lensProfile.K, lensProfile.D]) : "";
+  const key = Array.isArray(mapToImage) && mapToImage.length === 9 && bounds
+    ? [...mapToImage, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y, lpSig] : null;
+  if (!key || !lastWarp || key.length !== lastWarp.key.length || !lastWarp.key.every((v, i) => v === key[i])) {
+    lastWarp = key ? { key, mesh: warpMesh(mapToImage, bounds, 24, 12, lensProfile) } : null;
+  }
+  const mesh = lastWarp ? lastWarp.mesh : warpMesh(mapToImage, bounds, 24, 12, lensProfile);
+  for (const tri of mesh) {
     const dst = tri.map.map(([x, y]) => { const p = toPx(x, y); return [p.x, p.y]; });
     const affine = affineFromTriangles(tri.image, dst);
     if (!affine) continue;
@@ -177,7 +185,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     }
     if (pic.kind !== "plane") return;
     const { image, plane } = pic.frame;
-    const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
+    const affine = planeAffine(plane, image.naturalWidth ?? image.width, image.naturalHeight ?? image.height, toPx);
     if (!affine) return;
     ctx.save();
     ctx.globalAlpha = alpha;

@@ -36,6 +36,7 @@ def observe_subzones_2d(
     side_img: np.ndarray | None = None, top_img: np.ndarray | None = None, top_depth: np.ndarray | None = None, *,
     col: int = 2, row: int = 1, tier: int = 1, z_profile: dict[str, Any] | None = None,
     synthetic_subzones: Sequence[dict[str, Any]] | None = None,
+    height_map_mm: np.ndarray | None = None, factory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Extract per-sub-zone (`i=0,1,2` at `x=-30,0,+30 mm`) 2D observations from Top View (`XY + Depth`) and Side View (`XZ`)."""
     expected_tier = int(tier) if int(tier) in (1, 2, 3) else 1
@@ -61,6 +62,12 @@ def observe_subzones_2d(
             })
         return {"col": int(col), "row": int(row), "expected_tier": expected_tier, "expected_top_z_mm": expected_top_z_mm, "subzones": subs}
 
+    aligned_heights = height_map_mm
+    if aligned_heights is None and factory is not None and top_depth is not None and getattr(top_depth, "ndim", 0) == 2:
+        import cell_depth_pose
+        hm, plane = cell_depth_pose.height_map_in_colour(top_depth, factory)
+        if plane.get("ok"):
+            aligned_heights = hm
     side_prof = SideViewZProfile.from_dict((z_profile or {}).get("side_view"))
     td_cfg = (z_profile or {}).get("top_depth") or {}
     td_prof = TopDepthZProfile(
@@ -88,13 +95,13 @@ def observe_subzones_2d(
 
         top_depth_z_mm: float | None = None
         valid_d_ratio = 0.0
-        if top_depth is not None and hasattr(top_depth, "ndim") and top_depth.ndim == 2:
-            d_patch = top_depth[max(0, ty0):min(top_depth.shape[0], ty1), max(0, tx0):min(top_depth.shape[1], tx1)]
-            if d_patch.size > 0:
-                valid_mask = (d_patch > 0) & (d_patch <= 645)
+        if aligned_heights is not None and getattr(aligned_heights, "ndim", 0) == 2:
+            h_patch = aligned_heights[max(0, ty0):min(aligned_heights.shape[0], ty1), max(0, tx0):min(aligned_heights.shape[1], tx1)]
+            if h_patch.size > 0:
+                valid_mask = np.isfinite(h_patch)
                 valid_d_ratio = float(valid_mask.mean())
                 if valid_d_ratio >= 0.15:
-                    raw_h = max(0.0, 588.0 - float(np.median(d_patch[valid_mask])))
+                    raw_h = max(0.0, float(np.median(h_patch[valid_mask])))
                     top_depth_z_mm = td_prof.raw_height_to_pallet_z_mm(raw_h)
                     top_occ, top_valid = max(top_occ, min(1.0, valid_d_ratio)), True
 
@@ -284,12 +291,14 @@ def evaluate_multiview_subzones(
     side_img: np.ndarray | None = None, top_img: np.ndarray | None = None, top_depth: np.ndarray | None = None, *,
     col: int = 2, row: int = 1, tier: int = 1, spec_id: str = "C3", mode: str = "hybrid",
     z_profile: dict[str, Any] | None = None, synthetic_subzones: Sequence[dict[str, Any]] | None = None,
+    height_map_mm: np.ndarray | None = None, factory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Unified multi-view sub-zone judge supporting `mode='fused_3d'`, `mode='split_2d'`, `mode='hybrid'`, or `mode='adaptive_hybrid'`."""
     import cell_spec_recovery_fsm as csrf
 
     obs = observe_subzones_2d(
-        side_img, top_img, top_depth, col=col, row=row, tier=tier, z_profile=z_profile, synthetic_subzones=synthetic_subzones,
+        side_img, top_img, top_depth, col=col, row=row, tier=tier, z_profile=z_profile,
+        synthetic_subzones=synthetic_subzones, height_map_mm=height_map_mm, factory=factory,
     )
     fused = fuse_subzones_2d_to_3d(obs, expected_tier=tier, spec_id=spec_id)
     split = evaluate_subzones_split_2d(obs, expected_tier=tier, spec_id=spec_id)

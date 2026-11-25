@@ -442,6 +442,10 @@
       "path": "map/map-datum.js",
       "media_type": "application/javascript"
     },
+    "map-hover-card.js": {
+      "path": "map/map-hover-card.js",
+      "media_type": "application/javascript"
+    },
     "poll-gate.js": {
       "path": "shared/poll-gate.js",
       "media_type": "application/javascript"
@@ -701,6 +705,10 @@
     "cockpit-hosts.js": {
       "path": "shared/cockpit-hosts.js",
       "media_type": "text/javascript"
+    },
+    "calm-power.js": {
+      "path": "shared/calm-power.js",
+      "media_type": "application/javascript"
     },
     "robot-dock.js": {
       "path": "shared/robot-dock.js",

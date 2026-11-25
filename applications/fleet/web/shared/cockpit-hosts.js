@@ -103,6 +103,7 @@ export function TelemetryChartHost({
   minBound = null,
   maxBound = null,
   tone = "primary",
+  battery = null,
   sampleSeq = 0,
 }) {
   const hostRef = useRef(null);
@@ -121,6 +122,7 @@ export function TelemetryChartHost({
     };
   }, []);
 
+  const batterySig = battery ? `${battery.percent}:${battery.charging}:${battery.online}` : "";
   useLayoutEffect(() => {
     const trace = traceRef.current;
     if (!trace) return;
@@ -128,8 +130,8 @@ export function TelemetryChartHost({
       trace.clear();
       return;
     }
-    trace.update({ id, title, readout, value, unit, minBound, maxBound, tone });
-  }, [active, id, title, readout, value, unit, minBound, maxBound, tone, sampleSeq]);
+    trace.update({ id, title, readout, value, unit, minBound, maxBound, tone, battery });
+  }, [active, id, title, readout, value, unit, minBound, maxBound, tone, batterySig, sampleSeq]);
 
   return html`<div ref=${hostRef} />`;
 }
