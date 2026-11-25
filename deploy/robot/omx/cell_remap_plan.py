@@ -17,6 +17,18 @@ from pathlib import Path
 import cell_pipeline_io as cio
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
+MAP_POINTS = [
+    [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
+    [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
+]  # the 2026-10-28 remap grid
+
+
+def plan_report(config, points):
+    import cell_map_fit
+
+    rows = plan(config, points)
+    return {"plan_only": rows, "refused": refusal(rows), "reach": reach_note(config),
+            "leverage": cell_map_fit.plan_leverage(points, config.get("sites") or {})}
 
 
 def scoped(config: dict) -> dict:

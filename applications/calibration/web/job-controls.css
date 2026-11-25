@@ -1,0 +1,5 @@
+#jobForm label, #jobForm small { display: block; }
+#jobForm [hidden] { display: none; }
+#jobForm textarea, #jobForm select { max-width: 100%; min-width: 0; }
+#jobDetail, #jobForm { min-width: 0; }
+#jobOutput { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }

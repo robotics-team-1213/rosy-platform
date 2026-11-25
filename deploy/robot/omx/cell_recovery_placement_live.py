@@ -12,7 +12,7 @@ import cell_envelope
 import cell_objects
 import cell_params
 from cell_auto_setup import load_config
-from cell_recovery_cargo import fixed_site as _fixed_site
+from cell_recovery_cargo import fixed_base_geometry, fixed_site as _fixed_site
 from cell_route_surface import contact_evidence
 
 
@@ -128,8 +128,7 @@ class LivePlacement:
                     or self.cargo.get("destination_layer") != 0)):
                 self.diagnostics[name] = {"reason": "outside_assigned_destination"}
                 continue
-            if (not _point(xy, 2) or site.get("moves") or site.get("on_vehicle") or site.get("moving_px")
-                    or site.get("tier_of") or site.get("layer", 0) != 0 or not site.get("surface_px")):
+            if not _point(xy, 2) or not fixed_base_geometry(site) or not site.get("surface_px"):
                 self.diagnostics[name] = {"reason": "fixed_surface_geometry_missing"}
                 continue
             fine = (self.calibration.get("sites") or {}).get(name)

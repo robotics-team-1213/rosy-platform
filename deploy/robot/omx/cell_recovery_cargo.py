@@ -26,12 +26,16 @@ def fixed_site(name, arm):
                 and arm in site["arms"])
 
 
+def fixed_base_geometry(site):
+    return (isinstance(site, dict) and not any(site.get(k) for k in ("moves", "on_vehicle", "moving_px", "tier_of"))
+            and site.get("tier", 1) == 1 and all(site.get(k, 0) == 0 for k in ("layer", "layers_below", "z_offset_m")))
+
+
 def _support(config, target, source, calibration):
     from cell_route_surface import contact_evidence
 
     site, obj, entry = config["sites"][source], target["object"], target["entry"]
-    if (not fixed_site(source, config["arm_id"]) or site.get("tier_of") or site.get("tier", 1) != 1
-            or any(site.get(k, 0) != 0 for k in ("layer", "layers_below", "z_offset_m"))
+    if (not fixed_site(source, config["arm_id"]) or not fixed_base_geometry(site)
             or any(obj.get(k, 0) != 0 for k in ("grasp_shift_mm", "layers_below", "dz_m"))
             or any(target.get("bias_mm", ())) or any(site.get("grip_offset_m", ()))
             or (target.get("bias_region") or {}).get("droop_z_mm", 0) != 0

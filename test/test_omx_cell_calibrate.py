@@ -842,8 +842,7 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         path = tmp_path / "config.json"
         path.write_text(json.dumps(config))
         seen.clear()
-        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
-                        "--commissioning", "--person-at-switch"]) == 0
+        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify"]) == 0
         assert seen["depth"] is expect
 
 
@@ -912,6 +911,53 @@ def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch
         assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
     else:
         assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
+
+
+@pytest.mark.parametrize("mode", ["success", "moved", "missing_map", "held", "no_contact", "missing_samples"])
+def test_explicit_surface_remeasures_only_selected_existing_height(tmp_path, monkeypatch, mode):
+    import cell_pipeline
+    import cell_robot_profile
+    import cell_surface
+    import time
+
+    site = {"surface_z": .04, "place": [.1, -.2], "yaw_deg": 0}
+    mapping = {"reference_top_sha256": "a" * 64, "reference_map_sha": "b" * 12,
+               "reference_geometry_sha": "c" * 12, "sites": {"floor": {"homography": [[1]]}}}
+    cal_file, plan_file, cfg_file = (tmp_path / k for k in ("cal.json", "plan.json", "cfg.json"))
+    cal_file.write_text(json.dumps(mapping))
+    plan_file.write_text(json.dumps({"grip_closed": 35}))
+    config = {"sites": {"floor": site, "board": {**site, "surface_z": .05}}, "arm_id": "arm_s",
+              "operating_profile_path": "profile", "tcp_x_m": .074, "calibration_path": str(cal_file),
+              "plan_path": str(plan_file), "io": str(tmp_path), "work_dir": str(tmp_path), "cameras": {}}
+    cfg_file.write_text(json.dumps(config))
+    profile = {"device_id": "selected"}
+    state = {"ok": True, "t": time.time(), "holding": mode == "held", "human_hold_latched": False,
+             "state": [0] * 6, "target": [0] * 6, "operating_context": {"scope": "hardware", "session_id": "s",
+             "sha256": "d" * 64, "operating_profile": profile}}
+    cell = type("Cell", (), {"frame": lambda *_: None, "act": lambda self, cmd: dict(state, t=time.time())})()
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: cell)
+    monkeypatch.setattr(cell_robot_profile, "load", lambda *_: {"binding": profile})
+    monkeypatch.setattr(cc, "check", lambda *_: {"camera_shift": {"ok": True}, "camera_moved": mode == "moved",
+                        "missing_map": ["floor"] if mode == "missing_map" else []})
+    monkeypatch.setattr(cell_surface, "probe_library", lambda *a, **kw: {})
+    calls = []
+
+    def touch(_, path, **kwargs):
+        calls.append((path.name, kwargs["repeat"]))
+        if mode == "no_contact":
+            return {"result": "no contact"}
+        if mode == "missing_samples":
+            return {"result": "touched", "surface_z": .022}
+        return {"result": "touched", "surface_z": .022, "touches_m": [.022, .022], "spread_mm": 0}
+
+    monkeypatch.setattr(cell_surface, "touch", touch)
+    argv = ["--config", str(cfg_file), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]
+    assert cc.main(argv) == 0 and not calls
+    assert cc.main([*argv, "--remeasure-surface", "floor", "--surface-clear"]) == (0 if mode == "success" else 2)
+    assert calls == ([] if mode in ("moved", "missing_map", "held") else [("surface-floor.library.json", 2)])
+    saved = json.loads(cfg_file.read_text())["sites"]
+    assert saved["floor"]["surface_z"] == (.022 if mode == "success" else .04)
+    assert saved["board"] == config["sites"]["board"]
 
 
 def test_check_reports_low_zone_gaps_for_mapped_low_site(tmp_path):

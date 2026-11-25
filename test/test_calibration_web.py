@@ -83,6 +83,21 @@ def account_screen(store):
     server.server_close()
 
 
+@pytest.mark.parametrize(("query", "destination"), [
+    ("", "/"), ("?arm=arm_a", "/?arm=arm_a"), ("?arm=arm_b", "/?arm=arm_b"), ("?arm=arm_s", "/?arm=arm_s"),
+    ("?arm=https://example.invalid", "/"), ("?arm=arm_s&arm=arm_b", "/"),
+])
+def test_login_preserves_only_a_recognized_arm(account_screen, query, destination):
+    url, account = account_screen
+    received = []
+    def start(target):
+        received.append(target)
+        return "flow", "/"
+    account.start = start
+    assert call(url, "/api/account/login" + query)[0] == 200
+    assert received == [destination]
+
+
 def test_without_account_it_lists_and_shows_but_never_answers(open_screen, store):
     status, body = call(open_screen, web.API)
     rows = json.loads(body)
