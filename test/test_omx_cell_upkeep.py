@@ -513,3 +513,98 @@ def test_usb_recovery_restores_leaf_authorized_on_interruption():
         cu.usb_recover("arm_b_wrist", io)
     assert auth[0] is True
     assert log == ["units down", "auth 0", "auth 1", "units up"]
+
+
+def _unconfigured_leaf_tree(tmp_path, *, bcfg="", has_v4l=False, bclass="ef", extra_arm_a=False, second_cam=False):
+    hub = tmp_path / "sys/devices/pci/3-4/3-4.2"
+    cam = hub / "3-4.2.1"
+    cam.mkdir(parents=True)
+    (cam / "bDeviceClass").write_text(bclass)
+    (cam / "idVendor").write_text("0c45")
+    (cam / "idProduct").write_text("6367")
+    (cam / "authorized").write_text("1")
+    (cam / "speed").write_text("480")
+    if bcfg is not None:
+        (cam / "bConfigurationValue").write_text(bcfg)
+    if has_v4l:
+        (cam / "3-4.2.1:1.0/video4linux/video8").mkdir(parents=True)
+
+    openrb = hub / "3-4.2.3"
+    openrb.mkdir(parents=True)
+    (openrb / "idVendor").write_text("2f5d")
+    (openrb / "serial").write_text("SER_ARM_B")
+
+    if extra_arm_a:
+        oa = hub / "3-4.2.4"
+        oa.mkdir(parents=True)
+        (oa / "idVendor").write_text("2f5d")
+        (oa / "serial").write_text("SER_ARM_A")
+    if second_cam:
+        c2 = hub / "3-4.2.2"
+        c2.mkdir(parents=True)
+        (c2 / "bDeviceClass").write_text("ef")
+        (c2 / "idVendor").write_text("0c45")
+        (c2 / "idProduct").write_text("6367")
+        (c2 / "authorized").write_text("1")
+
+    sys_usb = tmp_path / "sys/bus/usb/devices"
+    sys_usb.mkdir(parents=True)
+    for node in hub.iterdir():
+        (sys_usb / node.name).symlink_to(node, target_is_directory=True)
+
+    cams_path = tmp_path / "omx-cameras.json"
+    cams_path.write_text(json.dumps({"cameras": [{"role": "arm_b_wrist", "device": str(tmp_path / "dev/v4l/by-id/rosy-arm_b_wrist"), "usb_id": "0c45:6367"}]}))
+    boards_path = tmp_path / "omx-arm-boards.json"
+    boards_path.write_text(json.dumps({"SER_ARM_B": "arm_b", "SER_ARM_A": "arm_a"}))
+    return cam, sys_usb, cams_path, boards_path
+
+
+def test_usb_recovery_recovers_unconfigured_leaf_when_by_id_missing(tmp_path):
+    cam, sys_usb, cams_path, boards_path = _unconfigured_leaf_tree(tmp_path, bcfg="")
+    state, log = {"ok": False}, []
+
+    def missing_usb_port(_dev):
+        raise FileNotFoundError("no such by-id symlink")
+
+    def frames(_dev):
+        log.append("read")
+        return state["ok"]
+
+    def leaf_auth(leaf, enabled):
+        log.append(f"auth {1 if enabled else 0} {Path(leaf).name}")
+        if enabled:
+            state["ok"] = True
+
+    io = cu.Io(
+        device=lambda _role: str(tmp_path / "dev/v4l/by-id/rosy-arm_b_wrist"),
+        usb_port=missing_usb_port,
+        unconfigured_leaf=lambda role: cu.unconfigured_usb_leaf(role, sys_usb=sys_usb, cameras_path=cams_path, boards_path=boards_path),
+        frames=frames,
+        ports=lambda *a: (_ for _ in ()).throw(AssertionError("root port must not cycle")),
+        leaf_auth=leaf_auth,
+        rebind=lambda: log.append("rebind"),
+        units=lambda _role, up: log.append("units up" if up else "units down"),
+        sleep=lambda s: log.append(f"sleep {s}"),
+    )
+    msg = cu.usb_recover("arm_b_wrist", io)
+    assert "re-authorized USB leaf 3-4.2.1" in msg and "SER_ARM_B untouched" in msg
+    assert log == ["units down", "read", "auth 0 3-4.2.1", "sleep 2", "auth 1 3-4.2.1", "sleep 2", "rebind", "sleep 2", "read", "units up"]
+
+
+def test_unconfigured_usb_leaf_refuses_hub_shared_arms_ambiguous_or_already_bound(tmp_path):
+    _, sys_usb, cams_path, boards_path = _unconfigured_leaf_tree(tmp_path, bclass="09")
+    assert cu.unconfigured_usb_leaf("arm_b_wrist", sys_usb=sys_usb, cameras_path=cams_path, boards_path=boards_path) is None
+
+    hub_dir = tmp_path / "sys"
+    import shutil
+    shutil.rmtree(hub_dir)
+    _, sys_usb, cams_path, boards_path = _unconfigured_leaf_tree(tmp_path, extra_arm_a=True)
+    assert cu.unconfigured_usb_leaf("arm_b_wrist", sys_usb=sys_usb, cameras_path=cams_path, boards_path=boards_path) is None
+
+    shutil.rmtree(hub_dir)
+    _, sys_usb, cams_path, boards_path = _unconfigured_leaf_tree(tmp_path, second_cam=True)
+    assert cu.unconfigured_usb_leaf("arm_b_wrist", sys_usb=sys_usb, cameras_path=cams_path, boards_path=boards_path) is None
+
+    shutil.rmtree(hub_dir)
+    _, sys_usb, cams_path, boards_path = _unconfigured_leaf_tree(tmp_path, bcfg="1", has_v4l=True)
+    assert cu.unconfigured_usb_leaf("arm_b_wrist", sys_usb=sys_usb, cameras_path=cams_path, boards_path=boards_path) is None

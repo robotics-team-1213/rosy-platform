@@ -45,3 +45,9 @@ applies_when: "diagnosing OMX finger-room edge refusals, post-remap low_zones IK
 4. **회귀 테스트 및 실기 프레임 검증:**
    - `test/test_omx_cell_auto_pick_site.py`, `test/test_omx_cell_calibrate.py`, `test/test_omx_cell_upkeep.py` 회귀 테스트 추가.
    - `check-2019`, `check-2040`, `check-2059`, `after-fold-b` 실기 캡처 4프레임 재평가에서 `check-2019/2040/2059` 모두 `margin_mm=16.0, unseen=False` 통과 및 `after-fold-b`/좌측 선반 인접 오거절 방지 유지, `rosy_harness.py lint` 0 errors, D-430 독립 안전 리뷰(`2fd0f087`) PASS 확인(PR 게이트에서 원격 Linux `pytest`, `size_range`, `safety_review` 실행).
+
+## Addendum (2026-11-25): `-71 EPROTO` 미구성(`by-id` 부재) USB 리프 자동 복구
+
+- **추가 증상:** `arm_b_wrist`가 `uvcvideo` UVC 제어 오류 `-71` 뒤 `can't set config #1, error -71` 상태로 멈추면 `/sys/bus/usb/devices/3-4.2.1` 리프(`0c45:6367`, `authorized=1`, `bConfigurationValue=""`)는 남아 있으나 `video4linux`와 `/dev/v4l/by-id/rosy-arm_b_wrist` 심볼릭 링크가 모두 사라져, `cell_upkeep.usb_port(device)`가 `FileNotFoundError`로 실패하며 `leaf_recover()`에 진입하지 못했다.
+- **수정 (`cell_upkeep.py`):** `unconfigured_usb_leaf(role)`를 추가해 `omx-cameras.json`의 `usb_id`와 `/etc/rosy/omx-arm-boards.json`으로 같은 부모 허브에 대상 팔의 `OpenRB`만 단독으로 공존하는 비허브(`bDeviceClass != "09"`)·미구성/미바인딩(`bConfigurationValue` 공백/`0` 또는 `video4linux` 없음)·무시리얼 단일 리프를 fail-closed(후보 1개일 때만 허용)로 역추적하고, `usb_recover()`에서 `usb_port`가 `FileNotFoundError`일 때만 `leaf_recover()`로 넘기도록 연결했다.
+- **검증:** `test/test_omx_cell_upkeep.py`, `test/test_omx_upkeep_identity.py` 원격 pytest 통과 및 실셀 `arm_b_wrist` 자동 복구 확인.
