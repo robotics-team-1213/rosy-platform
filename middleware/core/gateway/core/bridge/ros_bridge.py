@@ -170,6 +170,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self.dock_exemption_pub = node.create_publisher(Bool, "docking/collision_exemption", _LATCHED)
         self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
+        self.loc_window_pub = node.create_publisher(String, "localization/search_window", 1)
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
         self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
@@ -232,6 +233,8 @@ class RosBridge(RosBridgeHelpersMixin):
         loc.bind_clock(self._line_clock)
         loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
+        loc.publish_search_window = lambda body: self.loc_window_pub.publish(String(data=json.dumps(body)))
+        loc.search_window_listener = lambda: self.loc_window_pub.get_subscription_count() > 0
         self._svc.loc_mission.publish = (
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
         self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(

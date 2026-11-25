@@ -1087,3 +1087,18 @@ def test_fit_drop_hysteresis_gates_unmapped_objects_before_suspect():
     # Recovering above drop_fit re-enables unmapped object reporting.
     a.on_fit(6.5, 0.72)
     assert a.objects_due(6.8)
+
+
+def test_explicit_window_reports_global_result_without_native_auto_injection():
+    assist = LocAssist(lambda: "candidate")
+    assist.on_twist(19.0, 0.0, 0.0)
+    assist.on_twist(20.0, 0.0, 0.0)
+    assert assist.search_window_ready(20.0)
+    candidate = PoseCandidate(0.2, 0.0, 0.0, 0.98, "global", unique_margin=0.20)
+    assist.search_started(20.0, (0., 0., 0.), scan_stamp=19.9)
+
+    outputs = assist.search_finished(20.1, (0., 0., 0.), [candidate], allow_unique=False)
+
+    assert [kind for kind, _ in outputs] == ["candidates", "state"]
+    assert assist.machine.state.value == "CANDIDATES"
+    assert assist.machine.check is None and not assist.search_window_ready(20.1)
