@@ -350,7 +350,7 @@ def plan_site_grasp(
         place={"xy_m": place_xy, "z_m": place_z, "dest_long_axis_deg": _belt_axis_deg(config, cal, dest), "corridor_width_cm": 8.5 if dest == "belt" else None},
         operating_conditions=config.get("operating_conditions"), params=config.get("params"))
     out["metrics"]["clearance_cm"], out["metrics"]["wall_shift_cm"] = free_cm, shift_cm
-    b_dist = reg.get("dist_mm") if reg else None
+    b_dist = round(1000.0 * math.dist(reg["point_m"], o_work["raw_m"]), 1) if reg and "point_m" in reg else None
     m_outs = [map_outside_mm(rec, o_work["raw_m"]) for _, rec in observe_maps(cal or {}, source, "top")]
     m_out = next((v for v in m_outs if v is not None), o_work.get("outside_mm"))
     out["metrics"].update(bias_dist_mm=b_dist, map_outside_mm=m_out)
