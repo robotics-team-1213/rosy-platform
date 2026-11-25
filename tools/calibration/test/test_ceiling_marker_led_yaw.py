@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+repo = Path(__file__).resolve().parents[3]
+sys.path.extend(str(repo / part) for part in ("operations/overhead", "contracts/foundation", "operations/apps/games"))
 from ceiling_marker_led_yaw import combine, estimate_led
 from ceiling_marker_yaw import EstimateError
 
@@ -43,3 +45,4 @@ def test_stationary_marker_and_blink_from_recorded_frames():
     assert result["use"] == "candidate-only"
     with pytest.raises(EstimateError, match="named blue"):
         estimate_led(frames, record, **{**kwargs, "robot": "rosy_46"})
+
