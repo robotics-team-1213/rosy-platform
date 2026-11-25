@@ -370,6 +370,13 @@ def test_native_challenge_is_minted_before_grant_and_wire_scope_is_bound():
         CoreLeaseDelivery({"cell-1": ("http://127.0.0.1", "tok", True)})
 
 
+def test_native_hold_requires_explicit_motor_confirmation():
+    core = Core(Reply(b'{"hold_reason":"core_hold"}'))
+    native = CoreLeaseDelivery({"cell-1": ("https://core.example", "tok", True)}, opener=core)
+    with pytest.raises(OSError, match="did not confirm HOLD"):
+        native.hold("cell-1", "stop")
+
+
 def test_read_only_status_distinguishes_gateway_owner_and_motion_readiness():
     seen = []
     def op(request, timeout):

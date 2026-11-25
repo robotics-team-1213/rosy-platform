@@ -146,7 +146,7 @@ class NativeRelay:
             if (reply.get("accepted") is not True or reply.get("motor_hold_confirmed") is not True
                     or not isinstance(reply.get("hold_reason"), str) or not reply["hold_reason"]):
                 raise ApiError("NATIVE_POLICY_HOLD_UNCONFIRMED", 409)
-            return {"hold_reason": reply["hold_reason"]}
+            return {"hold_reason": reply["hold_reason"], "accepted": True, "motor_hold_confirmed": True}
 
 
 def create_app(cfg, *, relay=None):

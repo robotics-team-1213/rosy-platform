@@ -116,7 +116,10 @@ class CoreLeaseDelivery:
 
     def hold(self, workcell_id, reason):
         """PolicyApprovals.hold port: raises when CORE did not confirm, so the approval retries the HOLD."""
-        ok, _ = self._request(workcell_id, 'hold', {'reason': str(reason)[:96] or 'hold'})
+        ok, reply = self._request(workcell_id, 'hold', {'reason': str(reason)[:96] or 'hold'})
+        if workcell_id in self._native:
+            ok = (ok and isinstance(reply, dict) and reply.get('accepted') is True
+                  and reply.get('motor_hold_confirmed') is True and bool(reply.get('hold_reason')))
         if not ok:
             raise OSError('CORE did not confirm HOLD')
 

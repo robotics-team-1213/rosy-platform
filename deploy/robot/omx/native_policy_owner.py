@@ -40,6 +40,8 @@ def load_config(path):
             or cfg["socket_gid"] <= 0):
         raise ValueError("distinct dedicated native and CORE principals required for B")
     address, journal = Path(cfg["socket"]), Path(cfg["journal"])
+    if not address.is_relative_to("/run") or not journal.is_relative_to("/var/lib"):
+        raise ValueError("use a service RuntimeDirectory socket and persistent StateDirectory journal")
     for target in (address, journal):
         _trusted_parents(target.parent, {0, owner})
         if target.parent.stat().st_uid != owner:

@@ -95,3 +95,15 @@ def test_authenticated_owner_socket_reports_unarmed_and_never_confirms_motor_hol
         assert fence.status()["hold_reason"] == "core_hold"
     finally:
         fence.close()
+
+def test_native_fence_clock_rollback_latches_before_renewal(tmp_path):
+    now = [1_000_000_000]
+    fence = NativePolicyFence(PINS, tmp_path / "journal", clock=lambda: now[0])
+    try:
+        fence.receive(fence.owner_session_id, now[0]+900_000_000, grant())
+        now[0] -= 1
+        assert fence.status()["hold_reason"] == "owner_clock_fault"
+        with pytest.raises(PermissionError):
+            fence.require_current()
+    finally:
+        fence.close()

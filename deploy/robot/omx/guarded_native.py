@@ -58,6 +58,7 @@ from guarded_native_effort import (  # noqa: E402
     alignment_deadline, check_effort, check_hardware_errors, commit_holds, read_body_pwm,
     restart_after_pause, seed_follower_pose, stall_watch, watch_hold,
 )
+from native_policy_fence import NativePolicyFence, PolicyWriteRefused  # noqa: E402
 
 
 class GoalRejected(ValueError):
@@ -75,6 +76,7 @@ class NativeJointMotion:
                  offsets=None, teacher=False, shed_load=False, mount=None, grip_map=None, follower_floor=None, stage=None):
         if teacher != (leader is None) or (teacher and body_only):
             raise ValueError("teacher mode streams all six joints and has no leader")
+        self._policy_fence = None
         self.follower, self.leader, self.clock = follower, leader, clock
         self.body_only, self.teacher = body_only, teacher
         self.stage = valid_stage(stage)  # teleop_speed stage of a full-arm Leader session, else None
@@ -155,8 +157,38 @@ class NativeJointMotion:
         """Command acceleration limit: the full-arm stage's value (teleop_speed), else ACCEL_DEG_S2."""
         return STAGES[self.stage]["accel_deg_s2"] if self.stage and self.full_arm else ACCEL_DEG_S2
 
+    @classmethod
+    def for_policy(cls, follower, *, fence, clock=time.monotonic):
+        """Register guard for an exclusive native policy writer; never enroll a recorder session."""
+        if not isinstance(fence, NativePolicyFence):
+            raise ValueError("an owner-local native policy fence is required")
+        motion = cls(follower, None, teacher=True, clock=clock)
+        motion._policy_fence = fence
+        return motion
+
+    def write_goal(self, goals):
+        if self._policy_fence is None:
+            return self.follower.sync_write("Goal_Position", goals, normalize=False)
+        return self._policy_fence.write_current(self.follower.sync_write, "Goal_Position", goals, normalize=False)
+
+    def _enable_seeded_torque(self):
+        if self._policy_fence is not None:
+            # Vendor enable_torque loops over joints. Send one bounded group register command for the six-axis owner.
+            expected = dict.fromkeys(self.active, 1)
+            self._policy_fence.write_current(self.follower.sync_write, "Torque_Enable", expected, normalize=False)
+            torque = self.follower.sync_read("Torque_Enable", motors=list(self.active), normalize=False, num_retry=READ_RETRY)
+            if not isinstance(torque, dict) or torque != expected or any(type(v) is not int for v in torque.values()):
+                self._policy_fence.hold("seed_torque_unconfirmed")
+                raise PolicyWriteRefused("seed torque readback did not confirm all joints")
+        elif self.body_only:
+            self.follower.enable_torque(list(BODY))
+        else:
+            self.follower.enable_torque()
+
     def send(self, action, *, goal_check=None, hold_on_read_error=False, allow_stale_hold=False):
         try:
+            if self._policy_fence is not None:
+                self._policy_fence.require_current()
             if self.failed:
                 raise ValueError("guard stopped; restart the session")
             finite_values(action, [n + ".pos" for n in NAMES])
@@ -176,13 +208,26 @@ class NativeJointMotion:
                     self.stop_streaming()
                     raise GoalRejected(reason)
             return self.commit(prepared)
+        except PolicyWriteRefused as error:
+            self.stop_streaming()
+            raise GoalRejected(str(error), can_send_hold=False) from error
         except GoalRejected:
+            if self._policy_fence is not None:
+                self._policy_fence.hold("policy_goal_rejected")
             raise
         except BoundaryExpired:
+            if self._policy_fence is not None:
+                self._policy_fence.hold("policy_boundary_expired")
             self.failed = True  # no new motion; torque stays ON
             raise
         except BaseException as exc:
             self.failed = True
+            if self._policy_fence is not None:
+                self._policy_fence.hold("native_guard_fault")
+                if isinstance(exc, Exception) and is_recoverable_telemetry(exc):
+                    # A lost reply can follow a successful write. Neither the achieved pose nor torque is known.
+                    self.stop_streaming()
+                    raise GoalRejected("policy device transaction unconfirmed", can_send_hold=False) from exc
             try:
                 torque_off(self.follower)
             finally:
@@ -343,10 +388,7 @@ class NativeJointMotion:
         if not self.teacher and not self.tracking and deadline is not None and now >= deadline:
             raise ValueError(f"{self.label}: alignment deadline exceeded before command commit")
         if "seed" in prepared:
-            if self.body_only:
-                self.follower.enable_torque(list(BODY))
-            else:
-                self.follower.enable_torque()
+            self._enable_seeded_torque()
             self.command = dict(prepared["seed"])
             if self.lag is not None:
                 self.lag.seed(prepared["seed"], self.clock())
@@ -356,7 +398,7 @@ class NativeJointMotion:
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
         goals = prepared["goals"] if "goals" in prepared else self._round_goals(prepared["command"])
-        self.follower.sync_write("Goal_Position", goals, normalize=False)
+        self.write_goal(goals)
         self.sent = goals
         self.command = prepared["command"]
         if "target" in prepared:

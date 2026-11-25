@@ -33,6 +33,7 @@ class NativePolicyFence:
         with sqlite3.connect(journal) as db:
             db.execute("CREATE TABLE IF NOT EXISTS episodes (episode_id TEXT PRIMARY KEY, lease_id TEXT NOT NULL UNIQUE)")
         self._cond = threading.Condition()
+        self._writer = threading.Lock()
         self._expires = self._window_end = self._seq = 0
         self._last_now = None
         self._ids = None
@@ -92,7 +93,9 @@ class NativePolicyFence:
 
         A caller must separately bound and supervise the physical bus transaction itself.
         """
-        with self._cond:
+        # Serialize writers; never hold the watchdog condition across potentially blocking device I/O.
+        # A transaction already admitted may still be on the wire when authority is revoked.
+        with self._writer:
             self.require_current()
             return operation(*args, **kwargs)
 
