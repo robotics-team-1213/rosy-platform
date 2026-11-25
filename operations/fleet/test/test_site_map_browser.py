@@ -669,6 +669,35 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
         expect(page.locator("#trip-summary")).to_contain_text("실행하지 않음")
 
 
+@pytest.mark.parametrize("width,key", [(1440, "Enter"), (390, "Space")])
+def test_keyboard_place_picks_map_coordinates_on_rotated_map(page_site, width, key):
+    from playwright.sync_api import expect
+
+    page, store, _ = page_site
+    page.set_viewport_size({"width": width, "height": 844})
+    active = store.active_view()
+    rotated = {**active["map"], "view_turn_deg": 90}
+    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": rotated}))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#map-view-turn")).to_have_value("90")
+
+    show_screen(page, "trip-heading")
+    marker = page.locator('#site-map-svg [data-place="NW"]')
+    marker.press(key)
+    expect(page.locator("#trip-place")).to_have_value("NW")
+    expect(marker).to_be_focused()
+    page.locator("#trip-pick").check()
+    show_screen(page, "map-heading")  # The map stays visible and coordinate picking remains armed.
+    marker.press(key)
+    point = next(place for place in rotated["places"] if place["id"] == "NW")
+    expect(page.locator("#trip-point")).to_have_text(f"찍은 좌표 x {round(point['x'], 3):g} m, y {round(point['y'], 3):g} m")
+    expect(page.locator('.ui-subnav-nav a[href="#map-heading"]')).to_have_attribute("aria-current", "page")
+    expect(marker).to_be_focused()
+
+
 @pytest.mark.parametrize("width,height", [(1920, 1080), (1520, 900), (1519, 900),
                                          (1440, 1000), (390, 844), (320, 568)])
 @pytest.mark.parametrize("theme", ["dark", "light"])

@@ -1,4 +1,5 @@
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
+import {mapPoint} from '/console/assets/geometry-edit.js';
 import {setOffBy} from '/common/cause-line.js';
 import {operatorReason as roleReason} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
@@ -445,21 +446,22 @@ function clearPlan() {
   syncButtons();
 }
 
+const isTripPicking = () => $('trip-pick').checked && $('map-source').value === 'active' && state.view;
+function pickTripPoint(x, y) {
+  state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
+  $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
+  clearPlan();
+}
+
 $('site-map-svg').addEventListener('click', event => {
   if (survey.pick(event)) return;
   if (sourcePanel.pick(event)) return;
-  if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
-    const svg = event.currentTarget;
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    const [x, y] = state.view.toMap(at.x, at.y);
-    state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
-    $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
-    clearPlan();
+  if (isTripPicking()) {
+    pickTripPoint(...mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     return;
   }
   if (state.band !== null && state.view) {  // D-573: drawing a waiting band on the draft
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
-    state.band.push(state.view.toMap(at.x, at.y));
+    state.band.push(mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     render(); syncButtons();
     return;
   }
@@ -470,6 +472,7 @@ $('site-map-svg').addEventListener('click', event => {
   select(target.dataset.place ? {place: target.dataset.place}
     : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
   syncButtons();
+  if (screens.current() === 'map-heading') location.hash = '#edit-heading';
 });
 
 installBandEditing({request, guarded, state, select, render, syncButtons, notice});
@@ -570,17 +573,22 @@ const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home
   groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
     'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
   label: document.getElementById('site-map-screen')});
-// The map legend promises that picking a place or lane on the view screen opens it for editing.
-$('site-map-svg').addEventListener('click', event => {
-  if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
-});
-// Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
+// Pick the focused marker's world point without a round trip through integer mouse coordinates.
 $('site-map-svg').addEventListener('keydown', event => {
   const dot = event.target.closest?.('[data-place]');
-  if (!dot || !['Enter', ' '].includes(event.key)) return;
+  if (event.defaultPrevented || !dot || !['Enter', ' '].includes(event.key)) return;
   event.preventDefault();
   const id = dot.dataset.place;
-  dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+  if (isTripPicking() && !$('plane-pick').checked) {
+    const place = state.active.map.places.find(item => item.id === id);
+    if (place) pickTripPoint(place.x, place.y);
+  } else {
+    const circle = dot.querySelector('circle.place'), matrix = circle?.getScreenCTM();
+    if (matrix) {
+      const point = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value).matrixTransform(matrix);
+      dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, clientX: point.x, clientY: point.y}));
+    }
+  }
   $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
 pageScope.onResume(() => { void connect(); });
