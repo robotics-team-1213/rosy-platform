@@ -16,6 +16,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
+
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_ERROR_BYTES = 65_536
 MAX_TEXT_ASSET_CHARS = 65_536
@@ -150,7 +152,7 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
      "inputSchema": _obj_schema({"cell_id": {"type": "string", "enum": _CELLS}}, ["cell_id"])},
     {"name": "fleet_cell_tasks", "description": "List Fleet-R /api/fleet/pipeline/cell-tasks and cell safety summary.",
      "inputSchema": _obj_schema({"cell_id": {"type": "string", "enum": _CELLS}, "status": {"type": "string"}})},
-    {"name": "fleet_propose_cell_task", "description": "Propose a Fleet-R cell task (PROPOSED only; carries CAS & request_key).",
+    {"name": "fleet_propose_cell_task", "description": "Propose a Fleet-R cell task (PROPOSED only). For fallback, supply the failure bundle ID, context digest, readiness digest, and a stable request_key. For policy fallback, copy correlation.fleet_task_id into fallback_from_task_id.",
      "inputSchema": _obj_schema({
          "cell_id": {"type": "string", "enum": _CELLS}, "arm_id": {"type": "string"}, "src_site": {"type": "string"}, "dst_site": {"type": "string"},
          "preset": {"type": "string"}, "robot_id": {"type": "string"}, "tier": {"type": "integer"},
@@ -199,6 +201,10 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
      }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
 )
 TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
+OPERATIONS_MCP_TOOLS = frozenset({
+    "cell_readiness", "cell_failure_context", "cell_failure_asset", "cell_frame", "cell_queue",
+    "fleet_state", "fleet_cell_readiness", "fleet_cell_tasks", "fleet_propose_cell_task",
+})
 
 
 def _check_type(ps: dict[str, Any], val: Any, key: str) -> str | None:
@@ -244,6 +250,8 @@ def _validate_args(spec: dict[str, Any], args: Any) -> str | None:
     for k, val in args.items():
         if err := _check_type(props[k], val, k):
             return err
+    if spec["name"] == "fleet_propose_cell_task":
+        return validate_proposal_args(args)
     return None
 
 
@@ -335,6 +343,12 @@ class RosyAgentBridge:
         except (OSError, TimeoutError, urllib.error.URLError) as exc:
             return {"ok": False, "status": 503, "error_code": "PLANE_UNREACHABLE", "detail": self._scrub(str(exc))[:200]}
 
+    def check_cell_proposal_context(self, proposal: dict[str, Any]) -> dict[str, Any] | None:
+        """Recheck the saved failure context with the cell before handing a proposal to Fleet."""
+        return check_proposal_context(
+            proposal, lambda bundle_id: self.call_tool("cell_failure_context", {"bundle_id": bundle_id}),
+        )
+
     def call_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
         if name not in TOOL_MAP:
             return {"ok": False, "status": 400, "error_code": "UNKNOWN_TOOL", "detail": f"unknown tool {name!r}"}
@@ -403,7 +417,11 @@ class RosyAgentBridge:
             q = urllib.parse.urlencode({k: str(a[k]) for k in ("cell_id", "status") if a.get(k)})
             return self._http("GET", f"{fu}/api/fleet/pipeline/cell-tasks" + (f"?{q}" if q else ""), token=ft, cookie=fc)
         if name == "fleet_propose_cell_task":
+            if refusal := self.check_cell_proposal_context(a):
+                return refusal
             payload = {**a, "propose": True}
+            if a.get("failure_bundle_id"):
+                payload["failure_context_sha256"] = a["expected_context_sha256"]
             hdrs = {"Idempotency-Key": str(a["request_key"])} if a.get("request_key") else None
             res = self._http("POST", f"{fu}/api/fleet/pipeline/cell-tasks", token=ft, cookie=fc, body=payload, headers=hdrs)
             if res.get("ok"):
@@ -445,8 +463,12 @@ def _rpc_err(stdout, req_id: Any, code: int, msg: str) -> None:
     stdout.flush()
 
 
-def serve_mcp_stdio(bridge: RosyAgentBridge, stdin=sys.stdin, stdout=sys.stdout) -> int:
+def serve_mcp_stdio(
+    bridge: RosyAgentBridge, stdin=sys.stdin, stdout=sys.stdout, *, operations_only: bool = False,
+) -> int:
     """Handle line-delimited MCP JSON-RPC requests on stdio."""
+    tools = {name: spec for name, spec in TOOL_MAP.items()
+             if not operations_only or name in OPERATIONS_MCP_TOOLS}
     for line in stdin:
         s = line.strip()
         if not s:
@@ -472,11 +494,14 @@ def serve_mcp_stdio(bridge: RosyAgentBridge, stdin=sys.stdin, stdout=sys.stdout)
         elif method == "ping":
             result = {}
         elif method == "tools/list":
-            result = {"tools": list(TOOL_SPECS)}
+            result = {"tools": list(tools.values())}
         elif method == "tools/call":
             p = msg.get("params")
             if not isinstance(p, dict) or not isinstance(p.get("name"), str) or not (p.get("arguments") is None or isinstance(p.get("arguments"), dict)):
                 _rpc_err(stdout, req_id, -32602, "Invalid params")
+                continue
+            if operations_only and p["name"] not in tools:
+                _rpc_err(stdout, req_id, -32602, "Tool unavailable in operations scope")
                 continue
             res = bridge.call_tool(p["name"], p.get("arguments") or {})
             if res.get("ok") and isinstance(res.get("image_b64"), str):
@@ -553,14 +578,16 @@ def main(argv: list[str] | None = None) -> int:
     p_call = sub.add_parser("call")
     p_call.add_argument("tool")
     p_call.add_argument("--args-json", default="{}")
-    sub.add_parser("mcp-stdio")
+    p_mcp = sub.add_parser("mcp-stdio")
+    p_mcp.add_argument("--operations-only", action="store_true",
+                       help="expose observation and Fleet proposal tools only")
     args = ap.parse_args(argv)
     bridge = RosyAgentBridge(build_config(args))
     if args.cmd == "list-tools":
         print(json.dumps(list(TOOL_SPECS), indent=2, ensure_ascii=False))
         return 0
     if args.cmd == "mcp-stdio":
-        return serve_mcp_stdio(bridge)
+        return serve_mcp_stdio(bridge, stdin=sys.stdin, stdout=sys.stdout, operations_only=args.operations_only)
     res = bridge.call_tool(args.tool, json.loads(args.args_json))
     print(json.dumps(res, ensure_ascii=False))
     return 0 if res.get("ok") else 1

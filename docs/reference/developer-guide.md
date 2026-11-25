@@ -20,6 +20,8 @@ World(`operations/world`, 배포 휠 `rosy-world`)는 별도 PC나 프로세스�
 
 시험은 개발 계약 검사(실험실은 원격 시험 PC·CI, 개인 클론은 팀 가이드 조건) → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](../adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](../adr/D-516-offline-decision-model-replay-boundary.md)).
 
+OpenCode와 GLM으로 가상 셀에서 도구를 시험하는 방법은 [ROSY 에이전트 연결](rosy-agent-connection.md)을 본다.
+
 관측 → 현재 자세 → 규칙 → CORE. `world`는 관측과 확정 사건을 대조하는 상태이며 현재 구현은 자세를 제공한다([v0.2 §3.1](../reference/ROSY_Platform_Architecture_Design_v0.2.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)). 생성형 월드 모델은 구현되지 않았다. `age_s`는 그 자세가 얼마나 오래됐는지를 나타낸다.
 
 ```mermaid

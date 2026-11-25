@@ -159,6 +159,11 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a", "request_id": "req-learn-2"})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("cell_dry_run", {"config": "c.json", "catalog": "k.json", "roi": [0], "source": "a", "dest": "b", "person_at_switch": True})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("fleet_propose_cell_task", {"cell_id": "cell_s", "propose": False})["error_code"] == "INVALID_ARGS"
+        request_count = len(fleet_log)
+        assert bridge.call_tool("fleet_propose_cell_task", {
+            "cell_id": "cell_s", "fallback_verb": "propose_ik_fallback_for_policy",
+        })["error_code"] == "INVALID_ARGS"
+        assert len(fleet_log) == request_count
         assert bridge.call_tool("job_status", {"job_id": "j-nonjson"})["error_code"] == "INVALID_UPSTREAM_RESPONSE"
         assert bridge.call_tool("job_status", {"job_id": "j-redir"})["status"] == 302
         assert bridge._http("GET", (ROOT / "LICENSE").as_uri())["error_code"] == "INVALID_URL_SCHEME"
@@ -214,6 +219,77 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
     finally:
         for s in (cell_srv, fleet_srv, learn_srv, queued_srv):
             s.shutdown(); s.server_close()
+
+
+@pytest.mark.parametrize(
+    ("arm_args", "error", "methods"),
+    [
+        ({}, "INVALID_ARGS", []),
+        ({"arm_id": " "}, "INVALID_ARGS", []),
+        ({"arm_id": "arm_b"}, "STALE_FAILURE_CONTEXT", ["GET"]),
+        ({"arm_id": "arm_a"}, None, ["GET", "POST"]),
+    ],
+)
+def test_failure_bound_proposal_requires_the_diagnosed_arm(monkeypatch, arm_args, error, methods):
+    bridge = br.RosyAgentBridge(br.BridgeConfig())
+    calls = []
+    digest = "a" * 64
+
+    def fake_http(method, url, **kwargs):
+        calls.append(method)
+        if method == "GET":
+            assert url.endswith("/failures/b1")
+            return {"ok": True, "data": {
+                "bundle_id": "b1", "context_sha256": digest,
+                "cell_id": "cell_ab", "arm_id": "arm_a",
+                "freshness": {"still_valid_for_action": True},
+            }}
+        assert kwargs["body"]["arm_id"] == "arm_a"
+        return {"ok": True, "data": {"task": {"status": "PROPOSED"}}}
+
+    monkeypatch.setattr(bridge, "_http", fake_http)
+    response = bridge.call_tool("fleet_propose_cell_task", {
+        "cell_id": "cell_ab", "failure_bundle_id": "b1",
+        "expected_context_sha256": digest, "expected_readiness_digest": "b" * 64,
+        **arm_args,
+    })
+
+    assert calls == methods
+    assert response["ok"] is (error is None)
+    assert response.get("error_code") == error
+
+
+def test_operations_mcp_scope_enforces_the_tool_list(monkeypatch, capsys):
+    srv, url, calls = _serve_mock({
+        ("POST", "/api/fleet/pipeline/cell-tasks"): (200, {"task": {"status": "PROPOSED"}}, {}),
+    })
+    requests = [
+        {"method": "tools/list"},
+        {"method": "tools/call", "params": {"name": "learning_run_job"}},
+        {"method": "tools/call", "params": {
+            "name": "fleet_propose_cell_task", "arguments": {"cell_id": "cell_s"},
+        }},
+    ]
+    monkeypatch.setattr(sys, "stdin", io.StringIO("".join(
+        json.dumps({"jsonrpc": "2.0", "id": index, **request}) + "\n"
+        for index, request in enumerate(requests)
+    )))
+    try:
+        assert br.main(["--fleet-url", url, "mcp-stdio", "--operations-only"]) == 0
+        listed, denied, proposed = map(json.loads, capsys.readouterr().out.splitlines())
+        assert {tool["name"] for tool in listed["result"]["tools"]} == {
+            "cell_readiness", "cell_failure_context", "cell_failure_asset", "cell_frame", "cell_queue",
+            "fleet_state", "fleet_cell_readiness", "fleet_cell_tasks", "fleet_propose_cell_task",
+        }
+        assert denied["error"]["code"] == -32602
+        assert proposed["result"]["isError"] is False
+        assert [(method, path) for method, path, _, _ in calls] == [
+            ("POST", "/api/fleet/pipeline/cell-tasks"),
+        ]
+        assert calls[0][3]["propose"] is True
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_config_file_and_cookie_file_loading(tmp_path: Path, monkeypatch):
@@ -273,13 +349,15 @@ def test_bridge_schemas_match_cell_job_specs():
 
 def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():
     bridge_path = ROOT / "tools/remote/rosy_agent_bridge.py"
-    tree = ast.parse(bridge_path.read_text(encoding="utf-8"))
-    imports = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imports.update(a.name.split(".")[0] for a in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.add(node.module.split(".")[0])
-    assert imports <= set(sys.stdlib_module_names)
-    assert "subprocess" not in imports
-    assert scan_files([bridge_path, Path(__file__)], root=ROOT) == []
+    context_path = bridge_path.with_name("rosy_agent_proposal_context.py")
+    for path in (bridge_path, context_path):
+        allowed = set(sys.stdlib_module_names) - {"subprocess"}
+        if path == bridge_path:
+            allowed.add(context_path.stem)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert {a.name.split(".")[0] for a in node.names} <= allowed
+            elif isinstance(node, ast.ImportFrom):
+                assert node.level == 0 and node.module and node.module.split(".")[0] in allowed
+    assert scan_files([bridge_path, context_path, Path(__file__)], root=ROOT) == []
