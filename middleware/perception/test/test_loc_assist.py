@@ -96,14 +96,74 @@ def test_candidates_are_a_valid_report_and_move_the_state_to_candidates():
     assert one(out, 'state')['status']['request_id'] == 'r-1'
 
 
-def test_candidates_are_re_reported_every_two_seconds_with_a_new_stamp():
+def test_candidate_retransmission_keeps_evidence_stamp_until_rescored():
     a = core()
     candidates_ready(a, now=1.)
     assert kinds(a.tick(2.9), 'candidates') == []
     again = one(a.tick(3.), 'candidates')
-    assert again['request_id'] == 'r-1' and again['stamp'] == 3.
+    assert again['request_id'] == 'r-1' and again['stamp'] == 1.
     assert kinds(a.tick(4.), 'candidates') == []
-    assert one(a.tick(5.), 'candidates')['stamp'] == 5.
+    assert one(a.tick(5.), 'candidates')['stamp'] == 1.
+    a.on_twist(6., 0., 0.)
+    assert a.candidate_scan_due(6., 5.9)
+    assert a.on_candidate_scan(6., 5.9, [.97, .96], [(0.6, 0.1)]) == []
+    renewed = one(a.tick(7.), 'candidates')
+    assert renewed['stamp'] == 5.9 and renewed['request_id'] == 'r-1'
+    assert renewed['unmapped_objects'] == [{'x': 0.6, 'y': 0.1}]
+    assert one(a.tick(9.), 'candidates') == renewed
+
+
+def test_stationary_off_odom_relocation_retires_old_candidates_and_researches():
+    a = core(retry_s=2.)
+    candidates_ready(a, now=1.)
+    destination = (.86, -.52, math.pi)
+    ranges, angles = scan(destination, beams=640)
+    occupancy = field()
+    fits = [occupancy.robust_score(sensor_from_base((c.x, c.y, c.yaw), MOUNT), ranges, angles)
+            for c in (TRUTH, MIRROR)]
+    assert max(fits) < a.machine.min_fit
+    assert occupancy.robust_score(sensor_from_base(destination, MOUNT), ranges, angles) >= a.machine.min_fit
+    for t in (6., 7., 8.):
+        a.on_twist(t, 0., 0.)
+        assert not a.candidate_scan_due(t, t - 1.)  # delayed scans do not count
+        assert a.candidate_scan_due(t, t - .1)
+        out = a.on_candidate_scan(t, t - .1, fits, None)
+        assert kinds(out, 'inject') == []
+        assert not a.candidate_scan_due(t, t - .1)  # same scan cannot count again
+        if t < 8.:
+            assert out == [] and not a.search_due(t, ODOM)
+    status = one(out, 'state')['status']
+    assert (status['state'], status['reason'], status['request_id']) == ('SUSPECT', 'candidate_scan_mismatch', None)
+    assert kinds(a.tick(8.1), 'candidates') == []
+    assert kinds(a.on_decision(8.2, decision('r-1', 8.2)), 'inject') == []
+    assert a.search_due(8.2, ODOM)
+    a.search_started(8.2, ODOM, scan_stamp=8.1)
+    out = a.search_finished(9.1, ODOM, [PoseCandidate(*destination, .96, 'global')])
+    assert one(out, 'candidates')['request_id'] == 'r-2'
+    assert one(out, 'candidates')['stamp'] == 8.1
+    assert kinds(out, 'inject') == []
+    for t in (10., 11.2):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t - .1, [.2], None) == []
+    assert a.machine.request_id == 'r-2'
+
+
+def test_candidate_scan_disagreement_waits_for_search_backoff_and_resets_on_partial_agreement():
+    a = core()
+    candidates_ready(a, now=1.)
+    for t in (2., 3., 4., 5.):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t, [.1, .2], None) == []
+    a.on_twist(6., 0., 0.)
+    assert a.on_candidate_scan(6., 6., [.1, .95], [(0.6, 0.1)]) == []
+    assert a.machine.request_id == 'r-1'
+    report = one(a.tick(6.), 'candidates')
+    assert report['stamp'] == 1. and report['unmapped_objects'] == [{'x': .3, 'y': .1}]
+    for t in (7., 8.):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t, [.1, .2], None) == []
+    a.on_twist(9., 0., 0.)
+    assert one(a.on_candidate_scan(9., 9., [.1, .2], None), 'state')['status']['state'] == 'SUSPECT'
 
 
 def test_state_is_published_at_two_hertz_and_on_every_change():

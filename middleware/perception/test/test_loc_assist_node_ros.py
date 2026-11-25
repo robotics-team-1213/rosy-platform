@@ -173,3 +173,29 @@ def test_a_wrong_injection_is_still_rejected(node):
     machine = run_injection(node, truth, (.56, -.52, math.pi))    # 30 cm off
     assert machine.state is LocState.SUSPECT and machine.reason == 'inject_rejected'
     assert node.core.fit < .85
+
+
+def test_unmoved_odometry_with_new_scan_geometry_retires_the_old_candidate(node):
+    from control.sensing.loc_state import LocState
+    from loc_world import MOUNT, field, scan
+
+    node.field = field()
+    clock = [BASE_S]
+    node.now = lambda: clock[0]
+    published = []
+    node.publish = published.extend
+    node.tf.set_transform_static(
+        transform(node.tf.frame_prefix + 'base_link', 'laser', 0., (MOUNT.x, MOUNT.y, MOUNT.yaw)),
+        'test',
+    )
+    node.core.on_twist(BASE_S - 1., 0., 0.)
+    node.core.search_started(BASE_S, ODOM, scan_stamp=BASE_S)
+    node.core.search_finished(BASE_S, ODOM, [PoseCandidate(-1.26, .49, -math.pi / 2, .97, 'slot:A')])
+    ranges, angles = scan((.86, -.52, math.pi), beams=640)
+    for t in (BASE_S + 6., BASE_S + 7.1, BASE_S + 8.2):
+        clock[0] = t
+        node.core.on_twist(t, 0., 0.)
+        node.on_scan(laser_scan(t - .1, ranges, angles))
+    assert node.core.machine.state is LocState.SUSPECT and node.core.machine.request_id is None
+    assert node.core.search_due(clock[0], ODOM)
+    assert all(kind != 'inject' for kind, _ in published)
