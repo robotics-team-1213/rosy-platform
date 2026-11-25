@@ -158,7 +158,8 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     w_img = int(img.shape[1]) if hasattr(img, "shape") else 640
     if not (max(32.0, 0.05 * w_img) <= float(gap_px) <= 0.78 * w_img):
         return {"found": False, "why": "wrist_sanity_rejected: implausible gap_px", "gap_px": round(float(gap_px), 1)}
-    target = on_surface_blob(img, hsv, params)
+    blob = on_surface_blob(img, hsv, params, include_bbox=True)
+    target, blob_clipped = (blob[:3], bool(blob[3])) if blob is not None else (None, False)
     if target is None or target[2] > 55000 or not (float(a[0]) <= target[0] <= float(b[0])):
         face = top_face_between_fingers(img, a, b)
         if face is not None:
@@ -170,7 +171,7 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
             across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
             if not (0.06 <= s_face <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
                 return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s_face, 3)}
-            return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
+            return {"found": True, "along_mm": along_mm, "across_mm": across_mm, "clipped_border": blob_clipped,
                     "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face", "finger_color": mode}
     if target is None:
         return {"found": False, "why": "no container on a neutral surface in view"}
@@ -182,7 +183,7 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     along_mm, across_mm = round(float(d @ axis) * s, 1), round(float(d @ across_dir) * s, 1)
     if not (0.06 <= s <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
         return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s, 3)}
-    return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
+    return {"found": True, "along_mm": along_mm, "across_mm": across_mm, "clipped_border": blob_clipped,
             "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3), "finger_color": mode}
 
 
@@ -193,7 +194,7 @@ def resolve_wrist_servo_offset(
     structural_fallback: bool = True,
     prefer_structural: bool = False,
     camera_invariant_obb: bool = True,
-    hsv=([5, 95, 110], [32, 255, 255]),
+    hsv=([5, 95, 110], [36, 255, 255]),
 ) -> dict:
     """Unified wrist offset resolver combining pad-referenced `finger_offset_mm`, color-agnostic
     `structural_container_between_fingers`, and camera-invariant PCA/OBB `detect_wrist_container_obb`."""

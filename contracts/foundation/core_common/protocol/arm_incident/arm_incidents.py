@@ -91,6 +91,7 @@ TORQUE_UNCONFIRMED = re.compile(
     rf"(?:runner: )?session ended: RuntimeError: torque OFF not confirmed: \[{_BUSY}(?:, {_BUSY}){{0,5}}\]", re.ASCII)
 WINDUP = re.compile(r"(?:shoulder_pan|shoulder_lift|elbow_flex|wrist_flex) still [0-9]{1,4}\.[0-9] units short, PWM "
                     r"winding up [0-9]{1,4} -> [0-9]{1,4} of [0-9]{1,4}: pushing against something", re.ASCII)
+PARK_WINDUP = re.compile(rf"(?:runner: )?contact in park: {WINDUP.pattern}", re.ASCII)
 _STALE_T = r"(?:-?[0-9]+\.[0-9]|n/a)"
 _STALE_CORE = rf"stale effort sample \(>0\.5 seconds\)(?:: tick_ms={_STALE_T} last_tick_ms={_STALE_T} last_effort_ms={_STALE_T} pwm_ms={_STALE_T} monitor_ms={_STALE_T})?"
 STALE_EFFORT = re.compile(rf"(?:runner: )?session ended: ValueError: {_STALE_CORE}", re.ASCII)
@@ -98,17 +99,14 @@ STALE_EFFORT_FAULT_TEXT = re.compile(_STALE_CORE, re.ASCII)
 STALE_EFFORT_FAULT = ("ValueError", "stale effort sample (>0.5 seconds)")
 REMEASURE_MAX_AGE_S, REMEASURE_SKEW_S, REMEASURE_HOME_TOL = 900, 60, 3.0  # D-1040 freshness/skew/fold tolerances
 
-
 def _list_complete(facts, total_key: str, items) -> bool:
     total = facts.get(total_key)
     return total is None or (type(total) is int and total == len(items))
-
 
 def _stale_effort_kinds_ok(records, kinds) -> bool:
     return (isinstance(kinds, list) and len(kinds) == len(records)
             and all(isinstance(k, dict) and isinstance(k.get("fault"), str)
                     and STALE_EFFORT_FAULT_TEXT.fullmatch(k["fault"]) and k.get("stop_reasons") == [] for k in kinds))
-
 
 def remeasure_kind(facts) -> str | None:
     """D-1040 kind requiring ArmIncidentRemeasure (port-busy torque OFF, body wind-up, or stale effort sample), else None."""
@@ -121,8 +119,9 @@ def remeasure_kind(facts) -> str | None:
         return "torque OFF not confirmed (port in use)"
     if flagged and not windup and all(_runner_row(r, STALE_EFFORT) for r in flagged):
         return "stale effort sample"
-    if windup and not flagged and all(isinstance(h, dict) and isinstance(h.get("reason"), str)
-                                      and WINDUP.fullmatch(h["reason"]) for h in windup):
+    if (windup or flagged) and all(isinstance(h, dict) and isinstance(h.get("reason"), str)
+                                   and WINDUP.fullmatch(h["reason"]) for h in (windup or ())) \
+            and all(_runner_row(r, PARK_WINDUP, ("run park", "state")) for r in (flagged or ())):
         return "wind-up before the end"
     return None
 

@@ -79,6 +79,54 @@ def fault_records(arm, keep=8) -> list:
     return list(out.values())[-keep:]
 
 
+def _observer_io(run=None, users=None, scan=None, resolve=None):
+    import observer_handoff_io as oh_io
+
+    return (
+        run or oh_io.systemctl,
+        users or oh_io.fuser,
+        scan or oh_io.proc_holders,
+        resolve or (lambda p: str(Path(p).resolve(strict=True))),
+    )
+
+
+def pause_observer_if_sole_holder(arm, port, *, run=None, users=None, scan=None, resolve=None,
+                                  sleep=time.sleep, clock=time.monotonic, timeout_s=5.0) -> bool:
+    """Stop `rosy-omx-observer@<arm>` under `session_lock(arm)` iff its MainPID is the sole holder of `port`."""
+    import observer_handoff_io as oh_io
+
+    run_fn, users_fn, scan_fn, resolve_fn = _observer_io(run, users, scan, resolve)
+    resolved = resolve_fn(port)
+    holders = oh_io.port_holders(resolved, users_fn, scan_fn)
+    if not holders:
+        return False
+    unit = f"rosy-omx-observer@{arm}.service"
+    if run_fn("is-active", unit).stdout.strip() != "active":
+        return False
+    main_pid = int(run_fn("show", "-p", "MainPID", "--value", unit).stdout.strip() or 0)
+    if main_pid <= 0 or holders != {main_pid}:
+        return False
+    stopped = run_fn("stop", unit)
+    if stopped.returncode != 0:
+        raise oh_io.HandoffError(f"could not stop {unit}: {stopped.stderr.strip()}")
+    deadline = clock() + timeout_s
+    while oh_io.port_holders(resolved, users_fn, scan_fn):
+        if clock() >= deadline:
+            raise oh_io.HandoffError(f"{resolved} still held after {timeout_s:g} s")
+        sleep(0.2)
+    return True
+
+
+def resume_observer(arm, port, *, run=None, users=None, scan=None,
+                    sleep=time.sleep, clock=time.monotonic, timeout_s=5.0, resume_s=10.0):
+    """Restart `rosy-omx-observer@<arm>` after `session_lock` is closed and confirm it holds `port`."""
+    import observer_handoff as oh
+
+    run_fn, users_fn, scan_fn, _ = _observer_io(run, users, scan)
+    return oh.restart(arm, run=run_fn, users=users_fn, scan=scan_fn, device=str(port),
+                      sleep=sleep, clock=clock, timeout_s=timeout_s, resume_s=resume_s)
+
+
 def reassess(arm, config, *, device=None, fetch=None, read=None, lease_root=None, by_id=Path("/dev/serial/by-id"),
              calibration_dir=CALIBRATION, now=time.time, sleep=time.sleep, gap=GAP_S, held=True) -> dict:
     """The `remeasured` block (core_common ArmIncidentRemeasure) of `arm`'s own follower and plan home (its cell
@@ -109,27 +157,33 @@ def reassess(arm, config, *, device=None, fetch=None, read=None, lease_root=None
     views = zip(("top", "wrist"), HELD_VIEWS[arm]) if held else zip(VIEWS[arm], VIEWS[arm])
     fetch = fetch or viewer_fetch("http://127.0.0.1:8767")
     lock = session_lock(arm)  # SystemExit when a session holds the arm
+    paused_obs = False
     try:
-        if read is None:
-            import register_probe
-            read = register_probe.collect  # refuses a port another process holds
-        motors = {str(m["id"]): m for m in read(str(port))}
-        first_at = now()
-        sleep(gap)  # a second read under the same lock and lease: a creeping arm is not at rest
-        again = {str(m["id"]): m for m in read(str(port))}
-        at = now()
-        if sorted(motors) != ["11", "12", "13", "14", "15", "16"] or len(home) != len(BODY):
-            raise SystemExit(f"{arm}: read {sorted(motors)} against a home of {len(home)} joints; not a full read")
-        if sorted(again) != sorted(motors):
-            raise SystemExit(f"{arm}: the second read saw {sorted(again)}; not a full read")
-        stills = {}
-        for role, view in views:
-            data = fetch(view)
-            if data[:2] != b"\xff\xd8":
-                raise SystemExit(f"{arm}: the {view} view is not a JPEG")
-            stills[role] = data
+        try:
+            if read is None:
+                import register_probe
+                paused_obs = pause_observer_if_sole_holder(arm, port, sleep=sleep)
+                read = register_probe.collect  # refuses a port another process holds
+            motors = {str(m["id"]): m for m in read(str(port))}
+            first_at = now()
+            sleep(gap)  # a second read under the same lock and lease: a creeping arm is not at rest
+            again = {str(m["id"]): m for m in read(str(port))}
+            at = now()
+            if sorted(motors) != ["11", "12", "13", "14", "15", "16"] or len(home) != len(BODY):
+                raise SystemExit(f"{arm}: read {sorted(motors)} against a home of {len(home)} joints; not a full read")
+            if sorted(again) != sorted(motors):
+                raise SystemExit(f"{arm}: the second read saw {sorted(again)}; not a full read")
+            stills = {}
+            for role, view in views:
+                data = fetch(view)
+                if data[:2] != b"\xff\xd8":
+                    raise SystemExit(f"{arm}: the {view} view is not a JPEG")
+                stills[role] = data
+        finally:
+            lock.close()
     finally:
-        lock.close()
+        if paused_obs:
+            resume_observer(arm, port, sleep=sleep)
 
     def signed(m):  # read - home per body joint, units
         return {j: round(units(m[str(11 + i)]["position_raw"], j, cal) - h, 2) for i, (j, h) in enumerate(zip(BODY, home))}

@@ -22,7 +22,7 @@ import cell_control_core  # noqa: E402
 import cell_envelope  # noqa: E402
 from cell_finger_room import finger_room_view, free_mm, jaw_margin, own_removed  # noqa: E402
 import cell_objects  # noqa: E402
-from cell_observe import predicted_pixel  # noqa: E402
+from cell_observe import maps as observe_maps, outside_mm as map_outside_mm, predicted_pixel  # noqa: E402
 import cell_params as prm  # noqa: E402
 from cell_pick_geom import grasp_depth, surface_z  # noqa: E402
 import cell_pivot  # noqa: E402
@@ -92,13 +92,10 @@ def _resolve_gripper(arm_id: str, config: dict, cal_profile: dict | None = None)
     if offset is None:
         offset = prm.get(params, "gripper.closing_axis_offset_deg", prm.get(params, "auto.closing_theory_deg", 90.0))
     return {
-        "tcp_x_m": float(tcp) if tcp is not None else None,
-        "held_30mm": held_30, "gap_mm_per_unit": gap_u, "open_max_units": open_max,
-        "grip_closed_units": float(cal_p.get("grip_closed") or plan.get("grip_closed") or prm.get(params, "gripper.closed", 48.8)),
-        "closing_axis_offset_deg": float(offset) if offset is not None else None,
-        "nominal_margin_cm": nom_margin / 10.0,
-        "min_margin_cm": float(prm.get(params, "auto.min_jaw_margin_mm", 2.0)) / 10.0,
-        "max_margin_cm": float(prm.get(params, "auto.jaw_margin_max_mm", 16.0)) / 10.0,
+        "tcp_x_m": float(tcp) if tcp is not None else None, "held_30mm": held_30, "gap_mm_per_unit": gap_u,
+        "open_max_units": open_max, "grip_closed_units": float(cal_p.get("grip_closed") or plan.get("grip_closed") or prm.get(params, "gripper.closed", 48.8)),
+        "closing_axis_offset_deg": float(offset) if offset is not None else None, "nominal_margin_cm": nom_margin / 10.0,
+        "min_margin_cm": float(prm.get(params, "auto.min_jaw_margin_mm", 2.0)) / 10.0, "max_margin_cm": float(prm.get(params, "auto.jaw_margin_max_mm", 16.0)) / 10.0,
     }
 
 
@@ -332,12 +329,10 @@ def plan_site_grasp(
     entry = next((e for e in catalog if e.get("id") == o.get("object")), None) or catalog[0]
     cal_prof = cell_arm_cal.load(Path(str(config.get("work_dir", "."))).expanduser(), arm_id) if config.get("work_dir") else {}
     grip, pay = _resolve_gripper(arm_id, config, cal_prof), (cell_objects.payload(catalog, entry["id"]) or {})
-    obj_spec = {
-        "object_id": entry["id"], "width_cm": float(o.get("width_mm", entry["width_mm"])) / 10.0,
-        "length_cm": float(o.get("length_mm", entry["length_mm"])) / 10.0, "height_cm": float(entry.get("top_height_mm", 30.0)) / 10.0,
-        "long_axis_deg": float(o["long_axis_deg"]), "jaw_axis_deg_from_long": float((entry.get("grasp") or {}).get("jaw_axis_deg_from_long", 90.0)),
-        "kg": pay.get("kg"), "payload_source": pay.get("source"), "require_payload": True,
-    }
+    obj_spec = {"object_id": entry["id"], "width_cm": float(o.get("width_mm", entry["width_mm"])) / 10.0,
+                "length_cm": float(o.get("length_mm", entry["length_mm"])) / 10.0, "height_cm": float(entry.get("top_height_mm", 30.0)) / 10.0,
+                "long_axis_deg": float(o["long_axis_deg"]), "jaw_axis_deg_from_long": float((entry.get("grasp") or {}).get("jaw_axis_deg_from_long", 90.0)),
+                "kg": pay.get("kg"), "payload_source": pay.get("source"), "require_payload": True}
     o_work = {**o, "raw_m": o.get("raw_m") or [c / 1000.0 for c in o["centre_mm"]]}
     c_off = float(grip["closing_axis_offset_deg"] or 90.0)
     prelim_yaw = _wrap180(float(o["long_axis_deg"]) + obj_spec["jaw_axis_deg_from_long"] - c_off)
@@ -355,24 +350,28 @@ def plan_site_grasp(
         place={"xy_m": place_xy, "z_m": place_z, "dest_long_axis_deg": _belt_axis_deg(config, cal, dest), "corridor_width_cm": 8.5 if dest == "belt" else None},
         operating_conditions=config.get("operating_conditions"), params=config.get("params"))
     out["metrics"]["clearance_cm"], out["metrics"]["wall_shift_cm"] = free_cm, shift_cm
+    b_dist = reg.get("dist_mm") if reg else None
+    m_outs = [map_outside_mm(rec, o_work["raw_m"]) for _, rec in observe_maps(cal or {}, source, "top")]
+    m_out = next((v for v in m_outs if v is not None), o_work.get("outside_mm"))
+    out["metrics"].update(bias_dist_mm=b_dist, map_outside_mm=m_out)
+    warns = [w for w, c in (("bias_extrapolated", b_dist is not None and b_dist > 30.0), ("map_extrapolated", m_out is not None and m_out > 10.0)) if c and w not in out.get("warnings", [])]
+    out.setdefault("warnings", []).extend(warns)
     if clear_bad:
         out["feasible"] = False
         out["refusal_reasons"].append(f"clearance_insufficient: {free_cm}")
     if out["feasible"]:
-        out["ready_job_body"] = {
-            "arm": arm_id, "config": config_name, "catalog": catalog_name, "object": entry["id"],
-            "pick_area": source, "pick_x": out["pick_xyz_m"][0], "pick_y": out["pick_xyz_m"][1], "pick_z": out["pick_xyz_m"][2],
-            "pick_yaw_deg": out["metrics"]["pick_yaw_deg"], "place_area": dest, "place_x": out["place_xyz_m"][0],
-            "place_y": out["place_xyz_m"][1], "place_z": out["place_xyz_m"][2], "place_yaw_deg": out["metrics"]["place_yaw_deg"],
-        }
+        m = out["metrics"]
+        px, pl = out["pick_xyz_m"], out["place_xyz_m"]
+        out["ready_job_body"] = {"arm": arm_id, "config": config_name, "catalog": catalog_name, "object": entry["id"],
+                                 "pick_area": source, "pick_x": px[0], "pick_y": px[1], "pick_z": px[2], "pick_yaw_deg": m["pick_yaw_deg"],
+                                 "place_area": dest, "place_x": pl[0], "place_y": pl[1], "place_z": pl[2], "place_yaw_deg": m["place_yaw_deg"]}
     return out
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Pre-grasp feasibility planner (max angle deg & jaw cm)")
-    for k, req in (("--arm", True), ("--config", True), ("--catalog", True), ("--dest", True), ("--object", False), ("--colour", False)):
-        ap.add_argument(k, required=req, choices=("arm_s", "arm_a", "arm_b") if k == "--arm" else None)
-    ap.add_argument("--from", dest="source", required=True)
+    for k in ("--arm", "--config", "--catalog", "--from", "--dest", "--object", "--colour"):
+        ap.add_argument(k, required=k in ("--arm", "--config", "--catalog", "--from", "--dest"), dest="source" if k == "--from" else None, choices=("arm_s", "arm_a", "arm_b") if k == "--arm" else None)
     ap.add_argument("--roi", nargs=4, type=int, default=None)
     for k in ("--image", "--obb-json", "--out"):
         ap.add_argument(k, type=Path, default=None)

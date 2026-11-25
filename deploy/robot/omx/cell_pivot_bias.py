@@ -235,7 +235,8 @@ def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, param
         validate_bias(region, params)
     near = [r for r in data["regions"]
             if r["site"] == site and (not pivot_only or "radius_mm" in r) and 1000 * math.dist(r["point_m"], point_m) <= reach_mm]
-    return min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1), default=None)
+    best = min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1), default=None)
+    return None if best is None else {**best, "dist_mm": round(1000.0 * math.dist(best["point_m"], point_m), 1)}
 
 
 def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None, *,
@@ -264,8 +265,9 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
     if not near:
         near = [raw[0]]
     anchor = min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1))
+    dist_mm = round(1000.0 * math.dist(anchor["point_m"], point_m), 1)
     if len(near) == 1:
-        return {**anchor, "blended_n": 1}
+        return {**anchor, "dist_mm": dist_mm, "blended_n": 1}
     wx = wy = wsum = wdz = wdz_sum = 0.0
     for r in near:
         d_mm = 1000.0 * math.dist(r["point_m"], point_m)
@@ -279,7 +281,7 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
             wdz_sum += w
     piv = min((r for r in near if is_pivot_region(r)), key=lambda r: math.dist(r["point_m"], point_m), default=None)
     base = {**anchor, **({"radius_mm": piv["radius_mm"], "phase_deg": piv.get("phase_deg", 0.0)} if piv and "radius_mm" in piv else {})}
-    return {**base, "bias_mm": [round(wx / wsum, 2), round(wy / wsum, 2)],
+    return {**base, "bias_mm": [round(wx / wsum, 2), round(wy / wsum, 2)], "dist_mm": dist_mm,
             **({"droop_z_mm": round(wdz / wdz_sum, 2)} if wdz_sum > 0 else {}), "blended_n": len(near)}
 
 

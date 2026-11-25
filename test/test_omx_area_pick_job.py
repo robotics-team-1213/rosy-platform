@@ -702,3 +702,55 @@ def test_refine_pick_pose_rejects_implausible_wrist_gap_px(tmp_path: Path, monke
     assert vision_refined is False
     assert last_obs is not None and last_obs["found"] is False and last_obs["why"] == "wrist_sanity_rejected"
     assert wrist_log[0]["why"] == "wrist_sanity_rejected"
+
+
+def test_human_hold_passthrough_and_clipped_step_clamped_wrist_servo(tmp_path: Path, monkeypatch) -> None:
+    import cell_area_vision_align as align
+    import cell_auto_safety as cas
+    import cell_fingers
+    import cell_transfer as ct
+
+    # 1) Guarded.act and Gate.act allow human-hold unchecked even when fault is active
+    raw_cmds = []
+    class _FaultCell:
+        def act(self, cmd: str):
+            raw_cmds.append(cmd)
+            if cmd == "state":
+                return {"ok": True, "session_id": "s1", "fault": "contact in park", "settled": False, "human_hold_latched": False}
+            return {"ok": True, "human_hold_latched": True, "torque_hold_commanded": True}
+
+    g = cas.Guarded(_FaultCell(), {"safety": {}})
+    g.monitor.check = lambda *_a: pytest.fail("Monitor.check must not fire on human-hold")
+    assert g.act("human-hold")["human_hold_latched"] is True
+    gate = ct.Gate(g, {"operating_profile_path": None}, {}, sequence=[])
+    gate.assessment = {"session_id": "s1", "library_sha256": "abc", "mode": "commissioning"}
+    assert gate.act("human-hold")["human_hold_latched"] is True
+    assert [c for c in raw_cmds if c == "human-hold"] == ["human-hold", "human-hold"]
+    raw_cmds.clear()
+    cli._ensure_human_hold(_FaultCell())
+    assert raw_cmds == ["state", "human-hold"]
+
+    # 2) Clipped 28mm wrist offset converges via <=18mm bounded steps across 3 passes
+    monkeypatch.setattr(
+        align, "plan_library_from_directive",
+        lambda d, bp, **_kw: ({"chunks": {}}, {"pick": dict(d["pick"]), "grip_open": 58.0}, {"finger_color": "white"}),
+    )
+    obs_iter = iter([
+        {"found": True, "along_mm": 28.0, "across_mm": 0.0, "clipped_border": True, "mm_per_px": 0.14},
+        {"found": True, "along_mm": 11.2, "across_mm": 0.0, "clipped_border": False, "mm_per_px": 0.14},
+        {"found": True, "along_mm": 4.5, "across_mm": 0.0, "clipped_border": False, "mm_per_px": 0.14},
+    ])
+    monkeypatch.setattr(cell_fingers, "resolve_wrist_servo_offset", lambda *_a, **_kw: next(obs_iter))
+    cur_d = {"pick": {"area": "floor", "x": 0.070, "y": 0.140, "effective_xyz_m": [0.070, 0.140, 0.021], "yaw_deg": -90.0}}
+    img = np.zeros((480, 640, 3), np.uint8)
+    w_log: list[dict] = []
+    _lib, _plan, _cal, _last, refined = align.refine_pick_pose_at_hover(
+        cur_directive=cur_d, base_plan={}, lib={"chunks": {}},
+        plan={"pick": dict(cur_d["pick"]), "grip_open": 58.0}, cal={"finger_color": "white"},
+        lib_path=tmp_path / "lib.json", work_dir=tmp_path, kinematics_root=None, arm_id="arm_s",
+        exec_cfg={"vision_refine": True, "wrist_passes": 1}, frame_fn=lambda v: img if v == "wrist" else None,
+        before_side=None, above_shaking=False, run_cmd=lambda _c: {"ok": True, "state": [0, 0, 0, 0, 0, 58.0]},
+        wrist_log=w_log,
+    )
+    assert refined is True and len(w_log) == 3
+    assert 0.092 <= cur_d["pick"]["x"] <= 0.105  # shifted ~+26mm within 35mm cap

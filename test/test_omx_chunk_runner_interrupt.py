@@ -1058,3 +1058,16 @@ def test_guard_stopped_drains_rx_and_retries_when_torque_read_has_write_ack_byte
     assert cleared == ["clear"]
     assert calls == [1, 2]
     assert set(res.values()) == {0}
+
+
+def test_idle_parks_twice_latches_human_hold_without_deadlock():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock = Robot(), [], [0.0]
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 params={"runner.idle_park_s": 1.0, "runner.idle_retry_s": 1.0})
+    r.target = [18.0, -30.0, 20.0, 40.0, 10.0, 46.6]
+    r.idle_parks = 2
+    assert r.idle() is False
+    assert r.idle_parks == 3 and r.human_hold_latched is True and r._human_hold_ack_pending is True
+    assert status[-1]["person_needed"] is True and "idle fold held twice" in status[-1]["error"]
