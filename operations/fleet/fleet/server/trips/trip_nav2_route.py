@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 
 from core_common.protocol.evidence import STALE_POSE_S
+from core_common.robot_body import nominal_body_for
 from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
+from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
+from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_live import LiveTrip
+from fleet.server.trip_ports import TripError
+from fleet.server.trip_start_checks import crosswalks_on, signals_on, start_check
+from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
+from rosy.world.state.projections.map_pose_samples import parse_utc
 
 NAV2_ROUTE_STEP_M = 0.12
 NAV2_ROUTE_MAX_POINTS = 64
@@ -156,6 +164,165 @@ async def _cancel_active_route(runner, live: LiveTrip, robot_id: str, nav: str |
     runner._fence(robot_id)
 
 
+def camera_finish_segment(live: LiveTrip, index: int, active, along: float) -> str | None:
+    """One reviewed, straight, final painted section ending at a non-precision stop."""
+    if (not live.nav2 or live.request.get("camera_lane_fallback") is not True or live.repeat
+            or index != len(live.segments) - 1 or live.view.get("hold") is not None
+            or live.request.get("arrive_yaw") is not None
+            or not live.view["detail"].get("nav2_binding_id")
+            or active is None or active[0] != live.view["map_version"]):
+        return None
+    arc, segment = live.arc(index), live.segments[index]
+    place = live.graph.places.get(arc.end_place)
+    if (arc.drive_mode != "lane" or live.request.get("to") != arc.end_place
+            or place is None or place.kind != "stop" or not place.pinned
+            or place.precision_stop is not None or place.stop_zone is not None
+            or not segment["s_from"] < along < segment["s_to"]
+            or abs(segment["s_to"] - arc.length_m) > 1e-4):
+        return None
+    site = active[1]
+    edge = next((item for item in site.edges if item.id == arc.edge_id), None)
+    evidence = edge.evidence if edge is not None else None
+    if (site.survey is None or not site.survey.reviewed or evidence is None
+            or evidence.status != "reviewed" or evidence.source != "camera"
+            or evidence.reference_revision != site.survey.revision):
+        return None
+    (x0, y0), (x1, y1) = arc.polyline[0], arc.polyline[-1]
+    # Distance to the chord must be within the map's millimetre precision and no doubles back.
+    dx, dy = x1 - x0, y1 - y0
+    length = math.hypot(dx, dy)
+    if length <= 0.0 or arc.length_m - length > .001:
+        return None
+    if any(abs(dx * (y - y0) - dy * (x - x0)) / length > .001 for x, y in arc.polyline):
+        return None
+    yaw = getattr(place, "yaw", None)
+    if yaw is not None and abs(_wrap_angle(yaw - math.atan2(dy, dx))) > math.radians(1):
+        return None
+    return arc.end_place
+
+
+def camera_body_inside(live, index: int, pose) -> bool:
+    arc = live.arc(index)
+    body = nominal_body_for((live.view.get("caps") or {}).get("kind"))
+    if body is None:
+        return False
+    lateral, _, _ = arc.project(pose.x, pose.y)
+    return lateral + body.rotation_radius_m + body.sweep_pad_m <= arc.width_m / 2
+
+
+async def _camera_stationary(runner, live, after: float) -> float | None:
+    """Require two distinct fresh zero samples, returning the conservative trip lease deadline."""
+    previous = None
+    robot_id = live.view["robot_id"]
+    lease_id = (live.view.get("lease") or {}).get("lease_id")
+    if lease_id is None:
+        return None
+    for _ in range(4):
+        if not live.open or live.view["hold"] is not None:
+            return None
+        read_started = runner._clock()
+        state = await runner._call(runner.named_stop_state(robot_id))
+        evidence = (state.get("evidence") or {}).get("velocity") or {}
+        vel, line = state.get("velocity") or {}, state.get("line_follow") or {}
+        lease = state.get("trip_lease") or {}
+        expires_in = lease.get("expires_in_s")
+        deadline = read_started + expires_in if type(expires_in) in (int, float) and math.isfinite(expires_in) else -math.inf
+        stamp = parse_utc(evidence.get("sampled_at"))
+        if (evidence.get("evidence") == "fresh" and stamp is not None
+                and stamp > after and 0 <= runner._clock() - stamp < STALE_POSE_S
+                and state.get("mode") in {"IDLE", "NAVIGATION"}
+                and lease.get("lease_id") == lease_id and deadline > runner._clock()
+                and state.get("navigation") in {"IDLE", "CANCELED", "FAILED", "ARRIVED"}
+                and (state.get("safety") or {}).get("estop") is False and line.get("mode") == "OFF"
+                and all(type(vel.get(axis)) in (float, int) and vel[axis] == 0.0 for axis in ("linear", "angular"))):
+            if previous is not None and stamp > previous:
+                return deadline
+            previous = stamp
+        else:
+            previous = None
+        await asyncio.sleep(runner.config.period_s)
+    return None
+
+
+async def _start_camera_finish(runner, live, index: int, along: float, active) -> bool:
+    place = camera_finish_segment(live, index, active, along)
+    if (place is None or runner.named_stop_state is None or runner._cancel_goal is None or not runner.lease.required
+            or runner.traffic.holds(live, index) or live.segments[index]["s_to"] - along > runner.config.arm_distance_m):
+        return False
+    robot_id, segment = live.view["robot_id"], live.segments[index]
+    caps = await runner._caps_checks(robot_id, live.graph, [segment], False, place)
+    if (runner.authority.mode(caps) != "core" or not caps.line_follow_authority_required
+            or crosswalks_on(live.graph, [segment], active[1].crosswalks)
+            or signals_on(runner.traffic, [segment])):
+        return False
+    if not _cancel_ack(await runner._call(runner._cancel_goal(robot_id))):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
+    lease_deadline = await _camera_stationary(runner, live, runner._clock())
+    if lease_deadline is None:
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
+    live.active_route = None
+    scope = live.view["map_version"], live.view["detail"]["nav2_binding_id"]
+    camera = await runner._call(runner._junction.front_camera(robot_id)) or {}
+    age_ms, observed = camera.get("age_ms"), runner._clock()
+    if (camera.get("available") is not True or camera.get("stale") is not False
+            or type(age_ms) not in (int, float) or not 0 <= age_ms < 1000):
+        raise TripError(409, "TRIP_LANE_CAMERA_UNAVAILABLE")
+    pose = await precision_map_pose(runner, robot_id, scope)
+    if (pose is None or not camera_body_inside(live, index, pose)
+            or start_check(live.graph, [segment], pose.x, pose.y, pose.yaw,
+                           runner.config.start_heading_tol_deg)["code"]):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
+    _, fresh_along, _ = live.arc(index).project(pose.x, pose.y)
+    if (camera_finish_segment(live, index, active, fresh_along) is None
+            or segment["s_to"] - fresh_along > runner.config.arm_distance_m):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
+    pose_stamp = runner._clock() - pose.age_s
+
+    def check():
+        runner._check_human_hold()
+        now = runner._clock()
+        current = runner._store.active()
+        binding = runner._store.map_bindings.active(robot_id) or {}
+        if (not live.open or live.view["hold"] is not None or runner.traffic.holds(live, index)
+                or now >= lease_deadline or current is None or current[0] != scope[0]
+                or binding.get("binding_id") != scope[1]
+                or not 0 <= now - pose_stamp < STALE_POSE_S or not 0 <= now - pose.odom_stamp < STALE_POSE_S
+                or not 0. <= now - observed < 1. - age_ms / 1000):
+            raise TripError(409, "TRIP_CAMERA_FALLBACK_ADMISSION_CHANGED")
+
+    # Persist ambiguous ownership before the PUT. Restart/cancel stops both controllers.
+    phase = {"phase": "starting", "index": index, "started_at": runner._clock(),
+             "authority_end_m": live.segments[0]["s_from"] + live.progress(index, segment["s_to"])}
+    live.view["detail"].update(camera_lane_fallback=phase, line_follow_started=False)
+    runner._save(live)
+    with dispatch_guard(check, paths={"/api/v1/line-follow/mode"}):
+        check()
+        await runner._start_line(live)
+    if live.open:
+        phase["phase"] = "running"
+        live.view["traffic_authority"] = "core"
+        runner._save(live)
+    return True
+
+
+async def finish_camera_line(runner, live) -> None:
+    """End the replacement owner and prove stationary before reporting arrival."""
+    rid = live.view["robot_id"]
+    live.view["detail"]["line_follow_started"] = False
+    runner._save(live)
+    result = await runner._call(runner._junction.hold(rid))
+    if (not isinstance(result, dict) or result.get("mode") != "OFF"
+            or await _camera_stationary(runner, live, runner._clock()) is None):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
+    fallback = live.view["detail"]["camera_lane_fallback"]
+    scope = live.view["map_version"], live.view["detail"]["nav2_binding_id"]
+    pose = await precision_map_pose(runner, rid, scope)
+    if pose is None or not runner._arrived(live, fallback["index"], 0.0, True, pose):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
+    live.view["traffic_authority"] = "hold_back"
+    fallback["phase"] = "completed"
+
+
 async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, pose, active) -> None:
     """Ask Fleet for an alternate path, retry transiently, or hold cleanly for Fleet resume."""
     robot_id = live.view["robot_id"]
@@ -271,6 +438,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 return
         verdict = _route_finished(runner, live, index, s, nav, target_end=target_end)
         if verdict == "aborted":
+            if nav == "FAILED" and await _start_camera_finish(runner, live, index, s, active):
+                return
             if nav == "FAILED" and robot_id in runner.autonomous_robots:
                 await _handle_nav2_failure(runner, live, index, s, pose, active)
                 return
