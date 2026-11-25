@@ -205,7 +205,7 @@ def _smallest_eigvec_sym(mat: list[list[float]]) -> list[float]:
     n = len(mat)
     a = [row[:] for row in mat]
     v = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
-    for _ in range(32):
+    for _ in range(300):
         max_val, p, q = 0.0, 0, 1
         for i in range(n):
             for j in range(i + 1, n):

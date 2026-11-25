@@ -2,11 +2,13 @@
 import { project } from "/console/assets/map-fit.js";
 import { distortImagePoint } from "/console/assets/camera-warp.js";
 
+const tone = (name) => window.RosyPalette.cssColor(name);
+
 export function colorForErrorM(errM) {
-  if (!Number.isFinite(errM)) return "#888888";
-  if (errM <= 0.02) return "#2ea043";
-  if (errM <= 0.05) return "#d29922";
-  return "#f85149";
+  if (!Number.isFinite(errM)) return "--ink-quiet";
+  if (errM <= 0.02) return "--status-good";
+  if (errM <= 0.05) return "--status-warn";
+  return "--status-crit";
 }
 
 export function snapMapPoint(mapX, mapY, laneSet, thresholdM = 0.06) {
@@ -84,14 +86,14 @@ export function drawLoupe(ctx, image, imgX, imgY, canvasW, zoom = 4, size = 112)
   const pad = 10, x0 = canvasW - size - pad, y0 = pad;
   const srcSpan = size / zoom;
   ctx.save();
-  ctx.fillStyle = "#111113";
+  ctx.fillStyle = tone("--ground");
   ctx.fillRect(x0 - 2, y0 - 2, size + 4, size + 4);
   ctx.beginPath();
   ctx.rect(x0, y0, size, size);
   ctx.clip();
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(image, imgX - srcSpan / 2, imgY - srcSpan / 2, srcSpan, srcSpan, x0, y0, size, size);
-  ctx.strokeStyle = "#58a6ff";
+  ctx.strokeStyle = tone("--series-primary");
   ctx.lineWidth = 1;
   const cx = x0 + size / 2, cy = y0 + size / 2;
   ctx.beginPath();
@@ -100,7 +102,7 @@ export function drawLoupe(ctx, image, imgX, imgY, canvasW, zoom = 4, size = 112)
   ctx.stroke();
   ctx.restore();
   ctx.save();
-  ctx.strokeStyle = "#f0f6fc";
+  ctx.strokeStyle = tone("--ink");
   ctx.lineWidth = 1.5;
   ctx.strokeRect(x0, y0, size, size);
   ctx.restore();
