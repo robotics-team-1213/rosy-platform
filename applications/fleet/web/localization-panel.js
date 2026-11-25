@@ -60,13 +60,13 @@ export function createLocalizationPanel({
   let lastCandSig = "";
 
   const ensure = (map, id, init) => map.get(id) || map.set(id, init()).get(id);
-  const stateFor = (id) => ensure(cache, id, () => ({ loc: null, binding: null, track: null, fetchedAtMs: 0, inFlight: false, error: "", candIdx: 0 }));
+  const stateFor = (id) => ensure(cache, id, () => ({ loc: null, binding: null, track: null, fetchedAtMs: 0, retryAtMs: 0, inFlight: false, error: "", candIdx: 0 }));
   const samplesFor = (id) => ensure(sampleBuffers, id, () => ({ gridId: null, samples: [] }));
 
   async function refresh(id, { force = false } = {}) {
     if (!id || auth?.locked) return;
     const entry = stateFor(id);
-    if (entry.inFlight || (!force && Date.now() - entry.fetchedAtMs < POLL_MS)) return;
+    if (entry.inFlight || Date.now() < entry.retryAtMs || (!force && Date.now() - entry.fetchedAtMs < POLL_MS)) return;
     entry.inFlight = true;
     const life = scope.capture();
     try {
@@ -80,11 +80,19 @@ export function createLocalizationPanel({
       entry.binding = binding;
       if (ident?.robots) entry.track = ident.robots.find((row) => row.robot_id === id) || null;
       entry.fetchedAtMs = Date.now();
+      entry.retryAtMs = 0;
       entry.error = "";
     } catch (err) {
       if (err?.name !== "AbortError") {
+        entry.loc = null;
         entry.fetchedAtMs = Date.now();
-        entry.error = err?.message || "위치 세부 상태를 불러오지 못했습니다.";
+        if (err?.status === 429 && err.code === "RATE_LIMITED") {
+          const wait = Math.min(60, Math.max(1, Number(err.detail?.retry_after_s) || 1));
+          entry.retryAtMs = entry.fetchedAtMs + wait * 1000;
+          entry.error = `기체 후보 조회가 제한되었습니다. ${Math.ceil(wait)}초 뒤 다시 확인합니다.`;
+        } else {
+          entry.error = err?.message || "위치 세부 상태를 불러오지 못했습니다.";
+        }
       }
     } finally {
       entry.inFlight = false;
@@ -179,13 +187,16 @@ export function createLocalizationPanel({
   refreshBtn.addEventListener("click", scope.guard(() => { if (activeId) void refresh(activeId, { force: true }); }));
 
   onAction(confirmBtn, (id) => {
-    const idx = stateFor(id).candIdx;
+    const entry = stateFor(id);
+    const idx = entry.candIdx;
+    const candidate = entry.loc?.candidates?.candidates?.[idx];
+    const pose = candidate && { x: candidate.x, y: candidate.y, yaw: candidate.yaw };
     return {
       kind: "loc-confirm",
       message: `${id}의 후보 ${idx + 1} 위치를 확정해 자율 주행을 허용할까요?`,
-      eligible: () => Boolean(lastRobot?.online) && !confirmBtn.disabled,
+      eligible: () => Boolean(lastRobot?.online && pose) && !confirmBtn.disabled,
       request: (owner) => call(`/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidate_id: idx }), signals: [owner.signal],
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pose), signals: [owner.signal],
       }),
       okMsg: "후보 위치 확정 요청을 보냈습니다.",
       errLabel: "위치 확정 거절",
