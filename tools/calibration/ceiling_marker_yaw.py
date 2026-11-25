@@ -35,6 +35,10 @@ Stationary evidence cannot establish that the orange object is attached to the r
 For a D-950 transverse container, ``--transverse-cargo`` uses the normal of its long edge.
 Use ``--forward-motion`` only for a known straight forward segment.
 ``--installed-offset-deg`` adds a wrapped comparison with the installed value.
+Existing source binding is checked with ``ROSY_VISION_SOURCE_TOKEN`` (if supplied) or
+``--site-camera-config``. Otherwise only exact D-562 numbered marker identities are used.
+``--live-led`` explicitly opens the Fleet identify window alongside raw preview capture.
+Run cargo and LED candidate modes from the repository file so the sibling modules are available.
 
 Token: ``ROSY_FLEET_TOKEN`` (viewer or above) from an authenticated session.
 Development mode also requires login. The token is never printed. ``estimate`` is stdlib only.
@@ -177,10 +181,13 @@ def estimate_cargo(samples: Sequence[CueSample], *, forward_motion: bool = False
             "forward_cross_check": forward_motion and associated, "installation_allowed": False}
 
 
-def check_cargo_record(record: dict, *, source: str, revision: str | None) -> None:
-    if (not revision or record.get("source_id") != source or record.get("calibration_revision") != revision
-            or not record.get("map_id") or not record.get("approved_by")):
-        raise EstimateError("need the source's approved calibration record at the capture revision")
+def check_candidate_source(fleet, token, context, *, source, robot, marker, revision,
+                           site_camera_config=None) -> tuple[dict, dict]:
+    from ceiling_marker_provenance import check_candidate_source as check_source
+
+    return check_source(fleet, token, context, source=source, robot=robot, marker=marker,
+                        revision=revision, site_camera_config=site_camera_config,
+                        request=_request, approved_record=_approved_record)
 
 
 #: Browser origin Fleet checks on session requests; --origin sets it (the site's own console URL).
@@ -254,8 +261,12 @@ def cargo_frame_sample(record: dict, jpeg: bytes, captured_at: float, *, source:
     image = markers.image
     if marker not in markers or image is None or not math.isfinite(captured_at):
         return None
+    frame_size = (image.shape[1], image.shape[0])
+    approved_size = record.get("image") or {}
+    if frame_size != (approved_size.get("width"), approved_size.get("height")):
+        raise EstimateError("JPEG dimensions differ from the approved frame geometry")
     calibration = from_record(record, source_id=source, map_id=record["map_id"],
-                              frame_size=(image.shape[1], image.shape[0]), lens=record.get("lens"))
+                              frame_size=frame_size, lens=record.get("lens"))
     camera = solved_camera(calibration) if calibration is not None else None
     if camera is None or not 0 <= cargo_height_m < camera[2]:
         raise EstimateError("frame is incompatible with the approved projection or cargo height")
@@ -331,12 +342,16 @@ def _approved_record(fleet, token, context, source):
 
 def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, int], seconds: float,
             token: str | None, context, cargo_height_m: float | None = None,
-            revision: str | None = None, record: dict | None = None, transverse: bool = False) -> list:
+            revision: str | None = None, record: dict | None = None, transverse: bool = False,
+            capture_details: dict | None = None) -> list:
     """(captured_at, x, y, raw marker yaw) from the raw frames; needs rosy_vision (Vision container)."""
     record = record if record is not None else _approved_record(fleet, token, context, source)
     if cargo_height_m is not None:
+        from ceiling_marker_provenance import check_cargo_record, live_frame_stamp
+
         check_cargo_record(record, source=source, revision=revision)
-    samples: dict[float, tuple] = {}
+    samples: dict[float, tuple | CueSample] = {}
+    rotation = None
     lease, lease_at = None, -math.inf
     end = time.monotonic() + seconds
     while time.monotonic() < end:
@@ -348,19 +363,19 @@ def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, in
         except OSError:
             time.sleep(0.25)
             continue
-        captured_at = float(headers.get("X-Frame-Captured-At", "nan"))
-        size = (int(headers.get("X-Frame-Width", 0)), int(headers.get("X-Frame-Height", 0)))
         if cargo_height_m is None:
+            captured_at = float(headers.get("X-Frame-Captured-At", "nan"))
+            size = (int(headers.get("X-Frame-Width", 0)), int(headers.get("X-Frame-Height", 0)))
             sample = frame_sample(record, jpeg, size, captured_at, source=source, marker=marker,
                                   heading_edge=heading_edge)
         else:
-            if headers.get("X-Frame-Rectified") != "false":
-                raise EstimateError("cargo heading needs raw, unrectified frames")
-            age_ms = float(headers.get("X-Frame-Age-Ms", "nan"))
-            sample = (cargo_frame_sample(record, jpeg, captured_at, source=source, marker=marker,
-                                         heading_edge=heading_edge, cargo_height_m=cargo_height_m,
-                                         transverse=transverse)
-                      if 0 <= age_ms <= 1000 else None)
+            captured_at = live_frame_stamp(headers, record, expected_rotation=rotation)
+            sample = None
+            if captured_at is not None:
+                rotation = int(headers["X-Frame-Rotation-Deg"])
+                sample = cargo_frame_sample(record, jpeg, captured_at, source=source, marker=marker,
+                                            heading_edge=heading_edge, cargo_height_m=cargo_height_m,
+                                            transverse=transverse)
         if sample is not None:
             samples[captured_at] = sample
         time.sleep(0.25)
@@ -368,6 +383,8 @@ def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, in
         current = _approved_record(fleet, token, context, source)
         if current != record:
             raise EstimateError("approved calibration changed during capture")
+    if capture_details is not None:
+        capture_details["frame_rotation_deg"] = rotation
     return list(samples.values())
 
 
@@ -416,7 +433,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     offline = parser.add_mutually_exclusive_group()
     offline.add_argument("--frames", help="offline: folder of recorded raw JPEG frames")
     offline.add_argument("--cargo-video", help="offline: recorded raw video for a rear cue candidate")
+    offline.add_argument("--live-led", action="store_true", help="request one live Fleet LED identify window")
     parser.add_argument("--record", help="offline: the approved D-457 record as JSON")
+    parser.add_argument("--site-camera-config", help="operator-supplied camera config for marker binding")
     parser.add_argument("--calibration-revision", help="approved revision at candidate frame capture")
     parser.add_argument("--cargo-height-m", type=float, help="measured orange cargo top height; enables candidate mode")
     parser.add_argument("--transverse-cargo", action="store_true", help="long cargo edge lies across the robot")
@@ -426,7 +445,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.dev_session:
         parser.error("--dev-session is retired; sign in and provide ROSY_FLEET_TOKEN")
-    candidate_mode = args.cargo_height_m is not None or args.led_challenge is not None
+    candidate_mode = args.cargo_height_m is not None or args.led_challenge is not None or args.live_led
     if args.cargo_video and args.cargo_height_m is None:
         parser.error("--cargo-video needs --cargo-height-m")
     if args.transverse_cargo and args.cargo_height_m is None:
@@ -493,19 +512,40 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _candidate(args, fleet, context, edge):
+    from ceiling_marker_provenance import check_candidate_identity, check_cargo_record
+
     frame_options = {"source": args.source, "marker": args.marker, "heading_edge": edge}
     cargo_options = {**frame_options, "cargo_height_m": args.cargo_height_m, "transverse": args.transverse_cargo}
+    source_options = {"source": args.source, "robot": args.robot, "marker": args.marker,
+                      "revision": args.calibration_revision, "site_camera_config": args.site_camera_config}
+    if args.live_led:
+        from ceiling_marker_live_yaw import collect_live_candidate
+
+        return collect_live_candidate(fleet, token=os.environ.get("ROSY_FLEET_TOKEN"), context=context,
+                                      heading_edge=edge, seconds=args.seconds, forward_motion=args.forward_motion,
+                                      cargo_height_m=args.cargo_height_m, transverse=args.transverse_cargo,
+                                      **source_options)
     if not (args.frames or args.cargo_video):
         token = os.environ.get("ROSY_FLEET_TOKEN")
-        record = _approved_record(fleet, token, context, args.source)
+        record, provenance = check_candidate_source(fleet, token, context, **source_options)
+        capture_details = {}
         rows = collect(fleet, seconds=args.seconds, token=token, context=context, record=record,
-                       revision=args.calibration_revision, **cargo_options)
-        return {**estimate_cargo(rows, forward_motion=args.forward_motion), "map_id": record["map_id"]}
+                       revision=args.calibration_revision, capture_details=capture_details, **cargo_options)
+        if check_candidate_source(fleet, token, context, **source_options) != (record, provenance):
+            raise EstimateError("approved source or calibration changed during capture")
+        return {**estimate_cargo(rows, forward_motion=args.forward_motion), "map_id": record["map_id"],
+                **provenance, **capture_details}
 
     record = json.loads(Path(args.record).read_text(encoding="utf-8"))
     if not isinstance(record, dict):
         raise EstimateError("approved calibration record must be a JSON object")
     check_cargo_record(record, source=args.source, revision=args.calibration_revision)
+    identity = check_candidate_identity(source=args.source, robot=args.robot, marker=args.marker,
+                                        site_camera_config=args.site_camera_config)
+    provenance = {"map_id": record["map_id"], "marker_binding_provenance": identity,
+                  "projection_provenance": "operator_supplied_approved_record",
+                  "capture_provenance": "legacy_file_mtime" if args.frames else "video_frame_index_fps",
+                  "capture_revision_verified": False}
     cargo = None
     if args.cargo_height_m is not None:
         try:
@@ -516,7 +556,7 @@ def _candidate(args, fleet, context, edge):
             if not args.led_challenge:
                 raise
     if not args.led_challenge:
-        return {**cargo, "map_id": record["map_id"]}
+        return {**cargo, **provenance}
 
     from ceiling_marker_led_yaw import LedUnobserved, combine, estimate_led
 
@@ -527,9 +567,10 @@ def _candidate(args, fleet, context, edge):
     except LedUnobserved as exc:
         if cargo is None:
             raise
-        return {**cargo, "map_id": record["map_id"], "led_unavailable": str(exc)}
-    return {**combine(cargo, led), "map_id": record["map_id"]}
+        return {**cargo, **provenance, "led_unavailable": str(exc)}
+    return {**combine(cargo, led), **provenance}
 
 
 if __name__ == "__main__":
+    sys.modules.setdefault("ceiling_marker_yaw", sys.modules[__name__])
     sys.exit(main())

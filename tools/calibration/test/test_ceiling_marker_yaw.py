@@ -233,7 +233,7 @@ def test_candidate_cli_reports_wrapped_offset_difference_without_authority(
 
 
 def test_candidate_identity_requires_matching_marker_and_prioritizes_live_source(monkeypatch, tmp_path):
-    import ceiling_marker_yaw as tool
+    import ceiling_marker_provenance as tool
 
     monkeypatch.delenv("ROSY_VISION_SOURCE_TOKEN", raising=False)
     with pytest.raises(EstimateError, match="marker binding"):
@@ -249,7 +249,7 @@ def test_candidate_identity_requires_matching_marker_and_prioritizes_live_source
 
 
 def test_live_frame_requires_approved_size_lens_and_stable_rotation(monkeypatch):
-    import ceiling_marker_yaw as tool
+    import ceiling_marker_provenance as tool
 
     repo = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(repo / "operations" / "overhead"))
@@ -264,3 +264,38 @@ def test_live_frame_requires_approved_size_lens_and_stable_rotation(monkeypatch)
                        ("X-Source-Lens", "kind=wide;focal_mm=5.4;hfov_deg=67.8")]:
         with pytest.raises(EstimateError, match="approved frame geometry"):
             tool.live_frame_stamp({**headers, key: value}, record, expected_rotation=90)
+
+
+def test_live_source_requires_current_healthy_calibration_and_checks_both_bindings(monkeypatch):
+    import ceiling_marker_yaw as tool
+
+    record = {"source_id": "cam", "map_id": "map", "calibration_revision": "rev", "approved_by": "operator"}
+    source = {**record, "status": "OK", "calibration_health": {"state": "fresh"}}
+    config = {"source_id": "cam", "map_id": "map", "calibration": record, "robot_markers": {"rosy_45": 46}}
+    calls = []
+
+    def request(fleet, path, token, context):
+        calls.append((path, token))
+        return {"/api/fleet/tracking": {"sources": [source]}, "/api/fleet/detections/config": config}[path]
+
+    monkeypatch.setattr(tool, "_approved_record", lambda *args: record)
+    monkeypatch.setattr(tool, "_request", request)
+    monkeypatch.delenv("ROSY_VISION_SOURCE_TOKEN", raising=False)
+    args = {"source": "cam", "robot": "rosy_45", "marker": 45, "revision": "rev"}
+    assert tool.check_candidate_source("fleet", "operator", None, **args)[1] == {
+        "marker_binding_provenance": "d562_robot_number", "capture_provenance": "live_raw_preview_headers",
+        "calibration_health": "fresh",
+    }
+    assert calls == [("/api/fleet/tracking", "operator")]
+    monkeypatch.setenv("ROSY_VISION_SOURCE_TOKEN", "source-token")
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_source("fleet", "operator", None, **args)
+    args["marker"] = 46
+    assert tool.check_candidate_source("fleet", "operator", None, **args)[1]["marker_binding_provenance"] == "fleet_source_config"
+    assert calls[-1] == ("/api/fleet/detections/config", "source-token")
+    config["calibration"] = {**record, "calibration_revision": "old"}
+    with pytest.raises(EstimateError, match="incompatible with the approved record"):
+        tool.check_candidate_source("fleet", "operator", None, **args)
+    source["calibration_health"] = {"state": "mismatch"}
+    with pytest.raises(EstimateError, match="incompatible calibration health"):
+        tool.check_candidate_source("fleet", "operator", None, **args)

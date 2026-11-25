@@ -7,6 +7,7 @@ import time
 from urllib.error import HTTPError
 
 from ceiling_marker_led_yaw import LedUnobserved, combine, estimate_led
+from ceiling_marker_provenance import check_cargo_record, live_frame_stamp
 from ceiling_marker_yaw import (
     CueUnavailable,
     EstimateError,
@@ -14,9 +15,7 @@ from ceiling_marker_yaw import (
     _request,
     cargo_frame_sample,
     check_candidate_source,
-    check_cargo_record,
     estimate_cargo,
-    live_frame_stamp,
 )
 
 
