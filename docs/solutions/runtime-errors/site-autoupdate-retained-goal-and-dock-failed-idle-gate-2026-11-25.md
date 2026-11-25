@@ -43,6 +43,8 @@ Live `rosy-site-autoupdate` runs deferred signed `site-*` candidate rollouts wit
 
 Because `rosy-site-autoupdate.service` executes `/usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py` outside `/opt/rosy/candidate` (D-301 §3), site stack rollouts stay blocked until an administrator backs up and reinstalls the reviewed 5-file unit (`rosy_site_autoupdate.py`, `verify_candidate.py`, `candidate_signing.py`, `site_update_io.py`, `site_update_runtime.py`) into `/usr/local/lib/rosy-site/` from the reviewed `origin/main` commit per `deploy/site/README.md`. Pre-fix Fleet containers do not emit `goal_in_flight`, so a single idle Fleet container restart clears any pre-existing retained goal before the first automatic switch.
 
+If the updater reaches staging and rejects a reused service image, compare the signed manifest's `reused_images` and `images.<service>.reference` against `docker image inspect` on the site host. On Fleet R, both the queued predecessor and the #784 candidate reused a proxy image missing from the host, and its source release had been pruned. Leave each existing signed release on its assigned tag. Dispatch `build-site-candidate.yml` for a fresh reviewed `main` revision with `base_commit` empty to carry every image, then let the normal signer and updater verify and install it. When using a documentation-only revision for recovery, choose a path outside the candidate workflow's push filters so the automatic incremental build does not reserve the revision's release tag first.
+
 ## Prevention
 
 - Never assume `row["goal"]` paired with `IDLE`/terminal `navigation` represents finished work unless monotonic state-observation timestamps prove the terminal state occurred after goal acceptance (`goal_in_flight: False`).
