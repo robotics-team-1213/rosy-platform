@@ -1,20 +1,14 @@
 """Describe reusable named-route calibration and the remaining measurements, without moving the arm."""
 from __future__ import annotations
 
-import math
-
 import numpy as np
 
 from cell_attempts import digest
 from cell_calibrate_auto import map_agrees
-from cell_route_check import route_check
+from cell_route_check import _finite, route_check
 from cell_route_surface import contact_evidence
 from cell_route_visit import exact_visit
 from cell_site_target import resolve_cell_ab_site, temp_to_ship
-
-
-def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def _map_context(config, calibration, name, entry, check, reference_current):

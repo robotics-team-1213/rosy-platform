@@ -1,14 +1,10 @@
 """Reuse repeated contact measurements only at the measured arm point and setup."""
 import json
-import math
 import re
 from pathlib import Path
 
 import omx_tcp
-
-
-def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
+from cell_route_check import _finite
 
 
 def contact_binding(config, site, calibration, tcp):
