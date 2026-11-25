@@ -13,6 +13,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
+from fleet.swarm.transport import RobotApiError
 from test_charge_bays import _world_261026_charge_graph
 
 TRUTH = Fit(math.radians(15), 0.2, -0.1, ())
@@ -90,6 +91,18 @@ def test_invalid_robot_map_export_returns_upstream_error(tmp_path):
     response = client.get("/api/fleet/robots/rosy_42/map/bundle", headers=OP)
     assert response.status_code == 502
     assert response.json()["detail"]["code"] == "INVALID_ROBOT_MAP"
+
+
+def test_robot_map_export_hides_malformed_upstream_body(tmp_path, monkeypatch):
+    async def bad_map(self):
+        raise RobotApiError("rosy_42", 200, "BAD_RESPONSE", "unexpected upstream contents")
+
+    monkeypatch.setattr(FakeRobot, "map", bad_map)
+    response = _client(tmp_path).get("/api/fleet/robots/rosy_42/map/bundle", headers=OP)
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "INVALID_ROBOT_MAP"
+    assert "unexpected upstream contents" not in response.text
 
 
 def test_approve_read_and_revoke(tmp_path):
