@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.471
+**Version:** v1.472
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.472 Operator trip request history (Fleet)
+
+The authenticated Fleet read endpoint `GET /api/fleet/trip-requests` returns the 50 latest planning and operator start receipts. Each entry in `requests` includes `at` (Unix seconds), `robot_id`, `to`, `plan_id`, `stage`, `code` and `detail`. Stages are `preview`, `plan_refused`, `start_accepted` and `start_refused`. Start receipts record the Fleet admission result. CORE navigation state provides device execution evidence. Historical plan records remain visible after upgrade and new operator start requests add their own receipts.
 
 ### v1.471 Retain a pending pose request during localization verification (Fleet)
 
@@ -5096,6 +5100,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.472 | 2026-11-25 | [Fleet] Operator trip request history |
 | v1.471 | 2026-11-25 | [Fleet] Retain a pending pose request during localization verification |
 | v1.470 | 2026-11-25 | [CORE] Bounded localization candidate search window |
 | v1.469 | 2026-11-25 | [Fleet] Camera continuation after a failed Nav2 route |
