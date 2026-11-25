@@ -66,10 +66,10 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
     policy·cell 모두 소속 화면 링크에 현재 표시를 둔다(재비평 판정 — 경로 줄 h1이 문서 정체를 말한다)."""
     screens = [("/console?view=work", "전체 작업"), ("/console?view=work&amp;show=pending", "승인 대기"),
                ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
-               ("/console/learning", "학습")]
+               ("/console/policy", "정책"), ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
                                     ("cell.html", '<div class="ui-subnav">', []),
-                                    ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
+                                    ("policy.html", '<div class="ui-subnav">', ["/console/policy"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name
@@ -122,7 +122,7 @@ def test_every_area_document_heads_the_workspace_with_one_pathbar():
             "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
             "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">팔 관측·사건</strong>'),
-            "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
+            "policy.html": ("학습 정책 승인", "<strong>정책</strong>")}
     for name, (title, screen) in docs.items():
         page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
         assert page.count("<h1") == 1, f"{name}: one h1 only, and it lives in the path bar"

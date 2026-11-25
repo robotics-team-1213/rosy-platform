@@ -90,6 +90,21 @@ export function incidentLock(incident, who) {
   return incident.reported_by === who.me ? '신고한 사람과 다른 관리자가 해제해야 합니다' : '';
 }
 
+export function formatFleetAdmissionScope(policy) {
+  const scope = policy?.scope;
+  if (!scope) return null;
+  if (!scope.enabled) return `꺼짐${policy.reason ? ` · ${policy.reason}` : ' · 사람 전환 대기'}`;
+  const kinds = (scope.step_approval_kinds || []).map(kind => (kind === 'one_person' ? '1인 승인' : kind)).join('·') || '없음';
+  return [
+    '켜짐',
+    scope.robots?.length ? `로봇 ${scope.robots.join('·')}` : null,
+    `종류 ${kinds}`,
+    `잔여 ${policy.admits_remaining}/${scope.max_admits}회`,
+    scope.valid_until ? `유효 ${scope.valid_until}` : null,
+    `범위 ${scope.scope_revision}`,
+  ].filter(Boolean).join(' · ');
+}
+
 export function errorText(error) {
   const known = {
     STAGE_SKIP_REFUSED: '단계는 하나씩만 올릴 수 있습니다.',
