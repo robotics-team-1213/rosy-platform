@@ -1102,3 +1102,24 @@ def test_explicit_window_reports_global_result_without_native_auto_injection():
     assert [kind for kind, _ in outputs] == ["candidates", "state"]
     assert assist.machine.state.value == "CANDIDATES"
     assert assist.machine.check is None and not assist.search_window_ready(20.1)
+
+
+def test_window_eligibility_waits_until_an_old_candidate_is_retired_by_native_scans():
+    a = core(retry_s=2.)
+    candidates_ready(a, now=1.)
+    destination = (.86, -.52, math.pi)
+    ranges, angles = scan(destination, beams=640)
+    occupancy = field()
+    fits = [occupancy.robust_score(sensor_from_base((c.x, c.y, c.yaw), MOUNT), ranges, angles)
+            for c in (TRUTH, MIRROR)]
+    assert max(fits) < a.machine.min_fit
+    for now in (6., 7., 8.):
+        a.on_twist(now, 0., 0.)
+        assert not a.search_window_ready(now)
+        outputs = a.on_candidate_scan(now, now - .1, fits, None)
+    status = one(outputs, "state")["status"]
+    assert status["state"] == "SUSPECT" and status["reason"] == "candidate_scan_mismatch"
+    assert a.search_window_ready(8.)
+    a.search_started(8., ODOM, scan_stamp=7.9)
+    result = a.search_finished(8.1, ODOM, [], allow_unique=False)
+    assert kinds(result, "inject") == [] and a.search_window_ready(8.1)
