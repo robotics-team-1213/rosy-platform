@@ -24,7 +24,8 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, renderSitePointsSummary, sitePointsForActiveMap, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, renderMapInspector,
+  renderSitePointsSummary, sitePointsForActiveMap, svgElement as el, syncMapInspectorTargets} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
@@ -76,6 +77,7 @@ function render() {
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
+  syncMapInspectorTargets(map, state.selected, state.band !== null);
   const sitePoints = sitePointsForActiveMap(state.sitePoints, state.active, $('map-source').value);
   if (sitePoints !== displayedSitePoints) {
     renderSitePointsSummary($('site-points-panel'), $('site-points-body'), sitePoints);
@@ -180,39 +182,15 @@ function drawRobots() {
 
 function select(selection) {
   state.selected = selection;
-  const map = state.working;
-  const place = selection?.place && map?.places.find(item => item.id === selection.place);
-  const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
-  const crosswalk = selection?.crosswalk && (map?.crosswalks || []).find(item => item.id === selection.crosswalk);
   const reason = operatorReason() || ($('map-source').value === 'profile' ? '지도 설정은 규칙 JSON으로 고치거나 초안으로 불러오세요' : '');
-  $('place-form').hidden = !place || Boolean(reason);
-  $('edge-form').hidden = !edge || Boolean(reason);
-  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
-  if (!crosswalk && place?.kind !== 'stop') state.band = null;
-  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
-  if (place) {
-    $('selection').textContent = `장소 ${place.id}`;
-    $('place-name').value = place.name;
-    $('place-kind').value = place.kind;
-    $('place-pinned').checked = Boolean(place.pinned);
-    $('place-stop').hidden = place.kind !== 'stop';
-    $('place-approach').value = place.approach_m ?? '';
-  } else if (crosswalk) {
-    $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
-    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
-    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
-      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
-  } else if (edge) {
-    $('selection').textContent = `차로 ${edge.id} · ${edge.from} → ${edge.to}`;
-    $('edge-direction').value = edge.direction;
-    $('edge-mode').value = edge.drive_mode;
-    $('edge-speed').value = edge.speed_cap_mps;
-    $('edge-pinned').checked = Boolean(edge.pinned);
-  } else {
-    $('selection').textContent = selection ? '초안에 없는 항목입니다 · 초안 보기에서 고르세요' : '선택 없음';
-  }
+  if (!renderMapInspector(selection, shown(), state.working, reason)) state.band = null;
   render();
 }
+$('map-inspector-target').addEventListener('change', event => {
+  const value = event.target.value, separator = value.indexOf(':');
+  select(separator < 0 ? null : {[value.slice(0, separator)]: value.slice(separator + 1)});
+  syncButtons();
+});
 
 function syncButtons() {
   authoring.sync();

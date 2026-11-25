@@ -312,6 +312,60 @@ export function drawFacilities(svg, map, view) {
   }
 }
 
+export function syncMapInspectorTargets(map, selection, drawing) {
+  const picker = $('map-inspector-target');
+  const groups = [
+    ['place', '장소', (map?.places || []).map(item => [item.id, `${item.name} · ${item.id}`])],
+    ['edge', '차로', (map?.edges || []).map(item => [item.id, `${item.id} · ${item.from} → ${item.to}`])],
+    ['crosswalk', '횡단보도', (map?.crosswalks || []).map(item => [item.id, item.id])],
+  ].filter(([, , rows]) => rows.length);
+  const signature = JSON.stringify(groups);
+  if (picker.dataset.targets !== signature) {
+    picker.replaceChildren(new Option('요소 선택', ''), ...groups.map(([kind, label, rows]) => {
+      const group = document.createElement('optgroup');
+      group.label = label;
+      group.append(...rows.map(([id, text]) => new Option(text, `${kind}:${id}`)));
+      return group;
+    }));
+    picker.dataset.targets = signature;
+  }
+  const kind = selection && Object.keys(selection)[0], value = kind ? `${kind}:${selection[kind]}` : '';
+  if (picker.value !== value) picker.value = [...picker.options].some(option => option.value === value) ? value : '';
+  setOffBy(picker, drawing ? '구역 그리기를 먼저 마치세요' : groups.length ? '' : '검사할 지도 요소가 없습니다');
+}
+
+export function renderMapInspector(selection, displayed, draft, reason) {
+  const get = (map, key, id) => id && map?.[key]?.find(item => item.id === id);
+  const place = get(draft, 'places', selection?.place), edge = get(draft, 'edges', selection?.edge);
+  const crosswalk = get(draft, 'crosswalks', selection?.crosswalk);
+  const shownPlace = get(displayed, 'places', selection?.place), shownEdge = get(displayed, 'edges', selection?.edge);
+  const shownCrosswalk = get(displayed, 'crosswalks', selection?.crosswalk);
+  $('selection').textContent = shownPlace ? `장소 ${shownPlace.id}`
+    : shownEdge ? `차로 ${shownEdge.id} · ${shownEdge.from} → ${shownEdge.to}`
+    : shownCrosswalk ? `횡단보도 ${shownCrosswalk.id} · 대기 띠 ${(shownCrosswalk.approach || []).length}개` : '선택 없음';
+  $('place-form').hidden = !place || Boolean(reason);
+  $('edge-form').hidden = !edge || Boolean(reason);
+  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
+  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안에서 검사할 장소나 차로를 고르세요'));
+  if (place) {
+    $('place-name').value = place.name;
+    $('place-kind').value = place.kind;
+    $('place-pinned').checked = Boolean(place.pinned);
+    $('place-stop').hidden = place.kind !== 'stop';
+    $('place-approach').value = place.approach_m ?? '';
+  } else if (crosswalk) {
+    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
+    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
+      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
+  } else if (edge) {
+    $('edge-direction').value = edge.direction;
+    $('edge-mode').value = edge.drive_mode;
+    $('edge-speed').value = edge.speed_cap_mps;
+    $('edge-pinned').checked = Boolean(edge.pinned);
+  }
+  return Boolean(crosswalk || place?.kind === 'stop');
+}
+
 export function createMapEditor({svg, map, view, changed, reason}) {
   let points = [], redo = [], selected = null, selectedVertex = 0, drag = null, suppressClick = false;
   let lastMapId = null;

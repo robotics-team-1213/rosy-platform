@@ -1192,6 +1192,46 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     expect(page.locator("#draft-status")).not_to_contain_text("저장 안 된 초안")
 
 
+@pytest.mark.parametrize("width", [1440, 390])
+def test_map_inspector_selects_roads_and_crosswalks_on_each_source(page_site, width):
+    from playwright.sync_api import expect
+
+    page, store, _ = page_site
+    page.set_viewport_size({"width": width, "height": 844})
+    active = store.active_view()["map"]
+    profile = {**active, "crosswalks": [{**active["crosswalks"][0], "id": "profile-cw"}]}
+    page.route("**/api/fleet/site-map/profiles", lambda route: route.fulfill(json={"profiles": [
+        {"profile_id": "test-profile", "name": "비교 지도", "kind": "general", "map": profile},
+    ]}))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    picker = page.get_by_label("지도에서 검사할 요소")
+
+    picker.press("End")
+    expect(picker).to_have_value("crosswalk:cw2")
+    expect(page.locator('#site-map-svg [data-crosswalk="cw2"]')).to_have_class(re.compile(r"\bselected\b"))
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw2")
+    expect(picker).to_be_focused()
+
+    page.locator("#map-source").select_option("draft")
+    expect(picker).to_have_value("")
+    picker.select_option("edge:ring_n")
+    expect(page.locator("#edge-form")).to_be_visible()
+    expect(page.locator('#site-map-svg [data-edge="ring_n"]')).to_have_class(re.compile(r"\bselected\b"))
+    page.locator('#site-map-svg [data-crosswalk="cw1"]').dispatch_event("click")
+    expect(picker).to_have_value("crosswalk:cw1")
+
+    show_screen(page, "profile-heading")
+    page.locator("#map-profile").select_option("test-profile")
+    expect(picker.locator('[value="crosswalk:cw1"]')).to_have_count(0)
+    picker.select_option("crosswalk:profile-cw")
+    expect(page.locator("#selection")).to_contain_text("횡단보도 profile-cw")
+    expect(page.locator("#crosswalk-form")).to_be_hidden()
+    expect(page.locator("#apply-edit")).to_be_disabled()
+
+
 def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):
     """D-573 1/7: crosswalk polygons are read-only on the map; the operator draws a waiting band
     on the draft, the named save keeps it, and deleting it saves an empty band list."""
