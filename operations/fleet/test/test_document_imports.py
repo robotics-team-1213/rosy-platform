@@ -56,6 +56,7 @@ SHARED = {
 OWN = {
     "account-page.js": set(),
     "console.js": {
+        "trip-geometry.js", "trip-receipts.js",
         "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
