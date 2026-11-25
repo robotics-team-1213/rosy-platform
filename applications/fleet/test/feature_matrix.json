@@ -4332,6 +4332,38 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-plans"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/admit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cells/${encodeURIComponent(id)}/readiness",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
           "expression": "/api/fleet/pipeline/station-zones",
           "resolution": "literal-or-template",
@@ -4748,6 +4780,74 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/unload-release"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cell-plans",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cell-plans",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "list_cell_plans",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cell-plans"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "admit_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful batch admit response",
+          "contract_tests": [
+            "operations/fleet/test/test_wave4_integration.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "cancel_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful plan cancellation response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "cell_readiness",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful cell readiness response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
         },
         {
           "id": "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",

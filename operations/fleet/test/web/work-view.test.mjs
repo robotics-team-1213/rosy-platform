@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere, requestsNotice, requestsPause } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere, requestsNotice, requestsPause, summarizeWorkCounts } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -102,4 +102,18 @@ test("a 403 on channel-requests says the permission line and pauses polling; 404
   assert.equal(requestsPause(404), false);
   assert.equal(requestsPause(401), false);
   assert.equal(requestsPause(500), false);
+});
+
+test("summarizeWorkCounts aggregates total, pending, active(in_progress+waiting), and intervention counts", () => {
+  assert.deepEqual(summarizeWorkCounts([]), { total: 0, pending: 0, active: 0, intervention: 0 });
+  const sample = [
+    { visible_state: "approval_pending" },
+    { visible_state: "in_progress" },
+    { visible_state: "waiting" },
+    { visible_state: "intervention" },
+    { visible_state: "ended" },
+    { visible_state: "approval_pending" },
+    {},
+  ];
+  assert.deepEqual(summarizeWorkCounts(sample), { total: 7, pending: 2, active: 2, intervention: 1 });
 });

@@ -145,58 +145,83 @@
         <h2 id="work-heading">작업</h2><span class="spacer"></span>
         <ui-button kind="quiet" id="work-refresh" type="button" data-work-read="" data-action-icon="refresh" data-icon-only="">작업 새로고침</ui-button>
       </div>
-      <label class="sr-only" for="work-filter">업무 종류</label>
-      <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
-        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">팔레트 적재</option>
-      </select>
-      <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
-      <p id="work-sources" class="hint"></p>
+      <dl id="work-kpis" class="work-kpis" aria-label="작업 현황 요약">
+        <div class="work-kpi"><dt>전체</dt><dd id="work-kpi-total">—</dd></div>
+        <div class="work-kpi" data-kpi="pending"><dt>승인 대기</dt><dd id="work-kpi-pending">—</dd></div>
+        <div class="work-kpi" data-kpi="active"><dt>진행 · 대기</dt><dd id="work-kpi-active">—</dd></div>
+        <div class="work-kpi" data-kpi="intervention"><dt>개입 필요</dt><dd id="work-kpi-intervention">—</dd></div>
+      </dl>
+      <div class="work-toolbar">
+        <label class="sr-only" for="work-filter">업무 종류</label>
+        <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
+          <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">팔레트 적재</option>
+        </select>
+        <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
+      </div>
       <ul id="work-list" class="work-list" aria-label="조회 가능한 작업"></ul>
       <p id="work-empty" class="hint">현재 조회 범위에 작업이 없습니다.</p>
-      <details id="work-integrations">
-        <summary class="ui-disclosure-row">연동 작업·관제 구성</summary>
-        <div id="work-integrations-content"><span id="work-integrations-anchor" hidden></span></div>
-      </details>
-      <h3 id="channel-requests-heading">내 대화 요청</h3>
-      <p id="channel-requests-state" class="hint" role="status" tabindex="-1">접속 후 조회합니다.</p>
-      <ul id="channel-requests" class="work-list" aria-labelledby="channel-requests-heading"></ul>
-      <section id="channel-review" aria-labelledby="channel-review-heading" hidden>
-        <h3 id="channel-review-heading">대화 요청 검토</h3>
-        <p id="channel-review-original"></p>
-        <p id="channel-review-state" class="hint" role="status"></p>
-        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
-        <label for="channel-review-robot">이동할 로봇</label>
-        <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
-        <label for="channel-review-x">공유 지도 X (m)</label>
-        <input id="channel-review-x" class="ui-field" type="number" step="any" required value="0">
-        <label for="channel-review-y">공유 지도 Y (m)</label>
-        <input id="channel-review-y" class="ui-field" type="number" step="any" required value="0">
-        <label for="channel-review-yaw">목표 방향 (rad)</label>
-        <input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0">
-        <label for="channel-review-reason">검토 사유</label>
-        <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
-        <label for="channel-review-incident">현재 열린 위험 사건</label>
-        <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
-        <div class="actions">
-          <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
-          <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
+      <section class="work-channel-zone" aria-labelledby="channel-requests-heading">
+        <h3 id="channel-requests-heading">내 대화 요청</h3>
+        <p id="channel-requests-state" class="hint" role="status" tabindex="-1">접속 후 조회합니다.</p>
+        <ul id="channel-requests" class="work-list" aria-labelledby="channel-requests-heading"></ul>
+        <section id="channel-review" aria-labelledby="channel-review-heading" hidden>
+          <h3 id="channel-review-heading">대화 요청 검토</h3>
+          <p id="channel-review-original"></p>
+          <p id="channel-review-state" class="hint" role="status"></p>
+          <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
+          <label for="channel-review-reason">검토 사유</label>
+          <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
+          <fieldset class="review-group">
+            <legend>주행 이동 후보</legend>
+            <label for="channel-review-robot">이동할 로봇</label>
+            <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
+            <div class="review-coords">
+              <div class="review-field"><label for="channel-review-x">공유 지도 X (m)</label><input id="channel-review-x" class="ui-field" type="number" step="any" required value="0"></div>
+              <div class="review-field"><label for="channel-review-y">공유 지도 Y (m)</label><input id="channel-review-y" class="ui-field" type="number" step="any" required value="0"></div>
+              <div class="review-field"><label for="channel-review-yaw">목표 방향 (rad)</label><input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0"></div>
+            </div>
+            <div class="actions">
+              <ui-button id="channel-review-ready" kind="quiet" type="button">이동 후보 저장</ui-button>
+              <span id="channel-review-submit-holder" hidden>
+                <ui-button id="channel-review-submit" kind="irreversible" type="button">확인 후 Fleet에 요청</ui-button>
+              </span>
+            </div>
+          </fieldset>
+          <fieldset class="review-group">
+            <legend>열린 위험 사건 인수</legend>
+            <label for="channel-review-incident">현재 열린 위험 사건</label>
+            <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
+            <div class="actions">
+              <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
+              <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
+            </div>
+          </fieldset>
+          <fieldset class="review-group">
+            <legend>팔 작업 준비 · 승인</legend>
+            <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
+            <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
+            <div class="actions">
+              <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
+              <span id="channel-review-mission-admit-holder" hidden>
+                <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
+              </span>
+            </div>
+          </fieldset>
+          <div class="actions review-disposition">
+            <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
+            <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
+          </div>
+        </section>
+      </section>
+      <section id="work-ops-zone" class="work-ops-zone" aria-labelledby="work-ops-heading">
+        <div class="work-ops-head">
+          <h3 id="work-ops-heading">연동 · 정책</h3>
+          <p id="work-sources" class="hint"></p>
         </div>
-        <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
-        <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
-        <div class="actions">
-          <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
-          <span id="channel-review-mission-admit-holder" hidden>
-            <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
-          </span>
-        </div>
-        <div class="actions">
-          <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
-          <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
-          <ui-button id="channel-review-ready" kind="quiet" type="button">이동 후보 저장</ui-button>
-          <span id="channel-review-submit-holder" hidden>
-            <ui-button id="channel-review-submit" kind="irreversible" type="button">확인 후 Fleet에 요청</ui-button>
-          </span>
-        </div>
+        <details id="work-integrations">
+          <summary class="ui-disclosure-row">연동 작업·관제 구성</summary>
+          <div id="work-integrations-content"><span id="work-integrations-anchor" hidden></span></div>
+        </details>
       </section>
     </section>
 
@@ -351,6 +376,7 @@
         <p id="work-move-state" class="hint" role="status"></p>
         <div id="work-move-form"></div>
       </section>
+      <p id="work-move-guide" class="hint work-move-guide">좌측에서 ‘이동’을 선택하면 로봇과 목적지 운행 폼이 열립니다.</p>
       <section class="panel cell-context-panel" id="cell-context-panel" aria-labelledby="cell-context-heading" hidden></section>
       <section class="panel" aria-labelledby="roster-heading" data-unit-scope="drive">
         <div class="roster-block" data-unit-scope="drive">

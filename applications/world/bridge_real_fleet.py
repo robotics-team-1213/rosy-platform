@@ -74,6 +74,44 @@ def _read_secret(env_name: str, file_env_name: str, file_path: Path | None = Non
     return None
 
 
+def _default_parked_pose(rid: str, idx: int) -> list[float]:
+    if rid in _DEFAULT_PARKED_PINKYS:
+        return list(_DEFAULT_PARKED_PINKYS[rid])
+    return [round(-0.414 + 0.223 * idx, 4), 0.47, 0.0]
+
+
+def _csv_env_ids(name: str, default: list[str]) -> list[str]:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return list(default)
+    seen: list[str] = []
+    for part in raw.split(","):
+        rid = part.strip()
+        if rid and rid not in seen:
+            seen.append(rid)
+    return seen or list(default)
+
+
+def _resolve_fleet_robots(fleet_payload: dict[str, Any]) -> dict[str, list[str]]:
+    pinkys = _csv_env_ids("ROSY_WORLD_PINKY_IDS", CANONICAL_FLEET_ROBOTS["pinkys"])
+    arms = _csv_env_ids("ROSY_WORLD_ARM_IDS", CANONICAL_FLEET_ROBOTS["arms"])
+    known = set(pinkys) | set(arms)
+    for row in fleet_payload.get("robots") or ():
+        if not isinstance(row, dict) or not row.get("robot_id"):
+            continue
+        rid = str(row["robot_id"]).strip()
+        if not rid or rid in known:
+            continue
+        kind = str(row.get("kind") or row.get("robot_type") or "").strip().lower()
+        state = row.get("state") if isinstance(row.get("state"), dict) else {}
+        if kind in {"arm", "manipulator"} or rid.startswith("arm"):
+            arms.append(rid)
+        elif kind in {"pinky", "amr"} or rid.startswith(("rosy", "pinky")) or isinstance(state.get("pose"), dict):
+            pinkys.append(rid)
+        known.add(rid)
+    return {"pinkys": pinkys, "arms": arms}
+
+
 def fleet_state_to_world_state(
     fleet_payload: dict[str, Any],
     *,
@@ -94,11 +132,12 @@ def fleet_state_to_world_state(
         for row in fleet_payload["robots"]
         if isinstance(row, dict) and row.get("robot_id")
     }
+    roster = _resolve_fleet_robots(fleet_payload)
 
     pinkys: list[dict[str, Any]] = []
     online_count = 0
     estop_robots: list[str] = []
-    for rid in CANONICAL_FLEET_ROBOTS["pinkys"]:
+    for idx, rid in enumerate(roster["pinkys"]):
         row = by_id.get(rid) or {}
         state = row.get("state") if isinstance(row.get("state"), dict) else {}
         pose = state.get("pose") if isinstance(state.get("pose"), dict) else {}
@@ -117,7 +156,7 @@ def fleet_state_to_world_state(
         battery = state.get("battery")
         entry = {
             "id": rid,
-            "pose_m": [round(px, 5), round(py, 5), 0.0] if has_pose else list(_DEFAULT_PARKED_PINKYS[rid]),
+            "pose_m": [round(px, 5), round(py, 5), 0.0] if has_pose else _default_parked_pose(rid, idx),
             "yaw_rad": round(yaw, 5) if has_pose else -1.5708,
             "observed": has_pose and not unlocalized,
             "online": online,
@@ -131,9 +170,9 @@ def fleet_state_to_world_state(
         pinkys.append(entry)
 
     pinky_online = online_count > 0
-    arms: dict[str, list[float]] = {arm_id: list(_REST_ARM_JOINTS) for arm_id in CANONICAL_FLEET_ROBOTS["arms"]}
+    arms: dict[str, list[float]] = {arm_id: list(_REST_ARM_JOINTS) for arm_id in roster["arms"]}
     arms_observed, arms_fresh, arms_age_s = {}, {}, {}
-    for arm_id in CANONICAL_FLEET_ROBOTS["arms"]:
+    for arm_id in roster["arms"]:
         row = by_id.get(arm_id) or {}
         state = row.get("state") if isinstance(row.get("state"), dict) else {}
         safety = state.get("safety") if isinstance(state.get("safety"), dict) else {}
@@ -158,7 +197,10 @@ def fleet_state_to_world_state(
 
     primary = next((p for p in pinkys if p["observed"]), None)
     if primary is None:
-        primary = next((p for p in pinkys if p["online"]), pinkys[1])
+        fallback_pinky = pinkys[min(1, len(pinkys) - 1)] if pinkys else {
+            "id": None, "pose_m": [0.0, 0.0, 0.0], "yaw_rad": -1.5708, "observed": False, "online": False,
+        }
+        primary = next((p for p in pinkys if p["online"]), fallback_pinky)
     px, py, _ = primary["pose_m"]
     s3_in_bounds = bool(primary.get("observed")) and abs(px - 0.745) <= 0.04 and abs(py + 0.207) <= 0.025
     observed_ms = time.time_ns() // 1_000_000 if now_ms is None else now_ms
@@ -166,11 +208,12 @@ def fleet_state_to_world_state(
     gathered_ms = _finite_number(gathered_at * 1000) if gathered_at is not None else None
     active_map = active_map or {}
     live_map_sha = active_map.get("sha256")
+    total_robots = len(roster["pinkys"]) + len(roster["arms"])
     parity = {
         "schema": "rosy.world.parity.v1",
         "site_map_sha256": str(site_map_sha256 or "").lower(),
         "registration_sha256": None,
-        "fleet_robots": CANONICAL_FLEET_ROBOTS,
+        "fleet_robots": roster,
         "has_cargo_tray": True,
     }
     return {
@@ -187,7 +230,7 @@ def fleet_state_to_world_state(
         "site_map_sha256": parity["site_map_sha256"],
         "site_map_body_sha256": str(live_map_sha).lower() if live_map_sha else None,
         "site_map_version": active_map.get("version"),
-        "fleet_robots": CANONICAL_FLEET_ROBOTS,
+        "fleet_robots": roster,
         "parity": parity,
         "stage": "s3_stop" if s3_in_bounds else "c2_departure",
         "phase": "real_fleet_live",
@@ -203,10 +246,10 @@ def fleet_state_to_world_state(
         "arms_age_s": arms_age_s,
         "safety": {
             "estop": bool(estop_robots),
-            "estop_all": len(estop_robots) == 6,
+            "estop_all": total_robots > 0 and len(estop_robots) == total_robots,
             "estop_robots": estop_robots,
         },
-        "fleet_summary": {"online": online_count, "total": 6},
+        "fleet_summary": {"online": online_count, "total": total_robots},
         "cargo": {
             "zone": "unknown",
             "pose_m": [px, py, 0.115],

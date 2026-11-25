@@ -102,3 +102,17 @@ def test_pinch_hook_propagates_updated_pick_from_latest_target(tmp_path):
     assert out["verdict"] == "pass"
     assert target["pick"]["x"] == pytest.approx(0.125 + out["dx_mm"] / 1000.0, abs=1e-4)
 
+
+def test_pinch_hook_uses_live_fk_yaw_when_state_available(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen_closing = []
+    monkeypatch.setattr(cell_pinch, "check", lambda _c, _cam, _hsv, closing, *_a, **_kw: seen_closing.append(closing) or {"verdict": "refuse", "why": "stop", "dx_mm": 0.0, "dy_mm": 0.0, "iterations": []})
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, **_kw: (0.12, -0.05, 0.01, 90.0))
+    cell = type("C", (), {"act": lambda self, cmd: {"ok": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 56.0]}})()
+    target = {"pick": {"x": 0.12, "y": -0.05, "z": 0.01, "yaw_deg": -90.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": -90.0}, "offset": 0.0}
+    cfg = {"params": {"pinch.enabled": 1}, "wrist": {"hsv_min": HSV[0], "hsv_max": HSV[1]}, "work_dir": str(tmp_path), "arm_id": "arm_b"}
+    fn = cell_pinch.hook(cfg, cell, target, lambda _c, p, _pl, path: path, GAP_MM, 20.0)
+    fn()
+    assert seen_closing == [90.0]  # live FK yaw 90 + offset 0, not planned -90
+

@@ -198,3 +198,17 @@ def test_white_pads_and_yellow_structural_vs_baseplate_filtering():
     assert cfc.on_surface_blob(img_pink, multi_hsv) is not None
 
 
+def test_finger_hook_uses_live_fk_yaw_and_respects_target_offset(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen_closing = []
+    monkeypatch.setattr(cf, "finger_servo", lambda _c, _cam, _hsv, closing, *_a, **_kw: seen_closing.append(closing) or {"verdict": "refuse", "why": "stop", "dx_mm": 0.0, "dy_mm": 0.0, "total_mm": 0.0, "iterations": []})
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, **_kw: (0.12, 0.05, 0.10, 45.0))
+    cell = type("C", (), {"act": lambda self, cmd: {"ok": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 56.0]}})()
+    target = {"pick": {"x": 0.12, "y": 0.05, "z": 0.02, "yaw_deg": -135.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0}, "offset": 0.0}
+    cfg = {"params": {"wrist.finger_servo": 1}, "wrist": {"hsv_min": HSV[0], "hsv_max": HSV[1]}, "work_dir": str(tmp_path), "arm_id": "arm_b"}
+    fn = cf.finger_hook(cfg, cell, target, lambda _c, p, _pl, path: path, 44.0)
+    fn()
+    assert seen_closing == [45.0]  # live FK yaw 45 + target offset 0, not planned -135 + 90
+
+

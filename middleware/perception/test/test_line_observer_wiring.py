@@ -547,9 +547,15 @@ def test_idle_keep_cache_reuses_when_still_and_invalidates_on_change(monkeypatch
     node._save_idle_keep(frame, 11.2, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
     now_clk[0] = 11.6
     assert node._try_reuse_idle_keep(None, frame, 11.3, 1, (0.0, 0.0)) is False
-    node._odom_stamp = 11.35
+    node._odom_stamp = 11.30
+    node._odom_twist = (-0.0006, -0.0133)
+    node._save_idle_keep(frame, 11.32, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
+    assert node._try_reuse_idle_keep(None, frame, 11.35, 1, (0.0, 0.0)) is True
+    assert node._try_reuse_idle_keep(None, frame, 11.36, 1, (0.01, 0.0)) is False
+    node._odom_twist = (0.0, 0.03)
+    assert node._try_reuse_idle_keep(None, frame, 11.37, 1, (0.0, 0.0)) is False
     node._odom_twist = (0.05, 0.0)
-    assert node._try_reuse_idle_keep(None, frame, 11.35, 1, (0.0, 0.0)) is False
+    assert node._try_reuse_idle_keep(None, frame, 11.38, 1, (0.0, 0.0)) is False
     src = (Path(__file__).resolve().parents[1] / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._lane_keeper.reset()\n                    self._idle_keep_cache = None" in src
     assert "reuse_n = max(reuse_n, 2)" not in src

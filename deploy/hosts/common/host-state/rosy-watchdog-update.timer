@@ -1,0 +1,10 @@
+[Unit]
+Description=Check periodically for a signed ROSY PC watchdog update
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=20min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

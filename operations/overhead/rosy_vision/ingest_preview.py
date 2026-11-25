@@ -122,8 +122,10 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     if "rectification" in lease:
         try:
             settings = PreviewRectification.from_mapping(lease["rectification"])
-            if settings.mode == "map":
-                return await self._map_plane_response(source, frame, age, lease)
+            if settings.mode in ("map", "map_overlay"):
+                return await self._map_plane_response(
+                    source, frame, age, lease, annotated=(settings.mode == "map_overlay"),
+                )
             if settings.mode == "auto":
                 # D-484: swap the lease's corners for the calibration's accepted quad.
                 field = self._field_corners(source)
@@ -175,54 +177,19 @@ def _verified_lease(self, source: str, authorization: str | None) -> Mapping | R
 
 
 async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
-                              lease: Mapping | None = None) -> Response:
-    """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
-
-    The warp runs off the event loop, once per (frame, record revision) for all readers.
-    """
-    reported = self._plane_records.get(source)
-    if reported is None:
-        return _plane_unavailable()
-    record, map_id = reported
-    revision = str(record.get("calibration_revision"))
-    crop_map = lease.get("crop_map") if lease else None
-    if crop_map is not None and (lease.get("crop_map_id") != map_id
-                                 or lease.get("crop_revision") != revision):
-        return _plane_unavailable()
-    cached = self._plane_cache.get(source)
-    if cached is None or cached[0] is not frame or cached[1] != revision:
-        task = asyncio.ensure_future(asyncio.to_thread(
-            map_plane_jpeg, frame.jpeg, record, source_id=source, map_id=map_id,
-            lens=self.source_lens(source)))
-        # Retrieve a failure even when no reader is left to await it (no "never retrieved" log).
-        task.add_done_callback(lambda t: t.cancelled() or t.exception())
-        cached = (frame, revision, task)
-        self._plane_cache[source] = cached
-    plane: MapPlane | None = await asyncio.shield(cached[2])
-    if plane is None:
-        return _plane_unavailable()
-    jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
-    if crop_map is not None:
-        cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
-        if cropped is None:
-            return _plane_unavailable()
-        jpeg, size, bounds = cropped
-        rectified = "map-crop"
-    min_x, min_y, max_x, max_y = bounds
-    return _http_response(200, jpeg, extra={
-        "Content-Type": "image/jpeg", "Cache-Control": "no-store",
-        "X-Frame-Seq": str(frame.header.seq),
-        "X-Frame-Age-Ms": str(round(age * 1000)),
-        "X-Frame-Captured-At": str(frame.captured_at),
-        "X-Frame-Width": str(size[0]),
-        "X-Frame-Height": str(size[1]),
-        "X-Frame-Rotation-Deg": "0",
-        "X-Frame-Rectified": rectified,
-        "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
-        "X-Frame-Calibration": plane.revision,
-        "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
-        **_lens_header(self.source_lens(source)),
-    })
+                              lease: Mapping | None = None, *, annotated: bool = False) -> Response:
+    """D-560: the latest frame warped to the map plane (or annotated map_overlay), or 409."""
+    return await preview_plane.map_plane_response(
+        self,
+        source,
+        frame,
+        age,
+        lease,
+        unavailable=_plane_unavailable,
+        response=_http_response,
+        lens_header=_lens_header,
+        annotated=annotated,
+    )
 
 
 def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:

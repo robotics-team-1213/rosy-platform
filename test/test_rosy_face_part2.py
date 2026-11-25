@@ -1197,3 +1197,12 @@ def test_expressive_idle_face_defaults_to_slow_resting_cadence(tmp_path):
     clock.now += 0.2
     assert display.tick() is True
 
+    for nav, extra, want in (("CANCELED", {}, 1.0), ("ARRIVED", {}, 1.0), ("FAILED", {}, 1.0),
+                             ("PLANNING", {}, 0.0), ("BLOCKED", {}, 0.0), (None, {}, 0.0),
+                             ("IDLE", {"recovery": "retrace"}, 0.0), ("NAVIGATING", {}, 0.0)):
+        _face_inputs(tmp_path, power_mode="active", face="basic", robot_mode="IDLE", nav_state=nav, expression=None, **extra)
+        display.step()
+        display.tick(); display.tick()
+        clock.now += 1.0
+        assert (display.tick() or display.tick()) and round(display._faces._rest, 2) == want
+

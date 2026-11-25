@@ -28,7 +28,7 @@ from cell_job_guards import (  # noqa: E402
 )
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 from cell_job_readiness import CellStateGen, handle_get_route, parse_structured_result, proxy_frame  # noqa: E402
-from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, job_arms, moves_arm  # noqa: E402,F401
+from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
 try:
     import fcntl
@@ -161,7 +161,7 @@ class Runner:
             return auth_err
         try:
             argv = build_argv(job, eff_params, self.workdir)
-        except ValueError as exc:
+        except (ValueError, OSError, RuntimeError) as exc:  # RuntimeError: Path.resolve() on a symlink loop (3.12)
             return {"code": 400, "error": str(exc)}
         arms = job_arms(job, eff_params)
         target_arms = set(arms)
@@ -245,7 +245,7 @@ class Runner:
                 "principal_role": principal.role, "principal_id": principal.principal_id,
                 "proposer": eff_params.get("proposer"), "fleet_online": fleet_online,
                 "start": now, "expires_at": now + JOB_TTL_S,
-                "omx_tools_tree": _tools_tree(self.workdir), "audited": False,
+                "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
             if moving:

@@ -204,7 +204,7 @@ class LineObserverHelpersMixin:
             odom_fresh
             and self._odom_twist is not None
             and abs(self._odom_twist[0]) < 0.005
-            and abs(self._odom_twist[1]) < 0.01
+            and abs(self._odom_twist[1]) < 0.025
             and (cmd is None or (abs(cmd[0]) < 1e-3 and abs(cmd[1]) < 1e-3))
         )
 

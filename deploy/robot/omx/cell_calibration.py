@@ -198,7 +198,42 @@ def jaw_pixel(closed, opened, threshold: int = 30, min_area: int = 40):
 
 def parallax(pixel, from_z: float, to_z: float, camera: dict):
     """The pixel a point at height `from_z` would have at `to_z` straight below or above it, for a camera
-    looking down from camera["height_m"] with its optical centre at camera["center_px"]."""
+    looking down from camera["height_m"] with its optical centre at camera["center_px"] (or exact projective
+    ray-plane homology when camera["K"] and camera["normal"] are given)."""
+    arr = np.asarray(pixel, float)
+    is_batch = arr.ndim == 2
+    if is_batch and len(arr) == 0:
+        return arr
+    if camera.get("K") is not None and camera.get("normal") is not None and camera.get("height_m") is not None:
+        K = np.asarray(camera["K"], float)
+        n = np.asarray(camera["normal"], float)
+        norm = float(np.linalg.norm(n))
+        if norm > 1e-9:
+            n = n / norm
+            if n[2] > 0:
+                n = -n
+            dz = float(to_z) - float(from_z)
+            h_from = float(camera["height_m"]) - float(from_z)
+            if is_batch:
+                pts_h = np.column_stack([arr, np.ones(len(arr))])
+                r1 = pts_h @ np.linalg.inv(K).T
+                denom = -(r1 @ n)
+                if np.all(denom > 1e-6):
+                    lam1 = h_from / denom
+                    u2 = (lam1[:, None] * r1 + dz * n[None, :]) @ K.T
+                    if np.all(u2[:, 2] > 1e-6):
+                        return u2[:, :2] / u2[:, 2:3]
+            else:
+                r1 = np.linalg.solve(K, [float(arr[0]), float(arr[1]), 1.0])
+                denom = float(-r1 @ n)
+                if denom > 1e-6:
+                    lam1 = h_from / denom
+                    u2 = K @ (lam1 * r1 + dz * n)
+                    if float(u2[2]) > 1e-6:
+                        return float(u2[0] / u2[2]), float(u2[1] / u2[2])
     cx, cy = camera["center_px"]
     scale = (camera["height_m"] - from_z) / (camera["height_m"] - to_z)
+    if is_batch:
+        c = np.asarray([cx, cy], float)
+        return c + (arr - c) * scale
     return cx + (pixel[0] - cx) * scale, cy + (pixel[1] - cy) * scale

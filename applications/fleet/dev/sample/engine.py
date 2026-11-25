@@ -102,6 +102,8 @@ class SampleEngine:
             return response
         if (method, path) == ('GET', '/pipeline/cell-tasks'):
             return reply({'tasks': [], 'summary': {'total': 0, 'queued': 0, 'running': 0, 'completed': 0}})
+        if (method, path) == ('GET', '/pipeline/cell-plans'):
+            return reply({'ok': True, 'schema': 'rosy.fleet-cell-plan.v1', 'plans': []})
         if (method, path) == ('GET', '/pipeline/status'):
             return reply({'cell_states': {}, 'arm_holds': {}, 'arm_live_states': {}, 'pinky_tasks': [],
                           'repark_requests': {}, 'auto_events': []})
@@ -155,6 +157,8 @@ class SampleEngine:
         if (method, path) == ('GET', '/pipeline/cell-tasks'):
             # The Cell page's task ledger read: the sample site has no OMX cell queue, so an empty ledger.
             return reply({'tasks': []})
+        if (method, path) == ('GET', '/pipeline/cell-plans'):
+            return reply({'ok': True, 'schema': 'rosy.fleet-cell-plan.v1', 'plans': []})
         if (method, path) == ('GET', '/workcell-observations/usb-devices'):
             # No hardware is connected to the sample provider.
             return reply({'workcells': []})

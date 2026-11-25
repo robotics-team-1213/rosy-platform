@@ -27,7 +27,8 @@ from fleet.localization.service_logic import Ladder, Monitor
 from fleet.localization.wall_tiebreak import Tiebreak
 from fleet.server.localization_pose_helpers import (
     MapFrame, check_reached_unconfirmed, forget_removed_robots, fresh_overhead_sighting,
-    handle_pose_request, map_frame, observe_pose_from_anchors, track_anchor_provenance,
+    handle_pose_request, known_obstacle_points, map_frame, observe_pose_from_anchors,
+    track_anchor_provenance,
 )
 from fleet.swarm import read_spread, transport
 
@@ -175,6 +176,7 @@ class LocalizationService:
         self._tiebreak_camera: Optional[Callable[[str, Optional[str]], Optional[tuple[float, float]]]] = None
         self._active_map_id: Optional[Callable[[], Optional[str]]] = None
         self._site_maps = None
+        self._site_obstacle_pose: Optional[Callable[[str], Optional[tuple[str, float, float, float]]]] = None
 
     def set_wall_sync(self, sync) -> None:
         self._wall_sync = sync
@@ -192,6 +194,11 @@ class LocalizationService:
 
     def set_site_maps(self, site_maps) -> None:
         self._site_maps = site_maps
+
+    def set_site_obstacle_pose(
+        self, provider: Optional[Callable[[str], Optional[tuple[str, float, float, float]]]],
+    ) -> None:
+        self._site_obstacle_pose = provider
 
     def _binding_fit_for_state(self, rid: str, state: Mapping) -> Optional[object]:
         if self._site_maps is None:
@@ -448,8 +455,10 @@ class LocalizationService:
         if seen is None or seen[0] != key:
             seen = self._report_seen[rid] = (key, now)
         fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
-        if leader is not None and fresh:
-            for peer, seen in service_logic.peer_observations(report.unmapped_objects, leader, peers).items():
+        if leader is not None and fresh and peers:
+            known = known_obstacle_points(self, rid, leader, state, set(peers))
+            for peer, seen in service_logic.peer_observations(
+                    report.unmapped_objects, leader, peers, known_points=known).items():
                 observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is None and rid in self._fallback:

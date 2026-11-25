@@ -96,6 +96,11 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
     assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
+    assert (Path.home() / ".local/share/rosy/omx-devices/current").resolve() == Path(drive_argv[4])
+    assert "/session-wrappers/tools-env.sh" in drive_argv[2]
+    assert "tools-env-current.sh" not in drive_argv[2]
+    arm_b_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "arm": "arm_b"}, wd)
+    assert "tools-env-current.sh" in arm_b_argv[2]
     paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "n_action": 8}, wd)
     assert "--paced-chunks" in paced_argv and "--n-action" in paced_argv
     for bad_paced in (
@@ -736,3 +741,91 @@ def test_job_client_wait_timeout_and_cli_get_wait_run(monkeypatch, capsys):
         ("start", "pivot_near", {"site": "floor"}, "k1"),
         ("wait", "job-42", 45.0),
     ]
+
+
+def test_calibrate_check_targets_validation_and_non_moving_argv(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    no_targets = api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json"}, wd)
+    assert "--targets" not in no_targets
+    assert no_targets[:2] == ["bash", "-c"] and no_targets[3:] == ["cell_calibrate.py", "--config", "cell-s.json", "check"]
+    with_targets = api.build_argv(
+        api.JOBS["calibrate_check"],
+        {"config": "cell-s.json", "targets": ["floor:-0.06,0.15", "belt:0.115,-0.05"]},
+        wd,
+    )
+    idx = with_targets.index("--targets")
+    assert with_targets[:idx] == no_targets  # the old argv, unchanged, then only the new option
+    assert with_targets[idx + 1 :] == ["floor:-0.06,0.15", "belt:0.115,-0.05"]
+    assert api.moves_arm(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": ["floor:0,0"]}) is False
+    for bad in (
+        [],
+        [f"s{i}:0,0" for i in range(13)],
+        "floor:0,0",
+        ["--only:0,0"],
+        ["-x:0,0"],
+        ["BAD SITE:0,0"],
+        ["floor:0.9,0.0"],
+        ["floor:nan,0.0"],
+        ["floor:inf,0.0"],
+        ["floor:0.1"],
+    ):
+        with pytest.raises(ValueError):
+            api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": bad}, wd)
+
+    # a bad list is refused before any process starts; a good one starts
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    runner = api.Runner(wd, lock_dir=wd)
+    refused = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:nan,0.0"]})
+    assert refused["code"] == 400 and "targets" in refused["error"]
+    popen.assert_not_called()
+    started = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:-0.06,0.15"]})
+    assert started["code"] == 202
+    popen.assert_called_once()
+
+
+def test_runner_records_the_release_for_an_s_policy_dry_run(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    runner = api.Runner(wd, lock_dir=wd)
+    dry = runner.start(
+        "cell_policy_drive",
+        {
+            "arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json",
+            "policy_root": "~/rosy-models/pinky_v1", "policy_revision": "a" * 64,
+            "model_calibration": "model.json", "cell_calibration": "cell.json",
+            "max_chunks": 3, "operator": "op_b", "proposer": "op_a",
+            "dry_run": True, "person_at_switch": True,
+        },
+    )
+    assert dry["code"] == 202
+    assert runner.runs[dry["id"]]["omx_tools_tree"] == (Path.home() / ".local/share/rosy/omx-devices/current").resolve().name
+
+
+def test_runner_keeps_the_workdir_tree_for_a_short_argv(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: ["true"])
+    runner = api.Runner(wd, lock_dir=wd)
+    res = runner.start("calibrate_check", {"config": "cell-s.json"})
+    assert res["code"] == 202
+    assert runner.runs[res["id"]]["omx_tools_tree"] == "omx-tools-abc1234"
+
+
+def test_runner_answers_400_when_the_release_path_cannot_be_resolved(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+
+    def cannot_resolve(job, params, workdir):  # Path.resolve() raises RuntimeError on Python 3.12 for a symlink loop
+        raise RuntimeError("symlink loop")
+
+    monkeypatch.setattr(api, "build_argv", cannot_resolve)
+    res = api.Runner(wd, lock_dir=wd).start("cell_policy_drive", {"dry_run": True})
+    assert res["code"] == 400 and "symlink loop" in res["error"]
+    popen.assert_not_called()

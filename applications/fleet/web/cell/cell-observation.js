@@ -2,6 +2,7 @@ import {createCameraFrameHold, decodeImageUrl, paintCameraFrameHold} from '/comm
 import {action, node, patchAttr, patchHidden, patchText} from '/common/control-dom.js';
 import {setOff} from '/common/cause-line.js';
 import {createScope} from '/common/scope.js';
+import {confirmIrreversible} from '/common/ui.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {INCIDENT_BASES, INCIDENT_CAUSES, bindFocusZoom, issueVisionLease} from '/console/assets/cell-frames.js';
@@ -440,12 +441,16 @@ export function createCellObservation({request, root, credential = () => '', onS
           const confirmation = node('label', '', 'ui-check');
           const check = node('input'); check.type = 'checkbox'; check.className = 'ui-field';
           confirmation.append(check, document.createTextNode(' ' + note));
-          const button = node('ui-button', '사고 해제'); button.setAttribute('type', 'button');
-          button.setAttribute('kind', 'irreversible'); setOff(button, true, QUICK_CLEAR_REASON);
           const message = node('ui-text'); message.setAttribute('role', 'status');
-          check.addEventListener('change', () => { setOff(button, !check.checked, QUICK_CLEAR_REASON); });
-          button.addEventListener('click', async () => {
-            if (!check.checked || button.disabled || !canQuickClear()) return;
+          let confirming = false;
+          const button = action('사고 해제…', async () => {
+            if (confirming || !check.checked || button.disabled || !canQuickClear()) return;
+            confirming = true;
+            const allowed = await confirmIrreversible({
+              message: `사건 "${incident.incident_id}"의 보류를 해제할까요?`,
+              action: '사고 해제', opener: button, signal: scope.signal});
+            confirming = false;
+            if (!allowed || !button.isConnected || !check.checked || button.disabled || !canQuickClear()) return;
             setOff(check, true, '사고 해제 요청을 처리하는 중입니다.');
             await clearIncident(source, incident, note, button, message);
             if (!button.disabled) {
@@ -454,6 +459,8 @@ export function createCellObservation({request, root, credential = () => '', onS
               setOff(button, true, QUICK_CLEAR_REASON);
             }
           });
+          setOff(button, true, QUICK_CLEAR_REASON);
+          check.addEventListener('change', () => { setOff(button, !check.checked, QUICK_CLEAR_REASON); });
           item.append(confirmation, button, message);
         }
       } else {
