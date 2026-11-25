@@ -37,21 +37,32 @@ class MotionAdmitMixin:
         """Capability basis: 'enforce' when the live (or unknown) proof is bound and configured,
         None when it is live but cannot admit (fail closed), else 'site' if its standing part
         holds for `kind` (centre_ok: see motion_admitted)."""
+        return self._motion_basis_evidence(now, kind, map_id, centre_ok, ir_side)[0]
+
+    def _motion_basis_evidence(self, now, kind, map_id=None, centre_ok=False, ir_side=None):
+        """Return the basis and the first refusal, from the same motion gates."""
         if self._proof_live():
             try:
-                return 'enforce' if (self._return_motion is not None
-                                     and self._return_proof_configured is not None
-                                     and self._return_proof_configured() is True) else None
+                if (self._return_motion is not None and self._return_proof_configured is not None
+                        and self._return_proof_configured() is True):
+                    return 'enforce', None
             except Exception:  # noqa: BLE001 - an unreadable proof admits nothing
-                return None
+                pass
+            return None, 'enforce_unavailable'
         c, at, ir = self._config, self._clearance_at, self._ir_guard(now)
-        site = (c.site_floor_map_id is not None and map_id in (None, c.site_floor_map_id)
-                and c.ir_guard_enabled and (kind != 'arc' or ir != 'clear' or not self._ir_observation.visible)
-                and (ir in IR_ALLOWED[kind] and ir in ('clear', ir_side or ir) or (
-                    centre_ok and ir == 'centre' and kind in ('approach', 'advance')))
-                and c.obstacle_mode == 'path' and c.body_stop_known and self._scan_points is not None
-                and at is not None and 0 <= now-at <= c.clearance_stale_s)
-        return 'site' if site else None
+        if c.site_floor_map_id is None or map_id not in (None, c.site_floor_map_id):
+            return None, 'site_floor_unconfigured'
+        if not c.ir_guard_enabled:
+            return None, 'ir_guard_disabled'
+        if ((kind == 'arc' and ir == 'clear' and self._ir_observation.visible)
+                or not (ir in IR_ALLOWED[kind] and ir in ('clear', ir_side or ir) or (
+                    centre_ok and ir == 'centre' and kind in ('approach', 'advance')))):
+            return None, {'stale': 'ir_stale', 'centre': 'ir_centre'}.get(ir, 'ir_not_admissible')
+        if c.obstacle_mode != 'path' or not c.body_stop_known:
+            return None, 'body_clearance_unconfigured'
+        if self._scan_points is None or at is None or not 0 <= now-at <= c.clearance_stale_s:
+            return None, 'scan_stale'
+        return 'site', None
 
     def motion_admitted(self, now, linear, angular, kind, map_id=None, centre_ok=False, ir_side=None):
         """May this (linear, angular) of `kind` go out? map_id: the opening instruction's SiteMap.

@@ -1,11 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createFleetClient} from '../../../../shared/web/fleet-client.js';
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
 const {
   capabilityReason, chooseConvoyLeader, chooseLeader, estopCause, estopText, motionCommandReason, formationReason, leaderPathKind,
-  noRobotServesGrid,
+  junctionTurnRefusalText, noRobotServesGrid,
 } = await import('../../../../applications/fleet/web/motion-readiness.js');
+
+test('Fleet client renders the nested junction-turn refusal and preserves other errors', async () => {
+  const related = {code: 'TRIP_MODE_UNSUPPORTED', detail: {reason: 'JUNCTION_TURN_UNSUPPORTED'}};
+  const call = createFleetClient({origin: 'https://fleet.example',
+    fetchImpl: async () => Response.json({detail: {...related, detail: {
+      ...related.detail, junction_turn_reason: 'ir_centre',
+    }}}, {status: 422})});
+  await assert.rejects(call('/api/fleet/trips/test/start'), error => {
+    assert.match(junctionTurnRefusalText(error), /교차로 회전 불가 · 로봇 앞 IR 배열 중앙/);
+    return true;
+  });
+  assert.equal(junctionTurnRefusalText(related), '교차로 회전을 시작할 수 없습니다');
+  assert.equal(junctionTurnRefusalText({code: related.code, detail: {drive_mode: 'free'}}), '');
+});
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
   const caps = {runtime: {mode: 'motor'}, navigation: {goal_navigation: false}};

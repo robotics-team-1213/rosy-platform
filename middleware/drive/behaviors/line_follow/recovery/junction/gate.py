@@ -84,6 +84,9 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
 
     @property
     def supports_junction_turn(self):
+        return self.junction_turn_capability()[0]
+
+    def junction_turn_capability(self):
         """D-495 capability: live keep-mode keeper evidence with lane_corner_turning on (the
         junction HOLD that starts a turn) and a motion proof that can admit the turn at all.
         The observer's lane mode and flag are perception parameters; CORE learns them only from
@@ -91,8 +94,11 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         means False. The motion basis is D-498 _turn_basis, recomputed on every read."""
         with self._lock:
             at = self._keep_corner_at
-            return (at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
-                    and self._turn_basis(self._clock()) is not None)
+            now = self._clock()
+            if at is None or not 0 <= now-at <= KEEP_EVIDENCE_S:
+                return False, 'keep_corner_unavailable'
+            basis, reason = self._turn_basis_evidence(now)
+            return basis is not None, reason
 
     @property
     def supports_junction_pivot(self):
@@ -107,12 +113,15 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         guard without departure, path mode with the URDF body and a fresh scan) or None. The
         twist's own D-422 sweep is _maneuver_twist's. While approaching (D-507 4) the kind is
         'approach' and an IR centre inside the camera's cross-line band is allowed."""
+        return self._turn_basis_evidence(now)[0]
+
+    def _turn_basis_evidence(self, now):
         j = self._junction
         if j is not None and j.get('action') == 'bend':  # D-507 addendum: the bridge's IR rule
-            return self._motion_basis(now, 'bend', j.get('map_id'))
+            return self._motion_basis_evidence(now, 'bend', j.get('map_id'))
         if j is not None and j.get('state') == 'approaching':
-            return self._motion_basis(now, 'approach', centre_ok=self._centre_on_cross_line(now))
-        return self._motion_basis(now, 'turn')
+            return self._motion_basis_evidence(now, 'approach', centre_ok=self._centre_on_cross_line(now))
+        return self._motion_basis_evidence(now, 'turn')
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.

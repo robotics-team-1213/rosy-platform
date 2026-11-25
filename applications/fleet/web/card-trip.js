@@ -8,7 +8,7 @@ import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripPoseReason} from "/console/assets/site-map-model.js";
 import {consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason} from "/console/assets/localization-panel-logic.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
+import { chooseConvoyLeader, estopText, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { setOffBy } from "/common/cause-line.js";
 import { patchText } from "/common/control-dom.js";
@@ -111,7 +111,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       if (holder === form) form = null;
     } catch (err) {
       if (err.name === "AbortError") return;
-      holder.note = `운행 거절 · ${tripRefusalText(err)}`;
+      holder.note = `운행 거절 · ${junctionTurnRefusalText(err) || tripRefusalText(err)}`;
       log(`${robotId} ${holder.note}`, "bad");
     } finally {
       if (life.current()) { holder.busy = false; render(); }

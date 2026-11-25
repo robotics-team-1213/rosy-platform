@@ -163,6 +163,7 @@ class TripCaps:
     trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
+    junction_turn_reason: Optional[str] = None
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -182,6 +183,9 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 and math.isfinite(speed) and speed >= 0):
             known = frozenset(mode for mode in modes if mode in ("lane", "free"))
             floor = item.get("site_floor_map_id")
+            turn_reason = item.get("junction_turn_reason")
+            if item.get("junction_turn") is not False or not isinstance(turn_reason, str):
+                turn_reason = None
             line = capabilities.get("line_follow")
             camera = line.get("camera") if isinstance(line, dict) else None
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
@@ -198,7 +202,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             lane_bend_map_entry=item.get("lane_bend_map_entry") is True, lane_turn_map_entry=item.get("lane_turn_map_entry") is True,
                             lane_instruction_stamp=item.get("lane_instruction_stamp") is True,
                             **{k: item[k] is True for k in ("lane_crosswalk_gate", "lane_junction_signal") if k in item},
-                            line_camera=camera if isinstance(camera, dict) else None)
+                            line_camera=camera if isinstance(camera, dict) else None,
+                            junction_turn_reason=turn_reason)
     return None
 
 

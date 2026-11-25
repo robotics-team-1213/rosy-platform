@@ -202,6 +202,9 @@ class TripAdmission:
                               max_turn_deg=self.config.max_turn_deg, repeat=repeat,
                               final_place=final_place, nav2=nav2)
         if refused is not None:
+            turn_reason = getattr(caps, "junction_turn_reason", None)
+            if refused.get("reason") == "JUNCTION_TURN_UNSUPPORTED" and turn_reason:
+                refused["junction_turn_reason"] = turn_reason
             raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
         if lane and floor is not None and floor != map_id:

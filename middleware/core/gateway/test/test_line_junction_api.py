@@ -153,14 +153,20 @@ def test_turn_request_arms_and_reports_turn_deg(core_client):
     assert (junction["state"], junction["turn_deg"]) == ("armed", -90)
 
 
-def test_keep_debug_corner_turning_is_the_junction_turn_evidence(core_client):
-    _, services, clock = _active(core_client)
+def test_keep_debug_corner_turning_is_the_junction_turn_evidence(core_client, monkeypatch):
+    from core_api_web.api.v1 import system
+    monkeypatch.setattr(system, "_drive_provides", lambda svc, data: {"drive"})
+    client, services, clock = _active(core_client)
     assert services.line_follow.supports_junction_turn is False
     services.line_follow.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     for corner, expected in ((True, True), (False, False), ("yes", False)):
         raw = json.dumps({"reason": "no_boundary", "stamp": 100.0, "corner_turning": corner})
         observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
         assert services.line_follow.supports_junction_turn is expected
+        caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()
+        base = next(item for item in caps["controls"]["items"] if item["kind"] == "base_velocity")
+        assert base["junction_turn"] is expected
+        assert base.get("junction_turn_reason") == (None if expected else "keep_corner_unavailable")
 
 
 def test_refused_while_manual_control_is_active(core_client):

@@ -79,6 +79,7 @@ class BaseVelocityControl(_Wire):
     drive_modes: tuple[Literal["lane", "free"], ...] | None = None
     trip_max_linear: float | None = Field(None, ge=0, allow_inf_nan=False)
     junction_turn: bool | None = None
+    junction_turn_reason: str | None = None
     junction_pivot: bool | None = None
     lane_arc: bool | None = None
     lane_arc_map_anchor: bool | None = None
@@ -190,6 +191,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    autonomy: tuple[Literal["line"], ...] = (), robot_kind: str | None = None,
                    drive_modes: tuple[Literal["lane", "free"], ...] | None = None,
                    trip_max_linear: float | None = None, junction_turn: bool | None = None,
+                   junction_turn_reason: str | None = None,
                    junction_pivot: bool | None = None, lane_bend: bool | None = None,
                    lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    lane_arc_map_anchor: bool | None = None,
@@ -218,7 +220,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          max_angular=max_angular, pivot=True, fine=True,
                                          autonomy=autonomy, robot_kind=robot_kind,
                                          drive_modes=drive_modes, trip_max_linear=trip_max_linear,
-                                         junction_turn=junction_turn, junction_pivot=junction_pivot,
+                                         junction_turn=junction_turn, junction_turn_reason=junction_turn_reason,
+                                         junction_pivot=junction_pivot,
                                          lane_bend=lane_bend, lane_arc=lane_arc,
                                          lane_arc_map_anchor=lane_arc_map_anchor,
                                          lane_bend_map_entry=lane_bend_map_entry,
