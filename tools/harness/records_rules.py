@@ -179,6 +179,12 @@ def adr_number_findings(repo: Path, base: str | None, refs: tuple[str, ...] = ("
 
 
 def base_ref(repo: Path) -> str | None:
+    ref = os.environ.get("GITHUB_REF", "")
+    if os.environ.get("GITHUB_EVENT_NAME") == "pull_request" and re.fullmatch(r"refs/pull/\d+/merge", ref):
+        revisions = (_git(repo, "rev-parse", "HEAD", "HEAD^1", "HEAD^2") or "").split()
+        if len(revisions) == 3 and revisions[0] == os.environ.get("GITHUB_SHA"):
+            # The event base may be older than the test merge's actual base.
+            return revisions[1]
     requested = os.environ.get("HARNESS_BASE_REF") or ""
     if requested and set(requested) != {"0"} and _git(repo, "rev-parse", "--verify", "--quiet", f"{requested}^{{commit}}"):
         return requested
