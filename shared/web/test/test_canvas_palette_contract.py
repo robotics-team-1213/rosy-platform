@@ -34,6 +34,8 @@ CANVAS_FILES = [
     FLEET / "map" / "traffic-view.js",
     FLEET / "calibration" / "field-view.js",
     FLEET / "calibration" / "map-fit-view.js",
+    FLEET / "calibration" / "manual-fit-math.js",
+    FLEET / "calibration" / "manual-fit-view.js",
     FLEET / "shared" / "field-warp.js",
     FLEET / "sitemap" / "site-map.js",
     FLEET / "sitemap" / "site-map-sources.js",

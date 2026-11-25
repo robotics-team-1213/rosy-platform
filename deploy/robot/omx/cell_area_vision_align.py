@@ -98,6 +98,14 @@ def _wrist_err(obs: dict[str, Any], gain_across: float) -> float:
     return math.hypot(float(obs.get("along_mm", 0.0)), float(obs.get("across_mm", 0.0)) if gain_across > 0.0 else 0.0)
 
 
+def _apply_wrist_sanity(wo: dict[str, Any]) -> dict[str, Any]:
+    gpx, mpx = wo.get("gap_px"), wo.get("mm_per_px")
+    if wo.get("found") and ((gpx is not None and float(gpx) < 32.0) or (mpx is not None and not (0.06 <= float(mpx) <= 0.35))
+                            or abs(float(wo.get("along_mm") or 0.0)) > 35.0 or abs(float(wo.get("across_mm") or 0.0)) > 55.0):
+        wo.update(found=False, why="wrist_sanity_rejected")
+    return wo
+
+
 def refine_pick_pose_at_hover(
     *,
     cur_directive: dict[str, Any],
@@ -150,11 +158,11 @@ def refine_pick_pose_at_hover(
     w_img = frame_fn("wrist")
     if w_img is not None:
         w_obs_list = [
-            cell_fingers.resolve_wrist_servo_offset(
+            _apply_wrist_sanity(cell_fingers.resolve_wrist_servo_offset(
                 w_img if w_i == 0 else (frame_fn("wrist") or w_img),
                 cal,
                 prefer_structural=bool(exec_cfg.get("structural_wrist")),
-            )
+            ))
             for w_i in range(n_wrist)
         ]
         found_w = [o for o in w_obs_list if o.get("found")]
@@ -191,7 +199,7 @@ def refine_pick_pose_at_hover(
         w_img = frame_fn("wrist")
         if w_img is None:
             break
-        obs = cell_fingers.resolve_wrist_servo_offset(w_img, cal, prefer_structural=bool(exec_cfg.get("structural_wrist")))
+        obs = _apply_wrist_sanity(cell_fingers.resolve_wrist_servo_offset(w_img, cal, prefer_structural=bool(exec_cfg.get("structural_wrist"))))
         last_wrist_obs = obs
         wrist_log.append(obs)
         err1 = _wrist_err(obs, gain_across) if obs.get("found") else None
@@ -213,7 +221,7 @@ def refine_pick_pose_at_hover(
                 )
                 cal = dict(new_cal, finger_sign=flipped)
                 w_flip = frame_fn("wrist")
-                obs_flip = cell_fingers.resolve_wrist_servo_offset(w_flip, cal, prefer_structural=bool(exec_cfg.get("structural_wrist"))) if w_flip is not None else None
+                obs_flip = _apply_wrist_sanity(cell_fingers.resolve_wrist_servo_offset(w_flip, cal, prefer_structural=bool(exec_cfg.get("structural_wrist")))) if w_flip is not None else None
                 err_flip = _wrist_err(obs_flip, gain_across) if (obs_flip and obs_flip.get("found")) else None
                 if obs_flip and err_flip is not None and err_flip < err0:
                     p_xyz = flipped_xyz

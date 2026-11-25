@@ -4332,6 +4332,38 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-plans"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/admit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cells/${encodeURIComponent(id)}/readiness",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
           "expression": "/api/fleet/pipeline/station-zones",
           "resolution": "literal-or-template",
@@ -4750,6 +4782,74 @@
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/unload-release"
         },
         {
+          "id": "GET:/api/fleet/pipeline/cell-plans",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cell-plans",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "list_cell_plans",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cell-plans"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "admit_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful batch admit response",
+          "contract_tests": [
+            "operations/fleet/test/test_wave4_integration.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "cancel_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful plan cancellation response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "cell_readiness",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful cell readiness response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
+        },
+        {
           "id": "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
           "method": "POST",
           "path": "/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
@@ -4870,6 +4970,7 @@
         "applications/fleet/web/site-rules-judge.js",
         "applications/fleet/web/platoon-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
@@ -4901,6 +5002,14 @@
         },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/site-lanes",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-lanes"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
           "expression": "/api/fleet/site-lanes",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -6730,6 +6839,7 @@
         "applications/fleet/web/sitemap/site-map.html"
       ],
       "consumers": [
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/calibration/measured-calibration-view.js",
         "applications/fleet/web/console-goal.js",
@@ -6744,6 +6854,63 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations",
+            "POST:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations?include_history=true",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/fit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/fit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/freeze",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/freeze"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/rollback",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/rollback"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/accept",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/dismiss",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/calibrations",
@@ -7068,6 +7235,108 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/fit",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/fit",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "fit_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/fit"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/freeze",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/freeze",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "freeze_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/freeze"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/rollback",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/rollback",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "rollback_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/rollback"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "submit_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "accept_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "dismiss_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
         },
         {
           "id": "POST:/api/fleet/teach/confirm",

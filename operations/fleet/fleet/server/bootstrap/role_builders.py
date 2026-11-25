@@ -178,6 +178,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
             localization_service.set_active_map_id(map_pose.active_map_id)
         if site_maps is not None and callable(getattr(localization_service, "set_site_maps", None)):
             localization_service.set_site_maps(site_maps)
+        if callable(getattr(localization_service, "set_site_obstacle_pose", None)):
+            localization_service.set_site_obstacle_pose(partial(obstacle_site_pose, map_pose))
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:
@@ -223,7 +225,7 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator, read_guard=read_guard,
                                 operator_guard=operator_guard, require_named_operator=require_named_operator,
                                 map_revision=partial(active_map_revision, site_maps), map_pose=map_pose,
-                                console=console)
+                                console=console, site_maps=site_maps)
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources, calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer, require_operator=require_operator,

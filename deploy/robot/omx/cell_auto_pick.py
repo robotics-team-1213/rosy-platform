@@ -145,7 +145,8 @@ def _run_auto_core(
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"stopped: {row['error']}", **reach_fix_of(refused)}
             target = usable[0]
-            known = cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"))
+            use_blend = bool((config.get("calibrate") or {}).get("blend_bias"))
+            known = cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"), blend=use_blend)
             bias_data, problem = self_calibrate(
                 None, config, calibration, calibration_path, source,
                 target["object"]["raw_m"], objects, work, bias_data, sleep, log,
@@ -171,7 +172,7 @@ def _run_auto_core(
             if (
                 not dry_run
                 and problem is None
-                and cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"))
+                and cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"), blend=use_blend)
                 != target["bias_region"]
             ):
                 usable, refused = choose(

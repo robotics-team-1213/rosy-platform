@@ -138,6 +138,8 @@ class IngestServer:
         # keyed by frame identity and record revision.
         self._plane_records: dict[str, tuple[Mapping, str]] = {}
         self._plane_cache: dict[str, tuple[LatestFrame, str, asyncio.Future]] = {}
+        self._overlay_cache: dict[str, tuple] = {}
+        self._overlay_context: dict[str, dict] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -247,6 +249,45 @@ class IngestServer:
         else:
             self._plane_records.pop(source, None)
 
+    def report_overlay_context(self, source: str, *, places=(), robots=()) -> None:
+        """Record display-only map places and robot positions for ``mode: map_overlay``."""
+        import math
+        clean_places: list[dict] = []
+        for item in places or ():
+            if not isinstance(item, Mapping):
+                continue
+            x, y = item.get("x"), item.get("y")
+            if isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            clean_places.append({
+                "id": str(item.get("id") or "")[:64],
+                "name": str(item.get("name") or item.get("id") or "")[:64],
+                "x": float(x),
+                "y": float(y),
+            })
+            if len(clean_places) >= 64:
+                break
+        clean_robots: list[dict] = []
+        for item in robots or ():
+            if not isinstance(item, Mapping):
+                continue
+            rid = item.get("robot_id")
+            x, y = item.get("x"), item.get("y")
+            if not isinstance(rid, str) or not rid or isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            yaw = item.get("yaw")
+            row = {"robot_id": rid[:64], "x": float(x), "y": float(y)}
+            if isinstance(yaw, (int, float)) and not isinstance(yaw, bool) and math.isfinite(yaw):
+                row["yaw"] = float(yaw)
+            clean_robots.append(row)
+            if len(clean_robots) >= 32:
+                break
+        self._overlay_context[source] = {"places": clean_places, "robots": clean_robots}
+
     # -- handshake & preview handlers (bound from ingest_helpers / ingest_proposals) --
     _field_corners = ingest_helpers._field_corners
     _process_request = ingest_helpers._process_request
@@ -311,6 +352,7 @@ class IngestServer:
         self._map_cache.pop(source_name, None)
         self._map_done.pop(source_name, None)
         self._plane_cache.pop(source_name, None)
+        self._overlay_cache.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.

@@ -457,3 +457,16 @@ def test_world_docker_compose_hardening_and_bounded_logs() -> None:
         assert svc["read_only"] is True
         assert svc["cap_drop"] == ["ALL"]
         assert svc["logging"] == {"driver": "json-file", "options": {"max-size": "20m", "max-file": "3"}}
+
+
+def test_world_factory_actors_node_unit_tests(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "--test", "--test-reporter=spec", str(ROOT / "applications/world/test/factory-actors.test.mjs")],
+        cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

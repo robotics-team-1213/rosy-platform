@@ -4,6 +4,8 @@ from __future__ import annotations
 from cell_job_validators import (
     ARM,
     FILE,
+    FILTER_COL,
+    FILTER_OBJ,
     METRE,
     NAME,
     _actor,
@@ -55,6 +57,8 @@ AREA_JOBS = {
             "dry_run": _bool,
             "stay_in_hover": _bool,
             "no_vision_refine": _bool,
+            "catalog": _match(FILE),
+            "object": _match(FILTER_OBJ),
             "operator": _actor,
             "proposer": _actor,
         },
@@ -81,6 +85,25 @@ AREA_JOBS = {
             "roi": _roi,
         },
         "optional": {"operator": _actor, "proposer": _actor},
+    },
+    "grasp_plan": {
+        "script": "cell_grasp_plan_tool.py",
+        "moving": False,
+        "camera": True,
+        "argv": ["--arm", "{arm}", "--config", "{config}", "--catalog", "{catalog}", "--from", "{source}", "--dest", "{dest}"],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+            "catalog": _match(FILE),
+            "source": _match(NAME),
+            "dest": _match(NAME),
+        },
+        "optional": {
+            "roi": _roi,
+            "object": _match(FILTER_OBJ),
+            "colour": _match(FILTER_COL),
+            "out": _workdir_rel_path,
+        },
     },
     "incident_risk_clear": {
         "script": "omx_incident_pipeline.py",

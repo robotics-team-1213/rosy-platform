@@ -23,6 +23,7 @@ import cell_attempts  # noqa: E402
 import cell_calibration as cal  # noqa: E402
 import cell_cal_monitor  # noqa: E402
 import cell_depth  # noqa: E402
+import cell_depth_pose  # noqa: E402
 import cell_map_fit  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
@@ -249,42 +250,28 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         with_maps = calibration or {"sites": {}}
 
     cam_top = (config.get("cameras") or {}).get("top") or {}
-    cfg_height_m = cam_top.get("height_m")
     flags: list[str] = []
     cam_report: dict = dict.fromkeys(("cam_to_table_mm", "height_diff_mm", "plate_mm", "cam_to_plate_mm",
-                                      "align_scale", "align_shift", "align_edge_px"))
-    cam_report["config_height_m"] = cfg_height_m
-    heights = to_depth = plate_mm = None
-    if depth is not None and colour is not None:
-        plane = cell_depth.table_plane(depth)
-        cam_mm = round(abs(float(plane[1])), 2)
-        heights = cell_depth.height_map(depth, plane)
-        to_depth, edge_px = cell_depth.align_edges(colour, heights)
-        cam_report.update({
-            "cam_to_table_mm": cam_mm, "align_scale": round(float(to_depth[0, 0]), 3),
-            "align_shift": [round(float(to_depth[0, 2]), 1), round(float(to_depth[1, 2]), 1)],
-            "align_edge_px": round(float(edge_px), 2),
-            "height_diff_mm": round(cam_mm - float(cfg_height_m) * 1000.0, 1) if cfg_height_m is not None else None,
-        })
-        base_px = cam_top.get("plate_px")
-        if base_px is None:
-            for sname in list((config.get("calibrate") or {}).get("map_sites") or list(config.get("sites") or [])) + list((with_maps.get("sites") or {}).keys()):
-                rec = cell_pivot.map_record(with_maps, sname)
-                if rec and rec.get("homography"):
-                    fit_z = rec.get("z_view", ((config.get("sites") or {}).get(sname) or {}).get("z"))
-                    base_px = project_site_px(rec, cam_top, (0.0, 0.0), fit_z, 0.0)
-                    if base_px is not None:
-                        break
-        plate_mm = cell_depth.plate_top(heights, to_depth, base_px) if base_px is not None else None
-        if plate_mm is not None:
-            plate_mm = round(float(plate_mm), 2)
-            cam_report.update({"plate_mm": plate_mm, "cam_to_plate_mm": round(cam_mm - plate_mm, 2)})
-        else:
-            flags.append("plate_not_found")
-    else:
-        flags.append("missing_depth")
+                                      "align_scale", "align_shift", "align_edge_px", "tilt_deg", "nadir_px", "nadir_off_px"))
+    cam_report["config_height_m"] = cam_top.get("height_m")
 
-    sites_report: dict[str, dict] = {}
+    def _find_base_px():
+        base_px = cam_top.get("plate_px")
+        if base_px is not None:
+            return base_px
+        for sname in list((config.get("calibrate") or {}).get("map_sites") or list(config.get("sites") or [])) + list((with_maps.get("sites") or {}).keys()):
+            rec = cell_pivot.map_record(with_maps, sname)
+            if rec and rec.get("homography"):
+                fit_z = rec.get("z_view", ((config.get("sites") or {}).get(sname) or {}).get("z"))
+                bp = project_site_px(rec, cam_top, (0.0, 0.0), fit_z, 0.0)
+                if bp is not None:
+                    return bp
+        return None
+
+    heights, to_depth = cell_depth_pose.cal_eval_depth_setup(
+        depth, colour, cam_top, cam_report, flags, params, load_json_opt, _find_base_px
+    )
+    sites_raw: dict[str, dict] = {}
     bias_regions = (bias or {}).get("regions") or []
     for name, spec in (config.get("sites") or {}).items():
         rec = cell_pivot.map_record(with_maps, name)
@@ -298,16 +285,13 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         start_mm = _finite_height(heights, to_depth, start_px) if heights is not None else None
         surf_px_mm = _finite_height(heights, to_depth, spec.get("surface_px")) if heights is not None else None
         site_mm = next((v for v in (place_mm, surf_px_mm, start_mm) if v is not None), None)
-        depth_z = round((site_mm - plate_mm) / 1000.0, 4) if (site_mm is not None and plate_mm is not None) else None
-        depth_diff_mm = round((depth_z - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else None
         step_mm = round(place_mm - start_mm, 1) if (place_mm is not None and start_mm is not None) else None
-        if depth_diff_mm is not None and abs(depth_diff_mm) > d_lim:
-            site_flags.append("depth_diff_gt_6mm")
         if step_mm is not None and abs(step_mm) > s_lim:
             site_flags.append("place_vs_start_step_gt_8mm")
         receipt = (touch_receipts or {}).get(name) or (load_json_opt(work_dir / f"surface-{name}.json") if (touch_receipts is None and work_dir) else None)
-        touch_z = receipt.get("surface_z") if (receipt and receipt.get("result") in (None, "touched") and receipt.get("surface_z") is not None) else None
-        touch_diff_mm = round((float(touch_z) - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else None
+        raw_tz = receipt.get("surface_z") if (receipt and receipt.get("result") in (None, "touched")) else None
+        touch_z = float(raw_tz) if (isinstance(raw_tz, (int, float)) and not isinstance(raw_tz, bool) and math.isfinite(raw_tz)) else None
+        touch_diff_mm = round((touch_z - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else None
         if touch_diff_mm is not None and abs(touch_diff_mm) > t_lim:
             site_flags.append("touch_diff_gt_5mm")
         loo_max = ((rec or {}).get("loo_error_mm") or {}).get("max")
@@ -319,14 +303,17 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         if bias_fresh is False:
             site_flags.append("stale_bias")
         sigma_sum = cell_map_fit.site_sigma_summary(rec, [p for p in (spec.get("start"), spec.get("place")) if p], cam_top, target_z)
-        flags.extend(f"{name}:{fl}" for fl in site_flags)
-        sites_report[name] = {
-            "surface_z": surface_z, "place_mm": place_mm, "start_mm": start_mm, "surface_px_mm": surf_px_mm,
-            "depth_surface_z_m": depth_z, "depth_diff_mm": depth_diff_mm, "place_vs_start_step_mm": step_mm,
-            "touch_surface_z_m": touch_z, "touch_measured": (receipt or {}).get("measured"), "touch_diff_mm": touch_diff_mm,
-            "touch_self_seeded": bool(receipt and receipt.get("sets_surface_z") and touch_diff_mm == 0.0),
-            "loo_max_mm": loo_max, "map_sigma_mm": sigma_sum, "bias_fresh": bias_fresh, "flags": site_flags,
+        sites_raw[name] = {
+            "site_mm": site_mm, "surface_z": surface_z, "touch_z": touch_z, "flags": site_flags,
+            "entry": {
+                "surface_z": surface_z, "place_mm": place_mm, "start_mm": start_mm, "surface_px_mm": surf_px_mm,
+                "place_vs_start_step_mm": step_mm, "touch_surface_z_m": touch_z,
+                "touch_measured": (receipt or {}).get("measured"), "touch_diff_mm": touch_diff_mm,
+                "touch_self_seeded": bool(receipt and receipt.get("sets_surface_z") and touch_diff_mm == 0.0),
+                "loo_max_mm": loo_max, "map_sigma_mm": sigma_sum, "bias_fresh": bias_fresh,
+            },
         }
+    sites_report = cell_depth_pose.cal_eval_anchor_sites(sites_raw, cam_report, flags, d_lim, heights is not None)
 
     live_data = live if live is not None else (load_json_opt(Path(config["io"]).expanduser() / "live.json") if config.get("io") else None)
     fk_report: dict = {"present": bool(live_data), "fresh": False, "age_s": None, "tcp": None, "within_reach": None}

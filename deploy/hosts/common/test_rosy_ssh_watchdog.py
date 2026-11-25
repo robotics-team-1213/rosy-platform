@@ -11,7 +11,7 @@ pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="bash + /proc ho
 
 
 def run(tmp_path, *, ssh=False, ts_alive=True, route=True, ping=True, neigh=None,
-        uptime=7200, core_active=False, env=None):
+        uptime=7200, core_active=False, env=None, script=SCRIPT):
     """One watchdog run with stubbed system commands; returns (stdout, action lines)."""
     stubs = tmp_path / "bin"
     stubs.mkdir(exist_ok=True)
@@ -34,7 +34,7 @@ def run(tmp_path, *, ssh=False, ts_alive=True, route=True, ping=True, neigh=None
         (stubs / name).chmod(0o755)
     e = dict(os.environ, PATH=f"{stubs}:{os.environ['PATH']}",
              ROSY_SSH_WATCHDOG_STATE=str(tmp_path / "state"), **(env or {}))
-    out = subprocess.run(["bash", str(SCRIPT)], env=e, capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(["bash", str(script)], env=e, capture_output=True, text=True, check=True).stdout
     acted = ([l for l in calls.read_text().splitlines() if l.split()[0] not in ("is-enabled", "is-active")]
              if calls.exists() else [])
     calls.unlink(missing_ok=True)

@@ -40,12 +40,13 @@ def _setup(points, params):
 
 
 def _partners(coef, s, o, tcp, others, other_m) -> dict:
-    """{i: blob} for the points whose second blob the map puts within other_mm/2 of the opposite jaw."""
+    """{i: blob} for the points whose second blob the map puts within min(other_mm/4, 12 mm) of the opposite jaw."""
     out = {}
+    tol = min(other_m / 4, 0.012)
     for i, blobs in enumerate(others):
         gaps = [(math.dist(np.array([b[0], b[1], 1.0]) @ coef, tcp[i] - s[i] * o[i]), b) for b in blobs]
         gap, b = min(gaps, key=lambda g: g[0], default=(math.inf, None))
-        if gap <= other_m / 2:
+        if gap <= tol:
             out[i] = b
     return out
 
@@ -88,7 +89,9 @@ def _nearest(points, coef, params):
 def _pair_map(points, params):
     """The map from the middles of 3+ two-blob tries not on one line, or None."""
     _, _, tcp, _, others = _setup(points, params)
-    idx = [i for i, b in enumerate(others) if len(b) == 1]
+    gap_lo, gap_hi = prm.get(params, "jaw_centre.gap_lo_px"), prm.get(params, "jaw_centre.gap_hi_px")
+    idx = [i for i, b in enumerate(others)
+           if len(b) == 1 and gap_lo <= math.hypot(points[i]["pixel"][0] - b[0][0], points[i]["pixel"][1] - b[0][1]) <= gap_hi]
     if len(idx) < 3 or np.linalg.matrix_rank(np.c_[tcp[idx], np.ones(len(idx))], tol=1e-4) < 3:
         return None
     mid = np.array([[(points[i]["pixel"][0] + others[i][0][0]) / 2, (points[i]["pixel"][1] + others[i][0][1]) / 2, 1.0] for i in idx])
@@ -134,6 +137,9 @@ def remap_marks(points: list, params=None):
     pairs = _partners(coef, s, o, tcp, others, other_m)
     marks = [(((q["pixel"][0] + pairs[i][0]) / 2, (q["pixel"][1] + pairs[i][1]) / 2), tuple(q["tcp"])) if i in pairs
              else (tuple(q["pixel"]), tuple(float(v) for v in target[i])) for i, q in enumerate(points)]
-    rms = math.sqrt(float(np.mean(np.sum((A @ coef - target) ** 2, axis=1))))
+    m_px = np.array([[p[0], p[1], 1.0] for p, _ in marks], float)
+    m_arm = np.array([a for _, a in marks], float)
+    m_coef = np.linalg.lstsq(m_px, m_arm, rcond=None)[0]
+    rms = math.sqrt(float(np.mean(np.sum((m_px @ m_coef - m_arm) ** 2, axis=1))))
     record.update(sides=["ref" if v < 0 else "other" for v in s], pairs=sorted(pairs), rms_mm=round(1000 * rms, 2))
     return None, marks, record

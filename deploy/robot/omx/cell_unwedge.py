@@ -97,9 +97,12 @@ def _home_plan(home, bounds, start, lift):
 
 
 def _home_stop_result(status):
-    if status.get("contact") is True or str(status.get("fault") or "").startswith("contact"):
-        return "bind_suspected"
-    return "stopped"
+    return "bind_suspected" if (status.get("contact") is True or str(status.get("fault") or "").startswith("contact")) else "stopped"
+
+
+def _checked_prefix(status, context):
+    sid, sha = (context or {}).get("session_id") if isinstance(context, dict) else None, status.get("library_sha256")
+    return f"checked {sid} {sha} " if sid and sha else ""
 
 
 def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
@@ -125,7 +128,7 @@ def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
                 return "stopped", f"{joint}: no inward jog"
             if len(receipt["jogs"]) >= HOME_MAX_STEPS:
                 return "stopped", "too many jogs"
-            command = f"jog {joint}.pos {delta}"
+            command = f"{_checked_prefix(status, context)}jog {joint}.pos {delta}"
             row = {"command": command, "joint": joint, "delta": delta, "before": status}
             receipt["jogs"].append(row)
             row["ack"] = cell.act(command)
@@ -160,7 +163,7 @@ def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
     if not _home_state(status, context):
         return _home_stop_result(status), "live state refused before grip"
     if grip:  # an automatic rehome never opens or closes the jaws (an undetected box would drop)
-        ack = receipt["grip"] = cell.act(f"grip {home[5]}")
+        ack = receipt["grip"] = cell.act(f"{_checked_prefix(status, context)}grip {home[5]}")
         sleep(HOME_SETTLE_S)
         if ack.get("ok") is not True:
             return _home_stop_result(ack), "grip refused"
@@ -393,4 +396,4 @@ def main(argv=None) -> int:
     print(json.dumps(field.report("unwedge", summary), indent=1))
     return 0 if out["result"] == "recovered" else 1
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

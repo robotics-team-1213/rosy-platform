@@ -17,6 +17,7 @@ TOKEN_FILE_ENV = "ROSY_AUTO_CALIBRATION_TOKEN_FILE"
 
 CORNERS_M = ((-1.22, -0.61), (1.22, -0.61), (1.22, 0.61), (-1.22, 0.61))
 DRIFT_THRESHOLD_M = 0.015
+MAX_AUTO_DRIFT_M = 0.25
 MAP_PLACE_THRESHOLD_M = 0.012
 MAP_SYNC_REFUSED_FAIL_AFTER = 3  # consecutive refused map syncs before the run exits non-zero (visible in systemd)
 STABILITY_WINDOW = 5
@@ -176,6 +177,7 @@ def decide(
     series_corners: list[list[list[float]] | list[tuple[float, float]]],
     *,
     has_current_cal: bool = True,
+    cur_frozen: bool = False,
     place_diff_m: float = 0.0,
     now: float | None = None,
     last_approved_at: float | None = None,
@@ -184,6 +186,7 @@ def decide(
     window_size: int = STABILITY_WINDOW,
     stable_spread_m: float = STABLE_SPREAD_M,
     drift_threshold_m: float = DRIFT_THRESHOLD_M,
+    max_auto_drift_m: float = MAX_AUTO_DRIFT_M,
     place_threshold_m: float = MAP_PLACE_THRESHOLD_M,
     min_interval_s: float = MIN_APPROVAL_INTERVAL_S,
     spread_m: float | None = None,
@@ -191,62 +194,26 @@ def decide(
     """Return approve/hold decision with reason, drift (m), and spread (m)."""
     recent = list(series_corners[-window_size:])
     spread = series_spread_m(recent) if spread_m is None else spread_m
-    if has_current_cal and recent:
-        drift = corner_drift_m(mean_corners(recent))
-    elif not has_current_cal:
-        drift = 999.0
-    else:
-        drift = 0.0
-
+    drift = corner_drift_m(mean_corners(recent)) if (has_current_cal and recent) else (999.0 if not has_current_cal else 0.0)
+    meta = {"drift": round(drift, 4), "spread": round(spread, 4)}
     if force:
-        return {
-            "decision": "approve",
-            "reason": "forced",
-            "drift": round(drift, 4),
-            "spread": round(spread, 4),
-        }
-
+        return {"decision": "approve", "reason": "forced", **meta}
+    if cur_frozen:
+        return {"decision": "hold", "reason": "calibration_frozen", **meta}
     if len(recent) < window_size:
-        return {
-            "decision": "hold",
-            "reason": f"insufficient_samples:{len(recent)}/{window_size}",
-            "drift": round(drift, 4),
-            "spread": round(spread, 4),
-        }
-
+        return {"decision": "hold", "reason": f"insufficient_samples:{len(recent)}/{window_size}", **meta}
     if spread > stable_spread_m:
-        return {
-            "decision": "hold",
-            "reason": "unstable_series",
-            "drift": round(drift, 4),
-            "spread": round(spread, 4),
-        }
-
+        return {"decision": "hold", "reason": "unstable_series", **meta}
+    if has_current_cal and drift > max_auto_drift_m:
+        return {"decision": "hold", "reason": "drift_exceeds_auto_cap", **meta}
     needs_cal = (not has_current_cal) or (drift > drift_threshold_m)
     needs_map = bool(sync_map) and (needs_cal or (place_diff_m > place_threshold_m))
     if not (needs_cal or needs_map):
-        return {
-            "decision": "hold",
-            "reason": "within_threshold",
-            "drift": round(drift, 4),
-            "spread": round(spread, 4),
-        }
-
+        return {"decision": "hold", "reason": "within_threshold", **meta}
     if last_approved_at is not None and now is not None and (now - last_approved_at) < min_interval_s:
-        return {
-            "decision": "hold",
-            "reason": "rate_limited",
-            "drift": round(drift, 4),
-            "spread": round(spread, 4),
-        }
-
+        return {"decision": "hold", "reason": "rate_limited", **meta}
     reason = "no_current_cal" if not has_current_cal else ("drift_exceeded" if needs_cal else "place_diff_exceeded")
-    return {
-        "decision": "approve",
-        "reason": reason,
-        "drift": round(drift, 4),
-        "spread": round(spread, 4),
-    }
+    return {"decision": "approve", "reason": reason, **meta}
 
 
 def read_token(token_file: Path | None = None) -> str | None:
@@ -322,6 +289,7 @@ else:
             "rms_m": round(float(fit["rms_m"]), 5),
             "map_to_image": [round(float(v), 8) for v in fit["map_to_image"].ravel()],
             "image_to_map": [round(float(v), 8) for v in fit["image_to_map"].ravel()],
+            "lens_profile": fit.get("lens_profile"),
             "places": fit["places"],
             "edges": fit["edges"],
         }))
@@ -398,23 +366,51 @@ with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
     if needs_cal:
         score = max(0.95, min(0.995, round(1.0 - solved['rms_m'] * 8.0, 3)))
         body = {{
-            "source_id": "ceiling_north",
-            "map_id": "world_261026",
+            "source_id": "ceiling_north", "map_id": "world_261026",
             "map_to_image": solved["map_to_image"],
             "image": {{"width": solved["width"], "height": solved["height"]}},
             "track_bounds_m": {{"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}},
-            "fit_score": score,
-            "lens": {{"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}},
-            "frame_seq": solved["frame_seq"],
+            "fit_score": score, "lens": {{"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}},
+            "frame_seq": solved["frame_seq"], "auto": True,
         }}
+        if solved.get("lens_profile") is not None:
+            body["lens_profile"] = solved["lens_profile"]
         r = client.post('https://fleet:8090/api/fleet/calibrations', headers=headers, json=body)
-        r.raise_for_status()
-        out["cal_updated"] = True
-        out["calibration_revision"] = r.json().get("calibration_revision")
+        if r.status_code == 409 and "CALIBRATION_FROZEN" in r.text:
+            out["cal_frozen"] = True
+        else:
+            r.raise_for_status()
+            out["cal_updated"] = True
+            out["calibration_revision"] = r.json().get("calibration_revision")
 
 print(json.dumps(out))
 """
     return sh_json("rosy-site-fleet-1", "rosy", apply_code)
+
+
+def submit_recal_candidate(token: str, solved: dict, *, reason: str, spread_m: float, route_active: bool = False) -> dict:
+    """Best-effort stage held candidate in Fleet recalibration banner for 1-click operator review."""
+    score = max(0.95, min(0.995, round(1.0 - solved["rms_m"] * 8.0, 3)))
+    body = {
+        "map_id": "world_261026", "map_to_image": solved["map_to_image"],
+        "image": {"width": solved["width"], "height": solved["height"]},
+        "track_bounds_m": {"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61},
+        "fit_score": score, "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8},
+        "frame_seq": solved.get("frame_seq"), "lens_profile": solved.get("lens_profile"),
+        "rms_m": solved["rms_m"], "spread_m": round(float(spread_m), 5),
+        "hold_reason": reason, "route_active": bool(route_active),
+    }
+    code = f"""
+import json, httpx
+headers = {{"Authorization": f"Bearer {{{repr(token)}}}"}}
+with httpx.Client(verify='/run/secrets/site_ca', timeout=10.0) as client:
+    r = client.post('https://fleet:8090/api/fleet/calibrations/ceiling_north/recalibrate/candidate', headers=headers, json={repr(body)})
+    print(json.dumps({{"submitted": r.status_code == 200, "status": r.status_code}}))
+"""
+    try:
+        return sh_json("rosy-site-fleet-1", "rosy", code)
+    except Exception as exc:
+        return {"submitted": False, "error": str(exc)}
 
 
 def _load_state(state_file: Path) -> dict:
@@ -491,6 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     outcome = decide(
         [h["corners"] for h in history],
         has_current_cal=(old_m2i is not None),
+        cur_frozen=bool(cur_cal and cur_cal.get("frozen")),
         place_diff_m=place_diff_m,
         now=now,
         last_approved_at=last_approved_at,
@@ -512,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if outcome["decision"] != "approve":
+        if outcome.get("reason") in ("drift_exceeds_auto_cap", "calibration_frozen", "active_trips") and solved["rms_m"] <= 0.008:
+            submit_recal_candidate(token, solved, reason=outcome["reason"], spread_m=outcome.get("spread", 0.0), route_active=bool((cur_map or {}).get("route_active")))
         _save_state(STATE_FILE, {
             "map_sync_refused_runs": int(state.get("map_sync_refused_runs", 0)),  # holds between tries keep the count
             "checked_at": now,
@@ -533,13 +532,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     approved_solve = {
-        "width": solved["width"],
-        "height": solved["height"],
-        "frame_seq": solved["frame_seq"],
+        "width": solved["width"], "height": solved["height"], "frame_seq": solved["frame_seq"],
         "rms_m": round(sum(h["rms_m"] for h in history) / len(history), 5),
         "map_to_image": mean_homography([h["map_to_image"] for h in history]),
-        "places": avg_places,
-        "edges": solved["edges"],
+        "lens_profile": solved.get("lens_profile"),
+        "places": avg_places, "edges": solved["edges"],
     }
     needs_cal = force or (old_m2i is None) or (outcome["drift"] > DRIFT_THRESHOLD_M)
     # Keep site_map_versions (and D-1022 robot_map_bindings) stable unless --sync-map is explicitly requested.

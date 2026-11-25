@@ -1448,6 +1448,54 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "POST:/api/fleet/calibrations/fit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_fit_freeze_and_rollback_calibration_routes"
+      ],
+      "source_revision": "4c4965eddc5b1ad9d8800127bb8219a53f640ccb"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/freeze": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_fit_freeze_and_rollback_calibration_routes"
+      ],
+      "source_revision": "4c4965eddc5b1ad9d8800127bb8219a53f640ccb"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/rollback": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_fit_freeze_and_rollback_calibration_routes"
+      ],
+      "source_revision": "4c4965eddc5b1ad9d8800127bb8219a53f640ccb"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
+    "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_recalibration_pipeline.py",
+        "test_recalibration_candidate_accept_dismiss_and_listing_routes"
+      ],
+      "source_revision": "db71ef0d5fb7c63a1983952f5932ee3f38bf1581"
+    },
     "POST:/api/fleet/teach/confirm": {
       "status": 200,
       "test": [
@@ -2169,6 +2217,38 @@
         "test_approve_read_and_revoke"
       ],
       "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "GET:/api/fleet/pipeline/cell-plans": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_cell_plans.py",
+        "test_get_cell_plans_by_request_key_reconciles_and_isolates_service_principal"
+      ],
+      "source_revision": "3acebe7d257533594ce73c7bd9a6e43d51690e0b"
+    },
+    "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_wave4_integration.py",
+        "test_wave4_cell_plan_batch_admit_and_cancel_roundtrip"
+      ],
+      "source_revision": "3acebe7d257533594ce73c7bd9a6e43d51690e0b"
+    },
+    "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_cell_plans.py",
+        "test_cancel_cell_plan_and_refusal_visibility_and_pydantic_contracts"
+      ],
+      "source_revision": "3acebe7d257533594ce73c7bd9a6e43d51690e0b"
+    },
+    "GET:/api/fleet/pipeline/cells/{cell_id}/readiness": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_cell_plans.py",
+        "test_mode1_harbor_plan_executes_exact_sequence_and_enforces_admit_and_dependency"
+      ],
+      "source_revision": "3acebe7d257533594ce73c7bd9a6e43d51690e0b"
     }
   }
 }

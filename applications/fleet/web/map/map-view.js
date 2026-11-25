@@ -445,10 +445,18 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const drift = camera.calibration() && view.trackingDrift;
       const health = !drift && view.calibrationHealth;   // D-1006: 거부된 맞춤·범위 부족도 알린다
       calibrationStatus.hidden = !drift && !health;
-      calibrationStatus.textContent = health ? `카메라 교정 확인(${health.sourceId}) — ${health.text}`
+      const msg = health ? `카메라 교정 확인(${health.sourceId}) — ${health.text}`
         : !drift ? "" : drift.origin === "server"
         ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`
         : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`;
+      if (msg && typeof document?.createElement === "function" && typeof calibrationStatus.replaceChildren === "function") {
+        const link = document.createElement("a");
+        link.href = "/console/install#calibration";
+        link.textContent = "보정 도구 열기";
+        calibrationStatus.replaceChildren(`${msg} `, link);
+      } else {
+        calibrationStatus.textContent = msg;
+      }
     }
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";

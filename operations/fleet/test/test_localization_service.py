@@ -157,6 +157,26 @@ def test_the_mirror_signature_is_one_object_at_the_mirror_and_none_at_the_report
                                            {"r1": reported}) == {}
 
 
+def test_peer_observations_ignores_mirror_object_explained_by_another_peer():
+    reported_a = (1.26, 0.01, math.pi)                   # mirror of (-1.26, -0.01, 0)
+    peer_b = (-1.26, -0.01, 0.0)                         # real robot standing at r1's mirror
+    seen = service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": reported_a, "r2": peer_b})
+    assert list(seen) == ["r2"]
+    assert seen["r2"][:2] == pytest.approx((-1.26, -0.01)) and seen["r2"][2] is None
+
+
+def test_peer_observations_ignores_mirror_object_explained_by_known_points():
+    reported = (1.26, 0.01, math.pi)                     # mirror of (-1.26, -0.01, 0)
+    assert "r1" in service_logic.peer_observations(_report_at([(0.5, 0.0)]), ON_A, {"r1": reported})
+    assert service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": reported}, known_points=[(-1.26, -0.01)]) == {}
+    # Direct observation of the peer itself still holds even when known_points includes other spots.
+    seen = service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": (-1.26, -0.01, 0.0)}, known_points=[(0.0, 0.0)])
+    assert seen["r1"][:2] == pytest.approx((-1.26, -0.01)) and seen["r1"][2] is None
+
+
 def test_the_ladder_rungs_and_their_reset():
     ladder = Ladder()
     assert ladder.update("r", LocState.UNKNOWN, 0.0) is None          # not CANDIDATES yet
@@ -778,6 +798,54 @@ def test_an_agreeing_anchor_observation_never_marks_suspect():
     r2.see([seen_from(R2_TRUE, ON_A)])
     ticks(svc, clock, 5.0)
     assert r1.suspects == r2.suspects == [] and svc.anchors() == {"r1", "r2"}
+
+
+def test_anchor_ignores_offline_parked_robot_at_peers_mirror():
+    """Live regression (rosy_46/rosy_45/rosy_42): an offline parked robot in bay C3 near
+    the 180-degree origin twin of another robot must not fire fleet_monitor SUSPECT."""
+    clock = FakeClock()
+    p46 = (0.688, -0.365, 2.347)
+    p45 = (-0.238, 0.373, 1.658)
+    r46 = Anchor("rosy_46", p46, clock)
+    r45 = FakeRobot("rosy_45", state=state("rosy_45", "LOCALIZED", pose=p45))
+    r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
+    site_poses = {
+        "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        # Target also having a site pose must never mask its own mirror lock via exclude_ids.
+        "rosy_45": ("world_261026", 0.055, 0.450, 1.658),
+        "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
+    }
+    svc = service(r46, r45, r42, clock=clock, slots=[cues.Slot(*p46)], squares=[p46[:2]])
+    svc.set_site_obstacle_pose(lambda rid: site_poses.get(rid))
+    ticks(svc, clock, 10.0)
+    assert svc.anchors() == {"rosy_46"}
+    r46.see([(0.311, 0.417)])
+    ticks(svc, clock, 5.0)
+    assert r45.suspects == []
+    # Without the parked obstacle explanation, a lone object at the mirror still fires suspect.
+    site_poses.pop("rosy_42")
+    ticks(svc, clock, 1.0)
+    assert r45.suspects == ["fleet_monitor"]
+
+
+def test_candidates_observer_ignores_offline_parked_robot_at_peers_mirror():
+    """_arbitrate() also suppresses mirror suspects when an offline parked robot explains the point."""
+    clock = FakeClock()
+    r45 = FakeRobot("rosy_45", state=state("rosy_45", "LOCALIZED", pose=(-0.238, 0.373, 1.658)))
+    r46 = Reporting("rosy_46", clock, (0.688, -0.365, 2.347), [(0.311, 0.417)])
+    r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
+    site_poses = {
+        "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
+    }
+    svc = service(r45, r46, r42, clock=clock,
+                  slots=[cues.Slot(0.688, -0.365, 2.347)], squares=[(0.688, -0.365)])
+    svc.set_site_obstacle_pose(lambda rid: site_poses.get(rid))
+    ticks(svc, clock, 5.0)
+    assert r45.suspects == []
+    site_poses.pop("rosy_42")
+    ticks(svc, clock, 1.0)
+    assert r45.suspects == ["fleet_monitor"]
 
 
 def test_a_stale_anchor_status_is_ignored():

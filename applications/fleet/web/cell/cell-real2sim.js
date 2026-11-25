@@ -20,6 +20,7 @@ import {
 import {createCellActions} from './cell-real2sim-actions.js';
 import {createCellViews} from './cell-real2sim-views.js';
 import {
+  CELL_PLANS_PATH,
   createPipelinePanel,
   discoverPinkyIds,
   PIPELINE_STATUS_PATH,
@@ -44,6 +45,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   let lastCellTasksBody = null;
   let lastStatusBody = null;
   let lastUnloadRelease = null;
+  let lastPlansBody = null;
   let pollTimer = null;
   let liveStreamOn = true;
 
@@ -300,7 +302,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   function renderCellTasks(body) {
     lastCellTasksBody = body;
     renderDstOptions();
-    pipelinePanel.render(body, lastStatusBody, lastUnloadRelease);
+    pipelinePanel.render(body, lastStatusBody, lastUnloadRelease, lastPlansBody);
     renderVisualCards(body);
     renderCameraMatrix();
     renderRightInspector(body);
@@ -353,6 +355,14 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
       }
       if (expectedGen !== generation) return;
       lastUnloadRelease = unloadReleaseBody;
+      let plansBody = null;
+      try {
+        plansBody = await request(CELL_PLANS_PATH);
+      } catch {
+        plansBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastPlansBody = plansBody;
       renderCellTasks({
         ...body,
         pinky_robots: ids,

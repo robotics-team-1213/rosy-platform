@@ -36,6 +36,7 @@ SHARED = {
     "unit-links.js",  # D-977: verified child-unit cross-links shared by Cell and integrated control
     "disclosure-list.js",  # Active-first collapsible history list shared across Fleet views
     "map-fit.js",
+    "camera-warp.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
@@ -107,7 +108,6 @@ OWN = {
         "trail-view.js",
         "site-path.js",
         "confirmed-action.js",
-        "camera-warp.js",
         "camera-backdrop.js",
         "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "map-hover-card.js",
@@ -141,6 +141,8 @@ OWN = {
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
+        "manual-fit-math.js",
+        "manual-fit-view.js",
         "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
