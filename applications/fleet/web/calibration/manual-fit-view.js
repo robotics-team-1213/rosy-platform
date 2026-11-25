@@ -2,8 +2,12 @@
 import {
   flatMatrix, invert3, project, projectPolyline, projectTriangles, pickLanes, topDownLayout, fitFromCalibration,
 } from "/console/assets/map-fit.js";
+import { setOffBy } from "/common/cause-line.js";
 import { colorForErrorM, drawLoupe, formatRecalStatus, seedPointsFromFit, snapMapPoint, warpTopDownCanvas } from "/console/assets/manual-fit-math.js";
 import { isOperator } from "/console/assets/authorization.js";
+
+const tone = (name) => window.RosyPalette.cssColor(name);
+const font = (role = "micro", family = "mono") => window.RosyPalette.canvasFont(role, family);
 
 const REASONS_KO = {
   ok: "게이트 통과",
@@ -94,11 +98,11 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
   function drawCameraPane() {
     const ctx = camCanvas.getContext("2d");
     const cw = camCanvas.width, ch = camCanvas.height;
-    ctx.fillStyle = "#0d1117";
+    ctx.fillStyle = tone("--ground-deep");
     ctx.fillRect(0, 0, cw, ch);
     const img = lastFrame?.image;
     if (!img?.naturalWidth) {
-      ctx.fillStyle = "#8b949e"; ctx.font = "13px sans-serif";
+      ctx.fillStyle = tone("--ink-quiet"); ctx.font = font("label", "body");
       ctx.fillText("카메라 영상 대기 중…", 16, 28);
       return;
     }
@@ -110,10 +114,10 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
       if (!p.imagePx) return;
       const [px, py] = camToCanvas(p.imagePx[0], p.imagePx[1], cw, ch, iw, ih);
       const err = solved?.residuals_m?.[idx]?.err_m;
-      const col = idx === selectedIdx ? "#58a6ff" : (err != null ? colorForErrorM(err) : "#f0883e");
+      const col = tone(idx === selectedIdx ? "--series-primary" : (err != null ? colorForErrorM(err) : "--status-warn"));
       ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
-      ctx.font = "bold 12px monospace"; ctx.fillText(String(idx + 1), px + 8, py - 6);
+      ctx.font = font("micro", "mono"); ctx.fillText(String(idx + 1), px + 8, py - 6);
     });
     ctx.restore();
     if (hoverImg) drawLoupe(ctx, img, hoverImg[0], hoverImg[1], cw);
@@ -137,17 +141,17 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
   function drawMapPane() {
     const ctx = mapCanvas.getContext("2d");
     const cw = mapCanvas.width, ch = mapCanvas.height;
-    ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, cw, ch);
+    ctx.fillStyle = tone("--ground-deep"); ctx.fillRect(0, 0, cw, ch);
     const ls = currentLaneSet();
-    if (!ls) { ctx.fillStyle = "#8b949e"; ctx.font = "13px sans-serif"; ctx.fillText("사이트 차선 지도 없음", 16, 28); return; }
+    if (!ls) { ctx.fillStyle = tone("--ink-quiet"); ctx.font = font("label", "body"); ctx.fillText("사이트 차선 지도 없음", 16, 28); return; }
     const layout = topDownLayout(ls.bounds, cw, ch, 0.15);
-    drawLanesOn(ctx, layout.mapToCanvas, ls, "#58a6ff", 1.5);
+    drawLanesOn(ctx, layout.mapToCanvas, ls, tone("--series-primary"), 1.5);
     pairs.forEach((p, idx) => {
       if (!p.mapM) return;
       const pt = project(layout.mapToCanvas, p.mapM[0], p.mapM[1]);
       if (!pt) return;
       const res = solved?.residuals_m?.[idx];
-      const col = idx === selectedIdx ? "#58a6ff" : (res ? colorForErrorM(res.err_m) : "#f0883e");
+      const col = tone(idx === selectedIdx ? "--series-primary" : (res ? colorForErrorM(res.err_m) : "--status-warn"));
       if (res) {
         const pred = project(layout.mapToCanvas, p.mapM[0] + res.dx_m, p.mapM[1] + res.dy_m);
         if (pred) {
@@ -155,16 +159,16 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
           ctx.beginPath(); ctx.moveTo(pt[0], pt[1]); ctx.lineTo(pred[0], pred[1]); ctx.stroke();
         }
       }
-      ctx.fillStyle = col; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+      ctx.fillStyle = col; ctx.strokeStyle = tone("--ink"); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(pt[0], pt[1], 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.font = "bold 12px monospace"; ctx.fillText(String(idx + 1), pt[0] + 7, pt[1] - 5);
+      ctx.font = font("micro", "mono"); ctx.fillText(String(idx + 1), pt[0] + 7, pt[1] - 5);
     });
   }
 
   function drawComparePane() {
     const ctx = cmpCanvas.getContext("2d");
     const cw = cmpCanvas.width, ch = cmpCanvas.height;
-    ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, cw, ch);
+    ctx.fillStyle = tone("--ground-deep"); ctx.fillRect(0, 0, cw, ch);
     const ls = currentLaneSet(), img = lastFrame?.image;
     if (!ls || !img?.naturalWidth) return;
     const layout = { ...topDownLayout(ls.bounds, cw, ch, 0.15), bounds: ls.bounds };
@@ -195,7 +199,7 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
         }
       }
     }
-    drawLanesOn(ctx, layout.mapToCanvas, ls, "#3fb950", 1.5);
+    drawLanesOn(ctx, layout.mapToCanvas, ls, tone("--status-good"), 1.5);
   }
 
   function renderHistory() {
@@ -232,14 +236,14 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
     drawComparePane();
     const rec = activeRecord();
     if (freezeBtn) {
-      freezeBtn.disabled = !operator() || !rec || busy;
+      setOffBy(freezeBtn, busy ? "처리 중" : !operator() ? "운영자 권한 필요" : !rec ? "적용된 보정 없음" : "");
       freezeBtn.textContent = rec?.frozen ? "자동 보정 잠금 해제" : "자동 보정 잠금 (Freeze)";
     }
     const complete = pairs.filter((p) => p.imagePx && p.mapM);
-    if (solveBtn) solveBtn.disabled = !operator() || complete.length < 4 || busy;
-    if (applyBtn) applyBtn.disabled = !operator() || !solved?.accepted || busy;
-    if (delBtn) delBtn.disabled = selectedIdx < 0;
-    if (blendInput) blendInput.disabled = (compareMode?.value || "after") !== "blend";
+    if (solveBtn) setOffBy(solveBtn, busy ? "계산 중" : !operator() ? "운영자 권한 필요" : complete.length < 4 ? "대응점 4개 이상 필요" : "");
+    if (applyBtn) setOffBy(applyBtn, busy ? "적용 중" : !operator() ? "운영자 권한 필요" : !solved?.accepted ? "보정 계산을 먼저 통과하세요" : "");
+    if (delBtn) setOffBy(delBtn, selectedIdx < 0 ? "선택된 점 없음" : "");
+    if (blendInput) setOffBy(blendInput, (compareMode?.value || "after") !== "blend" ? "겹쳐 비교 모드에서 사용" : "");
     renderHistory();
     renderRecalBanner();
   }
@@ -252,9 +256,9 @@ export function createManualFitView({ scope, el, call, visionView, auth, onAppli
     if (!msg) return;
     recalText.textContent = msg;
     const hasPend = Boolean(row?.pending_candidate);
-    if (recalPreviewBtn) recalPreviewBtn.disabled = !hasPend || busy;
-    if (recalAcceptBtn) recalAcceptBtn.disabled = !hasPend || !operator() || busy;
-    if (recalDismissBtn) recalDismissBtn.disabled = busy;
+    if (recalPreviewBtn) setOffBy(recalPreviewBtn, busy ? "처리 중" : !hasPend ? "대기 후보 없음" : "");
+    if (recalAcceptBtn) setOffBy(recalAcceptBtn, busy ? "처리 중" : !operator() ? "운영자 권한 필요" : !hasPend ? "대기 후보 없음" : "");
+    if (recalDismissBtn) setOffBy(recalDismissBtn, busy ? "처리 중" : "");
   }
 
   async function refreshRecords() {

@@ -191,7 +191,7 @@ let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
 let manualFit = null;
-mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => { fieldView.render(); manualFit?.refresh(); } });
+mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
 manualFit = createManualFitView({ scope: pageScope, el, call, visionView, auth, onApplied: () => { mapFit.reset(); fieldView.render(); } });
 measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth, onPromoted: () => { manualFit?.refresh(); mapFit.reset(); }});
 // D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.

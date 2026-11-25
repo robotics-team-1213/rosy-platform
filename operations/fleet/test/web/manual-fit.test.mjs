@@ -30,9 +30,9 @@ test("snapMapPoint snaps to nearest polyline vertex within threshold and colors 
   };
   assert.deepEqual(snapMapPoint(0.52, -0.19, ls, 0.05), { x: 0.5, y: -0.2, snapped: true });
   assert.deepEqual(snapMapPoint(0.0, 0.0, ls, 0.05), { x: 0.0, y: 0.0, snapped: false });
-  assert.equal(colorForErrorM(0.01), "#2ea043");
-  assert.equal(colorForErrorM(0.03), "#d29922");
-  assert.equal(colorForErrorM(0.08), "#f85149");
+  assert.equal(colorForErrorM(0.01), "--status-good");
+  assert.equal(colorForErrorM(0.03), "--status-warn");
+  assert.equal(colorForErrorM(0.08), "--status-crit");
   const seeded = seedPointsFromFit({
     mapToImage: [100, 0, 320, 0, -100, 180, 0, 0, 1],
     image: { width: 640, height: 360 },
