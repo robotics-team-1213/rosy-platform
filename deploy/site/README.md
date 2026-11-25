@@ -1967,9 +1967,12 @@ sudo systemctl enable --now rosy-site-ledger-backup.timer
 After each backup the same run applies ledger retention to the live volume
 (also explicit in the compose `fleet-backup` command): terminal-task history
 `--prune-history 30`, pairing and CORE event audit `--prune-audit 90`, site
-API request audit `--prune-api-audit 90`, accepted-sighting audit
-`--prune-sightings 90` — every flag accepts `0` to disable that group, and
-tables missing from an older schema are skipped. The timer's backup copy is
+API request audit `--prune-api-audit 14`, accepted-sighting audit
+`--prune-sightings 90`. Set any group to `0` to disable pruning for that group.
+The API audit default applies unless a ledger setting overrides it. API audit
+pruning respects the archive watermark. A ledger with no watermark table keeps
+API audit rows for at least 90 days. Tables missing from an older schema are
+skipped. The timer's backup copy is
 VACUUMed after the copy completes, so the 14 kept backups track the retained
 data instead of the source file's high-water mark; the live volume keeps its
 size until the quarterly maintenance window, when a stopped-service

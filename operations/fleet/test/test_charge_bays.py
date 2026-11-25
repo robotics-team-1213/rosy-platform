@@ -146,7 +146,9 @@ def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     from fleet.swarm.robots import RobotEndpoint
 
     store = SiteMapStore()
-    client = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")], [FakeRobot("rosy_60")]),
+    clock = [0.0]
+    client = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")], [FakeRobot("rosy_60")],
+                                                clock=lambda: clock[0]),
                                    console_token="op", site_maps=store))
     auth = {"Authorization": "Bearer op"}
     if store.active() is None:
@@ -169,6 +171,12 @@ def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     app.state.charge_bays.observe = lambda now, robots, bays: seen.append(([r.robot_id for r in robots], bays))
     asyncio.run(app.state.charge_bays_tick())    # the background loop's step, no page open
     assert seen == [(["rosy_60"], [Bay("C1", -0.414, 0.47)])]
+    clock[0] = 4.0
+    asyncio.run(app.state.charge_bays_tick())
+    assert len(seen) == 1
+    clock[0] = 5.0
+    asyncio.run(app.state.charge_bays_tick())
+    assert len(seen) == 2
 
 
 def test_centerline_evaluation_flags_misaligned_dock_for_immediate_reseat():

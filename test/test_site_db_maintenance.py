@@ -781,6 +781,19 @@ def test_cli_prune_uses_stored_retention_and_archive_watermark(tmp_path):
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT rowid FROM fleet_api_audit").fetchall() == [(2,)]
 
+def test_short_api_audit_retention_waits_for_archive_watermark(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("CREATE TABLE fleet_api_audit (created_at TEXT NOT NULL)")
+        db.execute("INSERT INTO fleet_api_audit VALUES (strftime('%Y-%m-%dT%H:%M:%S', 'now', '-30 days'))")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 0
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("CREATE TABLE fleet_audit_flush (kind TEXT PRIMARY KEY, last_rowid INTEGER NOT NULL)")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 0
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("INSERT INTO fleet_audit_flush VALUES ('fleet_api_audit', 1)")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 1
+
 
 def test_prune_ledger_prunes_fleet_ai_facts_under_audit_days(tmp_path):
     from fleet.stuck.ai_facts import AiFactLog

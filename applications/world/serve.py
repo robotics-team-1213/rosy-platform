@@ -442,6 +442,12 @@ class WorldHandler(SimpleHTTPRequestHandler):
         return self._reply_json(200, {"ok": True, "world_id": raw_id, "deleted": existed})
 
     def log_message(self, fmt, *args):
+        if len(args) >= 2 and str(args[1]) == "200":
+            path = urlsplit(getattr(self, "path", "")).path
+            if (self.command == "GET" and path == "/healthz") or (
+                self.command == "POST" and path.startswith("/api/worlds/")
+            ):
+                return
         if sys.stderr is not None:
             super().log_message(fmt, *args)
 

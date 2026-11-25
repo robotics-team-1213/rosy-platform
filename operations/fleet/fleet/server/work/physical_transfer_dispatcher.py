@@ -167,8 +167,9 @@ class PhysicalTransferDispatcher:
 
     async def run(self):
         while True:
+            result = None
             try:
-                await asyncio.to_thread(self.tick)
+                result = await asyncio.to_thread(self.tick)
             except Exception:
                 _LOG.exception("Physical receipt monitor failed")
-            await asyncio.sleep(.25)
+            await asyncio.sleep(1.0 if result is None else 0.25)

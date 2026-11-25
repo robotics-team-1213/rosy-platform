@@ -155,6 +155,10 @@ class NotificationOutbox:
     def claim_due(self, now, config):
         routes = {channel.kind: config.route_revision(channel) for channel in config.channels}
         with closing(self._log._connect()) as connection, connection:
+            if connection.execute(
+                "SELECT 1 FROM fleet_notification_outbox WHERE state IN ('PENDING','RETRY','SENDING') LIMIT 1"
+            ).fetchone() is None:
+                return None
             connection.execute('BEGIN IMMEDIATE')
             connection.execute("UPDATE fleet_notification_outbox SET state='UNKNOWN', last_code='WORKER_OUTCOME_UNKNOWN' WHERE state='SENDING' AND last_attempt_at <= ?", (now - 30,))
             connection.execute("UPDATE fleet_notification_outbox SET state='EXPIRED', last_code='DELIVERY_EXPIRED' WHERE state IN ('PENDING','RETRY') AND expires_at <= ?", (now,))

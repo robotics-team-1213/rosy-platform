@@ -71,8 +71,16 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
     app.state.bay_inputs = bay_inputs
     app.state.bay_inputs = bay_inputs
 
+    next_refresh_at = float("-inf")
+
     async def charge_bays_tick() -> None:
         """Feed the plan each period, so a voltage rise is seen with nobody on the page."""
+        nonlocal next_refresh_at
+        now = console._clock()
+        if now < next_refresh_at:
+            return
+        # The one-second enclosing loop also feeds station recovery and person requests.
+        next_refresh_at = now + 5.0
         active, robots, bays = await bay_inputs()
         if active is not None and bays:
             bay_plan.observe(console._clock(), robots, bays)
