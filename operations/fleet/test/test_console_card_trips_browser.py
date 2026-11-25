@@ -91,6 +91,25 @@ def _settle(page, posts, path, count=1):
             return
 
 
+def test_s5_refusal_and_later_preview_are_separate_records(site):
+    from playwright.sync_api import expect
+
+    preview = {"at": 1795639225, "robot_id": "rosy_46", "to": "S5", "plan_id": "second", "stage": "preview"}
+    refusal = {**preview, "plan_id": "first", "stage": "plan_refused", "code": "TRIP_LANE_CAMERA_UNAVAILABLE",
+               "detail": {"error": "RATE_LIMITED"}}
+    browser, page, errors = _open(None, site, {**API, "/api/fleet/trip-requests": {"requests": [preview, refusal]}}, [])
+    try:
+        page.locator("#context-evidence-tab").click()
+        page.locator("#trip-receipt-history summary").click()
+        rows = page.locator("#trip-receipt-rows li")
+        expect(rows).to_have_count(2)
+        expect(rows.first).to_contain_text("S5 · 경로 계산 완료 · 출발 전")
+        expect(rows.last).to_contain_text("RATE_LIMITED")
+        assert not errors
+    finally:
+        browser.close()
+
+
 def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
     from playwright.sync_api import expect
 

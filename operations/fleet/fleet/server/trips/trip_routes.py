@@ -327,10 +327,26 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
 
     @app.post("/api/fleet/trips/{plan_id}/start", tags=["fleet"])
     async def fleet_trip_start(plan_id: str, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        def receipt(stage, code=None, detail=None):
+            try:
+                row = site_maps.plan(plan_id)
+                if row is not None:
+                    site_maps.record_event("trip_start_receipt", principal.principal_id, {
+                        "plan_id": plan_id, "robot_id": row["robot_id"], "to": row["request"].get("to"),
+                        "stage": stage, "code": code, "detail": detail or {}})
+            except sqlite3.Error:
+                _LOG.exception("trip receipt write failed plan_id=%s stage=%s code=%s", plan_id, stage, code)
         try:
-            return await runner.start(plan_id, principal.principal_id)
+            trip = await runner.start(plan_id, principal.principal_id)
         except TripError as exc:
+            receipt("start_refused", exc.code, exc.detail)
             raise trip_error(exc) from exc
+        receipt("start_accepted")
+        return trip
+
+    @app.get("/api/fleet/trip-requests", dependencies=read_guard, tags=["fleet"])
+    def trip_request_history() -> dict:
+        return {"requests": site_maps.trip_request_history()}
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
     async def fleet_trip_cancel(trip_id: str,  # D-540 9: a stop stays open

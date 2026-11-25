@@ -490,6 +490,14 @@
       "path": "card-trip.js",
       "media_type": "application/javascript"
     },
+    "trip-geometry.js": {
+      "path": "sitemap/trip-geometry.js",
+      "media_type": "application/javascript"
+    },
+    "trip-receipts.js": {
+      "path": "work/trip-receipts.js",
+      "media_type": "application/javascript"
+    },
     "site-rules-judge.js": {
       "path": "site-rules-judge.js",
       "media_type": "application/javascript"

@@ -521,6 +521,11 @@
       </section>
         </div>
         <div class="context-panel" id="context-evidence" role="tabpanel" tabindex="0" aria-labelledby="context-evidence-tab" hidden>
+          <details class="panel" id="trip-receipt-history">
+            <summary>운행 요청 기록</summary>
+            <ui-button kind="quiet" id="trip-receipt-refresh" type="button">새로고침</ui-button>
+            <ol id="trip-receipt-rows" aria-live="polite"></ol>
+          </details>
 
       <section class="panel incident-panel" aria-labelledby="incident-heading">
         <h2 id="incident-heading">사건 기록</h2>

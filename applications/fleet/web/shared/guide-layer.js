@@ -334,10 +334,9 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     const goalX = typeof selectedGoal?.x === "number" ? selectedGoal.x : (densePts.length ? densePts[densePts.length - 1][0] : null);
     const goalY = typeof selectedGoal?.y === "number" ? selectedGoal.y : (densePts.length ? densePts[densePts.length - 1][1] : null);
-    if (planRobot?.pose && goalX !== null && Date.now() - (activeRouteSource.at || 0) > 3500 && Math.hypot(planRobot.pose.x - goalX, planRobot.pose.y - goalY) < 0.055) {
-      if (selectedGoal) selectedGoal.statusText = "도착 완료";
-    }
-    const routeColor = selectedGoal?.status === "PREVIEW" ? warnCol : goalCol;
+    const dispatched = selectedGoal?.status === "DISPATCHED" || selectedGoal?.status === "BERTHING";
+    const blocked = selectedGoal?.status === "BLOCKED";
+    const routeColor = blocked ? css("--status-crit") : dispatched ? goalCol : warnCol;
     ctx.save();
     if (densePts.length >= 2) {
       // High-contrast dark halo underneath selected road polyline
@@ -451,7 +450,8 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
         const lenStr = typeof lenVal === "number" ? ` · ${lenVal.toFixed(2)}m` : "";
         const statusStr = selectedGoal?.statusText ? ` · ${selectedGoal.statusText}` : "";
         const goalTitle = selectedGoal?.label || `(${goalX.toFixed(2)}, ${goalY.toFixed(2)})`;
-        drawChip(ctx, null, gp.x, gp.y - 18, `TARGET · ${goalTitle}${lenStr}${viaStr}${statusStr}`, "good");
+        const phase = blocked ? "출발 보류" : dispatched ? "접수된 목표" : selectedGoal?.status === "UNCONFIRMED" ? "접수 확인 불가" : "출발 전";
+        drawChip(ctx, null, gp.x, gp.y - 18, `${phase} · ${goalTitle}${statusStr}${lenStr}${viaStr}`, blocked ? "bad" : dispatched ? "good" : "warn");
       }
     }
     ctx.restore();
