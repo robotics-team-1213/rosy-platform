@@ -5,7 +5,7 @@ import { PanelKvList } from "/console/assets/cockpit-hosts.js";
 import { node, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
 import {
-  bindingSpanM, buildBindingPayload, captureBindingSample, confirmReason,
+  bindingSpanM, buildBindingPayload, candidateHeadingLabel, captureBindingSample, confirmReason,
   MIN_BINDING_SAMPLES, MIN_BINDING_SPAN_M, relocalizeReason, summarizeLocalizationPanel,
 } from "/console/assets/localization-panel-logic.js";
 
@@ -117,7 +117,7 @@ export function createLocalizationPanel({
     }
 
     if (entry.candIdx >= summary.candidates.length) entry.candIdx = 0;
-    const candSig = `${id}:${summary.candidates.map((c) => `${c.x?.toFixed?.(2)},${c.y?.toFixed?.(2)},${c.scan_fit?.toFixed?.(3)}`).join("|")}`;
+    const candSig = `${id}:${summary.candidates.map((c) => `${c.x?.toFixed?.(2)},${c.y?.toFixed?.(2)},${c.yaw},${c.scan_fit?.toFixed?.(3)}`).join("|")}`;
     patchHidden(candRow, summary.candidates.length <= 1);
     if (candSig !== lastCandSig) {
       lastCandSig = candSig;
@@ -125,7 +125,7 @@ export function createLocalizationPanel({
         const opt = document.createElement("option");
         opt.value = String(idx);
         const fitTxt = typeof c.scan_fit === "number" ? c.scan_fit.toFixed(2) : "—";
-        opt.textContent = `후보 ${idx + 1} · (${Number(c.x).toFixed(2)}, ${Number(c.y).toFixed(2)}) · 적합도 ${fitTxt}`;
+        opt.textContent = `후보 ${idx + 1} · (${Number(c.x).toFixed(2)}, ${Number(c.y).toFixed(2)}) · ${candidateHeadingLabel(c.yaw)} · 적합도 ${fitTxt}`;
         return opt;
       }));
       candSelect.value = String(entry.candIdx);
@@ -193,7 +193,7 @@ export function createLocalizationPanel({
     const pose = candidate && { x: candidate.x, y: candidate.y, yaw: candidate.yaw };
     return {
       kind: "loc-confirm",
-      message: `${id}의 후보 ${idx + 1} 위치를 확정해 자율 주행을 허용할까요?`,
+      message: `${id}의 후보 ${idx + 1} 위치와 ${candidateHeadingLabel(pose?.yaw)}를 기체에서 검증할까요?`,
       eligible: () => Boolean(lastRobot?.online && pose) && !confirmBtn.disabled,
       request: (owner) => call(`/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pose), signals: [owner.signal],
