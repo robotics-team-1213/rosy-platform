@@ -69,6 +69,7 @@ def test_platform_parts_registers_d1072_safety_review_paths():
         "deploy/robot/omx/cell_vlm_orchestrator.py",
         "deploy/robot/omx/cell_envelope_review.py",
         "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+        "operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py",
         "operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py",
         "operations/fleet/fleet/server/sitemap/pipeline_evidence.py",
     }

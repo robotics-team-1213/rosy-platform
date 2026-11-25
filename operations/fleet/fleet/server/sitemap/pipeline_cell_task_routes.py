@@ -16,6 +16,7 @@ from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pin
 from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity,
 )
+from .pipeline_cell_task_presets import cell_task_presets
 from .pipeline_governance_store import (
     admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id, is_named_operator,
     prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
@@ -26,6 +27,7 @@ from fleet.server.sitemap.pipeline_unload_release import (
     exit_target, install_unload_release_routes, manifest_count, unload_release,
 )
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
+from fleet.server.rfid_receipts import is_inbound_supply
 
 
 _LEGACY_VEHICLE_SITE = "pinky"
@@ -135,20 +137,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _commit_ledger(bump_stop=True) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_stop_generation())
         return res
 
-    CELL_TASK_PRESETS: dict[str, dict] = {
-        "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
-        "s3_act_policy": {"preset": "s3_act_policy", "label": "S3 ACT 정책 구동 (arm_s · 최신 모델)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "execution_mode": "act_policy", "max_chunks": 4},
-        "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
-        "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
-        "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
-        "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
-        "s5_tier2_arm_b": {"preset": "s5_tier2_arm_b", "label": "S5 적재 2층 (arm_b: Belt -> Pallet L1)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None},
-        "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
-        "export_s3_belt": {"preset": "export_s3_belt", "label": "반출대 3 반출 (EXP_S3_BELT · arm_s)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "zone_id": "EXP_S3_BELT"},
-        "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
-        "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
-        "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
-    }
+    CELL_TASK_PRESETS = cell_task_presets()
 
     @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
     async def report_displaced_detection(request: Request):
@@ -225,7 +214,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             app.state.detected_displaced_site = None
         else:
             resolved_disp = raw_disp or None
-        return _enrich_task_health({
+        task = _enrich_task_health({
             "task_id": task_id,
             "cell_id": cell_id,
             "arm_id": arm_id,
@@ -251,16 +240,26 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "status": target_status,
             "created_at": round(time.time(), 3),
         })
+        rfid = getattr(app.state, "rfid_receipts", None)
+        if rfid is not None and rfid.workcell and is_inbound_supply(task):
+            task.update(intake_occurrence_id=f"intake-{uuid.uuid4().hex}", intake_workcell=rfid.workcell)
+        return task
 
     def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None,
                       principal_role: str | None = None, save: bool = True,
-                      idempotency: tuple[str, str] | None = None) -> list[dict]:
+                      idempotency: tuple[str, str] | None = None, retry_of=None) -> list[dict]:
         seen_ids: set[str] = set()
         built = []
         for idx, s in enumerate(specs):
             if idempotency is not None and len(specs) == 1 and not s.get("task_id"):
                 s = {**s, "task_id": deterministic_idempotency_id("cell", idempotency[0])}
             task = _build_cell_task(active, s, seen_ids=seen_ids, principal_id=principal_id, principal_role=principal_role)
+            if retry_of is not None and "intake_occurrence_id" in task:
+                for key in ("intake_occurrence_id", "intake_workcell"):
+                    if key in retry_of:
+                        task[key] = retry_of[key]
+                    else:
+                        task.pop(key, None)
             if idempotency is not None:
                 task["idempotency_key"], task["idempotency_body_sha256"] = idempotency[0], idempotency[1]
             seen_ids.add(task["task_id"])
@@ -482,9 +481,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
         new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier", *TASK_IDENTITY_FIELDS) if k in orig}
-        spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset")})
+        if orig.get("placement_attempt_id"):
+            raise HTTPException(409, detail={"code": "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"})
+        spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset", "zone_id") if k in orig})
         spec.update({"task_id": new_id, **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None}})
-        retried = _enqueue_one_task(active, spec, principal_id=principal_id)
+        retried, = _enqueue_many(active, [spec], principal_id=principal_id, retry_of=orig)
         return {"ok": True, "task": retried, "retried_from": task_id}
 
     @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=operator_guard)
