@@ -42,10 +42,10 @@ from tf2_ros import TransformListener
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from .loc_assist import LocAssist, lane_rules_near, localized_objects, pooled_grid, search
+from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
-from .sensing.localization import MapAgreement, planar_yaw
+from .sensing.localization import MapAgreement, planar_yaw, valid_beams
 from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from perception_runtime.perception.lane_bev import BirdsEye
 from .sensing.perception.paint_hypothesis import camera_paint_points, paint_score
@@ -190,9 +190,14 @@ class LocAssistNode(Node):
     def on_scan(self, msg):
         self.scan = msg
         machine = self.core.machine
-        if self.field is None or (machine.check is None and not machine.autonomy_allowed):
+        if self.field is None:
             return
         now = self.now()
+        if machine.check is None and not machine.autonomy_allowed:
+            scan_stamp = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
+            if self.core.candidate_scan_due(now, scan_stamp):
+                self.recheck_candidates(now, scan_stamp, msg)
+            return
         if machine.check is None and machine.autonomy_allowed and self.core._is_settled(now) and 0.0 <= now - self._last_settled_scan_s < 0.5:
             return
         # odom->sensor at the scan stamp, then AMCL's *latest* map->odom. AMCL stamps
@@ -215,6 +220,23 @@ class LocAssistNode(Node):
         self.publish(self.core.on_fit(now, fit))
         if self.core.objects_due(now):
             self.report_objects(now, msg, sensor)
+
+    def recheck_candidates(self, now, scan_stamp, scan):
+        ranges, angles = self.scan_arrays(scan)
+        if len(valid_beams(ranges, angles)[0]) < 30:
+            return
+        try:
+            mount = self.scan_mount(scan)
+        except Exception:
+            return
+        candidates = self.core.machine.candidates
+        sensor = [sensor_from_base((c.x, c.y, c.yaw), mount) for c in candidates]
+        fits = [self.field.robust_score(pose, ranges, angles) for pose in sensor]
+        objects = None
+        if all(fit >= self.core.machine.min_fit for fit in fits):
+            objects = localized_objects(self.field, sensor[0], *self.scan_arrays(scan, 1), mount,
+                                        self.p('robot_radius'))
+        self.publish(self.core.on_candidate_scan(now, scan_stamp, fits, objects))
 
     def report_objects(self, now, msg, sensor):
         """D-395 rev. 4 §5 (S1 R1): a LOCALIZED robot reports what the map does not explain,
@@ -284,13 +306,15 @@ class LocAssistNode(Node):
             self.get_logger().info(f'auto_recovery rejected: {reason}')
         self.publish(out)
 
+    def scan_mount(self, scan):
+        tf = self.tf.lookup_transform('base_link', scan.header.frame_id, rclpy.time.Time()).transform
+        return Mount(tf.translation.x, tf.translation.y, yaw(tf.rotation))
+
     def _auto_recovery_fit(self, candidate_pose):
         if self.field is None or self.scan is None:
             return 0.0
         try:
-            mount_tf = self.tf.lookup_transform('base_link', self.scan.header.frame_id, rclpy.time.Time())
-            t = mount_tf.transform.translation
-            mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+            mount = self.scan_mount(self.scan)
         except Exception:
             return 0.0
         ranges, angles = self.scan_arrays(self.scan)
@@ -363,15 +387,16 @@ class LocAssistNode(Node):
             return None
 
     def start_search(self, now, odom):
+        scan_stamp = rclpy.time.Time.from_msg(self.scan.header.stamp).nanoseconds * 1e-9
+        if not 0. <= now - scan_stamp <= SETTLE_S:
+            return
         try:
-            mount_tf = self.tf.lookup_transform('base_link', self.scan.header.frame_id, rclpy.time.Time())
-            t = mount_tf.transform.translation
-            mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+            mount = self.scan_mount(self.scan)
         except Exception:
             return
         ranges, angles = self.scan_arrays(self.scan)
         full = self.scan_arrays(self.scan, 1)   # peer objects: every beam (S1 finding 2)
-        self.core.search_started(now, odom)
+        self.core.search_started(now, odom, scan_stamp=scan_stamp)
         field, clear, generation = self.field, self.clear, self.generation
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
