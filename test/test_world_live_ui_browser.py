@@ -9,6 +9,7 @@ import shutil
 import struct
 import sys
 import threading
+import time
 from urllib.parse import parse_qs, urlsplit
 import zlib
 
@@ -191,6 +192,16 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     page.locator("#map-mode-vector").click()
                     expect(page.locator("#map-canvas")).to_be_visible()
                     expect(page.locator("#map-readout")).to_contain_text("버전7")
+
+                    serve._atomic_write_json(cache, {
+                        **live_map, "observed_at_ms": time.time_ns() // 1_000_000 - 38_000,
+                    })
+                    page.clock.set_system_time(4_102_444_800_000)
+                    page.locator("#map-mode-active").click()
+                    expect(page.locator("#map-active-canvas")).to_be_visible()
+                    page.clock.fast_forward(8_000)
+                    assert page.locator("#map-active-canvas").is_hidden()
+                    assert place.is_hidden()
                     assert failures == []
                 finally:
                     browser.close()
