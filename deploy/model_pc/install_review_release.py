@@ -132,7 +132,7 @@ def digest_tree(source: Path) -> str:
 
 
 def unit_contents(current: Path, state: Path, python: Path, host: str, port: int,
-                  *, source: Path | None = None) -> str:
+                  *, source: Path | None = None, service_tokens: Path | None = None) -> str:
     collaboration = state / 'learning-collaboration.json'
     if collaboration.is_file() and not ipaddress.ip_address(host).is_loopback:
         raise ValueError('collaboration requires a loopback listener behind HTTPS')
@@ -141,11 +141,8 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     dataset = current / "learning/curation/perception"
     paths = (
         current / "middleware/perception", current / "integrations/perception",
-        current / "contracts/foundation",
-        current / "tools/perception",
-        current / "learning/registry/perception",
-        dataset,
-        current / "learning/training/perception",
+        current / "contracts/foundation", current / "tools/perception",
+        current / "learning/registry/perception", dataset, current / "learning/training/perception",
     )
     for value in (current, state, python):
         if any(char.isspace() for char in str(value)):
@@ -167,6 +164,8 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
         if ((binding.exists() or binding.is_symlink())
                 and flag in ((source or current) / APP).read_text(encoding='utf-8')):
             control += f" {flag} {check_private_config(binding, what)}"
+    if service_tokens is not None:
+        control += f" --service-tokens {service_tokens}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
@@ -406,8 +405,17 @@ def _install_locked(source: Path | None, release: str, root: Path, state: Path |
         raise ValueError("a release switch is already pending")
     old_target = current.resolve() if current.is_symlink() else None
     old_unit = unit.read_bytes()
+    service_tokens = None
     for line in old_unit.decode('utf-8').splitlines():
         if line.startswith('ExecStart='):
+            if '--service-tokens' in line:
+                matches = re.findall(r' --service-tokens[ =](/[^\s"\'\\$%]+)(?=\s|$)', line)
+                entry = (source or target) / APP
+                if not entry.is_file(): entry = (source or target) / LEGACY_APP
+                if (line.count('--service-tokens') != 1 or len(matches) != 1 or service_tokens is not None
+                        or not entry.is_file() or '--service-tokens' not in entry.read_text(encoding='utf-8')):
+                    raise ValueError('cannot preserve bound --service-tokens for the target release')
+                service_tokens = check_private_config(Path(matches[0]), 'service tokens')
             bound = re.search(r' --omx-center-config ([^\s]+)', line)
             state_arg = re.search(r' --state ([^\s]+)', line)
             if bound:
@@ -431,7 +439,7 @@ def _install_locked(source: Path | None, release: str, root: Path, state: Path |
         check_source(source, root, state)
         if target.exists():
             raise ValueError(f"release already exists: {target}")
-        unit_text = unit_contents(current, state, python, host, port, source=source)
+        unit_text = unit_contents(current, state, python, host, port, source=source, service_tokens=service_tokens)
         binding = state / 'learning-collaboration.json'
         if b' --collaboration ' in old_unit and not binding.is_file():
             raise ValueError('bound collaboration configuration is missing')
@@ -491,10 +499,7 @@ def _install_locked(source: Path | None, release: str, root: Path, state: Path |
         lines = []
         for line in (unit_text if unit_text is not None else text).splitlines(keepends=True):
             if line.startswith('ExecStart='):
-                line = re.sub(r' --learning-control [^\s]+', '', line)
-                line = re.sub(r' --review-ai-config [^\s]+', '', line)
-                line = re.sub(r' --omx-center-config [^\s]+', '', line)
-                line = re.sub(r' --workspace-links [^\s]+', '', line)
+                line = re.sub(r' --(?:learning-control|review-ai-config|omx-center-config|workspace-links) [^\s]+', '', line)
                 for flag, _, _ in PRIVATE_CONFIGS:
                     line = re.sub(f' {flag} [^\\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
@@ -513,15 +518,11 @@ def _install_locked(source: Path | None, release: str, root: Path, state: Path |
                     line = re.sub(r' --decisions-port [^\s]+', '', line)
                     if not bound:
                         line = line.rstrip('\n') + f' --collaboration {binding}\n'
-                if state_arg and '--learning-control' in cli:
-                    binding = Path(state_arg[1]) / 'learning-control.json'
-                    if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
-                if state_arg and '--review-ai-config' in cli:
-                    binding = Path(state_arg[1]) / 'review-ai.json'
-                    if binding.is_file(): line = line.rstrip('\n') + f' --review-ai-config {binding}\n'
-                if state_arg and '--omx-center-config' in cli:
-                    binding = Path(state_arg[1]) / 'omx-center.json'
-                    if binding.is_file(): line = line.rstrip('\n') + f' --omx-center-config {binding}\n'
+                for flag, filename in (('--learning-control', 'learning-control.json'),
+                                       ('--review-ai-config', 'review-ai.json'), ('--omx-center-config', 'omx-center.json')):
+                    if state_arg and flag in cli:
+                        binding = Path(state_arg[1]) / filename
+                        if binding.is_file(): line = line.rstrip('\n') + f' {flag} {binding}\n'
                 if state_arg and '--workspace-links' in cli:
                     binding = Path(state_arg[1]) / 'workspace-links.json'
                     if binding.exists() or binding.is_symlink():
