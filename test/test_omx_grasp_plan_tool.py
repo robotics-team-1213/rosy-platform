@@ -199,3 +199,26 @@ def test_grasp_plan_job_spec_and_area_xyz_pick_optional_fields(tmp_path: Path):
 
     pick_job = spec.JOBS["area_xyz_pick"]
     assert "catalog" in pick_job["optional"] and "object" in pick_job["optional"]
+
+
+def test_check_clearance_and_shift_removes_own_blob_and_uses_width_for_short_axis(monkeypatch):
+    # Isolated object: raw foreground mask contains its own blob covering 30.7mm x 67.6mm.
+    # _check_clearance_and_shift must strip its own blob via own_removed() and pass closing_deg=None
+    # so jaw_margin samples from width_mm/2 rather than length_mm/2 when neighbour_clear_mm == 0.
+    rmask = np.zeros((200, 200), np.uint8)
+    rmask[80:120, 60:140] = 255  # object's own blob centered at (100, 100)
+    monkeypatch.setattr(tool, "finger_room_view", lambda *_a, **_kw: (rmask.copy(), [0, 0, 200, 200]))
+    monkeypatch.setattr(tool, "predicted_pixel", lambda _cfg, _cal, _site, pt: (100.0 + pt[0] * 1000.0, 100.0 + pt[1] * 1000.0))
+    monkeypatch.setattr(tool, "jaw_margin", lambda m, roi, px_fn, o, c_deg, params=None, opening_width_mm=None: (
+        {"margin_mm": None, "free_mm": [0.0, 0.0], "unseen": False}
+        if (m[100, 100] > 0 or c_deg is not None)
+        else {"margin_mm": 8.0, "free_mm": [26.0, 16.0], "unseen": False}
+    ))
+    cfg = {"params": {"auto.neighbour_clear_mm": 0.0}}
+    entry = {"id": "container-2", "width_mm": 30.7, "length_mm": 67.6, "grasp": {"jaw_axis_deg_from_long": 90.0}}
+    obs = {"raw_m": [0.0, 0.0], "long_axis_deg": -88.0, "width_mm": 30.7, "length_mm": 67.6}
+    free_cm, shift_cm, clear_bad, _ = tool._check_clearance_and_shift(
+        np.zeros((200, 200, 3), np.uint8), None, cfg, {}, "floor", [0, 0, 200, 200], obs, entry, 181.5, 3.07,
+    )
+    assert clear_bad is False and free_cm == [2.6, 1.6] and shift_cm == 0.0
+
