@@ -74,6 +74,10 @@
       "path": "cell/cell-channel-mission.js",
       "media_type": "application/javascript"
     },
+    "cell-observation-text.js": {
+      "path": "cell/cell-observation-text.js",
+      "media_type": "application/javascript"
+    },
     "cell-observation.js": {
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"
@@ -92,6 +96,10 @@
     },
     "cell-real2sim.js": {
       "path": "cell/cell-real2sim.js",
+      "media_type": "application/javascript"
+    },
+    "cell-readiness-model.js": {
+      "path": "cell/cell-readiness-model.js",
       "media_type": "application/javascript"
     },
     "cell-real2sim-specs.js": {

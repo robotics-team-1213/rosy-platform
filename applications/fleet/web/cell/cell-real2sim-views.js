@@ -182,7 +182,24 @@ export function createCellViews(ctx) {
         actions.append(btn);
       }
 
-      article.append(buildInspectorCamFrame(thumb), camSwitcher, head, meta, actions);
+      article.append(buildInspectorCamFrame(thumb), camSwitcher, head);
+      if (card.fieldStatus) {
+        const readiness = document.createElement('p');
+        readiness.className = 'cell-visual-meta';
+        readiness.textContent = card.fieldStatus.arms;
+        const queue = document.createElement('p');
+        queue.className = 'cell-visual-meta';
+        queue.textContent = card.fieldStatus.queue;
+        article.append(readiness, queue);
+        if (card.fieldStatus.refusal) {
+          const refusal = document.createElement('p');
+          refusal.className = 'cell-pipeline-banner';
+          refusal.dataset.kind = 'warning';
+          refusal.textContent = [card.fieldStatus.refusal, card.fieldStatus.next].filter(Boolean).join(' · ');
+          article.append(refusal);
+        }
+      }
+      article.append(meta, actions);
       return article;
     }));
     for (const args of pendingBinds) frames()?.bind(...args);
