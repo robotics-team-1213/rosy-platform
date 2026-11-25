@@ -109,6 +109,9 @@ def track_anchor_provenance(svc, states: Mapping[str, dict], localized: Mapping[
                             now: float) -> None:
     """Anchors (S1 finding 3): LOCALIZED at the pose of a Fleet decision that a world
     cue, `source: human` or anchored peers carried."""
+    operator_anchors = svc._search_window.operator_anchors
+    for rid in operator_anchors.keys() - localized.keys():
+        operator_anchors.pop(rid)
     for rid in states:
         pose = localized.get(rid)
         previous = svc._localized_at.get(rid)
@@ -120,11 +123,13 @@ def track_anchor_provenance(svc, states: Mapping[str, dict], localized: Mapping[
         svc._localized_at[rid] = (pose, now, frame)
         if previous is None or previous[2] != frame:
             svc._anchors.discard(rid)
+            operator_anchors.pop(rid, None)
             decided = svc._pending.pop(rid, None)
             unconfirmed = svc._unconfirmed.pop(rid, None)
             operator = svc._operator_pending.pop(rid, None)
             if operator is not None and operator[0] == frame and svc._reached(operator[1], pose, now):
                 svc._anchors.add(rid)
+                operator_anchors[rid] = (frame, states[rid].get("map_generation"))
                 logger.info("localization: %s LOCALIZED at the operator-confirmed pose: anchor", rid)
             elif decided is not None and decided[0] == frame and not service_logic.disagrees(decided[1], pose):
                 svc._anchors.add(rid)
@@ -138,6 +143,7 @@ def track_anchor_provenance(svc, states: Mapping[str, dict], localized: Mapping[
                             "not an anchor, not a peer", rid)
         elif rid in svc._anchors and service_logic.jumped(previous[0], pose, now - previous[1]):
             svc._anchors.discard(rid)
+            operator_anchors.pop(rid, None)
             logger.warning("localization: %s pose jumped while LOCALIZED: no longer an anchor", rid)
 
 
@@ -241,17 +247,23 @@ def fresh_overhead_sighting(
 
 def sighting_in_robot_frame(svc, rid: str, state: Optional[Mapping], now: float) -> Optional[cues.Sighting]:
     """Compare the scene camera cue only in the robot map's coordinates."""
-    if not svc.overhead_cue or state is None or (frame := map_frame(state)) is None:
+    if not svc.overhead_cue or state is None or map_frame(state) is None:
         return None
-    robot_map = frame[0]
     site_map = svc._current_active_map_id()
-    sighting = fresh_overhead_sighting(svc, rid, now, expected_map_id=site_map or robot_map)
+    if site_map is None:
+        return None
+    sighting = fresh_overhead_sighting(svc, rid, now, expected_map_id=site_map)
     if sighting is None:
         return None
-    if site_map is not None and (fit := svc._binding_fit_for_state(rid, state, expected_site_map=site_map)) is not None:
+    if (fit := svc._binding_fit_for_state(rid, state, expected_site_map=site_map)) is not None:
         x, y = fit.inverse((sighting.x, sighting.y))
         return cues.Sighting(x, y, cues.wrap(sighting.yaw - fit.yaw), sighting.captured_at)
-    return sighting if site_map is None or robot_map == site_map else None
+    return sighting if loaded_wall_proven(svc, state, site_map) else None
+
+
+def loaded_wall_proven(svc, state, active_map) -> bool:
+    prove = getattr(svc._wall_sync, "proves_loaded", None)
+    return bool(active_map and callable(prove) and prove(state, active_map))
 
 
 def forget_removed_robots(svc, current: set) -> None:
@@ -262,6 +274,7 @@ def forget_removed_robots(svc, current: set) -> None:
         svc._last_decision.pop(rid, None)
         svc._last_mission.pop(rid, None)
         svc._last_report.pop(rid, None)
+        svc._search_window.forget(rid)
         svc._busy_rung.pop(rid, None)
         svc._unsupported.pop(rid, None)
         svc._report_seen.pop(rid, None)
@@ -269,6 +282,7 @@ def forget_removed_robots(svc, current: set) -> None:
         svc._mission_running.discard(rid)
         svc._quiet_until.pop(rid, None)
         svc._anchors.discard(rid)
+        svc._search_window.operator_anchors.pop(rid, None)
         svc._pending.pop(rid, None)
         svc._operator_pending.pop(rid, None)
         svc._unconfirmed.pop(rid, None)
