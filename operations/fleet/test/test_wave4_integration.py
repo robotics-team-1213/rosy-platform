@@ -210,7 +210,8 @@ def test_wave4_cell_site_recognition_uses_app_state_web_common(tmp_path):
     custom_dir.mkdir()
     (custom_dir / "cell-site-map.json").write_text(
         '{"schema":"rosy.cell-site-map.v1","revision":9,"status":"verified","tier_height_mm":32.4,'
-        '"zones":[{"id":"yard","slots":[{"id":"yard:r1-s1","row":1,"slot":1,"columns":[1,1],"arms":["arm_a"],'
+        '"zones":[{"id":"yard","label":"야드","role":"보관","grid":{"rows":1,"columns":1,"tiers":1},'
+        '"slot_cells":1,"slots":[{"id":"yard:r1-s1","row":1,"slot":1,"columns":[1,1],"arms":["arm_a"],'
         '"tiers":[{"tier":1,"id":"yard:r1-s1-t1","item":"ship-h1r0-l0"}]}]}]}\n',
         encoding="utf-8",
     )

@@ -1,7 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
-import { createFactoryLayer } from "../web/factory-actors.js";
+const studioUrl = `data:text/javascript,${encodeURIComponent(
+  await readFile(new URL("../web/studio-look.js", import.meta.url), "utf8"),
+)}`;
+const armUrl = `data:text/javascript,${encodeURIComponent(
+  await readFile(new URL("../web/omx-arm.js", import.meta.url), "utf8"),
+)}`;
+const actorsCode = (await readFile(new URL("../web/factory-actors.js", import.meta.url), "utf8"))
+  .replace("./studio-look.js", studioUrl)
+  .replace("./omx-arm.js", armUrl);
+const { createFactoryLayer } = await import(`data:text/javascript,${encodeURIComponent(actorsCode)}`);
 
 function makeThreeMock() {
   class Vector3 {
