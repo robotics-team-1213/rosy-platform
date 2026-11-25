@@ -69,25 +69,47 @@ def _wire(monkeypatch, p):
     p.manager._anchor._wall = lambda: 1000.0
 
 
-@pytest.mark.parametrize("mode", ["probe_idle", "startup_anchor_present", "probe_armed"])
+@pytest.mark.parametrize("mode", ["probe_idle", "startup_anchor_present", "probe_armed", "two_indistinguishable", "only_named_bay_fits"])
 def test_an_in_bay_redock_through_the_bridge_docks_with_the_probe_wired(monkeypatch, mode):
     p, row = a_row(start=(-0.157, 0.0, math.pi), others=(), charges=False)    # 10.7 cm out of the stop face, straight in its lane
     with_reference(p)
     p.battery.percent = 100.0
     _wire(monkeypatch, p)
+    if mode in ("two_indistinguishable", "only_named_bay_fits"):
+        first = p.manager._db.get("bay1")
+        other = first.model_copy(deep=True, update={"id": "bay2"})
+        if mode == "only_named_bay_fits":
+            ref = other.metadata["reference_scan"]
+            ref["ranges"] = [1.4] * len(ref["ranges"])
+            compared = bay_scan_pose.locate
+            def locate(ref_points, live_points):
+                if ref_points and all(abs(math.hypot(x - BODY.lidar_x_m, y) - 1.4) < 0.001 for x, y in ref_points):
+                    return BayScanPose(x=0.12, y=0., heading=0., inliers=0.95, margin=0.6, median_m=0.002)
+                return compared(ref_points, live_points)
+            monkeypatch.setattr(bay_scan_pose, "locate", locate)
+        p.manager._db.add(other)
     if mode == "startup_anchor_present":
-        p.manager._anchor.record("bay1", "startup_probe", {"along_m": 0.0, "lateral_m": 0.0, "heading_deg": 0.0, "inliers": 0.9, "margin": 0.6})
+        p.manager._anchor.record("bay1", "startup_probe", {"along_m": 0.0, "lateral_m": 0.0, "heading_deg": 0.0, "inliers": 0.9, "margin": 0.6},
+                                 p.manager._anchor.observe())
     mono = {"now": 0.0}
     p.manager._anchor._mono = lambda: mono["now"]
+    from core_features.state.manager import StateManager
+    state = StateManager("p", clock=lambda: 1000.0, monotonic=lambda: mono["now"])
+    p.manager._anchor._odom = state.odom_pose_record
+    p.manager._anchor._history = state.odom_window_from
     services = SimpleNamespace(docking=p.manager, line_follow=SimpleNamespace(config=CFG))
     points = _reference_points()
-    p.manager.dock()
+    p.manager.dock("bay1")
     last_event = []
     for k in range(6000):
         mono["now"] = k * DT
+        stamp = 1_000_000_000 + int(k * DT * 1e9)
+        state.set_odom_pose(*p.world.pose, frame="odom", source_stamp_ns=stamp)
         if k % 2 == 0:
             p.detector.capture()
-            observation.bay_body_scan(services, lidar_scan(points, true_bay_pose(p.world)), received_at=p.clock.now)
+            scan = lidar_scan(points, true_bay_pose(p.world))
+            scan["source_stamp_ns"] = scan["source_now_ns"] = stamp
+            observation.bay_body_scan(services, scan, received_at=p.clock.now)
         p.manager.tick()
         event = p.manager.status().last_event
         if event and event not in last_event:
@@ -97,4 +119,48 @@ def test_an_in_bay_redock_through_the_bridge_docks_with_the_probe_wired(monkeypa
         p.world.step()
         p.clock.now += DT
     assert p.manager.state is DockState.DOCKED, (mode, p.manager._error, last_event)
+    if mode == "two_indistinguishable":
+        assert p.manager.status().anchor is None
+    if mode == "only_named_bay_fits":
+        assert p.manager.status().anchor is not None and p.manager.status().anchor.dock_id == "bay1"
     assert not any("something" in (e or "") for e in last_event), last_event
+
+
+def test_a_blocked_anchor_comparison_does_not_delay_the_next_two_operational_seat_results(monkeypatch):
+    import threading
+    from core_features.docking.dock_anchor import DockAnchorKeeper, SeatComparison, SeatObservation
+    from core_features.docking.model import DockingConfig
+
+    keeper = DockAnchorKeeper(DockingConfig(), lambda: None, lambda: None, lambda *a: None)
+    first_working, release, finished = threading.Event(), threading.Event(), threading.Event()
+    replies = {n: threading.Event() for n in (1, 2, 3)}
+    submitted = {n: threading.Event() for n in replies}
+    accepted, comparisons = [], []
+    fit = BayScanPose(x=0., y=0., heading=0., inliers=0.95, margin=0.6, median_m=0.002)
+    body = SimpleNamespace(scan_view=lambda *a, **k: SimpleNamespace(points=((0.0, 0.0),)))
+    def compare(*args):
+        comparisons.append(1)
+        first_working.set()
+        release.wait(10)
+        return {"C1": fit}
+    monkeypatch.setattr(observation, "_match_seat_references", compare)
+    monkeypatch.setattr(bay_scan_pose, "locate_track", lambda *args: fit)
+    def launch(number):
+        def submit(fn):
+            accepted.append(keeper.submit_comparison(fn))
+            submitted[number].set()
+        docking = SimpleNamespace(note_bay_scan_match=lambda *a, **k: replies[number].set(), submit_anchor_comparison=submit,
+                                  note_bay_seat_matches=lambda *a: finished.set())
+        pose = OdomPose(x=0, y=0, yaw=0, stamp=0, epoch=0)
+        frame = SeatComparison(number, "run", "C1", SeatObservation(pose, 0., 1), {"C1": {}})
+        observation._match_bay_scan(docking, body, CFG, (), {}, number, track=True, near=(0, 0, 0), seat_frame=frame)
+    try:
+        launch(1)
+        assert replies[1].wait(2) and first_working.wait(2) and submitted[1].wait(2)
+        for n in (2, 3):
+            launch(n)
+            assert replies[n].wait(2) and submitted[n].wait(2)
+        assert accepted == [True, False, False] and len(comparisons) == 1
+    finally:
+        release.set()
+    assert finished.wait(2)

@@ -8,6 +8,7 @@ designs: 2026-09-02-docking-station and 2026-09-23-lane-network-parking.
 from __future__ import annotations
 
 import threading
+from copy import deepcopy
 import uuid
 import time
 from typing import Any, Callable, Optional
@@ -25,7 +26,7 @@ from core_features.docking.bay_phases import BayPhases
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
-from core_features.docking.dock_anchor import DockAnchorKeeper
+from core_features.docking.dock_anchor import DockAnchorKeeper, PendingSeatAnchor, SeatComparison
 from core_features.docking.site_pose import judge_site_pose
 from core_features.docking.manager_helpers import DockingPhasesMixin
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
@@ -63,6 +64,7 @@ class DockingManager(DockingPhasesMixin):
                  motion_admission: Optional[Callable[..., None]] = None,
                  odom_pose_provider: Optional[Callable[[], Any]] = None,
                  map_generation_provider: Optional[Callable[[], Optional[int]]] = None,
+                 odom_window_provider: Optional[Callable[[int], tuple]] = None,
                  ) -> None:
         self._db = database
         self.motion_admission = motion_admission or (lambda *args: None)
@@ -95,7 +97,9 @@ class DockingManager(DockingPhasesMixin):
         self._execution_binding = None
         # The seat anchor (dock_anchor.py): "seated in bay X now" as an odom-bound pair for Fleet; hidden once its odom epoch ended.
         self._anchor = DockAnchorKeeper(self._cfg, odom_pose_provider or (lambda: None), lambda: self._map_id_provider(), self._emit,
-                                        map_generation_provider=map_generation_provider)
+                                        map_generation_provider=map_generation_provider, odom_window_provider=odom_window_provider,
+                                        reference_provider=self._anchor_references)
+        self._pending_seat_anchor = None
 
         self.executor: Optional[DockingExecutor] = None
         #: D-395: may docking drive (LOCALIZED, map frame)? CORE binds the localization
@@ -211,10 +215,13 @@ class DockingManager(DockingPhasesMixin):
                 last_event=self._last_event,
             )
 
-    def anchor_probe_request(self) -> Optional[tuple]:
-        """From the LiDAR callback (no lock): after a CORE (re)start, a stationary idle robot is checked against each reference-scan bay: (request id, dock id, reference scan)."""
+    def anchor_probe_request(self, scan_lag_s: float = 0.0, stamp_ns=None) -> Optional[tuple]:
+        """Return all reference bays to check against this stationary frame."""
         if self._state is not DockState.UNDOCKED or getattr(self._safety, "estop", False):
             return self._anchor.probe_request(False, [])
+        return self._anchor.probe_request(True, self._reference_bays(), scan_lag_s, stamp_ns)
+
+    def _reference_bays(self):
         docks = []
         for d in self._db.list():
             try:
@@ -222,11 +229,15 @@ class DockingManager(DockingPhasesMixin):
                     docks.append(d)
             except DockError:
                 continue
-        return self._anchor.probe_request(True, docks)
+        return docks
 
-    def note_anchor_probe_match(self, match, at=None, error=None, request_id=None) -> None:
-        """The bridge's answer to anchor_probe_request (BayScanPose or None)."""
-        self._anchor.note_probe_match(match, request_id)
+    def _anchor_references(self):
+        return {d.id: d.metadata["reference_scan"] for d in self._reference_bays()}
+
+    def note_anchor_probe_match(self, matches, request_id) -> None:
+        with self._lock:
+            if self._state is DockState.UNDOCKED and not getattr(self._safety, "estop", False):
+                self._anchor.note_probe_match(matches, request_id)
 
     def capture_native_operation(self, run_id: UUID | None = None):
         return self.native.capture(self._lock, run_id)
@@ -420,9 +431,17 @@ class DockingManager(DockingPhasesMixin):
         self._bay_phases.note_body_scan(rotation_block, front_gap_m, rear_gap_m,
                                         self._clock() if at is None else at)
 
-    def bay_scan_request(self) -> Optional[tuple]:
+    def bay_scan_request(self, scan_lag_s: float = 0.0, stamp_ns=None) -> Optional[tuple]:
         """LiDAR 콜백에서 부른다(락 없음): 칸 줄 판정이 이 칸의 기준 스캔을 기다리면 그 스캔(한 번)."""
-        return self._bay_phases.scan_request() if self.active and self._bay_phases.active() else None
+        if not self.active or not self._bay_phases.active():
+            return None
+        request = self._bay_phases.scan_request(scan_lag_s, stamp_ns)
+        if request and self._bay_phases._req_kind == "seat" and self.native.current is not None:
+            refs = deepcopy(self._anchor_references())
+            frame = SeatComparison(request[0], self.native.current.run_id, self._dock.id, self._bay_phases._seat_observation, refs)
+            self._pending_seat_anchor = PendingSeatAnchor(frame)
+            return (*request, frame)
+        return request
 
     def bay_seat_gap_request(self) -> Optional[tuple]:
         """LiDAR 콜백에서 부른다(락 없음): 이 칸 기준 스캔의 뒤 여유를 한 번 재 달라는 요청 (칸 id, 스캔)."""
@@ -435,9 +454,34 @@ class DockingManager(DockingPhasesMixin):
         """LiDAR 콜백에서 매 스캔 부른다(락 없음): 제자리 회전 감시가 스캔끼리 맞추는 데 쓰는 최신 표본."""
         self._bay_phases.note_sample(sample, lag_s)
 
-    def note_bay_scan_match(self, match, at=None, error=None, request_id=None) -> None:
+    def note_bay_scan_match(self, match, at=None, error=None, request_id=None, *, seat_frame=None) -> None:
         """기준 스캔과 맞춘 칸 자세(BayScanPose, 못 맞추면 None). 락 없음 — 한 번의 대입."""
-        self._bay_phases.note_scan_match(match, self._clock() if at is None else at, error, request_id)
+        at = self._clock() if at is None else at
+        if seat_frame is None:
+            self._bay_phases.note_scan_match(match, at, error, request_id)
+        else:
+            with self._lock:
+                candidate = self._pending_seat_anchor
+                if self._same_anchor_run(candidate) and candidate.frame is seat_frame and seat_frame.request_id == request_id:
+                    self._bay_phases.note_scan_match(match, at, error, request_id)
+
+    def submit_anchor_comparison(self, compare):
+        return self._anchor.submit_comparison(compare)
+
+    def note_bay_seat_matches(self, matches, frame):
+        with self._lock:
+            candidate = self._pending_seat_anchor
+            if (not self._same_anchor_run(candidate) or candidate.frame is not frame
+                    or self._state not in (DockState.DOCKING, DockState.DOCKED, DockState.CHARGING)):
+                return
+            refs = self._anchor_references()
+            winner = self._anchor.unique_seat(matches, refs.keys()) if frame.refs == refs else None
+            if not winner or winner[0] != frame.dock_id:
+                self._pending_seat_anchor = None
+                return
+            candidate.identity = winner[1]
+            if candidate.docked_geometry is not None:
+                self._publish_seat_anchor(candidate)
 
     def on_estop(self) -> None:
         """D-502: e-stop or release drops a pending return; re-arming waits for safety."""

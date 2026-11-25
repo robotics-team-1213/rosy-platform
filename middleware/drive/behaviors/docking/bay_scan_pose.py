@@ -25,7 +25,7 @@ MAX_POINTS = 150            # live and reference points kept per side
 RANGE_M = 1.2               # nothing farther is the bay
 INLIER_M = 0.03
 CELL_M = 0.01               # nearest-point grid resolution
-_FIELD: list = [None, None]
+_FIELD = (None, None)
 _SEEDS = tuple((gx, 0.0, math.radians(a)) for a in range(-180, 180, 20) for gx in (0.1, 0.3))
 _SAME_POSE_M, _SAME_POSE_RAD = 0.05, math.radians(8.0)
 
@@ -87,6 +87,18 @@ class _Field:
         return j, np.where(inside, d2, 1e9)
 
 
+def _reference_field(ref):
+    """A worker keeps the immutable cache snapshot or its own build while a peer changes references."""
+    global _FIELD
+    key = ref.tobytes()
+    cached_key, cached_field = _FIELD
+    if key == cached_key:
+        return cached_field
+    field = _Field(ref)
+    _FIELD = (key, field)
+    return field
+
+
 def _icp(cur, field, x, y, th, iters=25):
     ref = field.ref
     for i in range(iters):
@@ -123,10 +135,7 @@ def locate_near(reference, live, guess) -> Optional[BayScanPose]:
         return None
     if len(ref) < 40 or len(cur) < 40:
         return None
-    key = ref.tobytes()
-    if _FIELD[0] != key:
-        _FIELD[:] = [key, _Field(ref)]
-    field = _FIELD[1]
+    field = _reference_field(ref)
     gx, gy, gh = guess
     seeds = [(gx, gy, gh), (gx, gy + 0.21, gh), (gx, gy - 0.21, gh), (gx + 0.2, gy, gh), (gx - 0.2, gy, gh), (gx, gy, gh + 0.5), (gx, gy, gh - 0.5)]
     runs = [r for r in (_icp(cur, field, *seed) for seed in seeds) if r is not None]
@@ -152,10 +161,7 @@ def locate_track(reference, live, guess) -> Optional[BayScanPose]:
         return None
     if len(ref) < 40 or len(cur) < 40:
         return None
-    key = ref.tobytes()
-    if _FIELD[0] != key:
-        _FIELD[:] = [key, _Field(ref)]
-    run = _icp(cur, _FIELD[1], *guess)
+    run = _icp(cur, _reference_field(ref), *guess)
     if run is None:
         return None
     return BayScanPose(x=run[0], y=run[1], heading=run[2], inliers=run[3], margin=1.0, median_m=run[4])
@@ -190,10 +196,7 @@ def locate(reference: Sequence[tuple[float, float]], live: Sequence[tuple[float,
         return None
     if len(ref) < 40 or len(cur) < 40:
         return None
-    key = ref.tobytes()
-    if _FIELD[0] != key:                     # one reference per dock: build its grid once, not per zone check
-        _FIELD[:] = [key, _Field(ref)]
-    field = _FIELD[1]
+    field = _reference_field(ref)
     runs = [r for r in (_icp(cur, field, *seed) for seed in _SEEDS) if r is not None]
     if not runs:
         return None

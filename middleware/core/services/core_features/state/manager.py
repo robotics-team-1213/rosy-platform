@@ -6,6 +6,7 @@ import logging
 import math
 import threading
 import time
+from collections import deque
 from typing import Callable, Optional
 
 from core_common.domain.localization import normalize_map_id, odom_position_jump
@@ -69,6 +70,7 @@ class StateManager:
         self._odom_rejected_logged = False
         self._odom_epoch = 0  # D-758 0: odom discontinuities since start
         self._odom_source: tuple = (None, None)  # (frame, source stamp ns) last given
+        self._odom_frames = deque(maxlen=256)    # bounded source-stamped samples for pairing a LiDAR frame with odometry
         self._odom_write_token = object()  # Private original-source scope, including rejected writes.
         self._velocity = Velocity()
         self._battery = Battery()
@@ -207,6 +209,15 @@ class StateManager:
             # Age on the monotonic clock: a backward wall-clock step must not make it look fresh.
             return odom.x, odom.y, odom.yaw, self._monotonic() - self._odom_mono
 
+    def odom_window_from(self, stamp_ns: int) -> tuple:
+        """Copy from the last odom at or before this ROS source stamp through the newest receipt."""
+        with self._lock:
+            frames = tuple(self._odom_frames)
+        for index in range(len(frames) - 1, -1, -1):
+            if frames[index][0] <= stamp_ns:
+                return frames[index:]
+        return ()
+
     def station_scope(self, *, max_age_s: float, wait: bool = False) -> Optional[dict]:
         """Identity/map/odom scope; the final publisher never waits for a state writer."""
         if not self._lock.acquire(blocking=wait):
@@ -239,6 +250,7 @@ class StateManager:
             self._odom_write_token = object()
             stamp, mono = self._clock(), self._monotonic()
             if not all(math.isfinite(v) for v in (x, y, yaw, stamp)):
+                self._odom_frames.clear()
                 if not self._odom_rejected_logged:
                     self._odom_rejected_logged = True
                     log.warning("non-finite odom pose dropped (x=%r y=%r yaw=%r)", x, y, yaw)
@@ -253,6 +265,11 @@ class StateManager:
                                  prev_ns if source_stamp_ns is None else source_stamp_ns)
             self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp, epoch=self._odom_epoch, mono_s=mono)
             self._odom_mono = mono
+            if (type(source_stamp_ns) is not int or source_stamp_ns <= 0 or
+                    (self._odom_frames and (source_stamp_ns <= self._odom_frames[-1][0] or self._odom_frames[-1][1].epoch != self._odom_epoch))):
+                self._odom_frames.clear()
+            if type(source_stamp_ns) is int and source_stamp_ns > 0:
+                self._odom_frames.append((source_stamp_ns, self._odom_pose))
             return stamp, str(self._odom_epoch), self._odom_write_token, self._robot_id, self._map_id
 
     def _original_odom_scope(self, token):
