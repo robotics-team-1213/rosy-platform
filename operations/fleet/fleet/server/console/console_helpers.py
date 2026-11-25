@@ -264,10 +264,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     yielding = self._yielding.get(robot_id)
     decision = admission.yield_hold(yielding)
     if decision is not None:
-        if route_points is not None:
+        if route_points is not None or stop_binding is not None:
             return {**admission.response_of(decision), "queued": False}
-        if stop_binding is not None:
-            return {"accepted": False, "reason": decision.reason}
         # 이 로봇은 남을 지나가게 하려고 비켜서는 중이다. 지금 다른 데로 보내면 방금
         # 비운 통로를 다시 막고, 그 통로를 기다리던 미션은 영영 못 나간다. 세워 둔다.
         self._queued[robot_id] = admission.mission_of(
@@ -291,10 +289,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
         self._claims.pop(robot_id, None)
         getattr(self, "_site_claims", {}).pop(robot_id, None)
         decision = admission.untrusted_self_hold(robot_id)
-        if route_points is not None:
+        if route_points is not None or stop_binding is not None:
             return {**admission.response_of(decision), "queued": False}
-        if stop_binding is not None:
-            return {"accepted": False, "reason": decision.reason}
         self._queued[robot_id] = admission.mission_of(
             decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
             attempt_seq=attempt_seq)

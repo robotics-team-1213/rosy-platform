@@ -331,7 +331,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
             return
-        raise _GoalRefused(reason)
+        raise _GoalRefused(reason, reply)
     live.active_route = {"end_index": end_index, "points": len(payload)}
     live.nav2_retry_at = -math.inf
     live.view["detail"].pop("goal_wait", None)
