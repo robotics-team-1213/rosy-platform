@@ -137,9 +137,11 @@ def test_cargo_video_rejects_mismatched_revision_before_reading_frames(monkeypat
     assert code == 2
 
 
-def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_candidates():
+def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_candidates(monkeypatch):
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
+    repo = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(repo / "operations" / "overhead"))
     from rosy_vision.detect import generate_marker_image
 
     import ceiling_marker_yaw as tool
