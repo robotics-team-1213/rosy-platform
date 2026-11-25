@@ -13,7 +13,7 @@ export const STAGES = [
   ["ab_rehandle", "8. A↔B 임시대 정리", 36.0, "factory_omx"],
   ["outbound_dispatch", "9. 반출대 접안·출발", 45.0, "factory_outbound"],
 ];
-export const STAGE_LABELS = Object.fromEntries(STAGES.map(([id, label]) => [id, label]));
+export const STAGE_LABELS = { ...Object.fromEntries(STAGES.map(([id, label]) => [id, label])), observing: "현장 관측" };
 export const STAGE_DEFAULTS = Object.fromEntries(STAGES.map(([id, , start, cam]) => [id, { start, cam }]));
 const CONTAINER_PALETTE = [0xd96b27, 0x2b6cb0, 0x2f855a, 0xc53030, 0xd69e2e, 0x2c7a7b];
 const DEFAULT_ARM_SPECS = {
@@ -219,6 +219,9 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
       return;
     }
     root.visible = true;
+    const real = state.adapter === "real";
+    routeLine.visible = !real;
+    s3Group.visible = !real;
     if (state.s3_box?.center) {
       s3Group.position.set(state.s3_box.center[0], state.s3_box.center[1], 0.004);
       s3Group.rotation.z = state.s3_box.yaw_rad ?? Math.PI;

@@ -280,12 +280,12 @@ def test_real_fleet_app_closed_loop_with_virtual_six_robot_core_and_world(tmp_pa
             assert world_payload["arms_fresh"]["arm_a"] is True
             assert world_payload["pinky"]["has_cargo"] is False
             push_res = adapter.push_world_snapshot(world_url, "real-site", world_payload)
-            assert push_res["ok"] and push_res["parity"]["ok"]
+            assert push_res["ok"] and push_res["parity"]["reasons"] == ["live_site_map_unavailable"]
 
             reg = json.loads(urllib.request.urlopen(f"{world_url}/api/worlds", timeout=2.0).read().decode("utf-8"))
             real_entry = next(w for w in reg["worlds"] if w["world_id"] == "real-site")
             assert real_entry["status"] == "live"
-            assert real_entry["parity"]["ok"] is True
+            assert real_entry["parity"]["reasons"] == ["live_site_map_unavailable"]
             stream = f"{world_url}/sim/stream?world=real-site&max_events=1"
             with urllib.request.urlopen(stream, timeout=2.0) as res:
                 assert res.readline() == b"event: state\n"

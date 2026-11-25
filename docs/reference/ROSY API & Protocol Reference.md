@@ -5897,3 +5897,7 @@ MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로
 | `POST /api/learning/sim/stop` | manage: `run_id`, 현재 `expected_revision`. 소유 worker pidfd로 중지 요청, 종료 확인과 구분 |
 
 기존 Host·Origin·`X-Pinky-Token`·최대1MiB JSON 검사 뒤 프로젝트 권한을 다시 적용한다. 비협업 로컬 모드의 SIM 제어는403이며 연결 미설정은503이다. 시작 응답 유실은 새 실험을 만들지 않고 같은 요청으로 관찰한다. 입력/revision 충돌은 기존 로컬 HTTP의400 응답으로 거절한다. UNKNOWN은 자동 재시작하지 않는다. 첫 시나리오는 모델 import·관절·120프레임 검사이며 `task_success=null`, seed 미사용·영상 없음 사유를 명시한다. 물리 집기·학습 수용·정책 승격·로봇 명령 권한을 부여하지 않는다.
+
+## World 활성 지도
+
+`GET /api/worlds/real-site/site-map`은 World가 받은 Fleet 활성 지도 스냅샷을 반환한다. 현장에서는 Fleet 세션을 확인하는 `/world/` 아래에 제공한다. 브리지의 `POST`에는 World 적재 권한을 적용한다. 현장 프록시는 외부 쓰기를 거절한다. 스냅샷, 만료, 실시간 상태 필드는 [World 활성 지도 HTTP 계약](../../applications/world/README.md#world-활성-지도-http-계약)을 따른다.

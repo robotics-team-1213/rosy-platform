@@ -1,6 +1,7 @@
 import { showCad, showCell, showFieldPlane, showMap } from "./scene.js";
 import { initFactoryTab } from "./factory-live.js";
 import { initLiveFeeds, isLayoutSha } from "./live-feeds.js";
+import { activeSiteMap } from "./active-site-map.js";
 
 const byId = (id) => document.getElementById(id);
 const status = (id, state, text) => {
@@ -42,12 +43,12 @@ function mapData(envelope) {
   const map = envelope?.map;
   const locations = map?.places ?? map?.nodes;
   if (!text(map?.map_id) || !Array.isArray(locations) || !Array.isArray(map.edges)) {
-    throw new Error("Invalid archived map");
+    throw new Error("Invalid site map");
   }
   const places = locations.filter((place) => place && xy([place.x, place.y]));
   const edges = map.edges.map((edge) => edge?.polyline).filter((line) =>
     Array.isArray(line) && line.length >= 2 && line.every(xy));
-  if (!(places.length || edges.length)) throw new Error("Archive contains no map geometry");
+  if (!(places.length || edges.length)) throw new Error("Site map contains no geometry");
   return { id: map.map_id, version: envelope.version, places, edges };
 }
 
@@ -80,6 +81,7 @@ let cellLoad;
 let factoryTab;
 let userPickedTab = false;
 let liveFeeds;
+let syncActiveMapPoll;
 function activate(tab) {
   for (const item of tabs) {
     item.setAttribute("aria-selected", String(item === tab));
@@ -90,6 +92,7 @@ function activate(tab) {
   if (tab.id === "tab-factory") void factoryTab?.activate();
   else factoryTab?.deactivate();
   if (tab.id === "tab-cell") cellLoad ??= loadCell();
+  syncActiveMapPoll?.();
   if (liveFeeds) {
     if (tab.id === "tab-map") {
       liveFeeds.startPinkySim();
@@ -135,8 +138,42 @@ let fieldView;
 let cadPreset = "top";
 let choseMapMode = false;
 let mode = "vector";
+let archivedMapReadout;
+let archiveMapUnavailable = false;
+const activeMapCanvas = byId("map-active-canvas");
+const activeMap = activeSiteMap({
+  canvas: activeMapCanvas, showMap, mapData, date,
+  onUpdate() {
+    if (mode !== "active") return;
+    showMapSource();
+    updateMapHealth();
+  },
+});
+const activeMapLabel = () => ({
+  ready: "Fleet 활성 지도",
+  unavailable: "현장 활성 지도 미수신",
+  pending: "현장 활성 지도를 읽는 중…",
+})[activeMap.state];
+syncActiveMapPoll = () => activeMap.watch(mode === "active" &&
+  byId("tab-map").getAttribute("aria-selected") === "true");
+
+function showMapSource() {
+  const active = mode === "active";
+  const entries = active ? activeMap.entries : archivedMapReadout;
+  byId("map-readout").hidden = !entries;
+  if (entries) readout("map-readout", entries);
+  if (active) {
+    status("map-status", activeMap.state, activeMapLabel());
+  } else {
+    status("map-status", vectorAvailable ? "ready" : archiveMapUnavailable ? "unavailable" : "pending",
+      vectorAvailable ? "보관 지도" : archiveMapUnavailable ? "보관 차로 그래프를 그릴 수 없습니다" : "보관 지도를 읽는 중…");
+  }
+  activeMapCanvas.hidden = !active || !activeMap.entries;
+}
+
 function updateMapHealth() {
   const states = {
+    active: [activeMap.state, `지도 · ${activeMapLabel()}`],
     vector: vectorAvailable ? ["ready", "지도 · 보관 차로 그래프"] : ["pending", "지도 · 불러오는 중"],
     birdview: ["ready", "지도 · 보관 버드뷰"],
     field: ["ready", "지도 · Rosy Cam 현장 사진"],
@@ -155,17 +192,19 @@ function mapMode(next) {
   byId("map-image-figure").hidden = mode !== "image" || imageFailed;
   byId("map-empty").hidden = mode !== "image" || !imageFailed;
   byId("map-provenance").hidden = ["cad", "birdview", "field"].includes(mode);
-  byId("map-alignment-note").hidden = ["cad", "birdview", "field"].includes(mode);
+  byId("map-alignment-note").hidden = ["active", "cad", "birdview", "field"].includes(mode);
   byId("map-cad-canvas").hidden = mode !== "cad";
   byId("map-cad-controls").hidden = mode !== "cad" || !cadView;
   byId("map-cad-focus").hidden = mode !== "cad" || !cadView?.focus.stations;
   byId("cad-registration").hidden = mode !== "cad" || !cadView || !designAvailable;
   byId("map-cad-status").hidden = !(mode === "cad" && !cadView) && !(cadFailed && ["image", "birdview"].includes(mode));
-  for (const view of ["field", "birdview", "vector", "image", "cad"]) {
+  for (const view of ["active", "field", "birdview", "vector", "image", "cad"]) {
     byId(`map-mode-${view}`).setAttribute("aria-pressed", String(mode === view));
   }
   if (mode === "cad") liveFeeds?.startPinkySim();
   else liveFeeds?.stopPinkySim();
+  showMapSource();
+  syncActiveMapPoll();
   updateMapHealth();
 }
 function chooseMapMode(view) {
@@ -174,6 +213,7 @@ function chooseMapMode(view) {
 }
 const birdviewButton = byId("map-mode-birdview");
 birdviewButton.addEventListener("click", () => chooseMapMode("birdview"));
+byId("map-mode-active").addEventListener("click", () => chooseMapMode("active"));
 byId("map-mode-vector").addEventListener("click", () => { if (vectorAvailable) chooseMapMode("vector"); });
 byId("map-mode-image").addEventListener("click", () => chooseMapMode("image"));
 const image = byId("map-image");
@@ -185,21 +225,23 @@ image.addEventListener("error", archiveImageFailed);
 if (image.complete && !image.naturalWidth) archiveImageFailed();
 function mapFallback() {
   vectorAvailable = false;
+  archiveMapUnavailable = true;
   byId("map-mode-vector").hidden = true;
   if (mode === "vector") mapMode(birdviewAvailable ? "birdview" : "image");
-  status("map-status", "unavailable", "벡터 지도를 그릴 수 없어 보관 이미지를 표시합니다.");
+  if (mode !== "active") status("map-status", "unavailable", "벡터 지도를 그릴 수 없어 보관 이미지를 표시합니다.");
 }
 const mapPromise = (async () => {
   let map;
   try {
     const envelope = await readJson("site-map");
     map = mapData(envelope);
-    readout("map-readout", [
+    archivedMapReadout = [
       ["출처", "Fleet 활성 지도 보관본"],
       ["지도 ID", map.id],
       ["버전", map.version ?? "확인되지 않음"],
       ["활성 시각 (UTC)", date(envelope.activated_at)],
-    ]);
+    ];
+    if (mode !== "active") showMapSource();
   } catch {
     mapFallback();
     return null;
@@ -207,8 +249,10 @@ const mapPromise = (async () => {
   try {
     await showMap(byId("map-canvas"), map, mapFallback);
     vectorAvailable = true;
-    status("map-status", "ready", "보관 지도");
-    updateMapHealth();
+    if (mode !== "active") {
+      showMapSource();
+      updateMapHealth();
+    }
   } catch {
     mapFallback();
   }

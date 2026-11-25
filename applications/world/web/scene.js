@@ -68,19 +68,34 @@ export async function showMap(canvas, map, contextLost) {
   camera.position.z = 2;
   const route = new three.LineBasicMaterial();
   const placeGeometry = new three.CircleGeometry(0.017, 16);
+  const placeMaterial = new three.MeshBasicMaterial();
   const observationGeometry = new three.RingGeometry(0.016, 0.036, 20);
-  const places = map.places.map(({ x, y }) => marker(placeGeometry, token("--ink"), x, y, 0.01));
+  const geometry = new three.Group();
   const observations = new three.Group();
-  const bounds = new three.Box2();
-  for (const points of [...map.edges, map.places.map(({ x, y }) => [x, y])]) {
-    for (const [x, y] of points) bounds.expandByPoint(new three.Vector2(x, y));
+  scene.add(geometry, observations);
+  const size = new three.Vector2();
+  function setGeometry(next) {
+    for (const child of geometry.children) {
+      if (child.geometry !== placeGeometry) child.geometry.dispose();
+    }
+    geometry.clear();
+    const bounds = new three.Box2();
+    for (const { x, y } of next.places) {
+      const point = new three.Mesh(placeGeometry, placeMaterial);
+      point.position.set(x, y, 0.01);
+      geometry.add(point);
+      bounds.expandByPoint(new three.Vector2(x, y));
+    }
+    for (const edge of next.edges) {
+      geometry.add(path(edge, route));
+      for (const [x, y] of edge) bounds.expandByPoint(new three.Vector2(x, y));
+    }
+    const center = bounds.getCenter(new three.Vector2());
+    bounds.getSize(size);
+    camera.position.x = center.x;
+    camera.position.y = center.y;
   }
-  for (const edge of map.edges) scene.add(path(edge, route));
-  scene.add(...places, observations);
-  const center = bounds.getCenter(new three.Vector2());
-  const size = bounds.getSize(new three.Vector2());
-  camera.position.x = center.x;
-  camera.position.y = center.y;
+  setGeometry(map);
   const update = (aspect) => {
     const halfHeight = Math.max(size.y, size.x / aspect, 0.2) * 0.6;
     camera.left = -halfHeight * aspect;
@@ -89,12 +104,12 @@ export async function showMap(canvas, map, contextLost) {
     camera.bottom = -halfHeight;
     scene.background = new three.Color(token("--ground"));
     route.color.set(token("--text-secondary"));
-    for (const place of places) place.material.color.set(token("--ink"));
+    placeMaterial.color.set(token("--ink"));
     for (const point of observations.children) point.material.color.set(token("--series-primary"));
   };
   const draw = viewport(canvas, camera, scene, update, contextLost);
   draw();
-  return (positions) => {
+  const showPositions = (positions) => {
     for (const point of observations.children) point.material.dispose();
     observations.clear();
     for (const { x_m, y_m } of positions) {
@@ -102,6 +117,11 @@ export async function showMap(canvas, map, contextLost) {
     }
     draw();
   };
+  showPositions.setMap = (next) => {
+    setGeometry(next);
+    draw();
+  };
+  return showPositions;
 }
 
 export async function showCell(canvas, axes, contextLost, equipmentUrl, options = {}) {
