@@ -152,9 +152,12 @@ class WorldHandler(SimpleHTTPRequestHandler):
             site_map = _read_json_strict(self._worlds_dir() / ACTIVE_SITE_MAP_FILE)
             observed_at = site_map.get("observed_at_ms") if site_map else None
             now_ms = time.time_ns() // 1_000_000
-            if type(observed_at) is not int or abs(now_ms - observed_at) > ACTIVE_SITE_MAP_FRESH_MS:
-                site_map = None
-            return self.json_reply(200, {"site_map": site_map})
+            fresh_for_ms = (
+                ACTIVE_SITE_MAP_FRESH_MS - abs(now_ms - observed_at) if type(observed_at) is int else 0
+            )
+            if fresh_for_ms <= 0:
+                return self.json_reply(200, {"site_map": None})
+            return self.json_reply(200, {"site_map": site_map, "fresh_for_ms": fresh_for_ms})
         if posixpath.basename(posixpath.normpath(unquote(parts.path))).casefold() == ACTIVE_SITE_MAP_FILE:
             self.send_error(404)
             return None

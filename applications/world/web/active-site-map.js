@@ -3,6 +3,7 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
   let draw;
   let sha;
   let timer;
+  let expiryTimer;
   let watching = false;
   let request;
   let state = "pending";
@@ -28,6 +29,7 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
   placeSelect.addEventListener("change", markSelectedPlace);
 
   function unavailable() {
+    clearTimeout(expiryTimer);
     entries = undefined;
     state = "unavailable";
     onUpdate();
@@ -37,14 +39,16 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
     if (request) return;
     const controller = new AbortController();
     request = controller;
+    const sentAt = performance.now();
     try {
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]);
       const response = await fetch("./api/worlds/real-site/site-map", { signal });
       if (!response.ok) throw new Error("Active map unavailable");
-      const { site_map: envelope } = await response.json();
+      const { site_map: envelope, fresh_for_ms: freshForMs } = await response.json();
       const map = mapData(envelope);
       if (!Number.isSafeInteger(map.version) || map.version < 1 || !/^[a-f0-9]{64}$/.test(envelope.sha256)
-          || !Number.isSafeInteger(envelope.observed_at_ms) || envelope.observed_at_ms <= 0) {
+          || !Number.isSafeInteger(envelope.observed_at_ms) || envelope.observed_at_ms <= 0
+          || !Number.isSafeInteger(freshForMs) || freshForMs <= 0) {
         throw new Error("Invalid active map revision");
       }
       if (!draw) {
@@ -60,6 +64,9 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
       }
       const renderer = await draw;
       if (request !== controller) return;
+      // Charge the entire request to the server's remaining freshness budget.
+      const deadline = sentAt + freshForMs;
+      if (deadline <= performance.now()) throw new Error("Active map expired in transit");
       const geometryChanged = envelope.sha256 !== sha;
       if (geometryChanged) renderer.setMap(map);
       if (renderer !== showPositions || geometryChanged) {
@@ -67,6 +74,10 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
         updatePlaces(map.places);
       }
       sha = envelope.sha256;
+      clearTimeout(expiryTimer);
+      const remaining = deadline - performance.now();
+      if (remaining <= 0) throw new Error("Active map expired while rendering");
+      expiryTimer = setTimeout(unavailable, remaining);
       state = "ready";
       entries = [
         ["출처", "Fleet 활성 지도"],
@@ -97,6 +108,7 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
         void refresh();
         timer = setInterval(refresh, 10_000);
       } else {
+        clearTimeout(expiryTimer);
         request?.abort();
         request = undefined;
         entries = undefined;

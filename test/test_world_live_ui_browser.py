@@ -202,6 +202,17 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     page.clock.fast_forward(8_000)
                     assert page.locator("#map-active-canvas").is_hidden()
                     assert place.is_hidden()
+
+                    page.locator("#map-mode-vector").click()
+                    held.clear()
+                    page.route(route_pattern, lambda route: held.append(route))
+                    with page.expect_request(route_pattern):
+                        page.locator("#map-mode-active").click()
+                    page.clock.fast_forward(2_000)
+                    held[0].fulfill(json={"site_map": live_map, "fresh_for_ms": 1_000})
+                    page.unroute(route_pattern)
+                    expect(page.locator("#map-status")).to_have_text("현장 활성 지도 미수신")
+                    assert page.locator("#map-active-canvas").is_hidden()
                     assert failures == []
                 finally:
                     browser.close()
