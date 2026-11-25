@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Post-calibration empty-arm X/Y target verification & bounded visit compensation (`cell_post_eval.py`).
 
-Single Responsibility:
   - Isolate camera shift, movable-site shift, joint droop, scene motion, and map/bias residual.
   - Measure true X/Y TCP via opposing yaw pairs (or 1-yaw advisory fallback) with finger-identity validation (`source="visit"`).
   - Save bounded `kind="visit"` local bias (preserving `pivot` R/phi) only under `D-911` (`--commissioning --person-at-switch --apply`).
@@ -177,7 +176,7 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     writer, scoped = write_library_fn or cp.write_library, rp.scoped(config)
     approach_m, tcp_kw = float((config.get("plan") or {}).get("approach_m", 0.04)), _tcp_kw(config)
     used_bias = [float(used_reg["bias_mm"][0]), float(used_reg["bias_mm"][1])] if used_reg else [0.0, 0.0]
-    droops, marks_arm, fks = [], [], []
+    droops, marks_arm, pixels, fks = [], [], [], []
     try:
         for idx, yaw in enumerate(yaws):
             pose = {"x": float(point_m[0]), "y": float(point_m[1]), "z": round(float(z_view) - approach_m, 4), "yaw_deg": yaw}
@@ -199,6 +198,7 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
             px = cell_pivot.mark_jaws(cell, config, sleep, near=near)
             if px is None:
                 return {"site": site, "point_m": list(point_m), "map_sha": map_sha, "status": "failed", "reason": "mark_not_seen"}
+            pixels.append(px)
             marks_arm.append(cell_pivot.mark_to_arm(rec, config, site, px, fz))
             fks.append((fx, fy, fz, fyaw))
     finally:
@@ -243,10 +243,11 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     tol_mm = float(prm.get(params, "post.tol_mm"))
     status = "rejected" if not accepted else ("advisory" if geom_dep else ("pass" if resid_mag <= max(tol_mm, 2.0 * sigma_mm) else "drift"))
     pt_r = [round(float(point_m[0]), 4), round(float(point_m[1]), 4)]
+    from cell_route_visit import visit_evidence
     cell_cal_monitor.record_observation(
         config, site=site, map_sha=map_sha, source="visit", raw_mm=raw_bias, residual_mm=resid,
         sigma_mm=sigma_mm, accepted=accepted, reason=reason,
-        extra={"place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
+        extra={**visit_evidence(config, calibration, site, before, point_m, pixels, fks), "place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
                "geometry_dependent": geom_dep, **({"droop_mm": droop_mm} if droop_mm is not None else {}),
                **({"droop_z_mm": droop_z_mm} if droop_z_mm is not None else {}),
                **({"jaw_sides": jaw_sides} if jaw_sides else {})},

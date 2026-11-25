@@ -46,6 +46,32 @@ def test_probe_library_loads_in_the_runner_and_only_descends(tmp_path):
     assert loaded["chunks"]["above_probe"] == [down[0]]
 
 
+def test_approach_contact_does_not_record_a_surface():
+    cell = Scripted({"goto above_probe": {"ok": False, "contact": True}})
+    result = cs.touch(cell, Path("lib.json"), fk=lambda state: 1 / 0)
+    assert result["result"] == "refused" and "surface_z" not in result
+    assert cell.sent[-2:] == ["retreat", "park"] and "run descend_probe" not in cell.sent
+
+
+def test_reuse_repeated_contact_only_with_its_original_setup(tmp_path):
+    from cell_route_surface import contact_evidence
+
+    site = "tmp-b-2-l1"
+    cfg = {"arm_id": "arm_b", "tcp_x_m": 0.074, "plan": PLAN, "work_dir": str(tmp_path),
+           "calibration_path": str(tmp_path / "cal.json"),
+           "sites": {site: {"place": [0.15, 0.0], "yaw_deg": -14.4}}}
+    cal = {"reference_top_sha256": "a" * 64, "reference_map_sha": "b" * 12, "reference_geometry_sha": "c" * 12}
+    Path(cfg["calibration_path"]).write_text(json.dumps(cal))
+    state = cs.probe_library(PLAN, 0.15, 0.0, -14.4, 0.10, 0.01, tcp_x_m=0.074)["chunks"]["descend_probe"][-1]
+    cell = Scripted({"run descend_probe": {"ok": False, "contact": True, "state": state}})
+    cs.run_surface_step(cell, cfg, f"surface {site}", tmp_path)
+    assert contact_evidence(cfg, site, cal)["status"] == "matched_contact"
+    assert contact_evidence(cfg, site, dict(cal, reference_map_sha="d" * 12))["status"] == "candidate"
+    assert contact_evidence(dict(cfg, tcp_x_m=0.088), site, cal)["status"] == "candidate"
+    cfg["sites"][site]["place"][0] += 0.01
+    assert contact_evidence(cfg, site, cal)["status"] == "candidate"
+
+
 def test_touch_and_probe_library_apply_configured_tcp_x_m():
     lib_stock = cs.probe_library(PLAN, 0.15, 0.0, -14.4, 0.10, 0.01)
     lib_v21 = cs.probe_library(PLAN, 0.15, 0.0, -14.4, 0.10, 0.01, tcp_x_m=0.074)
