@@ -22,6 +22,9 @@ class Center:
     def __init__(self):
         self.calls = []
 
+    def bind_workspace(self, project):
+        self.project = project
+
     def world_experiment(self):
         return {'preset': {'id': START['preset_id']}, 'runs': []}
 
