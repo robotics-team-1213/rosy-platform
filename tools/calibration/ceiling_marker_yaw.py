@@ -34,6 +34,7 @@ frames, ``--frames DIR`` or ``--cargo-video MP4`` and emits a rear-cue candidate
 Stationary evidence cannot establish that the orange object is attached to the robot.
 For a D-950 transverse container, ``--transverse-cargo`` uses the normal of its long edge.
 Use ``--forward-motion`` only for a known straight forward segment.
+``--installed-offset-deg`` adds a wrapped comparison with the installed value.
 
 Token: ``ROSY_FLEET_TOKEN`` (viewer or above) from an authenticated session.
 Development mode also requires login. The token is never printed. ``estimate`` is stdlib only.
@@ -218,17 +219,17 @@ def frame_sample(record: dict, jpeg: bytes, size: tuple[int, int], captured_at: 
     return None if pose is None else (captured_at, *pose)
 
 
-def _transverse_heading(contour, area, cue, marker) -> float | None:
+def _transverse_heading(contour, moments, cue, marker) -> float | None:
     import cv2
 
     rect = cv2.minAreaRect(contour)
     short, long = sorted(rect[1])
     # The visible orange surface should be rectangular and long enough to resolve an axis.
-    if short <= 0 or long / short < 1.6 or area < 0.65 * short * long:
+    if short <= 0 or long / short < 1.6 or moments["m00"] < 0.65 * short * long:
         return None
-    box = cv2.boxPoints(rect)
-    edge = max((box[(i + 1) % 4] - box[i] for i in range(4)), key=lambda v: math.hypot(*v))
-    normal = math.atan2(edge[1], edge[0]) + math.pi / 2
+    # Filled area is less sensitive to one noisy extreme pixel than the rectangle angle.
+    long_axis = 0.5 * math.atan2(2 * moments["mu11"], moments["mu20"] - moments["mu02"])
+    normal = long_axis + math.pi / 2
     rear_to_marker = math.atan2(marker[1] - cue[1], marker[0] - cue[0])
     alignment = math.cos(normal - rear_to_marker)
     if abs(alignment) < 0.5:  # the marker must lie clearly to one side of the transverse axis
@@ -283,7 +284,7 @@ def cargo_frame_sample(record: dict, jpeg: bytes, captured_at: float, *, source:
         cue = (moments["m10"] / area, moments["m01"] / area)
         if not REAR_CUE_DISTANCE_M[0] <= math.dist(cue, pose[:2]) <= REAR_CUE_DISTANCE_M[1]:
             continue
-        front_yaw = _transverse_heading(cargo, area, cue, pose) if transverse else None
+        front_yaw = _transverse_heading(cargo, moments, cue, pose) if transverse else None
         if not transverse or front_yaw is not None:
             cues.append(CueSample(captured_at, pose, cue, front_yaw))
     if len(cues) > 1:
@@ -421,6 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--transverse-cargo", action="store_true", help="long cargo edge lies across the robot")
     parser.add_argument("--forward-motion", action="store_true", help="recorded segment is known to be straight forward")
     parser.add_argument("--led-challenge", help="Fleet identify receipt for the recorded raw JPEG frames")
+    parser.add_argument("--installed-offset-deg", type=float, help="compare the candidate with the installed offset")
     args = parser.parse_args(argv)
     if args.dev_session:
         parser.error("--dev-session is retired; sign in and provide ROSY_FLEET_TOKEN")
@@ -433,6 +435,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--led-challenge needs --frames")
     if candidate_mode and not args.calibration_revision:
         parser.error("candidate mode needs --calibration-revision")
+    if args.installed_offset_deg is not None and not (candidate_mode and math.isfinite(args.installed_offset_deg)):
+        parser.error("--installed-offset-deg needs candidate mode and a finite angle")
     if (args.frames or args.cargo_video) and not args.record:
         parser.error("offline frames need --record")
     if args.cargo_height_m is not None and not (math.isfinite(args.cargo_height_m) and args.cargo_height_m >= 0):
@@ -452,6 +456,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError) as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
+        if args.installed_offset_deg is not None:
+            difference = math.remainder(result["candidate_offset_deg"] - args.installed_offset_deg, 360.0)
+            result.update(installed_offset_deg=args.installed_offset_deg,
+                          candidate_minus_installed_deg=round(difference, 2),
+                          offset_difference_exceeds_repeatability=abs(difference) > MAX_YAW_SPREAD_DEG)
         print(json.dumps({**result, "robot_id": args.robot, "source_id": args.source,
                           "calibration_revision": args.calibration_revision, "use": "observation-only",
                           "installation_allowed": False}))

@@ -174,7 +174,12 @@ def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_
     for height in (0.04, 0.14):
         assert math.degrees(sample(height=height, transverse=True).front_yaw) == pytest.approx(90, abs=1.0)
 
-    frame[265:274, 315:338] = 240
+    # Two tiny edge excursions tilt the enclosing rectangle by several degrees.
+    cv2.line(frame, (317, 267), (315, 262), (0, 125, 235), 1)
+    cv2.line(frame, (321, 271), (321, 274), (0, 125, 235), 1)
+    assert math.degrees(sample(transverse=True).front_yaw) == pytest.approx(90, abs=2.0)
+
+    frame[262:275, 313:340] = 240
     frame[265:277, 319:331] = (0, 125, 235)
     assert sample(transverse=True) is None  # nearby orange square, no front axis
 
@@ -208,3 +213,20 @@ def test_cargo_cli_keeps_candidate_when_led_unobserved_but_refuses_invalid_evide
     monkeypatch.setattr(led, "estimate_led", invalid)
     assert tool.main(argv) == 2
     assert "invalid challenge" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("candidate, installed, difference, outside", [
+    (179, -179, -2, False), (-179, 179, 2, False), (4, -89.8, 93.8, True),
+])
+def test_candidate_cli_reports_wrapped_offset_difference_without_authority(
+        monkeypatch, capsys, candidate, installed, difference, outside):
+    import json
+    import ceiling_marker_yaw as tool
+
+    monkeypatch.setattr(tool, "_candidate", lambda *args: {"candidate_offset_deg": candidate})
+    assert tool.main(["--robot", "rosy_45", "--marker", "45", "--cargo-height-m", "0.10",
+                      "--calibration-revision", "v", "--installed-offset-deg", str(installed)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["candidate_minus_installed_deg"] == pytest.approx(difference)
+    assert result["offset_difference_exceeds_repeatability"] is outside
+    assert result["installation_allowed"] is False
