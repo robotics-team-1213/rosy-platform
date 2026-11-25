@@ -89,7 +89,8 @@ class TripProgress:
         return None
 
     async def _progress_pose(self, live: LiveTrip, robot_id: str):
-        binding_id = live.view["detail"].get("precision_binding_id")
+        detail = live.view["detail"]
+        binding_id = detail.get("precision_binding_id") or detail.get("nav2_binding_id")
         if binding_id is None:
             return await self.map_pose(robot_id)
         pose = await precision_map_pose(self, robot_id, (live.view["map_version"], binding_id))

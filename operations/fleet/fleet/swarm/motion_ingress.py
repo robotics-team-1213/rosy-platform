@@ -7,7 +7,7 @@ PREPARED_GOALS = frozenset({
 
 _MOTION = frozenset({
     "/api/v1/navigation/goal", "/api/v1/navigation/home", "/api/v1/navigation/route",
-    "/api/v1/navigation/goal/lease",
+    "/api/v1/navigation/bound-route", "/api/v1/navigation/goal/lease",
     "/api/v1/swarm/follow", "/api/v1/motion/rotate_to", "/api/v1/motion/nudge", "/api/v1/motion/repark",
     "/api/v1/motion/repark/run", "/api/v1/localization/mission",
     "/api/v1/docking/dock", "/api/v1/docking/undock",

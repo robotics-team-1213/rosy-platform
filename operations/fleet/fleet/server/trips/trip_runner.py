@@ -148,10 +148,11 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 raise TripError(409, "TRIP_ALREADY_STARTED")
             if self._clock() - row["created_at"] > PLAN_TTL_S:
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
-            repeat = bool((row.get("request") or {}).get("repeat"))
-            nav2 = (row.get("request") or {}).get("drive_mode") == "nav2"
+            request_data = row.get("request") or {}
+            repeat = bool(request_data.get("repeat"))
+            nav2 = request_data.get("drive_mode") == "nav2"
             graph = self._graph_for(plan["map_version"])
-            precision = commissioned_stop(graph, (row.get("request") or {}).get("to"))
+            precision = commissioned_stop(graph, request_data.get("to"))
             if nav2 and precision is not None:
                 raise TripError(422, "PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
             precision_scope = None
@@ -164,9 +165,19 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 if binding_id is None:
                     raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
                 precision_scope = plan["map_version"], binding_id
+            nav2_scope = None
+            binding_id = plan.get("nav2_binding_id")
+            if nav2 and isinstance(request_data.get("to"), str) and (
+                binding_id is not None or request_data.get("approved_slam_required") or self.config.map_binding_required
+            ):
+                if binding_id is None:
+                    raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
+                nav2_scope = plan["map_version"], binding_id
             notes = {"drive_mode": "nav2"} if nav2 else {}
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
                                            plan["actions"][-1]["place_id"], detail=notes, nav2=nav2)
+            if nav2_scope is not None and not caps.bound_route:
+                raise TripError(409, "NAV2_BOUND_ROUTE_UNSUPPORTED")
             body = nominal_body_for(caps.kind)
             pending = self.halts.pending_handoffs.get(robot_id)
             if pending is not None:
@@ -191,7 +202,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
                 start_token=start_token, start_guard=start_guard, nav2=nav2,
-                precision_scope=precision_scope)
+                precision_scope=precision_scope or nav2_scope)
             await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id,
@@ -200,6 +211,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 await self._guard_start(robot_id, start_token, start_guard)
                 self._check_engaged(robot_id)
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
+                if nav2_scope and (self._store.map_bindings.active(robot_id) or {}).get("binding_id") != nav2_scope[1]:
+                    raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
                 caps_view = _caps_view(caps)
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
@@ -223,6 +236,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 view["purpose"] = purpose
             if precision_scope is not None:
                 view["detail"]["precision_binding_id"] = precision_scope[1]
+            if nav2_scope is not None:
+                view["detail"]["nav2_binding_id"] = nav2_scope[1]
             live = LiveTrip(view, graph, request)
             live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from core_common.protocol.evidence import STALE_POSE_S
 from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
@@ -264,7 +265,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     traffic_end = _traffic_end_index(runner, live, index)
     target_end = None if traffic_end is None else (min(index, traffic_end) if live.view["hold"] is not None else traffic_end)
     if live.active_route is not None:
-        if runner.config.map_binding_required:
+        if runner.config.map_binding_required or live.nav2_binding_scope is not None:
             await runner._recheck_binding(live, active)
             if not live.open:
                 return
@@ -309,9 +310,16 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         {"x": round(rx, 4), "y": round(ry, 4), "kind": kind, **({"yaw": round(ryaw, 4)} if kind == "stop" else {})}
         for rx, ry, ryaw, kind in robot_pts
     ]
+    options = {}
+    if live.nav2_binding_scope is not None:
+        if runner._route is None:
+            raise _GoalRefused("BOUND_NAV2_ROUTE_UNAVAILABLE")
+        frame = live.view["detail"]["goal_frame"]
+        options["route_binding"] = {"site_map_id": frame["map_id"], "site_map_version": frame["map_version"],
+                                    "map_grid_id": frame["map_grid_id"], "binding_id": frame["binding_id"]}
     try:
         if runner._route is not None:
-            reply = await runner._call(runner._route(robot_id, payload)) or {}
+            reply = await runner._call(runner._route(robot_id, payload, **options)) or {}
         else:
             fx, fy, fyaw, _ = robot_pts[-1]
             reply = await runner._call(runner._goal(robot_id, fx, fy, fyaw)) or {}
@@ -341,16 +349,28 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
 
 def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
     robot_id = live.view["robot_id"]
+    binding_id = live.view["detail"].get("nav2_binding_id")
+    binding_required = binding_id is not None or runner.config.map_binding_required
+    if binding_id is not None and (
+        pose.source != "approved_slam" or pose.odom_stamp is None
+        or not 0 <= runner._clock() - pose.odom_stamp < STALE_POSE_S
+    ):
+        return None, {"map_id": active[1].map_id, "binding": "APPROVED_SLAM_POSE_REQUIRED"}
     if runner._robot_state is None:
-        if runner.config.map_binding_required:
+        if binding_required:
             return None, {"map_id": active[1].map_id, "robot_map_id": None, "binding": "MAP_BINDING_REQUIRED"}
         if not runner._poses_in_robot_frame:
             return None, {"map_id": active[1].map_id, "robot_map_id": None}
         return site_pts, None
     binding = (
         runner._store.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
-        if runner.config.map_binding_required else None
+        if binding_required else None
     )
+    current_binding_id = None
+    if binding is not None:
+        current_binding_id = (runner._store.map_bindings.active(robot_id) or {}).get("binding_id")
+        if binding_id is not None and current_binding_id != binding_id:
+            return None, {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"}
     converted_pts = []
     site_frame = True
     for px, py, pyaw, kind in site_pts:
@@ -371,7 +391,7 @@ def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
         "robot_map_id": (state or {}).get("map_id"),
         "goal_frame": "site" if site_frame else "robot",
         **({"map_grid_id": (state or {}).get("map_grid_id"),
-            "binding_id": (runner._store.map_bindings.active(robot_id) or {}).get("binding_id")}
+            "binding_id": current_binding_id}
            if binding is not None else {}),
     }
     return converted_pts, None
