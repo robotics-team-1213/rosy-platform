@@ -43,7 +43,9 @@ Live `rosy-site-autoupdate` runs deferred signed `site-*` candidate rollouts wit
 
 Because `rosy-site-autoupdate.service` executes `/usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py` outside `/opt/rosy/candidate` (D-301 §3), site stack rollouts stay blocked until an administrator backs up and reinstalls the reviewed 5-file unit (`rosy_site_autoupdate.py`, `verify_candidate.py`, `candidate_signing.py`, `site_update_io.py`, `site_update_runtime.py`) into `/usr/local/lib/rosy-site/` from the reviewed `origin/main` commit per `deploy/site/README.md`. Pre-fix Fleet containers do not emit `goal_in_flight`, so a single idle Fleet container restart clears any pre-existing retained goal before the first automatic switch.
 
+If a host stayed deferred past more than three signed `site-*` releases so that a retained incremental (`manifest_version: 2`) candidate's `base_commit` was pruned from releases (`verification failed: docker image inspection failed for <service>`), trigger `build-site-candidate.yml` via `workflow_dispatch` on `main` with an empty `base_commit` on a commit without an existing `site-*` tag (`manifest_version: 1` full build), wait for `auto_sign_candidates.py` to sign it after green `main` CI, then run `rosy-site-autoupdate.service`.
+
 ## Prevention
 
-- Never assume `row["goal"]` paired with `IDLE`/terminal `navigation` represents finished work unless monotonic state-observation timestamps prove the terminal state occurred after goal acceptance (`goal_in_flight: False`).
+- Never assume `row["goal"]` paired with `IDLE`/terminal `navigation` represents finished work unless monotonic state-observation timestamps classify the terminal observation as occurring after goal acceptance (`goal_in_flight: False`, without matching a specific attempt ID).
 - Distinguish robot CORE restarts from site-host Compose stack restarts when choosing idle allowlists (`DOCK_FAILED` blocks robot CORE restarts, not site Compose stack restarts).
