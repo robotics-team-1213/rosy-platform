@@ -27,11 +27,50 @@ import cell_place_fit  # noqa: E402
 import cell_recovery_advisor as cra  # noqa: E402
 import cell_space  # noqa: E402
 import chunk_runner as m  # noqa: E402
+from chunk_runner_recover import ensure_live_unlatch  # noqa: E402
 import judge_seat  # noqa: E402
 
 HOME = [0.0, -60.0, 50.0, 45.0, 10.0, 46.6]
 REACH = [20.0, -20.0, 20.0, 45.0, -5.0, 54.0]
 MOTORS = [n.split(".")[0] for n in m.NAMES]
+
+
+@pytest.mark.parametrize("fields", [{}, {"human_hold_latched": None}, {"human_hold_latched": 0},
+                                    {"human_hold_latched": True}, {"human_hold_latched": False}])
+def test_unlatch_requires_explicit_release(fields):
+    cell = Mock()
+    cell.act.return_value = {"ok": True, **fields}
+    latched = {"active": True}
+    ok, error = ensure_live_unlatch(cell, latched, Mock())
+    released = fields.get("human_hold_latched") is False
+    assert ok is released
+    assert latched["active"] is (not released)
+    assert bool(error) is (not released)
+
+
+@pytest.mark.parametrize("case", ["released", "still_held", "new_session", "old_state", "fault", "state_error",
+                                  "ack_error", "ack_fault", "read_failure"])
+def test_unlatch_reads_current_session_after_incomplete_ack(case):
+    context = {"session_id": "session", "scope": "hardware", "sha256": "a" * 64}
+    initial = {"operating_context": context, "library_sha256": "b" * 64}
+
+    def act(command):
+        if command == "recover-unlatch":
+            if case in ("ack_error", "ack_fault"):
+                return {"ok": True, "human_hold_latched": False, case[4:]: "bus fault"}
+            return {"ok": True}
+        assert command == "state"
+        if case == "read_failure":
+            raise OSError("bus offline")
+        return {**initial, "ok": True, "t": time.time() - (60 if case == "old_state" else 0),
+                "error": "bus fault" if case == "state_error" else None,
+                "human_hold_latched": case == "still_held", "fault": "held" if case == "fault" else None,
+                "operating_context": {**context, "session_id": "other"} if case == "new_session" else context}
+
+    latched = {"active": True, "initial_status": initial}
+    ok, _ = ensure_live_unlatch(SimpleNamespace(act=act), latched, Mock())
+    assert ok is (case == "released")
+    assert latched["active"] is (not ok)
 
 
 class _FakeBus:
