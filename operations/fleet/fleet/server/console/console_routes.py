@@ -22,7 +22,7 @@ from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.server.charge_bay_routes import install_charge_bay_routes
 from fleet import lane_progress
 from fleet.hub.hub import HubError
-from fleet.server.console.console_helpers import refresh_console_dispatch_fields
+from fleet.server.console_helpers import refresh_console_dispatch_fields
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.line_stuck_routes import (
     IncidentReviewRequest,
