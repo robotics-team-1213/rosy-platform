@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.465
+**Version:** v1.466
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.466 Stationary localization candidates retain scan provenance (CORE)
+
+The same `/api/v1/localization/candidates` request retains its `stamp` on transport-only retransmissions. A newer scan supplies a new stamp only when it revalidates the same hypotheses and refreshes their LiDAR evidence. Three recent scans showing disagreement with all candidates can retire the request as `SUSPECT` with reason `candidate_scan_mismatch`, then use the existing bounded search path. A replacement request and any later decision follow the existing localization check.
 
 ### v1.465 Map binding approval checks the measured frames (Fleet)
 
@@ -5053,6 +5057,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.466 | 2026-11-25 | [CORE] Retire a stationary candidate set when fresh scans repeatedly disagree |
 | v1.465 | 2026-11-25 | [Fleet] Map binding approval checks the measured frames |
 | v1.464 | 2026-11-25 | [Fleet] Keep the CORE junction readiness reason in lane trip refusals |
 | v1.463 | 2026-11-25 | [CORE] Explain the current junction-turn capability refusal |
