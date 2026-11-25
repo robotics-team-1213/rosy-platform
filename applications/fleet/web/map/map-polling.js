@@ -5,9 +5,23 @@ import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
-export function createMapPolling({ scope, el, view, auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable,
-  onTrafficChanged }) {
+const guideSummarySig = (guide, unavailable) => JSON.stringify([
+  Boolean(unavailable),
+  (guide?.robots || []).map((r) => [r.robot_id, r.online, r.pose?.state || null, r.lane?.edge_id || null,
+    Number.isFinite(r.pose?.x) ? r.pose.x.toFixed(1) : null, Number.isFinite(r.pose?.y) ? r.pose.y.toFixed(1) : null]),
+]);
+const trafficSummarySig = (view) => JSON.stringify([
+  view.traffic?.units?.length || 0,
+  (view.trafficTrips || []).map((t) => [t.trip_id, t.state, t.robot_id]),
+  (view.endedTrips || []).slice(0, 5).map((t) => [t.trip_id, t.state]),
+  (view.trafficAi || []).length,
+]);
+
+export function createMapPolling({ scope, el, view, auth, call, camera, draw, scheduleDraw = draw, layerOn, onMapChanged, onMapUnavailable,
+  onTrafficChanged, onTrafficDraw = scheduleDraw }) {
   let calibrationsAt = 0;
+  let lastGuideSig = "";
+  let lastTrafficSig = "";
 
   function syncLegend(mode) {
     el("map-legend").hidden = mode === "none";
@@ -114,7 +128,9 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
         if (guidePending) { guidePending = false; void refreshGuide({ force: true }); }
       }
     }
-    onTrafficChanged();  // the roster's exception queue reads view.guide too
+    const nextSig = guideSummarySig(view.guide, view.guideUnavailable);
+    if (nextSig !== lastGuideSig) { lastGuideSig = nextSig; onTrafficChanged(); }
+    else onTrafficDraw();
   }
   async function refreshTraffic() {
     const life = scope.capture();
@@ -151,7 +167,9 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     }
     view.trafficClock = trafficClock(view.trafficClock, view.traffic, Date.now());
     el("traffic-toggle").hidden = !view.traffic?.units?.length;
-    onTrafficChanged();
+    const nextSig = trafficSummarySig(view);
+    if (nextSig !== lastTrafficSig) { lastTrafficSig = nextSig; onTrafficChanged(); }
+    else onTrafficDraw();
   }
   scope.listen(el("traffic-toggle"), "click", () => {
     const on = !layerOn("traffic");
@@ -263,7 +281,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     view.sightings = next;
     if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
     el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
-    draw();
+    scheduleDraw();
   }
 
   return { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling };

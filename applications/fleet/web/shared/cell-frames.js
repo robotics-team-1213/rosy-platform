@@ -80,8 +80,11 @@ export function bindFocusZoom(target, { trigger = target, onToggle = null } = {}
   return setZoom;
 }
 
+const defaultVisible = (el, n = el?.hidden && el.parentElement ? el.parentElement : el) =>
+  !n?.closest?.('details:not([open]), [hidden]')
+  && (typeof n?.getClientRects !== 'function' || (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || '')) || n.getClientRects().length > 0);
 export function createCellFrameFeed({
-  call, scope = null, intervalMs = 2000, now = Date.now, onStateChange = null, onSourcesSample = null,
+  call, scope = null, intervalMs = 2000, now = Date.now, onStateChange = null, onSourcesSample = null, isVisible = defaultVisible,
 }) {
   const watchers = new Map();
   const seen = new WeakSet();  // nodes painted while connected
@@ -271,9 +274,11 @@ export function createCellFrameFeed({
       const pending = queue.values();
       active = new AbortController();
       const {signal} = active;
+      const show = (node) => node.isConnected && isVisible(node);
       async function drain() {
         for (const watcher of pending) {
-          if (!isCurrent(watcher, signal)) continue;
+          if (!isCurrent(watcher, signal) || (typeof document !== 'undefined' && document.hidden)) continue;
+          if (![...watcher.imgs].some(show) && ![...watcher.badges].some(show)) continue;
           try {
             await refreshOne(watcher, signal);
           } catch (error) {

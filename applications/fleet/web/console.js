@@ -44,6 +44,7 @@ import { createConsoleGoal } from "./console-goal.js";
 import { createConsoleRefresh } from "./console-refresh.js";
 import { createAssistantPanel } from "/console/assets/assistant.js";
 import { createZoneBlueprintInspector } from "/console/assets/zone-blueprint-inspector.js";
+import { createCalmPowerHealth } from "/console/assets/calm-power.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -169,6 +170,7 @@ const view = {
   controlUnit: null,
   receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
+  calmPower: createCalmPowerHealth({ graceMs: 3000 }),
 };
 const stateWaiters = [];
 function drainStateWaiters() {
@@ -219,17 +221,30 @@ if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "clic
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
 // 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
 const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refreshHealthz, refreshState } = createConsoleRefresh({
-  pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction, dispatchGate, resetRobotApps,
+  pageScope, el, view, auth, call, fleetApi, log, render, renderPoll: schedulePollRender, confirmedAction, dispatchGate, resetRobotApps,
   disarmGoal: (reason) => disarmGoal(reason),
   openCard: (robotId) => rosterWorkspace.open(robotId),
-  onFastTick: () => { manualControl.update(); mapView.draw(); },
 });
 
 
 
 // --- 로봇 목록 --------------------------------------------------------------
 
+const POLL_RENDER_MIN_MS = 900;
+let lastRenderAt = 0, cancelPollRender = null;
+pageScope.onDispose(() => { cancelPollRender?.(); cancelPollRender = null; });
+function schedulePollRender() {
+  const wait = POLL_RENDER_MIN_MS - (Date.now() - lastRenderAt);
+  if (wait <= 0) return render();
+  if (!cancelPollRender && !document.hidden && !pageScope.signal.aborted) {
+    cancelPollRender = pageScope.timeout(() => { cancelPollRender = null; render(); }, wait);
+  }
+}
+
 function render() {
+  cancelPollRender?.();
+  cancelPollRender = null;
+  lastRenderAt = Date.now();
   drainStateWaiters();
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
@@ -349,16 +364,9 @@ const formation = createFormation({ scope: pageScope, el, view, log, call, rende
 formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
-const mapView = createMapView({ scope: pageScope,
-  el, view, auth, call,
-  onMapChanged: render,
-  onTrafficChanged: render,
-  onMapUnavailable: () => {
-    const selected = view.selected;
-    if (selected) disarmGoal("지도를 확인할 수 없어 목표 지정 취소");
-    render();
-    if (selected) focusGoalButton(selected);
-  },
+const mapView = createMapView({ scope: pageScope, el, view, auth, call,
+  onMapChanged: render, onTrafficChanged: schedulePollRender,
+  onMapUnavailable: () => { const s = view.selected; if (s) disarmGoal("지도를 확인할 수 없어 목표 지정 취소"); render(); if (s) focusGoalButton(s); },
 });
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
@@ -442,17 +450,15 @@ mapView.bindCamera(visionView);
 
 const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
-const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
-const trackingView = {
-  ...rawTrackingView,
-  refresh: whenDrive(() => rawTrackingView.refresh()),
-};
+const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
+const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };
+let hadObsArms = false;
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
   contextHost: el("cell-context-panel"),
   isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
   namedReason,
-  onChanged: () => render(),
+  onChanged: () => { const hasArms = Boolean(view.workcellObs?.arms?.length); schedulePollRender({ urgent: hasArms && !hadObsArms }); hadObsArms = hasArms; },
   onVisionSample: (sample) => {
     if (auth.locked || !auth.role) return;
     pathSample.vision = sample;
@@ -490,15 +496,9 @@ connectionMode();
 refreshState();
 refreshAuthorization();
 void waitForScope().then(() => {
-  if (!auth.locked && owns("arms")) void cellStage.refresh();
-  if (!auth.locked && owns("drive")) {
-    mapView.refresh();
-    trackingView.refresh();
-    chargeBays.refresh();
-    platoon.refresh();
-    stationRecovery.refresh();
-    personRequests.refresh();
-  }
+  if (auth.locked) return;
+  if (owns("arms")) void cellStage.refresh();
+  if (owns("drive")) [mapView, trackingView, chargeBays, platoon, stationRecovery, personRequests].forEach((v) => v.refresh());
 });
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
 const poll = (fn, ms) => pageScope.interval(() => (!document.hidden ? fn() : undefined), ms);

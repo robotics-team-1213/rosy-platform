@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts" / "foundation"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
 import omx_incident  # noqa: E402
@@ -72,3 +74,168 @@ def test_a_refused_clear_keeps_the_hold(tmp_path, monkeypatch):
 
     out = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=refused)
     assert out["cleared"] is False and "REPEAT_LIMIT" in out["why"]
+
+
+def test_auto_clear_enforces_95_score_floor_and_returns_risk_fields(tmp_path, monkeypatch):
+    token = tmp_path / "cell-s-ai-assessor.token"
+    token.write_text("t")
+    monkeypatch.setenv("ROSY_ARM_ASSESSOR_TOKEN_FILE", str(token))
+    calls = []
+    clear = lambda *a, **k: calls.append((a, k))  # noqa: E731
+
+    ok = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear)
+    assert ok["cleared"] is True and ok["safety_score"] == 95 and ok["risk_score"] == 5 and ok["decision"] == "auto_clear"
+
+    calls.clear()
+    # Second clear of rested REAL arm within 24h scores 93 < 95 -> escalated, clear_fn not called
+    low = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear, recent_clears_24h=1)
+    assert low["cleared"] is False and low["safety_score"] == 93 and low["decision"] == "escalate_human"
+    assert calls == []
+
+    # Attempting to weaken min_score below 95 fails closed
+    bad = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear, min_score=90)
+    assert bad["cleared"] is False and bad["safety_score"] == 0 and bad["decision"] == "escalate_human"
+    assert calls == []
+
+
+def test_incident_risk_pipeline_applies_only_at_95_plus_and_logs_audit(tmp_path, monkeypatch):
+    import time
+    import omx_incident_pipeline as pipe
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "arm-home"))
+    mh_dir = tmp_path / "mh"
+    mh_dir.mkdir()
+    monkeypatch.setenv("ROSY_OMX_MOTOR_HEALTH_DIR", str(mh_dir))
+    token = tmp_path / "cell-s-ai-assessor.token"
+    token.write_text("t")
+    monkeypatch.setenv("ROSY_ARM_ASSESSOR_TOKEN_FILE", str(token))
+
+    class Link:
+        def __init__(self, held=True):
+            self._held = held
+
+        def hold(self):
+            return type("Hold", (), {"held": self._held, "incident_ids": ["d" * 32] if self._held else [], "reason": "hold"})()
+
+    # 1) No open incident -> noop exit 0
+    noop, code_noop = pipe.run_pipeline("arm_s", link=Link(held=False))
+    assert code_noop == 0 and noop["status"] == "no_open_incident" and noop["decision"] == "noop"
+
+    # 2) Open incident + healthy telemetry -> score 95 -> --apply clears
+    import omx_incident_fleet as fleet
+    t0 = time.time()
+    inc_folder = fleet.incidents_dir() / "20261125T010000-arm_s"
+    inc_folder.mkdir(parents=True)
+    (inc_folder / "incident.json").write_text(json.dumps({"arm": "arm_s", "facts": REAL, "reported_at": t0 - 20.0}))
+    fleet.keep_hold("arm_s", "link hold", ["d" * 32])
+    (mh_dir / "arm_s.json").write_text(json.dumps({
+        "status": "ended", "observed_at": t0 - 5.0, "stop_reasons": ["session ended"],
+        "motors": [{"joint": "shoulder_lift", "temperature_c": 41.0, "temperature_limit_c": 65.0,
+                    "torque_enabled": 0, "hardware_error": 0, "voltage_v": 12.1, "min_voltage_v": 9.5,
+                    "max_voltage_v": 14.5, "warnings": []}],
+    }))
+    cleared_calls = []
+    res_ok, code_ok = pipe.run_pipeline(
+        "arm_s", apply=True, link=Link(held=True),
+        clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0,
+    )
+    assert code_ok == 0 and res_ok["decision"] == "auto_clear" and res_ok["safety_score"] == 95 and res_ok["cleared"] is True
+    assert len(cleared_calls) == 1 and cleared_calls[0][1]["only"] == "d" * 32
+
+    # 3) Elevated temperature (52C -> -3) drops REAL below 95 -> escalates (exit 2), clear_fn NOT called
+    cleared_calls.clear()
+    (mh_dir / "arm_s.json").write_text(json.dumps({
+        "status": "ended", "observed_at": t0 + 5.0, "stop_reasons": ["session ended"],
+        "motors": [{"joint": "shoulder_lift", "temperature_c": 52.0, "temperature_limit_c": 65.0,
+                    "torque_enabled": 0, "hardware_error": 0}],
+    }))
+    res_low, code_low = pipe.run_pipeline(
+        "arm_s", apply=True, link=Link(held=True),
+        clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0 + 10.0,
+    )
+    assert code_low == 2 and res_low["decision"] == "escalate_human" and res_low["cleared"] is False
+    assert res_low["safety_score"] <= 92 and cleared_calls == []
+    auto_events = [json.loads(line) for line in (tmp_path / "incidents" / "auto-events.jsonl").read_text().splitlines()]
+    assert any(e["kind"] == "auto_clear" and e["result"] is True and "score=95/95" in e["why"] for e in auto_events)
+    risk_events = [json.loads(line) for line in (fleet.incidents_dir() / "risk-events.jsonl").read_text().splitlines()]
+    assert [e["decision"] for e in risk_events] == ["auto_clear", "escalate_human"]
+    assert risk_events[0]["safety_score"] == 95 and risk_events[0]["cleared"] is True
+    assert risk_events[1]["safety_score"] <= 92 and risk_events[1]["cleared"] is False
+
+    # 4) Corrupt local HOLD JSON & unreadable motor_health fail closed to score 0 (escalate_human, exit 2)
+    (mh_dir / "arm_s.json").unlink()
+    fleet.hold_path("arm_s").write_text("{corrupt json", encoding="utf-8")
+    cleared_calls.clear()
+    res_corrupt, code_corrupt = pipe.run_pipeline(
+        "arm_s", apply=True, link=Link(held=False),
+        clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0 + 20.0,
+    )
+    assert code_corrupt == 2 and res_corrupt["decision"] == "escalate_human" and res_corrupt["cleared"] is False
+    assert res_corrupt["safety_score"] == 0 and res_corrupt["risk_score"] == 100
+    assert any(v["code"] == "HOLD_UNREADABLE" for v in res_corrupt["hard_vetoes"]) and cleared_calls == []
+
+    # 5) Corrupt motor_health JSON fails closed to score 0 even with healthy hold/incident
+    fleet.keep_hold("arm_s", "link hold", ["d" * 32])
+    (mh_dir / "arm_s.json").write_text("{bad motor health", encoding="utf-8")
+    res_bad_mh, code_bad_mh = pipe.run_pipeline(
+        "arm_s", apply=True, link=Link(held=True),
+        clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0 + 30.0,
+    )
+    assert code_bad_mh == 2 and res_bad_mh["decision"] == "escalate_human" and res_bad_mh["safety_score"] == 0
+    assert any(v["code"] == "MOTOR_HEALTH_UNREADABLE" for v in res_bad_mh["hard_vetoes"]) and cleared_calls == []
+
+
+def test_incident_risk_clear_job_spec_is_non_motion_and_enforces_95_floor(tmp_path):
+    import cell_job_guards as guards
+    import cell_job_spec as spec
+
+    (tmp_path / "cell-auto-arm-s-live.json").write_text("{}", encoding="utf-8")
+    job = spec.JOBS["incident_risk_clear"]
+    params = {"arm": "arm_s", "config": "cell-auto-arm-s-live.json", "apply": True, "reassess": True, "min_score": 95,
+              "out": "risk.json"}
+    assert spec.moves_arm(job, params) is False
+    _, err = guards.authorize_principal("incident_risk_clear", job, params,
+                                        guards.Principal(guards.ROLE_MACHINE, "rosy-cli"), moves_arm_fn=spec.moves_arm)
+    assert err is None
+    argv = spec.build_argv(job, params, tmp_path)
+    assert "omx_incident_pipeline.py" in argv and "--apply" in argv and "--reassess" in argv
+    assert argv[argv.index("--min-score") + 1] == "95"
+    with pytest.raises(ValueError, match="min_score"):
+        spec.build_argv(job, {**params, "min_score": 94}, tmp_path)
+
+
+def test_omx_incident_pipeline_runs_cleanly_in_cold_subprocess(tmp_path):
+    import os
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / "deploy" / "robot" / "omx" / "omx_incident_pipeline.py"
+    inc = tmp_path / "incident.json"
+    inc.write_text(json.dumps({"arm": "arm_s", "facts": REAL}), encoding="utf-8")
+    mh_dir = tmp_path / "mh"
+    mh_dir.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ROSY_")}
+    env.update({
+        "HOME": str(tmp_path),
+        "ROSY_OMX_HOME": str(tmp_path / "arm-home"),
+        "ROSY_OMX_MOTOR_HEALTH_DIR": str(mh_dir),
+        "ROSY_OBSERVATION_BRIDGE_ENV": str(tmp_path / "absent-bridge.env"),
+        "PYTHONPATH": os.pathsep.join([
+            str(root / "deploy" / "robot" / "omx"),
+            str(root / "contracts" / "foundation"),
+            str(root / "operations" / "overhead"),
+        ]),
+    })
+    proc = subprocess.run(
+        [sys.executable, str(script), "--arm", "arm_s", "--incident-file", str(inc)],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["schema"] == "rosy.omx-incident-risk-pipeline.v1"
+    assert payload["safety_score"] == 95 and payload["decision"] == "auto_clear"

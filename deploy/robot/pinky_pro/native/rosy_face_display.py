@@ -582,7 +582,7 @@ class FaceDisplay:
             intent = core.get("expression") if live else None
             if expires is not None and not live and self._core_face_live:
                 face = "basic"
-            intent = intent or {"gaze_x": 0., "resting": False}
+            intent = intent or {"gaze_x": 0., "resting": core.get("robot_mode") == "IDLE" and core.get("nav_state", "IDLE") == "IDLE"}
             frame = self._faces.next(face, expression=intent, now=self._clock())
         else:
             frame = self._faces.next(face)
