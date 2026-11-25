@@ -334,6 +334,7 @@ def test_arm_focus_clearance_requires_confirmation_and_named_operator(cell_url, 
         expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
         button = card.locator("ui-button", has_text="사고 해제")
         if role == "operator":
+            expect(button).to_have_attribute("kind", "quiet")
             expect(button).to_be_disabled()
             expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
             assert state.cleared == []
@@ -345,6 +346,16 @@ def test_arm_focus_clearance_requires_confirmation_and_named_operator(cell_url, 
             expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
             check.check()
             button.click()
+            dialog = page.get_by_role("dialog", name=re.compile("사건 .* 해제할까요"))
+            expect(dialog).to_be_visible()
+            assert state.cleared == []
+            dialog.get_by_text("취소", exact=True).click()
+            expect(dialog).to_be_hidden()
+            assert state.cleared == []
+            button.click()
+            action = dialog.locator("ui-button", has_text="사고 해제")
+            expect(action).to_have_attribute("kind", "irreversible")
+            action.click()
             expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
             assert len(state.cleared) == 1
             assert set(state.cleared[0]) == {"note"} and "이동 경로" in state.cleared[0]["note"]
