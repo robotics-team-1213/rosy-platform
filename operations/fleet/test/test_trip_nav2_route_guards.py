@@ -170,7 +170,14 @@ def test_nav2_localization_refusal_records_blocker_and_dispatch_stage(blocker, d
     _clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map(), peers=[peer])
     peer._state["pose"] = dict(robot._state["pose"])
     run(console.snapshot())
-    (peer if dispatched else robot)._state["localization"] = {"state": "CANDIDATES", "pose_frame": "odom"}
+    # Localization can change between the trip preflight and console admission.
+    route = runner._route
+
+    async def route_after_localization_change(*args):
+        (peer if dispatched else robot)._state["localization"] = {"state": "CANDIDATES", "pose_frame": "odom"}
+        return await route(*args)
+
+    runner._route = route_after_localization_change
     ver = store.active()[0]
     plan = plan_body(plan_trip(graph, PlanRequest(
         map_version=ver, start_pose=(pose["v"].x, pose["v"].y, pose["v"].yaw), goal="S3",
