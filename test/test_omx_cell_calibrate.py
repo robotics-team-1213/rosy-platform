@@ -872,7 +872,7 @@ def test_moving_rects_includes_belt_and_moves_sites():
         ({"probe_z_to_m": "-0.02"}, (), None, "invalid probe_z_to_m"),
         ({"probe_z_to_m": float("nan")}, (), None, "invalid probe_z_to_m"),
         ({"probe_z_to_m": 0.10}, (), None, "invalid probe_z_to_m"),
-        ({"probe_z_to_m": -0.051}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": -0.121}, (), None, "invalid probe_z_to_m"),
         ({"place": [0.15]}, (), None, "invalid place"),
         ({"place": {"a": 1, "b": 2}}, (), None, "invalid place"),
         ({"place": [True, 0.0]}, (), None, "invalid place"),
