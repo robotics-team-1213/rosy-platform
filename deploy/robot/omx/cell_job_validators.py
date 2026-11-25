@@ -145,6 +145,25 @@ def _roi(v):
 METRE = _num(-0.5, 0.5)
 
 
+def _targets(v):
+    if not isinstance(v, list) or not (1 <= len(v) <= 12):
+        raise ValueError("1..12 'site:x,y' target entries")
+    out = []
+    for item in v:
+        if not isinstance(item, str) or item.count(":") != 1:
+            raise ValueError("each target must be 'site:x,y'")
+        site, xy = item.split(":", 1)
+        if not NAME.fullmatch(site) or xy.count(",") != 1:
+            raise ValueError("each target must be '<site>:<x>,<y>'")
+        xs, ys = xy.split(",", 1)
+        try:
+            x, y = float(xs), float(ys)
+        except ValueError as exc:
+            raise ValueError("target coordinates must be finite numbers in [-0.5, 0.5]") from exc
+        out.append(f"{site}:{METRE(x)},{METRE(y)}")
+    return out
+
+
 def _is_amr_bed_site(v: str) -> bool:
     if not isinstance(v, str) or not v:
         return False

@@ -129,6 +129,44 @@ def check_reached_unconfirmed(unconfirmed: tuple, pose: cues.Pose, now: float, *
             and anchoring)
 
 
+def known_obstacle_points(svc, observer_id: str, observer_pose: cues.Pose, observer_state: Optional[Mapping],
+                          exclude_ids: set[str]) -> list[tuple[float, float]]:
+    """Project measured non-target obstacle/parked poses onto the observer's robot-map frame."""
+    provider = getattr(svc, "_site_obstacle_pose", None)
+    if provider is None:
+        return []
+    site_map_id = None
+    fit = svc._binding_fit_for_state(observer_id, observer_state) if isinstance(observer_state, Mapping) else None
+    if fit is not None and svc._site_maps is not None and (active := svc._site_maps.active()) is not None:
+        site_map_id = active[1].map_id
+
+        def site_to_robot(sx: float, sy: float) -> tuple[float, float]:
+            return fit.inverse((sx, sy))
+    else:
+        obs_site = provider(observer_id)
+        if obs_site is None:
+            return []
+        site_map_id, osx, osy, osyaw = obs_site
+        dyaw = observer_pose[2] - osyaw
+        c, s = math.cos(dyaw), math.sin(dyaw)
+
+        def site_to_robot(sx: float, sy: float) -> tuple[float, float]:
+            return (
+                observer_pose[0] + c * (sx - osx) - s * (sy - osy),
+                observer_pose[1] + s * (sx - osx) + c * (sy - osy),
+            )
+    out: list[tuple[float, float]] = []
+    for other_id in svc._clients():
+        if other_id == observer_id or other_id in exclude_ids:
+            continue
+        other_site = provider(other_id)
+        if other_site is None or other_site[0] != site_map_id:
+            continue
+        rx, ry = site_to_robot(other_site[1], other_site[2])
+        out.append((rx, ry))
+    return out
+
+
 def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mapping[str, cues.Pose],
                               anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
     """D-395 rev. 4 §5 follow-up (S1 R1): a LOCALIZED anchor's status carries what its lidar sees."""
@@ -146,8 +184,11 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
         if now - seen[1] > service_logic.REPORT_FRESH_S:
             continue
         targets = {o: p for o, p in localized.items() if o != rid and map_frame(states[o]) == frame}
+        if not targets:
+            continue
+        known = known_obstacle_points(svc, rid, pose, states.get(rid), set(targets))
         for target, observed in service_logic.peer_observations(
-                status.unmapped_objects, pose, targets).items():
+                status.unmapped_objects, pose, targets, known_points=known).items():
             observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 
 import cv2
@@ -191,6 +192,55 @@ class LineObserverHelpersMixin:
         self._camera_controls_stable = summary.startswith(
             'exposure='
         ) or summary.startswith('v4l2 exposure=')
+
+    def _idle_keep_ttl(self) -> float:
+        if bool(self.get_parameter('learned_paint_motion_compensation').value):
+            return min(0.75, float(self.get_parameter('learned_paint_max_age_s').value) * 0.8)
+        return min(0.45, float(self.get_parameter('learned_paint_stale_s').value) * 0.75)
+
+    def _idle_keep_still(self, image_stamp: float, cmd) -> bool:
+        odom_fresh = self._odom_stamp is not None and 0.0 <= image_stamp - self._odom_stamp <= 0.5
+        return bool(
+            odom_fresh
+            and self._odom_twist is not None
+            and abs(self._odom_twist[0]) < 0.005
+            and abs(self._odom_twist[1]) < 0.01
+            and (cmd is None or (abs(cmd[0]) < 1e-3 and abs(cmd[1]) < 1e-3))
+        )
+
+    def _idle_keep_key(self, frame, image_stamp: float, route_context_seq):
+        lg = self._lane_guide
+        guide = lg.for_frame(image_stamp) if hasattr(lg, 'for_frame') else None
+        return (frame.shape, route_context_seq, self._wall_ahead, lg.generation,
+                getattr(lg, '_epoch', None), getattr(lg, '_seq', None),
+                guide is not None, self._drivable_steer, self._ground_label())
+
+    def _try_reuse_idle_keep(self, msg, frame, image_stamp: float, route_context_seq, cmd) -> bool:
+        cache = self._idle_keep_cache
+        if cache is None or not self._idle_keep_still(image_stamp, cmd):
+            return False
+        key = self._idle_keep_key(frame, image_stamp, route_context_seq)
+        c_stamp, c_key, c_thumb, c_obs, c_qual, c_cont, c_bundle = cache
+        if (c_key != key or not 0.0 <= image_stamp - c_stamp < self._idle_keep_ttl()
+                or float(np.abs(frame[::8, ::8].astype(np.int16) - c_thumb).mean()) >= 2.5):
+            return False
+        self._keep_last_stamp = image_stamp
+        self._idle_keep_skipped = True
+        self._keep_debug_pub.publish(String(data=json.dumps({**c_bundle, 'stamp': image_stamp}, default=float)))
+        self._publish('CAMERA_LINE', c_obs, stamp=image_stamp, quality=c_qual,
+                      containment=(None if c_cont is None else {**c_cont, 'stamp': image_stamp}),
+                      route_context_seq=route_context_seq)
+        self._publish_debug(msg, frame, c_obs)
+        return True
+
+    def _save_idle_keep(self, frame, image_stamp: float, route_context_seq, cmd,
+                        obs, quality, containment, bundle) -> None:
+        if not self._idle_keep_still(image_stamp, cmd):
+            self._idle_keep_cache = None
+            return
+        self._idle_keep_cache = (
+            image_stamp, self._idle_keep_key(frame, image_stamp, route_context_seq),
+            frame[::8, ::8].copy(), obs, quality, containment, bundle)
 
 
 __all__ = [

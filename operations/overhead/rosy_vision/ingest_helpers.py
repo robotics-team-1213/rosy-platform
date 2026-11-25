@@ -203,8 +203,10 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     if "rectification" in lease:
         try:
             settings = PreviewRectification.from_mapping(lease["rectification"])
-            if settings.mode == "map":
-                return await self._map_plane_response(source, frame, age, lease)
+            if settings.mode in ("map", "map_overlay"):
+                return await self._map_plane_response(
+                    source, frame, age, lease, annotated=(settings.mode == "map_overlay"),
+                )
             if settings.mode == "auto":
                 # D-484: swap the lease's corners for the calibration's accepted quad.
                 field = self._field_corners(source)
@@ -246,10 +248,10 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     })
 
 
-async def _map_plane_response(self, source, frame, age, lease=None):
+async def _map_plane_response(self, source, frame, age, lease=None, *, annotated: bool = False):
     return await map_plane_response(self, source, frame, age, lease,
                                     unavailable=_plane_unavailable, response=_http_response,
-                                    lens_header=_lens_header)
+                                    lens_header=_lens_header, annotated=annotated)
 
 
 def _rate_limited(self, key: tuple[str, ...], interval_s: float, *, burst: float = 1.0) -> Response | None:

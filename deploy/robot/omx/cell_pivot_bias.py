@@ -166,6 +166,10 @@ def validate_bias(region: dict, params=None) -> None:
         raise ValueError(f"bias refused: unknown kind {region.get('kind')!r}")
     if region.get("kind") == "visit" and ("radius_mm" in region or "phase_deg" in region):
         raise ValueError("bias refused: visit region must not carry pivot radius_mm or phase_deg")
+    if region.get("droop_z_mm") is not None:
+        dz = region["droop_z_mm"]
+        if type(dz) not in (int, float) or not math.isfinite(dz) or abs(dz) > 15.0:
+            raise ValueError("bias refused: droop_z_mm must be finite and within +-15.0 mm")
 
 
 def load_bias(path, params=None) -> dict:
@@ -202,7 +206,11 @@ def save_bias(path, bias: dict, params=None, *, fuse_local: bool = True) -> None
             w1, w2 = 1.0 / (s1 * s1), 1.0 / (s2 * s2)
             fused_b = [round((w1 * float(prev["bias_mm"][0]) + w2 * float(bias["bias_mm"][0])) / (w1 + w2), 2),
                        round((w1 * float(prev["bias_mm"][1]) + w2 * float(bias["bias_mm"][1])) / (w1 + w2), 2)]
+            d1, d2 = prev.get("droop_z_mm"), bias.get("droop_z_mm")
+            fused_dz = (round((w1 * float(d1) + w2 * float(d2)) / (w1 + w2), 2)
+                        if (d1 is not None and d2 is not None) else (d2 if d2 is not None else d1))
             bias = {**bias, "bias_mm": fused_b, "centre_sigma_mm": round(max(1.5, (w1 + w2) ** -0.5), 2),
+                    **({"droop_z_mm": fused_dz} if fused_dz is not None else {}),
                     "n": min(10, int(prev.get("n") or 1) + 1)}
             validate_bias(bias, params)
     data["regions"] = [
@@ -240,7 +248,9 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
     if not raw:
         return None
     piv0 = min((r for r in raw if is_pivot_region(r)), key=lambda r: math.dist(r["point_m"], point_m), default=None)
-    target_sha = map_sha or (piv0 and piv0.get("map_sha"))
+    latest_sha = next((r.get("map_sha") for r in sorted(reversed(raw), key=lambda r: str(r.get("measured") or ""), reverse=True)
+                       if r.get("map_sha")), None)
+    target_sha = map_sha or (piv0 and piv0.get("map_sha")) or latest_sha
     seen_keys: set = set()
     near = []
     for r in raw:
@@ -256,7 +266,7 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
     anchor = min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1))
     if len(near) == 1:
         return {**anchor, "blended_n": 1}
-    wx = wy = wsum = 0.0
+    wx = wy = wsum = wdz = wdz_sum = 0.0
     for r in near:
         d_mm = 1000.0 * math.dist(r["point_m"], point_m)
         sig = max(1.5, float(r.get("centre_sigma_mm") or r.get("bias_sigma_mm") or r.get("rms_mm") or 3.0))
@@ -264,9 +274,13 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
         wx += w * float(r["bias_mm"][0])
         wy += w * float(r["bias_mm"][1])
         wsum += w
+        if r.get("droop_z_mm") is not None:
+            wdz += w * float(r["droop_z_mm"])
+            wdz_sum += w
     piv = min((r for r in near if is_pivot_region(r)), key=lambda r: math.dist(r["point_m"], point_m), default=None)
     base = {**anchor, **({"radius_mm": piv["radius_mm"], "phase_deg": piv.get("phase_deg", 0.0)} if piv and "radius_mm" in piv else {})}
-    return {**base, "bias_mm": [round(wx / wsum, 2), round(wy / wsum, 2)], "blended_n": len(near)}
+    return {**base, "bias_mm": [round(wx / wsum, 2), round(wy / wsum, 2)],
+            **({"droop_z_mm": round(wdz / wdz_sum, 2)} if wdz_sum > 0 else {}), "blended_n": len(near)}
 
 
 def decompose_rigid_drift(points_m, residuals_mm, *, min_points: int = 4, rot_tol_deg: float = 0.8,

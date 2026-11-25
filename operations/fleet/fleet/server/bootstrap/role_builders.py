@@ -29,7 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
-from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
+from fleet.server.offline_pin import OfflinePinStore, mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -150,11 +150,14 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
     map_pose_config = map_pose_config or MapPoseConfig()
     if sightings is not None and map_pose_config.sighting_lease_s > sightings.lease_s:
         raise ValueError("fleet.map_pose.sighting_lease_s must not exceed the sighting ingest lease")
+    offline_pins = OfflinePinStore(db=getattr(site_maps, "_db", None), lock=getattr(site_maps, "_lock", None))
     map_pose = MapPoseService(
         lambda: console.robot_ids, config=map_pose_config,
         map_id=lambda: (active := site_maps.active()) and active[1].map_id,
         source_map_ids=[source.map_id for source in (sightings.sources if sightings is not None else ())],
-        gather=_gather_state, gather_rest=_rest_state, client_identity=console._client)
+        gather=_gather_state, gather_rest=_rest_state, client_identity=console._client,
+        offline_pins=offline_pins,
+        site_bays=lambda: ([p for p in active[1].places if p.kind == "charge"] if (active := site_maps.active()) is not None else ()))
     map_pose.active_map_id()
     execution_pose = map_pose_port if simulation_pose else map_pose
     if simulation_pose:
@@ -173,6 +176,10 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)
         if callable(getattr(localization_service, "set_active_map_id", None)):
             localization_service.set_active_map_id(map_pose.active_map_id)
+        if site_maps is not None and callable(getattr(localization_service, "set_site_maps", None)):
+            localization_service.set_site_maps(site_maps)
+        if callable(getattr(localization_service, "set_site_obstacle_pose", None)):
+            localization_service.set_site_obstacle_pose(partial(obstacle_site_pose, map_pose))
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:
@@ -218,7 +225,7 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator, read_guard=read_guard,
                                 operator_guard=operator_guard, require_named_operator=require_named_operator,
                                 map_revision=partial(active_map_revision, site_maps), map_pose=map_pose,
-                                console=console)
+                                console=console, site_maps=site_maps)
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources, calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer, require_operator=require_operator,

@@ -32,6 +32,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _roi,
     _safe_path,
     _surface_amr_bed_sites,
+    _targets,
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
@@ -64,7 +65,7 @@ JOBS = {
     },
     "calibrate_check": {
         "script": "cell_calibrate.py", "camera": True,
-        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)},
+        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)}, "optional": {"targets": _targets},
     },
     "auto_pick_dry_run": {
         "script": "cell_auto_pick.py",
@@ -351,7 +352,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
@@ -360,13 +361,15 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
+    if "targets" in opt_checked:
+        args += ["--targets", *opt_checked["targets"]]
     for option in (
         "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
         "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
-        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts", "min_score",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]

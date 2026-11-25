@@ -226,15 +226,15 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
         row = {"point": [x, y], "mark": mark, "near": near}
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
-        if mark and tcp_marks:
-            fk_yaw = rp.planned_yaw(lib, config)
-            if fk_yaw is None:
+        if mark:
+            fk_x, fk_y, _, fk_yaw = rp.measured_tcp_yaw(cell, config, lib, (x, y))
+            if tcp_marks and fk_yaw is None:
                 row["why"], mark = "no planned FK yaw for the jaw labelling", None
-            else:
-                seen_jaws.append({"tcp": (x, y), "yaw": fk_yaw, "pixel": tuple(mark), "blobs": report.get("blobs") or []})
+            elif tcp_marks:
+                seen_jaws.append({"tcp": (fk_x, fk_y), "yaw": fk_yaw, "pixel": tuple(mark), "blobs": report.get("blobs") or []})
         log(row)
         if mark:
-            marks.append((mark, (x, y)))
+            marks.append((mark, (fk_x, fk_y)))
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)

@@ -143,13 +143,15 @@ def mirror(pose: cues.Pose) -> cues.Pose:
 
 
 def peer_observations(objects: Sequence, observer: cues.Pose,
-                      peers: Mapping[str, cues.Pose]) -> dict[str, Observation]:
+                      peers: Mapping[str, cues.Pose], *,
+                      known_points: Sequence[tuple[float, float]] = ()) -> dict[str, Observation]:
     """Unambiguous evidence `objects` (base_link points with .x/.y: a candidate report's, or a
     LOCALIZED status's) give about each LOCALIZED peer, placed from `observer`'s map pose.
 
     Seen: an object within `PEER_EVIDENCE_M` of the peer's reported pose (observed there).
     Seen elsewhere (the mirror-lock signature): no object near the reported pose and exactly
-    one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object). Anything
+    one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object), excluding
+    points already explained by the observer, another peer, or `known_points`. Anything
     else (no objects, objects elsewhere, a hidden peer) is no evidence (review of lane C)."""
     placed = [cues.to_map(observer, (o.x, o.y)) for o in objects]
     out = {}
@@ -160,7 +162,16 @@ def peer_observations(objects: Sequence, observer: cues.Pose,
             out[robot_id] = (nearest[0], nearest[1], None)
             continue
         twin = mirror(pose)
-        at_mirror = [p for p in placed if math.dist(p, twin[:2]) <= PEER_EVIDENCE_M]
+        explained = [
+            observer[:2],
+            *(q[:2] for other_id, q in peers.items() if other_id != robot_id),
+            *known_points,
+        ]
+        at_mirror = [
+            p for p in placed
+            if math.dist(p, twin[:2]) <= PEER_EVIDENCE_M
+            and not any(math.dist(p, k) <= PEER_EVIDENCE_M for k in explained)
+        ]
         if len(at_mirror) == 1:
             out[robot_id] = (at_mirror[0][0], at_mirror[0][1], None)
     return out

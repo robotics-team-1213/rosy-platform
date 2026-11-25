@@ -137,10 +137,12 @@ def test_pivot_jaws_keeps_the_depth_frame_and_bands_only_when_the_band_is_on(tmp
     assert js.path_check([{"path": "band"}, {"path": "discs"}]).startswith("jaw paths mixed")
 
 
-def test_where_the_discs_meet_the_reference_jaw_wins():
+def test_where_the_discs_meet_the_nearest_disc_wins():
     near = {"places": [REF, (REF[0] + 30, REF[1])], "radius_px": 45.0, "band": None, "to": "reference"}
-    (x, y, _, side), = js.marks(*frames((REF[0] + 20, REF[1])), None, False, near)  # inside both discs
-    assert side == "ref" and (x, y) == pytest.approx((REF[0] + 20, REF[1]), abs=1)
+    (x, y, _, side), = js.marks(*frames((REF[0] + 10, REF[1])), None, False, near)  # 10 px from ref, 20 px from other
+    assert side == "ref" and (x, y) == pytest.approx((REF[0] + 10, REF[1]), abs=1)
+    (x, y, _, side), = js.marks(*frames((REF[0] + 20, REF[1])), None, False, near)  # 20 px from ref, 10 px from other
+    assert side == "other" and (x, y) == pytest.approx((REF[0] - 10, REF[1]), abs=1)
     (x, y, _, side), = js.marks(*frames((REF[0] + 60, REF[1])), None, False, near)  # only in the other's disc
     assert side == "other" and (x, y) == pytest.approx((REF[0] + 30, REF[1]), abs=1)
 
@@ -355,3 +357,35 @@ def test_remap_labelling_scales_past_the_brute_force_cap():
     assert why is None and rec["path"] == "anchored" and rec["sides"] == shows and rec["pairs"] == [3, 7, 11]
     why, _, rec = js.remap_marks(_remap_points(["ref"] * 14, set()), None)  # one jaw, no pair: either jaw fits
     assert why.startswith("jaw sides ambiguous") and rec["path"] == "anchored"
+
+
+def test_remap_jaws_filters_pair_gap_window_tightens_partners_and_computes_rms_on_marks():
+    import cell_remap_jaws as rj
+
+    # 1. _pair_map rejects 2-blob tries whose pixel gap exceeds jaw_centre.gap_hi_px (e.g. 180 px background blob)
+    pts = _remap_points(["ref", "other", "ref", "other", "ref", "other", "ref", "other"], set(), grid=GRID14[:8])
+    for i in (0, 2, 4):
+        pts[i]["blobs"].append([pts[i]["pixel"][0] + 180.0, pts[i]["pixel"][1], 400.0])
+    assert rj._pair_map(pts, None) is None
+
+    # 2. _partners rejects a second blob 18 mm from the opposite jaw (> min(54/4, 12)=12 mm) and accepts 5 mm
+    o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
+    px = lambda q: (400 - 1400 * q[0], 200 + 1400 * q[1])  # noqa: E731
+    pts2 = _remap_points(["ref", "other", "ref", "other", "ref", "other", "ref", "other"], {0, 2, 4}, grid=GRID14[:8])
+    # Add an ambiguous 2-blob point whose second blob is 18 mm from the opposite jaw
+    t3 = GRID14[3]
+    opp3 = (t3[0] - 0.5 * o[0], t3[1] - 0.5 * o[1])
+    pts2[3]["blobs"].append([*px((opp3[0] + 0.018, opp3[1])), 400.0])
+    # And one point whose second blob is 5 mm from the opposite jaw
+    t5 = GRID14[5]
+    opp5 = (t5[0] - 0.5 * o[0], t5[1] - 0.5 * o[1])
+    pts2[5]["blobs"].append([*px((opp5[0] + 0.005, opp5[1])), 400.0])
+    why, marks, rec = js.remap_marks(pts2, None)
+    assert why is None
+    assert 3 not in rec["pairs"] and 5 in rec["pairs"]
+    # 3. rms_mm matches least-squares fit residual of the actual returned `marks`
+    m_px = np.array([[p[0], p[1], 1.0] for p, _ in marks], float)
+    m_arm = np.array([a for _, a in marks], float)
+    m_coef = np.linalg.lstsq(m_px, m_arm, rcond=None)[0]
+    expected_rms = round(1000.0 * math.sqrt(float(np.mean(np.sum((m_px @ m_coef - m_arm) ** 2, axis=1)))), 2)
+    assert rec["rms_mm"] == pytest.approx(expected_rms, abs=0.01)

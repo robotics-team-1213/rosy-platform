@@ -140,3 +140,16 @@ def test_restore_caps_retries_transient_bus_timeout():
 
     s = rs.Session(open_bus=lambda _: FlakyBus(), systemctl=lambda *_: "", run=lambda *_: 0, log=lambda **_: None)
     assert s.restore_caps() == []
+
+
+def test_with_tier_biases_preserves_distinct_kinds_at_same_point():
+    cfg = {"sites": {"pallet": {"surface_z": -0.01}, "pallet-l0": {"tier_of": "pallet"}}}
+    bias = {
+        "regions": [
+            {"site": "pallet", "kind": "pivot", "point_m": [0.10, 0.20], "bias_mm": [2.0, -1.0]},
+            {"site": "pallet", "kind": "place_look", "point_m": [0.10, 0.20], "bias_mm": [3.0, -2.0]},
+        ]
+    }
+    out = pf.with_tier_biases(cfg, bias)
+    l0_kinds = sorted(r["kind"] for r in out["regions"] if r["site"] == "pallet-l0")
+    assert l0_kinds == ["pivot", "place_look"]

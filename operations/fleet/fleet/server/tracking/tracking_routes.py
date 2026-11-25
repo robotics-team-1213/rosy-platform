@@ -9,6 +9,7 @@ contains "vision" (test_app_roles): Fleet never relays frames (D-318).
 from __future__ import annotations
 
 import logging
+import math
 from typing import Literal, Optional
 
 from fastapi import Depends, Header, HTTPException
@@ -95,7 +96,7 @@ def _http(exc: TrackingError | IdentityError) -> HTTPException:
 
 def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard,
                             require_named_operator=None, map_revision=None, map_pose=None,
-                            console=None) -> None:
+                            console=None, site_maps=None) -> None:
     measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
     from fleet.server.auto_locate_service import AutoLocateService
     tracking.auto_locate = app.state.auto_locate = AutoLocateService(tracking, map_pose=map_pose, console=console)
@@ -128,6 +129,26 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
             result = tracking.config_for(authorization)
             if include_preview:
                 result['measured_preview'] = measured.config(tracking.authenticate(authorization))
+                if site_maps is not None:
+                    try:
+                        active = site_maps.active()
+                        site = active[1] if isinstance(active, tuple) and len(active) > 1 else None
+                        places = []
+                        for p in (getattr(site, "places", None) or ())[:64]:
+                            px, py = getattr(p, "x", None), getattr(p, "y", None)
+                            if (isinstance(px, (int, float)) and isinstance(py, (int, float))
+                                    and not isinstance(px, bool) and not isinstance(py, bool)
+                                    and math.isfinite(px) and math.isfinite(py)):
+                                pid = str(getattr(p, "place_id", None) or getattr(p, "id", None) or "")
+                                places.append({
+                                    "id": pid,
+                                    "name": str(getattr(p, "name", None) or pid),
+                                    "x": float(px),
+                                    "y": float(py),
+                                })
+                        result["places"] = places
+                    except Exception:
+                        pass
             return result
         except TrackingError as exc:
             raise _http(exc) from exc

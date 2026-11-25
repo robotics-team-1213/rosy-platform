@@ -76,8 +76,15 @@ function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height,
   ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();
 }
+let lastWarp = null;
 function warpOnto(ctx, image, mapToImage, bounds, toPx) {
-  for (const tri of warpMesh(mapToImage, bounds)) {
+  const key = Array.isArray(mapToImage) && mapToImage.length === 9 && bounds
+    ? [...mapToImage, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y] : null;
+  if (!key || !lastWarp || !lastWarp.key.every((v, i) => v === key[i])) {
+    lastWarp = key ? { key, mesh: warpMesh(mapToImage, bounds) } : null;
+  }
+  const mesh = lastWarp ? lastWarp.mesh : warpMesh(mapToImage, bounds);
+  for (const tri of mesh) {
     const dst = tri.map.map(([x, y]) => { const p = toPx(x, y); return [p.x, p.y]; });
     const affine = affineFromTriangles(tri.image, dst);
     if (!affine) continue;
@@ -168,7 +175,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     }
     if (pic.kind !== "plane") return;
     const { image, plane } = pic.frame;
-    const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
+    const affine = planeAffine(plane, image.naturalWidth ?? image.width, image.naturalHeight ?? image.height, toPx);
     if (!affine) return;
     ctx.save();
     ctx.globalAlpha = alpha;

@@ -282,13 +282,56 @@ def test_manual_and_auto_are_unchanged_by_a_reported_record():
 
 def test_lease_schema_accepts_map_mode_and_rejects_extra_fields():
     signer = VisionLeaseSigner("x" * 32)
-    token = signer.issue(principal_id="viewer", source_id=SOURCE, rectification={"mode": "map"}, now=100)
-    assert signer.verify(token, source_id=SOURCE, now=101)["rectification"] == {"mode": "map"}
-    assert PreviewRectification.from_mapping({"mode": "map"}).is_identity is False
-    for extra in ({"mode": "map", "fx": 1.0}, {"mode": "map", "output_aspect": 0.0},
-                  {"mode": "map", "corners": [[0, 0], [1, 0], [1, 1], [0, 1]]},
-                  {"mode": "map", "plane": 1}):
-        with pytest.raises(ValueError):
-            PreviewRectification.from_mapping(extra)
+    for mode in ("map", "map_overlay"):
+        token = signer.issue(principal_id="viewer", source_id=SOURCE, rectification={"mode": mode}, now=100)
+        assert signer.verify(token, source_id=SOURCE, now=101)["rectification"] == {"mode": mode}
+        assert PreviewRectification.from_mapping({"mode": mode}).is_identity is False
+        for extra in ({"mode": mode, "fx": 1.0}, {"mode": mode, "output_aspect": 0.0},
+                      {"mode": mode, "corners": [[0, 0], [1, 0], [1, 1], [0, 1]]},
+                      {"mode": mode, "plane": 1}):
+            with pytest.raises(ValueError):
+                PreviewRectification.from_mapping(extra)
     with pytest.raises(ValueError):
         PreviewRectification.from_mapping({"mode": "plane"})
+
+
+def test_map_overlay_mode_annotates_plane_and_leaves_plain_map_untouched():
+    server = _server()
+    assert _get(server, {"mode": "map_overlay"}).status_code == 409
+
+    server.report_calibration(SOURCE, RECORD, MAP)
+    server.report_overlay_context(
+        SOURCE,
+        places=[{"id": "S1", "name": "S1", "x": 0.4, "y": 0.2}],
+        robots=[{"robot_id": "rosy_46", "x": -0.3, "y": -0.1, "yaw": 0.0}],
+    )
+    plain = _get(server, {"mode": "map"})
+    assert plain.status_code == 200
+    assert plain.headers["X-Frame-Rectified"] == "map"
+
+    server._preview_last_sent.clear()
+    overlay = _get(server, {"mode": "map_overlay"})
+    assert overlay.status_code == 200
+    assert overlay.headers["X-Frame-Rectified"] == "map-overlay"
+    assert overlay.headers["X-Frame-Plane"] == plain.headers["X-Frame-Plane"]
+    assert overlay.headers["X-Frame-Calibration"] == plain.headers["X-Frame-Calibration"]
+    assert overlay.body != plain.body
+
+    server._preview_last_sent.clear()
+    plain_again = _get(server, {"mode": "map"})
+    assert plain_again.body == plain.body
+
+
+def test_render_map_overlay_jpeg_draws_grid_places_arms_and_robots():
+    from rosy_vision.birdview_overlay import render_map_overlay_jpeg
+    plane = map_plane_jpeg(_frame_jpeg(), RECORD, source_id=SOURCE, map_id=MAP, lens=LENS)
+    annotated = render_map_overlay_jpeg(
+        plane,
+        places=[{"id": "S2", "name": "S2", "x": 0.5, "y": 0.25}],
+        robots=[{"robot_id": "rosy_45", "x": -0.2, "y": 0.1, "yaw": 1.57}],
+        arms=[{"target_id": "arm_a", "base_x": 0.1, "base_y": -0.2, "head_x": 0.2, "head_y": -0.1}],
+        observed_fraction=0.88,
+    )
+    assert annotated != plane.jpeg
+    decoded = cv2.imdecode(np.frombuffer(annotated, np.uint8), cv2.IMREAD_COLOR)
+    assert decoded is not None and (decoded.shape[1], decoded.shape[0]) == plane.size
