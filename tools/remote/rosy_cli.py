@@ -65,7 +65,8 @@ def _summarize_cell_readiness(res: dict[str, Any]) -> dict[str, Any]:
         return _err_summary(res)
     d = res.get("data") or {}
     arms = {
-        arm: {k: info.get(k) for k in ("folded", "incident_held", "human_hold_latched", "fault", "dirty", "active_job_id")}
+        arm: {k: info.get(k) for k in ("folded", "incident_held", "incident_reason", "human_hold_latched",
+                                       "fault", "live_state_age_s", "dirty", "active_job_id")}
         for arm, info in (d.get("arms") or {}).items() if isinstance(info, dict)
     }
     return {

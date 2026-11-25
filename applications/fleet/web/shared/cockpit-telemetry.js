@@ -90,13 +90,13 @@ export function createCockpitHud({ el }) {
 
     if (!owns("drive") && owns("arms")) {
       const unitId = view.controlUnit?.unit_id || "ARM-CELL";
-      const critTotal = critCount + (sum?.heldCount || 0) + (sum?.faultArmCount || 0);
+      const critTotal = critCount + (sum?.incidentHeldCount || 0) + (sum?.faultArmCount || 0);
       const warnTotal = warnCount + (sum?.warnArmCount || 0);
       renderItems([
         { key: "online", label: "관제 단위", text: view.stateUnavailable ? "연결 끊김" : unitId, tone: view.stateUnavailable ? "crit" : "neutral" },
         { key: "mission", label: "팔 피드백", text: !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, tone: !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn" },
         { key: "battery", label: "셀 카메라", text: !sum ? "—" : view.cellCamChecked ? `${view.cellLiveCamCount ?? 0}/${sum.camsTotal} 실시간` : `${sum.camsTotal}대`, tone: view.cellCamChecked ? ((view.cellLiveCamCount ?? 0) > 0 ? "active" : "warn") : (sum?.camsTotal ? "neutral" : "warn") },
-        { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", tone: sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral" },
+        { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.incidentHeldCount > 0 ? `보류 ${sum.incidentHeldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : sum.homeRecoveryCount ? "홈 복구 대기" : "이상 없음", tone: sum?.incidentHeldCount > 0 ? "crit" : sum?.openIncidentCount || sum?.homeRecoveryCount ? "warn" : "neutral" },
         { key: "alerts", label: "경보", text: critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", tone: critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral" },
       ]);
       return;
@@ -131,7 +131,7 @@ export function createCockpitHud({ el }) {
       { key: "online", icon: "robot", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
       { key: "mission", icon: "next", label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
       { key: "battery", icon: null, label: "최저 배터리", text: battText, tone: battTone, title: battTitle, battery: { percent: minBatt, online: online > 0 && !view.stateUnavailable, charging: false } },
-      { key: "arms", icon: "arm", label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
+      { key: "arms", icon: "arm", label: "셀 팔", text: armsText, tone: armHeld > 0 ? (sum?.armsTotal && !sum.incidentHeldCount ? "warn" : "crit") : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
       { key: "alerts", icon: "notification", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
     ]);
   }

@@ -244,8 +244,10 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         servo: { currentMa: currentMa ?? undefined, temperatureC: tempC ?? undefined },
         place: armPositionLine(def, anc, cellId),
         task: anc.cell_status || (obsArm?.fresh ? "실시간 관측" : obsArm ? "대기" : undefined),
-        alarm: hold ? { level: "caution", text: obsArm?.heldIncidents?.length ? `보류 ${obsArm.heldIncidents.length}건` : "홀드 중" }
+        alarm: hold && obsArm?.heldIncidents?.length ? { level: "caution", text: `보류 ${obsArm.heldIncidents.length}건` }
           : hwFault ? { level: "danger", text: "모터 고장" }
+          : obsArm?.homeRecoveries?.length ? { level: "caution", text: "홈 복구 대기" }
+          : hold ? { level: "caution", text: "홀드 중" }
           : obsArm?.openIncidents?.length ? { level: "caution", text: `사건 ${obsArm.openIncidents.length}건` }
           : undefined,
       });
@@ -317,7 +319,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         syncTwin(profile, detail);
         if (profile.kind === "arm") {
           const { def, anc, obsArm, cellId, effectivePose } = detail || {};
-          const obsStatus = obsArm?.held ? `보류 ${obsArm.heldIncidents.length}건`
+          const obsStatus = obsArm?.heldIncidents?.length ? `보류 ${obsArm.heldIncidents.length}건`
+            : obsArm?.homeRecoveries?.length ? "홈 복구 대기"
             : obsArm?.fresh ? "실시간 관측" : obsArm ? "대기 · 엔코더 만료" : null;
           const motorTxt = obsArm?.motorHealth
             ? `${obsArm.maxTempC ?? "—"} °C · PWM ${obsArm.maxPwmPct ?? "—"}%`

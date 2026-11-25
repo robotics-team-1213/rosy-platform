@@ -45,6 +45,7 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
             {
               arm_id: "arm_s",
               label: "Arm S",
+              incidents: [{ state: "open", event_kind: "home_recovery", decision: { hold: true } }],
               fresh: false,
               positions: { joint1: 0, joint2: 0 },
               motor_health: {
@@ -87,6 +88,10 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
   assert.equal(armS.jointsText, null);
   assert.equal(armS.maxPwmPct, 80);
   assert.equal(armS.hwFaultMotors, 1);
+  assert.equal(armS.held, true);
+  assert.equal(armS.homeRecoveries.length, 1);
+  assert.deepEqual(armS.openIncidents, []);
+  assert.deepEqual(armS.heldIncidents, []);
 
   assert.deepEqual(
     obs.cameras.map((c) => c.source_id),
@@ -99,7 +104,9 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
     armsFresh: 1,
     camsTotal: 4,
     camsLive: 3,
-    heldCount: 1,
+    heldCount: 2,
+    incidentHeldCount: 1,
+    homeRecoveryCount: 1,
     openIncidentCount: 1,
     faultArmCount: 1,
     warnArmCount: 1,

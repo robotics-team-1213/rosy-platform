@@ -6,9 +6,9 @@ import {confirmIrreversible} from '/common/ui.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {INCIDENT_BASES, INCIDENT_CAUSES, bindFocusZoom, issueVisionLease} from '/console/assets/cell-frames.js';
-import {OBS_BASE, compareCameras, formatIncidentCountSummary, incidentLines, partitionIncidents} from '/console/assets/cell-obs-model.js';
+import {OBS_BASE, compareCameras, formatIncidentCountSummary, isHomeRecovery, partitionIncidents} from '/console/assets/cell-obs-model.js';
 import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
-import {faultLine} from './cell-observation-text.js';
+import {faultLine, incidentHeading, incidentLines, when} from './cell-observation-text.js';
 
 const staleArm = entry => {
   entry.fresh = false;
@@ -29,9 +29,6 @@ const staleCamera = (entry, detail = '', {dropFrame = false} = {}) => {
   patchAttr(entry.status, 'state', 'unavailable');
   entry.updateVisibility?.();
 };
-
-const STATE_LABEL = {open: '열림 · 사람 확인 필요', explained: '열림 · AI 설명 있음', cleared: '해제됨'};
-const when = seconds => new Date(seconds * 1000).toLocaleString('ko-KR');
 
 export {incidentLines};
 
@@ -115,11 +112,13 @@ export function createCellObservation({request, root, credential = () => '', onS
     }
     const items = [];
     for (const cell of workcells) for (const arm of cell.arms) {
-      const {open, held, namingCount} = partitionIncidents(arm.incidents);
+      const {held, homeRecoveries, namingCount} = partitionIncidents(arm.incidents);
       if (held.length) items.push({key: `inc:${arm.source_id}`, severity: 'danger', label: arm.label || arm.source_id,
         detail: `보류 사건 ${held.length}건 · 확인 후 해제 필요`, sourceId: arm.source_id});
       if (namingCount > 0) items.push({key: `name:${arm.source_id}`, severity: 'warn', label: arm.label || arm.source_id,
         detail: `원인 기록 대기 ${namingCount}건`, sourceId: arm.source_id});
+      if (homeRecoveries.length) items.push({key: `home:${arm.source_id}`, severity: 'warn', label: arm.label || arm.source_id,
+        detail: '홈 복구 대기', sourceId: arm.source_id});
       const entry = arms.get(arm.source_id);
       if (entry) {
         const health = entry.health.read();
@@ -373,19 +372,22 @@ export function createCellObservation({request, root, credential = () => '', onS
   }
 
   function paintIncidents(source, entry, incidents, scope) {
-    const key = JSON.stringify(incidents.map(i => [i.incident_id, i.state]));
+    const key = JSON.stringify(incidents.map(i => [i.incident_id, i.state, i.event_kind, i.decision?.hold]));
     if (key === entry.incidentKey) return;
     entry.incidentKey = key;
     // a guard stop the recovery handled comes with decision.hold false: it waits for a person's cause, the arm stays free
-    const {open, held, cleared, namingCount} = partitionIncidents(incidents);
-    entry.openIncidents = open.length;
-    entry.card.dataset.armHeld = String(held.length > 0);
-    entry.incidentsSummary.textContent = formatIncidentCountSummary(incidents.length, held.length, namingCount);
-    if (held.length) entry.incidents.open = true;
+    const {open, held, cleared, homeRecoveries, armHeld, namingCount} = partitionIncidents(incidents);
+    entry.openIncidents = open.length + homeRecoveries.length;
+    entry.card.dataset.armHeld = String(armHeld);
+    entry.card.dataset.incidentHeld = String(held.length > 0);
+    const physicalCount = open.length + cleared.filter(i => !isHomeRecovery(i)).length;
+    entry.incidentsSummary.textContent = [formatIncidentCountSummary(physicalCount, held.length, namingCount),
+      homeRecoveries.length ? '홈 복구 대기' : ''].filter(Boolean).join(' · ');
+    if (armHeld) entry.incidents.open = true;
 
     const renderIncidentItem = incident => {
       const item = node('li');
-      item.append(node('strong', `${STATE_LABEL[incident.state] || incident.state} · ${when(incident.reported_at)}`),
+      item.append(node('strong', incidentHeading(incident)),
         ...incidentLines(incident).map(line => node('p', line)));
       if (incident.frames.length) {
         const figure = node('div', '', 'cell-fault-frames');
@@ -464,12 +466,12 @@ export function createCellObservation({request, root, credential = () => '', onS
       return item;
     };
 
-    const visibleCleared = open.length > 0 ? [] : cleared.slice(0, 3);
-    const foldedCleared = open.length > 0 ? cleared : cleared.slice(3);
-    entry.incidentsList.replaceChildren(...[...open, ...visibleCleared].map(renderIncidentItem));
+    const visibleCleared = entry.openIncidents ? [] : cleared.slice(0, 3);
+    const foldedCleared = entry.openIncidents ? cleared : cleared.slice(3);
+    entry.incidentsList.replaceChildren(...[...open, ...homeRecoveries, ...visibleCleared].map(renderIncidentItem));
     if (foldedCleared.length > 0) {
       const fold = node('details', '', 'cell-incident-cleared-fold');
-      const summary = node('summary', `해제된 이전 사건 ${foldedCleared.length}건 보기`);
+      const summary = node('summary', `해제된 이전 ${foldedCleared.some(isHomeRecovery) ? '기록' : '사건'} ${foldedCleared.length}건 보기`);
       const list = node('ol', '', 'cell-incident-history');
       list.replaceChildren(...foldedCleared.map(renderIncidentItem));
       fold.append(summary, list);

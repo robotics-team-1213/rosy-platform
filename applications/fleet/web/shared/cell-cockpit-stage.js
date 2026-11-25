@@ -66,8 +66,9 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
     mhState.accept(arm.motorHealth, { receivedAtMs });
     renderMotorHealthSummary(mhRef.current, mhState.read(Date.now()));
   });
-  const badge = arm.held ? { status: "crit", text: `보류 ${arm.heldIncidents.length}건` }
+  const badge = arm.heldIncidents.length ? { status: "crit", text: `보류 ${arm.heldIncidents.length}건` }
     : arm.openIncidents.length ? { status: "warn", text: `사건 ${arm.openIncidents.length}건` }
+    : arm.homeRecoveries?.length ? { status: "warn", text: "홈 복구 대기" }
     : arm.fresh ? { status: "active", text: "실시간" }
     : { status: "warn", text: "대기 · 만료" };
   return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id}
@@ -241,9 +242,12 @@ export function createCellCockpitStage({
     let liveStatus = "neutral";
     let liveText = "수신 대기";
     if (sum?.armsTotal) {
-      if (sum.heldCount > 0 || sum.faultArmCount > 0) {
+      if (sum.incidentHeldCount > 0 || sum.faultArmCount > 0) {
         liveStatus = "crit";
-        liveText = sum.heldCount ? `보류 ${sum.heldCount}건` : "고장 확인";
+        liveText = sum.incidentHeldCount ? `보류 ${sum.incidentHeldCount}건` : "고장 확인";
+      } else if (sum.homeRecoveryCount > 0) {
+        liveStatus = "warn";
+        liveText = "홈 복구 대기";
       } else if (sum.armsFresh > 0) {
         liveStatus = "active";
         liveText = `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간`;
@@ -258,7 +262,7 @@ export function createCellCockpitStage({
     const camDiag = cams.map((c) => camStates.get(c.source_id)?.label).find(Boolean) || "영상 연결 확인 중";
     const arms = obs?.arms || [];
     const selectedId = selection?.get?.() ?? null;
-    const alertArms = arms.filter((arm) => arm.held || arm.openIncidents.length > 0 || arm.hwFaultMotors > 0 || arm.motorHealth?.status === "fault");
+    const alertArms = arms.filter((arm) => arm.openIncidents.length > 0 || arm.hwFaultMotors > 0 || arm.motorHealth?.status === "fault");
     const activeArms = arms.filter((arm) => isArmAttentionOrLive(arm, selectedId));
     const idleArmCount = arms.length - activeArms.length;
     const visibleArms = showAllArms ? arms : activeArms;
