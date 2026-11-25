@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import ssl
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -33,12 +35,15 @@ class SightingPublisher:
         if not source_token:
             raise ValueError("sighting source token is required")
         self._authorization = f"Bearer {source_token}"
+        # trust_env=False also suppresses HTTPX's SSL_CERT_FILE lookup.
+        ca_file = os.environ.get("SSL_CERT_FILE") if parts.scheme == "https" else None
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=timeout_s,
             transport=transport,
             follow_redirects=False,
             trust_env=False,
+            verify=ssl.create_default_context(cafile=ca_file) if ca_file else True,
             limits=HTTP_LIMITS,
         )
 
