@@ -87,7 +87,7 @@ export function createLocalizationPanel({
         entry.loc = null;
         entry.fetchedAtMs = Date.now();
         if (err?.status === 429 && err.code === "RATE_LIMITED") {
-          const wait = Math.min(60, Math.max(1, Number(err.detail?.retry_after_s) || 1));
+          const wait = Math.min(60, Math.max(1, err.retryAfterS || 1));
           entry.retryAtMs = entry.fetchedAtMs + wait * 1000;
           entry.error = `기체 후보 조회가 제한되었습니다. ${Math.ceil(wait)}초 뒤 다시 확인합니다.`;
         } else {

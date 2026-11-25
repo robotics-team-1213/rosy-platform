@@ -26,6 +26,7 @@ export function createFleetClient(options = {}) {
       error.status = status;
       error.code = detail.code;
       error.detail = detail.detail;
+      if (status === 429 && Number.isFinite(detail.retry_after_s)) error.retryAfterS = detail.retry_after_s;
       throw error;
     }
     return body;
