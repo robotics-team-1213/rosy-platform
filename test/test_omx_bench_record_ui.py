@@ -61,16 +61,36 @@ def test_camera_baseline_and_drift_check(tmp_path, monkeypatch):
 def test_side_reference_is_explicit_and_separate_from_lighting(tmp_path, monkeypatch):
     import hashlib
     import io
+    import threading
+    import urllib.request
     import bench_camera_alignment as alignment
 
     bench, _, _, _ = _setup(tmp_path, monkeypatch)
     jpeg = b'confirmed side frame'
     receipt = {'jpeg_bytes': jpeg, 'jpeg_sha256': hashlib.sha256(jpeg).hexdigest(),
-               'source_seq': 7, 'source_stamp': 123.25, 'camera': 'side'}
-    monkeypatch.setattr(alignment, 'fresh_side', lambda: receipt)
+               'source_seq': 7, 'source_stamp': time.time(), 'camera': 'side'}
+    bench._side_references = [receipt]
     with pytest.raises(ValueError):
-        alignment.save_reference(bench.prep, {})
-    alignment.save_reference(bench.prep, {'confirmed': True})
+        alignment.save_confirmed(bench, {})
+    with pytest.raises(ValueError):
+        alignment.save_confirmed(bench, {'confirmed': True, 'sha256': 'unseen'})
+    server = bench_record.make_server(bench, 0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        base = f'http://127.0.0.1:{server.server_port}'
+        request = urllib.request.Request(base + '/api/camera_alignment',
+                                         json.dumps({'confirmed': True, 'sha256': receipt['jpeg_sha256']}).encode(),
+                                         {'X-Bench': '1', 'Content-Type': 'application/json'})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            assert json.load(response)['source_stamp'] == receipt['source_stamp']
+        with urllib.request.urlopen(base + '/api/camera_alignment/reference.jpg', timeout=5) as response:
+            assert response.headers['Content-Type'] == 'image/jpeg'
+            assert response.read() == jpeg
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
     monkeypatch.setattr('bench_record_ops.urllib.request.urlopen', lambda *_a, **_kw: io.BytesIO(b'{}'))
     bench.save_camera_baseline({'arm': 'arm_a'})
     assert alignment.reference_image(bench.prep) == jpeg

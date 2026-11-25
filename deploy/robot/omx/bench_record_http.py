@@ -121,6 +121,21 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             if path == "/api/camera_check":
                 qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
                 return self.reply(200, bench.check_camera_drift((qs.get("arm") or [""])[0]))
+            if path == "/api/camera_preparation":
+                from bench_camera_alignment import preparation
+
+                qs = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                try:
+                    return self.reply(200, preparation(bench, (qs.get("arm") or [""])[0]))
+                except ValueError as exc:
+                    return self.reply(400, {"error": str(exc)})
+            if path == "/api/camera_alignment/reference.jpg":
+                from bench_camera_alignment import reference_image
+
+                try:
+                    return self.reply(200, reference_image(bench.prep), "image/jpeg")
+                except (OSError, ValueError):
+                    return self.reply(404, {"error": "side reference unavailable"})
             if path == "/api/pipeline/status":
                 return self.reply(200, bench.pipeline_status())
             if path == "/api/hf/status":
@@ -188,6 +203,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_params.js": lambda: ((HERE / "bench_record_params.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_camera_alignment.js": lambda: ((HERE / "bench_camera_alignment.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_overlay.js": lambda: ((HERE / "bench_record_overlay.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -242,6 +258,10 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.restart_cameras(body))
                 if self.path == "/api/camera_baseline":
                     return self.reply(200, bench.save_camera_baseline(body))
+                if self.path == "/api/camera_alignment":
+                    from bench_camera_alignment import save_confirmed
+
+                    return self.reply(200, save_confirmed(bench, body))
                 if self.path == "/api/pipeline/generate_replay":
                     return self.reply(200, bench.pipeline_generate_replay(body))
                 if self.path == "/api/pipeline/run":

@@ -612,8 +612,19 @@
                   </label>
                   <button type="button" id="save-init-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 로봇 팔 자세를 이니셜(홈) 포즈로 저장합니다">팔로워 포즈 저장</button>
                   <button type="button" id="save-leader-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 리더 팔 자세를 리더 홈 포즈로 저장합니다">리더 포즈 저장</button>
-                  <button type="button" id="save-cam-base-btn" class="btn-tool" style="min-height:44px">기준 카메라 저장</button>
+                  <button type="button" id="save-cam-base-btn" class="btn-tool" style="min-height:44px">조명 기준 저장</button>
                 </div>
+                <details id="camera-preparation" style="margin-top:12px">
+                  <summary>카메라 준비 점검 · A·B</summary>
+                  <ul id="camera-preparation-status"></ul>
+                  <p id="camera-alignment-status" role="status"></p>
+                  <div class="side-alignment-views">
+                    <figure><figcaption>저장한 측면 기준</figcaption><div id="side-reference-view"><img id="side-reference" alt="저장한 측면 기준" hidden></div></figure>
+                    <figure><figcaption>현재 측면 영상</figcaption><div id="side-current-view"><img id="side-current" alt="현재 측면 영상" hidden></div></figure>
+                  </div>
+                  <button type="button" id="save-side-reference" class="btn-tool" disabled>확인한 현재 구도를 기준으로 저장</button>
+                  <p id="side-reference-message" role="status"></p>
+                </details>
                 <p id="start-guard-note" class="quiet" style="margin-top:8px;margin-bottom:0"></p>
                 <div id="lock-conflict-box" class="alert warn" style="margin-top:10px" hidden>
                   <div id="lock-conflict-text" style="margin-bottom:8px"></div>
@@ -739,5 +750,6 @@
 <script src="/bench_record_review.js"></script>
 <script src="/bench_record_overlay.js"></script>
 <script src="/bench_record_cam.js"></script>
+<script src="/bench_camera_alignment.js"></script>
 </body>
 </html>

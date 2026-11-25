@@ -262,7 +262,7 @@ class BenchInspectMixin:
             base = {}
         base_cams = base.get("cameras") if isinstance(base.get("cameras"), dict) else {}
         allow = {"arm_a": {"top", "side", "arm_a_wrist"}, "arm_b": {"top", "side", "arm_b_wrist"}, "arm_ab": {"top", "side", "arm_a_wrist", "arm_b_wrist"}, "arm_s": {"arm_s_top", "arm_s_wrist"}}.get(arm_key)
-        out = {}
+        out = dict.fromkeys(allow or (), {"status": "missing"})
         for lbl, info in raw.items():
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", str(lbl)) or (allow and lbl not in allow) or not isinstance(info, dict) or "quality" not in info:
                 continue
@@ -285,7 +285,8 @@ class BenchInspectMixin:
                     out[lbl] = {"status": "lighting_mismatch", "delta_mean": dm, "delta_contrast": dc}
                 else:
                     out[lbl] = {"status": "ok", "delta_mean": dm}
-        return {"ok": True, "arm": arm_key, "cameras": out}
+        topics = {label: raw[label].get("topic") for label in out if isinstance(raw.get(label), dict)}
+        return {"ok": True, "arm": arm_key, "cameras": out, "topics": topics}
 
     def status(self):
         with self.lock:

@@ -405,7 +405,7 @@ async function saveCameraBaselineNow(silent){
       setReqError(err.message);
       if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
     }
-  }finally{if(btn){btn.disabled=false;btn.textContent='기준 카메라 저장';}}
+  }finally{if(btn){btn.disabled=false;btn.textContent='조명 기준 저장';}}
 }
 async function checkCameraDrift(skipAuto){
   if(typeof benchSessionActive==='function'&&benchSessionActive())return;
@@ -415,7 +415,7 @@ async function checkCameraDrift(skipAuto){
     if(!d||!d.cameras){clearNotice('cam-drift');return;}
     const allow=(typeof ARM_PREVIEW_CAMS!=='undefined'&&ARM_PREVIEW_CAMS[arm])?ARM_PREVIEW_CAMS[arm]:null;
     const ents=Object.entries(d.cameras).filter(([k])=>!allow||allow.has(k));
-    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='unusable_lighting');
+    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='missing'||v.status==='unusable_lighting');
     const soft=ents.filter(([,v])=>v.status==='lighting_mismatch'||v.status==='no_baseline');
     if(!hard.length&&soft.length){
       const now=Date.now();
@@ -424,7 +424,7 @@ async function checkCameraDrift(skipAuto){
         try{
           await api('/api/camera_baseline',{arm});
           clearNotice('cam-drift');
-          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명·구도 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
+          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
           return;
         }catch(_){}
         finally{camAutoHealInFlight=false;}
