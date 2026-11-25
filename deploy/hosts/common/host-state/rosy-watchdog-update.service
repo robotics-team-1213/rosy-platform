@@ -1,0 +1,17 @@
+[Unit]
+Description=Install the signed ROSY PC watchdog update
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/rosy/watchdog-update.pub.pem
+ConditionFileIsExecutable=/usr/local/sbin/rosy-ssh-watchdog
+
+[Service]
+Type=oneshot
+ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
+ExecStart=/usr/bin/python3 -I /usr/local/lib/rosy-watchdog-update/watchdog_update.py apply
+StateDirectory=rosy-watchdog-update
+StateDirectoryMode=0700
+TimeoutStartSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict

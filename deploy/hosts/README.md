@@ -130,6 +130,47 @@ swap 용량과 우선순위, 로컬 SSH 복구 제한(`/etc/default/rosy-ssh-wat
 `kernel.softlockup_panic=1`, 복구·점검 타이머 활성 상태를 다시 확인한다.
 이 확인은 실제 장애 복구 시험을 대신하지 않는다.
 
+### PC SSH 워치독 자동 갱신
+
+사이트 R, 셀 PC, 모델 PC, AI PC에서 기존 SSH 워치독 실행 파일을 서명된 릴리스로 갱신할 수 있다.
+첫 등록은 운영자가 검토된 체크아웃에서 수행한다. 전용 Ed25519 공개키를
+`/etc/rosy/watchdog-update.pub.pem`에 root 소유로 설치한다. 개인키는 서명 환경에 보관한다.
+기존 워치독과 타이머를 먼저 확인한 뒤 해당 PC 역할로 설치한다.
+
+```bash
+sudo python3 deploy/hosts/common/rosy-host-state install <site|cell|model|ai> --approve watchdog-update
+systemctl is-enabled rosy-watchdog-update.timer
+systemctl is-active rosy-watchdog-update.timer rosy-ssh-watchdog.timer
+```
+
+서명 환경에서 검토된 리비전의 스크립트를 다음 순번으로 묶는다. 파일 이름은
+`watchdog-update.bin`으로 고정한다. 팀 릴리스의 `host-watchdog-current` 태그에 이 파일을 게시한다.
+릴리스마다 순번을 올린다. 이전 동작으로 돌아갈 때도 정상 스크립트를 더 높은 순번으로 서명한다.
+
+```bash
+python3 deploy/hosts/common/watchdog_update.py pack --key <private-key> --sequence <integer> watchdog-update.bin
+```
+
+갱신 타이머는 D-805 동결 관문을 거친다. 검증이 실패하면 현재 실행 파일을 계속 사용한다.
+처음 승인된 파일이 내려오기 전에는 기존 워치독을 사용한다.
+`journalctl -u rosy-watchdog-update.service`에서 설치 순번을 확인하고,
+다음 `rosy-ssh-watchdog.service` 실행 결과를 확인한다.
+셀 PC의 `MAX_REBOOTS=0`은 `/etc/default/rosy-ssh-watchdog`에서 관리한다.
+갱신은 이 파일을 수정하지 않는다.
+
+등록된 PC에서 `/var/lib/rosy-watchdog-update/active`가 실행 가능하면 워치독은 그 파일만 실행한다.
+`/usr/local/sbin/rosy-ssh-watchdog`는 그때 실행되지 않는다. `--approve recovery`로 다시 설치하면 이 파일이
+바뀌지만 등록된 PC에서는 실행되지 않는다. `rosy-host-state check`는 이 차이를 알리지 않는다.
+`deploy/hosts/common/rosy-ssh-watchdog`를 고쳤으면 더 높은 순번으로 서명해서 다시 게시한다.
+등록된 PC는 그 경로로만 수정을 받는다.
+
+서명 갱신을 끝내려면 `sudo rm /etc/systemd/system/rosy-ssh-watchdog.service.d/20-signed-update.conf`를 실행한다.
+그 다음 `sudo systemctl daemon-reload`와 `sudo systemctl disable --now rosy-watchdog-update.timer`를 실행한다.
+워치독은 `/usr/local/sbin/rosy-ssh-watchdog`로 돌아간다. `rosy-host-state check`는 drop-in과
+`rosy-watchdog-update.timer`를 `awaiting_approval`로 보인다.
+`/var/lib/rosy-watchdog-update/active`는 남는다. 다시 `--approve watchdog-update`로 등록하면 첫 갱신 전에
+그 파일이 실행된다. 원하지 않으면 등록 전에 `sudo rm /var/lib/rosy-watchdog-update/active`로 지운다.
+
 ## 업데이트 상태 확인과 새 PC 연결 (D-805)
 
 모든 PC의 업데이트 경로와 사용자 유닛은 개발 PC에서 한 번에 확인한다. 읽기만 하며, 멈춘 경로나 선언과 다른 유닛이 있으면 exit 1이다. 역할별 사용자 유닛의 기준은 [`services.yaml`](services.yaml)(D-852)이다.
