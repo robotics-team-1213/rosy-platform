@@ -20,6 +20,13 @@ from test_site_autoupdate import (  # noqa: F401 - host is a pytest fixture
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'navigation': 'NAVIGATING'}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'trip_lease': {'lease_id': 'L1'}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'goal': {'target': 'bay_1'}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_45', 'goal': {'x': 0.45, 'y': 0.22}, 'state': {'mode': 'IDLE', 'navigation': 'IDLE'}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_45', 'goal': {'x': 0.45, 'y': 0.22, 'goal_lease': 'leased'}, 'state': {'mode': 'IDLE', 'navigation': 'CANCELED'}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_45', 'goal': {'x': 0.45, 'y': 0.22}, 'state': {'mode': 'NAVIGATION', 'navigation': 'CANCELED'}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'docking': {'state': 'DOCKING'}}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'docking': {'state': 'UNDOCKING'}}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'docking': {'state': 'UNKNOWN_NEW'}}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'DOCKING', 'docking': {'state': 'DOCK_FAILED'}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'line_follow': {'mode': 'CAMERA_LINE', 'state': 'TRACKING'}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'velocity': {'linear': 0.05, 'angular': 0.0}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'online': True, 'state': None}]}),
@@ -131,3 +138,48 @@ def test_site_autoupdate_fails_closed_when_viewer_token_is_symlink(host):
     assert fake.running == OLD and not http.downloads
     state = json.loads(host.paths.state.read_text(encoding='utf-8'))
     assert state['last_run']['result'] == 'deferred-busy'
+
+
+@pytest.mark.parametrize('nav_state', ['ARRIVED', 'CANCELED', 'FAILED'])
+def test_site_check_idle_allows_retained_terminal_goal_and_dock_failed(host, monkeypatch, capsys, nav_state):
+    token = host.root / 'etc/rosy/site-secrets/site-update-viewer.token'
+    token.parent.mkdir(parents=True, exist_ok=True)
+    token.write_text('viewer-secret', encoding='utf-8')
+    cfg = {k: str(v) if isinstance(v, Path) else v for k, v in host.config.items()}
+    monkeypatch.setattr(upd, 'Paths', lambda: host.paths)
+    monkeypatch.setattr(upd, 'load_config', lambda _: cfg)
+    http = FakeHttp([], {})
+    base_functional = http.functional
+
+    def functional(url, ca, tok):
+        if url.endswith('/api/fleet/state'):
+            return {'robots': [
+                {
+                    'robot_id': 'rosy_45',
+                    'online': True,
+                    'goal': {'x': 0.4501, 'y': 0.2205, 'yaw': 0.0117},
+                    'state': {
+                        'mode': 'IDLE',
+                        'navigation': nav_state,
+                        'docking': {'state': 'UNDOCKED'},
+                        'velocity': {'linear': 0.0, 'angular': 0.0},
+                    },
+                },
+                {
+                    'robot_id': 'rosy_46',
+                    'online': True,
+                    'goal': None,
+                    'state': {
+                        'mode': 'IDLE',
+                        'navigation': 'CANCELED',
+                        'docking': {'state': 'DOCK_FAILED', 'error': 'obstacle ahead'},
+                        'velocity': {'linear': 0.0, 'angular': 0.0},
+                    },
+                },
+            ]}
+        return base_functional(url, ca, tok)
+
+    http.functional = functional
+    monkeypatch.setattr(upd, 'Http', lambda: http)
+    assert upd.main(['check-idle']) == upd.EXIT_OK
+    assert json.loads(capsys.readouterr().out) == {'idle': True, 'reasons': []}
