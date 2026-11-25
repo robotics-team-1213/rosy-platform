@@ -107,7 +107,8 @@ def test_rfid_epc_delivers_one_existing_intake_event(tmp_path, cell):
                             epc=epc.lower(), observed_at=T)
     assert reading.epc == epc
     [early] = record(store, ports, intake, CELL, reading)
-    assert ports.after(early - 1, 1)[0]["event"].reason == "MISMATCH"
+    refused = ports.after(early - 1, 1)[0]["event"]
+    assert refused.reason == "MISMATCH" and refused.object_ref is None
     confirm(path, supply)
     reading = reading.model_copy(update={"observation_ref": "rfid-2"})
     [seq] = record(store, ports, intake, CELL, reading)

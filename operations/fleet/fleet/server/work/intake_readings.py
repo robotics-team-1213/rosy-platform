@@ -44,10 +44,13 @@ def conveyor_end_event(source, reading, tags, waiting, intake_point) -> PortEven
     if reading.state != "read":
         return _event(source, reading, "container.handling_failed",
                       reason="MISMATCH" if reading.state == "mismatch" else "UNREADABLE")
-    identifier = reading.epc if reading.point == "rfid_intake" else str(reading.tag)
+    rfid = reading.point == "rfid_intake"
+    identifier = reading.epc if rfid else str(reading.tag)
     ref = tags.get(identifier)
     if ref is None or ref not in waiting:  # an unknown tag, or a container nobody delivered here: never a guess
-        return _event(source, reading, "container.handling_failed", reason="MISMATCH", object_ref=ref)
+        # A handheld can read an unrelated cargo nearby without an intake delivery for it.
+        return _event(source, reading, "container.handling_failed", reason="MISMATCH",
+                      object_ref=None if rfid else ref)
     return _event(source, reading, "container.received_at_intake", object_ref=ref, intake_point=intake_point,
                   identity="observed")
 
