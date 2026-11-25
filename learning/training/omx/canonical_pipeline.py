@@ -92,11 +92,10 @@ def _named_mapping(raw, limit: int, label: str) -> dict:
 class CanonicalService:
     """Host-isolated canonical OMX pipeline manager attached to experiment_center.Center."""
 
-    def __init__(self, root: Path | None, config: dict | None, *, host_id: str | None = None,
-                 default_python: str | None = None, world_admission=None):
+    def __init__(self, root: Path | None, config: dict | None, *, host_id: str | None = None, default_python: str | None = None):
         self.host_id = host_id
         self.lock = threading.RLock()
-        self.world_admission = world_admission or (lambda: nullcontext(False))
+        self.world_admission = lambda: nullcontext(False)
         self.children: dict[str, subprocess.Popen] = {}
         self.configured = self.writable = False
         self.spec, self.spec_sha256, self.spec_source = load_canonical_spec(None)

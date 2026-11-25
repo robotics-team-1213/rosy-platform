@@ -84,7 +84,6 @@ class Center:
         self.canonical = CanonicalService(
             self.root / 'canonical', config.get('canonical'),
             host_id=self.host_id, default_python=self.python.get('act'),
-            world_admission=self._canonical_admission,
         )
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
@@ -111,6 +110,7 @@ class Center:
         self.studies = Studies(self)
         with self.connect() as db:
             if self.world_preset is not None or self._active_world_runs(db):
+                self.canonical.world_admission = self._canonical_admission
                 experiment_world.start_supervisor(self)
 
     def connect(self):
@@ -208,7 +208,9 @@ class Center:
             self._refresh(db)
             return {'datasets': [json.loads(r[0]) for r in db.execute('SELECT document FROM datasets ORDER BY rowid DESC')],
                     'runs': [self.inbox.decorate(db, json.loads(r[0]))
-                             for r in db.execute('SELECT document FROM runs ORDER BY rowid DESC')],
+                             for r in db.execute("SELECT document FROM runs WHERE COALESCE("
+                                                 "json_extract(document,'$.execution_mode'),'')<>? ORDER BY rowid DESC",
+                                                 (experiment_world.MODE,))],
                     'methods': self.methods, 'physical_learning_verified': False,
                     'owner_status': self.owner_status.describe()}
 
@@ -311,7 +313,10 @@ class Center:
             found = db.execute('SELECT document FROM runs WHERE id=?', (rid,)).fetchone()
             if not found:
                 raise ValueError('unknown learning run')
-            return self.inbox.decorate(db, json.loads(found[0]))
+            row = json.loads(found[0])
+            if row.get('execution_mode') == experiment_world.MODE:
+                raise ValueError('unknown learning run')
+            return self.inbox.decorate(db, row)
 
     def bundle_manifest(self, rid):
         from experiment_cuda_train import bundle_manifest
@@ -498,6 +503,8 @@ class Center:
             self._refresh(db)
             found = db.execute('SELECT document FROM runs WHERE id=?', (rid,)).fetchone()
             row = json.loads(found[0]) if found else {}
+            if row.get('execution_mode') == experiment_world.MODE:
+                raise ValueError('World experiment checkpoints stay in the experiment workspace')
             if row.get('execution_mode') in ('native_export', 'lerobot_inspect'):
                 raise ValueError('exported dataset is not a model learning artifact')
             online = row.get('execution_mode') == 'online_experience'

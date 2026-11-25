@@ -131,6 +131,9 @@ def test_center_run_retry_shared_slot_and_stop_restart(tmp_path, monkeypatch):
     assert first['dataset_revision'] == revision and first['scene_sha256'] == 'c' * 64
     assert owner.start_world_experiment(body)['id'] == first['id']
     assert len(launched) == 1
+    assert owner.snapshot()['runs'] == []
+    with pytest.raises(ValueError, match='stay in the experiment'):
+        owner.artifact(first['id'])
     with pytest.raises(ValueError, match='one owned'):
         owner.start_world_experiment(dict(body, request_id=str(uuid.uuid4())))
     with pytest.raises(PermissionError):
