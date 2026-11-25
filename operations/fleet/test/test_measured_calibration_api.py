@@ -103,3 +103,35 @@ def test_only_named_operator_can_sign_a_current_session_confirmation(tmp_path):
         assert client.post(endpoint, json=body, headers=_auth(VIEWER_TOKEN)).status_code == 200
         body['measured']['calibration_revision'] = 'old'
         assert client.post(endpoint, json=body, headers=_auth(OPERATOR_TOKEN)).status_code == 409
+        overlay_lease = client.post(
+            endpoint,
+            json={'source_id': 'ceiling_north', 'rectification': {'mode': 'map_overlay'}},
+            headers=_auth(VIEWER_TOKEN),
+        )
+        assert overlay_lease.status_code == 200, overlay_lease.text
+        overlay_claims = VisionLeaseSigner('v'*32).verify(overlay_lease.json()['lease'], source_id='ceiling_north')
+        assert overlay_claims['rectification'] == {'mode': 'map_overlay'}
+
+
+def test_detections_config_includes_places_only_when_include_preview_and_site_maps(tmp_path):
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from fleet.server.sightings import SightingService, SightingSource
+    from fleet.server.tracking import TrackingService
+    from fleet.server.tracking_calibration import TrackingCalibrationStore
+    from fleet.server.tracking_routes import install_tracking_routes
+
+    src = SightingSource(source_id='ceiling_north', token=SOURCE_TOKEN, robot_ids=('rosy_01',),
+                         map_id='map_v2_fleet', calibration_revision='cal-v3', corner_marker_ids=(30, 31, 32, 33))
+    tracking = TrackingService([src], calibrations=TrackingCalibrationStore(None), clock=_Clock())
+    site = SimpleNamespace(places=[SimpleNamespace(place_id='S1', name='S1 Stand', x=1.25, y=-0.4)])
+    site_maps = SimpleNamespace(active=lambda: (1, site, None, None))
+    app = FastAPI()
+    install_tracking_routes(app, tracking=tracking, require_operator=lambda: None, read_guard=(), operator_guard=(),
+                            site_maps=site_maps)
+    with TestClient(app) as client:
+        plain = client.get('/api/fleet/detections/config', headers=_auth(SOURCE_TOKEN)).json()
+        assert 'places' not in plain
+        with_preview = client.get('/api/fleet/detections/config?include_preview=true', headers=_auth(SOURCE_TOKEN)).json()
+        assert with_preview['places'] == [{'id': 'S1', 'name': 'S1 Stand', 'x': 1.25, 'y': -0.4}]

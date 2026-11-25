@@ -1,6 +1,9 @@
 """Preview encode adapters, separate from ingest transport: the legacy map plane and the rectified view."""
 import asyncio
+import math
+from rosy_vision.birdview_overlay import overlay_signature, render_map_overlay_jpeg
 from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.track.anchor_head_tracker import MOBILE_ANCHOR_KIND
 
 
 async def rectified_jpeg(ingest, source, frame, settings) -> bytes:
@@ -21,11 +24,55 @@ async def rectified_jpeg(ingest, source, frame, settings) -> bytes:
     return await asyncio.shield(cached[1])
 
 
+def _collect_overlay_inputs(ingest, source: str) -> tuple[list[dict], list[dict], list[dict]]:
+    ctx = (getattr(ingest, "_overlay_context", None) or {}).get(source) or {}
+    places = list(ctx.get("places") or ())
+    robots_by_id: dict[str, dict] = {}
+    for row in ctx.get("robots") or ():
+        if isinstance(row, dict) and row.get("robot_id"):
+            robots_by_id[str(row["robot_id"])] = dict(row)
+    arms: list[dict] = []
+    tracker = getattr(ingest, "anchor_tracker", None)
+    if tracker is not None:
+        lock = getattr(tracker, "_lock", None)
+        states_map = getattr(tracker, "_states", None)
+        seen_map = getattr(tracker, "_marker_seen", None)
+        if lock is not None and isinstance(states_map, dict):
+            with lock:
+                items = list(states_map.items())
+                seen = dict(seen_map or {})
+            for tid, st in items:
+                kind = getattr(st, "kind", None)
+                if kind == "omx_ai":
+                    arms.append({
+                        "target_id": tid,
+                        "label": getattr(st, "label", tid),
+                        "base_x": getattr(st, "base_x", None),
+                        "base_y": getattr(st, "base_y", None),
+                        "head_x": getattr(st, "head_x", None),
+                        "head_y": getattr(st, "head_y", None),
+                    })
+                elif kind == MOBILE_ANCHOR_KIND and seen.get(tid):
+                    hx, hy = getattr(st, "base_x", None), getattr(st, "base_y", None)
+                    hyaw = getattr(st, "base_yaw", None)
+                    if all(isinstance(v, (int, float)) and math.isfinite(v) for v in (hx, hy)):
+                        robots_by_id[tid] = {
+                            "robot_id": tid,
+                            "x": float(hx),
+                            "y": float(hy),
+                            **({"yaw": float(hyaw)} if isinstance(hyaw, (int, float)) and math.isfinite(hyaw) else {}),
+                        }
+    robots = [robots_by_id[k] for k in sorted(robots_by_id)]
+    return places, robots, arms
+
+
 async def map_plane_response(ingest, source, frame, age, lease, *, unavailable, response, lens_header,
-                             warp=map_plane_jpeg):
+                             warp=map_plane_jpeg, annotated: bool = False):
     """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
 
     The warp runs off the event loop, once per (frame, record revision) for all readers.
+    When ``annotated=True`` (``mode: map_overlay``), renders metric grid, lanes,
+    places, robots and arm positions onto a separate cached JPEG copy.
     """
     reported = ingest._plane_records.get(source)
     if reported is None:
@@ -49,12 +96,34 @@ async def map_plane_response(ingest, source, frame, age, lease, *, unavailable, 
     if plane is None:
         return unavailable()
     jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
+    obs_fraction = plane_observed_fraction(plane, crop_map)
     if crop_map is not None:
         cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
         if cropped is None:
             return unavailable()
         jpeg, size, bounds = cropped
         rectified = "map-crop"
+    elif annotated:
+        places, robots, arms = _collect_overlay_inputs(ingest, source)
+        map_paint = getattr(ingest, "map_paint", None)
+        sig = (revision, overlay_signature(places, robots, arms), id(map_paint) if map_paint is not None else 0)
+        ov_cache = ingest.__dict__.setdefault("_overlay_cache", {})
+        ov_entry = ov_cache.get(source)
+        if ov_entry is None or ov_entry[0] is not frame or ov_entry[1] != sig:
+            ov_task = asyncio.ensure_future(asyncio.to_thread(
+                render_map_overlay_jpeg,
+                plane,
+                map_paint=map_paint,
+                places=places,
+                robots=robots,
+                arms=arms,
+                observed_fraction=obs_fraction,
+            ))
+            ov_task.add_done_callback(lambda t: t.cancelled() or t.exception())
+            ov_entry = (frame, sig, ov_task)
+            ov_cache[source] = ov_entry
+        jpeg = await asyncio.shield(ov_entry[2])
+        rectified = "map-overlay"
     min_x, min_y, max_x, max_y = bounds
     return response(200, jpeg, extra={
         "Content-Type": "image/jpeg", "Cache-Control": "no-store",
@@ -67,6 +136,6 @@ async def map_plane_response(ingest, source, frame, age, lease, *, unavailable, 
         "X-Frame-Rectified": rectified,
         "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
         "X-Frame-Calibration": plane.revision,
-        "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
+        "X-Frame-Observed-Fraction": f"{obs_fraction:.6f}",
         **lens_header(ingest.source_lens(source)),
     })
