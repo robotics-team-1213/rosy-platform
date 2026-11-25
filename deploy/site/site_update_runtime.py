@@ -63,7 +63,8 @@ def _robot_busy_reasons(row: object) -> list[str]:
     state = row.get('state')
     goal = row.get('goal')
     retained_terminal_goal = (
-        isinstance(state, dict)
+        row.get('goal_in_flight') is False
+        and isinstance(state, dict)
         and state.get('mode') == 'IDLE'
         and state.get('navigation') in _NAV_TERMINAL_STATES
         and not (isinstance(goal, dict) and goal.get('goal_lease') is not None)
