@@ -230,3 +230,37 @@ def test_candidate_cli_reports_wrapped_offset_difference_without_authority(
     assert result["candidate_minus_installed_deg"] == pytest.approx(difference)
     assert result["offset_difference_exceeds_repeatability"] is outside
     assert result["installation_allowed"] is False
+
+
+def test_candidate_identity_requires_matching_marker_and_prioritizes_live_source(monkeypatch, tmp_path):
+    import ceiling_marker_yaw as tool
+
+    monkeypatch.delenv("ROSY_VISION_SOURCE_TOKEN", raising=False)
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46)
+    assert tool.check_candidate_identity(source="cam", robot="rosy_45", marker=45) == "d562_robot_number"
+    config = tmp_path / "site-cameras.yaml"
+    config.write_text("sources:\n  - source_id: cam\n    robot_markers: {rosy_45: 46}\n")
+    assert tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46,
+                                          site_camera_config=config) == "operator_supplied_site_config"
+    with pytest.raises(EstimateError, match="marker binding"):
+        tool.check_candidate_identity(source="cam", robot="rosy_45", marker=46, site_camera_config=config,
+                                      live_markers={"rosy_45": 45})
+
+
+def test_live_frame_requires_approved_size_lens_and_stable_rotation(monkeypatch):
+    import ceiling_marker_yaw as tool
+
+    repo = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(repo / "operations" / "overhead"))
+    record = {"image": {"width": 1280, "height": 720},
+              "lens": {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}}
+    headers = {"X-Frame-Rectified": "false", "X-Frame-Captured-At": "42.5", "X-Frame-Age-Ms": "50",
+               "X-Frame-Width": "1280", "X-Frame-Height": "720", "X-Frame-Rotation-Deg": "90",
+               "X-Source-Lens": "kind=standard;focal_mm=5.4;hfov_deg=67.8"}
+    assert tool.live_frame_stamp(headers, record, expected_rotation=90) == pytest.approx(42.5)
+    assert tool.live_frame_stamp({**headers, "X-Frame-Age-Ms": "1200"}, record) is None
+    for key, value in [("X-Frame-Rotation-Deg", "180"), ("X-Frame-Width", "640"),
+                       ("X-Source-Lens", "kind=wide;focal_mm=5.4;hfov_deg=67.8")]:
+        with pytest.raises(EstimateError, match="approved frame geometry"):
+            tool.live_frame_stamp({**headers, key: value}, record, expected_rotation=90)
