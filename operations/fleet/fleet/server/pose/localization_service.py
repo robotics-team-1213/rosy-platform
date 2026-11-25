@@ -332,6 +332,9 @@ class LocalizationService:
         await self._watch(localized, observations, now, states)
         for rid, state in states.items():
             status = trust.status_of(state)
+            if (status is not None and status.state is LocState.LOCALIZED
+                    and trust.native_pose_freshness(state) is False):
+                continue
             rung = self._ladder.update(rid, status.state if status else None, now,
                                        paused=self._decision_pending(rid, status))
             if rid not in self._ladder.robots():

@@ -20,6 +20,28 @@ export function localizationUrgent(loc) {
   return Boolean(loc && loc.needs_human);
 }
 
+function nativeChecking(native) {
+  return native?.state === "CANDIDATES" && native.reason === "checking" && !native.needs_human;
+}
+
+function freshCameraPose(guideRow) {
+  const pose = guideRow?.pose;
+  const age = pose?.last_sighting_age_s ?? (pose?.source === "sighting" ? pose.age_s : pose?.anchor_age_s);
+  return pose?.state === "LOCALIZED" && (pose.source === "sighting" || pose.anchor_source === "sighting")
+    && Number.isFinite(age) && age >= 0 && age <= FRESH_ANCHOR_S;
+}
+
+export function localizationAttention(loc, native, guideRow) {
+  const camera = freshCameraPose(guideRow) ? "카메라에서 로봇 확인 · " : "";
+  if (nativeChecking(native)) return {severity: "warn", text: `: ${camera}CORE 위치 후보 검증 중`};
+  if (localizationUrgent(loc)) return {
+    severity: "crit",
+    text: `: ${camera}${native?.state === "CANDIDATES"
+      ? "위치 보조에서 CORE 후보를 확인하세요" : "위치 보조에서 CORE 상태를 확인하세요"}`,
+  };
+  return null;
+}
+
 export function untrustedQueuedReason(who) {
   return `${who} 위치를 확인할 수 없어 대기 중 — 위치가 확정되거나 경로에서 멀어지면 자동 출발합니다`;
 }
@@ -77,8 +99,14 @@ export function sitePoseText(guideRow) {
 }
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */
-export function positionTag(loc, guideRow) {
-  if (loc?.needs_human) return localizationTag(loc);
+export function positionTag(loc, guideRow, native) {
+  if (nativeChecking(native)) return {
+    text: freshCameraPose(guideRow) ? "카메라 위치 확인 · CORE 검증 중" : "CORE 위치 후보 검증 중",
+    cls: "warn", title: "CORE가 위치 후보를 검증 중",
+  };
+  if (loc?.needs_human) return {
+    ...localizationTag(loc), text: "CORE 위치 확인 필요",
+  };
   const pose = guideRow?.pose;
   if (pose && Number.isFinite(pose.x) && Number.isFinite(pose.y)) {
     const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
