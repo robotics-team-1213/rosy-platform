@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import time
+from datetime import datetime, timezone
 from hashlib import sha256
 from types import SimpleNamespace
 
@@ -248,7 +249,8 @@ def test_nav2_failed_no_detour_retries_then_holds_until_resume():
     assert len(sent_routes) == NAV2_RETRIES + 2
 
 
-def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
+@pytest.mark.parametrize("lost", [False, True])
+def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path, lost):
     clock = FakeClock()
     clock.now = time.time()
     store = SiteMapStore(tmp_path / "site.sqlite", clock=clock)
@@ -289,20 +291,67 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         client.portal.call(runner.tick)
         assert len(robot.routes) == 1
 
+        runner.halts._clock = clock
+        cancel = runner._cancel_goal
+        attempts = []
+
+        async def controlled_cancel(rid):
+            attempts.append(rid)
+            if lost and len(attempts) == 1:
+                raise OSError("lost cancel")
+            return await cancel(rid)
+
+        runner._cancel_goal = controlled_cancel
+        camera_holds = []
+        if lost:
+            runner._live["rosy_42"].view["detail"]["camera_lane_fallback"] = {"phase": "starting", "index": 0}
+            async def hold_camera(rid):
+                camera_holds.append(rid)
+                return {"mode": "OFF"}
+            runner._junction.hold = hold_camera
+        robot._state.update(mode="IDLE", goal=None, velocity={"linear": 0., "angular": 0.}, line_follow={"mode": "OFF"})
+
+        def sample():
+            stamp = datetime.fromtimestamp(clock.now - .01, timezone.utc).isoformat()
+            robot._state["evidence"] = {"velocity": {"sampled_at": stamp, "evidence": "fresh"}}
+
+        sample()
         paused = client.post(f"/api/fleet/trips/{tid}/pause", json={"reason": "blocked_ahead"}, headers=op)
         assert paused.status_code == 200, paused.text
-        assert paused.json()["hold"]["reason"] == "fleet_hold" and robot._state["navigation"] == "CANCELED"
+        held = paused.json()["hold"]
+        assert held["reason"] == "fleet_hold" and held["stop"]["confirmed"] is False
+        assert runner._live["rosy_42"].active_route is not None
+        assert store.trip(tid)["hold"]["stop"] == held["stop"]
+        assert client.post(f"/api/fleet/trips/{tid}/pause", headers=op).json()["hold"]["at"] == held["at"]
+        assert len(attempts) == 1
+        assert camera_holds == (["rosy_42"] if lost else [])
+        for payload in ({}, {"blocked_edges": ["ab"]}):
+            refusal = client.post(f"/api/fleet/trips/{tid}/resume", headers=op, json=payload)
+            assert refusal.status_code == 409 and "TRIP_PAUSE_STOP_UNCONFIRMED" in refusal.text
 
-        # Holding across > stall_s keeps trip open without dispatching any route.
-        clock.advance(25.0)
+        clock.advance(25.)
         client.portal.call(runner.tick)
-        assert runner.view(tid)["state"] == "running" and len(robot.routes) == 1
+        assert len(robot.routes) == 1 and robot._state["navigation"] == "CANCELED"
+        clock.advance(.1)
+        sample()
+        robot._state["velocity"]["linear"] = .05
+        assert client.post(f"/api/fleet/trips/{tid}/resume", headers=op).status_code == 409
+        robot._state["velocity"]["linear"] = 0.
+        robot._state["goal"] = {"x": 1., "y": 2.}
+        assert client.post(f"/api/fleet/trips/{tid}/resume", headers=op).status_code == 409
+        clock.advance(.1)
+        sample()
+        robot._state["goal"] = None
+        client.portal.call(runner.tick)
+        assert runner.view(tid)["hold"]["stop"]["confirmed"] is True
+        assert runner._live["rosy_42"].active_route is None
 
         resumed = client.post(f"/api/fleet/trips/{tid}/resume", json={"blocked_edges": ["ab"]}, headers=op)
         assert resumed.status_code == 200, resumed.text
         data = resumed.json()
         assert data["hold"] is None and [s["edge_id"] for s in data["plan"]["segments"]] == ["ha", "ac", "cd"]
         assert data["detail"]["guided_blocked_edges"] == ["ab"]
+        assert "camera_lane_fallback" not in data["detail"]
 
         robot._state["navigation"] = "IDLE"
         client.portal.call(runner.tick)

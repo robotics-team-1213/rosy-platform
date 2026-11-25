@@ -63,6 +63,11 @@ class TripSteps:
         if self._precision_terminal_mismatch(live):
             return await self._stop(live, "failed", "TRIP_GOAL_REFUSED",
                                     {"goal_reason": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
+        stop = (live.view.get("hold") or {}).get("stop")
+        if stop is not None:
+            await self._check_pause(live)
+            self._save(live)
+            return
         if self._renew_lease is not None and live.view["state"] != "link_wait":  # D-760 4: a free robot then stops
             # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
             # renewal that fails lets CORE cancel the goal when its lease runs out.
