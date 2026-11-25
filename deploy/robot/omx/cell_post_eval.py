@@ -17,7 +17,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, cell_route_visit, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
-from cell_post_eval_summary import lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
+from cell_post_eval_summary import _visit_common_shift, lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
 
 SCHEMA = "rosy.omx-post-eval.v1"
 PAIR_OFFSETS = ((0.0, 180.0), (-60.0, 120.0), (-40.0, 140.0), (-80.0, 100.0), (-90.0, 90.0), (-20.0, 160.0))
@@ -268,32 +268,6 @@ def _track_ok(cell, config: dict, calibration: dict, site: str) -> tuple[bool, d
                                        lambda q: predicted_pixel(config, calibration, site, q), config.get("work_dir"))
     lim = float(prm.get(config.get("params"), "calibrate.max_shift_px"))
     return bool(report.get("tracked") and math.hypot(*report.get("shift_px", (0.0, 0.0))) <= lim), report
-
-
-def _visit_common_shift(rows: list[dict[str, Any]], config: dict) -> tuple[bool, dict[str, Any]]:
-    """Detect common-mode translation or 2D rigid/scale drift across distinct real sites in one post-eval run."""
-    cfg_sites, vecs, pts_r, res_r, used_biases = (config.get("sites") or {}), {}, [], [], []
-    for r in rows:
-        spec = cfg_sites.get(r.get("site") or "") or {}
-        if r.get("accepted") and not spec.get("tier_of") and not spec.get("map_from") and isinstance(r.get("residual_mm"), list):
-            if "used_bias_mm" in r:
-                used_biases.append(r["used_bias_mm"])
-            v, pt = r["residual_mm"], r.get("point_m")
-            if isinstance(pt, list) and len(pt) >= 2 and len(v) >= 2:
-                pts_r.append(pt[:2])
-                res_r.append(v[:2])
-            if r.get("status") == "drift" and len(v) >= 2 and math.hypot(*v) > 0:
-                vecs[f"{r.get('map_sha')}:{r['site']}"] = np.asarray(v, float)
-    rigid = cpb.decompose_rigid_drift(pts_r, res_r, trans_tol_mm=float(prm.get((config or {}).get("params"), "post.tol_mm")))
-    if used_biases and all(list(b) == [0.0, 0.0] for b in used_biases):
-        return False, {**rigid, "global_drift": False}
-    vals = list(vecs.values())
-    pair_common = len(vals) >= 2 and all(
-        float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))) > math.cos(math.radians(45.0))
-        and max(np.linalg.norm(a), np.linalg.norm(b)) <= 2.0 * min(np.linalg.norm(a), np.linalg.norm(b))
-        for i, a in enumerate(vals) for b in vals[i + 1:]
-    )
-    return bool(pair_common or rigid.get("global_drift")), rigid
 
 
 def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply: bool = False,
