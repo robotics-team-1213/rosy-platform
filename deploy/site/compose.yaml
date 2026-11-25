@@ -120,6 +120,7 @@ services:
       ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-}"
       ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-}"
       ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"
+      ROSY_CALIBRATION_ORIGIN: "${ROSY_CALIBRATION_ORIGIN:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy

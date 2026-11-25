@@ -1,8 +1,8 @@
 import "/common/ui.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests } from "./requests.js";
-import { loadJobStatus } from "./job-status.js";
-import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift } from "./status-logic.js";
+import { loadJobStatus, setJobArm, setJobOperator } from "./job-status.js";
+import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm } from "./status-logic.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -25,18 +25,12 @@ const state = {
 
 function currentProfile() {
   const list = state.bundle?.profiles || [];
-  return list.find((p) => p.id === state.profileId) || list[0] || null;
+  return profileForArm(list, linkedArm(location.search), state.profileId);
 }
 
-function defaultSiteForProfile(profile) {
-  if (!profile?.sites) return null;
-  for (const s of profile.map_sites || []) {
-    if (profile.sites[s]?.map) return s;
-  }
-  for (const [k, v] of Object.entries(profile.sites)) {
-    if (!v.extra && v.map) return k;
-  }
-  return Object.keys(profile.sites)[0] || null;
+function syncArmLinks(arm) {
+  const login = $("account-login");
+  if (login) login.href = arm ? `/api/account/login?arm=${encodeURIComponent(arm)}` : "/api/account/login";
 }
 
 function setSegmentGroup(buttons, activeBtn) {
@@ -121,6 +115,11 @@ function renderProfileBar() {
     const badge = errs > 0 ? `E${errs}/W${warns}` : warns > 0 ? `W${warns}` : "OK";
     btn.textContent = `${p.id} · ${maxLoo.toFixed(1)}mm · ${badge}`;
     btn.addEventListener("click", () => {
+      const url = new URL(location.href);
+      const arm = p.arm_id || p.id;
+      if (["arm_a", "arm_b", "arm_s"].includes(arm)) url.searchParams.set("arm", arm);
+      else url.searchParams.delete("arm");
+      history.replaceState(null, "", url);
       state.profileId = p.id;
       state.siteName = defaultSiteForProfile(p);
       state.selectedKey = null;
@@ -128,6 +127,13 @@ function renderProfileBar() {
       renderAll();
     });
     bar.appendChild(btn);
+  }
+  const arm = currentProfile()?.arm_id || currentProfile()?.id;
+  if (["arm_s", "arm_a", "arm_b"].includes(arm)) {
+    const link = document.createElement("a");
+    link.href = `/?arm=${arm}`;
+    link.textContent = `${arm} 보정 링크`;
+    bar.append(link);
   }
 }
 
@@ -472,12 +478,15 @@ function pickHit(canvas, clientX, clientY, targets) {
 
 function renderAll() {
   const profile = currentProfile();
+  const arm = linkedArm(location.search) || profile?.arm_id || profile?.id || null;
+  setJobArm(arm);
+  syncArmLinks(linkedArm(location.search));
   if (!profile) {
-    $("profileBar").replaceChildren();
+    renderProfileBar();
     $("hygienePanel").setAttribute("data-level", "ok");
     const summary = $("hygieneSummary");
     summary.setAttribute("state", "empty");
-    summary.textContent = "등록된 캘리브레이션 프로파일이 없습니다 (--profiles 또는 ROSY_CALIBRATION_PROFILES 미설정).";
+    summary.textContent = arm ? `${arm} 보정 프로파일이 등록되어 있지 않습니다.` : "등록된 캘리브레이션 프로파일이 없습니다.";
     $("profileSourceTag").setAttribute("status", "neutral");
     $("profileSourceTag").textContent = "NO PROFILES";
     const holdTag = $("holdBadge");
@@ -510,9 +519,7 @@ async function loadSnapshot() {
   try {
     const data = await fetchJson("/api/calibration/v1/profiles");
     state.bundle = data;
-    if (!state.profileId || !data.profiles?.some((p) => p.id === state.profileId)) {
-      state.profileId = data.profiles?.[0]?.id || null;
-    }
+    state.profileId = currentProfile()?.id || null;
     if (!state.siteName) state.siteName = defaultSiteForProfile(currentProfile());
     renderAll();
   } catch (err) {
@@ -577,6 +584,12 @@ function wireControls(reqs) {
   }
 }
 
-const reqs = initRequests({ onSessionChanged: () => loadSnapshot() });
+const initialArm = linkedArm(location.search);
+syncArmLinks(initialArm);
+setJobArm(initialArm);
+const reqs = initRequests({ onSessionChanged: account => {
+  setJobOperator(account.can_operate === true);
+  loadSnapshot();
+} });
 wireControls(reqs);
 reqs.session.restore().then(() => { reqs.refresh(); loadSnapshot(); });

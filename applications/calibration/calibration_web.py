@@ -47,6 +47,7 @@ COMMON = ROOT / "shared" / "web"
 OPERATE = "calibration.operate"
 SESSION_COOKIE, FLOW_COOKIE = "rosy_calibration_account", "rosy_calibration_flow"
 API = "/api/calibration/v1/requests"
+ARM_RETURNS = {arm: f"/?arm={arm}" for arm in ("arm_s", "arm_a", "arm_b")}
 PROFILES_API = "/api/calibration/v1/profiles"
 JOBS_API = ("/api/calibration/status", "/api/calibration/jobs", "/api/calibration/assessments", "/api/calibration/incidents/")
 ID = re.compile(r"[A-Za-z0-9_-]{1,96}")
@@ -190,7 +191,10 @@ class Handler(BaseHTTPRequestHandler):
                     body, claims = browser_session(self.account, _cookie(self, SESSION_COOKIE))
                 body["can_operate"] = self.can_operate(claims)
             elif method == "GET" and path == "/api/account/login" and self.account:
-                flow, target = self.account.start("/")
+                query = parse_qs(urlsplit(self.path).query, max_num_fields=8)
+                arms = query.get("arm", [])
+                destination = ARM_RETURNS.get(arms[0], "/") if len(arms) == 1 else "/"
+                flow, target = self.account.start(destination)
                 headers = [_set_cookie(FLOW_COOKIE, flow, 600), ("Location", target)]
                 status = 303
             elif method == "GET" and path == "/api/account/callback" and self.account:
@@ -364,7 +368,7 @@ def main(argv=None) -> int:
     account = None
     if args.account_config:
         from core_common.protocol.account_client import load_account_client
-        account = load_account_client(args.account_config, destinations=("/",))
+        account = load_account_client(args.account_config, destinations=("/", *ARM_RETURNS.values()))
     server = make_server(args.store or cell_requests.store(), args.port, account, profiles_path=profiles, cells=args.cells)
 
     def retry():  # a logout that could not reach Account is retried until it does

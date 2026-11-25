@@ -108,6 +108,7 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page, _, _ = browser_site
     real2sim = {"snapshots": [], "active": {"id": "browser-r2s"}, "physics_candidates": [], "sysid_summary": {}, "stages": []}
     cell_tasks = {
+        "calibration_origin": "https://cal.test",
         "tasks": [{
             "task_id": "cell-s-waiting", "arm_id": "arm_s", "cell_id": "cell_s", "status": "QUEUED", "robot_id": "rosy_42",
             "last_refusal": {"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "missing": ["pose", "bed_ready"]},
@@ -146,6 +147,10 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
     show_screen(page, "real2sim-heading")
+
+    for arm in ("arm_s", "arm_a", "arm_b"):
+        link = page.get_by_role("link", name=f"{arm} 보정", exact=True)
+        expect(link).to_have_attribute("href", f"https://cal.test/?arm={arm}")
 
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())

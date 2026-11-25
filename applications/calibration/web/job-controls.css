@@ -1,0 +1,4 @@
+#jobForm label:not(.ui-check):not([hidden]), #jobForm small:not([hidden]) { display: block; }
+#jobForm textarea, #jobForm select { max-width: 100%; min-width: 0; }
+#jobDetail, #jobForm { min-width: 0; }
+#jobOutput { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }

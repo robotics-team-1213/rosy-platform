@@ -71,6 +71,23 @@ def test_cell_claim_follows_the_robots_current_pose(pose, phase, locked):
     assert (action.get("reason") == "locked_by_cell") is locked
 
 
+@pytest.mark.parametrize(("configured", "published"), [
+    ("", None), ("https://op:secret@bad.test", None), ("http://cal.test", None),
+    ("https://cal.test:9449", "https://cal.test:9449"),
+])
+def test_cell_tasks_only_publish_a_configured_https_calibration_origin(monkeypatch, configured, published):
+    monkeypatch.setenv("ROSY_CALIBRATION_ORIGIN", configured)
+    site_map = _map()
+    app = FastAPI()
+    install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (1, site_map, build_graph(site_map), None)))
+    response = TestClient(app).get("/api/fleet/pipeline/cell-tasks")
+    assert response.status_code == 200
+    if published is None:
+        assert "calibration_origin" not in response.json()
+    else:
+        assert response.json()["calibration_origin"] == published
+
+
 def test_boot_default_arm_state_is_not_fresh_until_a_live_report():
     site_map = _map()
     app = FastAPI()

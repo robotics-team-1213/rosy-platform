@@ -173,6 +173,13 @@ export function createCellViews(ctx) {
           selectInspectorTarget(tId);
         });
         actions.append(iBtn);
+        if (body.calibration_origin && ['arm_s', 'arm_a', 'arm_b'].includes(tId)) {
+          const link = document.createElement('a');
+          link.href = `${body.calibration_origin}/?arm=${tId}`;
+          link.textContent = `${tId} 보정`;
+          link.addEventListener('click', event => event.stopPropagation());
+          actions.append(link);
+        }
       }
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');

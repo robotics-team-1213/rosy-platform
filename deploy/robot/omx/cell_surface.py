@@ -11,13 +11,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_pipeline as cp  # noqa: E402
-from cell_route_surface import probe_binding  # noqa: E402
+from cell_route_surface import contact_binding, contact_evidence, probe_binding  # noqa: E402
 
 
 def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_to: float, tcp_x_m: float | None = None) -> dict:
@@ -130,6 +131,51 @@ def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, st
                 return (probe_z_to, None) if z_min <= probe_z_to else (None, f"probe_z_to_m {probe_z_to} outside low_zones")
         return None, f"probe_z_to_m {probe_z_to} outside low_zones"
     return probe_z_to, None
+
+
+def surface_selection_error(config, calibration, found, name):
+    import omx_tcp
+    from cell_recovery_cargo import fixed_base_geometry, fixed_site
+
+    site = (config.get("sites") or {}).get(name)
+    if (not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?", name)
+            or not fixed_base_geometry(site) or not fixed_site(name, config.get("arm_id"))):
+        return "registered fixed surface site required"
+    if (found.get("camera_issue") or found.get("camera_moved") or found.get("map_binding_error")
+            or (found.get("camera_shift") or {}).get("ok") is not True):
+        return "current camera alignment and bound map required"
+    mapped = calibration.get("sites") or {}
+    parent = site.get("map_from", name)
+    missing = found.get("missing_map") or []
+    if not (mapped.get(name) or mapped.get(parent)) or name in missing or parent in missing:
+        return "selected site's map is missing"
+    if not contact_binding(config, name, calibration, omx_tcp.config_tcp(config)):
+        return "surface contact cannot be bound to this arm, target, TCP and map"
+    return None
+
+
+def remeasure_surface(cell, config, calibration, step, work):
+    from cell_bound_home_placement import _empty, _pose
+    from cell_envelope import _state_current
+    from cell_robot_profile import load
+
+    profile = config.get("operating_profile_path")
+    if not profile:
+        return {step: "operating profile unavailable"}
+    cell.operating_profile = load(Path(profile).expanduser())["binding"]
+    state = cell.act("state")
+    if (not _state_current(state, time.time()) or state["operating_context"].get("scope") != "hardware"
+            or state["operating_context"].get("operating_profile") != cell.operating_profile
+            or state.get("human_hold_latched") is not False or not _pose(state.get("state"))
+            or not _empty(state, config["plan"]["grip_closed"])):
+        return {step: "fresh empty gripper on the selected arm required"}
+    res = run_surface_step(cell, config, step, work)
+    if res.get(step) == "touched":
+        evidence = contact_evidence(config, step.split()[1], calibration)
+        if evidence["status"] != "matched_contact":
+            return {step: evidence["reason"]}
+        res["contact"] = evidence
+    return res
 
 
 def run_surface_step(cell, config: dict, step: str, work: Path, *, repeat: int = 2) -> dict:

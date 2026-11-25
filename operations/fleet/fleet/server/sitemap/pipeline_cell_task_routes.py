@@ -6,6 +6,7 @@ import time
 import uuid
 from types import SimpleNamespace
 from fastapi import HTTPException, Request
+from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
@@ -26,7 +27,6 @@ from fleet.server.sitemap.pipeline_unload_release import (
     exit_target, install_unload_release_routes, manifest_count, unload_release,
 )
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
-
 
 _LEGACY_VEHICLE_SITE = "pinky"
 #: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
@@ -411,6 +411,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {
             "tasks": tasks,
             "summary": summary,
+            **calibration_origin_fields(),
             **({"authority": gov.snapshot()} if gov is not None else {}),
             "cells": cells_info,
             "presets": list(CELL_TASK_PRESETS.values()),

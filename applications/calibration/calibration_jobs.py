@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import subprocess
@@ -22,6 +23,7 @@ STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "p
 MOVING = {"pivot-near", "remap", "surface"}  # D-911: a person at the power switch
 TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)?")  # never starts with '-'
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
+SITE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?")
 JOB_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{6}")
 CLEAR_FRESH_S = 600
 REASONS_MAX = 2000
@@ -37,6 +39,46 @@ def last_json(text: str):
         except ValueError:
             continue
     return None
+
+
+def site_point(name, site):
+    point = site.get("place")
+    if (SITE.fullmatch(name) and isinstance(point, list) and len(point) == 2
+            and all(type(v) in (int, float) and math.isfinite(v) for v in point)):
+        return point
+    return None
+
+
+def map_grade(key, record):
+    if key.endswith("~coarse") or "z_view" in record or record.get("coarse") or record.get("marks") in ("jaw", "tcp"):
+        return "coarse"
+    def vector(row, size):
+        return isinstance(row, list) and len(row) == size and all(type(v) in (float, int) and math.isfinite(v) for v in row)
+    h, points, residual = record.get("homography"), record.get("points"), record.get("loo_error_mm")
+    if (isinstance(h, list) and len(h) == 3 and all(vector(row, 3) for row in h)
+            and isinstance(record.get("measured"), str) and record["measured"].strip()
+            and isinstance(residual, dict) and vector([residual.get("mean"), residual.get("max")], 2)
+            and isinstance(points, list) and len(points) >= 5 and all(isinstance(p, dict)
+            and vector(p.get("pixel"), 2) and vector(p.get("arm_m"), 2) for p in points)):
+        return "fine"
+    return "unknown"
+
+
+def process_stamp(pid):
+    """Kernel process start ticks survive exec and distinguish a reused PID."""
+    try:
+        row = Path(f"/proc/{int(pid)}/stat").read_text()
+        return int(row.rsplit(")", 1)[1].split()[19])
+    except (OSError, ValueError, TypeError, IndexError):
+        return None
+
+
+def can_remeasure_surface(name, site, arm):
+    from cell_recovery_cargo import fixed_base_geometry, fixed_site
+
+    yaw = site.get("yaw_deg")
+    return (site_point(name, site) is not None and fixed_site(name, arm) and fixed_base_geometry(site)
+            and type(yaw) in (int, float) and math.isfinite(yaw))
 
 
 def spawn_process(argv, cwd, env, log: Path):
@@ -118,12 +160,19 @@ class Jobs:
             regions = []
         out = {}
         for name, site in (config.get("sites") or {}).items():
+            if not isinstance(site, dict):
+                continue
             src = site.get("map_from", name)
-            record = sites.get(name) or sites.get(f"{name}~coarse") or sites.get(src) or sites.get(f"{src}~coarse")
-            summary = None if record is None else {
-                "points": len(record.get("points", [])), "loo_error_mm": record.get("loo_error_mm"),
+            key = next((k for k in (name, f"{name}~coarse", src, f"{src}~coarse") if sites.get(k)), None)
+            record = sites.get(key)
+            grade = map_grade(key, record) if isinstance(record, dict) else "unknown"
+            record = record if isinstance(record, dict) else {}
+            summary = None if key is None else {
+                "points": len(record["points"]) if isinstance(record.get("points"), list) else 0, "loo_error_mm": record.get("loo_error_mm"),
+                "grade": grade, "coarse": grade == "coarse", "inherited": key not in (name, f"{name}~coarse"),
                 "sha": hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()[:12]}
             out[name] = {"map": summary, "surface_z": site.get("surface_z"), "map_from": site.get("map_from"),
+                         "place_xy_m": site_point(name, site), "can_remeasure_surface": can_remeasure_surface(name, site, config.get("arm_id")),
                          "bias": [{k: r.get(k) for k in ("point_m", "bias_mm", "kind", "n", "rms_mm", "measured")}
                                   for r in regions if r.get("site") == name]}
         return out
@@ -149,18 +198,15 @@ class Jobs:
         return self.work / "jobs" / f"{job_id}.{ext}"
 
     def running(self, arm):
-        """Jobs on the arm whose engine process is still alive (one job per arm, review 2026-11-17)."""
-        alive = []
-        for record in self.jobs():
-            if record.get("arm") == arm and record.get("status") == "running" and record.get("pid"):
-                try:
-                    os.kill(record["pid"], 0)
-                except PermissionError:
-                    pass
-                except (OSError, ValueError):
-                    continue
-                alive.append(record["id"])
-        return alive
+        return [row["id"] for row in self.jobs() if row.get("arm") == arm and row.get("status") == "running"]
+
+    def worker_status(self, record):
+        if record.get("status") == "running":
+            stamp = process_stamp(record.get("pid"))
+            reused = stamp is not None and record.get("pid_start_ticks") not in (None, stamp)
+            if reused or not record.get("pid") or not self.lease().live(record):
+                return {**record, "status": "interrupted"}
+        return record
 
     def start(self, body, by, owner_id=None):
         arm, step, targets = body.get("arm"), body.get("step"), body.get("targets", [])
@@ -170,22 +216,36 @@ class Jobs:
             return 422, {"error": "targets는 'site:x,y' 문자열 목록이어야 합니다."}
         if step in MOVING and body.get("person_at_switch") is not True:
             return 422, {"error": "팔이 움직이는 단계는 전원 스위치 앞의 사람이 필요합니다(person_at_switch)."}
-        owner = f"calibration-web:{owner_id or by}"  # the account id: two people may share a display name
-        config_path, _ = self.arm_config(arm)
+        config_path, config = self.arm_config(arm)
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
         if targets:
             argv += ["--targets", *targets]
+        if "site" in body or step == "surface":
+            name = body.get("site")
+            site = (config.get("sites") or {}).get(name) if isinstance(name, str) else None
+            if (step != "surface" or targets or config.get("arm_id") != arm or not isinstance(site, dict)
+                    or not can_remeasure_surface(name, site, arm)):
+                return 422, {"error": "등록된 면 측정 지점을 선택하세요."}
+            if body.get("surface_clear") is not True:
+                return 422, {"error": "선택한 고정 지점과 팔 이동 경로가 비어 있는지 확인하세요."}
+            argv += ["--remeasure-surface", name, "--surface-clear"]
         if step in MOVING:
             argv += ["--commissioning", "--person-at-switch"]
-        if self.arms[arm].get("session"):
+        if step in MOVING and self.arms[arm].get("session"):
             argv = [self.arms[arm]["session"], *argv]
         job_id = f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
+        owner = f"calibration-web:{owner_id or by}:{job_id}"
         (self.work / "jobs").mkdir(parents=True, exist_ok=True)
         lease = self.lease()
         with _lock:
-            if self.running(arm):
-                return 409, {"error": f"{arm}에서 작업이 이미 돌고 있습니다: {', '.join(self.running(arm))}"}
+            for previous in self.jobs():
+                if previous.get("arm") != arm:
+                    continue
+                if previous.get("status") == "running":
+                    return 409, {"error": f"{arm}에서 작업이 이미 돌고 있습니다: {previous['id']}"}
+                if previous.get("status") == "interrupted" and previous.get("lease_owner", "").endswith(f":{previous['id']}"):
+                    lease.release(arm, previous["lease_owner"], expected_pid=previous["pid"])
             try:
                 lease.claim(arm, owner, f"calibration {step}", 1800, None, self.revision())
             except lease.LeaseHeld as exc:
@@ -193,17 +253,20 @@ class Jobs:
             record = {"id": job_id, "arm": arm, "step": step, "targets": targets, "by": by, "revision": self.revision(),
                       "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None, "status": "running"}
             proc = None
+            if "site" in body:
+                record["site"] = body["site"]
+                record["surface_clear"] = True
             try:
                 proc = self.spawn(argv, str(config_path.parent), self.env(arm, owner), self.job_file(job_id, "log"))
                 # the lease follows the engine, not this server: a server restart must not free a moving arm
-                lease.claim(arm, owner, f"calibration {step}", 1800, proc.pid, self.revision())
-                record["pid"] = proc.pid
+                bound = lease.claim(arm, owner, f"calibration {step}", 1800, proc.pid, self.revision())
+                record.update(pid=proc.pid, boot_id=bound.get("boot_id"), pid_start_ticks=process_stamp(proc.pid), lease_owner=owner)
                 self.write(record)
             except BaseException as exc:  # no finish thread will run: stop the engine first, then free the lease
                 if proc is not None:
                     proc.terminate()
                     proc.wait(timeout=30)
-                lease.release(arm, owner)
+                lease.release(arm, owner, expected_pid=record["pid"])
                 if isinstance(exc, Exception):
                     return 500, {"error": f"엔진을 시작하지 못했습니다: {exc}"}
                 raise
@@ -228,7 +291,7 @@ class Jobs:
                       result=last_json(text), status="done" if code == 0 else "failed")
         self.write(record)
         try:
-            self.lease().release(record["arm"], owner)
+            self.lease().release(record["arm"], owner, expected_pid=proc.pid)
         except Exception:  # noqa: BLE001 - the lease expires by itself; the record is already final
             pass
 
@@ -236,7 +299,7 @@ class Jobs:
         rows = []
         for file in (self.work / "jobs").glob("*.json"):
             try:
-                rows.append(json.loads(file.read_text(encoding="utf-8")))
+                rows.append(self.worker_status(json.loads(file.read_text(encoding="utf-8"))))
             except (OSError, ValueError):
                 continue
         return sorted(rows, key=lambda r: r.get("started", ""), reverse=True)
@@ -252,7 +315,7 @@ class Jobs:
             record["log_tail"] = self.job_file(job_id, "log").read_text(encoding="utf-8", errors="replace")[-4000:]
         except OSError:
             record["log_tail"] = ""
-        return record
+        return self.worker_status(record)
 
     # --- assessments and incident clear -------------------------------------------------------------------------
     def assessments(self):
