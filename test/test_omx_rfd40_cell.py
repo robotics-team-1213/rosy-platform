@@ -92,12 +92,9 @@ class ListenerTests(unittest.TestCase):
     def run_listener(self, open_reader, pause):
         output, status = StringIO(), StringIO()
         args = ["rfd40_cell.py", "00:11:22:33:44:55", "--channel", "2", "--listen", "--beep-on-read"]
-        with patch.object(sys, "argv", args), patch("rfd40_cell.open_reader", open_reader, create=True), \
+        with patch.object(sys, "argv", args), patch("rfd40_cell.open_reader", open_reader), \
                 patch("rfd40_cell.time.sleep", pause), redirect_stdout(output), redirect_stderr(status):
-            try:
-                exit_code = main()
-            except SystemExit as exc:
-                exit_code = exc.code
+            exit_code = main()
         self.assertEqual(exit_code, 130, status.getvalue())
         return output.getvalue().splitlines()
 
@@ -114,6 +111,8 @@ class ListenerTests(unittest.TestCase):
         self.assertEqual(self.run_listener(opener, pause), [A, B])
         self.assertEqual(opener.call_count, 3)
         self.assertEqual(first.scan.call_count, 3)
+        first.verify_trigger.assert_called_once()
+        second.verify_trigger.assert_called_once()
         first.beep.assert_called_once()
         second.beep.assert_called_once()
         self.assertEqual(pause.call_count, 2)

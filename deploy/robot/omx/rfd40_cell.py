@@ -7,6 +7,7 @@ import socket
 import statistics
 import sys
 import time
+from contextlib import contextmanager
 
 
 def choose_epc(data, *, minimum_rssi=-60, margin=6):
@@ -112,11 +113,24 @@ class Reader:
             raise ConnectionError("RFD40 did not acknowledge the beeper commands")
 
 
+@contextmanager
+def open_reader(address, channel):
+    with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM) as link:
+        link.settimeout(5)
+        link.connect((address, channel))
+        reader = Reader(link)
+        if b"Connection Successful" not in reader.exchange(b"connect", 4):
+            raise ConnectionError("RFD40 did not establish a ZETI session")
+        yield reader
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("address", help="paired RFD40 Bluetooth address")
     parser.add_argument("--channel", type=int, choices=range(1, 31), metavar="1..30", required=True)
-    parser.add_argument("--probe", action="store_true", help="verify ZETI without starting inventory")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--probe", action="store_true", help="verify ZETI without starting inventory")
+    mode.add_argument("--listen", action="store_true", help="keep reading trigger cycles and reconnect on link loss")
     parser.add_argument("--beep-on-read", action="store_true", help="field test: beep after emitting an EPC")
     parser.add_argument("--minimum-rssi", type=int, default=-60)
     parser.add_argument("--margin", type=int, default=6)
@@ -130,15 +144,11 @@ def main():
         parser.error("wait must be between 2 and 60 seconds")
 
     emitted = False
+    delay = 1
 
     def session():
-        nonlocal emitted
-        with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM) as link:
-            link.settimeout(5)
-            link.connect((args.address, args.channel))
-            reader = Reader(link)
-            if b"Connection Successful" not in reader.exchange(b"connect", 4):
-                raise ConnectionError("RFD40 did not establish a ZETI session")
+        nonlocal emitted, delay
+        with open_reader(args.address, args.channel) as reader:
             if args.probe:
                 if b"Command:getversion" not in reader.exchange(b"getversion", 4):
                     raise ConnectionError("RFD40 did not answer the version request")
@@ -146,18 +156,38 @@ def main():
                 return 0
             reader.verify_trigger()
             print("Ready. Aim at the RFID tag, pull the trigger, then release it.", file=sys.stderr, flush=True)
-            epc = choose_epc(reader.scan(args.wait), minimum_rssi=args.minimum_rssi, margin=args.margin)
-            if epc is None:
-                print("No EPC selected. Check the trigger cycle and aim at one nearby tag.", file=sys.stderr)
-                return 2
-            emitted = True
-            print(epc, flush=True)
-            if args.beep_on_read:
-                reader.beep()
-            return 0
+            while True:
+                reports = reader.scan(args.wait)
+                delay = 1
+                epc = choose_epc(reports, minimum_rssi=args.minimum_rssi, margin=args.margin)
+                if epc is None:
+                    if args.listen:
+                        continue
+                    print("No EPC selected. Check the trigger cycle and aim at one nearby tag.", file=sys.stderr)
+                    return 2
+                try:
+                    print(epc, flush=True)
+                except BrokenPipeError:
+                    print("RFD40: EPC consumer closed the output", file=sys.stderr)
+                    return 1
+                emitted = True
+                if args.beep_on_read:
+                    reader.beep()
+                if not args.listen:
+                    return 0
 
     try:
-        return retry_link(session, lambda: emitted)
+        if not args.listen:
+            return retry_link(session, lambda: emitted)
+        while True:
+            try:
+                return session()
+            except OSError as exc:
+                print(f"RFD40: {exc}; reconnecting in {delay}s", file=sys.stderr, flush=True)
+                time.sleep(delay)
+                delay = min(30, delay * 2)
+    except KeyboardInterrupt:
+        return 130
     except (AttributeError, OSError) as exc:
         print(f"RFD40: {exc}", file=sys.stderr)
         return 1
