@@ -60,6 +60,7 @@ def replay_pivot(frames_dir: Path, config: dict, calibration: dict, site: str | 
     import cv2
     import cell_jaw_side as cjs
     import cell_pivot
+    from cell_pivot_bias import free_fit_refusal
 
     root, p = Path(frames_dir), config.get("params")
     if not root.is_dir():
@@ -126,10 +127,9 @@ def replay_pivot(frames_dir: Path, config: dict, calibration: dict, site: str | 
         bias = {"site": site, "kind": "pivot", **({"jaw_sides": sides} if sides else {}), "point_m": [round(tx, 4), round(ty, 4)],
                 "bias_mm": [round(1000 * (cx - tx), 1), round(1000 * (cy - ty), 1)], "radius_mm": free_fit["radius_mm"], "phase_deg": free_fit["phase_deg"],
                 "z_view": cell_pivot.pivot_z_view(config, site), "rms_mm": free_fit["rms_mm"], "n": len(k_tcps), "yaws_fk_deg": [round(t[3], 1) for t in k_tcps]}
-        if free_fit["rms_m"] * 1000 > prm.get(p, "pivot.max_rms_mm") or not (prm.get(p, "pivot.radius_lo_mm") <= free_fit["radius_m"] * 1000 <= prm.get(p, "pivot.radius_hi_mm")):
-            out = {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
-        else:
-            out = {"result": why_s or "calibrated", "bias": bias}
+        kept_marks = [arm_marks[i] for i in free_fit["kept_indices"]]
+        refusal = free_fit_refusal(free_fit, kept_marks, bias, why_s, p)
+        out = {"result": refusal or "calibrated", "bias": bias}
     return {**out, "site": site, "yaws": diag, **({"free_fit": free_fit} if free_fit is not None else {})}
 
 
