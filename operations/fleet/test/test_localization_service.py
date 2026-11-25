@@ -63,6 +63,7 @@ def service(*robots, clock, **kwargs):
     clients = {r.robot_id: r for r in robots}
     kwargs.setdefault("slots", SLOTS)
     kwargs.setdefault("squares", [A, B])
+    kwargs.setdefault("reference_map_id", "occupancy:123456789012")
     return LocalizationService(lambda: clients, clock=clock, wall=clock, **kwargs)
 
 
@@ -644,18 +645,34 @@ def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_on_the_sec
     assert r1.suspects == ["fleet_monitor"]
 
 
-def test_single_scan_candidate_without_asymmetric_evidence_cannot_discredit_a_peer():
+@pytest.mark.parametrize(("pose", "scan_fit", "obj"), [
+    ((0.634, -0.117, 1.553), 0.982, (0.170, 1.308)),
+    ((0.105, -0.437, 1.475), 0.944, (0.422, 0.903)),
+])
+def test_single_scan_candidate_without_asymmetric_evidence_cannot_discredit_a_peer(pose, scan_fit, obj):
+    # Field replay: each observer had one unlabeled object within 25 cm of the target's mirror.
     clock = FakeClock()
-    _, r1, r2, svc = _mirror_locked(clock, slots=[], squares=[])
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.507, -0.041, 0.0)))
+    r2 = Reporting("r2", clock, pose, [obj])
+    svc = service(r1, r2, clock=clock, slots=[], squares=[])
     original = r2.localization_candidates
 
     async def one_candidate():
         latest = await original()
-        return latest.model_copy(update={"candidates": latest.candidates[:1]})
+        candidate = latest.candidates[0].model_copy(update={"scan_fit": scan_fit})
+        return latest.model_copy(update={"candidates": [candidate]})
 
     r2.localization_candidates = one_candidate
     ticks(svc, clock, 1.0)
     assert r1.suspects == []
+
+
+def test_reference_square_and_slot_from_another_map_cannot_authorize_decision_or_monitor():
+    clock = FakeClock()
+    _, r1, r2, svc = _mirror_locked(clock, reference_map_id="other-map")
+    ticks(svc, clock, 3.0)
+    assert r1.suspects == []
+    assert r2.decisions == []
 
 
 class Periodic(Reporting):

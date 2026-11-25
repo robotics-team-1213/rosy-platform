@@ -112,7 +112,7 @@ class Arbiter:
         best = order[0]
         gap = scores[best]["total"] - scores[order[1]]["total"] if len(order) > 1 else math.inf
         lead = self._leads.get(robot)
-        carried = _carried(scores, best)
+        carried = carried_cues(scores, best)
         if carried:
             self._favoured[robot] = report.request_id
         else:
@@ -137,7 +137,7 @@ class Arbiter:
             ttl_s=self.ttl_s)
 
 
-def _carried(scores: list[dict], best: int) -> list[str]:
+def carried_cues(scores: list[dict], best: int) -> list[str]:
     """Asymmetric cues with positive evidence for the leader that beat every other candidate.
 
     Positive: beating a -1 (a peer hidden from the scan, a square not seen) with 0

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 import math
+from pathlib import Path
 from typing import Mapping, Optional
+
+import yaml
 
 from core_common.protocol.localization import LocState
 from fleet.localization import cues, pose_request, service_logic, trust
@@ -13,6 +16,25 @@ from fleet.swarm import transport
 logger = logging.getLogger("fleet.localization")
 
 MapFrame = tuple[str, str]
+
+
+def load_lane_rules(path: Optional[Path]) -> dict:
+    """`lane_rules.yaml` as a dict; {} (no squares, no slots) when absent or unreadable."""
+    if path is None:
+        return {}
+    try:
+        rules = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        logger.warning("localization: lane rules %s unreadable (%s); no squares or slots", path, exc)
+        return {}
+    return rules if isinstance(rules, dict) else {}
+
+
+def default_lane_rules() -> Optional[Path]:
+    """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
+    path = ((Path(__file__).resolve().parents[5] / "middleware") / "perception" / "map" / "map_v2_fleet"
+            / "lane_rules.yaml")
+    return path if path.is_file() else None
 
 
 def map_frame(state: Mapping) -> MapFrame | None:
@@ -215,6 +237,21 @@ def fresh_overhead_sighting(
             return None
         return cues.Sighting(x, y, yaw, captured_at=now - age)
     return None
+
+
+def sighting_in_robot_frame(svc, rid: str, state: Optional[Mapping], now: float) -> Optional[cues.Sighting]:
+    """Compare the scene camera cue only in the robot map's coordinates."""
+    if not svc.overhead_cue or state is None or (frame := map_frame(state)) is None:
+        return None
+    robot_map = frame[0]
+    site_map = svc._current_active_map_id()
+    sighting = fresh_overhead_sighting(svc, rid, now, expected_map_id=site_map or robot_map)
+    if sighting is None:
+        return None
+    if site_map is not None and (fit := svc._binding_fit_for_state(rid, state, expected_site_map=site_map)) is not None:
+        x, y = fit.inverse((sighting.x, sighting.y))
+        return cues.Sighting(x, y, cues.wrap(sighting.yaw - fit.yaw), sighting.captured_at)
+    return sighting if site_map is None or robot_map == site_map else None
 
 
 def forget_removed_robots(svc, current: set) -> None:

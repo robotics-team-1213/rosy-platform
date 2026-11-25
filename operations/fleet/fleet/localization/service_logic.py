@@ -18,7 +18,7 @@ from typing import Hashable, Mapping, Optional, Sequence
 from core_common.protocol.localization import CandidateReport, LocState
 
 from fleet.localization import cues
-from fleet.localization.arbiter import MARGIN, Context, Weights, score
+from fleet.localization.arbiter import MARGIN, Context, Weights, carried_cues, score
 
 #: D-395 §9 monitor thresholds (initial values, tuned in S1).
 SUSPECT_DIST_M = 0.25
@@ -133,10 +133,13 @@ def mirrored(before: cues.Pose, after: cues.Pose) -> bool:
 
 def clear_leader(report: CandidateReport, context: Context, now: float,
                  weights: Weights = Weights(), margin: float = MARGIN) -> Optional[cues.Pose]:
-    """The candidate that leads every other by `margin`, or None."""
-    totals = [row["total"] for row in score(report, context, now, weights)]
+    """The leader with independent asymmetric evidence to observe other robots."""
+    scores = score(report, context, now, weights)
+    totals = [row["total"] for row in scores]
     order = sorted(range(len(totals)), key=lambda i: -totals[i])
     if len(order) > 1 and totals[order[0]] - totals[order[1]] < margin:
+        return None
+    if not any(cue != "peers" for cue in carried_cues(scores, order[0])):
         return None
     c = report.candidates[order[0]]
     return (c.x, c.y, c.yaw)
