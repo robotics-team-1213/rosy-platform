@@ -105,7 +105,7 @@ def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, st
     """Return ``(probe_z_to, error)``; negative probes match ``grasp_planner.limits_at`` first-match ``low_zones``."""
     raw_z_to = site_cfg.get("probe_z_to_m", 0.010)
     probe_z_to = _finite_num(raw_z_to)
-    if probe_z_to is None or not (-0.12 <= probe_z_to < 0.12):
+    if probe_z_to is None or not (-0.12 <= probe_z_to < 0.10):
         return None, f"invalid probe_z_to_m: {raw_z_to!r}"
     if probe_z_to < 0.010:
         xy = _valid_xy(site_cfg.get("place"))

@@ -63,7 +63,7 @@ def test_validated_probe_z_to_envelope_low_zones_and_cli_check(tmp_path, capsys)
     assert cs.validated_probe_z_to(cfg, {"place": [0.15, 0.0], "probe_z_to_m": -0.09}) == (-0.09, None)
     assert cs.validated_probe_z_to(cfg, {"place": [0.15, 0.0], "probe_z_to_m": -0.11})[0] is None
     assert cs.validated_probe_z_to(cfg, {"place": [0.15, 0.0], "probe_z_to_m": -0.13})[0] is None
-    assert cs.validated_probe_z_to(cfg, {"place": [0.15, 0.0], "probe_z_to_m": 0.12})[0] is None
+    assert cs.validated_probe_z_to(cfg, {"place": [0.15, 0.0], "probe_z_to_m": 0.10})[0] is None
 
     plan_path, cfg_path = tmp_path / "plan.json", tmp_path / "cfg.json"
     plan_path.write_text(json.dumps(plan_with_low))
