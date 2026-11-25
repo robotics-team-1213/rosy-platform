@@ -29,6 +29,15 @@ export const workLine = (row, disambiguate = false) => [workKind(row), row.devic
   ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
 export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
 export const requestsPause = status => status === 403;
+export function summarizeWorkCounts(rows = []) {
+  let pending = 0, active = 0, intervention = 0;
+  for (const row of rows) {
+    if (row?.visible_state === "approval_pending") pending++;
+    else if (row?.visible_state === "in_progress" || row?.visible_state === "waiting") active++;
+    else if (row?.visible_state === "intervention") intervention++;
+  }
+  return { total: rows.length, pending, active, intervention };
+}
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한
 // 제안만 범위 안에서 자동 승인된다. law(FL-*)·사람 점유·E-stop은 이 표시로 해제되지 않는다.
@@ -84,14 +93,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.");
   }
   el("work-overview").hidden = !active;
-  // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
-  if (active && !document.getElementById("work-policy-link")) {
-    const policyLink = Object.assign(document.createElement("a"),
-      {id: "work-policy-link", className: "ui-action-link", href: "/console/policy",
-        textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"});
-    policyLink.dataset.kind = "quiet";
-    el("work-overview").prepend(policyLink);
-  }
+  const opsZone = el("work-ops-zone") || el("work-overview");
   // D-865 P3 — 승인 범위 readback과 운영자 전환. 범위 내용(로봇·종류·상한)은 사이트 설정이
   // 정하고 이 화면은 스위치만 보낸다(POST /api/fleet/policy-admission). 해제는 새 자동 승인만
   // 막고 진행 중 작업은 기존 fence·정지 경로를 따른다. 승인 자체는 서버의 정책 principal이 한다.
@@ -108,7 +110,29 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   policyToggle.id = "work-policy-admission-toggle"; policyToggle.hidden = true;
   const policyBody = Object.assign(document.createElement("div"), {id: "work-policy-admission-body"});
   policyBody.append(policyStatus, policyToggle); policyPanel.append(policyBody);
-  el("work-state").before(policyPanel);
+  opsZone.append(policyPanel);
+  // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다(하단 연동·정책 구역으로 이동).
+  if (active && !document.getElementById("work-policy-link")) {
+    const policyLink = Object.assign(document.createElement("a"),
+      {id: "work-policy-link", className: "ui-action-link", href: "/console/policy",
+        textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"});
+    policyLink.dataset.kind = "quiet";
+    opsZone.append(policyLink);
+  }
+  function paintKpis(allRows = null) {
+    if (!el("work-kpi-total")) return;
+    const counts = allRows ? summarizeWorkCounts(allRows) : null;
+    patchText(el("work-kpi-total"), counts ? String(counts.total) : "—");
+    patchText(el("work-kpi-pending"), counts ? String(counts.pending) : "—");
+    patchText(el("work-kpi-active"), counts ? String(counts.active) : "—");
+    patchText(el("work-kpi-intervention"), counts ? String(counts.intervention) : "—");
+    for (const [key, value] of [["pending", counts?.pending || 0], ["intervention", counts?.intervention || 0]]) {
+      const box = document.querySelector(`.work-kpi[data-kpi="${key}"]`);
+      if (!box) continue;
+      if (value > 0) box.dataset.alert = "true";
+      else delete box.dataset.alert;
+    }
+  }
   let policy = null, policyBusy = false, policyNotice = "";
   const policyGate = createPollGate();  // 404(이 Fleet에 기능 없음)면 reset 전까지 같은 404를 다시 두드리지 않는다
   function paintPolicy() {
@@ -173,6 +197,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (list.childElementCount) list.replaceChildren();
     clear();
     clearRequests(message);
+    paintKpis(null);
     patchText(el("work-state"), message);
     patchText(el("work-evidence"), "작업을 선택하세요.");
   }
@@ -235,7 +260,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     for (const row of visibleRows) { const base = workLine(row); labelCounts.set(base, (labelCounts.get(base) || 0) + 1); }
     const rowLabel = row => workLine(row, labelCounts.get(workLine(row)) > 1);
     const listSig = JSON.stringify(visibleRows.map(row => [
-      workKey(row), selected === workKey(row), row.status, rowLabel(row), autoAdmitScope(row, policy).member,
+      workKey(row), selected === workKey(row), row.status, row.visible_state || "", rowLabel(row), autoAdmitScope(row, policy).member,
     ]));
     if (listSig !== lastListSig || (visibleRows.length > 0 && !list.firstElementChild)) {
       lastListSig = listSig;
@@ -243,6 +268,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       list.replaceChildren();
       for (const row of visibleRows) {
         const item = document.createElement("li"), button = document.createElement("ui-button");
+        item.dataset.visibleState = row.visible_state || "";
         button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");  // toggle: aria-pressed draws the selection
         button.dataset.workKey = workKey(row);
         button.setAttribute("data-work-read", "");
@@ -290,6 +316,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       const result = await call("/api/fleet/work"); life.check();
       showKinds(result.kinds);
       if (fresh) return;
+      paintKpis(result.rows);
       const previous = rows.find(row => workKey(row) === selected);
       rows = shown ? result.rows.filter(row => shown.includes(row.visible_state)) : result.rows;
       channelRequestView.setSources(result.rows);
