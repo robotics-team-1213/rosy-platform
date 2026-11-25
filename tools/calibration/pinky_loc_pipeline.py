@@ -8,13 +8,12 @@ import datetime as _dt
 import json
 import math
 import os
-import ssl
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
+
+from pinky_loc_client import FleetClient, PipelineError, _read_token
 
 MIN_SPREAD_M = 0.05
 MAX_RESIDUAL_M = 0.05
@@ -30,80 +29,12 @@ D1022_CODES = frozenset({
 Point = tuple[float, float]
 
 
-class PipelineError(Exception):
-    """Structured refusal from verification or Fleet API checks."""
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
 def _finite(value: Any) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     val = float(value)
     return val if math.isfinite(val) else None
 
-
-def _read_token(token_file: Optional[Path]) -> Optional[str]:
-    if token_file is not None:
-        tok = Path(token_file).read_text(encoding="utf-8").strip()
-        if not tok:
-            raise PipelineError("EMPTY_TOKEN", f"token file {token_file} is empty")
-        return tok
-    return os.environ.get("ROSY_FLEET_TOKEN", "").strip() or None
-
-
-class FleetClient:
-    """Minimal stdlib HTTPS JSON client for Fleet API routes (never logs or echoes tokens)."""
-
-    def __init__(self, base_url: str, *, token: Optional[str] = None, ca_file: Optional[Path] = None,
-                 insecure: bool = False, timeout_s: float = 5.0) -> None:
-        self.base_url = base_url.rstrip("/")
-        self._token = token
-        self.timeout_s = float(timeout_s)
-        self._ssl_ctx = self._build_ssl_context(ca_file=ca_file, insecure=insecure)
-
-    @staticmethod
-    def _build_ssl_context(*, ca_file: Optional[Path], insecure: bool) -> ssl.SSLContext:
-        if insecure:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            return ctx
-        return ssl.create_default_context(cafile=str(ca_file)) if ca_file is not None else ssl.create_default_context()
-
-    def request_json(self, method: str, path: str, body: Optional[Mapping[str, Any]] = None) -> Any:
-        headers = {"Accept": "application/json"}
-        if self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
-        data: Optional[bytes] = None
-        if body is not None:
-            headers["Content-Type"] = "application/json"
-            data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(f"{self.base_url}{path}", data=data, headers=headers, method=method.upper())
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s, context=self._ssl_ctx) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw) if raw.strip() else {}
-        except urllib.error.HTTPError as exc:
-            code, msg = f"HTTP_{exc.code}", exc.reason or f"HTTP {exc.code}"
-            try:
-                err = json.loads(exc.read().decode("utf-8"))
-                detail = err.get("detail") if isinstance(err, dict) else None
-                if isinstance(detail, dict):
-                    code = str(detail.get("code") or code)
-                    nested = detail.get("detail") if isinstance(detail.get("detail"), dict) else None
-                    msg = str(detail.get("message") or (nested or {}).get("message") or detail.get("detail") or msg)
-            except Exception:
-                pass
-            raise PipelineError(code, f"{method} {path}: {msg}") from None
-        except urllib.error.URLError as exc:
-            raise PipelineError("CONNECT_ERROR", f"{method} {path}: {exc.reason}") from None
-
-
-# --------------------------------------------------------------------------- D-1022 pure math
 
 
 def _mean(pts: Sequence[Point]) -> Point:
@@ -353,10 +284,63 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+def _active_site(client: FleetClient) -> tuple[str, int]:
+    active = client.request_json("GET", "/api/fleet/site-map/active")
+    map_id, version = (active.get("map") or {}).get("map_id"), active.get("version")
+    if not isinstance(map_id, str) or type(version) is not int:
+        raise PipelineError("SITE_MAP_NOT_ACTIVE", "Fleet did not report an active site map revision")
+    return map_id, version
+
+
+def _aruco_sample(client: FleetClient, robot_id: str, source_id: str, map_id: str,
+                  max_age_s: float) -> Mapping[str, Any]:
+    response = client.request_json("GET", "/api/fleet/sightings")
+    row = next((row for row in response.get("sightings", []) if row.get("robot_id") == robot_id
+                and row.get("source_id") == source_id), {})
+    age_ms = _finite(row.get("age_ms"))
+    if (row.get("stale") is not False or age_ms is None or not 0 <= age_ms <= 1000 * min(1.0, max_age_s)
+            or row.get("map_id") != map_id or row.get("calibration_source") != "approved_record"
+            or not row.get("calibration_revision") or not str(row.get("processor_revision", "")).startswith("aruco-")
+            or type(row.get("seq")) is not int or _finite(row.get("captured_at")) is None):
+        raise PipelineError("ARUCO_UNAVAILABLE", f"{robot_id} needs a fresh approved ArUco sighting on {map_id}")
+    return row
+
+
+def _aruco_aligned(state: Mapping[str, Any], captured_at: float, max_age_s: float, *, after: bool) -> bool:
+    evidence = state.get("evidence") or {}
+    for key, field in (("pose", "received_at"), ("velocity", "sampled_at")):
+        row = evidence.get(key) or {}
+        try:
+            stamp = _dt.datetime.fromisoformat(row[field])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if row.get("evidence") != "fresh" or stamp.utcoffset() is None:
+            return False
+        offset = stamp.timestamp() - captured_at
+        if (offset > 0) != after or abs(offset) > max_age_s:
+            return False
+    return True
+
+
 def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec: Optional[str],
                grid_id_override: Optional[str], site_map_id_override: Optional[str],
-               holdout: bool, max_track_age_s: float) -> int:
+               holdout: bool, max_track_age_s: float, aruco_source: Optional[str] = None) -> int:
     site_map_id = site_map_id_override
+    sighting = None
+    doc = json.loads(out_path.read_text(encoding="utf-8")) if out_path.exists() else {"samples": []}
+    site_version = doc.get("site_map_version")
+    if aruco_source and site_version is None and doc.get("samples"):
+        raise PipelineError("MAP_BINDING_SITE_UNVERIFIED", "start a new file for samples tied to an active site revision")
+    if aruco_source or site_version is not None:
+        active_id, active_version = _active_site(client)
+        if (doc.get("site_map_id") not in (None, active_id) or site_map_id not in (None, active_id)
+                or site_version not in (None, active_version)):
+            raise PipelineError("MAP_BINDING_SITE_CHANGED", "samples belong to a different site map revision")
+        site_map_id, site_version = active_id, active_version
+    if aruco_source and (pair_spec is not None or holdout):
+        raise PipelineError("BAD_PAIR", "ArUco is for fit samples only; holdout requires --pair with a floor measurement")
+    if site_version is not None and holdout and pair_spec is None:
+        raise PipelineError("BAD_PAIR", "holdout requires --pair with a floor measurement")
     if pair_spec is not None:
         robot_pt, site_pt = _parse_manual_pair(pair_spec)
         map_grid_id = grid_id_override or _find_robot_state(client.request_json("GET", "/api/fleet/state"), robot_id).get("map_grid_id")
@@ -379,20 +363,51 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         rx, ry = _finite(pose.get("x")), _finite(pose.get("y"))
         if rx is None or ry is None:
             raise PipelineError("ROBOT_POSE_MISSING", f"{robot_id} pose is missing")
-        ident = client.request_json("GET", "/api/fleet/tracking/identity")
-        track = next((row for row in (ident.get("robots") or []) if isinstance(row, Mapping) and row.get("robot_id") == robot_id), None)
-        if not isinstance(track, Mapping) or track.get("state") != "CONFIRMED":
-            raise PipelineError("TRACK_NOT_CONFIRMED", f"{robot_id} ceiling camera track is not CONFIRMED")
-        age_s = _finite(track.get("age_s"))
-        if age_s is None or age_s < 0.0 or age_s > max_track_age_s:
-            raise PipelineError("TRACK_STALE", f"{robot_id} track age_s={age_s} exceeds {max_track_age_s}s")
+        if aruco_source:
+            track = sighting = _aruco_sample(client, robot_id, aruco_source, site_map_id, max_track_age_s)
+            if doc.get("aruco_calibration_revision") not in (None, sighting["calibration_revision"]):
+                raise PipelineError("ARUCO_CALIBRATION_CHANGED", "ArUco calibration changed between samples")
+            if any(s.get("captured_at") == sighting["captured_at"] for s in doc.get("samples", [])):
+                raise PipelineError("ARUCO_DUPLICATE", "ArUco frame was already recorded")
+            captured_at, max_age = sighting["captured_at"], min(1.0, max_track_age_s)
+            if not _aruco_aligned(st, captured_at, max_age, after=False):
+                raise PipelineError("SAMPLE_EVIDENCE_STALE", "CORE pose and measured velocity must precede the ArUco capture")
+            deadline = time.monotonic() + max_age
+            while True:
+                after = _find_robot_state(client.request_json("GET", "/api/fleet/state"), robot_id)
+                if _aruco_aligned(after, captured_at, max_age, after=True):
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise PipelineError("SAMPLE_EVIDENCE_STALE", "CORE must report fresh pose and velocity after the ArUco capture")
+                time.sleep(min(0.1, remaining))
+            if after.get("map_grid_id") != map_grid_id:
+                raise PipelineError("MAP_BINDING_GRID_CHANGED", "CORE grid changed while reading ArUco")
+            after_loc = after.get("localization") or {}
+            after_velocity = after.get("velocity") or {}
+            after_linear = _finite(after_velocity.get("linear"))
+            after_angular = _finite(after_velocity.get("angular"))
+            after_pose = after.get("pose") or {}
+            after_x, after_y = _finite(after_pose.get("x")), _finite(after_pose.get("y"))
+            if (after_loc.get("state") != "LOCALIZED" or after_loc.get("pose_frame") != "map"
+                    or after_linear is None or after_angular is None
+                    or abs(after_linear) >= STILL_LINEAR_MPS or abs(after_angular) >= STILL_ANGULAR_RADPS
+                    or after_x is None or after_y is None or math.hypot(after_x - rx, after_y - ry) > 0.01):
+                raise PipelineError("SAMPLE_STATE_CHANGED", "CORE must remain localized and stopped while reading ArUco")
+        else:
+            ident = client.request_json("GET", "/api/fleet/tracking/identity")
+            track = next((row for row in (ident.get("robots") or []) if isinstance(row, Mapping) and row.get("robot_id") == robot_id), None)
+            if not isinstance(track, Mapping) or track.get("state") != "CONFIRMED":
+                raise PipelineError("TRACK_NOT_CONFIRMED", f"{robot_id} ceiling camera track is not CONFIRMED")
+            age_s = _finite(track.get("age_s"))
+            if age_s is None or age_s < 0.0 or age_s > max_track_age_s:
+                raise PipelineError("TRACK_STALE", f"{robot_id} track age_s={age_s} exceeds {max_track_age_s}s")
         sx, sy = _finite(track.get("x")), _finite(track.get("y"))
         if sx is None or sy is None:
             raise PipelineError("TRACK_XY_MISSING", f"{robot_id} track coordinates missing")
-        robot_pt, site_pt, source = (rx, ry), (sx, sy), "live_camera"
+        robot_pt, site_pt, source = (rx, ry), (sx, sy), "approved_aruco" if sighting else "live_camera"
         site_map_id = site_map_id or track.get("map_id")
 
-    doc = json.loads(out_path.read_text(encoding="utf-8")) if out_path.exists() else {"robot_id": robot_id, "map_grid_id": map_grid_id, "site_map_id": site_map_id, "samples": []}
     if doc.get("robot_id") not in (None, robot_id):
         raise PipelineError("ROBOT_MISMATCH", f"{out_path} belongs to {doc.get('robot_id')}, not {robot_id}")
     if doc.get("map_grid_id") not in (None, map_grid_id):
@@ -400,19 +415,44 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
     doc.update({"robot_id": robot_id, "map_grid_id": map_grid_id})
     if site_map_id is not None:
         doc["site_map_id"] = site_map_id
+    if site_version is not None:
+        doc["site_map_version"] = site_version
+    if sighting:
+        doc["aruco_calibration_revision"] = sighting["calibration_revision"]
     doc.setdefault("samples", []).append({
         "robot": [round(robot_pt[0], 6), round(robot_pt[1], 6)],
         "site": [round(site_pt[0], 6), round(site_pt[1], 6)],
         "holdout": bool(holdout), "source": source,
+        **({k: sighting[k] for k in ("source_id", "seq", "captured_at")} if sighting else {}),
         "recorded_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
     })
     _write_json_atomic(out_path, doc)
-    site_pts = [(float(s["site"][0]), float(s["site"][1])) for s in doc["samples"]]
+    fit_samples, checks = _binding_samples(doc)
+    try:
+        _sample_verdict(doc, fit_samples, checks)
+        refusal = None
+    except PipelineError as exc:
+        refusal = {"code": exc.code, "message": exc.message}
+    site_pts = [(float(s["site"][0]), float(s["site"][1])) for s in fit_samples]
     span_m = max((math.dist(a, b) for a in site_pts for b in site_pts), default=0.0)
     print(json.dumps({"robot_id": robot_id, "map_grid_id": map_grid_id, "samples_total": len(doc["samples"]),
-                      "span_m": round(span_m, 3), "ready_for_bind": len(doc["samples"]) >= 4 and span_m >= MIN_SPAN_M,
+                      "span_m": round(span_m, 3), "ready_for_bind": refusal is None, "binding_refusal": refusal,
                       "out": str(out_path)}, indent=2))
     return 0
+
+
+def _binding_samples(doc):
+    samples = doc["samples"]
+    holdout = [s for s in samples if s.get("holdout")]
+    if doc.get("site_map_version") is None and not holdout and len(samples) >= 4:
+        return samples[:-1], samples[-1:]
+    return [s for s in samples if not s.get("holdout")], holdout
+
+
+def _sample_verdict(doc, fit_pairs, holdout):
+    if doc.get("site_map_version") is not None and (not holdout or any(s.get("source") != "manual" for s in holdout)):
+        raise PipelineError("HOLDOUT_REQUIRED", "ArUco fit needs an independently measured manual holdout")
+    return judge_pairs(fit_pairs, holdout)
 
 
 def run_bind(client: FleetClient, *, robot_id: str, pairs_path: Path, approve: bool) -> int:
@@ -422,20 +462,24 @@ def run_bind(client: FleetClient, *, robot_id: str, pairs_path: Path, approve: b
     samples = doc.get("samples") if isinstance(doc, Mapping) else None
     if not isinstance(samples, list) or not samples:
         raise PipelineError("TOO_FEW_PAIRS", f"{pairs_path} contains no samples")
-    holdout = [s for s in samples if s.get("holdout")]
-    fit_pairs = [s for s in samples if not s.get("holdout")]
-    if not holdout and len(samples) >= 4:
-        fit_pairs, holdout = samples[:-1], samples[-1:]
+    fit_pairs, holdout = _binding_samples(doc)
+    verdict = _sample_verdict(doc, fit_pairs, holdout)
+    if (approve and doc.get("site_map_version") is not None
+            and _active_site(client) != (doc.get("site_map_id"), doc["site_map_version"])):
+        raise PipelineError("MAP_BINDING_SITE_CHANGED", "samples belong to a different site map revision")
     payload_pairs = [{"robot": s["robot"], "site": s["site"]} for s in fit_pairs]
     payload_hold = [{"robot": s["robot"], "site": s["site"]} for s in holdout]
-    verdict = judge_pairs(payload_pairs, payload_hold)
     if not approve:
         print(json.dumps({"dry_run": True, "robot_id": robot_id, "map_grid_id": doc.get("map_grid_id"), **verdict}, indent=2))
         return 0
     live_grid_id = _find_robot_state(client.request_json("GET", "/api/fleet/state"), robot_id).get("map_grid_id")
     if doc.get("map_grid_id") and live_grid_id != doc.get("map_grid_id"):
         raise PipelineError("MAP_BINDING_GRID_CHANGED", f"pairs map_grid_id={doc.get('map_grid_id')} != live {live_grid_id}")
-    client.request_json("POST", f"/api/fleet/robots/{robot_id}/map-binding", {"pairs": payload_pairs, "holdout": payload_hold})
+    payload = {"pairs": payload_pairs, "holdout": payload_hold}
+    if doc.get("site_map_version") is not None:
+        payload["expected_frame"] = {"site_map_id": doc["site_map_id"], "site_map_version": doc["site_map_version"],
+                                     "robot_grid_id": doc["map_grid_id"]}
+    client.request_json("POST", f"/api/fleet/robots/{robot_id}/map-binding", payload)
     read = client.request_json("GET", f"/api/fleet/robots/{robot_id}/map-binding")
     if not read.get("matches"):
         raise PipelineError("BINDING_NOT_MATCHED", f"post-approve read returned matches={read.get('matches')} reason={read.get('reason')}")
@@ -468,6 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_samp.add_argument("--site-map-id", default=None)
     p_samp.add_argument("--holdout", action="store_true")
     p_samp.add_argument("--max-track-age-s", type=float, default=1.0)
+    p_samp.add_argument("--aruco-source", help="Use a fresh approved ArUco sighting as a fit sample")
     p_bind = sub.add_parser("bind", help="Judge D-1022 pairs and optionally POST /map-binding")
     p_bind.add_argument("--robot", required=True)
     p_bind.add_argument("--pairs", type=Path, required=True)
@@ -488,7 +533,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.cmd == "sample":
             return run_sample(client, robot_id=args.robot, out_path=args.out, pair_spec=args.pair,
                               grid_id_override=args.grid_id, site_map_id_override=args.site_map_id,
-                              holdout=args.holdout, max_track_age_s=args.max_track_age_s)
+                              holdout=args.holdout, max_track_age_s=args.max_track_age_s,
+                              aruco_source=args.aruco_source)
         if args.cmd == "bind":
             return run_bind(client, robot_id=args.robot, pairs_path=args.pairs, approve=args.approve)
     except PipelineError as exc:
