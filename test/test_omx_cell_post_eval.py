@@ -256,6 +256,29 @@ def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monke
     assert res_sw["applied"] == [] and res_sw["lateral_xy"]["verdict"] == "fail"
 
 
+def test_replayed_pivot_refuses_a_fit_beyond_the_live_bias_limit(tmp_path, monkeypatch):
+    import cell_jaw_side
+    from cell_jaw_side_replay import replay_pivot
+
+    cfg, _, calibration, _, _, _ = _make_setup(tmp_path)
+    yaws = (0.0, 45.0, 90.0, 135.0, 180.0)
+    marks = _synth_marks((0.13, 0.18), yaws, radius_m=0.022)
+    for index, yaw in enumerate(yaws):
+        frame = tmp_path / str(index)
+        frame.mkdir()
+        (frame / "jaws.json").write_text(json.dumps({"fk": (0.10, 0.18, 0.08, yaw)}))
+    monkeypatch.setattr(cell_jaw_side, "jaw_places", lambda *args: None)
+    monkeypatch.setattr(cell_jaw_side, "near_tcp", lambda *args: None)
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda _record, _config, _site, pixel, _z: pixel)
+    monkeypatch.setattr("cell_jaw_side_replay._replay_yaw_tries",
+                        lambda frame, *args: (marks[int(frame.name)], None, None, None))
+
+    result = replay_pivot(tmp_path, cfg, calibration, "beltend")
+
+    assert result["result"] == "bias refused: magnitude is past pivot.max_bias_mm"
+    assert result["bias"]["bias_mm"] == [30.0, 0.0]
+
+
 def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):
     data = {
         "schema": cpb.SCHEMA,
