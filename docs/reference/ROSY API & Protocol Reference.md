@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.470
+**Version:** v1.471
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.471 Retain a pending pose request during localization verification (Fleet)
+
+A robot's localization badge in `GET /api/fleet/state` includes `pose_request_needs_human: true` when the Fleet pose request needs operator review. The Console keeps this warning while CORE checks a candidate. The existing `needs_human` flag continues to represent either CORE or Fleet review.
 
 ### v1.470 Bounded localization candidate search window (CORE)
 
@@ -5092,6 +5096,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.471 | 2026-11-25 | [Fleet] Retain a pending pose request during localization verification |
 | v1.470 | 2026-11-25 | [CORE] Bounded localization candidate search window |
 | v1.469 | 2026-11-25 | [Fleet] Camera continuation after a failed Nav2 route |
 | v1.468 | 2026-11-25 | [Fleet] Approved SLAM for named Nav2 trips |
