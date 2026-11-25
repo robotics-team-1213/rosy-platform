@@ -55,10 +55,27 @@ test("fresh camera and an automatic CORE check are shown without a manual positi
   assert.equal(localizationAttention(escalated, pending, camera).severity, "warn");
   assert.equal(localizationAttention({ ...escalated, pose_request_needs_human: true }, pending, camera).severity, "crit");
   assert.equal(localizationAttention(escalated, { ...pending, needs_human: true }, camera).severity, "crit");
-  assert.match(localizationAttention(escalated, { ...pending, reason: "inject_rejected" }, camera).text, /CORE 후보/);
   assert.doesNotMatch(localizationAttention(escalated, pending, {
     pose: { ...camera.pose, last_sighting_age_s: 10 },
   }).text, /카메라/);
+});
+
+test("a Fleet timeout identifies the rejected CORE candidate and distinguishes native and stale warnings", () => {
+  const loc = row({ state: "CANDIDATES", pose_frame: "map", trusted: false, needs_human: true, label: "위치 확인 필요" });
+  const native = { state: "CANDIDATES", reason: "inject_rejected", needs_human: false, request_id: "205050-2" };
+  const guide = { pose: { state: "LOCALIZED", source: "bridged", anchor_source: "sighting", last_sighting_age_s: .4 } };
+  assert.equal(positionTag(loc, guide, native).text, "Fleet 위치 복구 지연");
+  assert.equal(positionTag(loc, guide, native).cls, "crit");
+  assert.match(localizationAttention(loc, native, guide).text, /CORE가 위치 후보를 확정하지 못했습니다/);
+  assert.match(localizationAttention(loc, native, guide).text, /위치 보조에서 후보와 지도 연결을 확인/);
+  assert.equal(positionTag(loc, guide, { ...native, needs_human: true }).text, "CORE 위치 확인 필요");
+  const laneReturn = { ...loc, pose_request_needs_human: true };
+  assert.equal(positionTag(laneReturn, guide, { ...native, reason: "checking" }).text, "차선 복귀 위치 확인 필요");
+  assert.equal(localizationAttention(laneReturn, native, guide).severity, "crit");
+  assert.equal(positionTag(loc, guide, null, true).text, "CORE 위치 상태 지연");
+  assert.equal(localizationAttention(loc, null, guide, true).severity, "warn");
+  assert.doesNotMatch(localizationAttention(loc, null, guide, true).text, /후보 확인|위치를 직접 지정/);
+  assert.equal(localizationAttention(null, null, null, true), null);
 });
 
 test("a mission held behind an untrusted robot says why", () => {
