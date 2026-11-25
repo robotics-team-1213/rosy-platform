@@ -20,7 +20,7 @@ import cell_auto_pick_plan  # noqa: E402
 import cell_auto_setup  # noqa: E402
 import cell_control_core  # noqa: E402
 import cell_envelope  # noqa: E402
-from cell_finger_room import finger_room_view, free_mm, jaw_margin  # noqa: E402
+from cell_finger_room import finger_room_view, free_mm, jaw_margin, own_removed  # noqa: E402
 import cell_objects  # noqa: E402
 from cell_observe import predicted_pixel  # noqa: E402
 import cell_params as prm  # noqa: E402
@@ -252,7 +252,9 @@ def _check_clearance_and_shift(img, mask, config: dict, cal: dict, site: str, ro
         return [None, None], 0.0, False, o
     rmask, rroi = view
     px_fn = lambda pt: predicted_pixel(config, cal, site, pt)  # noqa: E731
-    room = jaw_margin(rmask, rroi, px_fn, o, closing_deg, config.get("params"), opening_width_mm=span_cm * 10.0)
+    rmask = own_removed(rmask, rroi, px_fn, o)
+    closing_arg = None if round(float((entry.get("grasp") or {}).get("jaw_axis_deg_from_long", 90.0))) % 180 != 0 else closing_deg
+    room = jaw_margin(rmask, rroi, px_fn, o, closing_arg, config.get("params"), opening_width_mm=span_cm * 10.0)
     free_cm = [round(v / 10.0, 2) for v in room["free_mm"]]
     u = math.radians(float(o["long_axis_deg"]))
     dir_long = np.array([math.cos(u), math.sin(u)])
@@ -262,7 +264,7 @@ def _check_clearance_and_shift(img, mask, config: dict, cal: dict, site: str, ro
     if max_shift >= 0.4 and min(end_free) < 15.0 and max(end_free) >= 22.0:
         sign = 1.0 if end_free[1] > end_free[0] else -1.0
         cand_o = {**o, "raw_m": [o["raw_m"][0] + sign * (max_shift / 100.0) * dir_long[0], o["raw_m"][1] + sign * (max_shift / 100.0) * dir_long[1]]}
-        cand_room = jaw_margin(rmask, rroi, px_fn, cand_o, closing_deg, config.get("params"), opening_width_mm=span_cm * 10.0)
+        cand_room = jaw_margin(rmask, rroi, px_fn, cand_o, closing_arg, config.get("params"), opening_width_mm=span_cm * 10.0)
         if cand_room["margin_mm"] is not None or min(cand_room["free_mm"]) >= min(room["free_mm"]):
             best_o, room, shift_cm = cand_o, cand_room, round(sign * max_shift, 2)
             free_cm = [round(v / 10.0, 2) for v in room["free_mm"]]
