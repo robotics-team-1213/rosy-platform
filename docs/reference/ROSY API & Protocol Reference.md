@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.460
+**Version:** v1.461
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.461 Read-only robot map bundle export (Fleet)
+
+Exports the configured robot CORE occupancy grid as a trinary P5 PGM and Nav2 YAML metadata. The SHA-256 verifies the PGM bytes; live map binding identifiers and robot configuration are unchanged.
 
 ### v1.460 Fleet 파이프라인 호밍·VLA/LLM 복구 툴 계약 (Fleet)
 
@@ -5032,6 +5036,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.461 | 2026-11-25 | [Fleet] Additive: GET /api/fleet/robots/{robot_id}/map/bundle |
 | v1.460 | 2026-11-24 | [Fleet] Additive: GET /pipeline/recovery-tools, POST /pipeline/recovery-tools/invoke 및 D-1048 단계적 호밍·시각 체크포인트 |
 | v1.459 | 2026-11-24 | [Fleet] Additive: pinky_dispatch_enabled, depart_s3 출구 배차, cell robot_id 해석, repark ABORTED 대체 |
 | v1.458 | 2026-11-24 | [Cell] Additive: GET /readiness cells breakdown and optional ?cell=cell_s\|cell_ab filter |
