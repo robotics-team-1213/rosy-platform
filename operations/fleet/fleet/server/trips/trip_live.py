@@ -113,7 +113,9 @@ class LiveTrip:
         return self.request.get("drive_mode") == "nav2"
 
     def segment_is_lane(self, index: int) -> bool:
-        return not self.nav2 and self.arc(index).drive_mode == "lane"
+        camera = self.view["detail"].get("camera_lane_fallback") or {}
+        driving_camera = camera.get("phase") == "running" and camera.get("index") == index
+        return (not self.nav2 or driving_camera) and self.arc(index).drive_mode == "lane"
 
     def effective_mode(self, index: int) -> str:
         return "lane" if self.segment_is_lane(index) else "free"
