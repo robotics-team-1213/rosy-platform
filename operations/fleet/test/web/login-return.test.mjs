@@ -40,6 +40,9 @@ test('return rejects external destinations credentials login loops and unknown p
 test('return strips unrecognized query and fragment data', () => {
   assert.equal(loginReturn('/console?token=secret&view=inbox#password', origin), '/console');
   assert.equal(loginReturn('/console/cell?return=https://other.test&inbox=1', origin), '/console/cell');
+  const channel = '/console/cell?channel_request=' + 'a'.repeat(24);
+  assert.equal(loginReturn(channel + '&token=secret', origin), channel);
+  assert.equal(loginReturn(channel + '&channel_request=duplicate', origin), '/console/cell');
   assert.equal(loginHref({origin, href: origin + '/console?view=work'}),
     '/console/login?return=%2Fconsole%3Fview%3Dwork');
 });

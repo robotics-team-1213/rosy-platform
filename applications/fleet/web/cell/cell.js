@@ -8,6 +8,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {bindTokenAccess, classifyAuthFailure} from '/console/assets/fleet-session.js';
 import {childUnitLinks, renderUnitLinks} from '/console/assets/unit-links.js';
+import {createChannelMission} from '/console/assets/cell-channel-mission.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
@@ -133,6 +134,9 @@ async function api(path, options) {
 const revisions = new Map();
 let previewRefs = null, role = null, principal = null, busy = false, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
+const channelMission = createChannelMission({$, scope: pageScope, api, post, action, channelPath, jobStatusLabel,
+  state: () => ({review: channelReview, busy, role, principal, epoch: editEpoch}),
+  setReview: next => { channelReview = next; }});
 const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
 function clearJobSnapshot(summary = '작업 ID로 상태를 확인하세요.') {
   job = null; jobGeneration = null; $('job-state').textContent = ''; $('job-summary').textContent = summary;
@@ -147,6 +151,7 @@ function clearSession() {
   observations.clear(); catalog.clear(); real2sim.clear(); channelReceipt = channelReview = null;
   clearUnitLinks();
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
+  $('cell-channel-reason').value = ''; $('cell-channel-mission').replaceChildren();
   role = null; principal = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
   for (const kind of ['recipe', 'cell']) { $(kind + '-revision').setAttribute('state', 'empty'); $(kind + '-revision').textContent = '저장 전'; }
   $('proposal').textContent = ''; $('saved').hidden = true; $('saved-status').hidden = false;
@@ -167,6 +172,7 @@ function refreshControls() {
     setOffBy(field, busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
   }
   for (const control of document.querySelectorAll('[data-document-edit]')) { setOffBy(control, busy ? '요청 처리 중' : ''); }
+  channelMission.paint();
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
@@ -180,7 +186,8 @@ function refreshControls() {
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
     const allowed = isOperator(role) && !busy && jobAllowed && !sheetBlocked &&
-      (id !== 'propose' || (scopeFilled() && previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
+      (id !== 'propose' || (scopeFilled() && previewRefs !== null &&
+        (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED' && !channelMission.needsReadback))));
     let reason = '';
     if (!allowed) {
       reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
@@ -215,7 +222,8 @@ async function action(fn) {
     if (document.activeElement === document.body && focused?.isConnected && !focused.disabled && focused.getClientRects().length) focused.focus({preventScroll: true});
   }
 }
-function post(path, body) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }
+function post(path, body, signals) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), signals}); }
+
 function references() {
   const result = {};
   for (const kind of ['recipe', 'cell']) {
@@ -389,7 +397,10 @@ function connect(credentialChange = false) {
   observations.clear(); void observations.refresh().then(focusArmFromLink); void catalog.refresh(); void real2sim.refresh();
   void refreshUnitLinks();
   tokenAccess.refreshLogin(false);
-  await list();
+  try { await list(); } catch (error) {
+    if (!channelRequested || error.code !== 'CELL_APP_UNCONFIGURED') throw error;
+    cellServiceUnavailable = true;
+  }
   if (channelRequested) {
     if (!/^[0-9a-f]{24}$/.test(channelId || '')) throw new Error('대화 요청 주소를 확인하세요.');
     const receipts = await api('/api/fleet/channel-requests');
@@ -398,10 +409,12 @@ function connect(credentialChange = false) {
     channelReview = await api(channelPath + '/review');
     $('cell-channel-original').textContent = channelReceipt.content;
     $('cell-channel-request').hidden = false;
+    $('cell-channel-reason').value = channelReview.reason || '';
     $('request-key').value = channelReview.request_key; $('request-key').readOnly = true;
     if (channelReview.work_kind === 'cell_job') $('mission-id').value = channelReview.work_id;
     // Opened from a chat request: start on the step it needs unless the operator already chose one.
     if (!location.hash) location.hash = channelReview.work_kind === 'cell_job' ? '#mission-heading' : '#proposal-heading';
+    await channelMission.loadCandidates();
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
   });
@@ -443,7 +456,7 @@ $('propose').addEventListener('click', () => action(async () => {
   const fields = {...previewRefs, workcell_id: $('workcell').value, instance_id: $('instance').value};
   let result;
   if (channelRequested) {
-    if (!channelReceipt || !channelReview) throw new Error('대화 요청을 다시 확인하세요.');
+    if (!channelReceipt || !channelReview || channelMission.needsReadback) throw new Error('대화 요청을 다시 확인하세요.');
     const reason = $('cell-channel-reason').value.trim();
     if (!reason) throw new Error('원문과 준비한 작업을 확인한 사유를 입력하세요.');
     result = await post(channelPath + '/prepare', {...fields, kind: 'cell_job', reason,

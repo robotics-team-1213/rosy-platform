@@ -169,7 +169,7 @@
           <h3 id="channel-review-heading">대화 요청 검토</h3>
           <p id="channel-review-original"></p>
           <p id="channel-review-state" class="hint" role="status"></p>
-          <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
+          <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">셀에서 팔 작업 준비·승인</a></span>
           <label for="channel-review-reason">검토 사유</label>
           <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
           <fieldset class="review-group">
@@ -195,17 +195,6 @@
             <div class="actions">
               <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
               <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
-            </div>
-          </fieldset>
-          <fieldset class="review-group">
-            <legend>팔 작업 준비 · 승인</legend>
-            <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
-            <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
-            <div class="actions">
-              <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
-              <span id="channel-review-mission-admit-holder" hidden>
-                <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
-              </span>
             </div>
           </fieldset>
           <div class="actions review-disposition">

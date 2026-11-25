@@ -170,6 +170,8 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
             'candidate': None, 'reason': None, 'work_id': None, 'work_kind': None, 'work_status': None,
             'request_key': 'discord-' + request_id}
     api = {**API, path + '/review': view, '/api/fleet/channel-requests': {'rows': [receipt]},
+           '/api/fleet/auth/connection': {'mode': 'paired', 'password_login': True},
+           '/api/fleet/cell-app/documents': {'documents': []},
            '/api/fleet/work': {'rows': [{'source': 'mission', 'source_id': 'owned-source', 'status': 'PROPOSED',
                'action_kind': 'PICK_PLACE', 'device_id': 'omx', 'workcell_id': 'cell', 'reason': None,
                'updated_at': receipt['received_at']}], 'observed_at': receipt['received_at'],
@@ -183,9 +185,17 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
         page.goto(site + '/console?view=work')
         _settle(page, '#channel-requests ui-button')
         page.locator('#channel-requests ui-button').click()
-        expect(page.locator('#channel-review-cell')).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
-        page.locator('#channel-review-mission').select_option('owned-source')
-        page.locator('#channel-review-reason').fill('verified current source candidate')
+        link = page.locator('#channel-review-cell')
+        expect(link).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
+        expect(page.locator('#channel-review-mission')).to_have_count(0)
+        link.click()
+        expect(page.locator('#fleet-login')).to_have_attribute(
+            'href', '/console/login?return=%2Fconsole%2Fcell%3Fchannel_request%3D' + request_id + '&draft=1')
+        page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-token')")
+        page.reload()
+        expect(page.locator('#cell-channel-original')).to_have_text(receipt['content'])
+        page.locator('#cell-channel-mission').select_option('owned-source')
+        page.locator('#cell-channel-reason').fill('verified current source candidate')
 
         def prepare(route):
             body = route.request.post_data_json
@@ -196,13 +206,33 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
             view.update(state='LINKED', work_kind='mission', work_id='mission-new', work_status='PROPOSED', revision=1)
             route.fulfill(json=view)
         page.route('**' + path + '/prepare', prepare)
-        page.locator('#channel-review-mission-prepare').click()
-        expect(page.locator('#channel-review-state')).to_contain_text('승인 전')
+        page.locator('#cell-channel-mission-prepare').click()
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('승인 대기')
         assert len(posts) == 1
-        button = page.locator('#channel-review-mission-admit')
+        page.reload()
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('mission-new')
+        button = page.locator('#cell-channel-mission-admit')
+        api['/api/fleet/dispatch-control']['dispatch_enabled'] = False
+        button.click()
+        expect(page.locator('#notice')).to_contain_text('사이트 정지')
+        assert len(posts) == 1
+        api['/api/fleet/dispatch-control']['dispatch_enabled'] = True
         button.click()
         page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
         assert len(posts) == 1
+
+        def missing_result(route):
+            posts.append(('admit', route.request.post_data_json))
+            route.fulfill(status=503, json={'detail': 'fixture response lost'})
+        page.route('**' + path + '/admit', missing_result)
+        button.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        expect(page.locator('#notice')).to_contain_text('결과 미확인')
+        expect(button).to_be_disabled()
+        assert len(posts) == 2
+        page.unroute('**' + path + '/admit', missing_result)
+        page.reload()
+        expect(button).to_be_enabled()
 
         def admit(route):
             body = route.request.post_data_json
@@ -213,9 +243,9 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
         page.route('**' + path + '/admit', admit)
         button.click()
         page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-        expect(page.locator('#channel-review-state')).to_contain_text('실행 준비')
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('실행 대기')
         expect(button).not_to_be_visible()
-        assert len(posts) == 2 and not errors
+        assert len(posts) == 3 and not errors
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     finally:
         browser.close()
