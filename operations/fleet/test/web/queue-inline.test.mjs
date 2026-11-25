@@ -12,6 +12,14 @@ const { deadlockView, replanView } = await import("../../../../applications/flee
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
 
+test("CORE position intervention distinguishes a known site position", () => {
+  const view = { guide: { robots: [{ robot_id: "a", pose: { state: "LOCALIZED", source: "sighting", x: 0.2, y: 0.1 } }] } };
+  const { attentionItems } = createQueues({ view, streamEvidence: () => null });
+  const robot = nominal({ localization: { state: "CANDIDATES", pose_frame: "odom", needs_human: true } });
+  assert.ok(attentionItems(robot).some((item) => item.severity === "crit"
+    && item.text === ": 현장 위치 확인 · 기체 지도 위치 미확정 — 로봇 위치 메뉴에서 확인하세요"));
+});
+
 test("the four must-expand states: offline, E-stop latched, safety not nominal, calibration", () => {
   assert.equal(mustExpand(nominal()), false);
   assert.equal(mustExpand(nominal({ online: false })), true);

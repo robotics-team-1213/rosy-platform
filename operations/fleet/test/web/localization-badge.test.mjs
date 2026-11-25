@@ -106,8 +106,14 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
   assert.equal(positionTag(legacy, undefined).cls, "warn");
   assert.equal(positionTag(null, undefined), null);
   // A person must decide: still critical.
-  assert.equal(positionTag(row({ needs_human: true, trusted: false, label: "위치 확인 필요" }),
-    guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" })).cls, "crit");
+  const blocked = row({ state: "CANDIDATES", pose_frame: "odom", needs_human: true, trusted: false, label: "위치 확인 필요" });
+  const camera = positionTag(blocked, guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" }));
+  assert.equal(camera.cls, "crit");
+  assert.equal(camera.text, "현장 위치 확인 · 기체 지도 위치 미확정");
+  assert.match(camera.title, /Fleet 지도 위치: 확정 · 카메라/);
+  assert.match(camera.title, /CANDIDATES · odom/);
+  assert.equal(positionTag(blocked, guide({ x: 1, y: 1, state: "DEGRADED", source: "bridged" })).text, "기체 지도 위치 미확정");
+  assert.equal(positionTag(blocked, null).text, "기체 지도 위치 미확정");
 });
 
 test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {

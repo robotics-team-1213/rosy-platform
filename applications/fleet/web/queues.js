@@ -4,7 +4,7 @@ import { setOffBy } from "/common/cause-line.js";
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
 import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel, evidenceAgeText} from "/common/core_ui_logic.js";
 import { ruleMTag } from "./link-tag.js";
-import { localizationUrgent } from "./localization-badge.js";
+import { localizationUrgent, positionTag } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { estopText } from "./motion-readiness.js";
@@ -142,8 +142,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (trip?.wait?.over_bound) items.push({ severity: "warn", text: `: ${tripWaitText(trip)}` });
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     if (localizationUrgent(robot.localization)) {
-      // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
-      items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
+      const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
+      const location = positionTag(robot.localization, guideRow);
+      items.push({ severity: "crit", text: `: ${location.text} — 로봇 위치 메뉴에서 확인하세요` });
     } else if (state.hitl_requested === true) {
       // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는
       // 조작을 모의 버튼으로 걸면 경보가 거짓말을 한다(D-218, F-20). 진짜 개입은 로봇 화면에서.

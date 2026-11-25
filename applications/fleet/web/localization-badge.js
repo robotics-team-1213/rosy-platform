@@ -78,11 +78,19 @@ export function sitePoseText(guideRow) {
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */
 export function positionTag(loc, guideRow) {
-  if (loc?.needs_human) return localizationTag(loc);
   const pose = guideRow?.pose;
-  if (pose && Number.isFinite(pose.x) && Number.isFinite(pose.y)) {
-    const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
-      .filter(Boolean).join(" · ");
+  const siteLocated = pose && Number.isFinite(pose.x) && Number.isFinite(pose.y);
+  const words = siteLocated ? [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
+    .filter(Boolean).join(" · ") : "";
+  if (loc?.needs_human) {
+    const { cls, title } = localizationTag(loc);
+    const text = "기체 지도 위치 미확정";
+    if (siteLocated && pose.state === "LOCALIZED") {
+      return { text: `현장 위치 확인 · ${text}`, cls, title: `Fleet 지도 위치: ${words} · CORE ${title}` };
+    }
+    return { text, cls, title: `CORE ${title}` };
+  }
+  if (siteLocated) {
     return { text: words ? `지도 위치 ${words}` : "지도 위치", cls: pose.state === "LOCALIZED" ? "" : "warn",
       title: `Fleet 지도 위치: ${words || "상태 없음"}` };
   }
