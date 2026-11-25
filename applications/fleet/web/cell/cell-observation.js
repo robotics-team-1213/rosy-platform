@@ -5,7 +5,8 @@ import {createScope} from '/common/scope.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
-import {INCIDENT_BASES, INCIDENT_CAUSES, bindFocusZoom, issueVisionLease} from '/console/assets/cell-frames.js';
+import {buildCameraZoomHeading} from './cell-camera-zoom.js';
+import {INCIDENT_BASES, INCIDENT_CAUSES, issueVisionLease} from '/console/assets/cell-frames.js';
 import {OBS_BASE, compareCameras, formatIncidentCountSummary, isHomeRecovery, partitionIncidents} from '/console/assets/cell-obs-model.js';
 import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
 import {faultLine, incidentHeading, incidentLines, when} from './cell-observation-text.js';
@@ -219,12 +220,11 @@ export function createCellObservation({request, root, credential = () => '', onS
           expires: 0, pending: false, lease: null, identity: null, live: false, hasFrame: false, lastTickSec: -1,
           reason: '', updateVisibility: refreshCell};
         image.onerror = () => staleCamera(entry);
-        card.title = '눌러서 크게 보기'; card.tabIndex = 0; card.setAttribute('role', 'button');
-        card.setAttribute('aria-pressed', 'false'); card.setAttribute('aria-label', `${camera.label} 크게 보기`);
-        bindFocusZoom(card, {onToggle: on => card.setAttribute('aria-pressed', String(on))});
+        const label = camera.stream === 'depth' ? camera.label + ' · 깊이' : camera.label;
+        const heading = buildCameraZoomHeading(card, label);
         entry.label = camera.label;
         staleCamera(entry); cameras.set(camera.source_id, entry); cellState.camEntries.push(entry);
-        card.append(node('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), node('ui-text', camera.role === 'overhead'
+        card.append(heading, node('ui-text', camera.role === 'overhead'
           ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, frameWrap); wall.append(card);
       }
       refreshCell();

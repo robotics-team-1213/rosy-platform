@@ -11,7 +11,7 @@ import {
   streamEvidence, quarterTurn, roadOverlayPoints,
 } from "./site-layer.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
-import { createMapOverlays } from "./map-overlays.js";
+import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
 import { createMapPolling } from "./map-polling.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -34,42 +34,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
   const layerOn = (key) => view.layers?.[key] !== false;
-  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
-  const toggleBar = el("map-overlay-toggles");
-  if (toggleBar) {
-    const syncToggleButtons = () => {
-      const anyOn = subKeys.some((k) => view.layers[k] !== false);
-      for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
-        const k = btn.dataset.layerToggle;
-        if (k === "all") {
-          btn.setAttribute("aria-pressed", String(anyOn));
-          btn.textContent = anyOn ? "전체 표시 켬" : "전체 표시 끔";
-        } else {
-          btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
-        }
-      }
-      const legacyTraffic = el("traffic-toggle");
-      if (legacyTraffic) {
-        legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
-        legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
-      }
-    };
-    scope.listen(toggleBar, "click", (event) => {
-      const btn = event.target.closest("[data-layer-toggle]");
-      if (!btn) return;
-      const key = btn.dataset.layerToggle;
-      if (key === "all") {
-        const nextVal = !subKeys.some(layerOn);
-        for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
-      } else {
-        view.layers[key] = !(view.layers[key] !== false);
-      }
-      syncToggleButtons();
-      draw();
-    });
-    // #traffic-toggle clicks are handled by map-polling.js; a second handler here would cancel the first.
-    syncToggleButtons();
-  }
+  bindLayerToggles({scope, el, view, layerOn, draw});
   const {
     CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, reserveBox, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,

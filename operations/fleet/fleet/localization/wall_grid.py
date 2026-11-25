@@ -10,10 +10,15 @@ from __future__ import annotations
 
 import hashlib
 import math
+import struct
 from typing import Iterable
+
+from core_common.protocol.map_grid import occupancy_map_id
 
 OCCUPIED, FREE, UNKNOWN = 0, 254, 205  # trinary PGM values Nav2 map_server reads with negate 0
 DEFAULT_RESOLUTION_M = 0.025
+OCCUPIED_THRESH = 0.65
+FREE_THRESH = 0.25
 MARGIN_M = 0.10  # unknown border around the walls, so the outside is never cut off
 
 
@@ -68,14 +73,29 @@ def pgm_bytes(grid: dict) -> bytes:
     return f"P5\n{grid['width']} {grid['height']}\n255\n".encode() + body
 
 
+def nav2_grid_id(grid: dict, resolution: float) -> str:
+    """Content id of this trinary artifact as delivered in a ROS OccupancyGrid."""
+    values = {}
+    for value in (OCCUPIED, FREE, UNKNOWN):
+        occupancy = 1.0 - value / 255
+        values[value] = 100 if occupancy > OCCUPIED_THRESH else 0 if occupancy < FREE_THRESH else -1
+    # OccupancyGrid metadata carries resolution as float32, unlike the YAML input.
+    wire_resolution = struct.unpack("<f", struct.pack("<f", resolution))[0]
+    return occupancy_map_id({
+        "width": grid["width"], "height": grid["height"], "resolution": wire_resolution,
+        "origin": {"x": grid["origin"][0], "y": grid["origin"][1], "yaw": 0.0},
+        "data": [values[pixel] for row in grid["rows"] for pixel in row],
+    })
+
+
 def build(map_id: str, version: int, faces, resolution: float = DEFAULT_RESOLUTION_M) -> dict:
     """The artifact Fleet serves: pgm bytes, the Nav2 yaml as a dict, its sha256 and the file stem."""
     grid = rasterize(faces, resolution)
     stem = f"wall_{map_id}_v{version}"
     pgm = pgm_bytes(grid)
     return {"map_id": map_id, "version": version, "resolution": resolution, "file_stem": stem,
-            "pgm": pgm, "sha256": hashlib.sha256(pgm).hexdigest(),
+            "pgm": pgm, "sha256": hashlib.sha256(pgm).hexdigest(), "grid_id": nav2_grid_id(grid, resolution),
             "yaml": {"image": f"{stem}.pgm", "mode": "trinary", "resolution": resolution,
                      "origin": [grid["origin"][0], grid["origin"][1], 0.0], "negate": 0,
-                     "occupied_thresh": 0.65, "free_thresh": 0.25},
+                     "occupied_thresh": OCCUPIED_THRESH, "free_thresh": FREE_THRESH},
             "width": grid["width"], "height": grid["height"]}

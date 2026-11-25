@@ -77,5 +77,6 @@ test('D-601 start check: 출발 가능, 방향 반대, 차선 밖, with numbers 
   assert.match(tripErrorText('TRIP_HEADING_CONFLICT', {heading_err_deg: 178}), /방향 반대\(178°\)$/);
   assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.12}), /차선 밖 12 cm$/);
   assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE'), /카메라/);
+  assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE', {error: 'RATE_LIMITED'}), /조회가 요청 한도/);
   assert.doesNotMatch(tripErrorText('TRIP_LINE_FOLLOW_NOT_ACTIVE'), /카메라 또는 IR/);
 });

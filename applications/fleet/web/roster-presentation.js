@@ -84,7 +84,7 @@ export function navTag(state, robotId = null, nowMs = Date.now()) {
   if (nav === "ARRIVED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "ok" };
   if (nav === "FAILED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "crit" };
   // Navigation IDLE would repeat the mode tag's "대기".
-  return { text: nav === "IDLE" ? "목표 없음" : enumLabel(NAVIGATION_LABEL, nav), cls: "" };
+  return { text: nav === "IDLE" ? "CORE 실행 목표 없음" : enumLabel(NAVIGATION_LABEL, nav), cls: "" };
 }
 
 // 대기에는 세 가지 이유가 있고, 운영자가 할 일이 저마다 다르다. "대기 중" 한 마디로
@@ -155,7 +155,8 @@ function summarizeRobot(robot, view, attentionItems) {
   const power = rosterPower(view, robot, now);
   const heat = stateCurrent ? heatChip(state) : null;
   const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
-  const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow, stateCurrent ? state.localization : null);
+  const loc = view.stateUnavailable ? null
+    : positionTag(robot.localization, guideRow, stateCurrent ? state.localization : null, !stateCurrent);
   const locTitle = loc ? [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ") : undefined;
   const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
   const role = formation?.leader === robot.robot_id ? "대형 리더"

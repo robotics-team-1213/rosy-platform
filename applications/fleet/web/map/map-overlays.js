@@ -4,6 +4,46 @@ import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { robotMapPose } from "./localization-badge.js";
 
+export function bindLayerToggles({scope, el, view, layerOn, draw}) {
+  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
+  const toggleBar = el("map-overlay-toggles");
+  if (!toggleBar) return;
+  const syncToggleButtons = () => {
+    const allState = subKeys.every(layerOn) ? "true" : subKeys.some(layerOn) ? "mixed" : "false";
+    for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
+      const k = btn.dataset.layerToggle;
+      if (k === "all") {
+        btn.setAttribute("aria-pressed", allState);
+        btn.textContent = {true: "전체 표시 켬", mixed: "일부 표시", false: "전체 표시 끔"}[allState];
+      } else {
+        btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
+      }
+    }
+    const legacyTraffic = el("traffic-toggle");
+    if (legacyTraffic) {
+      legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
+      legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
+    }
+  };
+  const toggleLayer = (key) => {
+    if (key === "all") {
+      const nextVal = !subKeys.some(layerOn);
+      for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
+    } else {
+      view.layers[key] = !(view.layers[key] !== false);
+    }
+    syncToggleButtons();
+    draw();
+  };
+  scope.listen(toggleBar, "click", (event) => {
+    const btn = event.target.closest("[data-layer-toggle]");
+    if (btn) toggleLayer(btn.dataset.layerToggle);
+  });
+  const trafficToggle = el("traffic-toggle");
+  if (trafficToggle) scope.listen(trafficToggle, "click", () => toggleLayer("traffic"));
+  syncToggleButtons();
+}
+
 export function createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf }) {
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.

@@ -71,8 +71,11 @@ def choose_unique(report: CandidateReport, camera_xy: Optional[Sequence[float]])
 @dataclass
 class Tiebreak:
     hold_s: float = HOLD_S
-    _lead: dict = field(default_factory=dict)      # robot -> (mode, request_id, x, y, since)
+    _lead: dict = field(default_factory=dict)      # robot -> (mode, request_id, stamp, pose, since)
     _decided: dict = field(default_factory=dict)   # robot -> (request_id, stamp)
+
+    def interrupt(self, robot_id: str) -> None:
+        self._lead.pop(robot_id, None)
 
     def observe(self, report: CandidateReport, camera_xy: Optional[Sequence[float]], now: float) -> Optional[LocalizationDecision]:
         robot = report.robot_id
@@ -88,8 +91,9 @@ class Tiebreak:
             return None
         candidate, evidence = picked
         lead = self._lead.get(robot)
-        if lead is None or lead[0] != mode or lead[1] != report.request_id or (lead[2], lead[3]) != (candidate.x, candidate.y):
-            self._lead[robot] = (mode, report.request_id, candidate.x, candidate.y, now)
+        key = (mode, report.request_id, report.stamp, (candidate.x, candidate.y, candidate.yaw))
+        if lead is None or lead[:4] != key:
+            self._lead[robot] = (*key, now)
             return None
         if now - lead[4] < self.hold_s:
             return None

@@ -1,4 +1,5 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import { buildCameraZoomHeading } from "./cell-camera-zoom.js";
 import { buildInspectorCamFrame, renderOmxInspector } from "/console/assets/omx-inspector.js";
 import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } from "./cell-real2sim-specs.js";
 
@@ -219,35 +220,23 @@ export function createCellViews(ctx) {
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
       card.className = 'cell-observation-card';
-      card.tabIndex = 0;
-      const h4 = document.createElement('h4');
-      h4.textContent = cam.label;
       const img = document.createElement('img');
       img.alt = cam.label;
       const meta = document.createElement('pre');
       meta.textContent = cam.roiTarget ? '천장 Cam ROI 확대' : `Vision 소스 ${cam.source}`;
       pendingBinds.push([img, cam, meta, cam.roiTarget ? '천장 Cam ROI' : cam.source]);
-      card.addEventListener('click', () => {
-        card.classList.toggle('focused');
-        const camTargetMap = {
-          arm_s_top: 'arm_s',
-          arm_s_wrist: 'arm_s',
-          top: 'cell_ab',
-          side: 'cell_ab',
-          arm_a_wrist: 'arm_a',
-          arm_b_wrist: 'arm_b',
-          pinky_dock: cam.roiTarget || 'rosy_46',
-        };
+      const camTargetMap = {
+        arm_s_top: 'arm_s',
+        arm_s_wrist: 'arm_s',
+        top: 'cell_ab',
+        side: 'cell_ab',
+        arm_a_wrist: 'arm_a',
+        arm_b_wrist: 'arm_b',
+        pinky_dock: cam.roiTarget || 'rosy_46',
+      };
+      card.append(buildCameraZoomHeading(card, cam.label, () => {
         selectInspectorTarget(camTargetMap[cam.id] || 'arm_s', cam.id);
-      });
-      card.addEventListener('keydown', ev => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-          ev.preventDefault();
-          card.classList.toggle('focused');
-        } else if (ev.key === 'Escape') {
-          card.classList.remove('focused');
-        }
-      });
+      }), buildInspectorCamFrame(img), meta);
       const camQuickMap = {
         arm_s_top: {label: 'S3 셔틀 실행', preset: 's3_shuttle'},
         arm_s_wrist: {label: '자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
@@ -269,9 +258,7 @@ export function createCellViews(ctx) {
           else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction);
           else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined);
         });
-        card.append(h4, buildInspectorCamFrame(img), meta, actBtn);
-      } else {
-        card.append(h4, buildInspectorCamFrame(img), meta);
+        card.append(actBtn);
       }
       return card;
     }));

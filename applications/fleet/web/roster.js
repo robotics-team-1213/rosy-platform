@@ -87,7 +87,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, now) !== null;
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
-    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow, stateStale ? null : state.localization);
+    const locCurrent = robot.online && robot.state && !stateStale;
+    const loc = view.stateUnavailable ? null
+      : positionTag(robot.localization, guideRow, locCurrent ? state.localization : null, !locCurrent);
     const sitePose = !view.stateUnavailable ? sitePoseText(guideRow) : null;
     const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);

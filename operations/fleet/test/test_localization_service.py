@@ -909,6 +909,8 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
     sightings = FakeSightings(clock)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
     svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "occupancy:123456789012")
+    svc.set_wall_sync(SimpleNamespace(proves_loaded=lambda *_: True, sync=lambda _: asyncio.sleep(0)))
     for _ in range(8):
         sightings.see("r1", 1.0, 0.0, 0.0, age_s=0.4)   # older than 300 ms: not a cue
         ticks(svc, clock, 0.5)
@@ -919,11 +921,13 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
     assert r1.suspects == ["fleet_monitor"]
 
 
-@pytest.mark.parametrize("binding", [None, Fit(math.pi / 2, 1.0, -0.5, ())])
-def test_overhead_sighting_cannot_discredit_a_peer_in_a_different_map_frame(binding):
+@pytest.mark.parametrize("binding,same_map_label", [(None, False), (None, True), (Fit(math.pi / 2, 1.0, -0.5, ()), False)])
+def test_overhead_sighting_requires_proven_same_map_frame(binding, same_map_label):
     clock = FakeClock()
     sightings = FakeSightings(clock)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED"))
+    if same_map_label:
+        r1._state["map_id"] = "site-map"
     svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
     svc.set_active_map_id(lambda: "site-map")
     if binding is not None:
@@ -935,11 +939,10 @@ def test_overhead_sighting_cannot_discredit_a_peer_in_a_different_map_frame(bind
         sightings.see("r1", 1.0, -0.5, math.pi / 2, map_id="site-map")
         ticks(svc, clock, 0.5)
     assert r1.suspects == []
-    if binding is not None:
-        for _ in range(2):
-            sightings.see("r1", 1.0, -0.5, math.pi, map_id="site-map")
-            ticks(svc, clock, 0.5)
-        assert r1.suspects == ["fleet_monitor"]
+    for _ in range(2):
+        sightings.see("r1", 1.0, -0.5, math.pi, map_id="site-map")
+        ticks(svc, clock, 0.5)
+    assert r1.suspects == (["fleet_monitor"] if binding is not None else [])
 
 
 def test_one_overhead_sighting_re_read_counts_once():
@@ -947,6 +950,8 @@ def test_one_overhead_sighting_re_read_counts_once():
     sightings = FakeSightings(clock)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
     svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "occupancy:123456789012")
+    svc.set_wall_sync(SimpleNamespace(proves_loaded=lambda *_: True, sync=lambda _: asyncio.sleep(0)))
     sightings.see("r1", 0.0, 0.0, math.radians(90), age_s=0.0)
     ticks(svc, clock, 0.5)
     ticks(svc, clock, 0.5)                               # the same row, 0.5 s old, read again
