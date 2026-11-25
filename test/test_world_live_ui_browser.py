@@ -155,15 +155,18 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     expect(place.locator("option")).to_have_text(["전체 위치", "S3", "S4"])
                     place.select_option("S4")
                     expect(page.locator("#map-active-canvas")).to_have_attribute("aria-label", "Fleet 활성 지도 · S4")
+                    serve._atomic_write_json(cache, {**live_map, "observed_at_ms": live_map["observed_at_ms"] + 1000})
+                    page.clock.fast_forward(10_100)
+                    expect(received).not_to_have_text(received_v8)
+                    expect(place).to_have_value("S4")
                     serve._atomic_write_json(cache, {
                         **live_map, "version": 9, "sha256": "ef" * 32,
-                        "observed_at_ms": live_map["observed_at_ms"] + 1000,
+                        "observed_at_ms": live_map["observed_at_ms"] + 2000,
                         "map": {**live_map["map"], "places": live_map["map"]["places"][:1]},
                     })
                     page.clock.fast_forward(10_100)
                     expect(page.locator("#map-readout")).to_contain_text("버전9")
                     expect(page.locator("#map-readout")).to_contain_text("위치1")
-                    expect(received).not_to_have_text(received_v8)
                     expect(place.locator("option")).to_have_text(["전체 위치", "S3"])
                     expect(place).to_have_value("")
                     page.evaluate("""() => {
