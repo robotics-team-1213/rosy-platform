@@ -477,8 +477,10 @@ def test_active_site_map_is_available_without_robot_frames(tmp_path: Path, monke
         try:
             bridge_real_fleet.main()
             with urllib.request.urlopen(endpoint, timeout=2) as response:
-                active = json.load(response)["site_map"]
+                reply = json.load(response)
+                active = reply["site_map"]
                 assert response.headers["Cache-Control"] == "no-store"
+            assert 0 < reply["fresh_for_ms"] <= serve.ACTIVE_SITE_MAP_FRESH_MS
             assert active["version"] == 394 and active["sha256"] == "ab" * 32
             assert "activated_by" not in active and "survey" not in active["map"]
             assert active["map"]["places"][0]["id"] == "S4"
