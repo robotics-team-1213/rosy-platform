@@ -455,7 +455,7 @@ class LocalizationService:
         if seen is None or seen[0] != key:
             seen = self._report_seen[rid] = (key, now)
         fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
-        if leader is not None and fresh:
+        if leader is not None and fresh and peers:
             known = known_obstacle_points(self, rid, leader, state, set(peers))
             for peer, seen in service_logic.peer_observations(
                     report.unmapped_objects, leader, peers, known_points=known).items():

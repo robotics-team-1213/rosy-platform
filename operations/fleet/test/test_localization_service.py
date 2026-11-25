@@ -811,6 +811,8 @@ def test_anchor_ignores_offline_parked_robot_at_peers_mirror():
     r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
     site_poses = {
         "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        # Target also having a site pose must never mask its own mirror lock via exclude_ids.
+        "rosy_45": ("world_261026", 0.055, 0.450, 1.658),
         "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
     }
     svc = service(r46, r45, r42, clock=clock, slots=[cues.Slot(*p46)], squares=[p46[:2]])
@@ -822,7 +824,27 @@ def test_anchor_ignores_offline_parked_robot_at_peers_mirror():
     assert r45.suspects == []
     # Without the parked obstacle explanation, a lone object at the mirror still fires suspect.
     site_poses.pop("rosy_42")
-    ticks(svc, clock, 2.0)
+    ticks(svc, clock, 1.0)
+    assert r45.suspects == ["fleet_monitor"]
+
+
+def test_candidates_observer_ignores_offline_parked_robot_at_peers_mirror():
+    """_arbitrate() also suppresses mirror suspects when an offline parked robot explains the point."""
+    clock = FakeClock()
+    r45 = FakeRobot("rosy_45", state=state("rosy_45", "LOCALIZED", pose=(-0.238, 0.373, 1.658)))
+    r46 = Reporting("rosy_46", clock, (0.688, -0.365, 2.347), [(0.311, 0.417)])
+    r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
+    site_poses = {
+        "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
+    }
+    svc = service(r45, r46, r42, clock=clock,
+                  slots=[cues.Slot(0.688, -0.365, 2.347)], squares=[(0.688, -0.365)])
+    svc.set_site_obstacle_pose(lambda rid: site_poses.get(rid))
+    ticks(svc, clock, 5.0)
+    assert r45.suspects == []
+    site_poses.pop("rosy_42")
+    ticks(svc, clock, 1.0)
     assert r45.suspects == ["fleet_monitor"]
 
 
