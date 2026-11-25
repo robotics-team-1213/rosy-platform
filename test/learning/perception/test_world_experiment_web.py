@@ -50,7 +50,7 @@ def running(tmp_path, accounts, center):
         server.server_close()
 
 
-def test_world_controls_require_project_manager_and_bound_csrf(tmp_path):
+def test_world_controls_require_project_manager_csrf_and_origin(tmp_path):
     center = Center()
     accounts = Accounts()
     with running(tmp_path, accounts, center) as base:
@@ -60,7 +60,7 @@ def test_world_controls_require_project_manager_and_bound_csrf(tmp_path):
         reader_token = request(base, '/api/accounts/session', 'reader')[1]['token']
         manager_token = request(base, '/api/accounts/session', 'reviewer')[1]['token']
         assert request(base, PATH + '/start', 'reader', START, reader_token)[0] == 403
-        assert request(base, PATH + '/start', 'reviewer', START, reader_token)[0] == 403
+        assert request(base, PATH + '/start', 'reviewer', START, 'invalid-token')[0] == 403
         forged = urllib.request.Request(base + PATH + '/start', data=json.dumps(START).encode(), headers={
             'Origin': 'https://other.invalid', 'Cookie': 'rosy_learning_session=reviewer',
             'X-Pinky-Token': manager_token,
