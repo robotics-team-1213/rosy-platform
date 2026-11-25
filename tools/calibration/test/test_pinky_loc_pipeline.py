@@ -353,3 +353,47 @@ def test_sample_readiness_matches_binding(tmp_path, capsys, points, expected):
         assert result["binding_refusal"]["code"] == expected
     else:
         assert result["binding_refusal"] is None
+
+
+@pytest.mark.parametrize("pairs,fit_code,site_span_shortfall", [
+    ([
+        ([0.415044, -0.410333], [-0.255224, 0.483407]),
+        ([0.409060, -0.326061], [-0.237613, 0.375868]),
+        ([0.396248, -0.162492], [-0.208315, 0.181937]),
+        ([0.394217, -0.082741], [-0.194098, 0.086882]),
+    ], "COLLINEAR", 0.599),
+    ([(p, p) for p in [(0, 0), (1.2, 0), (0, 0.6)]], None, 0.0),
+])
+def test_versioned_fit_reports_geometry_without_a_floor_holdout(
+        tmp_path, capsys, monkeypatch, pairs, fit_code, site_span_shortfall):
+    monkeypatch.setattr(plp, "_active_site", lambda _: ("world_261026", 394))
+    path = tmp_path / "pairs.json"
+    path.write_text(json.dumps({
+        "site_map_version": 394,
+        "samples": [{"robot": robot, "site": site, "source": "approved_aruco",
+                     "holdout": False} for robot, site in pairs[:-1]],
+    }), encoding="utf-8")
+    (rx, ry), (sx, sy) = pairs[-1]
+
+    plp.run_sample(None, robot_id="rosy_42", out_path=path,
+                   pair_spec=f"{rx},{ry}={sx},{sy}", grid_id_override="g",
+                   site_map_id_override=None, holdout=False, max_track_age_s=1)
+
+    result = json.loads(capsys.readouterr().out)
+    assert not result["ready_for_bind"]
+    assert result["binding_refusal"]["code"] == "HOLDOUT_REQUIRED"
+    assert result["manual_holdout_missing"]
+    geometry = result["fit_geometry"]
+    assert geometry["pairs"] == len(pairs)
+    assert geometry["pairs_remaining"] == 0
+    assert geometry["site_span_shortfall_m"] == pytest.approx(site_span_shortfall)
+    if fit_code:
+        assert geometry["refusal"]["code"] == fit_code
+        assert geometry["robot_spread_m"] == pytest.approx(0.0012)
+        assert geometry["site_spread_m"] == pytest.approx(0.0004)
+    else:
+        assert geometry["refusal"] is None
+    original = path.read_bytes()
+    assert plp.main(["--token-file", str(tmp_path / "unused-token"), "inspect", "--pairs", str(path)]) == 0
+    assert json.loads(capsys.readouterr().out) == result
+    assert path.read_bytes() == original

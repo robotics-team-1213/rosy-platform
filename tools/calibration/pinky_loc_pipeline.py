@@ -77,7 +77,7 @@ def _fit_rigid(robot: Sequence[Point], site: Sequence[Point]) -> tuple[float, fl
 
 def judge_pairs(pairs: Sequence[Mapping[str, Sequence[float]]], holdout: Sequence[Mapping[str, Sequence[float]]] = (),
                 *, max_residual: float = MAX_RESIDUAL_M, min_span: float = MIN_SPAN_M,
-                max_holdout: float = MAX_HOLDOUT_M) -> dict[str, Any]:
+                max_holdout: float = MAX_HOLDOUT_M, require_holdout: bool = True) -> dict[str, Any]:
     """Verify D-1022 point pairs and holdout samples with exact parity to fleet.localization.map_binding."""
     robot = [(float(p["robot"][0]), float(p["robot"][1])) for p in pairs]
     site = [(float(p["site"][0]), float(p["site"][1])) for p in pairs]
@@ -93,7 +93,7 @@ def judge_pairs(pairs: Sequence[Mapping[str, Sequence[float]]], holdout: Sequenc
     span = max((math.dist(a, b) for a in site for b in site), default=0.0)
     if span < min_span:
         raise PipelineError("SPAN", f"pairs span {span:.2f} m, need at least {min_span} m")
-    if not hold_pairs:
+    if require_holdout and not hold_pairs:
         raise PipelineError("HOLDOUT_REQUIRED", "at least one held-out point pair is required")
     errors = [math.dist(_apply_fit(yaw, tx, ty, r), q) for r, q in hold_pairs]
     if any(e > max_holdout for e in errors):
@@ -441,6 +441,11 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         "recorded_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
     })
     _write_json_atomic(out_path, doc)
+    print(json.dumps({**_sample_readiness(doc), "out": str(out_path)}, indent=2))
+    return 0
+
+
+def _sample_readiness(doc):
     fit_samples, checks = _binding_samples(doc)
     try:
         _sample_verdict(doc, fit_samples, checks)
@@ -449,10 +454,13 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         refusal = {"code": exc.code, "message": exc.message}
     site_pts = [(float(s["site"][0]), float(s["site"][1])) for s in fit_samples]
     span_m = max((math.dist(a, b) for a in site_pts for b in site_pts), default=0.0)
-    print(json.dumps({"robot_id": robot_id, "map_grid_id": map_grid_id, "samples_total": len(doc["samples"]),
-                      "span_m": round(span_m, 3), "ready_for_bind": refusal is None, "binding_refusal": refusal,
-                      "out": str(out_path)}, indent=2))
-    return 0
+    progress = {} if doc.get("site_map_version") is None else {
+        "fit_geometry": _fit_progress(fit_samples, site_pts, span_m),
+        "manual_holdout_missing": refusal is not None and refusal["code"] == "HOLDOUT_REQUIRED",
+    }
+    return {"robot_id": doc.get("robot_id"), "map_grid_id": doc.get("map_grid_id"),
+            "samples_total": len(doc["samples"]), "span_m": round(span_m, 3),
+            "ready_for_bind": refusal is None, "binding_refusal": refusal, **progress}
 
 
 def _binding_samples(doc):
@@ -467,6 +475,24 @@ def _sample_verdict(doc, fit_pairs, holdout):
     if doc.get("site_map_version") is not None and (not holdout or any(s.get("source") != "manual" for s in holdout)):
         raise PipelineError("HOLDOUT_REQUIRED", "ArUco fit needs an independently measured manual holdout")
     return judge_pairs(fit_pairs, holdout)
+
+
+def _fit_progress(fit_samples, site_pts, span_m):
+    try:
+        judge_pairs(fit_samples, require_holdout=False)
+        refusal = None
+    except PipelineError as exc:
+        refusal = {"code": exc.code, "message": exc.message}
+    robot_pts = [(float(s["robot"][0]), float(s["robot"][1])) for s in fit_samples]
+    return {
+        "refusal": refusal,
+        "pairs": len(fit_samples),
+        "pairs_remaining": max(0, 3 - len(fit_samples)),
+        "site_span_shortfall_m": round(max(0.0, MIN_SPAN_M - span_m), 3),
+        "robot_spread_m": round(_spread(robot_pts), 4) if robot_pts else 0.0,
+        "site_spread_m": round(_spread(site_pts), 4) if site_pts else 0.0,
+        "minimum_spread_m": MIN_SPREAD_M,
+    }
 
 
 def run_bind(client: FleetClient, *, robot_id: str, pairs_path: Path, approve: bool) -> int:
@@ -533,12 +559,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_bind.add_argument("--robot", required=True)
     p_bind.add_argument("--pairs", type=Path, required=True)
     p_bind.add_argument("--approve", action="store_true")
+    sub.add_parser("inspect", help="Report readiness from a saved pairs file without contacting Fleet").add_argument(
+        "--pairs", type=Path, required=True)
     return ap
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.cmd == "inspect":
+            doc = json.loads(args.pairs.read_text(encoding="utf-8"))
+            if not isinstance(doc, Mapping) or not isinstance(doc.get("samples"), list):
+                raise PipelineError("BAD_PAIR", "pairs file must contain a samples list")
+            print(json.dumps({**_sample_readiness(doc), "out": str(args.pairs)}, indent=2))
+            return 0
         client = FleetClient(args.base_url, token=_read_token(args.token_file), ca_file=args.ca_file,
                              insecure=args.insecure, timeout_s=args.timeout_s)
         if args.cmd == "status":
