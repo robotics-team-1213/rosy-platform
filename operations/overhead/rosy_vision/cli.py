@@ -547,8 +547,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _limit_cv_threads() -> None:
+    try:
+        import cv2
+    except ImportError:
+        return
+    cv2.setNumThreads(1)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.command in ("vision", "station-vision"):
+        _limit_cv_threads()
     if args.command == "receive":
         try:
             asyncio.run(_run_receive(args))

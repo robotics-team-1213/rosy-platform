@@ -23,9 +23,12 @@ def note_event(row: dict) -> None:
 
 
 def note_auto_clear(arm: str, verdict: dict) -> None:
-    """The auto_clear verdict (auto_clear's return) as an event; the incident id is Fleet's, not known here."""
-    note_event({"kind": "auto_clear", "arm": arm, "incident_id": None, "result": bool(verdict.get("cleared")),
-                "why": verdict.get("why")})
+    """The auto_clear verdict (auto_clear's return) as a Fleet-valid auto-events.jsonl row."""
+    why = verdict.get("why")
+    if "safety_score" in verdict:
+        why = f"score={verdict['safety_score']}/{verdict.get('threshold', 95)} ({verdict.get('decision', '?')}): {why or ''}"[:200]
+    note_event({"kind": "auto_clear", "arm": arm, "incident_id": verdict.get("incident_id"),
+                "result": bool(verdict.get("cleared")), "why": why})
 
 
 def _fault_kind(path) -> dict:
@@ -78,24 +81,70 @@ def assessor_token_file() -> Path | None:
     return next((p for p in found if p.is_file()), None)
 
 
-def auto_clear(arm: str, f: dict, link, clear_fn=None) -> dict:
-    """D-1047 (user 2026-11-19, "보류 해제를 완전히 자동화"): the same rule Fleet applies (machine_clearable) is checked here
-    first; when it allows, the cell's AI assessor clears at once, so a link failure on a rested, torque-OFF arm no longer
-    waits for a person. Fleet still re-judges the stored facts and its repeat limit; any refusal leaves the hold."""
-    try:
-        from core_common.protocol.arm_incident.arm_incidents import machine_clearable
+def _ensure_core_common() -> None:
+    here = Path(__file__).resolve()
+    if len(here.parents) > 3:
+        extra = here.parents[3] / "contracts" / "foundation"
+        if extra.is_dir() and str(extra) not in sys.path:
+            sys.path.append(str(extra))
 
-        ok, why = machine_clearable(f)
-    except Exception as exc:  # the rule cannot judge: the hold stays
-        return {"cleared": False, "why": f"rule unavailable: {type(exc).__name__}"}
-    token = assessor_token_file()
-    if not ok or token is None or link is None:
-        return {"cleared": False, "why": why if not ok else "no assessor token or Fleet link"}
+
+def auto_clear(arm: str, f: dict, link, clear_fn=None, *, remeasured=None, recovery=None, camera_check=None,
+               motor_health=None, recent_clears_24h: int = 0, since=None, now=None, incident_id=None,
+               binding=None, min_score: int = 95, only=None) -> dict:
+    """D-1047 + 95+ risk pipeline: enforce Fleet's hard rules and deterministic safety_score >= 95 before calling the
+    AI assessor to clear. Refuses and escalates to a human when any hard veto hits or safety_score < 95."""
     try:
-        (clear_fn or _clear())(arm, f"automatic (D-1047): {why}", token, link, cause="software_or_config", basis="measured")
-        return {"cleared": True, "why": why}
+        _ensure_core_common()
+        from core_common.protocol.arm_incident.arm_incidents import evaluate_clear_safety
+
+        risk = evaluate_clear_safety(
+            f, remeasured=remeasured, recovery=recovery, camera_check=camera_check,
+            motor_health=motor_health, recent_clears_24h=recent_clears_24h,
+            since=since, now=now, incident_id=incident_id, binding=binding, min_score=min_score,
+        )
+    except Exception as exc:  # invalid threshold or rule unavailable: fail closed, hold stays
+        return {
+            "cleared": False, "why": f"rule unavailable: {type(exc).__name__}: {str(exc)[:120]}",
+            "safety_score": 0, "risk_score": 100, "threshold": 95, "decision": "escalate_human",
+            "hard_vetoes": [{"code": "RULE_UNAVAILABLE", "detail": str(exc)[:120]}], "deductions": [],
+        }
+
+    base = {
+        "safety_score": risk["safety_score"], "risk_score": risk["risk_score"],
+        "threshold": risk["threshold"], "decision": risk["decision"],
+        "hard_vetoes": risk["hard_vetoes"], "deductions": risk["deductions"],
+    }
+    if not risk["allowed"]:
+        if risk["hard_vetoes"]:
+            first = risk["hard_vetoes"][0]
+            why = (risk["policy_reason"] if first["code"] == "POLICY_NOT_CLEARABLE"
+                   else f"vetoed (score {risk['safety_score']}/100): "
+                        + ", ".join(v["code"] for v in risk["hard_vetoes"]))
+        else:
+            why = (f"safety score {risk['safety_score']}/{risk['threshold']} below threshold: "
+                   + ", ".join(d["code"] for d in risk["deductions"]))
+        return {"cleared": False, "why": why, **base}
+
+    token = assessor_token_file()
+    if token is None or link is None:
+        return {"cleared": False, "why": "no assessor token or Fleet link", **base}
+
+    extra = {}
+    if remeasured is not None:
+        extra["remeasured"] = remeasured
+    if recovery is not None:
+        extra["recovery"] = recovery
+    if only is not None:
+        extra["only"] = only
+    try:
+        (clear_fn or _clear())(
+            arm, f"automatic (D-1047, score={risk['safety_score']}/100): {risk['policy_reason']}",
+            token, link, cause="software_or_config", basis="measured", **extra,
+        )
+        return {"cleared": True, "why": risk["policy_reason"], **base}
     except (SystemExit, Exception) as exc:  # Fleet refused (kind or repeat limit) or unreachable: the hold stays
-        return {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        return {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:160]}", **base}
 
 
 def _clear():

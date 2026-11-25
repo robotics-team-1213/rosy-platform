@@ -252,3 +252,51 @@ def test_low_ev_blue_ring_glow_matches_default_fractions():
     assert decide([sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
                                 blobs=(LEFT, RIGHT), color="blue", config=higher) for i in range(19)],
                   not_before=0.0, not_after=6.0, now=6.0, config=higher)["reason"] == "none"
+
+
+def test_sample_frame_empty_blobs_returns_early_without_hsv_conversion(monkeypatch):
+    import cv2
+
+    monkeypatch.setattr(cv2, "cvtColor", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("cvtColor called")))
+    sample = sample_frame(np.zeros((16, 16, 3), np.uint8), captured_at=1.5, calibration_revision="r",
+                          blobs=(), color="blue")
+    assert sample.blobs == () and sample.lit == () and sample.lit_moments == ()
+    with pytest.raises(KeyError):
+        sample_frame(np.zeros((16, 16, 3), np.uint8), captured_at=1.5, calibration_revision="r",
+                     blobs=(), color="red")
+
+
+def test_sample_frame_roi_matches_full_frame_hsv_and_moments():
+    import cv2
+
+    config = LedConfig()
+    rng = np.random.default_rng(7)
+    image = rng.integers(40, 140, size=(240, 320, 3), dtype=np.uint8)
+    image[110:128, 95:115] = BLUE
+    image[2:14, 4:18] = AMBER
+    blobs = (
+        Blob(80.3, 120.7, 20.4, 0.5, 1.0),
+        Blob(5.2, 6.8, 12.1, 0.1, 0.1),    # partially clipped at top-left border
+        Blob(500.0, 500.0, 10.0, 2.0, 2.0),  # completely outside image
+    )
+
+    for color in ("blue", "amber"):
+        low, high = config.hues[color]
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lit_mask = (hsv[..., 0] >= low) & (hsv[..., 0] <= high) & (hsv[..., 1] >= config.min_saturation) & (hsv[..., 2] >= config.min_value)
+        rows, cols = np.ogrid[:240, :320]
+        exp_lit, exp_moments = [], []
+        for blob in blobs:
+            dist = np.hypot(cols - blob.x_px, rows - blob.y_px)
+            ring = (dist >= config.ring_inner * blob.radius_px) & (dist <= config.ring_outer * blob.radius_px)
+            cnt = int(ring.sum())
+            exp_lit.append(0.0 if cnt == 0 else float(lit_mask[ring].sum()) / cnt)
+            ys, xs = np.nonzero(lit_mask & (dist <= config.ring_outer * blob.radius_px))
+            n = int(xs.size)
+            exp_moments.append((n, float((xs - blob.x_px).sum()), float((ys - blob.y_px).sum())) if n else (0, 0.0, 0.0))
+
+        got = sample_frame(image, captured_at=2.0, calibration_revision="rev", blobs=blobs, color=color, config=config)
+        assert got.lit == pytest.approx(exp_lit, abs=1e-12)
+        for g_m, e_m in zip(got.lit_moments, exp_moments):
+            assert g_m[0] == e_m[0]
+            assert g_m[1:] == pytest.approx(e_m[1:], abs=1e-9)

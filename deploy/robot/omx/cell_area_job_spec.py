@@ -12,6 +12,7 @@ from cell_job_validators import (
     _match,
     _num,
     _roi,
+    _workdir_rel_path,
 )
 
 Z_METRE = _num(-0.15, 0.35)
@@ -80,5 +81,21 @@ AREA_JOBS = {
             "roi": _roi,
         },
         "optional": {"operator": _actor, "proposer": _actor},
+    },
+    "incident_risk_clear": {
+        "script": "omx_incident_pipeline.py",
+        "moving": False,
+        "camera": True,
+        "argv": ["--arm", "{arm}", "--config", "{config}"],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+        },
+        "optional": {
+            "apply": _bool,
+            "reassess": _bool,
+            "min_score": _int_range(95, 100),
+            "out": _workdir_rel_path,
+        },
     },
 }

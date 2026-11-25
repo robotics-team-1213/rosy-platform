@@ -272,7 +272,7 @@ def status_lines(target: dict, run, ledger=None, now: float | None = None) -> li
         lines.append('  ' + (output.strip() if output else f'no output (exit {code})').replace('\n', '\n  '))
     units = [name for kind, name in target['channels'] if kind == 'user-unit']
     if units:
-        code, output = run([*host_ssh(target['host']), 'bash -s'], input=PROBE.encode())
+        code, output = run([*host_ssh(target['host']), 'timeout -k 5 180 bash -s'], input=PROBE.encode())
         if code != 0:
             lines.append(f'  probe failed (exit {code})')
         else:

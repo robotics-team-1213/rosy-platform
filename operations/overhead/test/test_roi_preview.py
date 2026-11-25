@@ -52,3 +52,39 @@ def test_roi_without_a_preview_signer_is_not_found():
     server = _server()
     server.preview_signer = None
     assert _get(server, ROI_PATH, "Bearer anything").status_code == 404
+
+
+def test_anchor_head_tracker_encodes_roi_jpeg_on_demand_and_caches(monkeypatch):
+    import cv2
+    import numpy as np
+    from rosy_vision.track.anchor_head_tracker import AnchorHeadTracker
+    from rosy_vision.track.model import Calibration, DetectorResult
+
+    encode_calls = []
+    orig_imencode = cv2.imencode
+
+    def spy_imencode(*args, **kwargs):
+        encode_calls.append(args[0])
+        return orig_imencode(*args, **kwargs)
+
+    monkeypatch.setattr(cv2, "imencode", spy_imencode)
+    tracker = AnchorHeadTracker()
+    tracker.update_from_config({"anchors": [
+        {"target_id": "rosy_46", "kind": "pinky", "label": "rosy_46", "base_x": 0.4, "base_y": 0.35, "base_yaw": -1.5708, "updated_at": 1e12},
+    ]})
+    calib = Calibration("ceiling_north", "map_v2_fleet", "cal-v3", tuple(np.diag([0.0025, 0.0025, 1.0]).ravel()),
+                        (640, 360), (-1.0, -1.0, 2.0, 2.0), 60.0)
+    image = np.full((360, 640, 3), 120, np.uint8)
+    tracker.step(image, 100.0, calib, DetectorResult((), "OK"),
+                 source_id="ceiling_north", map_id="map_v2_fleet", processor_revision="p", seq=1)
+    assert encode_calls == []
+
+    arm_bytes, arm_at = tracker.roi_jpeg("arm_a")
+    assert arm_bytes is not None and arm_bytes.startswith(b"\xff\xd8") and arm_at == 100.0
+    assert len(encode_calls) == 1
+    assert tracker.roi_jpeg("arm_a") == (arm_bytes, 100.0)
+    assert len(encode_calls) == 1
+
+    pinky_bytes, pinky_at = tracker.roi_jpeg("rosy_46")
+    assert pinky_bytes is not None and pinky_bytes.startswith(b"\xff\xd8") and pinky_at == 100.0
+    assert len(encode_calls) == 2

@@ -20,7 +20,7 @@
  *     focus()         moves focus to .robot-panel-title (tabindex=-1)
  *     dispose()       unsubscribes from selection
  */
-import {actionIcon} from "/common/ui.js";
+import {actionIcon, iconSvg} from "/common/ui.js";
 import {patchAttr, patchData, patchHidden, patchText} from "/common/control-dom.js";
 import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
@@ -50,12 +50,12 @@ function statusTag(state, text, {icon, danger = false} = {}) {
 let panelSerial = 0;
 
 const SECTION_SPECS = [
-  ["status", "상태"],
-  ["camera", "카메라"],
-  ["commands", "명령"],
-  ["manual", "수동 조종"],
-  ["health", "모터 · 진단"],
-  ["settings", "설정 · 장치"],
+  ["status", "상태", "robot"],
+  ["camera", "카메라", "image"],
+  ["commands", "명령", "next"],
+  ["manual", "수동 조종", "hand"],
+  ["health", "모터 · 진단", "tools"],
+  ["settings", "설정 · 장치", "settings"],
 ];
 
 const JUMP_SPECS = [
@@ -157,7 +157,12 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
     return target;
   };
 
-  function makeSectionWrapper(key, heading, content) {
+  function setHeading(host, text, icon) {
+    const wrap = document.createElement("span"), label = document.createElement("span"), svg = icon ? iconSvg(icon) : null;
+    wrap.className = "robot-panel-sec-title"; label.textContent = text;
+    wrap.append(...(svg ? [svg] : []), label); host.append(wrap); return label;
+  }
+  function makeSectionWrapper(key, heading, content, icon) {
     if (key === "settings" || key === "manual" || key === "camera") {
       const details = document.createElement("details");
       details.className = "robot-panel-section";
@@ -169,7 +174,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
         });
       }
       const summary = document.createElement("summary");
-      summary.textContent = heading;
+      const headingEl = setHeading(summary, heading, icon);
       details.append(summary, content);
       if (key === "manual") {
         details.addEventListener("toggle", () => {
@@ -177,17 +182,17 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
           else onManualCollapse?.();
         });
       }
-      return {wrapper: details, headingEl: summary};
+      return {wrapper: details, headingEl};
     }
     const section = document.createElement("section");
     section.className = "robot-panel-section";
     section.dataset.section = key;
     const h3 = document.createElement("h3");
     h3.id = `robot-panel-sec-${panelId}-${key}`;
-    h3.textContent = heading;
+    const headingEl = setHeading(h3, heading, icon);
     section.setAttribute("aria-labelledby", h3.id);
     section.append(h3, content);
-    return {wrapper: section, headingEl: h3};
+    return {wrapper: section, headingEl};
   }
 
   function syncJumps(presentSections) {
@@ -310,7 +315,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
     const headingsSpec = typeof sectionHeadings === "function" ? sectionHeadings(profile, detail) : sectionHeadings;
     const presentSections = new Set();
     const desiredNodes = [];
-    for (const [key, defaultHeading] of SECTION_SPECS) {
+    for (const [key, defaultHeading, icon] of SECTION_SPECS) {
       const heading = headingsSpec?.[key] || defaultHeading;
       const render = sections?.[key];
       const content = typeof render === "function" ? render(profile, detail, links) : null;
@@ -331,7 +336,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
         }
         desiredNodes.push(existing.wrapper);
       } else {
-        const {wrapper, headingEl} = makeSectionWrapper(key, heading, content);
+        const {wrapper, headingEl} = makeSectionWrapper(key, heading, content, icon);
         sectionMap.set(key, {wrapper, content, headingEl});
         desiredNodes.push(wrapper);
       }

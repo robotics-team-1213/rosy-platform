@@ -8,6 +8,7 @@
     <arg name="use_sim_time" default="false"/>
     <arg name="params_file" default="$(find-pkg-share navigation)/params/nav2_params.yaml"/>
     <arg name="autostart" default="true"/>
+    <arg name="bond_timeout" default="0.0"/>
     <arg name="container_name" default="nav2_container"/>
     <arg name="use_composition" default="False"/>
     <arg name="use_respawn" default="False"/>
@@ -33,6 +34,7 @@
         <composable_node pkg="nav2_lifecycle_manager" plugin="nav2_lifecycle_manager::LifecycleManager" name="lifecycle_manager_localization">            
             <param name='use_sim_time' value="$(var use_sim_time)"/>
             <param name='autostart' value="$(var autostart)"/>
+            <param name='bond_timeout' value="$(var bond_timeout)"/>
             <param name='node_names' value="$(var lifecycle_nodes)"/>
         </composable_node>  
     </load_composable_node>
@@ -64,6 +66,7 @@
         <node pkg="nav2_lifecycle_manager" exec="lifecycle_manager" name="lifecycle_manager_localization" output="screen">
             <param name='use_sim_time' value="$(var use_sim_time)"/>
             <param name='autostart' value="$(var autostart)"/>
+            <param name='bond_timeout' value="$(var bond_timeout)"/>
             <param name='node_names' value="$(var lifecycle_nodes)"/>
         </node>
     </group>

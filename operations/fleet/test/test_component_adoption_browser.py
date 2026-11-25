@@ -136,13 +136,15 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
                 cam_sec = panel.locator('details[data-section="camera"]')
                 if not cam_sec.evaluate("n => n.open"):
                     cam_sec.locator("summary").click()
-                cam_btn = cam_sec.locator("ui-button")
-                expect(cam_btn).to_have_attribute("disabled", "")
-                assert "오프라인" in (cam_btn.get_attribute("reason") or "")
-                expect(cam_btn.locator("small[data-reason]")).to_be_visible()
+                front_btn = cam_sec.locator("ui-button", has_text="전면 카메라")
+                roi_btn = cam_sec.locator("ui-button", has_text="천장 확대 (ROI)")
+                expect(front_btn).to_have_attribute("disabled", "")
+                expect(roi_btn).not_to_have_attribute("disabled", "")
+                assert "오프라인" in (front_btn.get_attribute("reason") or "")
+                expect(front_btn.locator("small[data-reason]")).to_be_visible()
                 mobile_btn.click()
                 expect(panel).to_have_attribute("data-robot-id", mobile_id)
-                expect(cam_sec.locator("ui-button")).not_to_have_attribute("disabled", "")
+                expect(front_btn).not_to_have_attribute("disabled", "")
                 expect(cam_sec.locator("ui-button small[data-reason]")).to_have_count(0)
 
         # Switching to observed OMX arm via dock hides mobile jog, marks unverified joints, and collapses empty telemetry plot.

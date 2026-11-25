@@ -104,11 +104,11 @@ def camera_roles() -> dict:
 
 def unit_tail(role) -> str:
     return subprocess.run(["journalctl", "--user", "-u", f"rosy-omx-camera@{role}", "-n", "1", "-o", "cat", "--no-pager"],
-                          capture_output=True, text=True).stdout
+                          capture_output=True, text=True, timeout=15).stdout
 
 
 def unit_restart(role) -> None:
-    subprocess.run(["systemctl", "--user", "restart", f"rosy-omx-camera@{role}"], check=True)
+    subprocess.run(["systemctl", "--user", "restart", f"rosy-omx-camera@{role}"], check=True, timeout=15)
     time.sleep(8)  # the preview republishes within a few seconds (2026-11-04)
 
 
@@ -184,7 +184,7 @@ def port_set(ports, disabled) -> None:
     for port in ports:
         try:
             subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
-                           capture_output=True, check=True)
+                           capture_output=True, check=True, timeout=15)
         except (OSError, subprocess.SubprocessError) as failure:
             if disabled:
                 raise
@@ -198,25 +198,25 @@ def leaf_authorize(leaf, enabled) -> None:
     leaf_path = Path(leaf)
     if (leaf_path / "bDeviceClass").exists() and (leaf_path / "bDeviceClass").read_text().strip() == "09":
         raise OSError(f"refused to de-authorize USB hub {leaf_path.name}")
-    subprocess.run(["sudo", "-n", "tee", f"{leaf_path}/authorized"], input="1" if enabled else "0", text=True, capture_output=True, check=True)
+    subprocess.run(["sudo", "-n", "tee", f"{leaf_path}/authorized"], input="1" if enabled else "0", text=True, capture_output=True, check=True, timeout=15)
 
 
 def camera_rebind() -> None:
     """Run the one-shot camera symlink binder after a USB leaf re-authorization."""
-    subprocess.run(["systemctl", "--user", "start", "rosy-omx-cameras-bind.service"], check=False)
+    subprocess.run(["systemctl", "--user", "start", "rosy-omx-cameras-bind.service"], check=False, timeout=15)
 
 
 def camera_units(role, up) -> None:
     """The bind timer restarts the preview every 20 s, so it goes down first and up last."""
     names = ["rosy-omx-cameras-bind.timer", f"rosy-omx-camera@{role}"]
-    subprocess.run(["systemctl", "--user", "start" if up else "stop", *names], check=True)
+    subprocess.run(["systemctl", "--user", "start" if up else "stop", *names], check=True, timeout=15)
     if up:
         time.sleep(8)
 
 
 def sessions():
     """Command lines of every running record_session.py: a `--io chunk-io` one is the runner that owns the bus."""
-    text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
+    text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True, timeout=15).stdout
     return [line for line in text.splitlines() if "record_session.py" in line]
 
 

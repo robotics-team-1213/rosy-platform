@@ -419,3 +419,16 @@ def test_a_deadline_lock_takes_its_baseline_from_the_next_full_window():
     count = len(_requests(phone))
     _run(tuner, phone, end, 400.0, lambda ev, locked, now: Measurement(4.5, 0.3, 0.005, luma=120.0))
     assert len(_requests(phone)) > count  # clip past the limit still tunes again
+
+
+def test_scorer_throttles_to_one_hz_when_locked_and_stays_immediate_when_unlocked():
+    scorer = Scorer(None)
+    image, calib = _synthetic(120, 220, 10.0)
+    assert scorer.measure(image, calib, locked=False, now=0.0) is not None
+    assert scorer.measure(image, calib, locked=False, now=0.2) is not None
+    assert scorer.measure(image, calib, locked=True, now=1.0) is not None
+    assert scorer.measure(image, calib, locked=True, now=1.3) is None
+    assert scorer.measure(image, calib, locked=True, now=1.99) is None
+    assert scorer.measure(image, calib, locked=True, now=2.0) is not None
+    # Returning to unlocked clears the throttle immediately.
+    assert scorer.measure(image, calib, locked=False, now=2.1) is not None

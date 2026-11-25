@@ -110,7 +110,7 @@ export GZ_PARTITION=$NAME GZ_IP=127.0.0.1 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOS
 export REQ=deploy/robot/pinky_pro/requirements-core.txt OUT TMPDIR=$OUT/tmp ROS_LOG_DIR=$OUT/ros-log
 export FLEET_REQ=deploy/site/requirements-fleet.txt LEARNED_REQ=deploy/robot/pinky_pro/image/learned-perception-requirements.txt
 export PYDEPS=$R/sim-pydeps/$( { sha256sum "$REQ" "$FLEET_REQ" "$LEARNED_REQ"; printf '%s' "$INNER"; } | sha256sum | cut -c1-12)
-timeout -k 30 "$SECS" systemd-run --user --scope -q --unit "rosy-sim-$NAME" \
+timeout -k 30 "$SECS" systemd-run --user --scope --collect -q --unit "rosy-sim-$NAME" \
   -p MemoryMax="$MEM" -p CPUQuota="$((CPUS * 100))%" nice -n 10 bash "$OUT/inner.sh" "$@" &
 wait $!
 """

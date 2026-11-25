@@ -116,3 +116,41 @@ export function robotProfile(source, {staleAfterS = 5, lowBatteryPct = 20} = {})
     detail: typeof source.detail === "string" && source.detail.trim() ? source.detail.trim() : null,
   };
 }
+
+const fmtCoord = v => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
+
+/** Compute finite {x, y, yaw} pose for an OMX arm from anchor telemetry or static cell defs. */
+export function armEffectivePose(def, anc) {
+  const src = finite(anc?.base_x) && finite(anc?.base_y) ? anc
+    : finite(def?.base_x) && finite(def?.base_y) ? def : null;
+  if (!src) return undefined;
+  return {x: src.base_x, y: src.base_y, yaw: finite(anc?.head_yaw) ? anc.head_yaw : finite(def?.head_yaw) ? def.head_yaw : 0};
+}
+
+/** Format station, cell, and base coordinates for an OMX arm without fabricated fallbacks. */
+export function armPositionLine(def, anc, cellId) {
+  const prefix = [def?.stationId, cellId].filter(Boolean).join(" · ");
+  const pose = armEffectivePose(def, anc);
+  return pose ? `${prefix} · (${fmtCoord(pose.x)}, ${fmtCoord(pose.y)}) m` : prefix;
+}
+
+/** Ordered D-136 camera channels for an OMX arm; arm_s strictly excludes side cameras. */
+export function armCameraChannels(armId, obsCameras = []) {
+  const cams = Array.isArray(obsCameras) ? obsCameras : [], list = [];
+  const notSide = c => armId !== "arm_s" || (c?.source_id !== "omx_side" && c?.source_id !== "side" && c?.role !== "side");
+  const wrist = cams.find(c => c?.source_id && c.arm_id === armId && notSide(c));
+  if (wrist) list.push({id: "wrist", label: "손목", source: wrist.source_id});
+  const top = cams.find(c => c?.source_id === (armId === "arm_s" ? "omx_arm_s_top" : "omx_overhead") && notSide(c));
+  if (top) list.push({id: "overhead", label: "상단", source: top.source_id});
+  if (armId !== "arm_s") {
+    const side = cams.find(c => c?.source_id === "omx_side");
+    if (side) list.push({id: "side", label: "측면", source: side.source_id});
+  }
+  list.push({id: "roi", label: "천장 확대 (ROI)", roiTarget: armId});
+  return list;
+}
+
+/** Ordered camera channels for a mobile AMR (D-801 front WHEP + D-136 ceiling ROI). */
+export function mobileCameraChannels(robotId) {
+  return [{id: "front", label: "전면 카메라"}, {id: "roi", label: "천장 확대 (ROI)", roiTarget: robotId}];
+}

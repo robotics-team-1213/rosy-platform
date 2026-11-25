@@ -789,3 +789,41 @@ def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge()
     assert type(Service.wall_sync).__name__ == "WallMapSync"
     assert row["localization"]["label"] == "위치 확인 필요"
     assert row["localization"]["state"] == "CANDIDATES" and row["localization"]["trusted"] is False
+
+
+def test_telemetry_polling_paths_skip_api_audit_while_estop_stays_audited(tmp_path):
+    from types import SimpleNamespace
+    from fleet.server.site_auth import _skip_api_audit, build_authorize, parse_site_principals
+
+    robot = FakeRobot("rosy_01")
+    task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [robot])
+    site_users = {sha256(b"op-token").hexdigest(): {"principal_id": "op-1", "role": "operator"}}
+    principals = parse_site_principals(site_users, console)
+    authorize = build_authorize(None, principals, task_service)
+
+    exempt_paths = (
+        "/api/fleet/traffic/signals/presence",
+        "/api/fleet/signals/presence",
+        "/api/fleet/goal-lease/presence",
+        "/api/fleet/pipeline/cell-quality",
+        "/api/fleet/vision/lease",
+        "/api/fleet/pipeline/cell-tasks/claim",
+        "/api/fleet/pipeline/cell-camera/cam-1/frame",
+        "/api/fleet/pipeline/cell-tasks/task-123/bed-observation",
+    )
+    for path in exempt_paths:
+        assert _skip_api_audit(path) is True
+        req = SimpleNamespace(method="POST", url=SimpleNamespace(path=path), state=SimpleNamespace())
+        authorize(req, authorization="Bearer op-token")
+        assert getattr(req.state, "site_api_audit_id", None) is None
+    assert task_store.api_audit() == []
+
+    assert _skip_api_audit("/api/fleet/estop") is False
+    client = TestClient(create_app(console, task_service=task_service, site_users=site_users))
+    assert client.post("/api/fleet/estop", headers={"Authorization": "Bearer op-token"}).status_code == 200
+    assert [(r["path"], r["event_type"], r["status_code"]) for r in task_store.api_audit()] == [
+        ("/api/fleet/estop", "RESULT", 200),
+        ("/api/fleet/estop", "INTENT", None),
+    ]

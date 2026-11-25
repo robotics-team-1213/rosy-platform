@@ -338,9 +338,6 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         read_state=map_pose.state, require_named_operator=require_named_operator,
         read_guard=read_guard, record_event=site_maps.record_event,
         busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
-    install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
-                             require_named_operator=require_named_operator,
-                             record_event=site_maps.record_event)
     if getattr(site_maps, "path", None) is not None:
         from fleet.server.named_stop_store import NamedStopStore
         console.goal_leases.restore_named_stop(NamedStopStore(site_maps.path))
@@ -383,6 +380,10 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
 
     def cable_inhibited(robot):
         return getattr(app.state, "cable_tangled", None) is not False or robot in app.state.tethers
+
+    install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
+                             require_named_operator=require_named_operator,
+                             record_event=site_maps.record_event, cable_inhibited=cable_inhibited)
 
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
     from fleet.server.auto_repark import AutoNamedCorrection

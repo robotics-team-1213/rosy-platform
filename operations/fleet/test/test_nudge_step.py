@@ -27,8 +27,10 @@ def _app(tmp_path):
     robot = FakeRobot("r1", state={"robot_id": "r1"})
     console = FleetConsole([RobotEndpoint("r1", "http://127.0.0.1:8080", "robot-rest")], [robot])
     task_service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"r1"})
-    return create_app(console, console_token=OPERATOR, task_service=task_service,
-                      start_task_dispatcher=False, site_users=_users()), robot
+    app = create_app(console, console_token=OPERATOR, task_service=task_service,
+                     start_task_dispatcher=False, site_users=_users())
+    app.state.cable_tangled = False
+    return app, robot
 
 
 def _post(client, body=None, token=NAMED, robot="r1"):
@@ -55,6 +57,40 @@ def test_a_forward_step_with_a_distance(tmp_path):
         assert reply.status_code == 200
         assert reply.json()["kind"] == "nudge_forward"
     assert robot.missions == [("nudge_forward", 0.05, pytest.approx(0.05 / 0.03 + 5.0), None)]
+
+
+@pytest.mark.parametrize("cable", [True, None])
+def test_a_step_requires_confirmed_cable_clearance(tmp_path, cable):
+    app, robot = _app(tmp_path)
+    with TestClient(app) as client:
+        app.state.cable_tangled = cable
+        reply = _post(client, {"direction": "forward"})
+        assert reply.status_code == 409
+        assert reply.json()["detail"]["code"] == "STEP_CABLE_INHIBITED"
+    assert robot.missions == []
+
+
+def test_a_step_refuses_when_the_localization_traffic_hold_fails(tmp_path, monkeypatch):
+    async def failed_hold(self, robot_id):
+        raise RuntimeError("navigation cancellation not confirmed")
+
+    monkeypatch.setattr(FleetConsole, "hold_for_localization", failed_hold)
+    app, robot = _app(tmp_path)
+    with TestClient(app) as client:
+        reply = _post(client, {"direction": "forward"})
+        assert reply.status_code == 409
+        assert reply.json()["detail"]["code"] == "STEP_TRAFFIC_BUSY"
+    assert robot.missions == []
+
+
+def test_a_step_refuses_an_active_formation_without_asking_it_to_stop(tmp_path, monkeypatch):
+    monkeypatch.setattr(FleetConsole, "formation_status", lambda self: {"active": True})
+    app, robot = _app(tmp_path)
+    with TestClient(app) as client:
+        reply = _post(client, {"direction": "forward"})
+        assert reply.status_code == 409
+        assert reply.json()["detail"]["code"] == "STEP_TRAFFIC_BUSY"
+    assert robot.missions == []
 
 
 def test_bad_direction_or_distance_is_rejected(tmp_path):

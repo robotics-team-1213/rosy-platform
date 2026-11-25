@@ -3,6 +3,8 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
     PATH=/opt/rosy-venv/bin:$PATH \
     PYTHONPATH=/opt/rosy/src/site/vision:/opt/rosy/src/site/games:/opt/rosy/src/contracts/foundation
 

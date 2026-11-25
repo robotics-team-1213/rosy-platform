@@ -151,7 +151,7 @@ def run_db_self_test(store_path: Path | str | None, *, context_log: Any = None,
 def prune_expired_online(store_path: Path | str, settings: Mapping[str, Any], *,
                          context_log: Any = None) -> dict[str, int]:
     deleted = {key: 0 for key in ("fleet_task_history", "device_pairing_audit", "core_event_audit",
-                                  "fleet_api_audit", "sighting_audit")}
+                                  "fleet_api_audit", "sighting_audit", "fleet_ai_facts")}
     now = datetime.now(timezone.utc)
     with closing(connect_sqlite(store_path)) as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -170,6 +170,9 @@ def prune_expired_online(store_path: Path | str, settings: Mapping[str, Any], *,
                     ((now - timedelta(days=int(settings["audit_retention_days"]))).timestamp(),)).rowcount
             if audit and "core_event_audit" in tables:
                 deleted["core_event_audit"] = conn.execute("DELETE FROM core_event_audit WHERE received_at < ?", (audit,)).rowcount
+            if audit and "fleet_ai_facts" in tables:
+                deleted["fleet_ai_facts"] = conn.execute("DELETE FROM fleet_ai_facts WHERE received_at < ?",
+                    ((now - timedelta(days=int(settings["audit_retention_days"]))).timestamp(),)).rowcount
             sighting = cutoff("sighting_retention_days")
             if sighting and "sighting_audit" in tables:
                 deleted["sighting_audit"] = conn.execute("DELETE FROM sighting_audit WHERE received_at < ?",

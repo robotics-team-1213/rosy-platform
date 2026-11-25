@@ -8,23 +8,23 @@ import { createRobotDock } from "/console/assets/robot-dock.js";
 import { createRobotPanel } from "/console/assets/robot-panel.js";
 import { Robot3dHost, TelemetryChartHost, PanelKvList } from "/console/assets/cockpit-hosts.js";
 import { createMotorHealthState, renderMotorHealth } from "/common/motor-health.js";
-import { robotProfile } from "/console/assets/robot-profile.js";
+import { robotProfile, armEffectivePose, armPositionLine, armCameraChannels, mobileCameraChannels } from "/console/assets/robot-profile.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
-import { node, patchHidden, patchText } from "/common/control-dom.js";
+import { node } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { createLocalizationPanel } from "./localization-panel.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
-import { powerHealthView } from "./power-health-view.js";
+import { rosterPower } from "./roster-presentation.js";
 import { staleAgeS } from "./state-age.js";
 
 export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "" }) {
   const locPanel = createLocalizationPanel({ scope, view, auth, call, log, render, confirmedAction, isOperator, namedReason });
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
-  const armFeed = createCellFrameFeed({ call, scope, intervalMs: 2000 });
-  armFeed.setRunning(false);
+  const camFeed = createCellFrameFeed({ call, scope, intervalMs: 2000 });
+  camFeed.setRunning(false);
   const armHealthState = createMotorHealthState();
   const statusWrap = document.createElement("div");
   statusWrap.className = "robot-panel-status-wrap";
@@ -37,20 +37,15 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   const cameraBox = document.createElement("div");
   cameraBox.className = "robot-panel-camera-box";
   const cameraToggleSlot = document.createElement("div");
-  const armCameraHint = node("p", "팔 카메라는 작업 화면(셀)에서 확인합니다.", "hint");
-  const armCamBox = document.createElement("div");
-  armCamBox.className = "robot-panel-camera-box";
-  const armCamToggleSlot = document.createElement("div");
-  const armCamFrame = document.createElement("div");
-  armCamFrame.className = "omx-inspector-cam-frame";
-  const armCamImg = document.createElement("img");
-  armCamImg.className = "omx-inspector-main-cam omx-inspector-cam";
-  armCamImg.alt = "선택한 팔 카메라 실시간 영상";
-  const armCamStandby = node("span", "영상 대기", "omx-inspector-cam-standby");
-  armCamStandby.setAttribute("role", "status");
-  const armCamBadge = node("small", "영상 대기 · 클릭하여 연결", "omx-inspector-cam-badge");
-  armCamFrame.append(armCamImg, armCamStandby);
-  armCamBox.append(armCamToggleSlot, armCamFrame, armCamBadge);
+  const camFrame = document.createElement("div");
+  camFrame.className = "omx-inspector-cam-frame";
+  const camImg = document.createElement("img");
+  camImg.className = "omx-inspector-main-cam omx-inspector-cam";
+  camImg.alt = "선택한 로봇 카메라 실시간 영상";
+  const camStandby = node("span", "영상 대기", "omx-inspector-cam-standby");
+  camStandby.setAttribute("role", "status");
+  const camBadge = node("small", "영상 대기 · 클릭하여 연결", "omx-inspector-cam-badge");
+  camFrame.append(camImg, camStandby);
   const armStatusBox = document.createElement("div");
   const armHealthBox = document.createElement("section");
   const armCommandsBox = document.createElement("div");
@@ -73,14 +68,17 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   let lastArmStatusSig = "";
   let lastSettingsSig = "";
   let lastCamToggleSig = "";
-  let armCamActive = false;
-  let armCamSource = "";
+  let mobileCamChannel = "off";
+  let armCamChannelId = null;
+  let boundCamKey = "";
 
-  function resetArmCam() {
-    armCamActive = false;
-    armCamSource = "";
-    armFeed.setRunning(false);
-    armCamImg.removeAttribute("src");
+  function stopAllCameras() {
+    frontCamera.stop();
+    mobileCamChannel = "off";
+    armCamChannelId = null;
+    boundCamKey = "";
+    camFeed.setRunning(false);
+    camImg.removeAttribute("src");
   }
 
   function clearInspectorHosts() {
@@ -111,7 +109,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       return { id: `arm:${profile.id}`, title: "SERVO · LOAD", readout: "—", value: null, unit: "mA", minBound: null, maxBound: null, tone };
     }
     const robot = detail?.robot || {};
-    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    const power = rosterPower(view, robot, Date.now());
     const pct = robot.online && !view.stateUnavailable ? power.percent : null;
     const readout = pct !== null
       ? `${pct}%${typeof power.voltage === "number" ? ` · ${power.voltage.toFixed(1)}V` : ""}`
@@ -122,6 +120,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       title: "POWER · BATT",
       readout,
       value: pct,
+      battery: { percent: pct, charging: power.chargingConfirmed, online: robot.online && !view.stateUnavailable },
       unit: "%",
       minBound: 0,
       maxBound: 100,
@@ -161,7 +160,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     const now = Date.now();
     const mobile = view.robots.map((robot) => {
       const state = view.stateUnavailable ? {} : (robot.state || {});
-      const power = powerHealthView(robot, view.receivedAtMs, now);
+      const power = rosterPower(view, robot, now);
       const staleS = staleAgeS(robot, view.receivedAtMs, now);
       const ageS = typeof robot.state_age_s === "number" && Number.isFinite(robot.state_age_s)
         ? robot.state_age_s + Math.max(0, (now - (view.receivedAtMs ?? now)) / 1000)
@@ -233,6 +232,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         : obsArm ? (obsArm.fresh ? "fresh" : obsArm.ageS !== null ? "delayed" : "unavailable")
         : anc.online === false ? "disconnected"
         : anc.cell_status ? "fresh" : "unavailable";
+      const pose = armEffectivePose(def, anc);
       const profile = robotProfile({
         id: armId,
         name: def.shortLabel,
@@ -242,43 +242,66 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         evidence,
         torque: typeof anc.torque === "boolean" ? anc.torque : (obsArm?.motorHealth?.status === "active" ? true : undefined),
         servo: { currentMa: currentMa ?? undefined, temperatureC: tempC ?? undefined },
-        place: `${def.stationId} · ${cellId}`,
+        place: armPositionLine(def, anc, cellId),
         task: anc.cell_status || (obsArm?.fresh ? "실시간 관측" : obsArm ? "대기" : undefined),
         alarm: hold ? { level: "caution", text: obsArm?.heldIncidents?.length ? `보류 ${obsArm.heldIncidents.length}건` : "홀드 중" }
           : hwFault ? { level: "danger", text: "모터 고장" }
           : obsArm?.openIncidents?.length ? { level: "caution", text: `사건 ${obsArm.openIncidents.length}건` }
           : undefined,
       });
-      return { profile, detail: { def, anc, obsArm, cellId, currentMa, tempC, pwmPct } };
+      return { profile, detail: { def, anc, obsArm, cellId, effectivePose: pose, currentMa, tempC, pwmPct } };
     });
     return [...mobile, ...arms];
   }
 
   const resolve = (id) => latestRecords.find((r) => r.profile.id === id) ?? null;
 
-  const toggleArmCamera = scope.guard(() => {
-    if (!openId) return;
-    armCamActive = !armCamActive;
-    if (!armCamActive) armFeed.setRunning(false);
+  const selectCamChannel = scope.guard((kind, chId) => {
+    if (!openId || (kind === "mobile" && resolve(openId)?.profile.kind !== "mobile")) return;
+    const cur = kind === "arm" ? armCamChannelId : mobileCamChannel;
+    const next = cur === chId ? (kind === "arm" ? null : "off") : chId;
+    stopAllCameras();
+    if (kind === "arm") armCamChannelId = next;
+    else { mobileCamChannel = next; if (next === "front") frontCamera.toggle(openId); }
     render();
   });
 
-  const toggleMobileCamera = scope.guard(() => {
-    if (!openId) return;
-    const entry = resolve(openId);
-    if (!entry || entry.profile.kind !== "mobile") return;
-    frontCamera.toggle(openId);
-    render();
-  });
+  function renderCamTabs(label, channels, activeId, kind, optsFor) {
+    renderDom(html`<div class="omx-inspector-tabs" role="group" aria-label=${label}>
+      ${channels.map((ch) => {
+        const extra = optsFor ? optsFor(ch) : {};
+        return html`<${UiButton} key=${ch.id} kind="segment" data-work-read="" aria-pressed=${activeId === ch.id ? "true" : "false"} disabled=${Boolean(extra.disabled)} reason=${extra.reason || ""} onClick=${() => selectCamChannel(kind, ch.id)}>${ch.label}</${UiButton}>`;
+      })}
+    </div>`, cameraToggleSlot);
+  }
+
+  function syncCameraBox(children, visionSpec) {
+    if (visionSpec) children.push(camFrame, camBadge);
+    const same = cameraBox.childElementCount === children.length
+      && children.every((child, idx) => cameraBox.children[idx] === child);
+    if (!same) cameraBox.replaceChildren(...children);
+    if (!visionSpec) {
+      camFeed.setRunning(false);
+      return cameraBox;
+    }
+    camFeed.setRunning(!auth.locked && !document.hidden);
+    if (boundCamKey !== visionSpec.key) {
+      boundCamKey = visionSpec.key;
+      camFeed.bind(camImg, visionSpec.view, camBadge, visionSpec.label);
+    }
+    return cameraBox;
+  }
 
   const panel = createRobotPanel({
     selection,
     resolve,
     onManualCollapse: () => manualControl.stop(),
+    onCameraCollapse: () => { stopAllCameras(); render(); },
+    locate: (profile, detail) => (detail?.effectivePose ? () => roster.openCard(profile.id) : null),
+    sectionHeadings: (p) => ({ commands: p.kind === "arm" ? "셀 작업 · 관측" : "위치 · 목표" }),
     onClose: () => {
       manualControl.stop();
-      frontCamera.stop();
-      resetArmCam();
+      stopAllCameras();
       clearInspectorHosts();
       openId = null;
       dock.setOpen(null);
@@ -293,15 +316,19 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       status(profile, detail) {
         syncTwin(profile, detail);
         if (profile.kind === "arm") {
-          const { def, anc, obsArm, cellId } = detail || {};
+          const { def, anc, obsArm, cellId, effectivePose } = detail || {};
           const obsStatus = obsArm?.held ? `보류 ${obsArm.heldIncidents.length}건`
             : obsArm?.fresh ? "실시간 관측" : obsArm ? "대기 · 엔코더 만료" : null;
           const motorTxt = obsArm?.motorHealth
             ? `${obsArm.maxTempC ?? "—"} °C · PWM ${obsArm.maxPwmPct ?? "—"}%`
             : anc?.motor_summary;
+          const posReach = effectivePose
+            ? `(${effectivePose.x.toFixed(2)}, ${effectivePose.y.toFixed(2)} m)${typeof def?.reach_m === "number" ? ` · 도달 ${def.reach_m.toFixed(2)} m` : ""}`
+            : null;
           const rows = [
             ["셀", cellId],
             ["연계 정류장", def?.stationName || profile.place.text],
+            ["위치 · 반경", posReach],
             ["상태", anc?.cell_status || obsStatus],
             ["관절", obsArm?.jointsText || anc?.joints_summary],
             ["서보", motorTxt],
@@ -327,59 +354,33 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       },
       camera(profile, detail) {
         if (profile.kind === "arm") {
-          const cams = view.workcellObs?.cameras || [];
-          const cam = cams.find((c) => c.arm_id === profile.id)
-            || cams.find((c) => profile.id === "arm_s" ? c.source_id === "omx_arm_s_top" : c.source_id === "omx_overhead");
-          if (!cam) {
-            lastCamToggleSig = "";
-            resetArmCam();
-            return armCameraHint;
-          }
-          const camLabel = armCamActive ? `${cam.label} 끄기` : `${cam.label} 보기`;
-          const toggleSig = `arm:${profile.id}:${armCamActive}:${camLabel}`;
+          const channels = armCameraChannels(profile.id, view.workcellObs?.cameras);
+          const activeCh = armCamChannelId ? channels.find((c) => c.id === armCamChannelId) || null : null;
+          if (armCamChannelId && !activeCh) { armCamChannelId = null; boundCamKey = ""; camImg.removeAttribute("src"); }
+          const toggleSig = `arm:${profile.id}:${activeCh?.id || "off"}:${channels.map((c) => c.id).join(",")}`;
           if (toggleSig !== lastCamToggleSig) {
             lastCamToggleSig = toggleSig;
-            renderDom(html`<${UiButton}
-              kind="toggle"
-              data-work-read=""
-              aria-pressed=${armCamActive ? "true" : "false"}
-              onClick=${toggleArmCamera}
-            >${camLabel}</${UiButton}>`, armCamToggleSlot);
+            renderCamTabs("팔 카메라 선택", channels, activeCh?.id || null, "arm");
           }
-          patchHidden(armCamFrame, !armCamActive);
-          if (armCamActive) {
-            armFeed.setRunning(!auth.locked && !document.hidden);
-            if (armCamSource !== cam.source_id) {
-              armCamSource = cam.source_id;
-              armFeed.bind(armCamImg, { source: cam.source_id }, armCamBadge, cam.label);
-            }
-          } else {
-            armFeed.setRunning(false);
-            patchText(armCamBadge, `${cam.label} · 클릭하면 실시간 영상을 연결합니다`);
-          }
-          return armCamBox;
+          return syncCameraBox([cameraToggleSlot], activeCh && {
+            key: `${profile.id}:${activeCh.id}:${activeCh.roiTarget || activeCh.source}`,
+            view: activeCh.roiTarget ? { roiTarget: activeCh.roiTarget } : { source: activeCh.source },
+            label: activeCh.label,
+          });
         }
-        const active = frontCamera.robotId() === profile.id;
-        const camOff = !detail?.robot?.online && !active;
-        const reason = camOff ? "오프라인 로봇은 전면 카메라를 열 수 없습니다." : "";
-        const toggleSig = `mob:${profile.id}:${active}:${camOff}:${reason}`;
+        const channels = mobileCameraChannels(profile.id);
+        const frontActive = mobileCamChannel === "front" && frontCamera.robotId() === profile.id;
+        const activeId = frontActive ? "front" : mobileCamChannel === "roi" ? "roi" : "off";
+        const frontOff = !detail?.robot?.online && !frontActive;
+        const frontReason = frontOff ? "오프라인 로봇은 전면 카메라를 열 수 없습니다." : "";
+        const toggleSig = `mob:${profile.id}:${activeId}:${frontOff}:${frontReason}`;
         if (toggleSig !== lastCamToggleSig) {
           lastCamToggleSig = toggleSig;
-          renderDom(html`<${UiButton}
-            kind="toggle"
-            data-work-read=""
-            aria-pressed=${active ? "true" : "false"}
-            disabled=${camOff}
-            reason=${reason}
-            onClick=${toggleMobileCamera}
-          >전면 카메라</${UiButton}>`, cameraToggleSlot);
+          renderCamTabs("이동로봇 카메라 선택", channels, activeId, "mobile", (ch) => (ch.id === "front" ? { disabled: frontOff, reason: frontReason } : {}));
         }
         const children = [cameraToggleSlot];
-        if (active && frontCamera.stage()) children.push(frontCamera.stage());
-        const same = cameraBox.childElementCount === children.length
-          && children.every((child, idx) => cameraBox.children[idx] === child);
-        if (!same) cameraBox.replaceChildren(...children);
-        return cameraBox;
+        if (frontActive && frontCamera.stage()) children.push(frontCamera.stage());
+        return syncCameraBox(children, activeId === "roi" && { key: `${profile.id}:roi:${profile.id}`, view: { roiTarget: profile.id }, label: "천장 확대 (ROI)" });
       },
       health(profile, detail) {
         if (profile.kind !== "arm" || !detail?.obsArm?.motorHealth) return null;
@@ -436,7 +437,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     onToggle: (id) => {
       yieldedForGoal = false;
       manualControl.stop();
-      frontCamera.stop();
+      stopAllCameras();
       if (!id) {
         openId = null;
         dock.setOpen(null);
@@ -464,8 +465,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     if (!found) return;
     if (openId && openId !== id) {
       manualControl.stop();
-      frontCamera.stop();
-      resetArmCam();
+      stopAllCameras();
     }
     openId = id;
     roster.openCard(id, { fromSelection: true });
@@ -478,8 +478,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   function close() {
     yieldedForGoal = false;
     manualControl.stop();
-    frontCamera.stop();
-    resetArmCam();
+    stopAllCameras();
     clearInspectorHosts();
     openId = null;
     dock.setOpen(null);
@@ -500,7 +499,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         panel.setRobot(found.profile, found.detail);
       } else {
         manualControl.stop();
-        frontCamera.stop();
+        stopAllCameras();
         clearInspectorHosts();
         openId = null;
         dock.setOpen(null);
@@ -513,6 +512,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     if (isWide() || panel.root.hidden) return;
     yieldedForGoal = true;
     manualControl.stop();
+    stopAllCameras();
     clearInspectorHosts();
     panel.setRobot(null);
     dock.setOpen(null);
@@ -543,7 +543,6 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     renderDom(null, armStatusBox);
     renderDom(null, settingsBox);
     renderDom(null, cameraToggleSlot);
-    renderDom(null, armCamToggleSlot);
     dock.dispose();
     panel.dispose();
   });

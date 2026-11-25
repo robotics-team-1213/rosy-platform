@@ -91,11 +91,11 @@ export function resolveSavedProfile(storage, source, lensKind) {
   return others.length ? { saved: null, warning: `저장한 화면 보정은 ${LENS_NAMES[others[0]]}용입니다. 지금 카메라는 ${LENS_NAMES[lensKind]}라 기본값으로 보여 줍니다. 이 렌즈에 맞게 다시 맞추세요.` } : { saved: null, warning: null };
 }
 const PLANE_RETRY_MS = 30000, PLANE_ERROR_MS = 5000;
-export function createPlaneFeed({ scope, visionView, onChange, now = Date.now }) {
+export function createPlaneFeed({ scope, visionView, onChange, now = Date.now, createBitmap = globalThis.createImageBitmap }) {
   let frame = null, busy = false, retryAt = 0, cancelExpiry = () => {}, generation = 0;
   function drop() {
     cancelExpiry(); cancelExpiry = () => {};
-    if (frame) URL.revokeObjectURL(frame.url);
+    if (frame) { if (frame.url) URL.revokeObjectURL(frame.url); frame.image?.close?.(); }
     const had = Boolean(frame); frame = null; return had;
   }
   async function refresh(wanted = true, targetSeq = null) {
@@ -111,18 +111,22 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
       if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; drop(); changed = true; changeReason = "plane-unavailable"; return; }
       if (got.state === "rate-limited") { retryAt = now() + 260; return; }
       if (got.state !== "live") { retryAt = now() + PLANE_ERROR_MS; return; }
-      const url = URL.createObjectURL(got.blob), image = new Image();
-      image.src = url;
-      const decoded = await image.decode().then(() => true, () => false);
+      let image = typeof createBitmap === "function" ? await createBitmap(got.blob).catch(() => null) : null;
+      let url = null, decoded = Boolean(image);
+      if (!image) {
+        url = URL.createObjectURL(got.blob); image = new Image(); image.src = url;
+        decoded = await image.decode().then(() => true, () => false);
+      }
+      const release = () => { if (url) URL.revokeObjectURL(url); image?.close?.(); };
       if (!life.current() || startedGeneration !== generation || !decoded) {
-        URL.revokeObjectURL(url);
+        release();
         if (!decoded && life.current() && startedGeneration === generation) retryAt = now() + PLANE_ERROR_MS;
         return;
       }
       const ageMs = got.ageMs + now() - requestedAt;
-      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= FRAME_LATE_MS) { URL.revokeObjectURL(url); changed = drop(); changeReason = "stale"; return; }
-      if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
-        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; drop(); changed = true; changeReason = "plane-unavailable"; return;
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= FRAME_LATE_MS) { release(); changed = drop(); changeReason = "stale"; return; }
+      if (!planeFitsImage(got.plane, image.naturalWidth ?? image.width, image.naturalHeight ?? image.height)) {
+        release(); retryAt = now() + PLANE_RETRY_MS; drop(); changed = true; changeReason = "plane-unavailable"; return;
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane, calibrationRevision: got.calibrationRevision,

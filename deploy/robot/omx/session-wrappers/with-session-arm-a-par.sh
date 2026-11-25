@@ -10,7 +10,9 @@ if ! { [ -p chunk-io-a/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   sleep 0.2
   flock -n ~/rosy-omx/session-arm_a.lock true || { echo "REFUSED: the arm session lock is held"; exit 2; }
   export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_a-$(date +%Y%m%d-%H%M%S).jsonl  # jitter_replay.py reads it (2026-11-04)
-  n0=$(wc -l < chunk-io-a/chunk-status.jsonl 2>/dev/null || echo 0)
+  STATUS=chunk-io-a/chunk-status.jsonl
+  if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
+  n0=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
   (
     ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config.json --caps caps-arm-a-wrist400-20261109.json --arm arm_a --chunks "${ROSY_SESSION_CHUNKS:-chunks-topdown-guard-arma-closed49-20261103.json}" --io chunk-io-a --params cell-params-floor-1028.json --operating-profile arm-a-robot-profile.json </dev/null
     rc=$?

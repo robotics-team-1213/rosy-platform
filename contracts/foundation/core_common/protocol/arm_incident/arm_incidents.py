@@ -405,3 +405,11 @@ def clearable_after_fold(facts, recovery, incident_id=None, reported_at=None) ->
     if recovery.get("corridor_clear") is not True:
         return False, "auto-fold corridor not confirmed clear"
     return True, f"folded home by the cell ({recovery.get('candidate')}), torque OFF; nothing latched or wound up"
+
+
+from .arm_incident_risk import (  # noqa: E402, F401  (public protocol exports)
+    AUTO_CLEAR_MIN_SCORE,
+    MAX_RECENT_CLEARS_24H,
+    RISK_SCHEMA,
+    evaluate_clear_safety,
+)

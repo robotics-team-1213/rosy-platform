@@ -3,7 +3,7 @@ Description=Refresh ROSY LAN service discovery
 
 [Timer]
 OnBootSec=10s
-OnUnitInactiveSec=15s
+OnUnitInactiveSec=60s
 Unit=rosy-mdns-bridge.service
 
 [Install]

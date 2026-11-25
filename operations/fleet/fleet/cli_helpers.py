@@ -84,9 +84,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--vision-url", default=None,
                          help="server-side Vision ingest origin (e.g. https://vision:8095) for the "
                               "periodic calibration-drift watch; needs --vision-preview-secret-env")
-    console.add_argument("--calibration-drift-interval-s", type=float, default=60.0, metavar="SECONDS",
+    console.add_argument("--calibration-drift-interval-s", type=float, default=300.0, metavar="SECONDS",
                          help="cadence of the approved-vs-proposed calibration comparison per "
-                              "source (0 disables; default 60)")
+                              "source (0 disables; default 300)")
     console.add_argument("--lan-camera-proxy", action="store_true",
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path, help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")

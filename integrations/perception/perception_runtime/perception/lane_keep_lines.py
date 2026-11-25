@@ -153,8 +153,9 @@ def _median_filter_1d(values: np.ndarray, size: int) -> np.ndarray:
 
 def _fit_axis(points: np.ndarray):
     centre = points.mean(axis=0)
-    _, _, vt = np.linalg.svd(points - centre, full_matrices=False)
-    direction = vt[0]
+    dx, dy = points[:, 0] - centre[0], points[:, 1] - centre[1]
+    theta = 0.5 * math.atan2(2.0 * float(dx @ dy), float(dx @ dx - dy @ dy))
+    direction = np.array([math.cos(theta), math.sin(theta)])
     if direction[0] < 0:
         direction = -direction
     return centre, direction

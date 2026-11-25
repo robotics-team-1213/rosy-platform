@@ -20,15 +20,33 @@ const LABEL = {
   hidden: (robot) => `${robot} · 영상 숨김(2초 넘게 새 화면 없음)`,
   waiting: (robot) => `${robot} · 첫 화면 대기`,
   connecting: (robot) => `${robot} · 연결 중`,
-  lost: (robot) => `${robot} · 영상 없음`,
+  lost: (robot) => `${robot} · 영상 연결 실패`,
   closed: (robot) => `${robot} · 중지`,
 };
+
+function lostLabel(robot, phase, error) {
+  const status = error?.status;
+  if (status === 403) return `${robot} · 영상 권한 없음`;
+  if (status === 401) return `${robot} · 로그인 필요`;
+  if (status === 404 || status === 503) {
+    return phase === "grant"
+      ? `${robot} · 전면 카메라 미연결(미디어 서버 미구성)`
+      : `${robot} · 로봇 카메라 송신 대기 중`;
+  }
+  return error?.message ? `${robot} · 영상 연결 실패 (${error.message})` : `${robot} · 영상 연결 실패`;
+}
 
 function el(doc, tag, text, attrs = {}) {
   const node = doc.createElement(tag);
   if (text != null) node.textContent = text;
   for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
   return node;
+}
+
+function ensureVideoCss(doc) {
+  if (doc?.head && !doc.querySelector?.('link[href$="/robot-video.css"]')) {
+    doc.head.append(el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"}));
+  }
 }
 
 export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
@@ -81,9 +99,11 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
     const view = {tile, video, label, hadLive: false, disconnectedAt: null, disconnectTimer: null};
     views.push(view);
     let grant = null;
+    let phase = "grant";
     try {
       grant = await call(grantPath(robot), {method: "POST"});
       if (running?.stage !== stage) throw new Error("stopped");
+      phase = "whep";
       sessions.push(await open({
         grant, video, onState: (state) => show(view, robot, state), ...(fetchImpl ? {fetchImpl} : {}),
         renewGrant: async () => (grant = await call(grantPath(robot, `/${grant.grant_id}/renew`), {method: "POST"})),
@@ -91,7 +111,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
       }));
     } catch (error) {
       show(view, robot, {state: "lost"});
-      if (error?.status === 403) label.textContent = `${robot} · 영상 권한 없음`;
+      label.textContent = lostLabel(robot, phase, error);
       if (grant && error?.message !== "stopped") call(grantPath(robot, `/${grant.grant_id}`), {method: "DELETE"}).catch(() => {});
     }
   }
@@ -99,6 +119,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
   return {
     async start(stage, robots) {
       this.stop();
+      ensureVideoCss(doc);
       const picked = [...new Set(robots)].slice(0, MAX_TILES);
       running = {stage, robots: picked};
       stage.dataset.tiles = String(picked.length);
@@ -135,8 +156,7 @@ export function bindVisibility({doc = document, target, video, Observer = global
 function mountRobotVideoPanel({doc = document} = {}) {
   const anchor = doc.querySelector(".vision-preview");
   if (!anchor || doc.getElementById("robot-video")) return null;
-  const link = el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"});
-  doc.head.append(link);
+  ensureVideoCss(doc);
   // 접힌 채 시작한다: 펼치기 전에는 Fleet에 아무것도 묻지 않고(상태 폴링에 요청을 더하지 않는다) 영상도 열지 않는다.
   const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video"});
   const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading", class: "ui-disclosure-row"});
@@ -183,6 +203,11 @@ function mountRobotVideoPanel({doc = document} = {}) {
     if (!robots.length) { status.textContent = "로봇을 한 대 이상 고르세요."; return; }
     status.textContent = `${robots.length}대 영상을 엽니다.`;
     await video.start(stage, robots);
+    const tiles = [...stage.querySelectorAll("[data-robot-video-tile]")];
+    if (tiles.length && tiles.every((t) => t.dataset.state === "lost")
+        && tiles.some((t) => t.textContent?.includes("미디어 서버 미구성"))) {
+      status.textContent = "전면 카메라 미디어 서버가 구성되지 않았습니다 — 각 로봇의 천장 확대(ROI)나 상단 카메라를 이용하세요.";
+    }
   });
   stopButton.addEventListener("click", () => { video.stop(); status.textContent = "영상을 닫았습니다."; });
   panel.addEventListener("toggle", () => {

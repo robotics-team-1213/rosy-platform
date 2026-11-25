@@ -222,13 +222,17 @@ def run_console(args: argparse.Namespace) -> None:
             sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
-        from fleet.server.tracking_drift import CalibrationDriftWatch, VisionMapProposalReader
+        from fleet.server.tracking_drift import (
+            CalibrationDriftWatch,
+            DEFAULT_INTERVAL_S,
+            VisionMapProposalReader,
+        )
 
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         calibration_store = TrackingCalibrationStore(sightings_db)
         drift_provider = None
         vision_url = getattr(args, "vision_url", None)
-        drift_interval_s = getattr(args, "calibration_drift_interval_s", 60.0)
+        drift_interval_s = getattr(args, "calibration_drift_interval_s", DEFAULT_INTERVAL_S)
         if vision_url and drift_interval_s:
             # The watch reads Vision's existing D-375 map-proposal endpoint with a preview
             # lease signed here; without the secret it could not talk to Vision at all.
