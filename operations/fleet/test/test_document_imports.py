@@ -155,12 +155,14 @@ OWN = {
         "cell-channel-mission.js",
         "cell-document-editor.js",
         "cell-observation.js",
+        "cell-observation-text.js",
         "subnav-screens.js",  # D-926 3: each Cell step is its own screen
         "file-picker.js",  # D-926 C7: one Korean file picker
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
         "cell-real2sim.js",  # 실물↔시뮬(Real-to-Sim / Sim-to-Real) 파이프라인 상태 및 핸드오프 평가
         "cell-real2sim-specs.js",  # split from cell-real2sim.js
+        "cell-readiness-model.js",
         "cell-real2sim-actions.js",  # split from cell-real2sim.js
         "cell-real2sim-views.js",  # split from cell-real2sim.js
         "cell-pipeline-panel.js",  # fleet E2E pipeline panel mounted above visual cards
