@@ -210,34 +210,38 @@ def camera_body_inside(live, index: int, pose) -> bool:
     return lateral + body.rotation_radius_m + body.sweep_pad_m <= arc.width_m / 2
 
 
-async def _camera_stationary(runner, live, after: float) -> bool:
-    """Require two distinct fresh zero samples newer than the acknowledged stop."""
+async def _camera_stationary(runner, live, after: float) -> float | None:
+    """Require two distinct fresh zero samples, returning the conservative trip lease deadline."""
     previous = None
     robot_id = live.view["robot_id"]
     lease_id = (live.view.get("lease") or {}).get("lease_id")
     if lease_id is None:
-        return False
+        return None
     for _ in range(4):
         if not live.open or live.view["hold"] is not None:
-            return False
+            return None
+        read_started = runner._clock()
         state = await runner._call(runner.named_stop_state(robot_id))
         evidence = (state.get("evidence") or {}).get("velocity") or {}
         vel, line = state.get("velocity") or {}, state.get("line_follow") or {}
+        lease = state.get("trip_lease") or {}
+        expires_in = lease.get("expires_in_s")
+        deadline = read_started + expires_in if type(expires_in) in (int, float) and math.isfinite(expires_in) else -math.inf
         stamp = parse_utc(evidence.get("sampled_at"))
         if (evidence.get("evidence") == "fresh" and stamp is not None
                 and stamp > after and 0 <= runner._clock() - stamp < STALE_POSE_S
                 and state.get("mode") in {"IDLE", "NAVIGATION"}
-                and (state.get("trip_lease") or {}).get("lease_id") == lease_id
+                and lease.get("lease_id") == lease_id and deadline > runner._clock()
                 and state.get("navigation") in {"IDLE", "CANCELED", "FAILED", "ARRIVED"}
                 and (state.get("safety") or {}).get("estop") is False and line.get("mode") == "OFF"
                 and all(type(vel.get(axis)) in (float, int) and vel[axis] == 0.0 for axis in ("linear", "angular"))):
             if previous is not None and stamp > previous:
-                return True
+                return deadline
             previous = stamp
         else:
             previous = None
         await asyncio.sleep(runner.config.period_s)
-    return False
+    return None
 
 
 async def _start_camera_finish(runner, live, index: int, along: float, active) -> bool:
@@ -247,13 +251,14 @@ async def _start_camera_finish(runner, live, index: int, along: float, active) -
         return False
     robot_id, segment = live.view["robot_id"], live.segments[index]
     caps = await runner._caps_checks(robot_id, live.graph, [segment], False, place)
-    if (runner.authority.mode(caps) != "core"
-            or not (caps.line_follow_authority_required or caps.line_follow_authority_under_lease)
+    if (runner.authority.mode(caps) != "core" or not caps.line_follow_authority_required
             or crosswalks_on(live.graph, [segment], active[1].crosswalks)
             or signals_on(runner.traffic, [segment])):
         return False
-    if not _cancel_ack(await runner._call(runner._cancel_goal(robot_id))) or not await _camera_stationary(
-            runner, live, runner._clock()):
+    if not _cancel_ack(await runner._call(runner._cancel_goal(robot_id))):
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
+    lease_deadline = await _camera_stationary(runner, live, runner._clock())
+    if lease_deadline is None:
         raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
     live.active_route = None
     scope = live.view["map_version"], live.view["detail"]["nav2_binding_id"]
@@ -279,7 +284,8 @@ async def _start_camera_finish(runner, live, index: int, along: float, active) -
         current = runner._store.active()
         binding = runner._store.map_bindings.active(robot_id) or {}
         if (not live.open or live.view["hold"] is not None or runner.traffic.holds(live, index)
-                or current is None or current[0] != scope[0] or binding.get("binding_id") != scope[1]
+                or now >= lease_deadline or current is None or current[0] != scope[0]
+                or binding.get("binding_id") != scope[1]
                 or not 0 <= now - pose_stamp < STALE_POSE_S or not 0 <= now - pose.odom_stamp < STALE_POSE_S
                 or not 0. <= now - observed < 1. - age_ms / 1000):
             raise TripError(409, "TRIP_CAMERA_FALLBACK_ADMISSION_CHANGED")
@@ -306,7 +312,7 @@ async def finish_camera_line(runner, live) -> None:
     runner._save(live)
     result = await runner._call(runner._junction.hold(rid))
     if (not isinstance(result, dict) or result.get("mode") != "OFF"
-            or not await _camera_stationary(runner, live, runner._clock())):
+            or await _camera_stationary(runner, live, runner._clock()) is None):
         raise TripError(409, "TRIP_CAMERA_FALLBACK_STOP_UNCONFIRMED")
     fallback = live.view["detail"]["camera_lane_fallback"]
     scope = live.view["map_version"], live.view["detail"]["nav2_binding_id"]

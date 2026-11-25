@@ -85,7 +85,7 @@ class AuthoritySender:
         last = self._sent.get(robot_id)
         if last is not None and last[0] == leg:
             absolute = max(absolute, last[1])
-        camera = live.view["detail"].get("camera_lane_fallback")
+        camera = (live.view.get("detail") or {}).get("camera_lane_fallback")
         if camera is not None:
             absolute = min(absolute, camera["authority_end_m"] + live.trim_m)
         self._sent[robot_id] = (leg, absolute)

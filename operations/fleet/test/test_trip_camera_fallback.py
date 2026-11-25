@@ -8,11 +8,13 @@ from pydantic import ValidationError
 
 from fakes import run
 from fleet.server import trip_nav2_route
+from fleet.server.trip_halts import TripHalts
 from fleet.server.trip_nav2_route import camera_finish_segment
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_routes import TripRequest
 from fleet.server.trip_runner import TripRunner
 from fleet.swarm.dispatch_guard import check_dispatch
+from fleet.traffic.trip_authority import AuthoritySender
 
 
 def example():
@@ -46,6 +48,29 @@ def test_request_requires_explicit_approved_slam_and_finite_named_trip():
                     {"to": {"x": 1., "y": 0.}}, {"drive_mode": None}):
         with pytest.raises(ValidationError):
             TripRequest(**(approved | changes))
+
+
+def test_only_the_reviewed_segment_limits_core_authority():
+    trip, *_ = example()
+    trip.view.update(robot_id="r1", trip_id="trip-1")
+    trip.view["detail"]["camera_lane_fallback"] = {"authority_end_m": 1.0}
+    trip.traffic = {"authority_end_m": 3., "front_d_m": .6, "pose_stamp": 10.}
+    trip.route_rev, trip.trim_m = 1, 0.
+    assert AuthoritySender(None, clock=lambda: 1.).body(trip)["until_m"] == .4
+
+
+def test_restart_stops_both_possible_owners_of_an_uncertain_camera_change():
+    observed = []
+
+    async def halt(robot_id, lane, place, *, handoff_pending):
+        observed.append((robot_id, lane, place, handoff_pending))
+        return {"stop_sent": True}
+
+    halts = NS(halt_robot=halt, _clock=lambda: 1., _store=NS(put_trip=lambda _trip: None))
+    trip = {"robot_id": "r1", "drive_mode": "nav2", "next_place": "finish",
+            "detail": {"camera_lane_fallback": {"phase": "starting"}}}
+    assert run(TripHalts._retry_trip_entry(halts, trip))
+    assert observed == [("r1", False, None, True)]
 
 
 @pytest.mark.parametrize("change", [
@@ -85,7 +110,8 @@ def test_camera_finish_refuses_uncommissioned_or_unbound_section(change):
 
 
 @pytest.mark.parametrize("outcome", ["success", "stale_camera", "changed_binding", "stop_unknown",
-                                     "velocity_repeated", "body_outside"])
+                                     "velocity_repeated", "body_outside", "lease_expired_at_wire",
+                                     "authority_only_under_lease"])
 def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monkeypatch, outcome):
     trip, site, arc, *_ = example()
     events = []
@@ -111,14 +137,16 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
             clock[0] += .01
         return {
             "mode": "IDLE", "navigation": "CANCELED", "line_follow": {"mode": "OFF"},
-            "safety": {"estop": False}, "trip_lease": {"lease_id": "lease-1"},
+            "safety": {"estop": False}, "trip_lease": {
+                "lease_id": "lease-1", "expires_in_s": .05 if outcome == "lease_expired_at_wire" else 8.,
+            },
             "velocity": {"linear": 0., "angular": 0.},
             "evidence": {"velocity": {"evidence": "fresh",
                                       "sampled_at": datetime.fromtimestamp(clock[0], timezone.utc).isoformat()}},
         }
 
     async def caps(*_args):
-        return NS(line_follow_authority_required=True)
+        return NS(line_follow_authority_required=outcome != "authority_only_under_lease")
 
     async def front(_robot):
         events.append("front")
@@ -131,6 +159,8 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
         events.append("wire")
         if outcome == "changed_binding":
             binding["binding_id"] = "replaced"
+        if outcome == "lease_expired_at_wire":
+            clock[0] += .10
         check_dispatch(path="/api/v1/line-follow/mode")
         events.append("camera")
 
@@ -152,6 +182,10 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
         assert run(trip_nav2_route._start_camera_finish(runner, trip, 0, .5, (3, site)))
         assert events == ["cancel", "zero", "zero", "front", "saved", "wire", "camera", "saved", "saved"]
         assert trip.view["detail"]["camera_lane_fallback"]["phase"] == "running"
+        return
+    if outcome == "authority_only_under_lease":
+        assert not run(trip_nav2_route._start_camera_finish(runner, trip, 0, .5, (3, site)))
+        assert not events
         return
     with pytest.raises(TripError):
         run(trip_nav2_route._start_camera_finish(runner, trip, 0, .5, (3, site)))
