@@ -270,9 +270,9 @@ def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, 
         raise OSError("map reference JPEG is empty")
     calibration["reference_top_sha256"] = hashlib.sha256(raw).hexdigest()
     calibration["reference_map_sha"] = cell_attempts.digest(calibration["sites"])
-    geometry = cell_map_followers.site_geometry(config)
-    calibration["reference_geometry_sha"] = cell_attempts.digest(geometry)
-    calibration["reference_geometry_sites"] = cell_map_followers.site_digests(geometry, calibration["reference_geometry_sha"])
+    calibration["reference_geometry_sha"] = geometry_sha(config)
+    calibration["reference_geometry_sites"] = cell_map_followers.site_digests(
+        cell_map_followers.site_geometry(config), calibration["reference_geometry_sha"])
     import cell_cal_history
 
     cell_cal_history.keep([cal_path, ref_path, Path(cal_path).with_suffix(".bias.json")], "map")
