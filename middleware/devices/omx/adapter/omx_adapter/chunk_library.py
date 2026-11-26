@@ -17,8 +17,8 @@ FOLDED_ROLL_LIFT = (10.0, -10.0)  # wrist camera clearance lift before rotating 
 FOLDED_UNFOLD_ELBOW = 43.0  # open elbow_flex first from folded home so jaws lift outward/upward clear of base tab
 # Rise lag logs (10/26-27): 2 units/s (3.6 deg/s) keeps lag under the 5-unit strain limit across arm loads.
 RISE_SPEED = 2.0
-# Above closed + this threshold jaws are open (empty; box holds 51.6-54.1 vs open_max 56): rise before closing.
-OPEN_JAW_MARGIN = 8.0
+# Above closed + this threshold jaws are open (closed 46.6-49.0, box <= closed+5.7, open 55.6-56.0): rise before closing.
+OPEN_JAW_MARGIN = 6.0
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 

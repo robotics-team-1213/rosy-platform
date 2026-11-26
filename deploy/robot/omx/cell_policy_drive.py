@@ -282,7 +282,7 @@ def main(argv=None) -> int:
              "endpoint_url": _safe_log_url(args.endpoint_url), "max_chunks": args.max_chunks, "n_action": args.n_action,
              "max_obs_age_s": args.max_obs_age_s, "goal_slot": goal_slot, "goal_site": args.goal_site,
              "goal_destination": destination, "goal_site_slot": mapped_slot,
-             "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None})
+             "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None, "library": args.library.name, "policy_root": Path(args.policy_root).name if args.policy_root else None})
         from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
         import cell_params as prm, cell_stop_proof as stop_proof
         authorize = handoff = rim_z_m = None
