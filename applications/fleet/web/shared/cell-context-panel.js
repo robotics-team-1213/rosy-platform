@@ -2,10 +2,10 @@
 import { html, render as renderDom, useState } from "/common/vendor/htm-preact.esm.min.js";
 import { UiButton } from "/common/preact-ui.js";
 import { patchHidden } from "/common/control-dom.js";
-import { INCIDENT_CAUSES, INCIDENT_BASES } from "/console/assets/cell-frames.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { isHomeRecovery } from "/console/assets/cell-obs-model.js";
+import { armIncidentClearPlan, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
 
 const WORK_REFRESH_MS = 5000;
 const ENDED_WORK_STATES = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]);
@@ -37,35 +37,7 @@ export function activeCellWorkRows(rows) {
 
 function IncidentClearForm({ arm, incident, clearReason, onClearIncident }) {
   const [expanded, setExpanded] = useState(false);
-  const [cause, setCause] = useState(INCIDENT_CAUSES[0][0]);
-  const [basis, setBasis] = useState(INCIDENT_BASES[0][0]);
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState("");
-
-  async function submitClear() {
-    const text = note.trim();
-    if (!text) {
-      setFeedback("확인한 내용을 적어야 해제할 수 있습니다.");
-      return;
-    }
-    setBusy(true);
-    setFeedback("");
-    try {
-      await onClearIncident(arm.sourceId, incident.incident_id, { note: text, cause, basis });
-      setNote("");
-      setExpanded(false);
-      setFeedback("해제했습니다.");
-    } catch (err) {
-      setFeedback(err?.status === 403 ? "이름 있는 운영자만 해제할 수 있습니다."
-        : err?.status === 409 ? "이미 해제된 사건입니다."
-        : "해제하지 못했습니다. 다시 시도하세요.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const reasonText = busy ? "해제 요청을 처리하는 중입니다." : clearReason;
+  const nextStep = armIncidentClearPlan(incident).mode === "next_step";
   const summaryText = typeof incident?.decision?.reason === "string"
     ? incident.decision.reason
     : "사람 확인이 필요한 팔 정지 사건입니다.";
@@ -79,22 +51,11 @@ function IncidentClearForm({ arm, incident, clearReason, onClearIncident }) {
     <p class="cell-context-reason">${summaryText}</p>
     <div class="cell-context-item-actions">
       <${UiButton} kind="quiet" type="button" data-work-read="" aria-expanded=${expanded ? "true" : "false"}
-        onClick=${() => setExpanded((prev) => !prev)}>${expanded ? "해제 접기" : "원인 적고 해제"}</${UiButton}>
+        onClick=${() => setExpanded((prev) => !prev)}>${expanded ? "접기" : nextStep ? "다음 단계 보기" : "확인하고 해제"}</${UiButton}>
       <a class="ui-action-link" data-kind="quiet" href=${`/console/cell?focus=arm:${encodeURIComponent(arm.sourceId)}#observation-heading`}>상세</a>
     </div>
-    ${expanded ? html`<div class="cell-context-clear">
-      <select class="ui-field" aria-label="정지 원인" value=${cause} onChange=${(e) => setCause(e.target.value)}>
-        ${INCIDENT_CAUSES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
-      </select>
-      <select class="ui-field" aria-label="판단 근거" value=${basis} onChange=${(e) => setBasis(e.target.value)}>
-        ${INCIDENT_BASES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
-      </select>
-      <input class="ui-field" type="text" maxLength=${400} value=${note} aria-label="확인한 내용"
-        placeholder="팔과 집게를 확인한 내용 (필수)" onInput=${(e) => setNote(e.target.value)} />
-      <${UiButton} kind="primary" type="button" disabled=${Boolean(reasonText)} reason=${reasonText}
-        onClick=${submitClear}>확인했습니다 · 해제</${UiButton}>
-      ${feedback ? html`<p class="hint" role="status">${feedback}</p>` : null}
-    </div>` : null}
+    ${expanded ? html`<${IncidentClearBody} arm=${arm} incident=${incident} clearReason=${clearReason}
+      onClearIncident=${onClearIncident} />` : null}
   </li>`;
 }
 
