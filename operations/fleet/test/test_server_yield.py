@@ -483,3 +483,16 @@ def test_the_snapshot_does_not_carry_the_stored_route_to_the_browser():
 
 def _row(snapshot, robot_id):
     return [r for r in snapshot["robots"] if r["robot_id"] == robot_id][0]
+
+
+def test_rear_bay_claim_blocks_adjacent_turn_and_crossing_and_clears_far_bay():
+    from fleet.server.traffic_arbitration_helpers import road_peer_wait
+
+    console = _console(SimRobot("rosy_45", (0.446, 0.0), None))
+    console.rear_bay_claims = {"rosy_46": ("world_261026", [(0.0, 0.0), (0.0, 0.47)])}
+    assert console._claim_blocker("rosy_45", [(0.222, 0.0)], site_route=("world_261026", [(0.222, 0.0), (0.222, 0.47)])) == ("rosy_46", True)
+    assert console._claim_blocker("rosy_45", [(-0.4, 0.235)], site_route=("world_261026", [(-0.4, 0.235), (0.4, 0.235)])) == ("rosy_46", True)
+    assert console._claim_blocker("rosy_45", [(0.446, 0.0)], site_route=("world_261026", [(0.446, 0.0), (0.446, 0.47)])) == (None, False)
+    assert console._claim_blocker("rosy_45", [(-0.5, -0.31)], site_route=("world_261026", [(-0.5, -0.31), (0.5, -0.31)])) == (None, False)
+    wait = road_peer_wait(console, "rosy_45", [{"x": 0.446, "y": 0.47}], (0.446, 0.47), lambda _r: None, None)
+    assert wait["reason"] == "LOCALIZATION_UNTRUSTED" and wait["stage"] == "pre_dispatch_mover_check"

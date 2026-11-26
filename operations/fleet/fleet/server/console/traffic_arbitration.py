@@ -214,12 +214,17 @@ class TrafficArbitration:
 
     def _claim_blocker(self, mover: str, route, *, site_route=None) -> tuple[Optional[str], bool]:
         """``(blocker, is_conflict)`` for a dispatched goal's route (D-1010)."""
+        # Rear-bay claims carry sparse [P_n, staging, goal] polylines; check exact segment distance
+        # against 2 * TRAY_TURN_RADIUS_M (0.288 m) + margin (0.30 m) so crossing routes and adjacent
+        # turning bays (0.222 m pitch) stay blocked while non-adjacent bays and far lanes clear.
+        bay_clearance = min(self._clearance_m, getattr(self, "_bay_clearance_m", 0.30))
         for other, (map_id, claim) in getattr(self, "rear_bay_claims", {}).items():
             if other == mover:
                 continue
             if site_route is None or site_route[0] != map_id:
                 return other, False
-            if traffic.blocking_robot(site_route[1], {other: claim}, self._clearance_m) is not None:
+            dist = traffic.polyline_distance(site_route[1], claim)
+            if dist is not None and dist < bay_clearance:
                 return other, True
         site_claims = getattr(self, "_site_claims", {})
         mover_frame = self._frame_of(mover)

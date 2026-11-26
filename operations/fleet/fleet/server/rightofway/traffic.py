@@ -143,3 +143,22 @@ def remaining_distance(route: Sequence[Point], pose: Optional[Point],
         return None
     return sum(math.dist(thin_route[i], thin_route[i + 1])
                for i in range(start, goal))
+
+
+def _segment_distance(a: Point, b: Point, c: Point, d: Point) -> float:
+    """Exact 2D distance between closed segments ``[a, b]`` and ``[c, d]``."""
+    from fleet.site_map import _point_segment, _segments_cross
+
+    if _segments_cross(a, b, c, d):
+        return 0.0
+    return min(_point_segment(a, c, d), _point_segment(b, c, d),
+               _point_segment(c, a, b), _point_segment(d, a, b))
+
+
+def polyline_distance(a: Sequence[Point], b: Sequence[Point]) -> Optional[float]:
+    """Minimum exact segment-to-segment distance between two polylines; ``None`` if either is empty."""
+    if not a or not b:
+        return None
+    segs_a = tuple(zip(a, a[1:])) or ((a[0], a[0]),)
+    segs_b = tuple(zip(b, b[1:])) or ((b[0], b[0]),)
+    return min(_segment_distance(p, q, r, s) for p, q in segs_a for r, s in segs_b)
