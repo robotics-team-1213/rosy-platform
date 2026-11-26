@@ -24,9 +24,10 @@ those files. `known_failures.py` reported it as NEW. The same commit passed in C
 
 ## Cause
 
-`records_rules.cutover_findings` diffs `merge-base(HEAD, origin/main)..HEAD`. The SHIP script in
-`remote_pytest.py` fetched public main into the lab repo only when a bundle prerequisite was
-missing, so the lab `origin/main` stayed hours behind. The merge base then sat before the records
+`records_rules.cutover_findings` diffs `merge-base(HEAD, origin/main)..HEAD`. Since #460 (2026-11-21, a speed-up
+that checked the bundle before fetching), the SHIP script in `remote_pytest.py` fetched public main
+into the lab repo only when a bundle prerequisite was missing, so the lab `origin/main` stayed hours
+behind. The fetch was not only for the bundle: lint that reads `origin/main` depended on it too. The merge base then sat before the records
 bot's later main commits (API Reference version line, module `logs.md` folds), and the rule counted
 those commits as the branch's own direct edits.
 
