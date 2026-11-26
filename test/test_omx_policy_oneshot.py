@@ -318,7 +318,7 @@ def test_state_files_block_a_retry_even_when_the_log_shows_a_transient_cause(tmp
             ("hw", health, {"motors": [{"hardware_error": 4}]}, "motor-health-current.json:hardware_error"),
             ("status", health, {"status": "fault"}, "motor-health-current.json:status=fault")):
         path.write_text(json.dumps(body))
-        row, wait = refusal.refusal("arm_b", "start_failed", "REFUSED: x", state_files=clean, lock_dir=tmp_path)
+        row, wait = refusal.refusal("arm_b", "lock_held", "REFUSED: x", state_files=clean, lock_dir=tmp_path)  # a cause that would be retried
         assert wait is None and row["result"] == "refused" and row["code"] == "safety_state", name  # no log line needed
         assert flag in row["reason"] or any(flag in e for e in row["evidence"]), name
         path.write_text(json.dumps({}))
@@ -350,7 +350,7 @@ def test_wrapper_with_the_real_refusal_helper_does_not_retry_on_a_held_arm(tmp_p
     result = subprocess.run(["bash", "./with-session-arm-b-par.sh", "touch", str(tmp_path / "moved")], cwd=OMX / "session-wrappers",
                             env=env, capture_output=True, text=True, timeout=60)
     assert result.returncode == 2 and not (tmp_path / "moved").exists()
-    assert result.stdout.count("REFUSED: the arm session did not start") == 1  # one attempt, no second session
+    assert result.stdout.splitlines().count("REFUSED: the arm session did not start") == 1  # one attempt, no second session
     last = json.loads(result.stdout.strip().splitlines()[-1])
     assert last["result"] == "refused" and last["code"] == "safety_state" and "live.json:human_hold_latched" in last["reason"] + " ".join(last["evidence"])
 
@@ -362,5 +362,5 @@ def test_the_run_job_is_judged_like_the_drive_by_the_outcome_fence(monkeypatch):
     monkeypatch.setattr(cell_vlm_facts, "query_incident", lambda *a, **k: {"held": False})
     for job in ("cell_policy_drive", "cell_policy_run"):
         bad = {"exit": 0, "structured_result": {"result": "stopped_x", "parked": True, "took_one": True}}
-        _status, detail = cell_vlm_fence.verify_job_outcome(None, job, "arm_b", bad, collect_facts=False)
+        _status, detail = cell_vlm_fence.verify_job_outcome(type("C", (), {"readiness": lambda self: {}})(), job, "arm_b", bad, collect_facts=False)
         assert any("policy_drive result" in r for r in detail.get("failure_reasons", [])) or "policy_drive result" in json.dumps(detail), job
