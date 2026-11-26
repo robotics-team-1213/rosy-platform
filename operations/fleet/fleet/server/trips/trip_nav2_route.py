@@ -450,6 +450,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             if not live.open:
                 return
         elif verdict == "busy":
+            if live.active_route.get("road_speed_owner") and nav in _NAV_RUNNING:
+                await runner.road_speed.renew(runner, live, active, index, s, pose)
             return
     if target_end is None:
         live.view["detail"]["traffic_hold"] = {
@@ -480,6 +482,13 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         for rx, ry, ryaw, kind in robot_pts
     ]
     options = {}
+    controlled = getattr(runner, "road_speed", None) is not None and (
+        live.nav2_binding_scope is not None or runner.config.map_binding_required
+        or runner._store.rules.active_rules() is not None)
+    if controlled:
+        if runner._route is None:
+            raise _GoalRefused("ROAD_SPEED_AUTHORITY_UNAVAILABLE")
+        options["road_speed_controlled"] = True
     if live.nav2_binding_scope is not None:
         if runner._route is None:
             raise _GoalRefused("BOUND_NAV2_ROUTE_UNAVAILABLE")
@@ -510,6 +519,13 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             return
         raise _GoalRefused(reason, reply)
     live.active_route = {"end_index": end_index, "points": len(payload)}
+    if controlled:
+        owner = reply.get("road_speed_owner")
+        if not owner:
+            await runner._stop(live, "stopped", "ROAD_SPEED_OWNER_MISSING")
+            return
+        live.active_route["road_speed_owner"] = owner
+        await runner.road_speed.renew(runner, live, active, index, s, pose)
     live.nav2_retry_at = -math.inf
     live.view["detail"].pop("goal_wait", None)
     live.view["detail"]["nav2_route"] = {"points": len(payload), "end_index": end_index, "lap": live.view.get("lap")}

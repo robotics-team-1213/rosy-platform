@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-def renew_goal_lease(self, correlation_id: str, ttl_s: float, owner: str | None = None) -> None:
+def renew_goal_lease(self, correlation_id: str, ttl_s: float, owner: str | None = None, *, speed_grant=None) -> None:
     """D-550 10: renew only an unexpired lease for this exact goal and sender."""
     from .manager import _IDLE_STATES, NavigationError, _check_lease_ttl
     _check_lease_ttl(ttl_s)
@@ -13,6 +13,11 @@ def renew_goal_lease(self, correlation_id: str, ttl_s: float, owner: str | None 
             raise NavigationError("GOAL_LEASE_NOT_ACTIVE", f"no active leased goal {correlation_id!r}")
         if owner != self._lease[3]:  # D-760 9: only the token that sent the goal (lease_owner)
             raise NavigationError("FORBIDDEN", "only the token that sent this leased goal may renew it")
+        if speed_grant is not None:
+            run = self._route
+            if run is None or run.result is not None or run.run_id != self._lease[2] or run.speed_authority is None:
+                raise NavigationError("GOAL_LEASE_NOT_ACTIVE", "road speed owner is no longer active")
+            run.speed_authority.update(**speed_grant, lease_ttl_s=ttl_s)
         self._lease = (correlation_id, now + ttl_s, self._lease[2], self._lease[3])
         self._native_mutate(self._advance_generation)
 

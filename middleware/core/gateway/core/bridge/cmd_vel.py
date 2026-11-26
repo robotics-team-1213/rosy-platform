@@ -251,12 +251,20 @@ def _cmd_vel_cycle(command, power, send, readiness, warn, *, trial_guard,
             warn(f"cmd_vel guard failed: {exc}")
         return
     submission_error = None
+    def write():
+        authority = getattr(out, "road_speed_authority", None)
+        if authority is None:
+            return port.submit(guarded)
+        return authority.submit(
+            guarded.payload.linear_mps, guarded.payload.angular_radps, lambda: port.submit(guarded),
+            lambda: PortDecision(False, "hold", "road_speed_authority_changed"))
+
     def submit():
         if execution_fence is None:
-            return port.submit(guarded)
+            return write()
         decision = execution_fence.submit(
             receipt, out, (guarded.payload.linear_mps, guarded.payload.angular_radps),
-            lambda: port.submit(guarded))
+            write)
         return (PortDecision(False, "hold", "execution_context_changed")
                 if decision is CONTEXT_CHANGED else decision)
     try:

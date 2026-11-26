@@ -327,6 +327,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     async def read_trip_navigation(robot_id, run_id):
         return await console.clients()[robot_id]._get(f"/api/v1/navigation/state?run_id={run_id}")
 
+    from fleet.server.trip_road_speed import RoadSpeed
+    trip_runner.road_speed = RoadSpeed(map_pose, console.goal_leases.update_road_speed)
     trip_runner.navigation_readback = read_trip_navigation
     trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision

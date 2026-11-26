@@ -490,3 +490,29 @@ def test_navigation_state_carries_the_map_generation_and_it_follows_a_navigation
     assert isinstance(first, int) and first == svc.state.map_generation.value == svc.state.snapshot().map_generation
     svc.state.map_generation.bump("a restarted navigation stack went ACTIVE")
     assert tc.get("/api/v1/navigation/state", headers=OPERATOR).json()["map_generation"] == first + 1
+
+
+def test_road_route_grants_are_owned_short_lived_and_close_with_run():
+    import time
+    nav, _ = make()
+    stop = [RoutePoint(0.2, 0.1, STOP)]
+    with pytest.raises(NavigationError):
+        nav.route(stop, road_speed_controlled=True)
+    run = nav.route(stop, correlation_id="run1", lease_ttl_s=5, lease_owner="fleet", road_speed_controlled=True)
+    authority = run.speed_authority
+    assert authority.apply(.2, .4, time.monotonic()) == (0., 0.)
+    stamp = time.time() - .1
+    grant = dict(issued_at=stamp, expires_at=stamp + 1.4, limit_mps=.05)
+    for cid, owner in [("other", "fleet"), ("run1", "other")]:
+        with pytest.raises(NavigationError):
+            nav.renew_goal_lease(cid, 5, owner, speed_grant=grant)
+    nav.renew_goal_lease("run1", 5, "fleet", speed_grant=grant)
+    assert authority.apply(-.2, .4, time.monotonic()) == pytest.approx((-.05, .1))
+    with pytest.raises(NavigationError):
+        nav.renew_goal_lease("run1", 5, "fleet", speed_grant=grant)
+    nav.renew_goal_lease("run1", 5, "fleet")  # ordinary renew cannot extend motion
+    assert authority.apply(0., .4, time.monotonic() + 2) == (0., 0.)
+    assert authority.submit(.2, .4, lambda: "sent", lambda: "held") == "held"
+    assert authority.submit(.03, .4, lambda: "sent", lambda: "held") == "sent"
+    nav.cancel()
+    assert authority.submit(.03, .4, lambda: "sent", lambda: "held") == "held"

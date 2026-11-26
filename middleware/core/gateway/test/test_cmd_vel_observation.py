@@ -161,3 +161,18 @@ def test_unfenced_publish_exception_has_no_success_observation():
     with pytest.raises(RuntimeError, match='publish failed'):
         run(send=fail, observe=observed.append)
     assert observed == []
+
+
+def test_a_tightened_road_grant_blocks_an_already_selected_velocity_at_the_writer():
+    import time
+    from core_features.navigation.road_speed import RoadSpeedAuthority
+    authority = RoadSpeedAuthority()
+    selected = cycle.Twist(.04, -.1)
+    selected.road_speed_authority = authority
+    stamp = time.time() - .1
+    authority.update(stamp, stamp + 1.5, .05, 5.)
+    def prewrite():
+        authority.update(stamp + .01, stamp + 1.5, .02, 5.)
+        return True
+    log = run(select=lambda:selected, motion_ready=prewrite)
+    assert [event for event in log if event[0] == "write"] == [("write", 0., 0.)]

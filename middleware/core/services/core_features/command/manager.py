@@ -38,6 +38,7 @@ class _AutonomousInput:
     stamp: float
     mode_epoch: int
     preserve_curvature: bool = False
+    speed_authority: object | None = None
 
 
 ZERO = Twist()
@@ -219,7 +220,7 @@ class CommandManager:
         return self._manual_twist is not None and not self.watchdog.expired()
 
     def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None,
-                      *, preserve_curvature: bool = False, expected_mode_epoch: int | None = None) -> None:
+                      *, preserve_curvature: bool = False, expected_mode_epoch: int | None = None, speed_authority=None) -> None:
         epoch = self._modes.epoch if expected_mode_epoch is None else expected_mode_epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
@@ -227,7 +228,7 @@ class CommandManager:
             self._reject('navigation', 'invalid velocity')
             twist = None
         candidate = None if twist is None else _AutonomousInput(
-            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch, preserve_curvature)
+            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch, preserve_curvature, speed_authority)
         def commit() -> None:
             self._nav_input = candidate
             self._input_epoch += 1
@@ -465,7 +466,11 @@ class CommandManager:
             self._safety.trigger_estop('control:' + self._safety.policy_reason)
             self._modes.transition(Mode.EMERGENCY)
             return ZERO
+        if candidate is not None and candidate.speed_authority is not None:
+            output = candidate.speed_authority.apply(*output, time.monotonic())
         result = Twist(*output)
+        if candidate is not None and candidate.speed_authority is not None:
+            result.road_speed_authority = candidate.speed_authority
         # D-400: judged after cmd_vel reached the wheels (announce_pending) so the
         # policy's cost never delays the output. Single slot: one candidate per cycle.
         self._pending_shadow = (command_id, source, linear, angular, now,
@@ -554,7 +559,10 @@ class CommandManager:
         age = current - candidate.stamp
         if 0.0 <= age <= self._nav_timeout_s and candidate.mode_epoch == mode_epoch:
             preserve_curvature = candidate.preserve_curvature
-            l, a = self._safety.clip(candidate.linear, candidate.angular, "line" if preserve_curvature else "nav")
+            linear, angular = candidate.linear, candidate.angular
+            if candidate.speed_authority is not None:
+                linear, angular = candidate.speed_authority.apply(linear, angular, current)
+            l, a = self._safety.clip(linear, angular, "line" if preserve_curvature else "nav")
             return self._policy_output(l, a, source, current, mode_epoch, input_epoch, candidate=candidate,
                                        preserve_curvature=preserve_curvature)
         return ZERO
