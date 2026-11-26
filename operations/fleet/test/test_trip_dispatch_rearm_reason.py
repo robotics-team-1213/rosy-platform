@@ -26,3 +26,28 @@ def test_real_hazard_stays_human_hold():
     with pytest.raises(TripError) as e:
         r._check_human_hold()
     assert e.value.code == "HUMAN_HOLD"
+
+
+def test_route_fallback_wires_reason():
+    """A runner built before install_pipeline_routes gets the reason from app.state, not a bare HUMAN_HOLD."""
+    from types import SimpleNamespace
+    from fleet.server.trip_routes import install_trip_routes
+    app = SimpleNamespace(state=SimpleNamespace(pipeline_hold_state_fn=lambda: ("DISPATCH_REARM_REQUIRED", {}),
+                                                pipeline_human_hold_fn=lambda: True))
+    app.post = app.get = app.delete = lambda *a, **k: (lambda f: f)
+    r = object.__new__(TripRunner)
+    try:
+        install_trip_routes(app, console=None, site_maps=None, routing_config=None, require_operator=None,
+                            require_named_operator=None, caps_for=None, runner=r, read_guard=[])
+    except Exception:
+        pass  # route registration past the wiring is not under test
+    with pytest.raises(TripError) as e:
+        r._check_human_hold()
+    assert e.value.code == "DISPATCH_REARM_REQUIRED"
+
+
+def test_pipeline_dir_override(tmp_path, monkeypatch):
+    """A sim host without /var/lib/rosy names a writable ledger dir instead of the fail-closed /tmp."""
+    from fleet.server.sitemap.pipeline_routes import _storage_dir
+    monkeypatch.setenv("ROSY_VAR_LIB", str(tmp_path))
+    assert _storage_dir() == tmp_path / "pipeline" and (tmp_path / "pipeline").is_dir()
