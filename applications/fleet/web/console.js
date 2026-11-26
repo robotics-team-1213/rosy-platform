@@ -418,7 +418,7 @@ const stationRecovery = createStationRecovery({ scope: pageScope, view, call, lo
 const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => hasOperatorRole(auth.role), namedReason,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
   openCard: (robotId) => { rosterWorkspace.open(robotId); } });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
@@ -451,7 +451,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };

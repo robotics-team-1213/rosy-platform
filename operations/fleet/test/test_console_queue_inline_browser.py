@@ -676,6 +676,7 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         assert "바뀐 경로 3.2 m" in slot.inner_text()
         _shot(page, "console-replan-1440x900.png")
         slot.locator('ui-button[data-replan="confirm"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         for _ in range(50):  # the answer lands on the real network clock
             page.clock.run_for(100)
             if "바뀐 경로로 계속합니다" in slot.inner_text():
@@ -874,6 +875,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
         assert "AI 참고 · 교착 확인 (모두 멈춤) · rosy_02, rosy_03 · 신뢰도 90%" in text
         _shot(page, "console-deadlock-1440x900.png")
         slot.locator('ui-button[data-replan="confirm"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         for _ in range(50):
             page.clock.run_for(100)
             if ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts:
