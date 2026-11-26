@@ -61,8 +61,8 @@ class SimpleShadow:
 
 def test_margin_configuration_only_tightens(monkeypatch):
     gate = real_gate("b", monkeypatch, 0.5)
-    assert sg.StateGate(gate.stats, arm_id="arm_b", sim_rule=gate.sim_rule, margin=1.0).margin == sg.MARGIN_RAD
-    assert sg.StateGate(gate.stats, arm_id="arm_b", sim_rule=gate.sim_rule, margin=0.01).margin == 0.01
+    assert sg.StateGate(gate.stats, arm_id="arm_b", sim_rule=gate.sim_rule, margin=3.0).margin == sg.MARGIN_RAD
+    assert sg.StateGate(gate.stats, arm_id="arm_b", sim_rule=gate.sim_rule, margin=0.5).margin == sg.MARGIN_RAD / 2
 
 
 def test_state_range_is_read_from_the_checkpoint_statistics(tmp_path):

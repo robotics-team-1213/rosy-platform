@@ -255,6 +255,9 @@ def test_open_cell_ignores_a_commissioning_mark_stored_in_the_config_file_and_wa
 def test_worker_act_binds_request_without_starting_a_physical_session(tmp_path, monkeypatch, arm_id):
     import hashlib
 
+    import cell_policy_start_gate as start_gate
+
+    monkeypatch.setattr(start_gate, "read_state_range", lambda _root: {})  # statistics present; the gate itself has its own tests
     monkeypatch.setattr(cte, "check_arm_hold", lambda *_: {"held": False})
     monkeypatch.setattr(cte.subprocess, "run", lambda *_a, **_kw: pytest.fail("started the physical session wrapper"))
     wrap, cfg, _, _, _ = cte._arm_run_spec(arm_id, tmp_path)
@@ -302,6 +305,12 @@ def test_worker_act_binds_request_without_starting_a_physical_session(tmp_path, 
         cfg.write_text(json.dumps(config))
         assert result["stage_result"]["policy_request"] == {
             "weights_sha256": revision, "goal_site": destination, "goal_slot": 0, "destination": "ship-h1r0-l0"}
+        def no_statistics(_root):
+            raise ValueError("POLICY_STATE_STATS_MISSING: checkpoint")
+
+        monkeypatch.setattr(start_gate, "read_state_range", no_statistics)
+        assert run()["error"] == "POLICY_STATE_STATS_MISSING"  # the exact Fleet refusal code
+        monkeypatch.setattr(start_gate, "read_state_range", lambda _root: {})
         units.write_text(json.dumps({"arm": "arm_b" if arm_id == "arm_a" else "arm_a", "state": "sim_rad", "gripper": "sim_jaw"}))
         assert run()["error"] == "ACT_POLICY_MODEL_BINDING_MISMATCH"
         task["dst_site"] = "pallet-l0"
@@ -391,6 +400,8 @@ def test_policy_drive_resolves_valid_io_relative_to_config_and_rejects_missing_i
         mp.setattr(cp, "FifoCell", CapCell)
         mp.setattr(cpd, "calibration_offset", lambda *_a: [0.0] * 6)
         mp.setattr(cpd, "demonstrated_range", lambda *_a: ([-100.0] * 6, [100.0] * 6))
+        import cell_policy_start_gate as start_gate
+        mp.setattr(start_gate, "read_state_range", lambda _root: {"min": [-1e3] * 6, "max": [1e3] * 6})
         mp.setattr(cpd.lrs, "LeRobotShadow", lambda *_a, **_kw: SimpleNamespace(
             sim_rule=None, goal_size=None, image_views=(), files={},
             inputs=lambda st, _f, **_k: ({"s": st}, {}), infer=lambda _o: SimpleNamespace(chunk=[[0.0] * 6] * 16),
