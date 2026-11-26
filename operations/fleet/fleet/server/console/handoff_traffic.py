@@ -52,7 +52,7 @@ def _point(state):
     return xy
 
 
-#: A Pinky Pro's tray corner sweeps this radius in an in-place turn (docking model, panel B 2026-11-21); the body
+#: The nominal base's tray corner sweeps this radius in an in-place turn (docking model, panel B 2026-11-21); the body
 #: circle alone (0.0826) leaves the tray out. Fleet must not import the CORE docking model, so the value is kept here.
 TRAY_TURN_RADIUS_M = 0.144
 
