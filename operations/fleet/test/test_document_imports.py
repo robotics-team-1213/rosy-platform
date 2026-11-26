@@ -126,6 +126,7 @@ OWN = {
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
+        "measured-motion.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",

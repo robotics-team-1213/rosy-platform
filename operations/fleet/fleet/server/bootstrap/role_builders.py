@@ -336,6 +336,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.navigation_readback = read_trip_navigation
     trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
     trip_runner.halts.read_stop_state = trip_runner.named_stop_state
+    trip_runner.halts.read_navigation = lambda rid: console.clients()[rid]._get("/api/v1/navigation/state")
+    trip_runner.halts.wire_epoch = console.goal_leases.idle_wire_epoch
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
 
     from fleet.server.handoff_recovery import stopped_handoff
