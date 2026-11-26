@@ -93,7 +93,7 @@ function drawBadge(x,y,txt,bg,fg){
   const w=Math.min(180,Math.max(46,txt.length*6.3+12));
   const bx=Math.max(4,Math.min(640-w-4,x-w/2));
   const by=Math.max(4,Math.min(480-22,y-9));
-  return '<g class="cam-ov-badge"><rect x="'+bx+'" y="'+by+'" width="'+w+'" height="18" rx="4" fill="'+bg+'" stroke="'+fg+'" stroke-width="1.2"/><text x="'+(bx+w/2)+'" y="'+(by+12.2)+'" fill="#eeeeef" font-size="10.5" font-weight="700" font-family="ui-monospace,Consolas,monospace" text-anchor="middle">'+esc(txt)+'</text></g>';
+  return '<g class="cam-ov-badge"><rect x="'+bx+'" y="'+by+'" width="'+w+'" height="18" rx="4" fill="'+bg+'" stroke="'+fg+'" stroke-width="1.2"/><text x="'+(bx+w/2)+'" y="'+(by+12.2)+'" fill="#eeeeef" font-size="12" font-weight="700" font-family="ui-monospace,Consolas,monospace" text-anchor="middle">'+esc(txt)+'</text></g>';
 }
 
 function renderCamGoalOverlay(){
@@ -173,8 +173,8 @@ function renderCamGoalOverlay(){
       const mx=(p0[0]+p1[0])/2+(p0[1]>p1[1]?18:-18), my=(p0[1]+p1[1])/2-18;
       inner+='<path d="M '+p0[0].toFixed(1)+' '+p0[1].toFixed(1)+' Q '+mx.toFixed(1)+' '+my.toFixed(1)+' '+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+'" fill="none" stroke="rgba(12,13,15,.85)" stroke-width="5.2" stroke-linecap="round"/>';
       inner+='<path d="M '+p0[0].toFixed(1)+' '+p0[1].toFixed(1)+' Q '+mx.toFixed(1)+' '+my.toFixed(1)+' '+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+'" fill="none" stroke="#ffc53d" stroke-width="2.8" stroke-dasharray="7 4" marker-end="url(#cam-ov-arr)"/>';
-      inner+='<circle cx="'+p0[0].toFixed(1)+'" cy="'+p0[1].toFixed(1)+'" r="8" fill="#58a6ff" stroke="#0c0d0f" stroke-width="1.8"/><text x="'+p0[0].toFixed(1)+'" y="'+(p0[1]+3.5).toFixed(1)+'" fill="#0c0d0f" font-size="10" font-weight="800" text-anchor="middle">1</text>';
-      inner+='<circle cx="'+p1[0].toFixed(1)+'" cy="'+p1[1].toFixed(1)+'" r="8" fill="#3dd68c" stroke="#0c0d0f" stroke-width="1.8"/><text x="'+p1[0].toFixed(1)+'" y="'+(p1[1]+3.5).toFixed(1)+'" fill="#0c0d0f" font-size="10" font-weight="800" text-anchor="middle">2</text>';
+      inner+='<circle cx="'+p0[0].toFixed(1)+'" cy="'+p0[1].toFixed(1)+'" r="9" fill="#58a6ff" stroke="#0c0d0f" stroke-width="1.8"/><text x="'+p0[0].toFixed(1)+'" y="'+(p0[1]+4.2).toFixed(1)+'" fill="#0c0d0f" font-size="12" font-weight="800" text-anchor="middle">1</text>';
+      inner+='<circle cx="'+p1[0].toFixed(1)+'" cy="'+p1[1].toFixed(1)+'" r="9" fill="#3dd68c" stroke="#0c0d0f" stroke-width="1.8"/><text x="'+p1[0].toFixed(1)+'" y="'+(p1[1]+4.2).toFixed(1)+'" fill="#0c0d0f" font-size="12" font-weight="800" text-anchor="middle">2</text>';
     }
   }
   svg.innerHTML=inner;
