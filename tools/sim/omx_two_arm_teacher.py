@@ -122,12 +122,18 @@ class Teacher:
         return data.qpos[self.world.q[arm]].copy()
 
     @staticmethod
-    def move_g(q_from, q_to, seconds):
-        """Joint-space move of one arm, one target per frame."""
+    def move_g(q_from, q_to, seconds, j1_lead=False):
+        """Joint-space move of one arm, one target per frame. With `j1_lead`, joint1 turns ahead so a folded home clears the ship."""
         n = max(1, round(seconds * FPS))
         for i in range(1, n + 1):
             s = i / n
-            yield q_from + s * s * (3 - 2 * s) * (q_to - q_from)
+            if not j1_lead:
+                yield q_from + s * s * (3 - 2 * s) * (q_to - q_from)
+            else:
+                u1, ur = min(1., s / .55), max(0., (s - .35) / .65)
+                q = q_from + ur * ur * (3 - 2 * ur) * (q_to - q_from)
+                q[0] = q_from[0] + u1 * u1 * (3 - 2 * u1) * (q_to[0] - q_from[0])
+                yield q
 
     def settle_g(self, data, arm, q_target, grip, pos_target=None, max_s=6.0):
         """Closed-loop settle at a waypoint until joint error, velocity, TCP position, and jitter gate converge."""
@@ -210,7 +216,7 @@ class Teacher:
         if not ok:
             return dict(row, result="unreachable", reason=f"{arm} cannot do the step tool-down inside the limits: {note}")
         app_s = self.servo_comp.pace_seconds(arm, q, q_app, 2.5) if self.servo_comp is not None else 2.5
-        yield from self.move_g(np.append(q[:5], g_open), np.append(q_app[:5], g_open), app_s)
+        yield from self.move_g(np.append(q[:5], g_open), np.append(q_app[:5], g_open), app_s, j1_lead=step["from"] == "belt" and L.choices.get("wait_pose") == "home")
         yield from self.settle_g(data, arm, q_app, g_open, np.array([*wps[0][1], wps[0][2]]))
         q, off, worst, prev, held = q_app, None, 0., wps[0], {}
         adj_xy = None

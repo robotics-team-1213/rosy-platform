@@ -85,7 +85,7 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
     z_up = carry_z(layout, here, step["from"], step["to"])
     drop_z = 0 if b["kind"] == "belt" else RELEASE_DROP_STAND if b["kind"] == "stand" else drop_upper if b.get("layer", 0) > 0 else drop
     za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + drop_z  # released this far above its seat
-    z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" and layout.choices.get("wait_pose") != "home" else z_up  # belt pick approach depends only on belt height when waiting beside the belt (wait_pose="home" crosses the ship)
+    z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" else z_up  # belt pick approach depends only on belt height (wait_pose="home" turns j1 first in move_g to clear the ship)
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
     via = _carry_via(layout.arms.get(step.get("arm")), a["xy"], b["xy"],
                      clear_r=STAND_CARRY_CLEAR_R if b["kind"] == "stand" else BASE_SINGULARITY_R)
