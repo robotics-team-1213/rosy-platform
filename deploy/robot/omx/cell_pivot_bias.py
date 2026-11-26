@@ -238,6 +238,9 @@ def save_bias(path, bias: dict, params=None, *, fuse_local: bool = True) -> None
         or math.dist(r["point_m"], bias["point_m"]) > 0.010
         or (is_local and is_pivot_region(r))
     ] + [bias]
+    import cell_cal_history
+
+    cell_cal_history.keep([path], "bias")
     tmp = Path(path).with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=1))
     tmp.replace(path)
