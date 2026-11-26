@@ -1,5 +1,6 @@
 import "/common/account-profile.js";
 import { createAccountSession } from "/common/account-session.js";
+import { kstStamp } from "./status-logic.js";
 
 const $ = (id) => document.getElementById(id);
 const KIND = { measure: "측정", check: "확인" };
@@ -26,7 +27,8 @@ export function initRequests({ onSessionChanged } = {}) {
     if (className) node.className = className;
     return node;
   };
-  const when = (value) => (value ? new Date(value).toLocaleString("ko-KR") : "");
+  const when = (value) => kstStamp(value)?.text ?? "";
+  const stamped = (node, value) => Object.assign(node, { title: kstStamp(value)?.title ?? "" });
   const say = (message, state = "") => {
     const node = $("status");
     if (!node) return;
@@ -144,7 +146,7 @@ export function initRequests({ onSessionChanged } = {}) {
     const detail = $("detail");
     detail.replaceChildren();
     detail.hidden = false;
-    detail.append(text("h3", req.question), text("p", `${KIND[req.kind] || req.kind} · ${req.item} · 열린 때 ${when(req.opened_at)}`));
+    detail.append(text("h3", req.question), stamped(text("p", `${KIND[req.kind] || req.kind} · ${req.item} · 열린 때 ${when(req.opened_at)}`), req.opened_at));
     if (req.image) {
       const img = document.createElement("img");
       img.className = "request-picture";
@@ -165,7 +167,7 @@ export function initRequests({ onSessionChanged } = {}) {
       const result = a.verdict
         ? `${a.value} ${a.unit} → ${a.verdict === "neither" ? "어느 후보도 지지하지 않음" : a.verdict + " 후보 지지"}`
         : VERDICT[a.result];
-      done.append(text("p", result), text("p", `${a.by} · ${when(a.at)}`));
+      done.append(text("p", result), stamped(text("p", `${a.by} · ${when(a.at)}`), a.at));
       if (a.note) done.append(text("p", `메모: ${a.note}`));
       detail.append(done);
     } else if (canOperate) {

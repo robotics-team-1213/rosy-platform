@@ -120,6 +120,7 @@
             <div class="cal-canvas-wrap">
               <canvas id="topCanvas" width="640" height="480" aria-label="탑 카메라 모눈종이"></canvas>
             </div>
+            <p id="topEvidence" class="cal-card-sub">-</p>
             <footer class="cal-legend">
               <span class="cal-leg-item"><i class="cal-sw cal-sw-grid"></i>mm 모눈(20/50mm)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>LOO 오차 5 mm 이하</span>
@@ -127,6 +128,7 @@
               <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>LOO 15 mm 초과 · × 제외된 관측점</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-plan"></i>계획점 · 관측 연결 미확인</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-bias"></i>Bias = map−FK (적용 시 −bias)</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-delayed"></i>점선·흐림 · 옛 지도 기준 bias (지도 지연)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-site"></i>Start/Place (Z 시차 반영)</span>
             </footer>
             <details id="fixtureDetails" hidden><summary>실측 외곽 · 픽셀과 팔 기준 좌표</summary><pre id="fixtureValues"></pre></details>

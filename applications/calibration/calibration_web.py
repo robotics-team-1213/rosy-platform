@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import os
 import re
 import sys
@@ -340,6 +341,8 @@ class Handler(BaseHTTPRequestHandler):
                           ("Shift-Px", "max_px"), ("Inliers", "inliers")):
             if binding.get(key) is not None:
                 headers.append((f"X-Rosy-Frame-{name}", str(binding[key])))
+        if stamp is not None and math.isfinite(stamp):  # the evidence line shows when the camera saw this frame
+            headers.append(("X-Rosy-Frame-Observed-At", str(stamp)))
         if details:
             return self.json(200, {"media": media, "image": base64.b64encode(body).decode("ascii"),
                                    "fixture_observation": binding.get("fixture_observation")}, headers)

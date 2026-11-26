@@ -9,6 +9,9 @@ const {
   linkedArm,
   profileForArm,
   postEvalRequest,
+  freshLiveTcp,
+  kstStamp,
+  mapEvidence,
 } = await import("../web/status-logic.js");
 
 test("only a supervised eligible site can submit post-eval, with its name alone", () => {
@@ -116,4 +119,28 @@ test("classifyDrift reads cross_verify.drift and fails closed to unknown or advi
     classifyDrift({ cross_verify: { drift: { alarmed_sites: [], sites: { pallet: { status: "pass" } } } } }).verdict,
     "pass",
   );
+});
+
+test("live TCP freshness counts the server budget on the page clock, never the wall clock", () => {
+  const tcp = {x: 0.1, y: 0.2, z: 0.03, yaw_deg: 0};
+  const live = {stale: false, fresh_for_ms: 1500, fresh_until: 1, tcp};
+  assert.equal(freshLiveTcp(live, 0), tcp);
+  assert.equal(freshLiveTcp(live, 1499), tcp);
+  assert.equal(freshLiveTcp(live, 1500), null);
+  assert.equal(freshLiveTcp(live, -1), null);
+  for (const bad of [null, {}, {...live, stale: true}, {...live, stale: undefined}, {...live, fresh_for_ms: undefined},
+    {...live, fresh_for_ms: "1500"}, {...live, fresh_for_ms: 0}])
+    assert.equal(freshLiveTcp(bad, 0), null);
+});
+
+test("screen times are KST HH:MM:SS with the UTC original kept for the title", () => {
+  assert.deepEqual(kstStamp(Date.UTC(2026, 10, 26, 0, 5, 3)), {text: "09:05:03", title: "UTC 2026-11-26T00:05:03.000Z"});
+  assert.deepEqual(kstStamp("2026-11-26T15:00:00Z"), {text: "00:00:00", title: "UTC 2026-11-26T15:00:00.000Z"});
+  for (const bad of [null, undefined, "", "not a time", NaN]) assert.equal(kstStamp(bad), null);
+});
+
+test("the map evidence line names map SHA, observation time and source without inventing missing parts", () => {
+  assert.deepEqual(mapEvidence("0123456789ab", Date.UTC(2026, 10, 26, 0, 5, 3), "live"),
+    {textContent: "지도 01234567 · 관측 09:05:03 · 실시간 카메라", title: "관측 UTC 2026-11-26T00:05:03.000Z"});
+  assert.deepEqual(mapEvidence(null, null, "reference"), {textContent: "지도 없음 · 관측 — · 기준 영상", title: ""});
 });

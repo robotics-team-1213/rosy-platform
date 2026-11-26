@@ -236,6 +236,7 @@ body {
 .cal-sw-warn { background: var(--status-warn); }
 .cal-sw-plan { background: transparent; border: 1px dashed var(--ink-quiet); border-radius: 50%; }
 .cal-sw-bias { background: var(--series-secondary); }
+.cal-sw-delayed { background: transparent; border: 1px dashed var(--ink-quiet); }
 .cal-sw-site { background: var(--ink); }
 .cal-sw-reach { background: var(--series-secondary); }
 .cal-sw-roi { background: var(--ink-quiet); }
@@ -324,6 +325,10 @@ body {
 .cal-table td[data-level="error"] {
   color: var(--status-crit);
   font-weight: var(--weight-label);
+}
+
+.cal-table td[data-evidence="delayed"] {
+  color: var(--text-secondary);
 }
 
 .cal-table td[data-level="ok"] {
