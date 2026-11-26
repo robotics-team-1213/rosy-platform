@@ -179,22 +179,8 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
                 failed = command
                 break
         if failed:
-            log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state"),
-                 "transit_speed": motion["plan"].get("transit_speed", 0.85),
-                 "runner_session": (status.get("operating_context") or {}).get("session_id"),
-                 "runner": {k: status[k] for k in ("t", "target", "health", "contact", "strain_sample", "fault", "trace_receipt",
-                                                   "library_sha256") if k in status}})
-            if at_stop is not None:  # evidence never stands between a stop and the fold: a stuck camera's
-                import threading      # frame() could hold the arm in contact for ~60 s, so it gets AT_STOP_S
-
-                def grab():
-                    try:
-                        at_stop(status.get("state"), status)
-                    except BaseException:
-                        pass
-                grabber = threading.Thread(target=grab, daemon=True)
-                grabber.start()
-                grabber.join(timeout=AT_STOP_S)
+            rp.record_stop(status, failed, [x, y], speed=motion["plan"].get("transit_speed", 0.85),
+                           log=log, at_stop=at_stop, timeout=AT_STOP_S)
             if not fold(cell).get("ok"):
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             break
