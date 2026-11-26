@@ -167,6 +167,7 @@ def _cleanup_on_end(state, task: dict, status: str, now: float) -> None:
             rec = releases.get(batch_id)
             if rec is not None and _auto_depart(task) and rec.get("task_id") == task.get("task_id"):
                 rec.update(state="HELD", reason=task.get("reason") or status)
+                _event(state, task["robot_id"], batch_id, "HELD", rec["reason"], now)
             elif rec is not None and rec.get("state") == "OPERATOR" and rec.get("task_id") == task.get("task_id"):
                 releases.pop(batch_id, None)
     if task.get("action") == "dock_and_unload_s3":
@@ -388,6 +389,7 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
                     receipt={"trip_state": trip.get("state"), "lease": (trip.get("lease") or {}).get("lease_id")})
         if _auto_depart(task):
             state.unload_releases[task["unload_batch_id"]].update(state="SENT", trip_id=trip["trip_id"], sent_at=now)
+            _event(state, robot_id, task["unload_batch_id"], "SENT", task["place_id"], now, trip["trip_id"])
         save()
         sent.append(task)
     return sent

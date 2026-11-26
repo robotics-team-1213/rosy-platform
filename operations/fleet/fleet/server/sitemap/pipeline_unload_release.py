@@ -162,11 +162,11 @@ def continue_unload(state, enqueue) -> list[str]:
     return made
 
 
-def _event(state, robot_id, batch, result, why, now) -> None:
-    from fleet.server.sitemap import pipeline_auto_events
+def _event(state, robot_id, batch, result, why, now, trip_id=None) -> None:
+    from fleet.server import pipeline_auto_events
 
     pipeline_auto_events.add(state, [{"kind": "auto_depart", "robot_id": robot_id, "batch_id": batch, "result": result,
-                                      "why": why, "t": now}], "fleet")
+                                      "why": why, "t": now, "trip_id":trip_id}], "fleet")
 
 
 def exit_target(rules, site) -> tuple[str, float, float, float] | None:
@@ -293,9 +293,11 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
                 stage_trip(robot_id, batch, target[0], release, now)
             elif record is not None:
                 record.update(state="HELD", reason="DEPART_LEGACY_ATTEMPT_REQUIRES_REVIEW")
+                _event(state, robot_id, batch, "HELD", record["reason"], now)
                 save()
             else:
                 state.unload_releases[batch] = {"robot_id": robot_id, "state": "HELD", "reason": "NO_EXIT_PLACE"}
+                _event(state, robot_id, batch, "HELD", "NO_EXIT_PLACE", now)
                 save()
             continue
         if record is None:
