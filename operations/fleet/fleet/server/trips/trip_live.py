@@ -29,6 +29,9 @@ class LiveTrip:
         #: Active D-1009 Nav2 route span dispatched to CORE (``{"end_index", "points"}``).
         self.active_route: Optional[dict] = None
         #: Bounded Nav2 failure recovery state (alternate-path replans and cooldown retries).
+        self.road_profile_key = None
+        self.road_profile = []
+        self.road_pose = None
         self.nav2_retries: int = 0
         self.nav2_retry_at: float = -math.inf
         self.nav2_replans: int = 0
@@ -97,6 +100,7 @@ class LiveTrip:
 
     def see(self, pose) -> None:
         """Keep the map pose just read and when it was read."""
+        self.road_pose = pose
         self.view["pose"], self.pose_read_at = pose_view(pose), _ports._monotonic()
 
     @property
