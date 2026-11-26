@@ -116,3 +116,30 @@ def test_native_character_keeps_searching_through_the_recovery_hold(tmp_path):
     display.step()
     display.tick()
     assert names[-1] == "searching"
+
+
+def test_native_character_glances_toward_turn_signal_and_rests_while_dozing(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", signal="left", face="happy")
+    display, _, clock, _, _, _ = _face_loop(module, tmp_path)
+    seen = []
+    display._faces._render = lambda name, phase, gaze_x, resting: seen.append((name, gaze_x, resting)) or b"panel"
+    display.step()
+    display.tick()
+    clock.now += .5
+    display.tick()
+    assert seen[-1][0] == "happy" and seen[-1][1] < -3.0 and seen[-1][2] == 0.0
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", signal="right", face="happy")
+    display.step()
+    display.tick()
+    clock.now += .5
+    display.tick()
+    assert seen[-1][1] > 3.0
+    _face_inputs(tmp_path, robot_mode="IDLE", battery_charging=True, face="bored")
+    display.step()
+    display.tick()
+    clock.now += 1.0
+    display.tick()
+    assert seen[-1][0] == "doze" and seen[-1][2] > 0.5
+
