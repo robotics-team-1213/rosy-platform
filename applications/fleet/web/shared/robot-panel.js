@@ -50,6 +50,7 @@ function statusTag(state, text, {icon, danger = false} = {}) {
 let panelSerial = 0;
 
 const SECTION_SPECS = [
+  ["faults", "오류 · 보류", "warn"],
   ["status", "상태", "robot"],
   ["camera", "카메라", "image"],
   ["commands", "명령", "next"],
@@ -59,6 +60,7 @@ const SECTION_SPECS = [
 ];
 
 const JUMP_SPECS = [
+  ["faults", "오류"],
   ["status", "상태"],
   ["camera", "카메라"],
   ["commands", "명령"],

@@ -399,7 +399,7 @@
       "media_type": "application/javascript"
     },
     "motion-readiness.js": {
-      "path": "motion-readiness.js",
+      "path": "map/motion-readiness.js",
       "media_type": "application/javascript"
     },
     "line-stuck.js": {
