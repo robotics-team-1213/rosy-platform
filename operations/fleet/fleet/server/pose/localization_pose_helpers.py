@@ -239,7 +239,8 @@ def fresh_overhead_sighting(
             x, y, yaw = float(row["x"]), float(row["y"]), float(row["yaw"])
         except (KeyError, TypeError, ValueError):
             return None
-        if not 0.0 <= age <= cues.OVERHEAD_FRESH_S:
+        max_age = 1.0 if force else cues.OVERHEAD_FRESH_S
+        if not 0.0 <= age <= max_age:
             return None
         return cues.Sighting(x, y, yaw, captured_at=now - age)
     return None

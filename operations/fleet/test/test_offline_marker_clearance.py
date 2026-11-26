@@ -139,7 +139,7 @@ def test_disconnected_peer_keeps_the_speed_allowance_until_it_has_stayed_still(r
         _hold_still(rig, .24, 2.5, .05)
         rig.now[0] += .5
         if problem == "gap":
-            rig.now[0] += .3          # .85 s since the last sighting: the run restarts
+            rig.now[0] += 1.0         # > STATIC_MAX_GAP_S (1.2 s) since the last sighting: the run restarts
         elif problem == "new_map":
             rig.version[0] += 1
             rig.see(y=.24, age=.4, seq=20)

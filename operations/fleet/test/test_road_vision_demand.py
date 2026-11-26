@@ -125,3 +125,27 @@ def test_ambiguous_sources_wait_for_scoped_evidence_and_network_errors_back_off(
         assert attempts == ["B","B"]
         await service.aclose()
     asyncio.run(scenario())
+
+
+def test_localization_fallback_wakes_covering_source_without_open_trip():
+    async def scenario():
+        now = [10.]
+        sent = []
+        async def hold(source):
+            sent.append(source)
+        async def close():
+            pass
+        loc = NS(_fallback={"rosy_45"})
+        sources = NS(sources=[NS(source_id="ceiling_north", map_id="site", robot_ids=("rosy_45",), robot_markers=())])
+        runner = NS(_live={}, _store=NS(active=lambda: (3, NS(map_id="site"))))
+        demand = RoadVisionDemand(NS(hold_stream=hold, aclose=close), sources, clock=lambda: now[0], localization=loc)
+        demand.period(runner)
+        await asyncio.sleep(0)
+        assert sent == ["ceiling_north"]
+        loc._fallback.clear()
+        now[0] += RENEW_S
+        demand.period(runner)
+        await asyncio.sleep(0)
+        assert sent == ["ceiling_north"]
+        await demand.aclose()
+    asyncio.run(scenario())

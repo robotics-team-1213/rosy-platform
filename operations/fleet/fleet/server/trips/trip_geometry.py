@@ -354,7 +354,15 @@ async def site_goal_in_robot_frame(app, console, robot_id: str, goal: tuple) -> 
     site_pose = pose_of(robot_id) if pose_of is not None else None
     try:
         state, _ = await console._gather_state(robot_id)
-        converted = robot_frame_goal(goal, site_pose, state, active[1].map_id)
+        bindings = getattr(site_maps, "map_bindings", None)
+        binding = None
+        if bindings is not None:
+            fit, reason = bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+            if fit is not None:
+                binding = (fit, reason)
+            elif reason == "MAP_BINDING_GRID_CHANGED":
+                binding = (None, reason)
+        converted = robot_frame_goal(goal, site_pose, state, active[1].map_id, binding)
     except SiteFrameMismatch:
         converted = None
     except Exception:  # noqa: BLE001 - an unreadable robot is not a frame proof

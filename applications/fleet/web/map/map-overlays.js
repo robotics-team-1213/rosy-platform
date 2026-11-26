@@ -5,7 +5,7 @@ import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { robotMapPose } from "./localization-badge.js";
 
 export function bindLayerToggles({scope, el, view, layerOn, draw}) {
-  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
+  const subKeys = ["poses", "omx", "lanes", "traffic", "sightings", "labels", "grid"];
   const toggleBar = el("map-overlay-toggles");
   if (!toggleBar) return;
   const syncToggleButtons = () => {
@@ -23,6 +23,11 @@ export function bindLayerToggles({scope, el, view, layerOn, draw}) {
     if (legacyTraffic) {
       legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
       legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
+    }
+    const legendTracking = el("legend-tracking");
+    if (legendTracking) {
+      const hasTracked = Boolean(view.cameraTracking?.robots?.length || view.cameraTracking?.unknown?.length);
+      legendTracking.hidden = (view.layers.tracking === false) || !hasTracked;
     }
   };
   const toggleLayer = (key) => {

@@ -45,7 +45,7 @@ def test_a_new_native_report_or_heading_starts_a_new_hold():
     assert tie.observe(origin, A[:2], 0.0) is None
     rotated = report(poses=((*A[:2], math.pi),), stamp=1.0)
     assert tie.observe(rotated, A[:2], 2.1) is None
-    later = report(poses=((*A[:2], math.pi),), stamp=2.0)
+    later = report(poses=((*A[:2], math.pi),), stamp=2.0, request_id="r1-2")
     assert tie.observe(later, A[:2], 4.2) is None
     tie.interrupt("r1")
     assert tie.observe(later, A[:2], 6.3) is None
@@ -435,3 +435,44 @@ def test_unique_candidate_corroboration_and_cross_frame_bound_tiebreak():
                 "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ticks(svc, clock, 0.5)
     assert svc.anchors() == {"r1"}
+
+
+def test_fresh_overhead_sighting_accepts_3fps_ceiling_camera_only_on_tiebreak_force():
+    from fleet.server.pose.localization_pose_helpers import fresh_overhead_sighting
+
+    clock = FakeClock()
+    seen = Sightings(clock)
+    seen.see(-0.9, 0.4)
+    clock.advance(0.45)  # 450 ms > 300 ms OVERHEAD_FRESH_S, typical for 3 fps ceiling_north
+    r = FakeRobot("r1")
+    svc = LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=seen, clock=clock, wall=clock,
+                              overhead_cue=True)
+    assert fresh_overhead_sighting(svc, "r1", clock(), force=False, expected_map_id="site-a") is None
+    forced = fresh_overhead_sighting(svc, "r1", clock(), force=True, expected_map_id="site-a")
+    assert forced is not None and (forced.x, forced.y) == (-0.9, 0.4)
+
+
+def test_tiebreak_hold_survives_advancing_scan_stamps_and_allows_retry_on_new_stamp():
+    from fleet.localization.wall_tiebreak import Tiebreak
+
+    tiebreak = Tiebreak(hold_s=2.0)
+    r1 = CandidateReport.model_validate({
+        "robot_id": "r1", "request_id": "req-1", "stamp": 10.0,
+        "candidates": [
+            {"x": -1.0, "y": 0.5, "yaw": 0.0, "scan_fit": 0.99},
+            {"x": 1.0, "y": -0.5, "yaw": math.pi, "scan_fit": 0.99},
+        ],
+    })
+    assert tiebreak.observe(r1, (-0.9, 0.4), 10.0) is None
+    # Advancing report.stamp every 1 s with steady candidate geometry must not reset hold_s
+    r1_t1 = r1.model_copy(update={"stamp": 11.0})
+    assert tiebreak.observe(r1_t1, (-0.9, 0.4), 11.1) is None
+    r1_t2 = r1.model_copy(update={"stamp": 12.1})
+    decision = tiebreak.observe(r1_t2, (-0.9, 0.4), 12.2)
+    assert decision is not None and (decision.pose.x, decision.pose.y) == (-1.0, 0.5)
+    # Same (request_id, stamp) deduplicates; a subsequent stamp retries cleanly
+    assert tiebreak.observe(r1_t2, (-0.9, 0.4), 12.5) is None
+    r1_t3 = r1.model_copy(update={"stamp": 14.5})
+    assert tiebreak.observe(r1_t3, (-0.9, 0.4), 14.5) is None
+    retried = tiebreak.observe(r1_t3.model_copy(update={"stamp": 15.5}), (-0.9, 0.4), 16.6)
+    assert retried is not None and (retried.pose.x, retried.pose.y) == (-1.0, 0.5)
