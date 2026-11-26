@@ -9,6 +9,7 @@ import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/a
 import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
 import { renderHoverCard } from "./map-hover-card.js";
+import { PLACE_SNAP_M } from "./stop-zone-overlay.js";
 
 function tripDispatchRefusal(error) {
   return junctionTurnRefusalText(error) || tripRefusalText(error);
@@ -323,16 +324,17 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     if (!world) { clearMapHover(); return; }
     const { x, y } = world;
     view.pointerWorld = { x, y };
-    const readout = el("map-cursor-readout");
-    if (readout) {
-      const s = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`, next = `X ${s(x)} m · Y ${s(y)} m · 칸 ${gridCellOf(x, y).label}`;
-      if (readout.textContent !== next) readout.textContent = next;
-      readout.hidden = false;
-    }
-    let bestPlace = null, bestDist = 0.13;
+    let bestPlace = null, bestDist = PLACE_SNAP_M;
     for (const place of view.activeSiteMap?.map?.places || []) {
       const d = Math.hypot(place.x - x, place.y - y);
       if (d < bestDist) { bestDist = d; bestPlace = place; }
+    }
+    const readout = el("map-cursor-readout");
+    if (readout) {
+      const s = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+      const next = `X ${s(x)} m · Y ${s(y)} m · 칸 ${gridCellOf(x, y).label}${bestPlace ? ` · 스냅 ${bestPlace.id}` : ""}`;
+      if (readout.textContent !== next) readout.textContent = next;
+      readout.hidden = false;
     }
     let hoverEntity = null;
     for (const r of view.guide?.robots || []) {
@@ -399,7 +401,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           return pickFocus(anc.target_id, `${anc.label} 선택됨 · 우측 인스펙터와 도크 선택이 갱신되었습니다`);
         }
       }
-      let bestPlace = null, bestDist = 0.14;
+      let bestPlace = null, bestDist = PLACE_SNAP_M;
       for (const place of view.activeSiteMap?.map?.places || []) {
         const d = Math.hypot(place.x - world.x, place.y - world.y);
         if (d < bestDist) { bestDist = d; bestPlace = place; }

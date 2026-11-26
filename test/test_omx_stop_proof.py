@@ -5,6 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -220,3 +221,145 @@ def test_auto_recover_is_skipped_without_next_with_unsafe_arm_or_without_params(
     out = call(_finished_run(runner, tmp_path, {"next": "recover_hold"}))
     assert out["started"] is False and out["reason"] == "STOP_PROOF_CONTACT"
     popen.assert_not_called()
+
+
+def test_session_proof_reconciles_lagging_live_chunk_and_merges_state_faults():
+    now = time.time()
+    lagging_live = {**FOLDED, "t": now - 0.05, "chunk": "policy"}
+    idle_state = {"ok": True, "command": "state", "chunk": None, "t": now, "holding": False, "fault": None, "human_hold_latched": False}
+    cell = Mock(policy_state=Mock(return_value=lagging_live))
+    assert sp.session_proof(cell, "r1", "arm_b", state=idle_state)["ok"] is True
+    assert sp.session_proof(cell, "r1", "arm_b", state={**idle_state, "t": now - 0.1})["code"] == "STOP_PROOF_NOT_SETTLED"
+    assert sp.session_proof(cell, "r1", "arm_b")["code"] == "STOP_PROOF_NOT_SETTLED"
+    for bad_chunk in ("park-slow", "fold-from-hold"):
+        c_rec = Mock(policy_state=Mock(return_value={**lagging_live, "chunk": bad_chunk}))
+        assert sp.session_proof(c_rec, "r1", "arm_b", state=idle_state)["code"] == "STOP_PROOF_NOT_SETTLED"
+    assert sp.session_proof(Mock(policy_state=Mock(return_value={**lagging_live, "t": now - 30})), "r1", "arm_b", state=idle_state)["code"] == "STOP_PROOF_LIVE_STALE"
+    clean_cell = Mock(policy_state=Mock(return_value={**FOLDED, "t": now}))
+    assert sp.session_proof(clean_cell, "r1", "arm_b", state={**idle_state, "human_hold_latched": True})["code"] == "STOP_PROOF_LATCH"
+    assert sp.session_proof(clean_cell, "r1", "arm_b", state={**idle_state, "contact": True})["code"] == "STOP_PROOF_CONTACT"
+    assert sp.session_proof(clean_cell, "r1", "arm_b", state={**idle_state, "settled": False})["code"] == "STOP_PROOF_NOT_SETTLED"
+    int_cell = Mock(policy_state=Mock(return_value={**FOLDED, "t": now, "interrupt": "sigterm"}))
+    assert sp.session_proof(int_cell, "r1", "arm_b", state=idle_state)["code"] == "STOP_PROOF_FAULT"
+    assert sp.session_proof(clean_cell, "r1", "arm_b", state={**idle_state, "ok": False, "error": "boom"})["code"] == "STOP_PROOF_FAULT"
+    assert sp.session_proof(clean_cell, "r1", "arm_b", state={**idle_state, "fault": "motor err"})["code"] == "STOP_PROOF_FAULT"
+    assert sp.session_proof(Mock(policy_state=Mock(return_value={**FOLDED, "t": now, "fault": "motor err"})), "r1", "arm_b",
+                            state={**idle_state, "fault": "contact in policy"})["code"] == "STOP_PROOF_CONTACT"
+
+
+def _assess_fixture(tmp_path, *, arm="arm_b", instance="arm_b_follower"):
+    from cell_robot_profile import load
+
+    cal = {k: {"id": i + 11, "drive_mode": 0, "homing_offset": 0, "range_min": 0, "range_max": 4095}
+           for i, k in enumerate(["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"])}
+    cal_path, prof_path, env_path = tmp_path / "cal.json", tmp_path / "prof.json", tmp_path / "env.json"
+    cal_path.write_text(json.dumps(cal))
+    prof_path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": arm,
+                                     "instance_id": instance, "robot_config_sha256": "a" * 64,
+                                     "operating_envelope_path": str(env_path), "work_dir": str(tmp_path)}))
+    binding = load(prof_path)["binding"]
+    env_path.write_text(json.dumps({"schema": "rosy.omx-operating-envelope.v1", "device_id": arm, "instance_id": instance,
+                                    "profile_sha256": binding["profile_sha256"],
+                                    "attempts_path": str(tmp_path / "att.jsonl"), "reviews": []}))
+    names = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"]
+    cond = {"installation_revision": "inst-1", "object_revision": "obj-1", "payload_max_kg": 0.25,
+            "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "scene-1"}
+    old_proof = {**FOLDED, "schema": sp.SCHEMA, "ok": True, "job_id": "r0", "arms": [arm], "at": time.time() - sp.MAX_AGE_S - 5}
+    cfg = {"arm_id": arm, "calibration_path": str(cal_path), "operating_profile_path": str(prof_path),
+           "operating_envelope_path": str(env_path), "work_dir": str(tmp_path), "payload": {"kg": 0.05, "source": "t"},
+           "params": {"auto.max_gross_kg": 0.25}, "operating_conditions": cond, "_commissioning": {"stop_proof": old_proof},
+           "cameras": {}, "sites": {}, "plan": {}, "profiles": {}}
+    return cfg, binding, names, old_proof
+
+
+def test_authorization_bind_proof_refreshes_past_max_age_with_real_assess_and_fails_closed(tmp_path):
+    import cell_policy_handoff as handoff
+
+    cfg, binding, names, old_proof = _assess_fixture(tmp_path)
+    lib = {"fps": 30, "names": names, "gripper_closed": 48.8, "chunks": {"home": [[0] * 6], "policy": [[0] * 6]}}
+    live = {**FOLDED, "folded": False, "t": time.time()}
+    cell = Mock(policy_state=Mock(side_effect=lambda: dict(live, t=time.time())))
+    logs = []
+    auth = handoff.Authorization(cfg).bind_proof(cell, "run-2", "arm_b", log=logs.append)
+    st = {"t": time.time(), "ok": True, "state": [20, 10, 5, 30, -29, 54], "target": [20, 10, 5, 30, -29, 54],
+          "operating_context": {"scope": "hardware", "sha256": "c" * 64, "session_id": "s1", "operating_profile": binding}}
+    res = auth(lib, st, ("run policy", "park"), check_home=False)
+    assert res["allowed"] and res["mode"] == "commissioning"
+    assert cfg["_commissioning"]["stop_proof"] is old_proof  # never mutated in place
+    assert logs and logs[-1]["stop_proof_refresh"] and logs[-1]["stop_proof"]["job_id"] == "run-2:auth-1"
+    with pytest.raises(ValueError, match="session_changed"):
+        auth(lib, {**st, "operating_context": {**st["operating_context"], "session_id": "s2"}}, ("run policy", "park"), check_home=False)
+    live["human_hold_latched"] = True
+    with pytest.raises(ValueError, match="STOP_PROOF_LATCH"):
+        auth(lib, st, ("run policy", "park"), check_home=False)
+
+
+def test_chunk_runner_loop_publishes_live_immediately_when_chunk_clears():
+    import chunk_runner_loop as loop
+
+    snapshots = []
+    runner = SimpleNamespace(
+        chunk="policy", target=[0.0] * 6, fps=30, ticks=1, lag=0.0, fault=None, holding=False, robot=None,
+        human_hold_latched=False, torque_hold_commanded=False, policy_playback=None, health=None,
+        jitter={"shaking": False}, pending=[], signals=None, last_input=0.0, last_present=[0.0] * 6,
+        clock=lambda: 1.0, sleep=lambda _s: None, live=snapshots.append, idle=lambda: len(snapshots) >= 1,
+        present=lambda: [0.0] * 6, command=lambda _c: False, report=lambda **_kw: None,
+    )
+
+    def _clear_on_tick(r, _tag, _fn):
+        if r.chunk == "policy":
+            r.chunk = None  # ticks=1 would not fire periodic 3-tick publish without transition check
+        return False
+
+    orig = loop.interrupt_tick
+    loop.interrupt_tick = _clear_on_tick
+    try:
+        loop.run(runner, lambda: [])
+    finally:
+        loop.interrupt_tick = orig
+    assert snapshots and snapshots[0]["chunk"] is None
+
+
+def test_paced_multi_chunk_refreshes_expired_stop_proof_with_real_bind_proof(tmp_path, monkeypatch):
+    if str(Path(__file__).resolve().parent) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import cell_envelope as ce
+    import cell_policy_handoff as handoff
+    from cell_robot_profile import load
+    from test_omx_policy_drive import Cell, LIB, NAMES as PD_NAMES, SimPolicy, cal, drive, write_lib
+
+    cal_p, prof_p, env_p = tmp_path / "cal.json", tmp_path / "prof.json", tmp_path / "env.json"
+    cal_p.write_text(json.dumps(cal()))
+    prof_p.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "arm_b",
+                                  "instance_id": "arm_b_follower", "robot_config_sha256": "a" * 64,
+                                  "operating_envelope_path": str(env_p), "work_dir": str(tmp_path)}))
+    binding = load(prof_p)["binding"]
+    env_p.write_text(json.dumps({"schema": ce.SCHEMA, "device_id": "arm_b", "instance_id": "arm_b_follower",
+                                 "profile_sha256": binding["profile_sha256"],
+                                 "attempts_path": str(tmp_path / "att.jsonl"), "reviews": []}))
+    expired = {"schema": sp.SCHEMA, "ok": True, "job_id": "init", "arms": ["arm_b"], "at": 100.0}
+    sp._MINTED.add(("init", 100.0))
+    cond = {"installation_revision": "inst-1", "object_revision": "obj-1", "payload_max_kg": 0.25,
+            "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "scene-1"}
+    cfg = {"arm_id": "arm_b", "calibration_path": str(cal_p), "operating_profile_path": str(prof_p),
+           "operating_envelope_path": str(env_p), "work_dir": str(tmp_path), "payload": {"kg": 0.05, "source": "t"},
+           "params": {"auto.max_gross_kg": 0.25}, "operating_conditions": cond,
+           "_commissioning": {"stop_proof": expired}, "cameras": {}, "sites": {}, "plan": {}, "profiles": {}}
+    ctx = {"scope": "hardware", "sha256": "c" * 64, "session_id": "s1", "operating_profile": binding}
+    lib_p = write_lib(tmp_path, {**LIB, "names": [f"{n}.pos" for n in PD_NAMES]})
+
+    class _PacedCell(Cell):
+        def policy_state(self):
+            return {"t": 1000.0, "state": list(self.state), "folded": False, "chunk": None, "fault": None, "human_hold_latched": False}
+
+        def act(self, cmd):
+            r = super().act(cmd)
+            return {**r, "operating_context": ctx, "t": 1000.0, "health": {"current_ma": [0] * 6}, "health_t": 1000.0}
+
+    monkeypatch.setattr(sp.time, "time", lambda: 1000.0)
+    monkeypatch.setattr(ce.time, "time", lambda: 1000.0)
+    cell, logs = _PacedCell(expected_chunks={"home", "reach", "policy"}), []
+    auth = handoff.Authorization(cfg).bind_proof(cell, "run-7", "arm_b", log=logs.append)
+    res = drive.run_episode(cell, SimPolicy([[[0, -58, 51, 50, -5, 49]] * 16] * 3), lib_p, tmp_path,
+                            offset=[0] * 6, max_chunks=3, dry_run=False, log=logs.append, authorize=auth, paced_chunks=True, n_action=4)
+    assert res["result"] == "chunks_done" and sum(1 for r in logs if r.get("stop_proof_refresh")) == 3

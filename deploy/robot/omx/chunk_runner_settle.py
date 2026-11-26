@@ -211,10 +211,14 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
                 if threshold is not None:
                     fields["holding"] = by_position and current >= threshold
             runner.holding = bool(fields["holding"])
-        elif runner.holding and (
-            runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place", *RECOVERY_PARKS)
-            or runner.chunk.startswith(("lift_pick", "goto above_place", "descend_place"))
-        ):
+        elif runner.chunk == "policy" and present[5] > runner.target[5] + 0.8:
+            if (health := runner.read_health()):
+                runner.health, threshold = health, runner.library.get("hold_current_ma")
+                ma5, pwm5 = abs((health.get("current_ma") or [0] * 6)[5]), (health.get("pwm") or [0] * 6)[5]
+                if pwm5 <= -60 or (threshold is not None and ma5 >= threshold):
+                    fields["holding"], fields["gripper_current_ma"], runner.holding = True, ma5, True
+        elif runner.holding and (runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place", *RECOVERY_PARKS)
+                                 or runner.chunk.startswith(("lift_pick", "goto above_place", "descend_place"))):
             runner.holding = present[5] > grip_floor + empty_margin
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None

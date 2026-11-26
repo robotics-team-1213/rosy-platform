@@ -14,6 +14,7 @@ import { fitBox, mapBounds } from "/console/assets/site-map-model.js";
 import { scaleBar } from "/common/map-rules.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
+import { drawStopZones } from "./stop-zone-overlay.js";
 import { createMapPolling } from "./map-polling.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -33,7 +34,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // D-360 레이어 토글. 첫 화면은 정돈된 가상 지도(로봇·도로·교통·라벨)만 켜고, 천장 카메라 관측/추적 고리는 필요 시 켠다.
   if (!view.layers) {
-    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
+    view.layers = { poses: true, omx: true, lanes: true, zones: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
   view.layers.storedRoutes ??= false;
   const layerOn = (key) => view.layers?.[key] !== false;
@@ -192,6 +193,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null, ruler);
     }
     drawPointerCell(ctx, toPx, bounds);
+    drawStopZones(ctx, toPx, {
+      activeMap: sameFrame ? activeMap : null, robots: view.robots, guideRobots: view.guide?.robots,
+      trips: view.trafficTrips, hoverPlaceId: view.hoverWorld?.place?.id || null,
+      css, on: layerOn("zones"), labelsOn: layerOn("labels"), lineWidth: 1.6, drawChip,
+    });
     if (showLanes) {
       const hovered = view.hoverEntity?.kind === "place" ? view.hoverEntity.place : null;
       if (hovered && !(layerOn("labels") && /^[CS]/.test(String(hovered.id)))) {
@@ -549,6 +555,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
+    if (view.activeSiteMap?.map?.map_id === grid.map_id) {
+      drawStopZones(ctx, toGridPoint, {
+        activeMap: view.activeSiteMap.map, robots: view.robots, guideRobots: view.guide?.robots,
+        trips: view.trafficTrips, hoverPlaceId: view.hoverWorld?.place?.id || null,
+        css, on: layerOn("zones"), labelsOn: layerOn("labels"), lineWidth: 0.5, drawChip,
+      });
+    }
     if (layerOn("grid")) drawMapDatum(ctx, toGridPoint, gridBounds, {css});
     flushChips(ctx);
     if (view.selected && view.cursor) {

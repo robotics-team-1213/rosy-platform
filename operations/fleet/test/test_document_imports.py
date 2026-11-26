@@ -116,6 +116,7 @@ OWN = {
         "camera-backdrop.js",
         "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "map-hover-card.js",
+        "stop-zone-overlay.js",
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",

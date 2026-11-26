@@ -5722,3 +5722,11 @@
 - gate 변화: 없음. 셀 장비 배치는 표시 전용 후보·사진 추정이며 실측이 아니다. 공급 작업대 S 남쪽 가장자리가 `loop_right` 차로의 표준 폭(0.20 m)과 약 9 mm, 컨베이어 남단이 4 mm 여유다(오차 범위라 "지도 검사"에만 적음, 실측 전). `fleet/fleet/server/sitemap` 단위는 10,000줄 한도에 꽉 차 있다.
 - 결정: 없음
 - 교훈: CE: 새 교훈 기록 — `docs/solutions/logic-errors/site-map-owns-place-coordinates-zone-config-copies-overlap-2026-11-26.md`. 근거: 구역 YAML에 따로 적힌 좌표 5개가 활성 지도와 0.5~90 cm 어긋나 겹침으로 보였고, 셀 장비를 현장 프레임에 놓는 방법은 코드에 숫자만 남는다. 시험 통과이며 현장 수용은 아니다.
+
+## 2026-11-27 · uncommitted · pr1-stop-zone-overlay-and-next-steps
+
+- 변경: 지도 stop_zone 다각형 오버레이(stop-zone-overlay.js)·zones 레이어 토글·서버/표시계산 판별·스냅 반경 통일(0.14m)·aria-live off·큐 nextStepFor(/console/install#robots) 안내 추가 및 D-766 한도 준수를 위해 device-watch.js를 web/map/로 이동
+- 증거: stop-zone-overlay/queue-inline/attention-stale/console-goal-preview node 45 passed; ui_preflight 및 rosy_harness lint 확인
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

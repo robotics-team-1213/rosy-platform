@@ -3,6 +3,7 @@ import { iconSvg } from "/common/ui.js";
 import { batteryMeterState } from "/console/assets/cockpit-telemetry.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
 import { gridCellOf } from "./map-datum.js";
+import { stopZoneOccupants, stopZoneSummaryForRobot } from "./stop-zone-overlay.js";
 
 const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
 const mkEl = (tag, cls, txt) => {
@@ -69,6 +70,8 @@ export function renderHoverCard(entity, { el, view }) {
     const unc = typeof p.u_m === "number" ? ` (±${p.u_m.toFixed(2)}m)` : "";
     lines.push(["정밀 좌표 · 방위", `${hasXY ? `(${fmtCoord(p.x)}, ${fmtCoord(p.y)}) m` : "위치 모름"} · HEAD ${deg}${unc}${cell}`]);
     lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · ${devices.length ? `장치 ${readyCount}/${devices.length} 정상` : "장치 미수신"}`]);
+    const zone = stopZoneSummaryForRobot(robotObj, r, view.activeSiteMap?.map, view.trafficTrips);
+    if (zone) lines.push(["정지 구역", zone.label]);
     if (pctNum !== null) bars.push(["battery", "배터리", `${pctNum}%${volt ? ` · ${volt}` : ""}`, null, null, { percent: pctNum, charging, online: r.online !== false }]);
     else if (volt) lines.push(["배터리", volt]);
     if (alignPct !== null) bars.push(["pose", "차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn", null]);
@@ -113,6 +116,9 @@ export function renderHoverCard(entity, { el, view }) {
     title = `${pl.id} · ${pl.name || pl.id}`;
     badge = isCharger ? "충전 스테이션" : (String(pl.id).startsWith("P") ? "대기·분기점" : "작업 정류장");
     lines.push(["지도 좌표 · 도로", `X ${pl.x.toFixed(3)} m, Y ${pl.y.toFixed(3)} m · 칸 ${gridCellOf(pl.x, pl.y).label} · ${edgeDesc}`]);
+    if (Array.isArray(pl.stop_zone) && pl.stop_zone.length >= 3) {
+      lines.push(["정지 구역", stopZoneOccupants(pl, view.robots, view.guide?.robots, view.trafficTrips).label]);
+    }
     if (road) {
       const via = road.places?.length ? road.places.join(" → ") : pl.id;
       lines.push([`${activeId} 도로 경로`, `거리 ${road.length_m.toFixed(2)} m · 경유: ${via}`]);
