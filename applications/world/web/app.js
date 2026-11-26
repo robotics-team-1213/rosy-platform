@@ -2,6 +2,7 @@ import { showCad, showCell, showFieldPlane, showMap } from "./scene.js";
 import { initFactoryTab } from "./factory-live.js";
 import { initLiveFeeds, isLayoutSha } from "./live-feeds.js";
 import { activeSiteMap } from "./active-site-map.js";
+import { mapEvidence, stamp, viewTurnOf } from "./common/map-rules.js";
 
 const byId = (id) => document.getElementById(id);
 if (["/world/", "/world/index.html"].includes(location.pathname)) byId("world-experiments-link").hidden = false;
@@ -9,11 +10,6 @@ const status = (id, state, text) => {
   const element = byId(id);
   if (element.getAttribute("state") !== state) element.setAttribute("state", state);
   if (element.textContent !== text) element.textContent = text;
-};
-const date = (value) => {
-  if (!Number.isFinite(value) && typeof value !== "string") return "확인되지 않음";
-  const timestamp = new Date(typeof value === "number" ? value * 1000 : value);
-  return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : "확인되지 않음";
 };
 const text = (value) => typeof value === "string" && value.trim().length > 0;
 const captureClock = new Intl.DateTimeFormat("ko-KR", {
@@ -24,11 +20,12 @@ const xy = (values) => Array.isArray(values) && values.length >= 2 &&
 
 function readout(id, entries) {
   const element = byId(id);
-  element.replaceChildren(...entries.flatMap(([name, value]) => {
+  element.replaceChildren(...entries.flatMap(([name, value, title]) => {
     const term = document.createElement("dt");
     const details = document.createElement("dd");
     term.textContent = name;
     details.textContent = value;
+    if (title) details.title = title;
     return [term, details];
   }));
   element.hidden = false;
@@ -50,7 +47,7 @@ function mapData(envelope) {
   const edges = map.edges.map((edge) => edge?.polyline).filter((line) =>
     Array.isArray(line) && line.length >= 2 && line.every(xy));
   if (!(places.length || edges.length)) throw new Error("Site map contains no geometry");
-  return { id: map.map_id, version: envelope.version, places, edges };
+  return { id: map.map_id, version: envelope.version, viewTurn: viewTurnOf(map), places, edges };
 }
 
 function recordingData(recording) {
@@ -159,10 +156,11 @@ let cadPreset = "top";
 let choseMapMode = false;
 let mode = "vector";
 let archivedMapReadout;
+let archivedMapEvidence;
 let archiveMapUnavailable = false;
 const activeMapCanvas = byId("map-active-canvas");
 const activeMap = activeSiteMap({
-  canvas: activeMapCanvas, placeSelect: byId("map-active-place"), showMap, mapData, date,
+  canvas: activeMapCanvas, placeSelect: byId("map-active-place"), showMap, mapData,
   onUpdate() {
     if (mode !== "active") return;
     showMapSource();
@@ -190,6 +188,8 @@ function showMapSource() {
       vectorAvailable ? "보관 지도" : archiveMapUnavailable ? "보관 차로 그래프를 그릴 수 없습니다" : "보관 지도를 읽는 중…");
   }
   activeMapCanvas.hidden = !active || !activeMap.entries;
+  const evidence = (active ? activeMap.entries && activeMap.evidence : mode === "vector" && vectorAvailable && archivedMapEvidence) || null;
+  Object.assign(byId("map-evidence"), { hidden: !evidence, textContent: evidence?.text ?? "", title: evidence?.title ?? "" });
   byId("map-active-place-control").hidden = activeMapCanvas.hidden || !activeMap.hasPlaces;
 }
 
@@ -257,12 +257,10 @@ const mapPromise = (async () => {
   try {
     const envelope = await readJson("site-map");
     map = mapData(envelope);
-    archivedMapReadout = [
-      ["출처", "Fleet 활성 지도 보관본"],
-      ["지도 ID", map.id],
-      ["버전", map.version ?? "확인되지 않음"],
-      ["활성 시각 (UTC)", date(envelope.activated_at)],
-    ];
+    archivedMapReadout = [["지도 ID", map.id]];
+    archivedMapEvidence = mapEvidence({
+      version: map.version, timeLabel: "활성", time: envelope.activated_at, source: "Fleet 활성 지도 보관본",
+    });
     if (mode !== "active") showMapSource();
   } catch {
     mapFallback();
@@ -580,7 +578,7 @@ liveFeeds = initLiveFeeds({
   byId,
   status,
   readout,
-  date,
+  stamp,
   text,
   readJson,
   mapData,

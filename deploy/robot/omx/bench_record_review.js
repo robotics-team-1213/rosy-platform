@@ -151,7 +151,7 @@ function renderManualHoldCard(st){
   }
   const qa=$('mh-quick-actions');
   if(qa){
-    qa.innerHTML='';
+    const qaOld=[...qa.children];qa.innerHTML='';
     const tgtArm=rec?.auto_recover?.arm||mh?.arm||st?.arm||(f&&f.arm&&f.arm.value!=='arm_ab'?f.arm.value:'arm_a');
     if(rec?.auto_recover?.eligible){
       const arBtn=document.createElement('button');arBtn.type='button';arBtn.id='mh-auto-recover-btn';arBtn.className='btn-primary btn-xs';
@@ -201,7 +201,7 @@ function renderManualHoldCard(st){
       }
     }
     if(rec?.can_ack_error){
-      const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-primary btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
+      const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-tool btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
       aBtn.addEventListener('click',async()=>{aBtn.disabled=true;setReqError('');try{renderStatus(await api('/api/recover/ack_error',{}));}catch(e){setReqError(e.message);}finally{aBtn.disabled=false;}});
       qa.append(aBtn);
     }
@@ -222,6 +222,8 @@ function renderManualHoldCard(st){
         qa.append(swBtn);
       }
     }
+    const qaSig=tgtArm+'|'+qa.innerHTML;// same buttons: keep the old nodes so keyboard focus survives the poll
+    if(qaSig===qa.dataset.sig)qa.replaceChildren(...qaOld);else qa.dataset.sig=qaSig;
   }
 }
 async function runAutoRecover(isAuto,arm){
@@ -236,7 +238,6 @@ async function runAutoRecover(isAuto,arm){
     if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
     if(res&&res.home_failed){
       const guide='복구는 완료되었으나 홈 복귀 실패: '+(res.home_error||'')+(res.next_action?(' → 다음 조치: '+res.next_action):'');
-      setReqError(guide);
       if($('mh-cause-hint')){$('mh-cause-hint').textContent=guide;$('mh-cause-hint').hidden=false;}
       if(typeof setNotice==='function')setNotice('pose-feedback','warn',guide,{persistent:true});
       if(typeof window.pushBenchLog==='function')window.pushBenchLog('pose','warn',guide);
@@ -249,7 +250,7 @@ async function runAutoRecover(isAuto,arm){
     }
   }catch(e){
     const msg=e.message||String(e);
-    setReqError('자동 복구 보류: '+msg);
+    if(typeof setNotice==='function')setNotice('pose-feedback','warn','자동 복구 보류: '+msg,{persistent:true});
     if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','warn','자동 복구 보류: '+msg);
     if(typeof setActivity==='function')setActivity('자동 복구 보류','warn',msg);
     await pollStatus();
@@ -292,7 +293,6 @@ if($('mh-clear-btn')&&$('mh-clear-confirm')){
       if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
       if(st&&st.home_failed){
         const guide='보류 해제는 완료되었으나 홈 복귀 실패: '+(st.home_error||'')+(st.next_action?(' → 다음 조치: '+st.next_action):'');
-        setReqError(guide);
         if($('mh-cause-hint')){$('mh-cause-hint').textContent=guide;$('mh-cause-hint').hidden=false;}
         if(typeof setNotice==='function')setNotice('pose-feedback','warn',guide,{persistent:true});
         if(typeof window.pushBenchLog==='function')window.pushBenchLog('pose','warn',guide);
@@ -328,7 +328,7 @@ async function renderEpisodeReviewPanel(host,dsName){
   const busy=(typeof benchSessionActive==='function'&&benchSessionActive());
 
   let h='<div class="ep-review-box">';
-  h+='<div class="ep-review-head"><div class="mono" style="font-size:.78rem"><b>'+esc(dsName)+'</b> · '+eps.length+'회 · 합격 '+(sum.good||0)+' · 불량 '+(sum.bad||0)+' · 미평가 '+(sum.unrated||0)+'</div>';
+  h+='<div class="ep-review-head"><div class="mono" style="font-size:.8rem"><b>'+esc(dsName)+'</b> · '+eps.length+'회 · 합격 '+(sum.good||0)+' · 불량 '+(sum.bad||0)+' · 미평가 '+(sum.unrated||0)+'</div>';
   h+='<div class="ep-review-bulk">';
   if(badIndices.length)h+='<button type="button" class="btn-tool btn-xs" data-tone="warn" data-ep-del-bad="1"'+(busy?' disabled':'')+'>불량 '+badIndices.length+'개 일괄 삭제</button>';
   h+='<button type="button" class="btn-tool btn-xs" data-ds-dnt="'+(data.do_not_train?'0':'1')+'"'+(busy?' disabled':'')+'>'+(data.do_not_train?'학습제외 해제':'학습제외(DO_NOT_TRAIN)')+'</button>';

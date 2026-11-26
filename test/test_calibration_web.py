@@ -280,6 +280,20 @@ def test_profiles_endpoint_is_account_gated_and_survives_missing_tcp_x(store, tm
         server.server_close()
 
 
+def test_live_tcp_freshness_is_a_server_age_and_budget_not_a_browser_clock(tmp_path):
+    entry = cell_calibration_view.load_profile_registry(_write_test_profile(tmp_path, "http://127.0.0.1:1/x.jpg"))[0]
+    live = lambda now: cell_calibration_view.build_profile_snapshot(entry, now_ts=now)["robot_status"]["live"]  # noqa: E731
+    fresh = live(1.5)  # sample t=1.0, verify.live_fresh_s default 2.0
+    assert (fresh["stale"], fresh["age_ms"], fresh["fresh_for_ms"]) == (False, 500, 1500)
+    expired = live(10.0)
+    assert (expired["stale"], expired["age_ms"], expired["fresh_for_ms"]) == (True, 9000, 0)
+    future = live(0.5)  # a sample from the future is never fresh, whatever the budget
+    assert (future["stale"], future["age_ms"], future["fresh_for_ms"]) == (True, -500, 0)
+    (tmp_path / "arm_test" / "live.json").unlink()
+    missing = live(1.5)
+    assert (missing["stale"], missing["age_ms"], missing["fresh_for_ms"]) == (True, None, 0)
+
+
 def test_frame_response_pairs_bytes_provenance_and_lifetime(monkeypatch):
     sent = []
     handler = SimpleNamespace(send=lambda *args: sent.append(args))
@@ -296,12 +310,16 @@ def test_frame_response_pairs_bytes_provenance_and_lifetime(monkeypatch):
     assert (code, media, body) == (200, "image/jpeg", b"warped")
     assert dict(headers) == {"X-Rosy-Frame-Binding": "aligned", "X-Rosy-Frame-Generation": "bound",
                              "X-Rosy-Frame-Lifetime-Ms": "1500", "X-Rosy-Frame-Reference-Sha256": "ref",
-                             "X-Rosy-Frame-Shift-Px": "1.25", "X-Rosy-Frame-Inliers": "312"}
-    for stamp in (None, "97", "nan", "101", ""):
+                             "X-Rosy-Frame-Shift-Px": "1.25", "X-Rosy-Frame-Inliers": "312",
+                             "X-Rosy-Frame-Observed-At": "99.5"}
+    for stamp, observed in ((None, None), ("97", "97.0"), ("nan", None), ("101", "101.0"), ("", None)):
         web.Handler._send_frame(handler, {}, "live", b"original", "image/png", stamp)
         code, media, body, headers = sent.pop()
         assert (code, media, body) == (200, "image/png", b"original")
-        assert dict(headers) == {"X-Rosy-Frame-Binding": "unverified", "X-Rosy-Frame-Lifetime-Ms": "0"}
+        expected = {"X-Rosy-Frame-Binding": "unverified", "X-Rosy-Frame-Lifetime-Ms": "0"}
+        if observed:  # a stale frame still says when it was seen; an unreadable stamp says nothing
+            expected["X-Rosy-Frame-Observed-At"] = observed
+        assert dict(headers) == expected
 
 
 def test_live_frame_proxy_allows_loopback_and_blocks_remote_ssrf(store, tmp_path):

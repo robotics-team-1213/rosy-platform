@@ -1,0 +1,37 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>카메라 배치 정렬</title>
+<style>
+*{box-sizing:border-box}body{background:#101519;color:#f6f7f8;font:16px system-ui;margin:0}main{max-width:1060px;margin:auto;padding:20px}header,section{display:flex;align-items:center;gap:18px;flex-wrap:wrap}header{justify-content:space-between}h1{font-size:24px}select,button{font:inherit;background:#20282f;color:white;padding:7px;border:1px solid #67747a;border-radius:5px}canvas{width:100%;display:block;background:#050607;margin:12px 0}output{font-variant-numeric:tabular-nums}b{color:#61ffff}strong{color:#ffc14d}summary{cursor:pointer}details img{max-width:100%}
+</style><main><header><h1>카메라 배치 정렬</h1><select id="profile" aria-label="카메라 선택"></select></header>
+<section><b>＋ 목표점</b><strong>○ 현재점</strong><span>현재점이 목표점에 겹치도록 카메라를 조정하세요.</span></section>
+<canvas id="view" width="640" height="480" aria-label="목표와 현재 위치를 연결한 실시간 영상"></canvas>
+<output id="status">영상 연결 중</output><details><summary>기준 영상 보기</summary><img id="reference" alt="선택한 카메라의 기준 구도"></details></main>
+<script>
+const el=id=>document.getElementById(id), canvas=el('view'), ctx=canvas.getContext('2d'), select=el('profile');
+let profiles=[], generation=0, last=null, watchdog;
+function clear(message){ctx.clearRect(0,0,canvas.width,canvas.height);el('status').textContent=message}
+function draw(p,img,row){
+ canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;ctx.drawImage(img,0,0);const values=[];
+ p.points.forEach(([x,y],i)=>{
+  const cur=row.points[i];ctx.lineWidth=2;
+  if(cur){const [a,b]=cur;ctx.strokeStyle='#fff';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(x,y);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#ffc14d';ctx.beginPath();ctx.arc(a,b,6,0,2*Math.PI);ctx.stroke();values.push(i+1+'번 '+Math.hypot(a-x,b-y).toFixed(1)+' px')}
+  else values.push(i+1+'번 추적 대기');
+  ctx.strokeStyle='#61ffff';ctx.beginPath();ctx.moveTo(x-8,y);ctx.lineTo(x+8,y);ctx.moveTo(x,y-8);ctx.lineTo(x,y+8);ctx.stroke();
+  ctx.fillStyle='#101519';ctx.fillRect(x+9,y-17,17,17);ctx.fillStyle='white';ctx.font='bold 14px sans-serif';ctx.fillText(i+1,x+13,y-4)
+ });el('status').textContent=values.join('　·　')+'　|　프레임 '+row.seq;
+}
+async function loop(g){
+ while(g===generation){
+  const i=select.selectedIndex;
+  try{const row=await (await fetch('frame/'+i,{signal:AbortSignal.timeout(3000)})).json();
+   if(g!==generation)return;
+   if(row.error||row.seq===last)clear(row.error||'새 프레임 대기');
+   else{const img=new Image();img.src='data:image/jpeg;base64,'+row.image;await img.decode();if(g!==generation)return;
+    last=row.seq;draw(profiles[i],img,row);clearTimeout(watchdog);watchdog=setTimeout(()=>clear('영상 갱신 대기'),2400)}
+  }catch{if(g===generation)clear('영상 연결 대기')}
+  await new Promise(resolve=>setTimeout(resolve,450));
+ }
+}
+function start(){clearTimeout(watchdog);last=null;clear('영상 연결 중');el('reference').src='data:image/jpeg;base64,'+profiles[select.selectedIndex].jpeg;loop(++generation)}
+(async()=>{profiles=await(await fetch('profiles')).json();profiles.forEach(p=>select.add(new Option(p.name)));select.onchange=start;start()})().catch(()=>clear('프로필을 불러올 수 없습니다.'));
+</script></html>

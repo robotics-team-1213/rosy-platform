@@ -42,7 +42,7 @@ INPUT_FILES = {
 WEB_FILES = (
     "index.html", "styles.css", "app.js", "live-feeds.js", "scene.js", "scene-geometry.js",
     "play.js", "factory-live.js", "factory-live-ui.js", "factory-actors.js", "world-monitor.js", "studio-look.js",
-    "active-site-map.js",
+    "active-site-map.js", "sim-freshness.js",
     "omx-arm.js", "manifest.webmanifest",
 )
 FACTORY_STAGES = (
@@ -54,7 +54,7 @@ FACTORY_EXTENDED_STAGES = FACTORY_STAGES + ("ab_rehandle", "outbound_dispatch")
 COMMON_FILES = (
     "tokens.css", "theme.js", "components.css", "component-controls.css",
     "template.css", "app-shell.css", "brand/mark.svg", "ui.js", "ui-wiring.js",
-    "confirmation.js", "live-dialog-geometry.js", "vendor/three.module.min.js",
+    "confirmation.js", "live-dialog-geometry.js", "core_ui_logic.js", "map-rules.js", "vendor/three.module.min.js",
     "vendor/three.core.min.js", "vendor/three.LICENSE",
     "meshes/pinky-tray.stl",
     *(f"meshes/omx-link{i}.stl" for i in range(8)),

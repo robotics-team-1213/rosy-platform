@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx"))
 
-from cell_camera_input_preflight import collect
+from cell_camera_input_preflight import binding_status, collect
 
 
 def test_three_roles_must_advance():
@@ -39,3 +39,15 @@ def test_stale_sequence_or_source_stamp_blocks():
     evidence = collect("arm_b", frame, sleep=lambda _: None)
     assert not evidence["camera_source_ready"]
     assert all(not camera["ok"] for camera in evidence["cameras"].values())
+
+
+def test_a_live_side_role_can_still_have_the_wrong_camera():
+    registry = {"cameras": [{"role": "side", "device": "camera", "usb_id": "4c4a:4a55", "topic": "/side"}]}
+    producers = {"camera-side": {"ROSY_CAMERA_DEVICE": "camera", "ROSY_CAMERA_TOPIC": "/side"}}
+    facts = {"camera": {"id": "8086:0b07"}}
+    args = ("side",), registry, producers, facts, {"side": "/side"}
+    assert binding_status(*args, realpath=lambda path: path) == {"side": "binding_mismatch"}
+    facts["camera"]["id"] = "4c4a:4a55"
+    assert binding_status(*args, realpath=lambda path: path) == {"side": "matched"}
+    registry["cameras"].append({"role": "arm_s_top", "device": "camera"})
+    assert binding_status(*args, realpath=lambda path: path) == {"side": "binding_mismatch"}

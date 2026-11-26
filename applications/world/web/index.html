@@ -124,6 +124,7 @@
           <label id="map-active-place-control" hidden>지도 위치
             <select id="map-active-place" class="ui-field" aria-controls="map-active-canvas"></select>
           </label>
+          <span id="map-active-keys" class="sr-only">지도에서 화살표 키로 위치를 고르고 Home 키로 전체 위치를 봅니다.</span>
         </header>
         <div class="world-viewbar" role="group" aria-label="지도 보기">
           <ui-button id="map-mode-field" kind="segment" type="button" aria-pressed="false" hidden>현장 사진</ui-button>
@@ -157,7 +158,7 @@
         </div>
         <div class="world-stage">
           <canvas id="map-canvas" role="img" aria-label="보관 지도 벡터 그래프 — 노드와 유도선"></canvas>
-          <canvas id="map-active-canvas" role="img" aria-label="Fleet 활성 지도 — 위치와 차로" hidden></canvas>
+          <canvas id="map-active-canvas" role="img" tabindex="0" aria-label="Fleet 활성 지도 — 위치와 차로" aria-describedby="map-active-keys" hidden></canvas>
           <canvas id="map-cad-canvas" class="world-orbit" role="img" tabindex="0" aria-label="2026-10-26 보관 CAD" aria-describedby="map-cad-note" hidden></canvas>
           <figure id="map-field-figure" class="world-figure" hidden>
             <img id="map-field-photo" alt="Rosy Cam 현장 원본" hidden>
@@ -179,6 +180,7 @@
           </figure>
           <ui-empty id="map-empty" hidden>보관 지도 파일이 없거나 읽지 못했다.</ui-empty>
         </div>
+        <p id="map-evidence" class="world-caption" hidden></p>
         <section id="pinky-camera-panel" class="world-provenance" aria-label="카메라 보기" hidden>
           <div class="world-viewbar" role="group" aria-label="카메라 선택">
             <ui-button id="camera-source-field" kind="segment" type="button" aria-pressed="false">Rosy Cam 현장 상단</ui-button>
@@ -213,7 +215,7 @@
         </header>
         <div class="world-stage world-cell-stage">
           <div id="cell-view" class="world-cell-view" data-d435="false">
-            <canvas id="cell-canvas" class="world-orbit" role="img" tabindex="0" aria-label="OMX 베이스 3D 보기. 분홍색은 팔 A, 중립색은 팔 B" aria-describedby="cell-controls-note"></canvas>
+            <canvas id="cell-canvas" class="world-orbit" role="img" tabindex="0" aria-label="OMX 베이스 3D 보기. 파란색은 팔 A, 중립색은 팔 B" aria-describedby="cell-controls-note"></canvas>
             <img id="cell-r2s-overlay" class="world-cell-r2s-overlay" src="./data/cell-photo.jpg" alt="" aria-hidden="true" data-r2s-alpha="0">
           </div>
           <div id="cell-fallback" class="world-cell-fallback" hidden>

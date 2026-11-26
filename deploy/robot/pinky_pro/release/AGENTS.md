@@ -1,42 +1,12 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
 
 # release
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Release packaging and the privileged Host Agent. Modules are scripts (not an installed package). `HostAgent` is pure decision/dispatch; `host_agent_server` is POSIX transport + injected `HostCommands`. CORE talks to it over `/run/rosy/host-agent.sock`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `host_agent.py` | Decision layer: roles, confirmations, refusals, audit; no socket, no root |
-| `host_agent_server.py` | Unix-socket server, peer credential check, privileged actions |
-| `manifest.py` | Release manifest read/write |
-| `manifest.schema.json` | Manifest JSON schema |
-| `publish_secret_baseline.json` | D-889 5: `tools/publish_main.py` secret-scan hits reviewed as not secrets, one row per exact (commit, path, rule) with verdict and review date; never a value or excerpt. A hit is skipped only on an exact triple; a new commit or another rule still stops the publish. Generated 2026-10-26 from `origin/main..84e20380a2` (109 rows); the top-level `reviewer` states it was an agent review, not a human sign-off |
-| `signing.py` | Compatibility module alias to `deploy/hosts/common/release/signing.py`; native installers copy that self-contained implementation, not this alias |
-| `sign_image_release.py` | Offline image checksum verification and fail-closed Ed25519 signing CLI |
-| `storage.py` | On-disk release store |
-| `updater.py` | Activate / rollback a signed release |
-| `layout.py` | Directory layout for releases |
-| `network.py` | Network profile provisioning helpers |
-| `image_checks.py` | Image content checks used by the pipeline |
-| `secret_scan.py` | Secret scanning before ship |
-| `arm64_release_builder.py` | Native ARM64 `core`/`io` build and unsigned release-payload assembler; private keys are forbidden here |
-| `import_unsigned_payload.py` | Fail-closed checksum, archive, identity, payload, and nested ARM64 image verifier before offline signing; never accepts a private key |
-| `build_payload_release.py` | D-225 2.1: `build` (payload tree → unsigned native release dir) and `pack` (deterministic tar.gz for `rosy-release-push.ps1 -Tarball`); never reads a private key |
-| `artifact_impact.py` | D-325 advisory classifier for no Pinky artifact, native payload, flashable image, or fail-closed review |
-
-## Subdirectories
-
-| Directory | Purpose |
-|-----------|---------|
-| `public-keys/` | Committed Ed25519 **public** trust anchors only (see `public-keys/AGENTS.md`) |
+Release packaging and the privileged Host Agent. Modules are scripts (not an installed package). `HostAgent` is pure decision/dispatch; `host_agent_server` is POSIX transport + injected `HostCommands`. CORE talks to it over `/run/rosy/host-agent.sock`. Contract: `docs/reference/rosy-host-agent-contract.md`; client `middleware/core/api/core_api_web/api/host_agent_client.py`. Files: `ls`; `public-keys/` holds committed Ed25519 **public** anchors only.
 
 ## For AI Agents
 
@@ -44,76 +14,22 @@ Release packaging and the privileged Host Agent. Modules are scripts (not an ins
 
 - Never give Host Agent an arbitrary shell. Commands are an allow-list.
 - Inject `HostCommands` in tests; do not run `nmcli`/`systemctl`/`reboot` in pytest.
-- CORE client must treat `HOST_AGENT_UNAVAILABLE` / `HOST_AGENT_TIMEOUT` / `HOST_AGENT_UNREADABLE_RESPONSE` as three distinct outcomes (`host_agent_client.py`).
-- Activation `runtime_mode` is always `"core"` (`layout.py:ACTIVATION_RUNTIME_MODE`). Motor/hardware is a separate field approval — updater must not activate those modes.
-- Keep this directory importable via `test/conftest.py` (no `setup.py`).
+- CORE client treats `HOST_AGENT_UNAVAILABLE` / `HOST_AGENT_TIMEOUT` / `HOST_AGENT_UNREADABLE_RESPONSE` as three distinct outcomes.
+- Activation `runtime_mode` is always `"core"` (`layout.py:ACTIVATION_RUNTIME_MODE`). Motor/hardware is a separate field approval; the updater must not activate those modes.
+- Keep this directory importable via `test/conftest.py` (no `setup.py`). `signing.py` aliases `deploy/hosts/common/release/signing.py`; native installers copy that implementation.
+- Signing tools (`sign_image_release.py`, `arm64_release_builder.py`, `import_unsigned_payload.py`, `build_payload_release.py`) other than `sign_image_release.py` (offline) never read or accept a private key; import verifies checksum, archive, identity and nested image before signing.
+- `publish_secret_baseline.json` (D-889): one row per exact (commit, path, rule) of reviewed secret-scan hits, never a value or excerpt. A new commit or other rule still stops the publish. The 2026-10-26 rows were an agent review, not human sign-off.
+- Payload-only update (D-225 2.1, operator; no card re-flash; DEVICE evidence only when `UPDATE_GO` is not HOLD):
+- Payload steps: CI "Build Pinky Pro native payload" artifact, offline `sign_image_release.py`, `build_payload_release.py pack --modes-from <unsigned tar.gz>` (restores exec bits the zip lost), then `../rosy-release-push.ps1 -Tarball`. Use each script's `--help`.
+- Payload builds against the ROS debs installed on the CI runner. Before pushing, diff payload `ros-packages.txt` (`name=version`) with the image release's `deb-packages.txt` (`ros-jazzy-*` only). If versions differ, consider an image rebuild; no gate enforces this.
+- Artifact selection (D-325): `artifact_impact.py --base <installed image source_revision> --head <candidate> --json`; never substitute the payload revision. `none` skips; `native-payload`, `flashable-image` pick the workflow; `review` blocks. It is advisory and waives no signing, readback or field gate.
 
 ### Testing Requirements
 
 ```bash
-python3 -m pytest test/test_host_agent.py test/test_release_manifest.py \
-  test/test_release_signing.py test/test_release_storage.py \
-  test/test_release_updater.py test/test_release_layout.py \
-  test/test_release_boundary_guards.py -v
+python3 -m pytest test/test_host_agent.py test/test_release_manifest.py test/test_release_signing.py test/test_release_storage.py test/test_release_updater.py test/test_release_layout.py test/test_release_boundary_guards.py test/test_payload_release_build.py test/test_native_payload_workflow.py -q
 ```
-
-### Payload-only update (D-225 2.1, operator)
-
-기존 로봇의 payload 계층만 바꿀 때. 카드 재기록 없음. `UPDATE_GO`가 HOLD인 동안은 개발용이고 DEVICE 증거가 아니다.
-
-```powershell
-$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
-# 1. CI: Actions > "Build Pinky Pro native payload" (release_id) 실행 후 artifact 받기
-gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D $RosyScratch\payload
-# 2. 오프라인 서명 (파일럿 키, 이미지 서명과 같은 도구)
-python deploy\robot\pinky_pro\release\sign_image_release.py $RosyScratch\payload\<id> `
-  --private-key <offline key> --public-key deploy\robot\pinky_pro\release\public-keys\rosy-release-2026-01.pem
-# 3. 재포장: --modes-from 이 artifact zip이 잃은 exec bit를 Linux 빌드 tarball에서 되살린다
-python deploy\robot\pinky_pro\release\build_payload_release.py pack --release-dir $RosyScratch\payload\<id> `
-  --out $RosyScratch\payload\<id>.tar.gz --modes-from $RosyScratch\payload\<id>.unsigned.tar.gz `
-  --public-key deploy\robot\pinky_pro\release\public-keys\rosy-release-2026-01.pem
-# 4. 전송·전환
-deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <ip> -Tarball $RosyScratch\payload\<id>.tar.gz
-```
-
-ROS 의존성: payload는 잠긴 입력이 아니라 **CI 러너에 그 시점 설치된** `ros-jazzy-*` deb에 대고 빌드된다. payload-only 갱신은 로봇 이미지의 deb를 바꾸지 않으므로, 전송 전에 payload의 `ros-packages.txt`(`name=version`)를 로봇 이미지 릴리스의 `deb-packages.txt`(이미지 dist 사이드카, 또는 로봇의 `/opt/rosy/releases/<이미지 release id>/deb-packages.txt`)와 diff 한다. payload 자체의 `deb-packages.txt`는 러너 전체 목록이라 비교 대상이 아니다. 버전이 다르면 이미지 재빌드를 검토한다. 활성화 게이트는 없다(운영자 확인 사항).
-
-```powershell
-$img = Get-Content <image deb-packages.txt> | ? { $_ -like 'ros-jazzy-*' } | % { $_ -replace "`t", '=' }
-Compare-Object $img (Get-Content $RosyScratch\payload\<id>\ros-packages.txt)
-```
-
-Tests: `python -m pytest test/test_payload_release_build.py test/test_native_payload_workflow.py -q`.
-
-### Select an artifact before building (D-325)
-
-Use the deployed signed image manifest's `source_revision` as `--base`, and the
-exact candidate commit as `--head`. Do not substitute a newer active payload
-revision; the image and payload revisions have separate provenance:
-
-```powershell
-python deploy\robot\pinky_pro\release\artifact_impact.py `
-  --base <installed-image-source-revision> --head <candidate-commit> --json
-```
-
-`none` skips Pinky artifacts; `native-payload` selects the existing payload
-workflow subject to ROS deb inventory equality; `flashable-image` selects the
-native ARM64 image workflow; `review` blocks release selection. This output is
-not release authorization and does not waive signing, readback, or field gates.
-
-### Common Patterns
 
 JSON request/response lines, schema version 1, bounded request size.
-
-## Dependencies
-
-### Internal
-
-- Contract: `docs/reference/rosy-host-agent-contract.md`
-- Client: `middleware/core/api/core_api_web/api/host_agent_client.py`
-
-### External
-
-- OpenSSL 3, POSIX unix sockets (server path)
 
 <!-- MANUAL: -->

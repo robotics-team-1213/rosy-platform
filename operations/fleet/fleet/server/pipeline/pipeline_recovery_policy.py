@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 
+from fleet.pipeline.cell_site_targets import ARM_CELL, act_fallback_refusal
 from core_common.protocol.cell_failure_context import canonical_sha256
 from core_common.protocol.pipeline_recovery_tools import (
     MAX_ACT_FALLBACK_CHUNKS,
@@ -15,7 +16,6 @@ from fleet.server.sitemap import pipeline_auto_events, pipeline_repark
 from .pipeline_home_recovery import bound_home_worker_ready, incident_roots, limit_home_tools
 
 CELL_ARMS = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
-ARM_CELL = {"arm_s": "cell_s", "arm_a": "cell_ab", "arm_b": "cell_ab"}
 CAM_CELL = {"arm_s_top": "cell_s", "arm_s_wrist": "cell_s", "top": "cell_ab", "side": "cell_ab",
             "arm_a_wrist": "cell_ab", "arm_b_wrist": "cell_ab"}
 _HW_VETO_WORDS = ("latched", "windup", "holding_high", "overload", "hw_error")
@@ -465,8 +465,6 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
             disp_why = vla_why = common_block
         elif depth >= 1:
             disp_why = vla_why = "FALLBACK_DEPTH_EXCEEDED"
-        elif cell_id != "cell_s" or arm_id != "arm_s":
-            disp_why, vla_why = "CELL_S_ONLY", "ACT_POLICY_UNSUPPORTED_ARM"
         elif held_any or not folded:
             disp_why = vla_why = "ARM_NOT_FOLDED_OR_HELD"
         else:
@@ -474,6 +472,11 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
                 disp_why = "RECOVERY_CAP_EXCEEDED"
             if budgets.get("enqueue_vla_act_fallback", 0) >= MAX_RECOVERIES_PER_ROOT:
                 vla_why = "RECOVERY_CAP_EXCEEDED"
+
+        if disp_why is None and (cell_id, arm_id) != ("cell_s", "arm_s"):
+            disp_why = "CELL_S_ONLY"
+        if vla_why is None:
+            vla_why = act_fallback_refusal(cell_id, task)
 
         rp_why = ("PLACEMENT_ALREADY_VERIFIED_HOME_ONLY" if trigger == "FOLD_READBACK_MISSING"
                   else common_block if common_block else "NO_REACH_FIX" if not has_fix

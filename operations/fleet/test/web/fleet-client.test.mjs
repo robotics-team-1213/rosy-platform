@@ -51,6 +51,12 @@ test('404 disables optional polling until the owner resets its gate', async () =
   assert.equal(gate.due(), true);
 });
 
+test('candidate reads retain the receiver retry interval', async () => {
+  const {client} = clientFor(429, {detail: {code: 'RATE_LIMITED', retry_after_s: 15}});
+  await assert.rejects(client('/api/fleet/robots/r1/localization'),
+    error => error.status === 429 && error.code === 'RATE_LIMITED' && error.retryAfterS === 15);
+});
+
 test('credential is read per request and never sent to another origin', async () => {
   let token = 'old';
   const seen = [];

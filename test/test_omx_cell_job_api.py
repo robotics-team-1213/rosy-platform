@@ -126,12 +126,10 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "tools-env-current.sh" in arm_b_argv[2]
     paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "n_action": 8}, wd)
     assert "--paced-chunks" in paced_argv and "--n-action" in paced_argv
-    for bad_paced in (
-        {"mode": "hybrid", "goal_site": "yard:r3-s2-t1"},
-        {"mode": "taught", "goal_site": "yard:r3-s2-t1"},
-    ):
-        with pytest.raises(ValueError, match="paced_chunks"):
-            api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, **bad_paced}, wd)
+    with pytest.raises(ValueError, match="paced_chunks"):  # paced hybrid is admitted (ACT grasp, taught carry), taught is not
+        api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "mode": "taught", "goal_site": "yard:r3-s2-t1"}, wd)
+    hybrid_paced = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "mode": "hybrid", "goal_site": "yard:r3-s2-t1"}, wd)
+    assert "--paced-chunks" in hybrid_paced and hybrid_paced[hybrid_paced.index("--mode") + 1] == "hybrid"
     live = {**base_policy, "dry_run": False}
     assert api.build_argv(api.JOBS["cell_policy_drive"], live, wd)[0] == "./with-session-arm-s-live.sh"
     with pytest.raises(ValueError, match="person_at_switch"):
@@ -799,6 +797,8 @@ def test_cell_safe_home_guards_hw_error_incident_cap_and_clears_multi(tmp_path, 
     monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "missing-boards.json"))
     rc_unavail, res_unavail = csh.run_safe_home(args_missing, live_fn=lambda _c: False)
     assert rc_unavail == 2 and res_unavail["result"] == "refused_hw_probe_unavailable"
+    (tmp_path / "boards.json").write_text(json.dumps({"00FB51A150323952582E3120FF070726": "arm_s"}), encoding="utf-8")
+    monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "boards.json"))  # /dev/null is unmapped: passes the board check
 
     rc_alert, res_alert = csh.run_safe_home(
         args, live_fn=lambda _c: False,

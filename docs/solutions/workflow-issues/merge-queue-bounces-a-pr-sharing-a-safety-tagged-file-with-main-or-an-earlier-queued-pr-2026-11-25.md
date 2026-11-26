@@ -77,7 +77,7 @@ force-push와 rebase는 쓰지 않는다(D-1055). 원인이 된 PR이 main에 �
 - safety 태그 경로를 고친 PR을 올리기 전에 같은 경로를 고치는 다른 PR이 열려 있거나 큐에 있는지 본다(`gh pr list --state open --json number,files,autoMergeRequest`, `python tools/merge_queue.py list`). 있으면 그 PR이 먼저 들어간 뒤 이 PR이 큐에서 나올 것으로 간주하고 「해결」을 바로 할 준비를 한다.
 - main에 이미 들어온 변경은 `git diff --name-only $(git merge-base HEAD origin/main) origin/main -- <그 경로>`로 보인다. 이때는 큐에 넣기 전에 「해결」을 먼저 한다. PR CI의 `scope`도 같은 검사를 하므로 같은 메시지로 실패할 것으로 보인다. 관측하지는 않았다.
 - PR CI가 통과했다는 것은 큐의 병합 커밋이 통과한다는 뜻이 아니다. 큐는 앞선 항목까지 쌓은 위에서 합친다. 큐에서 나온 PR은 PR 상태가 아니라 큐 안 실행을 본다.
-- PR 병합을 기다리는 스크립트는 `statusCheckRollup`의 실패만 보지 않는다. 타임라인의 `removed_from_merge_queue`도 보되, 그것은 병합 성공 때도 남는다(`merged`와 같은 초). PR state가 아직 `OPEN`일 때만 빠진 것으로 센다. 큐에 들어간 PR은 `autoMergeRequest`가 `null`이 되므로 그것만으로 빠진 것으로 판정하지 않는다. 같은 head에서 같은 이름의 검사가 두 번 잡히면 옛 실행이 `CANCELLED`로 남을 수 있다(#763의 `review-gate`).
+- PR 병합을 기다리는 스크립트는 `statusCheckRollup`의 실패만 보지 않는다. 타임라인의 `removed_from_merge_queue`도 보되, 그것은 병합 성공 때도 남는다(`merged`와 같은 초). PR state가 아직 `OPEN`일 때만 빠진 것으로 센다. 큐에 들어간 PR은 `autoMergeRequest`가 `null`이 되므로 그것만으로 빠진 것으로 판정하지 않는다. 같은 head에서 같은 이름의 검사가 두 번 잡히면 옛 실행이 `CANCELLED`로 남을 수 있다(#763의 `review-gate`). 2026-11-26 #912: 모든 검사가 녹색인데 PR이 `BLOCKED`로 남고 자동 병합이 큐에 넣지 않았다. `enqueuePullRequest` 오류가 `Required status check "review-gate" is cancelled`라고 원인을 알려 줬고, 취소된 그 실행만 `gh run rerun <id>`로 다시 돌리자 바로 큐에 들어가 병합됐다. 녹색인데 큐에 안 들어가면 같은 이름의 취소 실행부터 찾는다.
 
 ## 관련
 

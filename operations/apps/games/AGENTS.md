@@ -36,7 +36,7 @@ Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stay
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Design: `docs/plans/2026-09-17-robot-soccer-game-host-design.md`. Live camera: `games match --config ... --observer overhead`. Board: `--preview` (D-101).
 
 ### Testing Requirements

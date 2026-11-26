@@ -1509,6 +1509,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_policy_paced.py
   - deploy/robot/omx/cell_policy_entry.py
+  - deploy/robot/omx/cell_policy_pre_home.py
   - deploy/robot/omx/cell_remote_policy.py
   - deploy/robot/omx/cell_two_arm_guard.py
   - deploy/robot/omx/cell_two_arm_policy.py
@@ -1539,6 +1540,9 @@ safety_review_paths:
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
   - deploy/robot/omx/cell_area_job_spec.py
+  - deploy/robot/omx/cell_site_job_spec.py
+  - deploy/robot/omx/cell_site_register.py
+  - deploy/robot/omx/cell_config_io.py
   - deploy/robot/omx/cell_area_pick_cli.py
   - deploy/robot/omx/cell_bundle_emit.py
   - deploy/robot/omx/cell_depth_lock.py

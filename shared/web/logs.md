@@ -1249,3 +1249,35 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-26 · uncommitted · World 2D 지도가 Fleet 지도 규칙을 따름
+
+- 변경: World 활성·보관 2D 지도가 view_turn_deg(D-513 7)로 돌아가고 N 표지·축척 막대(0.5·1·2 m)를 그린다. 장소는 '이름 (ID)'. 지도 아래 근거 줄 '지도 vN · 수신 HH:MM:SS · 출처'(KST, UTC 원문은 title). 기록 시각도 KST+title. 활성 지도 캔버스에 화살표·Home 키 경로(#856 방식). Isaac·Pinky SIM 신선도는 serve.py가 주는 age_ms·fresh_for_ms로 판정하고 상태 이름은 EVIDENCE_LABEL(최신·지연·정보 없음). World 활성 지도 투영에 표시용 places[].name·view_turn_deg 추가(추가만).
+- 증거: node --test applications/world/test/map-rules.test.mjs 5 pass; 원격 pytest·브라우저 결과는 커밋 보고에 기록
+- gate 변화: 없음
+- 결정: 2026-11-26 UI 지도 패널 추천안 사용자 승인
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · 3×3 평면 투영 사본 4벌을 plane-math.js 하나로
+
+- 변경: shared/web/plane-math.js(invert3·project)를 /common 자산으로 추가하고 Fleet map-fit.js·measured-calibration-view.js·field-layers.js·start-point-layer.js와 Calibration grid-projection.js의 사본을 그것으로 바꿈. 특이 임계 1e-15, 지평선 w≤1e-9는 null(가장 엄격한 규칙). test_shared_dedupe HELPERS에 invert3 행(Calibration 화면 포함), test_only_exports 상한 5→4
+- 증거: node --test operations/fleet/test/web (plane-math.test.mjs가 옛 사본과 동일성·차이 고정) 로컬 통과; 원격 pytest는 갈래 보고에 기록
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 추천안(사용자 승인)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · 지도·용어 일관성(UI 패널 2라운드 합의 항목)
+
+- 변경: 관제 경로 프록시·Fleet·Vision 끊김 crit→warn(대열 relay crit 유지). '실측 요청'→'보정 요청', '설치·보정'→'설치', '실측 교정'→'보정'('카메라 설치·보정' 유지). Calibration 원점 축 화살표 --ink-quiet, STALE/FRESH→EVIDENCE_LABEL. World aria 팔 A 색 파란색. '무마커 추론'→'무마커 추정'. 이름 없는 장소는 id. 폐기 이름 0건 게이트 추가.
+- 증거: 원격 pytest 523 passed·브라우저 65 passed(0 new), harness lint 0 error
+- gate 변화: 없음
+- 결정: 근거 D:/DevTemp/ui-map-panel-1126/round2-*.md, 결정 정본 term-fleet.md(R2-19)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · World·Fleet 2D 지도 규칙 사본을 /common/map-rules.js 하나로
+
+- 변경: shared/web/map-rules.js(viewTurnOf·placeText·scaleBar·stamp·mapEvidence)를 /common 자산으로 추가. World map-rules.js 사본(#922)을 지우고 World 고유 simFreshness는 sim-freshness.js로 옮김, World 번들 COMMON_FILES에 map-rules.js. Fleet site-map-model의 viewTurnOf·근거 줄 시각 형식, map-view 축척 단위 선택, site-map·zone-blueprint 장소 표기를 공용으로 바꿈(Fleet 근거 줄 함수는 activeMapEvidence로 이름 바꿈). 축척 단위는 Fleet 0.5·1·2 m 우선, 칸을 넘으면 1·0.5·0.2·0.1·0.05 m(0.02·0.01 m 삭제). Fleet 근거 줄은 날짜가 다르면 MM-DD를 붙이고 시각 없음은 '확인되지 않음'. test_shared_dedupe HELPERS에 scaleBar 행(World 화면 포함)
+- 증거: node --test shared/web/test/map-rules.test.mjs, applications/world/test, operations/fleet/test/web 로컬 통과; World 사본을 되살리면 dedupe 시험 빨강(5곳) 확인; 원격 pytest는 갈래 보고에 기록
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 추천안
+- 교훈: 없음

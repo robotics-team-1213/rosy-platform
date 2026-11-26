@@ -206,7 +206,7 @@ def _load_lerobot_arm(
 
             chunk = policy.predict_action_chunk(pre(batch))
             arr = np.asarray(post(chunk).detach().cpu().numpy(), dtype=np.float64).reshape(-1, len(JOINT_NAMES))
-        return [[float(x) for x in r] for r in arr[:n_action_steps]]
+        return [[float(x) for x in r] for r in arr]  # the whole chunk; PolicyRegistry.infer trims to n_action_steps
 
     return predict
 
@@ -375,6 +375,7 @@ class PolicyRegistry:
         raw_chunk, visoff_diag = visoff.visoff_output(raw_out)
         if not isinstance(raw_chunk, (list, tuple)) or not (1 <= len(raw_chunk) <= entry.chunk_size):
             return 500, {"ok": False, "error": "invalid predicted chunk length"}
+        raw_chunk = raw_chunk if req.get("full_chunk") is True else raw_chunk[:entry.n_action_steps]  # timed single-arm drops late rows
         validated: list[list[float]] = []
         for row in raw_chunk:
             vec = _is_finite_floats(row, 6)

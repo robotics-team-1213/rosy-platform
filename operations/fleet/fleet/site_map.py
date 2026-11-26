@@ -201,6 +201,21 @@ def approach_pose(place: SitePlace) -> Optional[tuple[float, float, float]]:
     return place.x - d * math.cos(place.yaw), place.y - d * math.sin(place.yaw), place.yaw
 
 
+class DisplaySource(BaseModel):
+    """Where an edge's display-only line came from (2026-11-26). Routing and editing keep ``polyline``."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["survey"]
+    surveyed_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    plane: str = Field(min_length=1, max_length=64, pattern=r"\S")
+    #: The stored polyline ends the survey was compared against. Screens draw the line only while the
+    #: edge still ends there (1 mm, coordinate rounding): a moved edge needs a new survey.
+    anchors: tuple[tuple[float, float], tuple[float, float]]
+    #: A stored polyline point: the stored line up to it stays drawn as not surveyed (an unpainted U-turn).
+    stored_until: Optional[tuple[float, float]] = None
+    note: Optional[str] = Field(default=None, min_length=1, max_length=120, pattern=r"\S")
+
+
 class SiteEdge(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
@@ -218,10 +233,16 @@ class SiteEdge(BaseModel):
     robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
         default=None, max_length=16)
     evidence: Optional[RoadEvidence] = None
+    #: 2026-11-26 additive: a measured line screens draw instead of ``polyline``, with its source.
+    display_polyline: Optional[list[tuple[float, float]]] = Field(default=None, min_length=2, max_length=128)
+    display_source: Optional[DisplaySource] = None
 
     @model_validator(mode="after")
     def _finite(self) -> "SiteEdge":
-        if any(not math.isfinite(v) for point in self.polyline for v in point):
+        if (self.display_polyline is None) != (self.display_source is None):
+            raise ValueError(f"edge {self.id} display_polyline and display_source come together")
+        shown = [*(self.display_polyline or ()), *(self.display_source.anchors if self.display_source else ())]
+        if any(not math.isfinite(v) for point in [*self.polyline, *shown] for v in point):
             raise ValueError(f"edge {self.id} polyline must be finite")
         if sum(math.dist(a, b) for a, b in zip(self.polyline, self.polyline[1:])) <= 0.0:
             raise ValueError(f"edge {self.id} polyline has zero length")
@@ -431,7 +452,36 @@ class SiteMap(BaseModel):
                 del edge["name"]
             if edge["evidence"] is None:
                 del edge["evidence"]
+            if edge["display_source"] is None:  # 2026-11-26: maps without a display line stay byte-equal
+                del edge["display_source"], edge["display_polyline"]
         return body
+
+
+#: world_261026 floor survey on the ceiling_north plane, 2026-11-26 (400 px/m), moved here from the console
+#: (site-layer.js floorSurvey). No centreline is painted through the loop_right U-turn; only its straight
+#: approach was measured. Row: from, to, anchors (stored ends), surveyed line, stored_until, note.
+FLOOR_SURVEYS = {"world_261026": {
+    "bay_1": ("P1", "C1", ((-0.43002, 0.04266), (-0.41816, 0.47)), ((-0.4222, 0.0433), (-0.4386, 0.44)), None,
+              "영상의 분홍 충전선 중심"),
+    "upper_east": ("S3", "J_in", ((0.745, -0.207), (0.31418, -0.25008)), ((0.745, -0.25008), (0.31418, -0.25008)),
+                   None, "영상에서 읽은 차선 양쪽 경계의 중점"),
+    "loop_right": ("S5", "S3", ((0.89822, -0.48152), (0.745, -0.207)), ((0.9238, -0.25008), (0.745, -0.25008)),
+                   (0.9238, -0.207), "영상에서 읽은 차선 양쪽 경계의 중점"),
+}}
+
+
+def with_floor_surveys(body: dict) -> dict:
+    """The served map plus the surveyed display line on edges that carry none and still end where surveyed."""
+    surveys, edges = FLOOR_SURVEYS.get(body.get("map_id"), {}), []
+    for edge in body.get("edges", []):
+        row, line = surveys.get(edge.get("id")), edge.get("polyline") or []
+        if (row and "display_polyline" not in edge and (edge.get("from"), edge.get("to")) == row[:2] and len(line) >= 2
+                and all(math.dist(end, anchor) <= 0.001 for end, anchor in zip((line[0], line[-1]), row[2]))):
+            source = {"kind": "survey", "surveyed_at": "2026-11-26", "plane": "ceiling_north",
+                      "anchors": [list(p) for p in row[2]], "stored_until": list(row[4]) if row[4] else None, "note": row[5]}
+            edge = {**edge, "display_polyline": [list(p) for p in row[3]], "display_source": source}
+        edges.append(edge)
+    return {**body, "edges": edges}
 
 
 def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:

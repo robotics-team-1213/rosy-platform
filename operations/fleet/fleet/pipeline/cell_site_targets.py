@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+ARM_CELL = {"arm_s": "cell_s", "arm_a": "cell_ab", "arm_b": "cell_ab"}
 _STACKING_AREAS = frozenset({"pallet", "yard", "temp_a", "temp_b"})
 _LEGACY_CELL_AB_AREAS = frozenset({"pallet", "belt", "temp_plate_a", "temp_plate_b"})
 _SIM_AREA_PREFIXES = ("ship-", "tmp-a-", "tmp-b-", "yard:", "temp_a:", "temp_b:", "stand:", "yard-", "temp_a-", "temp_b-", "stand-")
@@ -340,3 +341,28 @@ def cell_ab_completion_verified(
         if isinstance(slot, dict) and (vt.get("col") != slot.get("col") or vt.get("row") != slot.get("row")):
             return False
     return True
+
+
+def act_route_refusal(cell_id: str, arm_id: str, src_site: str, dst_site: str,
+                      tier: int, displaced_to: str | None) -> str | None:
+    """Check the resolved task sites against the route the selected policy can represent."""
+    if ARM_CELL.get(arm_id) != cell_id:
+        return "ACT_POLICY_UNSUPPORTED_ARM"
+    if displaced_to is not None:
+        return "INVALID_EXECUTION_MODE"
+    if cell_id == "cell_ab":
+        if type(tier) is not int or tier not in (1, 2, 3) or src_site != "belt":
+            return "ACT_POLICY_INVALID_TARGET"
+        if dst_site not in (f"ship-h1r{row}-l{tier - 1}" for row in range(3)):
+            return "ACT_POLICY_INVALID_TARGET"
+    return None
+
+
+
+def act_fallback_refusal(cell_id: str, task: dict | None) -> str | None:
+    """Why a failed task's own route cannot be retried as an ACT fallback, else None."""
+    if not task or not all(task.get(k) for k in ("arm_id", "src_site", "dst_site", "tier")):
+        return "ORIGINAL_TASK_ROUTE_REQUIRED"
+    if task.get("directive"):
+        return "DIRECTIVE_REQUIRES_NEW_TASK"
+    return act_route_refusal(cell_id, task["arm_id"], task["src_site"], task["dst_site"], task["tier"], task.get("displaced_to"))

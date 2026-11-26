@@ -44,7 +44,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
                 max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
                 params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None,
-                paced_chunks: bool = False, mask_pick_goal: bool = False) -> dict:
+                paced_chunks: bool = False, mask_pick_goal: bool = False, state_gate=None) -> dict:
     if mask_pick_goal and (handoff is None or goal_slot is None or getattr(shadow, "goal_size", None) is None):
         raise ValueError("masked pickup requires a goal-conditioned hybrid handoff")
     library = json.loads(library_path.read_text(encoding="utf-8"))
@@ -110,8 +110,6 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
         return jaw_zone_error(poses, kin, jaw_spec) if jaw_spec is not None else None
 
-    if paced_chunks and handoff is not None:
-        raise ValueError("paced_chunks cannot be combined with handoff")
     if not paced_chunks and (getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None):
         def infer(state, frames):
             model_state = np.asarray(state) if sim_units else np.asarray(state) + off
@@ -148,7 +146,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                          n_action=n_action, max_obs_age_s=max_obs_age_s, max_chunks=max_chunks,
                          dry_run=dry_run, log=log, handoff=handoff, authorize=authorize,
                          jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None),
-                         kin=kin, jaw_spec=jaw_spec)
+                         kin=kin, jaw_spec=jaw_spec, state_gate=state_gate)
 
     from cell_policy_paced import run_paced_chunks
 
@@ -156,7 +154,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                             goal=goal, sim_units=sim_units, open_g=open_g, model_closed=model_closed, closed=closed,
                             low=low, high=high, fastest=fastest, kin=kin, jaw_spec=jaw_spec,
                             resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s,
-                            pre_home=paced_chunks, n_action=n_action, home_roll=home_roll)
+                            pre_home=paced_chunks, n_action=n_action, home_roll=home_roll, handoff=handoff, state_gate=state_gate)
 
 
 def main(argv=None) -> int:
@@ -211,8 +209,8 @@ def main(argv=None) -> int:
         parser.error("--token-file requires --endpoint-url")
     if args.mask_pick_goal and args.endpoint_url:
         parser.error("--mask-pick-goal cannot be used with --endpoint-url")
-    if args.paced_chunks and args.mode != "act":
-        parser.error("--paced-chunks requires act mode")
+    if args.paced_chunks and args.mode == "taught":
+        parser.error("--paced-chunks requires act or hybrid mode")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")
@@ -351,12 +349,20 @@ def main(argv=None) -> int:
                     res = {"result": "refused", "reason": str(error)}
             else:
                 import omx_tcp
+                from cell_policy_start_gate import build_gate
+                try:  # the usual refusal output, not parser.error: a library or checkpoint the policy was not trained for moves nothing
+                    state_gate = build_gate(args.policy_root, library, shadow, offset, (config.get("params") or {}).get("policy.state_margin_frac"))
+                except ValueError as error:
+                    return {"result": "refused", "at": 0, "reason": str(error), "parked": False}
                 demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
-                res = run_episode(runner, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
-                                  log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
-                                  max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
-                                  params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
-                                  paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal)
+                kw = dict(offset=offset, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
+                          max_obs_age_s=args.max_obs_age_s, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
+                          rim_z_m=rim_z_m, paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal, state_gate=state_gate)
+                from cell_policy_preflight import preflight
+                if not args.dry_run and handoff is None and (refused := preflight(runner, shadow, args.library, work, config, log, kw)):
+                    return refused  # the same episode as a dry run refused: nothing moved
+                res = run_episode(runner, shadow, args.library, work, max_chunks=args.max_chunks, dry_run=args.dry_run,
+                                  log=log, handoff=handoff, authorize=authorize, **kw)
             if look:
                 after = look()
                 res["source"] = {"before": before.get("objects"), "after": after.get("objects")}

@@ -294,10 +294,16 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     live_info = cell_cal_eval.parse_live(live, config, plan, ref_record, now_ts=now_ts, joints_tcp_fn=cell_pivot.joints_tcp)
     sample_time = (live or {}).get("t")
     fresh_s = prm.get(config.get("params"), "verify.live_fresh_s")
+    now = time.time() if now_ts is None else now_ts
+    # Browsers count fresh_for_ms on their own monotonic clock; comparing fresh_until with Date.now() breaks under clock skew.
+    live_info["age_ms"], live_info["fresh_for_ms"] = None, 0
     if isinstance(sample_time, (int, float)) and math.isfinite(sample_time):
         live_info["fresh_until"] = sample_time + fresh_s
-        if sample_time > (time.time() if now_ts is None else now_ts):
+        live_info["age_ms"] = round((now - sample_time) * 1000)
+        if sample_time > now:
             live_info["stale"] = True
+        elif live_info.get("stale") is False:
+            live_info["fresh_for_ms"] = max(0, round((live_info["fresh_until"] - now) * 1000))
 
     drift = cell_cal_monitor.summarize(config, calibration)
     lateral = cell_post_eval.lateral_summary(config, with_maps, now_ts=now_ts)

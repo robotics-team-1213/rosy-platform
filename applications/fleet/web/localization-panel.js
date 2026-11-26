@@ -5,7 +5,7 @@ import { PanelKvList } from "/console/assets/cockpit-hosts.js";
 import { node, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
 import {
-  bindingSpanM, buildBindingPayload, captureBindingSample, confirmReason,
+  bindingSpanM, buildBindingPayload, candidateHeadingLabel, captureBindingSample, confirmReason,
   MIN_BINDING_SAMPLES, MIN_BINDING_SPAN_M, relocalizeReason, summarizeLocalizationPanel,
 } from "/console/assets/localization-panel-logic.js";
 
@@ -14,8 +14,7 @@ const POLL_MS = 2000;
 function quietButton(label, { workRead = false } = {}) {
   const btn = document.createElement("ui-button");
   btn.setAttribute("kind", "quiet");
-  btn.type = "button";
-  btn.textContent = label;
+  Object.assign(btn, { type: "button", textContent: label });
   if (workRead) btn.dataset.workRead = "";
   return btn;
 }
@@ -27,8 +26,7 @@ export function createLocalizationPanel({
   const root = node("div", "", "ui-control-stack");
   const kvHost = document.createElement("div");
   const candRow = node("div", "", "ui-control-stack");
-  const candSelect = document.createElement("select");
-  candSelect.className = "ui-field";
+  const candSelect = document.createElement("select"); candSelect.className = "ui-field";
   candSelect.dataset.workRead = "";
   candSelect.setAttribute("aria-label", "확정할 위치 후보 선택");
   candRow.append(candSelect);
@@ -60,13 +58,13 @@ export function createLocalizationPanel({
   let lastCandSig = "";
 
   const ensure = (map, id, init) => map.get(id) || map.set(id, init()).get(id);
-  const stateFor = (id) => ensure(cache, id, () => ({ loc: null, binding: null, track: null, fetchedAtMs: 0, inFlight: false, error: "", candIdx: 0 }));
+  const stateFor = (id) => ensure(cache, id, () => ({ loc: null, binding: null, track: null, fetchedAtMs: 0, retryAtMs: 0, inFlight: false, error: "", candIdx: 0 }));
   const samplesFor = (id) => ensure(sampleBuffers, id, () => ({ gridId: null, samples: [] }));
 
   async function refresh(id, { force = false } = {}) {
     if (!id || auth?.locked) return;
     const entry = stateFor(id);
-    if (entry.inFlight || (!force && Date.now() - entry.fetchedAtMs < POLL_MS)) return;
+    if (entry.inFlight || Date.now() < entry.retryAtMs || (!force && Date.now() - entry.fetchedAtMs < POLL_MS)) return;
     entry.inFlight = true;
     const life = scope.capture();
     try {
@@ -79,12 +77,15 @@ export function createLocalizationPanel({
       entry.loc = loc;
       entry.binding = binding;
       if (ident?.robots) entry.track = ident.robots.find((row) => row.robot_id === id) || null;
-      entry.fetchedAtMs = Date.now();
-      entry.error = "";
+      Object.assign(entry, { fetchedAtMs: Date.now(), retryAtMs: 0, error: "" });
     } catch (err) {
       if (err?.name !== "AbortError") {
+        entry.loc = null;
         entry.fetchedAtMs = Date.now();
-        entry.error = err?.message || "위치 세부 상태를 불러오지 못했습니다.";
+        const wait = err?.status === 429 && err.code === "RATE_LIMITED" ? Math.min(60, Math.max(1, err.retryAfterS || 1)) : 0;
+        entry.retryAtMs = wait && entry.fetchedAtMs + wait * 1000;
+        entry.error = wait ? `기체 후보 조회가 제한되었습니다. ${Math.ceil(wait)}초 뒤 다시 확인합니다.`
+          : err?.message || "위치 세부 상태를 불러오지 못했습니다.";
       }
     } finally {
       entry.inFlight = false;
@@ -109,7 +110,7 @@ export function createLocalizationPanel({
     }
 
     if (entry.candIdx >= summary.candidates.length) entry.candIdx = 0;
-    const candSig = `${id}:${summary.candidates.map((c) => `${c.x?.toFixed?.(2)},${c.y?.toFixed?.(2)},${c.scan_fit?.toFixed?.(3)}`).join("|")}`;
+    const candSig = `${id}:${summary.candidates.map((c) => `${c.x?.toFixed?.(2)},${c.y?.toFixed?.(2)},${c.yaw},${c.scan_fit?.toFixed?.(3)}`).join("|")}`;
     patchHidden(candRow, summary.candidates.length <= 1);
     if (candSig !== lastCandSig) {
       lastCandSig = candSig;
@@ -117,7 +118,7 @@ export function createLocalizationPanel({
         const opt = document.createElement("option");
         opt.value = String(idx);
         const fitTxt = typeof c.scan_fit === "number" ? c.scan_fit.toFixed(2) : "—";
-        opt.textContent = `후보 ${idx + 1} · (${Number(c.x).toFixed(2)}, ${Number(c.y).toFixed(2)}) · 적합도 ${fitTxt}`;
+        opt.textContent = `후보 ${idx + 1} · (${Number(c.x).toFixed(2)}, ${Number(c.y).toFixed(2)}) · ${candidateHeadingLabel(c.yaw)} · 적합도 ${fitTxt}`;
         return opt;
       }));
       candSelect.value = String(entry.candIdx);
@@ -179,13 +180,14 @@ export function createLocalizationPanel({
   refreshBtn.addEventListener("click", scope.guard(() => { if (activeId) void refresh(activeId, { force: true }); }));
 
   onAction(confirmBtn, (id) => {
-    const idx = stateFor(id).candIdx;
+    const idx = stateFor(id).candIdx, { x, y, yaw } = stateFor(id).loc?.candidates?.candidates?.[idx] || {};
+    const pose = x === undefined ? null : { x, y, yaw };
     return {
       kind: "loc-confirm",
-      message: `${id}의 후보 ${idx + 1} 위치를 확정해 자율 주행을 허용할까요?`,
-      eligible: () => Boolean(lastRobot?.online) && !confirmBtn.disabled,
+      message: `${id}의 후보 ${idx + 1} 위치와 ${candidateHeadingLabel(pose?.yaw)}를 기체에서 검증할까요?`,
+      eligible: () => Boolean(lastRobot?.online && pose) && !confirmBtn.disabled,
       request: (owner) => call(`/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidate_id: idx }), signals: [owner.signal],
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pose), signals: [owner.signal],
       }),
       okMsg: "후보 위치 확정 요청을 보냈습니다.",
       errLabel: "위치 확정 거절",
@@ -202,8 +204,7 @@ export function createLocalizationPanel({
   }));
 
   sampleBtn.addEventListener("click", scope.guard(async () => {
-    const id = activeId;
-    const robotSnapshot = lastRobot;
+    const id = activeId, robotSnapshot = lastRobot;
     if (!id || !robotSnapshot) return;
     const life = scope.capture();
     try {
@@ -214,11 +215,9 @@ export function createLocalizationPanel({
       stateFor(id).track = trackRow;
       const buf = samplesFor(id);
       const res = captureBindingSample({ robot: robotSnapshot, trackRow, existingSamples: buf.samples, existingGridId: buf.gridId });
-      if (!res.ok) {
-        log(`${id} 결속점 채집 보류 · ${res.reason}`, "bad");
-      } else {
-        buf.gridId = res.gridId;
-        buf.samples = res.samples;
+      if (!res.ok) log(`${id} 결속점 채집 보류 · ${res.reason}`, "bad");
+      else {
+        Object.assign(buf, { gridId: res.gridId, samples: res.samples });
         log(`${id} 결속점 ${buf.samples.length}번 채집 완료 (폭 ${res.spanM.toFixed(2)} m)`, "good");
       }
       paint(robotSnapshot);
@@ -269,10 +268,8 @@ export function createLocalizationPanel({
       if (robot.online) void refresh(robot.robot_id, { force: switched });
     },
     clear() {
-      activeId = null;
-      lastRobot = null;
-      lastKvSig = "";
-      lastCandSig = "";
+      activeId = lastRobot = null;
+      lastKvSig = lastCandSig = "";
       renderDom(null, kvHost);
     },
   };

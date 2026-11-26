@@ -151,3 +151,57 @@ def test_a_folded_park_lifts_the_elbow_before_a_large_wrist_turn():
     small = chunks.park_path([0.0, -60.0, 50.0, 45.0, 18.0, 46.6], home, 46.6, 30)
     assert min(f[2] for f in small) >= 49.9
 
+
+def test_transit_path_opens_elbow_before_lifting_shoulder_from_folded_home():
+    """2026-11-25 arm_a: simultaneous lift/elbow unfold dipped inward into the base bracket until elbow opened first."""
+    import math
+    chunks = importlib.import_module("omx_adapter.chunk_library")
+    from omx_adapter.kinematics import OmxKinematics
+
+    kin = OmxKinematics.load(ADAPTER / "config/omx_f_kinematics.yaml")
+
+    def fk(frame):
+        return kin.fk([math.radians(v * 1.8) for v in frame[:5]])
+
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
+    goal = [10.5, -19.5, 13.9, 55.7, 10.5, 62.0]
+    frames = chunks.transit_path(home, goal, 46.6, 30)
+    assert not chunks.too_fast([home] + frames, 30)
+    assert frames[-1] == pytest.approx(goal)
+    idx = next(i for i, f in enumerate(frames) if f[2] <= 43.1)
+    assert all(f[1] == home[1] for f in frames if f[2] > 43.0)  # shoulder_lift does not move before elbow_flex reaches the rest point
+    start_fk = fk(home)
+    assert all(fk(f).x >= start_fk.x - 1e-4 for f in frames[: idx + 1])
+    assert fk(frames[idx]).z >= 0.080
+
+
+@pytest.mark.parametrize(
+    "jaws_open, no_turn, blend",
+    [
+        (False, False, [False, False, False, True, True, False, False]),  # close the jaws, unfold, transit, turn
+        (True, False, [False, False, False, False, True, False, False]),  # jaws open: rise first, close them at transit
+        (False, True, [False, False, False, True, False, False]),  # no turn: transit flows into the approach
+        (True, True, [False, False, False, False, False, False]),
+    ],
+)
+def test_folded_transit_keeps_the_reviewed_waypoints_and_blend_flags(jaws_open, no_turn, blend):
+    """The unfold waypoint (passed at rest) is the only change from the reviewed path: every other corner keeps its
+    blend flag in all four rise_first x skip_turn cases (independent review of 57c7848c5b, 2026-11-25)."""
+    chunks = importlib.import_module("omx_adapter.chunk_library")
+    flow = importlib.import_module("omx_adapter.motion_profile").flow
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 56.0 if jaws_open else 49.0]
+    goal = [0.8, -30.0, 13.9, 51.6, 45.2, 62.0] if no_turn else [10.5, -19.5, 13.9, 55.7, 10.5, 62.0]
+    closed = home[:5] + [46.6]
+    # the transit waypoint keeps the gripper of the waypoint before it: 46.6 once the jaws closed on it, else the start's
+    transit = [closed[0], chunks.TRANSIT[1], chunks.TRANSIT[2], chunks.TRANSIT[3], closed[4], home[5] if jaws_open else closed[5]]
+    turn = [goal[0], *transit[1:4], goal[4], 46.6]  # taken after the jaws closed at transit, in both orders
+    first = home if jaws_open else closed
+    waypoints = ([home] if jaws_open else [home, closed]) + [[*first[:2], chunks.FOLDED_UNFOLD_ELBOW, *first[3:]], transit]
+    waypoints += [[*transit[:5], 46.6]] if jaws_open else []
+    waypoints += [] if no_turn else [turn]
+    waypoints += [goal[:5] + [46.6], goal[:6]]
+    assert len(waypoints) == len(blend)
+    for fps in (15, 30):
+        assert chunks.transit_path(home, goal, 46.6, fps) == flow(
+            waypoints, fps, 0.85 * chunks.PARK_SPEED, blend=blend, blend_s=0.6, rise_speed=chunks.RISE_SPEED
+        )

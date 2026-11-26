@@ -1,81 +1,32 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-17 | Updated: 2026-09-17 -->
 # server
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-13
 
 ## Purpose
 
-관제 PC의 Fleet 서버 v1 — 사이트 오케스트레이터와 관제 UI 역할(site-fabric 설계 §2, 전환
-순서 3단계). 등록된 N대의 상태를 모으고, 로봇별 목표·취소와 전체 정지를 내린다. 미션은
-Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 로봇이 아니다.
-
-## Key Files
-
-| File | Description |
-|---|---|
-| `model_feedback_dispatch.py` | Fleet-owned allowlist, trusted turn scope and existing Mission/Proposal transaction adapters. Decision owns model contracts/catalog only |
-| `ledger/deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
-| `ledger/context_log.py`, `ledger/context_options.py` | D-796 site-host Postgres mirror of terminal advisory runs (`ContextLog`, `rosy_deliberation_run`) and its `--context-db-*` console surface (`add_cli_arguments`/`activate_from_args` → the process-wide active sink the journal defaults to). Best-effort only; a failure is a warning and never touches the SQLite ledger |
-| `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
-| `console/traffic_arbitration.py` | `FleetConsole` 믹스인(safety): 경로 점유·양보(bays)·대기 미션 풀기·국소화 신뢰 판정·군집 속도·`cancel`·`hold_for_localization`. 상태는 콘솔이 소유, `goal`/`_goal` 전송 순서는 console.py. 순수 이동(D-766 분할) |
-| `console/formation_control.py` | `FleetConsole` 믹스인: 열린 대형 세션 하나(팔로워 집합·상태·시작·재편·재개·정지·죽은 리더 인계). 순수 이동(D-766 분할) |
-| `console/estop_fanout.py` | 전체 비상정지 전달만 맡는다(safety): 모든 로봇에 동시에, 연결조차 안 된 요청만 5 s 안에서 최대 3번(응답 유실·읽기 시한은 다시 보내지 않고 UNKNOWN, D-271 5), 대형 해제는 정지와 나란히. 목표·점유 정리는 콘솔 |
-| `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
-| `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
-| `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
-| `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
-| `identity.py` | D-472 `IdentityService` — 움직이는 미확인 로봇 한 대씩 CORE LED 점멸을 요청(≤ 6 s), Vision 판정으로 익명 트랙에 묶고 손실·0.30 m 겹침·revision 변경·`identity_ttl_s`에 풀어 `confirmed_track_pose`(D-511 입력)를 낸다. 지도 자세 중재·trip·명령은 읽지 않는다(`test_boundaries.py`) |
-| `lane_compliance_service.py` | D-511 M0 `LaneComplianceMonitor` — 2 Hz로 움직인 로봇만 refresh 하고 모든 로봇의 차로 여유를 판정해 최신값을 `/api/fleet/state` 행 `lane_compliance`와 `GET /api/fleet/robots/{id}/lane-compliance`로 보여 준다. 지도 자세가 LOCALIZED가 아니면 신선한 D-472 LED 확인 트랙(`identity.confirmed_track_pose`, 같은 lease·map id)을 대신 판정하고 `pose_source`·`heading_source`를 남긴다(yaw 없음: 이동 방향, 정지면 방향 문 없이). 로봇에 아무것도 보내지 않는다. 루프는 `background_workers.lane_compliance_loop` |
-| `tether_routes.py`, `tether_watch.py` | D-512 테더 원(표시·설정, 메모리)과 D-526 `TetherWatch`(safety 태그): 0.5 s마다 지도 자세로 반경+0.15 m·누적 회전 405°·자세 2 s 없음을 재고 기존 로봇 E-Stop을 보낸 뒤 trip을 끝낸다. 래치, 테더 POST가 재무장. 되돌아가기는 하지 않는다 |
-| `teach_service.py`, `teach_routes.py` | D-494 6 주행 가르치기 — 한 대의 map pose를 0.5 s마다 기록하고, 멈추면 RDP 선과 끝 장소 후보를 돌려주며, 확정·주소 만들기는 초안에만 쓴다(`/api/fleet/teach*`). 로봇에 아무것도 보내지 않는다. 순수 규칙은 `fleet/routing/teach.py` |
-| (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
-| `auth/account_receiver.py`, `password_session.py` | D-962 Fleet PKCE receiver와 앱 세션. 비밀번호·중앙 세션의 호환 import는 [Account 소유자](../../../account/AGENTS.md)로 전달한다. |
-| `host_control_routes.py` | D-524 Service Control(서비스 제어) — `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host}/control`. GET은 목록에 더해 가드 `status.json`(`guard`)과 관제 PC 드리프트(`drift`)를 읽기만 한다. 없거나 깨지면 null이다. POST는 이름 있는 운영자만. 재부팅은 10분 예약이고 팔 세션과 살아 있는 작업은 PC 도우미가 거절한다(D-991). 유닛은 허용 목록의 재시작만. 세 호스트 모두 강제 명령 SSH 키(Fleet 전용 마운트 `/run/rosy-fleet-host-control/`)로 부른다. 프로세스 이름과 셸은 받지 않는다. 설정이 없거나 site-users·로그인이 없으면 POST는 503 |
-| `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
-| `tracking/` | Tracking and purpose-specific calibration holder; existing `fleet.server.tracking*`, `measured_calibration*`, `vision_preview_routes` imports remain stable through `SERVER_HOLDERS`. Preview approval does not change sighting admission |
-| `model_feedback_dispatch.py` | D-657 원장 결속 모델 도구 어댑터. 기존 scope·journal·stop/fence 재검사를 보존하며 Decision 계약/후보를 소비 |
-| `goal_evidence_service.py`, `mission_service.py`, `mission_progress.py` | producer 인증·새 post-action frame/attempt·원장/clock 소비는 Fleet 소유. 순수 목표 검증과 전체 progress 계산은 `rosy.execution.site.{goal_evidence,workflow}` 소비 |
-| `applications/fleet/web` | 관제 UI 원본 ([안내](../../../../applications/fleet/web/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
+The control-PC Fleet server v1: site orchestrator and console UI (site-fabric design section 2). It gathers N robots' state and scatters goals, cancels and all-stop. Missions stay on the Fleet side (D-12): this server, not the robot, remembers dispatched goals. Non-package source holders (D-750, D-798) such as `evidence/`, `sitemap/`, `pose/`, `recognition/`, `rightofway/`, `ledger/`, `console/`, `cell/`, `auth/`, `tracking/` keep the `fleet.server.*` import names; the operational ledger keeps one SQLite/process/transaction owner. UI source: [applications/fleet/web](../../../../applications/fleet/web/AGENTS.md).
 
 ## For AI Agents
 
-- **v1 의 gather 는 폴링이다.** 설계 §3 의 최종 경로는 로봇 `FleetAgent` 의 outbound WS 지만
-  그 에이전트는 이 서버가 생긴 뒤에야 소켓을 연다. 붙으면 `snapshot()` 의 출처만 바꾼다.
-- 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 준 map 프레임 값이다
-  (`ros_bridge._map_frame = "map"`). `map` 은 사이트 공유 프레임이라 N대를 한 격자에 겹쳐
-  그릴 수 있다 — 로봇별로 `rosy_XX/map` 을 만들면 이 화면도 CORE 의 목표 전달도 깨진다.
-- 전체 정지 요청은 부분 실패해도 200 이다. 레거시 `stopped`는 CORE HTTP 응답 수이며 실제 정지·물리 E-stop 확인이 아니다(D-298). 응답이 없는 대는 결과 불명으로 표시하고 장치 readback을 별도로 확인한다.
-- UI 는 CSP `style-src 'self'` 아래에서 돈다 — `style` 속성과 `el.style.x =` 는 적용되지
-  않는다. 색과 배치는 클래스로만 준다.
-- 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 기본 바인드는 루프백이고, 밖으로 열려면
-  `--token` 이 필수다(`cli.run_console` 가 강제).
-- **교행은 Fleet 만 볼 수 있다.** 로봇의 코스트맵은 자기 주변만 본다 — 상대가 멀리 있으면
-  둘 다 같은 통로로 들어가는 계획을 세우고, 서로를 본 순간엔 이미 마주 보고 갇혀 있다.
-  두 경로를 동시에 쥔 쪽이 Fleet 이라 여기서 순서를 정한다(D-12). 양보는 늘 **나중에
-  내려온 미션** 쪽이다 — 달리던 로봇을 세우면 통로 한가운데 장애물이 하나 생길 뿐이다.
-- 경로는 목표를 받은 **뒤에** 생긴다. 그래서 `goal()` 은 일단 내려보내고, 경로를 읽어
-  충돌이면 취소해 대기열에 넣는다. 되돌리는 값은 로봇이 아직 거의 안 움직였을 때 취소 한 번이다.
-- 경로를 못 읽으면 막지 않는다. 모른다는 이유로 미션을 세우면 계획이 늦은 로봇 한 대가
-  현장을 통째로 세운다.
-- **대형에서 리더는 목표를 받고 팔로워는 받지 않는다.** 대형은 리더를 몰아서 움직이는
-  것이고(D-20), 리더를 막으면 무장만 된 채 아무 데도 못 간다. 반대로 팔로워에 목표를
-  따로 내리면 로봇 안에서 추종과 항법이 같은 바퀴를 두고 다툰다.
-- 대형은 사이트에 하나다. 이미 열려 있으면 거절한다 — 조용히 갈아치우면 앞 세션의
-  팔로워가 무장된 채 남아 아무도 보내지 않는 참조를 기다린다.
-- e-stop 은 대형을 **함께** 푼다. 풀지 않으면 e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해
-  달려나간다. 다만 해제(팔로워 swarm/cancel, 대당 시한)를 기다린 뒤 세우지 않는다 — 닿지 않는
-  팔로워 하나가 모든 로봇의 정지를 늦춘다. 전달은 `console/estop_fanout.py`(동시, 닿지 않은 요청만 재시도)다.
-- 해제는 거절하지 않는다. 대형을 못 푸는 화면은 대형을 여는 화면보다 나쁘다.
-- 로봇 로컬 대시보드를 대체하지 않는다. 한 대의 현장 화면·수동 조작·비상정지는 CORE
-  `/dashboard` 에 그대로 있다(D-23).
+### Working In This Directory
 
-## Testing Requirements
+- Gather in v1 is polling; the robot `FleetAgent` outbound WS (design 3) later changes only the `snapshot()` source.
+- Robot pose is CORE's TF `map` to `<ns>base_footprint`, a site-shared frame. Never create per-robot `rosy_XX/map`: it breaks this view and CORE goal delivery.
+- All-stop returns 200 even on partial failure. Legacy `stopped` counts CORE HTTP replies, not confirmed stops or a physical E-stop (D-298); unanswered robots show as unknown and need a device readback.
+- `console/estop_fanout.py` (safety) delivers all-stop to every robot concurrently; only never-connected requests retry (max 3 within 5 s); lost replies and read timeouts are UNKNOWN, never resent (D-271 5).
+- Never wait for formation release before stopping; e-stop also releases the formation so followers do not chase stale references.
+- `console/traffic_arbitration.py` (safety mixin: route occupancy, yield, queued missions, localization trust, `cancel`, `hold_for_localization`) keeps `goal`/`_goal` send order in `console.py`.
+- `tether_watch.py` (D-526, safety) sends the existing robot E-Stop on radius+0.15 m, 405 deg rotation or 2 s pose loss, then ends the trip; latched, a tether POST re-arms; no return motion.
+- `host_control_routes.py` (D-524): POST only for named operators; reboot is a 10-minute schedule that the PC helper refuses during an arm session or live work (D-991); allowlisted unit restarts only; forced-command SSH keys under `/run/rosy-fleet-host-control/`; no process names or shell;
+- 503 without config or login.
+- Read-only advisory services never send to robots: `identity.py` (D-472, LED blink request only, no command reads), `lane_compliance_service.py` (D-511), `teach_service.py` (D-494 6, writes drafts only), `map_pose_service.py` (D-494 3), `signals.py` (ROSY-SIGNAL-001, kept apart from `swarm/`),
+- `traffic.py` (pure geometry).
+- Only Fleet sees both routes, so Fleet orders crossings (D-12). The later-issued mission yields. `goal()` sends first, then reads the route and cancels into the queue on conflict. Unreadable route: do not block.
+- In a formation the leader takes goals, followers never (D-20). One formation per site; refuse a second. Release never refuses.
+- CSP `style-src 'self'`: no `style` attributes or `el.style.x =`; use classes. The server holds robots.yaml operator tokens: default bind is loopback; non-loopback requires `--token` (`cli.run_console` enforces).
+- Does not replace the robot-local CORE `/dashboard` (D-23). Model-feedback dispatch (D-657) stays Fleet-owned; Decision owns contracts/catalog only. `auth/` forwards to [Account](../../../account/AGENTS.md) (D-962).
 
-`operations/fleet/test/test_server_console.py`, `test_server_app.py`, `test_server_traffic.py`, `test_server_formation.py` — 가짜 로봇만 쓰고
-네트워크는 없다. `test_server_app.py` 는 `fastapi.testclient` 를 쓰므로 fastapi 가 필요하다.
+### Testing Requirements
 
-## Source responsibility holders (D-750)
-
-`peer/` camera proof; `cell/` adapters; `auth/` robot registration/pairing, Fleet receiver sessions and compatibility forwarding; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts; D-798 `evidence/` proposals and evidence, `sitemap/` site map and teaching, `pipeline/` pipeline recovery policy and guarded tools, `pose/` map pose and lane compliance, `recognition/` identity, sightings and roster, `rightofway/` signals, traffic and bays. These are non-package source holders. Existing `fleet.server.*` names remain; Fleet's operational ledger retains one SQLite/process/transaction owner. The independent Account DB and process follow the Account owner. `channel/` stays the existing channel package and `app.py` composes the server.
+D-584: `tools/remote/remote_pytest.py` on `operations/fleet/test/test_server_console.py`, `test_server_app.py` (needs fastapi), `test_server_traffic.py`, `test_server_formation.py`. Fake robots, no network.

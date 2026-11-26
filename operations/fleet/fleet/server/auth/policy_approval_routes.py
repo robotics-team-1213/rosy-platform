@@ -31,6 +31,10 @@ def install_policy_approval_routes(app, *, approvals, configured_omx, require_vi
     def list_policy_approvals(principal=Depends(require_viewer)):
         return {"approvals": approvals.listing(), "lease_delivery_connected": approvals.delivery_connected}
 
+    @app.get("/api/fleet/policy-approvals/targets/{workcell_id}/status", tags=["fleet"])
+    def target_status(workcell_id: str, principal=Depends(require_named_operator)):
+        return approvals.target_status(workcell_id)
+
     @app.post("/api/fleet/policy-approvals", tags=["fleet"], status_code=201)
     def propose_policy_approval(body: PolicyApprovalRequest, principal=Depends(require_named_operator)):
         if body.workcell_id not in configured_omx:

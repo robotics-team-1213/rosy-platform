@@ -315,7 +315,7 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
 
     pred = srv._load_lerobot_arm(tmp_path, {"top": (24, 32)}, 2, None, "cpu")
     out = pred({"state": [0.0] * 6, "frames_rgb": {"top": np.zeros((24, 32, 3), dtype=np.uint8)}, "goal": None})
-    assert len(out) == 2 and len(out[0]) == 6
+    assert len(out) == 4 and len(out[0]) == 6  # the whole chunk; PolicyRegistry.infer trims unless full_chunk
     assert seen["cfg_device"] == "cpu" and seen["to_device"] == "cpu" and seen["eval"] is True
     assert seen["pre_over"] == {"device_processor": {"device": "cpu"}}
     assert seen["post_over"] == {"device_processor": {"device": "cpu"}}
@@ -586,5 +586,15 @@ def test_load_lerobot_arm_moves_uint8_to_device_before_float_scale(tmp_path, mon
     assert state_devs == [target_dev, target_dev]
     ops = recorded[0].ops
     assert ops.index(("to_device", target_dev, "uint8")) < ops.index(("to_float", "uint8", target_dev)) < ops.index(("div_", 255.0, "float32", target_dev))
-    assert len(out) == 4 and all(len(row) == 6 and all(v == pytest.approx(1.0) for v in row) for row in out)
+    assert len(out) == 6 and all(len(row) == 6 and all(v == pytest.approx(1.0) for v in row) for row in out)  # whole chunk
 
+
+def test_infer_trims_to_n_action_steps_unless_full_chunk_requested(tmp_path):
+    pdir, rev = _make_checkpoint(tmp_path, "arm_b", views=("top",), hw=(24, 32), n_steps=3, chunk_size=6)
+    reg = srv.PolicyRegistry.from_specs([f"arm_b={pdir}:{rev}"], loader=lambda *_a: (lambda _obs: [[0.1 * i] * 6 for i in range(6)]))
+    req = {"arm_id": "arm_b", "revision": rev, "state": [0.0] * 6, "frames": {"top": _encode_b64_jpeg(24, 32)}}
+    code, body = reg.infer(req)
+    assert code == 200 and len(body["chunk"]) == 3
+    code, body = reg.infer({**req, "full_chunk": True})
+    assert code == 200 and len(body["chunk"]) == 6 and body["chunk"][5][0] == pytest.approx(0.5)
+    assert len(reg.infer({**req, "full_chunk": "yes"})[1]["chunk"]) == 3  # anything but true keeps the trimmed chunk

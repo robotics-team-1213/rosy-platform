@@ -1,6 +1,7 @@
 import {
   configureStudioRenderer, attachStudioEnvironment, createProceduralFactoryFloor,
 } from "./studio-look.js";
+import { scaleBar } from "./common/map-rules.js";
 import {
   readCadGeometry, readEquipment, cadLabels, lightEquipment, siteMarkings,
 } from "./scene-geometry.js";
@@ -61,6 +62,32 @@ function marker(geometry, colour, x, y, z) {
   return mesh;
 }
 
+// N and scale marks drawn as SVG attributes (no inline style), turned like Fleet's drawNdOverlay.
+function mapDatum(canvas) {
+  const ns = "http://www.w3.org/2000/svg";
+  const node = (name, attrs, parent) => {
+    const child = document.createElementNS(ns, name);
+    for (const [key, value] of Object.entries(attrs)) child.setAttribute(key, value);
+    return parent ? parent.appendChild(child) : child;
+  };
+  const svg = node("svg", { class: "world-map-datum", "aria-hidden": "true", width: 160, height: 28 });
+  const north = node("g", { transform: "translate(12 14)" }, svg);
+  node("circle", { r: 10, class: "world-map-datum-ring" }, north);
+  const arrow = node("path", { d: "M0 -8 L3.5 -1 L-3.5 -1 Z", class: "world-map-datum-north" }, north);
+  node("text", { y: 6, "text-anchor": "middle" }, north).textContent = "N";
+  const bar = node("path", { class: "world-map-datum-bar" }, svg);
+  const label = node("text", { y: 12, "text-anchor": "middle" }, svg);
+  if (canvas.nextElementSibling?.classList.contains("world-map-datum")) canvas.nextElementSibling.remove();
+  canvas.after(svg);
+  return (turn, pxPerM) => {
+    arrow.setAttribute("transform", `rotate(${turn})`);
+    const scale = scaleBar(pxPerM, 160 - 34);
+    bar.setAttribute("d", scale ? `M30 18 V22 H${30 + scale.barPx} V18` : "");
+    label.setAttribute("x", scale ? 30 + scale.barPx / 2 : 0);
+    label.textContent = scale ? `${scale.stepM} m` : "";
+  };
+}
+
 export async function showMap(canvas, map, contextLost) {
   three ??= await import("./common/vendor/three.module.min.js");
   const scene = new three.Scene();
@@ -74,6 +101,8 @@ export async function showMap(canvas, map, contextLost) {
   const observations = new three.Group();
   scene.add(geometry, observations);
   const size = new three.Vector2();
+  const datum = mapDatum(canvas);
+  let turn = 0;
   function setGeometry(next) {
     for (const child of geometry.children) {
       if (child.geometry !== placeGeometry) child.geometry.dispose();
@@ -94,6 +123,12 @@ export async function showMap(canvas, map, contextLost) {
     bounds.getSize(size);
     camera.position.x = center.x;
     camera.position.y = center.y;
+    // D-513 7: view_turn_deg turns the drawn map clockwise; the map frame itself is unchanged.
+    turn = next.viewTurn ?? 0;
+    const rad = (turn * Math.PI) / 180;
+    camera.up.set(-Math.sin(rad), Math.cos(rad), 0);
+    camera.lookAt(center.x, center.y, 0);
+    if (turn % 180) size.set(size.y, size.x);
   }
   setGeometry(map);
   const update = (aspect) => {
@@ -102,6 +137,7 @@ export async function showMap(canvas, map, contextLost) {
     camera.right = halfHeight * aspect;
     camera.top = halfHeight;
     camera.bottom = -halfHeight;
+    datum(turn, canvas.clientHeight / (2 * halfHeight));
     scene.background = new three.Color(token("--ground"));
     route.color.set(token("--text-secondary"));
     placeMaterial.color.set(token("--ink"));

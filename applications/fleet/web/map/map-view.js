@@ -7,9 +7,11 @@
 // 그린다. 관측은 속이 빈 점선 고리로, CORE TF pose(채운 삼각형)와 섞지 않는다.
 
 import {
-  siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, quarterTurn, roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
+  siteBounds, canvasSizeFor, gridLines, GRID_STEP_M,
+  streamEvidence, roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "./site-layer.js";
+import { fitBox, mapBounds } from "/console/assets/site-map-model.js";
+import { scaleBar } from "/common/map-rules.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
 import { createMapPolling } from "./map-polling.js";
@@ -144,7 +146,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const calibration = camera.calibration();
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
-    // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
+    // 보정을 바꾸는 것은 설치의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
@@ -152,27 +154,27 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const fallback = canvasSizeFor(bounds, 800);
     // D-515: 실영상도 지도 미터 뷰(+y 위) 위에 위에서 본 직사각형으로 편다. 지도 방향이 화면
     // 방향이라 따로 돌리지 않고(D-513 7의 mapUpTurn 불필요), 클릭도 미터 뷰를 그대로 거꾸로 푼다.
-    const width = rect.width > 0 ? rect.width : fallback.width;
-    const height = rect.height > 0 ? rect.height : fallback.height;
+    const width = rect.width > 0 ? rect.width : fallback.width, height = rect.height > 0 ? rect.height : fallback.height;
     const dpr = window.devicePixelRatio || 1;
     const ctx = clearCanvas(canvas, Math.round(width * dpr), Math.round(height * dpr));
     ctx.scale(dpr, dpr);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
-    // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
-    // 돌리므로 글자는 똑바로 선다.
+    // 돌린다. 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로 돌리므로 글자는 똑바로 선다.
+    // 범위는 현장 지도와 같은 활성 지도(장소·도로·시설)이고, 활성 지도가 없을 때만 카메라 사각형이다.
     const rot = view.siteViewTurn || 0;
-    const side = rot === 90 || rot === 270;
-    const fw = side ? height : width, fh = side ? width : height;
-    const t = fitTransform(bounds, fw, fh, 32);
-    const turn = quarterTurn(rot, fw, fh);
-    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    const activeMap = view.activeSiteMap?.map;
+    const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
+    const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
+    // 눈금자는 격자 범위 중 보이는 칸(여백 32, 위 좌표 칩 띠 40 안쪽)만 — 밖 눈금은 가장자리로 몰려 겹친다.
+    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32), { max, min } = Math;
+    const ruler = { min_x: max(bounds.min_x, min(ax, bx)), max_x: min(bounds.max_x, max(ax, bx)), min_y: max(bounds.min_y, min(ay, by)), max_y: min(bounds.max_y, max(ay, by)) };
+    const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
-    view.siteToWorld = (x, y) => { const p = turn.unpoint(x, y); return { x: (p.x - t.ox) / t.scale, y: (t.oy - p.y) / t.scale }; };
+    view.siteToWorld = (x, y) => { const [mx, my] = t.toMap(x, y); return { x: mx, y: my }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
-    const activeMap = view.activeSiteMap?.map;
-    const showLanes = layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
+    const showLanes = layerOn("lanes") && sameFrame;
     const polygons = layerOn("site") ? sitePolygons() : [];
     const key = JSON.stringify([activeMap?.map_id, view.activeSiteMap?.version, bounds, width, height, dpr, rot,
       ["site", "grid", "lanes", "labels", "storedRoutes"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
@@ -181,23 +183,20 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (off) {
       if (staticKey !== key) {
         clearCanvas(staticLayer, canvas.width, canvas.height).scale(dpr, dpr);
-        drawStaticSite(off, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
+        drawStaticSite(off, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null, ruler);
         staticKey = key;
       }
       ctx.drawImage(staticLayer, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width / dpr, canvas.height / dpr);
     } else {
-      drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
+      drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null, ruler);
     }
     drawPointerCell(ctx, toPx, bounds);
     if (showLanes) {
       const hovered = view.hoverEntity?.kind === "place" ? view.hoverEntity.place : null;
       if (hovered && !(layerOn("labels") && /^[CS]/.test(String(hovered.id)))) {
         const p = toPx(hovered.x, hovered.y);
-        ctx.save();
-        ctx.font = font("micro");
-        ctx.fillStyle = css("--ink");
-        ctx.fillText(String(hovered.id), p.x + 7, p.y - 6);
-        ctx.restore();
+        ctx.save(); ctx.font = font("micro"); ctx.fillStyle = css("--ink");
+        ctx.fillText(String(hovered.id), p.x + 7, p.y - 6); ctx.restore();
       }
     }
     if (showLanes && layerOn("labels")) {
@@ -249,11 +248,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.font = font("micro"); ctx.fillStyle = css("--ink-quiet");
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("N", 0, 3.5);
     ctx.restore();
-    let stepM = pxPerM * 0.5 >= 40 ? 0.5 : pxPerM * 1.0 >= 28 ? 1.0 : 2.0;
-    const sx = cx + 16, sy = 25, maxBar = rightBound - sx;
-    if (stepM * pxPerM > maxBar && stepM > 0.5 && pxPerM * 0.5 >= 28) stepM = 0.5;
-    const barPx = stepM * pxPerM;
-    if (barPx > maxBar || barPx < 24) return;
+    const sx = cx + 16, sy = 25, { stepM, barPx } = scaleBar(pxPerM, rightBound - sx) ?? {};
+    if (!stepM) return;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.strokeStyle = css("--ink-quiet"); ctx.fillStyle = css("--ink-quiet"); ctx.lineWidth = 1.2;
@@ -302,7 +298,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.restore();
   }
 
-  function drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, activeMap) {
+  function drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, activeMap, ruler) {
     drawMetreGrid(ctx, toPx, bounds, cameraOn);
     const labelFont = font("micro");
     ctx.save();
@@ -335,11 +331,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       };
       const storedRoutes = [];
       for (const edge of activeMap.edges || []) {
-        const surveyed = surveyedRoadPoints(activeMap, edge);
+        const surveyed = surveyedRoadPoints(edge);
         ctx.setLineDash(!surveyed && edge.drive_mode === "free" ? [6, 4] : []);
         strokeRoad(surveyed ?? roadOverlayPoints(activeMap.map_id, edge));
         if (surveyed) {
-          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(activeMap, edge);
+          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(edge);
           if (stored) storedRoutes.push(stored);
         }
       }
@@ -379,7 +375,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.restore();
     }
     drawCrosswalks(ctx, toPx, 1.5);
-    if (layerOn("grid")) drawMapDatum(ctx, toPx, bounds, {css, dpr});
+    if (layerOn("grid")) drawMapDatum(ctx, toPx, ruler, {css, dpr});
   }
 
   const traffic = (ctx, toPoint, pxPerM) =>
@@ -418,7 +414,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       placeList.hidden = !places.length;
       placeList.replaceChildren(...places.map(place => {
         const row = document.createElement("li");
-        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+        row.textContent = `${place.name || place.id} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
         return row;
       }));
     }

@@ -33,6 +33,7 @@ import cell_jaw_axis  # noqa: E402,F401
 import cell_objects  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402,F401
 import cell_params as prm  # noqa: E402
+import cell_site_target  # noqa: E402
 from cell_pick_geom import across, box_centre, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot, cell_place_fit  # noqa: E402,E401
@@ -65,6 +66,8 @@ def _run_auto_core(
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
+    if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], source, dest)):  # before any camera or arm step
+        return {**out, "result": "refused", "error": refused}
     map_error = cell_auto_evidence.map_pose_preflight(cell, config, calibration, calibration_path, work, dry_run, out)
     if map_error:
         return {**out, "result": f"held: {map_error}"}

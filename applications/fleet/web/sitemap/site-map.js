@@ -11,10 +11,11 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/assets/fleet-session.js';
-import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, activeMapEvidence, planIsCurrent, planPolylines, siteMapErrorText, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
+import {placeText, viewTurnOf} from '/common/map-rules.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
-import {roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
+import {roadOverlayPoints, surveyedRoadPoints, surveyText, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -87,6 +88,9 @@ function render() {
   if (!sourcePanel.renderStatus(map)) return;
   const {view, point: backgroundPoint} = sourcePanel.drawBackground(svg, map, () => fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs()));
   state.view = view;
+  const activeSource = $('map-source').value === 'active';
+  const evidence = activeMapEvidence(state.active, surveyedRoadPoints), evidenceText = (activeSource ? '' : '초안 표시 · 기준 ') + evidence.text;
+  if ($('map-evidence').textContent !== evidenceText) Object.assign($('map-evidence'), {textContent: evidenceText, title: evidence.title});
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
   // D-573 1/7: crosswalk areas under the lanes (read-only polygons) and their waiting bands.
   for (const crosswalk of map.crosswalks || []) {
@@ -97,19 +101,17 @@ function render() {
   }
   for (const place of map.places) if (place.stop_zone) el('polygon', {class: 'stop-zone', points: line(place.stop_zone)}, svg);
   if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
-  const activeSource = $('map-source').value === 'active';
   for (const edge of map.edges) {
-    const surveyed = activeSource ? surveyedRoadPoints(map, edge) : null;
+    const surveyed = activeSource ? surveyedRoadPoints(edge) : null;
     const points = activeSource ? surveyed ?? roadOverlayPoints(map.map_id, edge) : edge.polyline;
     const selected = state.selected?.edge === edge.id;
     const path = el('polyline', {points: line(points), 'data-edge': edge.id,
       class: 'edge ' + edge.drive_mode + (surveyed ? ' surveyed' : '') + (selected ? ' selected' : '')}, svg);
     const routeLabel = edge.id + ' · ' + (edge.direction === 'two_way' ? '양방' : '일방') + ' · ' + edge.speed_cap_mps + ' m/s';
-    const surveyLabel = edge.id === 'bay_1' ? '영상의 분홍 충전선 중심' : '영상에서 읽은 차선 양쪽 경계의 중점';
-    el('title', {}, path).textContent = surveyed ? edge.id + ' · ' + surveyLabel : routeLabel;
+    el('title', {}, path).textContent = surveyed ? edge.id + ' · ' + surveyText(edge.display_source) : routeLabel;
     if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
     if (surveyed) {
-      const stored = selected ? edge.polyline : unmeasuredRoadPoints(map, edge);
+      const stored = selected ? edge.polyline : unmeasuredRoadPoints(edge);
       if (stored) {
         const attrs = {points: line(stored), class: 'stored-road'};
         attrs[selected ? 'data-stored-road' : 'data-road-prefix'] = edge.id;
@@ -313,7 +315,7 @@ async function load() {
   state.sitePoints = await loadSitePointsOverlay(request, active);
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
-    .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
+    .map((place, index) => new Option(`${index + 1} ${placeText(place)}`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'

@@ -27,6 +27,7 @@ from cell_lerobot_shadow import CAMERA_ROLES, JOINT_NAMES, UNITS, read_sim_rule
 
 _HEX64_CHARS = frozenset("0123456789abcdef")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+IDLE_RECONNECT_S = 50.0  # the D-1073 server drops a keep-alive socket after 60 s idle (2026-11-26: 83 s approach, then Broken pipe)
 MAX_TIMEOUT_S, DEFAULT_JPEG_QUALITY = 2.0, 85
 
 
@@ -205,8 +206,9 @@ class RemotePolicyShadow:
         return conn
 
     def _ensure_conn(self) -> http.client.HTTPConnection:
-        if self._conn is not None:
+        if self._conn is not None and time.monotonic() - getattr(self, "_used_at", 0.0) < IDLE_RECONNECT_S:
             return self._conn
+        self._close_conn_locked(reset_dns=False)  # idle past the server's keep-alive: a reused socket gave Broken pipe
         if self._scheme == "https":
             conn = http.client.HTTPSConnection(self._host, self._port, timeout=self.timeout_s)
             try:
@@ -246,11 +248,9 @@ class RemotePolicyShadow:
             self._closed = True
             self._close_conn_locked(reset_dns=False)
 
-    def __enter__(self) -> "RemotePolicyShadow":
-        return self
+    def __enter__(self) -> "RemotePolicyShadow": return self  # noqa: E704
 
-    def __exit__(self, *_exc: Any) -> None:
-        self.close()
+    def __exit__(self, *_exc: Any) -> None: self.close()  # noqa: E704
 
     def __del__(self) -> None:
         if getattr(self, "_conn_lock", None) is not None:
@@ -291,7 +291,7 @@ class RemotePolicyShadow:
                 conn = self._ensure_conn()
                 conn.request(method, target, body=raw_req, headers=headers)
                 resp = conn.getresponse()
-                raw = resp.read()
+                raw, self._used_at = resp.read(), time.monotonic()
             except Exception as exc:
                 self._close_conn_locked(reset_dns=True)
                 raise RemotePolicyError(f"{method} {route} failed: {exc}") from exc
@@ -356,7 +356,7 @@ class RemotePolicyShadow:
     def infer(self, obs: dict[str, Any], *, state: Any = None) -> SimpleNamespace:
         t0 = time.perf_counter()
         req_id = f"{self.arm_id}-{uuid.uuid4().hex[:16]}"
-        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id})
+        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id, **({"full_chunk": True} if getattr(self, "full_chunk", False) else {})})
         rtt_s = time.perf_counter() - t0
         if not isinstance(reply, dict) or reply.get("ok") is not True:
             raise RemotePolicyError(f"inference error reply: {reply!r}")

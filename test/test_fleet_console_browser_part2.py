@@ -62,14 +62,14 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
         assert "paint-test" in tag, tag
         page.select_option("#map-display-mode", "overlay")
         # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
-        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
+        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitBox pad 32, 화면 회전 없음, 활성 지도 없음).
         pixel = page.evaluate("""async () => {
-          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const { fitBox } = await import('/console/assets/site-map-model.js');
           const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
           const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
-          const p = project(t, 0.25, 0.75);
-          return [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data];
+          const t = fitBox({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          const [px, py] = t.toPx(0.25, 0.75);
+          return [...g.getImageData(Math.round(px * dpr), Math.round(py * dpr), 1, 1).data];
         }""")
         assert pixel[0] > 150 and pixel[1] < 100, pixel
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
@@ -341,10 +341,18 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             " && document.activeElement.matches('#roster article')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
-        page.evaluate("() => { window.__focusedCard = document.activeElement; }")
-        page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=3000)
+        # f729d4bee2: one summary article per robot is kept and patched in place by later polls, so the card is
+        # never rebuilt; focus must stay on that same node while a real state change re-renders its facts.
+        page.evaluate("() => { window.__focusedCard = document.activeElement;"
+                      " window.__focusedHtml = document.activeElement.innerHTML; }")
+        changed = json.loads(json.dumps(SNAPSHOT))
+        next(r for r in changed["robots"] if r["robot_id"] == "rosy_03")["link_reason"] = {"message": "링크 재확인 시험"}
+        api["/api/fleet/state"] = changed
+        page.wait_for_function("() => window.__focusedCard.innerHTML !== window.__focusedHtml"
+                               " && window.__focusedCard.textContent.includes('링크 재확인 시험')", timeout=10000)
         assert page.evaluate(
-            "() => document.activeElement.matches('#roster article')"
+            "() => window.__focusedCard.isConnected && document.activeElement === window.__focusedCard"
+            " && document.activeElement.matches('#roster article')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.keyboard.press("ArrowDown")
@@ -657,7 +665,9 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
             page.locator('[data-context-tab="tools"]').click()
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
-            assert page.locator("#estop").get_attribute("reason") == "운영자 권한이 필요합니다"
+            # D-1043 (c900aba2df): a signed-in human viewer may press the Fleet E-stop, so it stays live.
+            assert page.locator("#estop").get_attribute("reason") is None
+            assert page.locator("#estop").is_enabled()
         assert not errors
         save_temp_screenshot(page, f"fleet_desktop_{scenario}.png")
         browser.close()

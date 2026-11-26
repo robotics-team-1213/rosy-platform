@@ -9,7 +9,11 @@ const {
   linkedArm,
   profileForArm,
   postEvalRequest,
+  freshLiveTcp,
+  kstStamp,
+  mapEvidenceInput,
 } = await import("../web/status-logic.js");
+const { mapEvidence } = await import("../../../shared/web/map-rules.js");
 
 test("only a supervised eligible site can submit post-eval, with its name alone", () => {
   const sites = {"tmp-b-2": {can_post_eval: true, place: [0.1,0.2]}, pallet: {can_post_eval: false}};
@@ -116,4 +120,33 @@ test("classifyDrift reads cross_verify.drift and fails closed to unknown or advi
     classifyDrift({ cross_verify: { drift: { alarmed_sites: [], sites: { pallet: { status: "pass" } } } } }).verdict,
     "pass",
   );
+});
+
+test("live TCP freshness counts the server budget on the page clock, never the wall clock", () => {
+  const tcp = {x: 0.1, y: 0.2, z: 0.03, yaw_deg: 0};
+  const live = {stale: false, fresh_for_ms: 1500, fresh_until: 1, tcp};
+  assert.equal(freshLiveTcp(live, 0), tcp);
+  assert.equal(freshLiveTcp(live, 1499), tcp);
+  assert.equal(freshLiveTcp(live, 1500), null);
+  assert.equal(freshLiveTcp(live, -1), null);
+  for (const bad of [null, {}, {...live, stale: true}, {...live, stale: undefined}, {...live, fresh_for_ms: undefined},
+    {...live, fresh_for_ms: "1500"}, {...live, fresh_for_ms: 0}])
+    assert.equal(freshLiveTcp(bad, 0), null);
+});
+
+test("screen times are KST HH:MM:SS with the UTC original kept for the title", () => {
+  assert.deepEqual(kstStamp(Date.UTC(2026, 10, 26, 0, 5, 3)), {text: "09:05:03", title: "UTC 2026-11-26T00:05:03.000Z"});
+  assert.deepEqual(kstStamp("2026-11-26T15:00:00Z"), {text: "00:00:00", title: "UTC 2026-11-26T15:00:00.000Z"});
+  for (const bad of [null, undefined, "", "not a time", NaN]) assert.equal(kstStamp(bad), null);
+});
+
+test("the map evidence line uses the shared rule with map SHA, observation time and source", () => {
+  const now = Date.UTC(2026, 10, 26, 0, 6, 0);
+  assert.deepEqual(mapEvidenceInput("0123456789ab", Date.UTC(2026, 10, 26, 0, 5, 3), "live"),
+    {version: "01234567", timeLabel: "관측", time: Date.UTC(2026, 10, 26, 0, 5, 3) / 1000, source: "실시간 카메라"});
+  assert.deepEqual(mapEvidence(mapEvidenceInput("0123456789ab", Date.UTC(2026, 10, 26, 0, 5, 3), "live"), now),
+    {text: "지도 v01234567 · 관측 09:05:03 · 실시간 카메라", title: "관측 2026-11-26T00:05:03.000Z (UTC)"});
+  // Missing parts are said, never invented.
+  assert.deepEqual(mapEvidence(mapEvidenceInput(null, null, "reference"), now),
+    {text: "지도 v? · 관측 확인되지 않음 · 기준 영상", title: ""});
 });

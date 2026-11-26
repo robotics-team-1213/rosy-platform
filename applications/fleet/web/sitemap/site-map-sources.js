@@ -1,6 +1,7 @@
 import {svgElement as el} from '/console/assets/map-editor.js';
 import {randomUUID} from '/console/assets/uuid.js';
-import {soccerProfileMap, rectangularView, viewTurnOf, planeView, siteMapErrorText} from '/console/assets/site-map-model.js';
+import {soccerProfileMap, rectangularView, planeView, siteMapErrorText} from '/console/assets/site-map-model.js';
+import {viewTurnOf} from '/common/map-rules.js';
 import {copyMapTemplate} from '/console/assets/drawing-import.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';

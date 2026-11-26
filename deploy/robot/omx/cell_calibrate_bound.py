@@ -226,6 +226,9 @@ def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, 
     calibration["reference_geometry_sha"] = cell_attempts.digest({
         name: {key: site.get(key) for key in ("auto_roi", "surface_px", "map_from")}
         for name, site in config["sites"].items() if not site.get("tier_of")})
+    import cell_cal_history
+
+    cell_cal_history.keep([cal_path, ref_path, Path(cal_path).with_suffix(".bias.json")], "map")
     cal_tmp = cal_path.with_suffix(".pending.json")
     with cal_tmp.open("w", encoding="utf-8") as stream:
         json.dump(calibration, stream)

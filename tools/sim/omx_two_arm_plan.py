@@ -76,7 +76,17 @@ def step_swept_poses(layout, arm_name, src, dst, here):
             per = (len(path) - 1) // n_seg
             wait_q = getattr(arm, "wait", arm.home)
             n_wait = 6
-            qs_t = [(2.5 * k / n_wait, wait_q + (path[0] - wait_q) * (k / n_wait), False) for k in range(n_wait)]
+            j1_lead = src == "belt" and layout.choices.get("wait_pose") == "home"
+            qs_t = []
+            for k in range(n_wait):
+                s = k / n_wait
+                if j1_lead:
+                    u1, ur = min(1., s / .55), max(0., (s - .35) / .65)
+                    q_w = wait_q + ur * ur * (3 - 2 * ur) * (path[0] - wait_q)
+                    q_w[0] = wait_q[0] + u1 * u1 * (3 - 2 * u1) * (path[0][0] - wait_q[0])
+                else:
+                    q_w = wait_q + (path[0] - wait_q) * s
+                qs_t.append((2.5 * s, q_w, False))
             ts = [seg_t[1]]
             for s in range(n_seg):
                 dt = (seg_t[s + 2] - seg_t[s + 1]) / per

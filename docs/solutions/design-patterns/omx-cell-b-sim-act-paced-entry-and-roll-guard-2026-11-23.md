@@ -45,3 +45,15 @@ applies_when: Running sim-unit ACT policies on dual-arm OMX cells or recovering 
 
 - 3자 병렬 독립 리뷰 패널(`agy-pro`·`codex`·`opencode` 부분 패널) 소견(`P-01`~`P-10`)을 모두 코드·회귀 시험·D-430 재검토로 해결·검증했다.
 - 실물 토크 인가 및 이동은 사람 작업자의 D-911 `person_at_switch: true` 확인 전까지 별도 게이트로 보류한다.
+
+## 추가 (2026-11-26): 실물 첫 정책 청크까지 남아 있던 막힘
+
+arm_b mixed 체크포인트(`3bedf6f…`)로 실물 회차를 반복했고, `20261126-192527-8997a5`에서 처음으로 정책 청크 1개가 실행됐다(관절 이동 3.13, 스스로 park, 사고 없음). 그 전 거절은 모두 home·entry 뒤에 나와 매번 human-hold·사고 기록·사람 확인을 거쳤다.
+
+- **timed는 시뮬 속도 정책에 쓸 수 없다.** 위 4번 그대로다. 지연을 다 줄이자(GPU 0.056 s, 관측 0.30 s) `policy window cannot play at the reviewed step rate`로 거절됐다. 첫 청크에서 관측 나이만큼 앞 행을 버리면 정지한 팔에서 한 틱에 3단위를 뛰어야 한다. 시뮬 학습 정책은 `--paced-chunks`로 돌린다.
+- **paced는 entry 직후 집게가 아직 열리는 중일 수 있다.** entry가 정착을 보고한 뒤에도 집게가 55.78로 0.2 s에 0.3 열렸고, 정지 판정(6관절, `STILL_TOL` 0.15)이 매번 거절했다. entry를 실행한 시작에 한해 자세가 맞고 흔들림이 없으면 최대 ~2 s 다시 읽는다(PR #931).
+- **원격 서버는 `n_action_steps`(4행)만 돌려줬다.** timed 경로는 관측 나이만큼 행을 버리므로 0.27 s 지평에서 전부 늦었다. timed 단팔만 `full_chunk`로 전체를 받는다(PR #921). paced·양팔은 받은 행을 모두 재생하므로 잘린 청크를 유지한다.
+- **설정·서빙 불일치.** `cell-arm-b-policy.json`에 무게 선언이 없어 D-935로 거절됐고, AI PC 서버는 B에 11-23 체크포인트를 서빙하고 있었다.
+- **재발 방지.** 실물 구동은 같은 회차를 dry run 1청크로 먼저 돌리고 무게 선언을 확인한 뒤에만 움직인다(PR #932). 원격 GPU는 재시작 직후 첫 호출이 0.5 s라 예열 뒤 돌린다.
+
+다음에 적용: 시뮬 단위 ACT 실물 회차는 paced, GPU 원격(예열), entry 라이브러리, 무게가 선언된 설정으로 시작하고, 서버 `/health`의 revision이 `--policy-revision`과 같은지 먼저 본다.

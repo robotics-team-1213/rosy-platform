@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cell_params as prm
 from cell_pick_geom import grasp_depth, surface_z
+from cell_site_target import unmeasured_refusal
 from cell_transfer import FOLDED, RETURN_HELD, Gate, transfer_folded
 
 
@@ -93,6 +94,26 @@ class CellHandoff:
                          empty_stop=float(library["gripper_closed"] if library.get("jaw_empty_stop") is None else library["jaw_empty_stop"]),
                          hold_current_ma=library.get("hold_current_ma"), tcp_x_m=omx_tcp.config_tcp(config))
 
+    def settled_facts(self, cell, log):
+        """Paced mode: the runner's measured Handoff check over fresh state reads, one per runner frame."""
+        import time
+
+        from chunk_policy_playback import Handoff
+        from grasp_planner import Planner
+
+        check = Handoff(self.spec, Planner(dict(self.config["plan"], fps=self.library["fps"], tcp_x_m=self.spec["tcp_x_m"])).kin)
+        facts = {"triggered": False, "reason": "runner did not report a measured hold"}
+        for n in range(self.spec["hold_frames"] + 1):  # the first read only seeds jaw stillness
+            if n:
+                time.sleep(1 / self.library["fps"])
+            cur = cell.act("state")
+            if not isinstance(cur, dict) or not cur.get("ok") or cur.get("fault") or cur.get("holding") is not True:
+                facts = {"triggered": False, "reason": "runner did not report a measured hold"}
+                break
+            facts = check.sample(cur["state"], cur["target"], health=cur.get("health"))
+        log({"paced_handoff": facts})
+        return facts if facts["triggered"] else None
+
     def carry(self, cell, status, authorize, log):
         from cell_policy_timing import ack_status, best_effort_hold, cmd_ack_ok, send_hold
         from grasp_planner import Planner, norm_to_rad
@@ -165,6 +186,8 @@ def validate_taught_goal(config, source, goal_site, destination, library):
     goal = next((name for name in names if name in sites), None)
     if goal is None or source not in sites:
         raise ValueError("source and destination must exist in the arm's configured sites")
+    if unmeasured_refusal(sites, goal_site, destination, source):
+        raise ValueError("SITE_NOT_MEASURED: a registered slot needs XY and Z measurements before the arm goes there")
     effective = {**config, "sites": sites}
     pick, place = (library["source"][k] for k in ("pick", "place"))
     # Check xy and relative elevation so a taught lower-tier library cannot serve a higher-tier job.

@@ -712,3 +712,38 @@ def test_driver_concurrent_can_disturb_and_keep_judging_after_a_failed_step(monk
     rows, summary = drv.concurrent(task, seed=7, disturb=(1., True), stop_on_fail=False)
     assert sorted(r["step"] for r in rows) == ["s1", "s2"] and summary["passed"] == 1 and not summary["completed"]
     assert seen["privileged_at_fresh"] is False and seen["ze"][-1] == {"arm_a": 1.}
+
+
+def test_recorder_skips_settle_and_belt_in_frames_while_advancing_physics(monkeypatch):
+    """Stationary settle_g and belt_in_g ticks advance Teacher physics without recording fixed-point frames."""
+    physics_calls, recorded = [], []
+    monkeypatch.setattr(helpers, "observe", lambda *_a: (np.zeros(12, np.float32), {"top": np.zeros((4, 4, 3), np.uint8)}))
+    monkeypatch.setattr(helpers.teaching.Teacher, "frame", lambda _self, _d, targets, label, ctxs=None: physics_calls.append(label))
+    monkeypatch.setattr(helpers.teaching.Teacher, "settle_g", lambda _self, *_a, **_kw: iter([np.ones(6), np.ones(6)]))
+    monkeypatch.setattr(helpers.teaching.Teacher, "belt_in_g", lambda _self, *_a, **_kw: iter([np.zeros(6), np.zeros(6)]))
+
+    layout = sites.Layout()
+    rec = helpers.Recorder(types.SimpleNamespace(layout=layout), types.SimpleNamespace(add_frame=recorded.append), {}, no_goal=True)
+    rec.goal = True
+    targets = {arm: np.zeros(6, np.float32) for arm in sites.ARMS}
+    for _ in rec.belt_in_g(None, {"arm": "arm_b"}):
+        rec.frame(None, targets, "belt_in")
+    rec.frame(None, targets, "move")
+    for _ in rec.settle_g(None, "arm_b", np.zeros(6), 0.5):
+        rec.frame(None, targets, "settle")
+    rec.frame(None, targets, "grasp")
+    assert physics_calls == ["belt_in", "belt_in", "move", "settle", "settle", "grasp"]
+    assert rec.count == 2 and len(recorded) == 2 and not rec._settling
+
+    recorded.clear()
+    rec.recording, rec.count = True, 0
+    ctx_a = helpers.teaching.Ctx("arm_a")
+    ctx_b = helpers.teaching.Ctx("arm_b")
+    gen_b = rec.settle_g(None, "arm_b", np.zeros(6), 0.5)
+    next(gen_b)
+    rec.frame(None, targets, "b_only_settling", [ctx_b])
+    assert len(recorded) == 0
+    rec.frame(None, targets, "a_moving_b_settling", [ctx_a, ctx_b])
+    assert len(recorded) == 1
+    list(gen_b)
+    assert not rec._settling

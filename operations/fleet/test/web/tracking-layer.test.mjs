@@ -100,7 +100,7 @@ test("map coordinates retain signs, metres and measured versus inferred provenan
     unknown: [{ x: .25, y: -.5 }, { x: 1, y: 0, marker_id: 41 }] });
   assert.deepEqual(positionRows(out), [
     { name: "rosy_01", x: "-1.23", y: "0.46", basis: "마커 관측" },
-    { name: "미확인 1", x: "0.25", y: "-0.50", basis: "무마커 추론 · 이름 미확정" },
+    { name: "미확인 1", x: "0.25", y: "-0.50", basis: "무마커 추정 · 이름 미확정" },
     { name: "ArUco 41", x: "1.00", y: "0.00", basis: "마커 관측 · 미등록" },
   ]);
   assert.deepEqual(positionRows(classifyTracking(null)), []);

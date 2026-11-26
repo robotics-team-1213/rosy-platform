@@ -1,5 +1,8 @@
-export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onUpdate }) {
+import { mapEvidence, placeText, stamp } from "./common/map-rules.js";
+
+export function activeSiteMap({ canvas, placeSelect, showMap, mapData, onUpdate }) {
   let entries;
+  let evidence;
   let draw;
   let sha;
   let timer;
@@ -14,19 +17,28 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
   function markSelectedPlace() {
     const place = places.get(placeSelect.value);
     showPositions?.(place ? [{ x_m: place.x, y_m: place.y }] : []);
-    canvas.setAttribute("aria-label", place ? `Fleet 활성 지도 · ${place.id}` : mapLabel);
+    canvas.setAttribute("aria-label", place ? `Fleet 활성 지도 · ${placeText(place)}` : mapLabel);
   }
 
   function updatePlaces(locations) {
     const previous = placeSelect.value;
     places = new Map(locations.filter(({ id }) => typeof id === "string" && id).map((place) => [place.id, place]));
     placeSelect.replaceChildren(new Option("전체 위치", ""),
-      ...Array.from(places.keys(), (id) => new Option(id, id)));
+      ...Array.from(places.values(), (place) => new Option(placeText(place), place.id)));
     placeSelect.value = places.has(previous) ? previous : "";
     markSelectedPlace();
   }
 
   placeSelect.addEventListener("change", markSelectedPlace);
+  // Keyboard path on the map itself (#856): arrows step through places, Home/Escape shows all.
+  canvas.addEventListener("keydown", (event) => {
+    const count = placeSelect.options.length;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    if (count < 2 || (!step && !["Home", "Escape"].includes(event.key))) return;
+    event.preventDefault();
+    placeSelect.selectedIndex = step ? (placeSelect.selectedIndex + step + count) % count : 0;
+    markSelectedPlace();
+  });
 
   function unavailable() {
     clearTimeout(expiryTimer);
@@ -80,14 +92,15 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
       expiryTimer = setTimeout(unavailable, remaining);
       state = "ready";
       entries = [
-        ["출처", "Fleet 활성 지도"],
         ["지도 ID", map.id],
-        ["버전", map.version],
-        ["활성 시각 (UTC)", date(envelope.activated_at)],
-        ["수신 시각 (UTC)", date(envelope.observed_at_ms / 1000)],
         ["위치", map.places.length],
         ["차로", map.edges.length],
       ];
+      evidence = mapEvidence({
+        version: map.version, timeLabel: "수신", time: envelope.observed_at_ms / 1000, source: "Fleet 활성 지도",
+      });
+      const activated = stamp(envelope.activated_at).title;
+      if (activated) evidence.title += ` · 활성 ${activated}`;
       onUpdate();
     } catch {
       if (request === controller) unavailable();
@@ -98,6 +111,7 @@ export function activeSiteMap({ canvas, placeSelect, showMap, mapData, date, onU
 
   return {
     get entries() { return entries; },
+    get evidence() { return evidence; },
     get hasPlaces() { return places.size > 0; },
     get state() { return state; },
     watch(viewing) {

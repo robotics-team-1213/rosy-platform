@@ -43,6 +43,8 @@ class PlanRequest:
     #: When True (Nav2 road-following), allow any start yaw on the lane (Nav2 rotates in place).
     ignore_start_heading: bool = False
     nav2_off_lane_margin_m: float = 0.0
+    #: How close to the goal place counts as already there (a rear-bay staging uses the trip's arrive radius).
+    arrived_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -141,13 +143,14 @@ def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan 
     if request.via or not isinstance(request.goal, str):
         return None
     x, y, yaw = request.start_pose
+    limit = ARRIVED_M if request.arrived_m is None else request.arrived_m
     want = request.arrive_yaw if request.arrive_yaw is not None else getattr(
         graph.places[request.goal], "yaw", None)
     stops = stop_goals(graph, request.goal, want, config, request.body_front_m) if request.stop_offset else []
     if stops:
-        if not any(math.dist((x, y), xy) <= ARRIVED_M for _a, _s, xy in stops):
+        if not any(math.dist((x, y), xy) <= limit for _a, _s, xy in stops):
             return None
-    elif math.dist((x, y), graph.place_xy(request.goal)) > ARRIVED_M:
+    elif math.dist((x, y), graph.place_xy(request.goal)) > limit:
         return None
     if want is not None and not heading_ok(yaw, want, config):
         return None

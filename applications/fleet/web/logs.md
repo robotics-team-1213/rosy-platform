@@ -1205,3 +1205,35 @@
 - 변경: `map/map-polling.js` — `refreshTraffic()`에서 `traffic.map_version` 변경으로 `/api/fleet/site-map/active`를 다시 읽을 때 `refreshCalibrations()`도 함께 호출해, 30초 폴링 지연 없이 새 지도 오버레이와 카메라 정사 보정이 같은 주기에 맞물리도록 수정했다.
 - 증거: `node --test operations/fleet/test/web/map-view.test.mjs` 및 원격 pytest 통과.
 - gate 변화: 없음.
+
+## 2026-11-26 · uncommitted · 관제·현장 지도·보정 맞춤을 fitBox 하나로
+
+- 변경: site-map-model.js에 mapBounds·fitBox(축척·px 여백·y 뒤집기·화면 방향·3×3 matrix)를 두고 fitView, 관제 지도(map-view·camera-backdrop의 fitTransform+quarterTurn), 보정 topDownLayout이 그것을 부름. 관제 지도는 같은 좌표계의 활성 지도가 있으면 현장 지도와 같은 범위(장소·도로·시설)로 맞추고, 없을 때만 카메라 사각형. 화면 방향 검사는 viewTurnOf 하나(siteViewTurn 삭제). D-515 이후 호출자 없는 cameraScreenToMap·quarterTurn 삭제, test_only_exports 상한 4→3
+- 증거: node --test operations/fleet/test/web 624 통과(site-layer·map-plane·map-datum·trail-view 시험을 fitBox로 같은 기대값 유지)
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 추천안(사용자 승인)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · 지도 근거 줄: 지도 vN · 활성 시각 · 출처 · 측량
+
+- 변경: 관제 지도(index.html map-board 바닥)와 현장 지도(site-map.html)에 ui-text #map-evidence. site-map-model.js mapEvidence가 '지도 vN · 활성 HH:MM:SS(KST) · 출처 Fleet 활성 지도 · 측량 날짜 평면' 또는 '측량선 없음'을 만들고 UTC 원문은 title. map-polling.js는 활성 지도를 다시 읽을 때(버전 변경 포함) showActiveMap으로 이 줄을 갱신. 측량선은 서버 display_polyline만 그림
+- 증거: node --test operations/fleet/test/web 625 통과(site-map.test mapEvidence, site-layer.test 측량 필드)
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 결정 2(사용자 승인)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · Fleet console part2 browser tests follow in-place roster cards and the viewer E-stop
+
+- 변경: test_keyboard_traverses_the_roster_and_arms_a_goal waits for a real state change to re-render the focused rosy_03 summary card and checks focus stays on that same node (f729d4bee2 keeps one article per robot, so the old wait for a rebuilt card never ended). The viewer case of test_desktop_exception_states_fit_without_hiding_evidence expects a live E-stop with no reason (D-1043, c900aba2df) instead of the old operator lock.
+- 증거: origin/main b864ae96ac reproduced 2 failed, 26 passed: D:/DevTemp/ui-map-panel-1126/part2-fix/repro/run-1.txt
+- gate 변화: 없음
+- 결정: D-1043
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · 관제 지도 눈금자 이름표 겹침 수정
+
+- 변경: PR #925가 관제 지도를 활성 지도 범위로 맞춘 뒤에도 눈금자(drawMapDatum)는 카메라 사각형 전체를 받아, 화면 밖 눈금 이름표가 캔버스 가장자리로 몰려 겹침(X0/X1, X6/X8, 0/Y-1)·위쪽 이름표가 좌표 칩에 가려짐. map-view drawSiteView가 격자 범위와 보이는 칸(여백 32, 위 좌표 칩 띠 40 안쪽)의 겹침만 눈금자에 넘김. D-766 순증 없게 map-view 두 곳 접음
+- 증거: test_sample_browser.py::test_control_map_ruler_labels_stay_apart_inside_the_map 1366·390 원격: 시험만 커밋(af025bbfdc) 2건 실패(X-1/X0 등 겹침), 수정본 통과. sample 미리보기 전후 캡처 D:/DevTemp/ui-map-panel-1126/map-ruler/{before,after3}_*.png
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

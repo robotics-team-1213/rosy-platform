@@ -288,6 +288,7 @@
         <p id="map-camera-stamp" class="map-camera-stamp" hidden></p>
         <div id="map-hover-card" class="map-hover-card" role="status" aria-live="polite" hidden></div>
       </div>
+      <ui-text id="map-evidence" scale="unit" role="status">활성 지도 확인 중</ui-text>
       </div>
       <details id="map-readouts" class="map-readouts">
       <summary class="cockpit-disclosure-row">장소·교통·관측 좌표</summary>
@@ -322,7 +323,6 @@
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
-
     </section>
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
@@ -364,7 +364,7 @@
       <section class="panel" aria-labelledby="roster-heading" data-unit-scope="drive">
         <div class="roster-block" data-unit-scope="drive">
           <h2 id="roster-heading">등록 로봇</h2>
-          <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>
+          <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치에서 등록</a></p>
           <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
 
           <div id="address-drift" class="address-drift" hidden>

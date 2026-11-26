@@ -1,5 +1,6 @@
 import { $, fetchJson, makeTable, addDtDd } from "./app.js";
 import { setJobData } from "./job-controls.js";
+import { kstStamp } from "./status-logic.js";
 export { setJobArm, setJobOperator } from "./job-controls.js";
 
 const JOB_STEP_LABEL = { check: "사전 점검(check)", "depth-verify": "깊이 검증(depth-verify)", "pivot-near": "피벗 근접 보정(pivot-near)", remap: "재매핑(remap)", surface: "면 높이 측정", "post-eval": "등록된 칸의 XY 위치 검증" };
@@ -7,9 +8,9 @@ const JOB_RESULT = { running: ["실행 중", "warn"], done: ["종료", ""], fail
   interrupted: ["중단 · 완료 여부 미확인", "warn"] };
 
 function leaseText(lease) {
-  if (!lease) return "비어 있음";
-  const until = Number.isFinite(lease.expires) ? new Date(lease.expires * 1000).toLocaleString("ko-KR") : "-";
-  return `${lease.live ? "점유 중" : "만료됨"} · ${lease.owner} · ${lease.purpose || "-"} · 만료 ${until}`;
+  if (!lease) return { text: "비어 있음", title: "" };
+  const until = Number.isFinite(lease.expires) ? kstStamp(lease.expires * 1000) : null;
+  return { text: `${lease.live ? "점유 중" : "만료됨"} · ${lease.owner} · ${lease.purpose || "-"} · 만료 ${until?.text ?? "-"}`, title: until?.title ?? "" };
 }
 
 function renderRecentJobs(rows) {
@@ -32,10 +33,12 @@ function renderRecentJobs(rows) {
     tdStep.textContent = JOB_STEP_LABEL[j.step] || j.step || "-";
     const tdResult = document.createElement("td");
     const [label, level] = JOB_RESULT[j.status] || [j.status || "-", ""];
-    tdResult.textContent = label;
+    tdResult.textContent = j.error ? `${label} · ${j.error}` : label;
     if (level) tdResult.setAttribute("data-level", level);
     const tdWhen = document.createElement("td");
-    tdWhen.textContent = j.ended || j.started ? new Date(j.ended || j.started).toLocaleString("ko-KR") : "-";
+    const at = kstStamp(j.ended || j.started);
+    tdWhen.textContent = at?.text ?? "-";
+    tdWhen.title = at?.title ?? "";
     tr.append(tdArm, tdStep, tdResult, tdWhen);
     tbody.appendChild(tr);
   }
@@ -77,7 +80,10 @@ export async function loadJobStatus({ onStatus } = {}) {
   tag.setAttribute("status", "active");
   tag.textContent = "표시 중";
   if (status.leases_error) addDtDd(leaseDl, "리스 조회", `실패: ${status.leases_error}`);
-  for (const [arm, info] of Object.entries(status.arms || {})) addDtDd(leaseDl, arm, leaseText(info?.lease));
+  for (const [arm, info] of Object.entries(status.arms || {})) {
+    const lease = leaseText(info?.lease);
+    addDtDd(leaseDl, arm, lease.text).title = lease.title;
+  }
   if (!leaseDl.children.length) addDtDd(leaseDl, "팔", "cells.json에 등록된 팔이 없습니다.");
   try {
     const rows = (await fetchJson("/api/calibration/jobs")).jobs || [];

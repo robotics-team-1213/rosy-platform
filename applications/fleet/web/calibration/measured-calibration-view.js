@@ -1,6 +1,7 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import { setOff } from "/common/cause-line.js";
 import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
+import { invert3 as invert3x3 } from "/common/plane-math.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -13,17 +14,6 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
   map_changed:'지도 바뀜', invalid_config:'교정 기록 확인 필요', readback_stale:'적용 기록 만료'};
 
 const READING_REASON = '상태 읽는 중';
-
-function invert3x3(rows) {
-  if (!Array.isArray(rows) || rows.length !== 3) return null;
-  const m = rows.flat();
-  if (m.length !== 9 || !m.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  if (!Number.isFinite(det) || Math.abs(det) < 1e-15) return null;
-  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((v) => v / det);
-}
 
 export function createMeasuredCalibrationView({scope, root, call, visionView, auth, onPromoted = () => {}}) {
   const el = id => root.querySelector(`#measured-${id}`);
@@ -93,7 +83,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const editReason = busy ? busyReason : `${NAMED_OPERATOR_REASON}.`;
     const setOperable = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? (reading ? readingReason : '') : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
-    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
+    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 보정을 승인 저장하세요.');
     setOperable(buttons.approve,!!candidate && candidate.evidence_kind === 'measured' && !!limits() && candidate.source_id === source,
       '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
     setOperable(buttons.revoke,!!record,'철회할 승인 기록이 없습니다.');
@@ -106,7 +96,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const activeBundle = candidate || record?.bundle;
     if (buttons.promote) {
       setOperable(buttons.promote, !!promotableBundle(),
-        candidate || pendingFile ? '가져온 교정 묶음을 먼저 승인 저장하세요.' : '현재 유효한 실측 교정 승인 기록이 필요합니다.');
+        candidate || pendingFile ? '가져온 교정 묶음을 먼저 승인 저장하세요.' : '현재 유효한 보정 승인 기록이 필요합니다.');
     }
     const b = activeBundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
@@ -127,7 +117,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   async function readStored(t) {
     try {
       const body = await call('/api/fleet/calibrations?purpose=preview',{signals:[t.signal]}); t.check();
-      if (body.use !== 'preview-only') throw new Error('이 서버는 실측 교정 미리보기를 지원하지 않습니다.');
+      if (body.use !== 'preview-only') throw new Error('이 서버는 보정 미리보기를 지원하지 않습니다.');
       return body.calibrations?.find(row => row.source_id === t.source) || null;
     } catch (error) {
       if (t.current()) { record = status = null; conditions.checked = false; }
@@ -143,7 +133,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       const lease = await grant(t);
       const response = await fetch(lease.url.href.replace(/\/frame$/,'/measured-status'), {
         signal:t.signal,credentials:'omit',redirect:'error',cache:'no-store',headers:{Authorization:`Bearer ${lease.lease}`}});
-      if (!response.ok) throw new Error('실측 교정 적용 상태를 읽지 못했습니다.');
+      if (!response.ok) throw new Error('보정 적용 상태를 읽지 못했습니다.');
       const result = await response.json(); t.check();
       if (result.source_id !== t.source) throw new Error('카메라 상태의 출처가 다릅니다.');
       status = result;
@@ -176,7 +166,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   function failure(error,t) {
     if (error.name === 'AbortError' || !t.current()) return;
-    clearImage(); message.textContent = `실측 교정 확인 실패: ${error.message}`;
+    clearImage(); message.textContent = `보정 확인 실패: ${error.message}`;
   }
   async function action(fn) {
     if (busy || reading) return;
@@ -241,10 +231,10 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       record = await readStored(t);
       if (record?.calibration_revision !== expected) {
         status = null; conditions.checked = false;
-        throw new Error('승인 기록이 바뀌었습니다. 현재 실측 교정을 다시 확인하세요.');
+        throw new Error('승인 기록이 바뀌었습니다. 현재 보정을 다시 확인하세요.');
       }
       const bundle = promotableBundle();
-      if (!bundle) throw new Error('현재 유효한 실측 교정 승인 기록이 필요합니다.');
+      if (!bundle) throw new Error('현재 유효한 보정 승인 기록이 필요합니다.');
       const mapToImage = invert3x3(bundle.floor.undistorted_to_map);
       if (!mapToImage) throw new Error('실측 평면 행렬을 뒤집을 수 없습니다.');
       const [bx0, by0, bx1, by1] = bundle.bounds_m;

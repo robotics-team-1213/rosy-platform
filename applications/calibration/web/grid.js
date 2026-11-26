@@ -1,10 +1,13 @@
 import { drawFixtureOutlines } from "./fixture-frame.js";
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 // Calibration "모눈종이" (Top-Camera Overlay + Arm-Base Metric XY Grid) Canvas Renderer.
 // Reads all colours and fonts exclusively from window.RosyPalette (tokens.css) so dark/light themes
 // and shared/web token contracts remain intact without inline styles or raw hex values.
 
-import { applyH, invert3x3, parallaxPixel } from "./grid-projection.js";
-export { applyH, invert3x3, parallaxPixel };
+import { invert3, project as applyH } from "/common/plane-math.js";
+import { mapEvidence } from "/common/map-rules.js";
+import { mapEvidenceInput } from "./status-logic.js";
+import { parallaxPixel } from "./grid-projection.js";
 
 const tone = (name) => window.RosyPalette.cssColor(name);
 const font = (role = "micro", family = "mono") => window.RosyPalette.canvasFont(role, family);
@@ -58,13 +61,11 @@ function looColor(distMm) {
   return tone("--status-good");
 }
 
-function freshTcp(profile) {
-  const live = profile?.robot_status?.live;
-  return live?.stale === false && Number.isFinite(live.fresh_until) && Date.now() / 1000 <= live.fresh_until
-    ? live.tcp : null;
-}
+// Freshness is not severity: a bias measured on an older map is drawn dashed and quiet and says so in words.
+const biasTone = (r) => tone(r.stale_map ? "--ink-quiet" : "--series-secondary");
+const mapAge = (r) => (r.stale_map ? ` · 지도 ${EVIDENCE_LABEL.delayed}` : "");
 
-function collectBounds(profile, siteObj) {
+function collectBounds(profile, siteObj, tcp) {
   const pts = [[0, 0]];
   const add = (xy) => {
     if (Array.isArray(xy) && Number.isFinite(xy[0]) && Number.isFinite(xy[1])) pts.push([xy[0], xy[1]]);
@@ -87,7 +88,6 @@ function collectBounds(profile, siteObj) {
     add(r.point_m);
     add(r.map_point_m);
   }
-  const tcp = freshTcp(profile);
   if (tcp) add([tcp.x, tcp.y]);
   let minX = -0.06;
   let maxX = 0.24;
@@ -126,7 +126,7 @@ export function renderTopView(canvas, state) {
 
   const siteObj = profile?.sites?.[siteName] || null;
   const map = siteObj?.map || null;
-  const invH = map?.homography ? invert3x3(map.homography) : null;
+  const invH = map?.homography ? invert3(map.homography) : null;
   const cam = profile?.camera_top || {};
   const fitZ = map?.z_view;
   const surfaceZ = siteObj?.surface_z;
@@ -319,10 +319,10 @@ export function renderTopView(canvas, state) {
     for (const r of profile?.bias?.regions || []) {
       const fkPx = zPlane === "surface" && r.fk_pixel_surface_z ? r.fk_pixel_surface_z : r.fk_pixel_z_view;
       const mapPx = zPlane === "surface" && r.map_pixel_surface_z ? r.map_pixel_surface_z : r.map_pixel_z_view;
-      const col = r.stale_map ? tone("--status-warn") : tone("--series-secondary");
+      const col = biasTone(r);
       if (fkPx && mapPx) {
         drawArrow(ctx, fkPx[0], fkPx[1], mapPx[0], mapPx[1], col, 7, r.stale_map);
-        drawBadge(ctx, mapPx[0] + 6, mapPx[1], `bias ${r.bias_mm[0]},${r.bias_mm[1]}mm`, col, tone("--scrim"));
+        drawBadge(ctx, mapPx[0] + 6, mapPx[1], `bias ${r.bias_mm[0]},${r.bias_mm[1]}mm${mapAge(r)}`, col, tone("--scrim"));
         hitTargets.push({ key: `bias:${r.site}`, x: fkPx[0], y: fkPx[1], data: { kind: "bias", ...r } });
       }
     }
@@ -350,7 +350,7 @@ export function renderTopView(canvas, state) {
       ctx.restore();
     }
     const tcpPx = profile?.robot_status?.live?.tcp_pixel;
-    if (state.frameSource === "live" && freshTcp(profile) && Array.isArray(tcpPx)) {
+    if (state.frameSource === "live" && state.tcp && Array.isArray(tcpPx)) {
       const col = tone("--robot-1");
       drawDiamond(ctx, tcpPx[0], tcpPx[1], 8, col, null);
       drawBadge(ctx, tcpPx[0] + 9, tcpPx[1], "TCP", col, tone("--scrim"));
@@ -374,7 +374,7 @@ export function renderArmGrid(canvas, state) {
 
   const siteObj = profile?.sites?.[siteName] || null;
   const map = siteObj?.map || null;
-  const bounds = collectBounds(profile, siteObj);
+  const bounds = collectBounds(profile, siteObj, state.tcp);
   const pad = 42;
   const spanX = Math.max(0.05, bounds.maxX - bounds.minX);
   const spanY = Math.max(0.05, bounds.maxY - bounds.minY);
@@ -429,8 +429,8 @@ export function renderArmGrid(canvas, state) {
 
   // Origin + axis arrows (+X right, +Y up)
   const [ox, oy] = toCanvas(0, 0);
-  drawArrow(ctx, ox, oy, ox + 28, oy, tone("--status-crit"), 6, false);
-  drawArrow(ctx, ox, oy, ox, oy - 28, tone("--status-good"), 6, false);
+  drawArrow(ctx, ox, oy, ox + 28, oy, tone("--ink-quiet"), 6, false);
+  drawArrow(ctx, ox, oy, ox, oy - 28, tone("--ink-quiet"), 6, false);
   ctx.save();
   ctx.font = font("micro", "mono");
   ctx.fillStyle = tone("--ink");
@@ -536,7 +536,7 @@ export function renderArmGrid(canvas, state) {
       if (!r.point_m) continue;
       const [fx, fy] = toCanvas(r.point_m[0], r.point_m[1]);
       const [mx, my] = r.map_point_m ? toCanvas(r.map_point_m[0], r.map_point_m[1]) : [fx, fy];
-      const col = r.stale_map ? tone("--status-warn") : tone("--series-secondary");
+      const col = biasTone(r);
       ctx.save(); ctx.strokeStyle = col;
       if (r.stale_map) ctx.setLineDash([4, 3]);
       ctx.globalAlpha = 0.45;
@@ -548,7 +548,7 @@ export function renderArmGrid(canvas, state) {
       }
       ctx.restore();
       drawArrow(ctx, fx, fy, mx, my, col, 7, r.stale_map);
-      drawBadge(ctx, mx + 6, my + 16, `bias(${r.site}) ${r.bias_mm[0]},${r.bias_mm[1]}mm`, col, tone("--scrim"));
+      drawBadge(ctx, mx + 6, my + 16, `bias(${r.site}) ${r.bias_mm[0]},${r.bias_mm[1]}mm${mapAge(r)}`, col, tone("--scrim"));
       hitTargets.push({ key: `bias:${r.site}`, x: fx, y: fy, data: { kind: "bias", ...r } });
     }
     for (const [sName, info] of Object.entries(profile?.cross_verify?.lateral_xy?.sites || {})) {
@@ -563,7 +563,7 @@ export function renderArmGrid(canvas, state) {
   }
 
   // 6. Live TCP + yaw heading
-  const tcp = freshTcp(profile);
+  const tcp = state.tcp;
   if (layers.centerAndTcp && tcp) {
     const col = tone("--robot-1");
     const [tx, ty] = toCanvas(tcp.x, tcp.y);
@@ -575,4 +575,10 @@ export function renderArmGrid(canvas, state) {
   }
 
   return { hitTargets, toWorld, toCanvas };
+}
+
+/** Element props for the evidence line under the camera map: the shared /common/map-rules.js line. */
+export function evidenceProps(digest, observedMs, source) {
+  const { text, title } = mapEvidence(mapEvidenceInput(digest, observedMs, source));
+  return { textContent: text, title };
 }

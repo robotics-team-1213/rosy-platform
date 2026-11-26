@@ -5088,3 +5088,43 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. AI PC 외 장비의 수용은 별도다.
 - 결정: 없음
 - 교훈: 현장에서 systemd가 모르는 `ConditionPathIsExecutable=` 지시어를 무시했다. 실행 파일 조건을 `ConditionFileIsExecutable`로 고치고, 현장 문제의 원인을 systemd 파서 회귀로 고정했다.
+
+## 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
+
+- 변경: tools/remote/omx_hotfix.py: after a bench link switch, read /api/arms on the cell; idle with no arm locked -> systemctl --user restart rosy-omx-bench-record.service and print is-active; busy or unreadable -> print 'bench restart held' and exit 3 (deploy stands). BENCH_RECORD_GUIDE.md section 3 drops the manual restart step.
+- 증거: 2026-11-26: link switched 04:57 but the service kept old code from 03:59; test/test_omx_hotfix.py idle/busy/read-failure/cell-link cases
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
+
+- 변경: 연결 끊김은 warn·정상과 대기는 색 없음, 미확인 배지 초기 톤 제거, 보류 카드 경보를 원인 줄로 옮김, 자동 복구 보류는 warn 알림·홈 복귀 실패 중복 오류 제거, 빠른 조치 버튼은 같으면 유지해 초점 보존, 신선도 문구(조명 판정 지연·조명 정보 없음·최신·브라우저 수신·원인 미확인), CSS 작은 글자 .8rem
+- 증거: 원격 pytest test_omx_bench_*.py·test_omx_camera_input_preflight.py, 로그 D:/DevTemp/ui-map-panel-1126/bench-ui/
+- gate 변화: 없음
+- 결정: 두 패널 2라운드 합의 6항목(안전 버튼 동작·문구 불변)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · Calibration 화면 신선도를 서버 예산으로, 옛 지도는 점선·흐림과 문구로
+
+- 변경: cell_calibration_view가 robot_status.live에 age_ms·fresh_for_ms를 더하고 calibration_web 프레임 응답에 X-Rosy-Frame-Observed-At을 더함(기존 필드 불변). 화면은 TCP 신선도를 performance.now()로 예산과 비교하고(브라우저 벽시계 비교 제거), stale_map bias를 warn 색 대신 ink-quiet 점선과 '지도 지연'으로 그리며, 탑 카메라 지도 아래에 '지도 SHA 8자 · 관측 HH:MM:SS(KST) · 출처' 근거 줄을 둔다. 시각 표기는 KST HH:MM:SS, UTC 원문은 title.
+- 증거: test/test_calibration_web.py(신선도 예산·Observed-At 헤더), test/test_calibration_frame_browser.py(TCP 표시·옛 지도 문구·근거 줄), applications/calibration/test/status-logic.test.mjs
+- gate 변화: ARTIFACT
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 결정 반영(녹화 중지 표기, 자동 복구 우선, 녹화 시작 중립, 공용 값 일치 시험, 좁은 폭 표시)
+
+- 변경: /stop 단추 표기를 녹화 중지로 바꾸고 전원 차단 위치를 aria-describedby로 덧붙였다. 수동 보류 카드에서 자동 복구 단추를 사람 확인 단추보다 위에 두고 주 단추를 자동 복구 하나로 줄였다. 녹화 시작 단추는 중립 채움에 빨간 점만 남겼다. 390·320 폭에서 손목 카메라 배지 겹침, 알림 단추 세로 꺾임, 12px 미만 글자를 고쳤다. 단추 동작·위치·단축키는 그대로다.
+- 증거: test/test_omx_bench_decisions_ui.py, test/test_omx_bench_narrow_browser.py, 원격 test/test_omx_bench_*.py
+- gate 변화: 없음
+- 결정: 2026-11-26 UI 지도 패널 bench-r2 결정 1~4(사용자 나머지 처리 지시)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 12px 미만 글자 전부 12px 이상
+
+- 변경: bench_record css·html·js의 rem 글자(루트 15px)와 SVG 글자를 .8rem/12 이상으로, 보이는 모든 글자 12px 하한 시험 추가
+- 증거: test_omx_bench_narrow_browser.py 390·320 보이는 모든 글자 12px 단언, 변이 1회 적발
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

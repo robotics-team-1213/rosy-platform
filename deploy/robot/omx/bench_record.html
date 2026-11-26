@@ -25,7 +25,7 @@
       <nav class="header-tools" aria-label="작업대 도구">
         <div class="tool-cluster" data-group="status" role="group" aria-label="서버와 카메라 상태">
           <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
-          <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+          <span class="ui-tag" id="hdr-cam-health">카메라 확인 중</span>
         </div>
         <div class="tool-cluster" data-group="prefs" role="group" aria-label="신호음과 도움말">
           <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
@@ -68,7 +68,7 @@
       <div class="primary-ops">
         <div class="ops-cluster ops-start" role="group" aria-label="녹화 시작">
           <button type="button" id="hdr-prepare-btn" class="btn-primary topbar-rec-btn" data-tabs="setup" aria-describedby="hdr-start-reasons" disabled title="리더-팔로워 실시간 텔레옵 연동 (녹화 전 직접 조작 가능) [Space]">텔레옵 연동 · 준비<kbd class="kbd-hint">Space</kbd></button>
-          <button type="button" id="hdr-start-now-btn" class="btn-tool btn-xs" data-tabs="setup" disabled title="준비 없이 바로 녹화 시작 [Ctrl+Enter]">바로 녹화</button>
+          <button type="button" id="hdr-start-now-btn" class="btn-tool btn-xs" data-tabs="setup" aria-describedby="hdr-start-reasons" disabled title="준비 없이 바로 녹화 시작 [Ctrl+Enter]">바로 녹화</button>
         </div>
         <div id="home-include-leader-group" class="home-group" data-tabs="setup">
           <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
@@ -95,7 +95,7 @@
         </div>
       </div>
       <div class="stop-group">
-        <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live title="즉시 정지 요청 · 물리 차단은 follower 전원 스위치">비상정지 (E-Stop)</button>
+        <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live aria-describedby="hdr-stop-note" title="녹화 정상 종료 요청 · 전원 차단은 작업대 전원 스위치">녹화 중지</button><span id="hdr-stop-note" class="bench-sr-only">전원 차단은 작업대 전원 스위치</span>
       </div>
     </section>
   </header>
@@ -103,13 +103,13 @@
   <main class="app-main">
     <div class="layout">
       <div class="bench-stage-col">
-        <div class="card manual-hold-card" id="manual-hold-card" aria-labelledby="h-manual-hold" role="alert" hidden>
+        <div class="card manual-hold-card" id="manual-hold-card" aria-labelledby="h-manual-hold" hidden>
           <div class="mh-head">
             <div>
               <h2 id="h-manual-hold" style="margin:0">작업대 문제 진단 · 안전 복구 센터</h2>
-              <p id="mh-reason" class="mh-reason"></p>
+              <p id="mh-reason" class="mh-reason" role="alert"></p>
             </div>
-            <span id="mh-torque-badge" class="badge mono" data-tone="crit">상태 확인 중</span>
+            <span id="mh-torque-badge" class="badge mono">상태 확인 중</span>
           </div>
           <div id="mh-facts" class="mh-facts mono"></div>
           <ul id="mh-issue-list" class="mh-issue-list" hidden></ul>
@@ -125,14 +125,14 @@
               <label class="check-row"><input type="checkbox" id="mh-dead-lease-check"><span>팔이 접혀 있고 토크 OFF 상태임을 직접 확인했습니다 (죽은 러너 임대 해제)</span></label>
             </div>
             <div id="mh-clear-box" class="mh-step">
-              <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 복구 후 홈 복귀</button>
+              <div id="mh-quick-actions" class="mh-quick-actions"></div>
+              <button type="button" id="mh-clear-btn" class="btn-tool">팔 확인 완료 · 복구 후 홈 복귀</button>
               <div id="mh-clear-confirm" class="reset-confirm-bar" hidden>
                 <span class="quiet">보류를 해제하고 멈춘 유닛을 복원한 뒤, 팔과 리더를 안전하게 홈으로 복귀시킬까요?</span>
-                <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">확인 · 복구 후 홈 복귀</button>
+                <button type="button" id="mh-clear-yes" class="btn-tool btn-xs">확인 · 복구 후 홈 복귀</button>
                 <button type="button" id="mh-clear-only-yes" class="btn-tool btn-xs">보류만 해제</button>
                 <button type="button" id="mh-clear-no" class="btn-tool btn-xs">취소</button>
               </div>
-              <div id="mh-quick-actions" class="mh-quick-actions"></div>
               <button type="button" id="mh-log-btn" class="btn-tool btn-xs">실시간 로그 보기</button>
             </div>
           </div>
@@ -315,7 +315,7 @@
                 <a href="/api/cell_map" target="_blank" rel="noopener">cell_map</a>
                 <a href="/api/logs" target="_blank" rel="noopener">logs</a>
               </div>
-              <span class="quiet" style="font-size:.74rem">rosy-omx-bench-record.service</span>
+              <span class="quiet" style="font-size:.8rem">rosy-omx-bench-record.service</span>
             </div>
           </div>
         </details>
@@ -332,7 +332,7 @@
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
             </dl>
             <div id="sb-reset-bar" class="sb-reset-bar">
-              <span class="quiet" style="margin-right:auto;font-size:.75rem">기본값</span>
+              <span class="quiet" style="margin-right:auto;font-size:.8rem">기본값</span>
               <button type="button" id="sb-apply-rec-defaults-btn" class="btn-tool btn-xs" title="추천 속도 60°/s 및 기본 config/caps 적용">권장값(60°/s)</button>
               <button type="button" id="sb-factory-reset-btn" class="btn-tool btn-xs" data-tone="warn" title="속도·집게·임시 설정을 공장 초기값으로 되돌립니다">공장 초기화</button>
             </div>
@@ -361,7 +361,7 @@
                 <label class="jc-field"><span>팔로워 닫힘</span><input type="number" id="gm-fc" class="jc-inp" min="0" max="4095" step="1"></label>
                 <label class="jc-field"><span>팔로워 열림</span><input type="number" id="gm-fo" class="jc-inp" min="0" max="4095" step="1"></label>
               </div>
-              <div id="sb-grip-span" class="mono quiet" style="font-size:.73rem">확인 중...</div>
+              <div id="sb-grip-span" class="mono quiet" style="font-size:.8rem">확인 중...</div>
             </div>
             <details id="sb-joint-caps-box" class="sb-param-block">
               <summary class="sb-param-head" style="cursor:pointer;list-style:none">
@@ -564,7 +564,7 @@
                       <input type="number" id="lp-reset-time" min="0.5" max="600" step="0.5" placeholder="기본" style="min-height:40px">
                     </label>
                   </div>
-                  <p class="quiet" style="font-size:.78rem;margin:6px 0 0">잠금 항목(fps·단위·스텝·카메라)은 로봇 프로필 해시(D-911)로 보호됩니다.</p>
+                  <p class="quiet" style="font-size:.8rem;margin:6px 0 0">잠금 항목(fps·단위·스텝·카메라)은 로봇 프로필 해시(D-911)로 보호됩니다.</p>
                 </fieldset>
                 <fieldset class="group">
                   <legend>안전 한계 (caps) · 그래프 클릭/드래그 조정</legend>
@@ -612,8 +612,19 @@
                   </label>
                   <button type="button" id="save-init-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 로봇 팔 자세를 이니셜(홈) 포즈로 저장합니다">팔로워 포즈 저장</button>
                   <button type="button" id="save-leader-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 리더 팔 자세를 리더 홈 포즈로 저장합니다">리더 포즈 저장</button>
-                  <button type="button" id="save-cam-base-btn" class="btn-tool" style="min-height:44px">기준 카메라 저장</button>
+                  <button type="button" id="save-cam-base-btn" class="btn-tool" style="min-height:44px">조명 기준 저장</button>
                 </div>
+                <details id="camera-preparation" style="margin-top:12px">
+                  <summary>카메라 준비 점검 · A·B</summary>
+                  <ul id="camera-preparation-status"></ul>
+                  <p id="camera-alignment-status" role="status"></p>
+                  <div class="side-alignment-views">
+                    <figure><figcaption>저장한 측면 기준</figcaption><div id="side-reference-view"><img id="side-reference" alt="저장한 측면 기준" hidden></div></figure>
+                    <figure><figcaption>현재 측면 영상</figcaption><div id="side-current-view"><img id="side-current" alt="현재 측면 영상" hidden></div></figure>
+                  </div>
+                  <button type="button" id="save-side-reference" class="btn-tool" disabled>확인한 현재 구도를 기준으로 저장</button>
+                  <p id="side-reference-message" role="status"></p>
+                </details>
                 <p id="start-guard-note" class="quiet" style="margin-top:8px;margin-bottom:0"></p>
                 <div id="lock-conflict-box" class="alert warn" style="margin-top:10px" hidden>
                   <div id="lock-conflict-text" style="margin-bottom:8px"></div>
@@ -739,5 +750,6 @@
 <script src="/bench_record_review.js"></script>
 <script src="/bench_record_overlay.js"></script>
 <script src="/bench_record_cam.js"></script>
+<script src="/bench_camera_alignment.js"></script>
 </body>
 </html>

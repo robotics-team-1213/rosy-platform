@@ -17,8 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
-import cell_diagnose
-import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
+import cell_calibrate_args, cell_diagnose
+import cell_calibration as cal, cell_config_io, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402  (cell_config_io: one locked writer for every config rewrite)
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
@@ -140,14 +140,14 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
     motion = rp.scoped(config)
-    visits = []
+    visits, stop = [], None
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
     if not fold(cell).get("ok"):
         raise SystemExit("remap: initial park failed")
     before = cell.frame("top")
     cv2.imwrite(str(frames / "before.jpg"), before)
-    for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
+    for i, (x, y) in enumerate(rp.remap_order(config, points)):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
             lib = cp.write_library(motion, view, view, work / f"remap-{i}.json")
@@ -167,6 +167,7 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
             finally:
                 if not fold(cell).get("ok"):
                     raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
+            stop = f"remap stopped at {failed} for {[x, y]}: {status.get('error') or 'refused'}"
             break
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
@@ -196,11 +197,11 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
-    moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
+    moved = cell_scene_guard.scene_moved(before, after, ignore=rp.scene_ignore(config))
     rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
-        raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    record = rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+        raise SystemExit(f"{stop + '; ' if stop else ''}remap: the scene changed during it, no map saved: {moved}; views in {frames}")
+    record = rp.fit_naming_stop(stop, config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
     return {**record, "planned_visits": visits}
 
 
@@ -220,14 +221,11 @@ def main(argv=None):
                     help="auto: run only the reviewed step kinds")
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
+    ap.add_argument("--obstacle-mm", type=float, default=None, help="override obstacle height (mm above table) for remap z_view clearance")
+    ap.add_argument("--remeasure-map", action="store_true", help="auto --only remap: remap even when check finds the map current")
     args = ap.parse_args(argv)
-    if args.cad_image_evidence is not None and not args.route:
-        ap.error("--cad-image-evidence requires check --route")
-    if args.remeasure_surface is not None and (args.step != "auto" or args.only != ["surface"]
-            or not args.surface_clear or args.plan_only or args.replay_frames or args.targets or args.verify):
-        ap.error("--remeasure-surface requires auto --only surface --surface-clear")
-    if args.route and (args.step != "check" or args.plan_only or args.replay_frames):
-        ap.error("--route requires a live read-only check")
+    if refused := cell_calibrate_args.argument_error(args):
+        ap.error(refused)
     import cv2
     import cell_pipeline as cp
 
@@ -236,9 +234,9 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
-        report = rp.plan_report(config, points)
-        print(json.dumps(report), flush=True)
-        return 2 if report["refused"] else 0
+        out = rp.plan_only(config, points, args.obstacle_mm)  # the IK rows, the refusal, reach, leverage and the z_view record
+        print(json.dumps(out), flush=True)
+        return 2 if out["refused"] else 0
     if args.replay_frames is not None:
         if args.step != "check":
             raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
@@ -254,8 +252,8 @@ def main(argv=None):
     if args.step != "check":
         work.mkdir(parents=True, exist_ok=True)
     from cell_shared_pallet import fixture_check_frame, shared_pallet
-    frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
-    found = check(config, calibration, targets, frame, config["params"])
+    top_frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
+    found = check(config, calibration, targets, top_frame, config["params"])
     found.update(fixture_report)
     if args.step == "check":
         from cell_route_calibration import include_route_report
@@ -271,6 +269,7 @@ def main(argv=None):
     if todo == ["review-camera-reference"]:
         print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)
         return 0 if args.step == "check" else 2
+    todo = cell_calibrate_args.with_remeasure(todo, args.remeasure_map)
     if args.verify:
         for vstep in ("post-eval", "depth-verify"):
             if vstep not in todo:
@@ -280,29 +279,31 @@ def main(argv=None):
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0
-    refused = rp.refusal(rp.plan(config, points)) if "remap" in todo else None  # before any move: one bad point refuses the run
+    remap_config, z_info = (config, None) if "remap" not in todo else rp.remap_view(config, top_frame, args.obstacle_mm, depth_capture)
+    depth_bad = f"obstacle not measured: {z_info['depth_error']}; fix the D435 or pass --obstacle-mm" if z_info and z_info.get("depth_error") else None
+    refused = depth_bad or (rp.refusal(rp.plan(remap_config, points)) if "remap" in todo else None)  # before any move: one bad point refuses the run
     if refused:
-        print(json.dumps({"refused": refused, "todo": todo}), flush=True)
+        print(json.dumps({"refused": refused, "todo": todo, **({"z_view": z_info} if z_info else {})}), flush=True)
         return 2
     if todo != ["depth-verify"] and not (args.commissioning and args.person_at_switch):
-        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}), flush=True)
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo, **({"z_view": z_info} if z_info else {})}), flush=True)
         return 2
     done, config_dirty = [], False
     for step in todo:
         if step == "remap":
-            ref_path = Path(config["preflight"]["reference_top"]).expanduser()
+            ref_path = Path(remap_config["preflight"]["reference_top"]).expanduser()
             import cell_hooks, cell_pivot_bias
 
-            stills = cell_hooks.stills(cell, config)
+            stills = cell_hooks.stills(cell, remap_config)
             try:
-                record = remap(cell, config, points, work, at_stop=stills)
+                record = remap(cell, remap_config, points, work, at_stop=stills)
             finally:
                 stills.close()
-            if not map_agrees(record, config["params"]):
+            if not map_agrees(record, remap_config["params"]):
                 done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
                 break
             current = cell.frame("top")
-            for site in _map_write_sites(config):
+            for site in _map_write_sites(remap_config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             if ref_path.exists():
                 move_regions(
@@ -318,7 +319,7 @@ def main(argv=None):
                                  "shared_pallet_surface": comparison})
                     print(json.dumps({"done": done}), flush=True)
                     return 2  # the geometry, map, reference and bias on disk still belong to the previous generation
-            save_bound_map_reference(cal_path, ref_path, calibration, config, current)
+            save_bound_map_reference(cal_path, ref_path, calibration, remap_config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
                 bp.with_suffix(".json.bak").write_bytes(bp.read_bytes())
@@ -326,7 +327,7 @@ def main(argv=None):
             bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
             bp_tmp.replace(bp)
             cell_pivot_bias._BIAS_CACHE.clear()
-            done.append({"remap": record["loo_error_mm"]})
+            done.append({"remap": record["loo_error_mm"], **({"z_view": z_info} if z_info else {})})
         elif step == "regions":
             continue
         elif step == "consensus-repair":
@@ -382,9 +383,9 @@ def main(argv=None):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
     if config_dirty:
-        cfg_tmp = args.config.with_suffix(".tmp")
-        cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
-        cfg_tmp.replace(args.config)
+        if err := cell_config_io.write_config_checked(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, 1, done):
+            print(json.dumps({"config_write_failed": err, "done": done}, default=str), flush=True)
+            return 2
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

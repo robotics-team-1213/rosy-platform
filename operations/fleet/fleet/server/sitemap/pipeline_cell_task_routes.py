@@ -9,7 +9,7 @@ from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
-from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
+from fleet.pipeline.cell_site_targets import act_route_refusal, expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled, install_pinky_dispatch
@@ -178,8 +178,6 @@ def install_cell_tasks_routes(app, ctx) -> None:
         execution_mode = spec.get("execution_mode")
         if execution_mode is not None and execution_mode not in ("guarded_pick", "act_policy"):
             raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
-        if execution_mode == "act_policy" and (cell_id != "cell_s" or arm_id != "arm_s"):
-            raise HTTPException(422, detail={"code": "ACT_POLICY_UNSUPPORTED_ARM"})
         max_chunks = spec.get("max_chunks")
         if max_chunks is not None and (execution_mode != "act_policy" or type(max_chunks) is not int or not 1 <= max_chunks <= 6):
             raise HTTPException(422, detail={"code": "INVALID_MAX_CHUNKS"})
@@ -190,8 +188,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                       or directive.get("arm_id") != arm_id):
             raise HTTPException(422, detail={"code": "INVALID_CELL_DIRECTIVE"})
         raw_disp = spec.get("displaced_to")
-        if execution_mode == "act_policy" and raw_disp is not None:
-            raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
+        if execution_mode == "act_policy" and (refusal := act_route_refusal(cell_id, arm_id, targets["src_site"], targets["dst_site"], tier, raw_disp)):
+            raise HTTPException(422, detail={"code": refusal})
         resolved_robot_id = _resolve_cell_robot_id(cell_id, spec)
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)

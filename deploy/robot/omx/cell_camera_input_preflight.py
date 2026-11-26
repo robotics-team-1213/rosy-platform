@@ -3,19 +3,52 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 import time
 
 from cell_pipeline_io import FifoCell
 
-_ARMS = ("arm_a", "arm_b")
-_VIEWER = "http://127.0.0.1:8767"
+_ARMS = ("arm_a", "arm_b", "arm_ab")
+VIEWER = "http://127.0.0.1:8767"
+
+
+def policy_roles(arm):
+    if arm not in _ARMS:
+        raise ValueError("unknown OMX policy arm")
+    wrists = ("arm_a_wrist", "arm_b_wrist") if arm == "arm_ab" else (f"{arm}_wrist",)
+    return ("top", "side", *wrists)
+
+
+def viewer_cell(roles):
+    return FifoCell(None, {role: f"{VIEWER}/frame/{role}.jpg" for role in roles})
+
+
+def binding_status(roles, registry, producers, facts, topics, *, realpath=os.path.realpath):
+    from omx_cameras import model_mismatch
+
+    cameras = {row["role"]: row for row in registry["cameras"] if row.get("enabled") is not False}
+    devices = {role: realpath(row["device"]) for role, row in cameras.items()}
+    status = {}
+    for role in roles:
+        if role not in cameras:
+            status[role] = "unregistered"
+            continue
+        row, device = cameras[role], devices[role]
+        env = producers.get(f"camera-{role}", {})
+        if device not in facts:
+            status[role] = "device_missing"
+        elif (model_mismatch(row, facts[device]) or list(devices.values()).count(device) > 1
+              or realpath(env.get("ROSY_CAMERA_DEVICE", "")) != device
+              or env.get("ROSY_CAMERA_TOPIC") != row["topic"] or topics.get(role) != row["topic"]):
+            status[role] = "binding_mismatch"
+        else:
+            status[role] = "matched"
+    return status
 
 
 def collect(arm, frame_receipt, *, sleep=time.sleep):
     """Require two advancing receipts from each role. This does not measure exposure sync."""
-    if arm not in _ARMS:
-        raise ValueError("unknown OMX policy arm")
-    roles = ("top", "side", f"{arm}_wrist")
+    roles = policy_roles(arm)
 
     def read(role, previous=None):
         try:
@@ -52,8 +85,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm", required=True, choices=_ARMS)
     arm = parser.parse_args(argv).arm
-    roles = ("top", "side", f"{arm}_wrist")
-    cell = FifoCell(None, {role: f"{_VIEWER}/frame/{role}.jpg" for role in roles})
+    cell = viewer_cell(policy_roles(arm))
     result = collect(arm, cell.frame_receipt)
     print(json.dumps(result, indent=2, allow_nan=False))
     return 0 if result["camera_source_ready"] else 1

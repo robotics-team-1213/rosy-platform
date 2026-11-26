@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Calibration — 모눈종이 · 실측 요청</title>
+  <title>Rosy Calibration — 모눈종이 · 보정 요청</title>
   <link rel="icon" type="image/svg+xml" href="/common/brand/platform.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -22,11 +22,11 @@
     <ui-topbar role="banner">
       <ui-brand href="/" aria-label="Rosy Calibration 홈">
         <b>Calibration</b>
-        <small>모눈종이 · 프로파일 · 실측 요청</small>
+        <small>모눈종이 · 프로파일 · 보정 요청</small>
       </ui-brand>
       <nav class="cal-tabs" role="tablist" aria-label="화면 전환">
         <ui-button id="tabGrid" kind="segment" type="button" role="tab" aria-selected="true" class="active">모눈종이 · 프로파일</ui-button>
-        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">실측 요청</ui-button>
+        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">보정 요청</ui-button>
       </nav>
       <span data-spacer></span>
       <ui-button id="btnTheme" kind="quiet" type="button">테마 전환</ui-button>
@@ -120,6 +120,7 @@
             <div class="cal-canvas-wrap">
               <canvas id="topCanvas" width="640" height="480" aria-label="탑 카메라 모눈종이"></canvas>
             </div>
+            <p id="topEvidence" class="cal-card-sub">-</p>
             <footer class="cal-legend">
               <span class="cal-leg-item"><i class="cal-sw cal-sw-grid"></i>mm 모눈(20/50mm)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>LOO 오차 5 mm 이하</span>
@@ -127,6 +128,7 @@
               <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>LOO 15 mm 초과 · × 제외된 관측점</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-plan"></i>계획점 · 관측 연결 미확인</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-bias"></i>Bias = map−FK (적용 시 −bias)</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-delayed"></i>점선·흐림 · 옛 지도 기준 bias (지도 지연)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-site"></i>Start/Place (Z 시차 반영)</span>
             </footer>
             <details id="fixtureDetails" hidden><summary>실측 외곽 · 픽셀과 팔 기준 좌표</summary><pre id="fixtureValues"></pre></details>
@@ -214,6 +216,7 @@
                   <option value="surface">면 높이 측정</option>
                 </select>
                 <small id="jobRemapNote" hidden>집게를 관측 높이에서 촬영해 XY 맵을 맞춥니다. 이 작업만으로 면 높이에서의 정밀 XY 측정이 완료되지는 않습니다.</small>
+                <label id="jobRemeasureLabel" class="ui-check" hidden><input type="checkbox" class="ui-field" id="jobRemeasure"> 점검에서 필요 없다고 해도 지도를 다시 잽니다(성공하면 지정 좌표 편차 보정값도 다시 재야 합니다)</label>
                 <label id="jobSurfaceLabel" hidden>측정할 면
                   <select id="jobSurface" class="ui-field"></select>
                 </label>
@@ -245,7 +248,7 @@
       <section id="panelRequests" aria-labelledby="tabRequests" hidden>
         <div class="ui-app-body" data-seats="none">
           <main class="ui-app-main" id="request-main" tabindex="-1">
-            <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
+            <div class="ui-pathbar"><h1 class="ui-page-heading">보정 요청</h1></div>
             <div class="ui-stage-grid" data-layout="watch">
               <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
                 <h2 id="detail-heading" class="sr-only">요청 내용</h2>

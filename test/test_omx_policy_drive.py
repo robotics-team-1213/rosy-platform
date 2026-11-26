@@ -13,6 +13,14 @@ import cell_policy_drive as drive  # noqa: E402
 NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 
 
+@pytest.fixture(autouse=True)
+def _checkpoint_state_range(monkeypatch):
+    """These CLI tests use fake checkpoint folders; the state gate itself is tested in test_omx_policy_start_gate."""
+    import cell_policy_start_gate as gate
+
+    monkeypatch.setattr(gate, "read_state_range", lambda _root: {"min": np.full(6, -1e3), "max": np.full(6, 1e3)})
+
+
 def cal(wrist_roll_homing=0):
     return {n: {"id": i, "drive_mode": 0, "homing_offset": wrist_roll_homing if n == "wrist_roll" else 0,
                 "range_min": 0, "range_max": 4095} for i, n in enumerate(NAMES)}
@@ -818,22 +826,19 @@ def test_paced_chunks_flag_uses_guarded_loop_and_rejects_incompatible_modes(tmp_
     assert seen == [True]
     assert drive.main([*base, "--paced-chunks", "--n-action", "8"]) == 0
     with pytest.raises(SystemExit):
-        drive.main([*base, "--paced-chunks", "--mode", "hybrid", "--goal-site", "tray"])
-    with pytest.raises(SystemExit):
         drive.main([*base, "--paced-chunks", "--mode", "taught", "--goal-site", "tray"])
     monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: SimPolicy([[[0] * 6] * 16]))
     assert drive.main([*base, "--paced-chunks", "--n-action", "4"]) == 0
 
-    # Direct run_episode with paced_chunks=True bypasses run_timed and admits n_action; handoff still rejected.
+    # Direct run_episode with paced_chunks=True bypasses run_timed and admits n_action and a hybrid handoff (dry run never carries).
     monkeypatch.setattr(drive, "run_episode", orig_run_episode)
     rows = []
     ep = drive.run_episode(cell, PacedPolicy(), lib_path, tmp_path, offset=[0] * 6,
                            max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True, n_action=8)
     assert ep == {"result": "dry_run", "chunks": 1} and rows[0]["envelope"] == {"ok": True}
 
-    with pytest.raises(ValueError, match="paced_chunks"):
-        drive.run_episode(cell, PacedPolicy(), lib_path, tmp_path, offset=[0] * 6,
-                          max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True, handoff=object())
+    assert drive.run_episode(cell, PacedPolicy(), lib_path, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=True,
+                             log=rows.append, paced_chunks=True, handoff=object()) == {"result": "dry_run", "chunks": 1}
 
     # Checked failure recovery: chunk-0 authorize/load failures never send bare park; chunk-1 authorize failure parks with chunk-0 prefix.
     cell_auth = Cell()
@@ -1481,6 +1486,8 @@ def test_live_local_cpu_act_sets_nice_and_thread_env(tmp_path, monkeypatch):
     monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: Cell())
     monkeypatch.setattr(cell_policy_handoff, "Authorization", lambda _cfg: None)
     monkeypatch.setattr(drive, "run_episode", lambda *a, **kw: {"result": "chunks_done", "parked": True, "chunks": 1})
+    import cell_policy_preflight
+    monkeypatch.setattr(cell_policy_preflight, "preflight", lambda *a, **kw: None)  # this test is about nice/threads
 
     common = ["--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
               "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--goal-slot", "4",

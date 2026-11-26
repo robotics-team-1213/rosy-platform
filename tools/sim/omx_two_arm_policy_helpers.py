@@ -86,6 +86,22 @@ class Recorder(teaching.Teacher):
         self.isolated, self.failed, self.history, self.track, self.delta, self.track_buf = False, [], False, 0, None, None
         self.concurrent, self.recording, self.blocks, self.skill, self.prompt, self.no_goal = concurrent, False, {}, skill, PROMPT, no_goal
         self.goal_mode = goal_mode
+        self._settling = {}
+
+    def _settling_gen(self, arm, gen):
+        self._settling[arm] = self._settling.get(arm, 0) + 1
+        try:
+            return (yield from gen)
+        finally:
+            self._settling[arm] -= 1
+            if self._settling[arm] <= 0:
+                self._settling.pop(arm, None)
+
+    def settle_g(self, data, arm, *args, **kwargs):
+        return (yield from self._settling_gen(arm, super().settle_g(data, arm, *args, **kwargs)))
+
+    def belt_in_g(self, data, step):
+        return (yield from self._settling_gen(step["arm"], super().belt_in_g(data, step)))
 
     def frame(self, data, targets, label, ctxs=None):
         goal = self.goal
@@ -97,7 +113,9 @@ class Recorder(teaching.Teacher):
                     if c.step["id"] not in self.blocks:
                         self.blocks[c.step["id"]] = goal_block(self.layout, c.step, c.here, self.goal_mode)
                 goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []}, goal_size(self.layout, self.goal_mode))
-        if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
+        active_settle = getattr(self, "_settling", None) or {}
+        settling = (bool(ctxs) and all(c.arm in active_settle for c in ctxs)) if self.recording else bool(active_settle)
+        if not settling and goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
             if self.count == 0:  # a new episode: its tracking errors start padded with its first frame's
                 self.track_buf = deque(maxlen=self.track)

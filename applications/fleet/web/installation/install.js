@@ -1,4 +1,4 @@
-// D-410 — 설치·보정 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
+// D-410 — 설치 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 import { evidenceAgeText } from "/common/core_ui_logic.js";

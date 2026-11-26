@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+import re
 import shutil
 import struct
 import sys
@@ -139,21 +140,37 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     live_map = {
                         "version": 8, "sha256": "cd" * 32, "activated_at": frame["observed_at_ms"] / 1000,
                         "observed_at_ms": frame["observed_at_ms"],
-                        "map": {"map_id": "track", "places": [{"id": "S3", "x": 0.745, "y": -0.207},
-                                                            {"id": "S4", "x": 0.9, "y": -0.2}], "edges": []},
+                        "map": {"map_id": "track", "view_turn_deg": 90,
+                                "places": [{"id": "S3", "name": "적재 3", "x": 0.745, "y": -0.207},
+                                           {"id": "S4", "x": 0.9, "y": -0.2}], "edges": []},
                     }
                     serve._atomic_write_json(cache, live_map)
                     page.locator("#tab-map").click()
                     page.clock.install()
                     page.locator("#map-mode-active").click()
                     expect(page.locator("#map-active-canvas")).to_be_visible()
-                    expect(page.locator("#map-readout")).to_contain_text("버전8")
                     expect(page.locator("#map-readout")).to_contain_text("위치2")
-                    received = page.locator('#map-readout dt:text-is("수신 시각 (UTC)") + dd')
-                    expect(received).to_be_visible()
+                    received = page.locator("#map-evidence")
+                    expect(received).to_have_text(re.compile(r"^지도 v8 · 수신 \d\d:\d\d:\d\d · Fleet 활성 지도$"))
+                    expect(received).to_have_attribute("title", re.compile(r"^수신 \S+Z \(UTC\) · 활성 \S+Z \(UTC\)$"))
                     received_v8 = received.inner_text()
+                    # D-513 7: the map's view turn reaches World's N mark too; a scale bar is drawn.
+                    datum = page.locator("#map-active-canvas + svg.world-map-datum")
+                    expect(datum).to_be_visible()
+                    expect(datum.locator(".world-map-datum-north")).to_have_attribute("transform", "rotate(90)")
+                    expect(datum.locator("text").last).to_have_text(re.compile(r"^0?\.?\d+ m$"))
                     place = page.get_by_label("지도 위치")
-                    expect(place.locator("option")).to_have_text(["전체 위치", "S3", "S4"])
+                    expect(place.locator("option")).to_have_text(["전체 위치", "적재 3 (S3)", "S4"])
+                    canvas = page.locator("#map-active-canvas")
+                    canvas.press("ArrowRight")
+                    expect(place).to_have_value("S3")
+                    expect(canvas).to_have_attribute("aria-label", "Fleet 활성 지도 · 적재 3 (S3)")
+                    canvas.press("ArrowLeft")
+                    expect(place).to_have_value("")
+                    canvas.press("ArrowLeft")
+                    expect(place).to_have_value("S4")
+                    canvas.press("Home")
+                    expect(place).to_have_value("")
                     place.select_option("S4")
                     expect(page.locator("#map-active-canvas")).to_have_attribute("aria-label", "Fleet 활성 지도 · S4")
                     serve._atomic_write_json(cache, {**live_map, "observed_at_ms": live_map["observed_at_ms"] + 1000})
@@ -166,9 +183,9 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                         "map": {**live_map["map"], "places": live_map["map"]["places"][:1]},
                     })
                     page.clock.fast_forward(10_100)
-                    expect(page.locator("#map-readout")).to_contain_text("버전9")
+                    expect(received).to_contain_text("지도 v9 · 수신 ")
                     expect(page.locator("#map-readout")).to_contain_text("위치1")
-                    expect(place.locator("option")).to_have_text(["전체 위치", "S3"])
+                    expect(place.locator("option")).to_have_text(["전체 위치", "적재 3 (S3)"])
                     expect(place).to_have_value("")
                     page.evaluate("""() => {
                       Object.defineProperty(document, "hidden", { value: true, configurable: true });
@@ -191,7 +208,8 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     expect(page.locator("#map-status")).to_have_text("현장 활성 지도 미수신")
                     page.locator("#map-mode-vector").click()
                     expect(page.locator("#map-canvas")).to_be_visible()
-                    expect(page.locator("#map-readout")).to_contain_text("버전7")
+                    expect(received).to_have_text(re.compile(r"^지도 v7 · 활성 .+ · Fleet 활성 지도 보관본$"))
+                    expect(page.locator("#map-canvas + svg.world-map-datum")).to_be_visible()
 
                     serve._atomic_write_json(cache, {
                         **live_map, "observed_at_ms": time.time_ns() // 1_000_000 - 38_000,
@@ -217,6 +235,58 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                 finally:
                     browser.close()
         finally:
+            server.stop_event.set()
+            server.shutdown()
+            thread.join()
+
+
+def test_isaac_freshness_follows_server_age_not_browser_clock(tmp_path: Path) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    _write_bundle(tmp_path)
+    live = tmp_path / "data/isaac-live.json"
+    sample = {
+        "schema": "rosy.world.isaac-state.v1", "run_id": "run-1", "scene": "conformance", "layout_sha256": None,
+        "sim_time_s": 1.0, "reset_count": 0, "state": "running",
+        "joints": [{"name": "joint1", "position_rad": 0.1}],
+        "objects": [{"id": "box", "frame_id": "world", "position_m": [0, 0, 0], "orientation_xyzw": [0, 0, 0, 1]}],
+    }
+    writing = threading.Event()
+    writing.set()
+
+    def keep_fresh() -> None:
+        while writing.is_set():
+            serve._atomic_write_json(live, {**sample, "observed_at_ms": time.time_ns() // 1_000_000})
+            time.sleep(0.2)
+
+    writer = threading.Thread(target=keep_fresh, daemon=True)
+    writer.start()
+    with serve.make_server(tmp_path, "127.0.0.1", free_port()) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with playwright.sync_playwright() as pw:
+                browser = pw.chromium.launch(**launch_options(), args=["--enable-unsafe-swiftshader"])
+                try:
+                    page = browser.new_page()
+                    # A browser clock a day ahead used to mark every SIM sample as expired.
+                    page.clock.install(time=int((time.time() + 86_400) * 1000))
+                    page.goto(f"http://127.0.0.1:{server.server_port}/")
+                    page.locator("#tab-cell").click()
+                    page.locator("#isaac-status-toggle").click()
+                    health = page.locator("#isaac-health")
+                    playwright.expect(health).to_have_text("Isaac · 최신")
+                    writing.clear()
+                    writer.join()
+                    serve._atomic_write_json(live, {**sample, "observed_at_ms": time.time_ns() // 1_000_000 - 10_000})
+                    playwright.expect(health).to_have_text("Isaac · 지연")
+                    playwright.expect(page.locator("#isaac-status")).to_have_text(
+                        re.compile(r"^지연 · 1\d초 전 · 최근 SIM 관측이 없습니다\.$"))
+                    live.unlink()
+                    playwright.expect(health).to_have_text("Isaac · 정보 없음")
+                finally:
+                    browser.close()
+        finally:
+            writing.clear()
             server.stop_event.set()
             server.shutdown()
             thread.join()

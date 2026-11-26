@@ -1,6 +1,6 @@
 # ROSY Calibration
 
-셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 실측 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
+셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 보정 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
 
 ## 경계
 
@@ -22,6 +22,24 @@
 
 - 사람이 정하는 것: 인쇄물 부착(D-933), 바닥을 낮출 사각형의 승인(`limits.low_zones`), 동작마다 스위치 확인.
 - 숫자를 손으로 고치지 않는다. 다시 재야 하면 그 단계를 다시 돌린다.
+
+### A·B 카메라 준비와 구도 맞추기
+
+녹화 벤치의 **포즈·기준 → 카메라 준비 점검 · A·B**에서 등록 장치·영상 연결, 새 프레임, 조명을 확인한다. 구도를 확인하고 **확인한 현재 구도를 기준으로 저장**을 누르면 측면 JPEG와 프레임 출처가 벤치 준비 폴더의 `camera-side-reference.json`에 함께 저장된다. 조명 기준 갱신은 이 파일을 변경하지 않는다.
+
+자동 구도 비교는 측면에 고정한 `DICT_4X4_50` 마커 두 개를 사용한다. 벤치 준비 폴더의 `camera-side-markers.json`에는 두 마커의 정수 ID를 `ids`에, 현장 검증으로 정한 최대 모서리 이동 허용치를 `max_shift_px`에 기록한다. 설정이나 마커 검출이 없으면 자동 판정은 보류한다. 기준 사진과 현재 영상을 비교해 선박과 임시대가 보이도록 맞춘다. 마커가 둘 다 보이면 현재 영상의 노란 점을 파란 목표점에 맞춘다.
+
+이 화면은 준비 점검용이다. 위치 보정의 수용 기준과 ACT 실행 권한은 각각 기존 절차를 따른다.
+
+### 카메라 배치 실시간 비교
+
+관제 노트북에서 `python tools/remote/camera_alignment_view.py <profiles.json> --config <agent-bridge.json>`을 실행하고 출력된 로컬 주소를 연다. OpenCV와 NumPy가 필요하다. 프로필마다 카메라 역할, 해당 설치의 기준 JPEG, 고정물의 목표 픽셀 좌표를 등록한다. 기준 파일 경로는 프로필 파일의 위치를 기준으로 해석하며 좌표의 원점은 기준 영상의 왼쪽 위다.
+
+```json
+[{"name":"Cell S 상부","view":"arm_s_top","reference":"reference-top.jpg","points":[[282,200],[443,204]]}]
+```
+
+현재 프레임의 특징으로 기준점을 투영하고 각 점 주변의 무늬를 다시 대조한다. 십자는 목표, 원은 추적된 위치, 점선 길이는 이동량이다. 새 설치에는 해당 설치에서 촬영한 기준과 움직이지 않는 고정점을 사용한다. 보정 수용은 위 보정 순서의 실측 절차로 판정한다.
 
 ### 보정 후 실물 검증
 
@@ -65,7 +83,7 @@ python3 deploy/robot/omx/cell_checkerboard.py intrinsics \
 - 세션 잠금은 팔마다다(`joint_tune.session_lock(arm)`, `record_session --arm`).
 - 움직이기 전에 경로 점검(`cell_corridor`)과 통로 예약(`cell_space`)을 거친다.
 
-## 실측 요청
+## 보정 요청
 
 사람만 확인할 수 있는 것(줄자 거리, 감독 시험으로 보는 자세)은 엔진 `deploy/robot/omx/cell_requests.py`가 요청으로 연다([D-951 덧붙임 2026-11-09](../../docs/adr/D-951-rosy-calibration-application.md)). 요청은 후보마다 예측값을 적고, 사람의 답은 어느 후보를 지지하는지만 정한다. 값을 직접 바꾸지 않는다.
 
@@ -81,7 +99,7 @@ python3 deploy/robot/omx/cell_requests.py answer <id> --value <mm> --by <이름>
 
 ## 화면
 
-실측 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
+보정 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
 
 ```
 python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/cell-requests --account-config <receiver.json> --port 8776
@@ -89,6 +107,7 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 
 - `--store` 기본은 `ROSY_CELL_REQUESTS`. `contracts/foundation`은 체크아웃에서 스스로 찾는다.
 - `--profiles <json>`(또는 `ROSY_CALIBRATION_PROFILES`)을 주면 `모눈종이 · 프로파일` 탭이 열려 각 로봇(`arm_a`, `arm_b`, `arm_s` 등)의 호모그래피·LOO 잔차·`pivot-near` bias·시차 투영(`z_view`/`surface_z`)·실시간 TCP/hold 상태를 읽기 전용으로 점검할 수 있다(`GET /api/calibration/v1/profiles`, `.../profiles/<id>/frame/reference|live`). Account 설정이 있으면 이 경로도 로그인 세션이 있어야 열린다.
+- 신선도는 서버가 정한다. 프로파일의 `robot_status.live`에는 `age_ms`(표본 나이, 모르면 null)와 `fresh_for_ms`(응답 시점부터 남은 신선 시간, 낡았거나 미래 표본이면 0)가 있다. 화면은 요청을 보낸 때부터 `performance.now()`로 이 예산을 세고, 브라우저 벽시계로 `fresh_until`을 비교하지 않는다. 프레임 응답의 `X-Rosy-Frame-Observed-At`(유닉스 초)은 카메라가 그 프레임을 본 시각이며, 지도 아래 근거 줄 `지도 SHA 앞 8자 · 관측 HH:MM:SS(KST) · 출처`에 쓰인다(UTC 원문은 title). 옛 지도 기준 bias(`stale_map`)는 상태색이 아니라 점선·흐림과 `지도 지연` 문구로 보인다.
 - 관제 PC의 시스템 python3에는 Account 토큰 검증에 쓰는 `joserfc`가 없다(2026-11-13 확인, 로그인 callback에서 서버가 죽었다). 유닛은 전용 venv로 돈다: `python3 -m venv --system-site-packages ~/.local/share/rosy/calibration/venv && ~/.local/share/rosy/calibration/venv/bin/pip install joserfc==1.7.5 cryptography==50.0.0` (pydantic은 시스템 것, `python3-venv` 필요).
 - 읽기 전용 확인: `--account-config` 없이 띄우고 `ssh -L 8776:127.0.0.1:8776 <관제 PC>`로 연다. 이때는 로그인이 없어 답을 받지 않는다.
 - Account 설정이 있으면 목록·상세·그림도 그 site의 로그인 세션이 있어야 보이고, 답은 site 권한 `calibration.operate`가 있어야 한다. 답의 누가는 세션의 이름이다.

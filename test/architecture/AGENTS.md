@@ -1,56 +1,34 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-11-01 -->
 
 # architecture
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
-## Purpose
-
-Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation. Known-list ratchets (lists that only shrink) use `test/ratchet_lists.py`: a new entry fails, a stale one warns.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `test_capability_owners.py` | Every `platform_parts.yaml` root has one `capability:`; `.github/CODEOWNERS` routes each owned root to that capability's logins and names no root without them; every root (plus `app_subtrees`) names one `app:`, so each tracked path maps to exactly one app through `affected_repo.app_of` |
-| `test_app_imports.py` | D-1036 addendum 3: an app imports only itself and `core`, `core` no app (static imports, tests included, app `repo` skipped); existing pairs frozen in `known_app_imports.txt` (shrink only; `ALLOWED_EDGES` consumer→library directions are not listed; `--write` regenerates); Ollama direct-HTTP callers ratcheted at 14 |
-| `test_wheel_structure.py` | Wheels (`pyproject.toml` without `package.xml`) carry `COLCON_IGNORE`, `AGENTS.md` and their own tests; `KNOWN_WITHOUT_OWN_TESTS` is checked both ways; every `concern: control` wheel is a `harness.yaml` module |
-| `test_module_structure.py` | D-168/D-427 package standard: declared roots, owner guides, harness modules and functional tests; package dependencies and import direction; D-766 absolute size limits (600/800/10,000) against `size_ratchet.txt` and `size_units.txt`; the counting rule is `tools/harness/size_limits.py`. Every tracked code file under a colcon or ops root must be measured (`SIZE_UNMEASURED` lists exceptions with reasons); fleet holders equal `fleet/_source_layout.py` `SOURCE_ROOTS`. Static holder mapping preserves installed package identities |
-| `size_ratchet.txt` | D-766 4: files and units already over the limit, `<count> <key>`, frozen at the measured count; rows only go down. `safety <count> <key> <YYYY-MM-DD>` rows are the D-766 8 exception. Data: not a FULL trigger |
-| `test_size_tiers.py` | D-949: the ratchet as a refactoring queue. No product row of 1,000 lines or more (`TIER1_IN_FLIGHT` only for a split committed on another branch), and the 800-999 product, over-1,500 test and over-10,000 unit rows equal `TIER2_QUEUE`, `TEST_QUEUE`, `UNIT_QUEUE`; every set only shrinks |
-| `size_units.txt` | D-766: size units, `<path>` or `<path> small` (grandfathered below the 1,000-line floor). Data: not a FULL trigger |
-| `known_duplicates.txt` | D-940 registry of intentional cross-part duplicate groups, one `<path> <path>\|<name>  <갈래 ①-④>  <reason>` row per group (space-separated paths); rows only shrink, and the reason names the bucket (① consume the contract original, ② consolidate in the owner, ③ guarded intentional duplication, ④ same name, different invariant) |
-| `test_fleet_route_guards.py` | 실제 Fleet app의 모든 `/api/fleet` 경로가 의존 트리에 역할 guard를 가진다. 핸들러 안에서 자격을 확인하는 경로는 이유와 함께 `INLINE_AUTH`·`PUBLIC_READS`에 적고 양방향으로 검사한다 |
-| `test_rest_model_mirror.py` | D-940 follow-up: Fleet's hand-declared copies of CORE v1 request bodies stay a declared subset (`fleet ⊆ core`, `KNOWN_DRIFT` checked both ways); field names only — constraints and enums stay with the API reference |
-| `test_target_layout.py` | D-310 source layout: every package has a declared target path, XML package names are unique, moved packages keep their name, product containers hold only declared packages, retired sketch names (`rosy_pinky_pro`, `rosy_decision`, ...) must not appear |
-| `test_folder_package_names.py` | D-339/D-231: a source folder whose name differs from its installed package name must be in `FOLDER_TO_PACKAGE`; no stale entries |
-| `test_folder_layout.py` | D-186 script/document ownership, declared deployment and data layout, no retired paths in current developer docs. Module-local helpers stay with their actual install/consumer owner; workspace tools compose owners |
-| `test_3d_asset_boundary.py` | 2026-11-19 3D asset boundary: meshes only under the five runtime roots, no CAD sources (`.3mf .scad .step ...`), every mesh has a `SOURCE.json` with `"source"`, no `manifold3d`/`cadquery` imports. Rule text: `docs/reference/platform-folder-responsibilities.md` 「3D 자산 경계」 |
-| `test_document_placement.py` | D-226 publication first: sample secret/internal paths (`private/`, `.env`, keys, images, bags, `data/teleop`, `*.sqlite3`, worktrees) must be git-ignored; templates, public keys and public material must stay trackable; no tracked file under an ignore rule; repo root carries only the listed files; dated evidence stays out of modules; module roots carry only `README AGENTS CLAUDE progress logs index`; `progress.md` only in `harness.yaml` modules; every nested `AGENTS.md` names its parent in its first lines. Needs `git` on PATH |
-| `test_layer_boundaries.py` | D-229 by AST import scan: perception imports neither decision, vision nor ROS; decision does not import perception; line_follow reads decisions, not pixels; geometry does not import perception |
-| `test_fleet_ledger_writers.py` | D-750: the modules that write Fleet's core ledger tables (`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`) by literal SQL equal `KNOWN_WRITERS`; a new writer or a dropped one fails, so a new writer needs a reviewed edit of the list |
-| `test_duplicate_definitions.py` | D-940: identical top-level definitions across parts, checked both ways against `known_duplicates.txt` groups (`python test/architecture/test_duplicate_definitions.py` prints them). One-sided edits to a registered copy turn its row stale |
-| `test_app_identity.py` | D-377 "Rosy + one English word": each `surfaces.yaml` app row must agree on display names, folder name, `rosy_<word>` package, `<word>.svg` icon and Android ids (`io.github.livsbittt.rosy.<word>`). `PENDING` lists rows not yet renamed; a pending row must still break the rule |
-| `test_app_roles.py` | D-370 one role per app: Cam app has no CORE API, Fleet user API, cmd_vel or estop; Vision has no robot command and writes only sightings to Fleet; Fleet vision routes only issue leases; Pilot never calls Fleet; each operation has one owning surface (e-stop and ADR-marked transitional entries excepted) |
+Repo-structure tests: where folders, packages, documents and imports may live. They read the tree, `package.xml`, `harness.yaml`, `platform_parts.yaml` and `surfaces.yaml`; no ROS. Each test's docstring states its rule.
+Exception tables use set equality (P5): a new violation fails and so does a stale entry. Update the table in the commit that creates or removes the violation.
+Shrink-only lists use `test/ratchet_lists.py` (new entry fails, stale warns).
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Fix the layout, not the test. If a move is intended, update the target/exception table in the same commit.
-- New package: add `AGENTS.md`, a `harness.yaml` entry, `test/`, declare cross-package use in `package.xml`, and add a `FOLDER_TO_PACKAGE` row if folder and package names differ.
-- Size (D-766, revision 2). A file over 600 lines (`.js`/`.mjs`/`.ts` too; `.html`/`.css` 800 with at most 600 lines of inline `<script>`; a test file 1,500) or a unit over 10,000 is split in the same commit as the growth or an earlier one; there is no verdict and no allowance. Each commit passes on its own: `python tools/harness/size_range.py main HEAD` (git only, no tests); the pre-push hook and CI run it beside the Safety-Review check. `tools/land.py` does not.
-  - **Lower a ratchet row.** When a change shrinks a frozen file or unit, set its `size_ratchet.txt` row to the new count in the same change; delete the row when it is back under the limit. `python test/architecture/test_module_structure.py` rewrites the measured rows (comments and `safety` rows stay). The script never writes a row above its value and keeps the row of a `safety` key. The guard refuses a raised row or a new row against the base: the newest of `ROSY_SIZE_BASE` and the merge-bases with `main` and `origin/main` whose tree has `size_ratchet.txt`, else the nearest first-parent ancestor that has it. Without git history the test fails, it never skips.
-  - **Move a frozen file.** A pure move of a frozen file (e.g. `proposal_store.py` into a new holder) renames its row: delete the old row and add the new key in the same change, with a count not above the old row. Any other new row is refused.
-  - **Register a unit.** Add the path to `size_units.txt`. It must be a Python subpackage or a declared holder (Fleet `SERVER_HOLDERS`, control `_source_layout.py` `PACKAGE_DIRS`/`FLAT_ROOTS`/`CONTROL_ROOTS`, or a CMake `install(DIRECTORY …)` folder), have a module docstring and its package `AGENTS.md` row, and be 1,000 lines or more when its parent was 2,000 or more. No new `small` marks.
-  - **Safety exception.** A D-430 safety fix inside a frozen file or unit may go up to +30 over its row: add `safety <count> <key> <expiry>` (expiry at most 7 days after the commit) in the same commit, which carries a `Safety-Review:` trailer. Split it and delete the row before the expiry; the expiry is checked against the run date, so after it every run is red. A safety row already in the base is never edited (no renewal).
-  - **Merging main.** Before D-766 lands, main grows under the old rule; merge it with `git merge --no-commit main`, set the rows to the measured counts, then commit. A merge with a parent that has no `size_ratchet.txt` is the transition: it has no base (like the landing commit) and is the base for the commits after it, in the guard and in `size_range.py`.
-  - **Pure moves.** `python tools/harness/split_check.py <base> <head>` prints `AST identical, only imports/paths changed` (exit 0) or what differs: a definition, its order, a non-path string constant, an import to a module outside the moved set, or any changed non-`.py` file. A pure move gets a boundary review only (D-766 3). Compression (joining lines, dropping docstrings) is not a split.
-- Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage. Packages are found under manifest `colcon_roots`: `learning`, `operations`, `middleware`, `contracts`, `integrations`, `shared`.
+- Fix the layout, not the test. Exception tables are `key -> reason`; the reason is mandatory.
+- New package: `AGENTS.md`, a `harness.yaml` entry, `test/`, cross-package use declared in `package.xml`, and a `FOLDER_TO_PACKAGE` row if folder and package names differ.
+- Size (D-766 rev 2): a file over 600 lines (`.html`/`.css` 800, a test file 1,500) or a unit over 10,000 is split in the same commit as the growth or earlier; no verdict, no allowance. Each commit passes `python tools/harness/size_range.py main HEAD`; `tools/land.py` does not run it.
+- Ratchet rows (`size_ratchet.txt`, `size_units.txt`) only go down: set a shrunk file's row to the new count in the same change; delete it under the limit (`python test/architecture/test_module_structure.py` rewrites measured rows).
+- A raised or new row against the base is refused; without git history the test fails, never skips. A pure move renames the row with a count not above the old one.
+- New units need a docstring and their package `AGENTS.md` row; no new `small` marks.
+- Safety exception: a D-430 safety fix in a frozen file may go up to +30 over its row via `safety <count> <key> <expiry>` (expiry at most 7 days out) in a commit with a `Safety-Review:` trailer. Split and delete the row before expiry; after it every run is red.
+- A safety row already in the base is never renewed. Safety-Review applies to every such edit.
+- Merging `main` across D-766: `git merge --no-commit main`, set rows to measured counts, then commit.
+- `python tools/harness/split_check.py <base> <head>` proves a pure move (boundary review only, D-766 3); compression is not a split.
+- Registries only shrink: `known_app_imports.txt` (D-1036 add. 3; `ALLOWED_EDGES` consumer to library), `known_duplicates.txt` (D-940, reason names the bucket), `size_tiers` queues (D-949), `KNOWN_WRITERS` for Fleet ledger tables (D-750: a new writer needs a reviewed list edit).
+- Boundaries: perception does not import decision, vision or ROS (D-229); an app imports only itself and `core` (D-1036); Cam has no CORE API, Vision issues no robot command, Pilot never calls Fleet (D-370).
+- Meshes only under the five runtime roots with `SOURCE.json`, no CAD sources (2026-11-19); sample secret paths stay git-ignored (D-226).
+- A commit adding a ratchet (`ratchet_lists` user or `*only_shrink` test) outside this folder adds it to `GUARD_SET` in `tools/harness/affected_tests.py` in the same commit (`test/test_harness_contracts.py`).
+- `ROOT = Path(__file__).resolve().parents[2]`; scans skip `build install log .worktrees .git node_modules __pycache__`.
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
-- A commit that adds a ratchet (a `ratchet_lists` user or an `*only_shrink` test) outside this folder adds it to `tools/harness/affected_tests.py` `GUARD_SET` in the same commit; every file here is already in it. `test/test_harness_contracts.py` checks this.
+- Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage.
 
 ### Testing Requirements
 
@@ -58,21 +36,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/architecture-check" -- test/architecture -q
 ```
 
-`test_module_structure.py` is also part of the D-346 pre-push fast gate (`tools/hooks/`).
+`test_module_structure.py` is also in the D-346 pre-push fast gate.
 
-### Common Patterns
 
-- `ROOT = Path(__file__).resolve().parents[2]`; scans skip `build install log .worktrees .git node_modules __pycache__`.
-- Exception tables are dicts of `key -> reason`; the reason is mandatory.
 
-## Dependencies
-
-### Internal
-
-- `tools/harness/harness.yaml`, `platform_parts.yaml`, `shared/web/surfaces.yaml`, package manifests and owner guides under the current declared roots
-
-### External
-
-- pytest, PyYAML, git
-
-<!-- MANUAL: -->

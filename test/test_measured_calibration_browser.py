@@ -101,7 +101,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         approve = page.get_by_role('region', name='교정 승인', exact=True)
         preview = page.get_by_role('region', name='Vision 미리보기', exact=True)
         tracking = page.get_by_role('region', name='추적 보정', exact=True)
-        expect(approve.get_by_role('button', name='실측 교정 승인 저장')).to_be_visible()
+        expect(approve.get_by_role('button', name='보정 승인 저장')).to_be_visible()
         expect(preview.get_by_role('button', name='교정 상태 확인')).to_be_visible()
         expect(preview.get_by_role('status')).to_be_visible()
         expect(tracking.get_by_role('button', name='승인본을 추적 보정으로 저장')).to_be_visible()

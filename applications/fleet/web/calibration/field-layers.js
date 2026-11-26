@@ -115,11 +115,6 @@ function solve(a, b) {
   return m.map((row, i) => row[n] / row[i]);
 }
 
-export function applyHomography(h, x, y) {
-  const w = h[6] * x + h[7] * y + h[8];
-  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
-}
-
 // 보정 뷰 캔버스 크기와 경기장 사각형 위치. 경기장 둘레에 margin 비율만큼 가린 바깥을 남긴다.
 export function rectifiedLayout(aspect, maxWidth = 640, maxHeight = 400, margin = 0.08) {
   const a = finite(aspect) && aspect > 0 ? Math.min(8, Math.max(1 / 8, aspect)) : 1;

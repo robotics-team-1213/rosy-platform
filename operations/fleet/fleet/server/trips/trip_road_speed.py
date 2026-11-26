@@ -4,13 +4,34 @@ from __future__ import annotations
 from bisect import bisect_right
 import math
 
+from core_common.protocol.evidence import STALE_POSE_S
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_ports import TripError
 from fleet.speed_table import speed_table
+from rosy.world.state.projections.map_pose_samples import parse_utc
 
 GRANT_S = 1.5
+
+
+async def _goal_finished(runner, rid) -> bool:
+    """A lease 409 is a normal arrival only when CORE itself reports the goal done: ARRIVED, no goal,
+    no e-stop, zero fresh velocity. Anything else (failed, cancelled, replaced, unknown) stays a stop."""
+    if getattr(runner, "_robot_state", None) is None:
+        return False
+    try:
+        state = await runner._call(runner._robot_state(rid))
+    except Exception:
+        return False
+    if not isinstance(state, dict) or state.get("navigation") != "ARRIVED" or state.get("goal") is not None:
+        return False
+    evidence = (state.get("evidence") or {}).get("velocity") or {}
+    stamp = parse_utc(evidence.get("sampled_at"))
+    vel = state.get("velocity") or {}
+    return (evidence.get("evidence") == "fresh" and stamp is not None and 0 <= runner._clock() - stamp < STALE_POSE_S
+            and (state.get("safety") or {}).get("estop") is False
+            and all(type(vel.get(a)) in (int, float) and vel[a] == 0.0 for a in ("linear", "angular")))
 
 
 class RoadSpeed:
@@ -101,6 +122,10 @@ class RoadSpeed:
             if not isinstance(reply, dict) or reply.get("renewed") is not True or reply.get("correlation_id") != owner:
                 raise TripError(409, "ROAD_SPEED_ACK_UNCONFIRMED")
         except Exception as exc:
+            if (getattr(exc, "status", None) == 409 and getattr(exc, "code", None) == "GOAL_LEASE_NOT_ACTIVE"
+                    and live.open and live.active_route is route and await _goal_finished(runner, rid)):
+                detail["state"] = "arrived"  # reached the target before the first renewal; the step loop sees ARRIVED
+                return
             detail.update(state="unconfirmed", error=getattr(exc, "code", type(exc).__name__))
             if isinstance(exc, RoadSpeedRefused):
                 raise TripError(409, exc.code) from exc

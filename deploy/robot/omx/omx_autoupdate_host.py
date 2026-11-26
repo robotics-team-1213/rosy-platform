@@ -223,10 +223,13 @@ class Host:
             if not units:
                 return complete
             if self.cfg.get("sequential"):
-                for verb, ordered in (("stop", reversed(units)), ("start", units)):
-                    for unit in ordered:
-                        if sp.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0:
-                            return False
+                # every unit is tried: 2026-11-26 a rollback stopped at arm_b's observer (its session held the bus)
+                # and left arm_s's observer, the observation bridge and the Arm S status bridge down for 15 min
+                failed = [f"{verb} {unit}" for verb, ordered in (("stop", list(reversed(units))), ("start", units)) for unit in ordered
+                          if sp.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0]
+                if failed:
+                    log(step="units_failed", units=failed)
+                    return False
             elif sp.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             _tm().sleep(self.cfg.get("settle", 10))
