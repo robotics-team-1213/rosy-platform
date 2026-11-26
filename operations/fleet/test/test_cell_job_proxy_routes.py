@@ -60,6 +60,19 @@ def test_policy_drive_carries_the_named_operator_and_fleet_side_files(setup):
                     "policy_root": "policies/a", "policy_revision": "f" * 64}
 
 
+def test_model_run_settings_come_only_from_the_host_list(setup):
+    """2026-11-27: real runs need the backend, calibration, goal and step budget the CLI passed; only listed keys pass."""
+    client, fake = setup
+    conf = client.app.state.cell_job_proxy.cells["cell_ab"]
+    conf["models"] = [{**MODEL, "params": {"act_backend": "openvino", "goal_slot": 1, "n_action": 16,
+                                           "model_calibration": "cal-a.json", "operator": "x", "dry_run": False}}]
+    assert client.post("/api/fleet/cells/cell_ab/jobs/cell_policy_drive", headers=OP, json=RUN).status_code == 202
+    body = fake.calls[0][3]
+    assert (body["act_backend"], body["goal_slot"], body["n_action"], body["model_calibration"]) == ("openvino", 1, 16, "cal-a.json")
+    assert body["operator"] == "operator-a" and body["dry_run"] is True
+    assert "cal-a.json" not in client.get("/api/fleet/cells/cell_ab/jobs/options", headers=OP).text
+
+
 @pytest.mark.parametrize("job", ["recover_hold", "safe_home"])
 def test_recovery_jobs_send_the_arm_site_files(setup, job):
     client, fake = setup
