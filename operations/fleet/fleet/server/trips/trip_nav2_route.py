@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import math
 from uuid import uuid4
 
@@ -12,6 +13,8 @@ from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
+from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
+from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reservation_covers, reserved_wait, road_centerline
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.road_route_lease import RoadSpeedRefused
@@ -22,12 +25,6 @@ from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
 from rosy.world.state.projections.map_pose_samples import parse_utc
 
-NAV2_ROUTE_STEP_M = 0.12
-NAV2_ROUTE_MAX_POINTS = 64
-NAV2_ROUTE_MIN_GAP_M = 0.03
-NAV2_CLOSED_LOOP_SPLIT_M = 0.60
-NAV2_SPLIT_MIN_SPAN_M = 0.25
-NAV2_SPLIT_WALL_CLEAR_M = 0.22
 NAV2_RETRY_S = 5.0
 NAV2_TRANSIENT_RETRY_S = 2.0
 NAV2_RETRIES = 2
@@ -36,93 +33,6 @@ _NAV_RUNNING = ("NAVIGATING", "PLANNING")
 _NAV_ABORTED = ("FAILED", "CANCELED")
 _IMMEDIATE_HOLD_REASONS = ("fleet_hold", "nav2_problem")
 _TRANSIENT_GOAL_REFUSALS = ("ROUTE_CONFLICT", "YIELDING")
-
-
-def _wrap_angle(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
-
-def _split_closed_loop(pts: list[tuple[float, float, float, str]], start_xy: tuple[float, float], walls=()) -> None:
-    """Promote one straight-segment waypoint to ``stop`` so Nav2 cannot short-circuit a closed loop."""
-    if len(pts) < 2:
-        return
-    end_xy = (pts[-1][0], pts[-1][1])
-    if math.hypot(end_xy[0] - start_xy[0], end_xy[1] - start_xy[1]) >= NAV2_CLOSED_LOOP_SPLIT_M:
-        return
-    spans = [
-        min(
-            math.hypot(p[0] - start_xy[0], p[1] - start_xy[1]),
-            math.hypot(p[0] - end_xy[0], p[1] - end_xy[1]),
-        )
-        for p in pts[:-1]
-    ]
-    max_span = max(spans)
-    if max_span < NAV2_SPLIT_MIN_SPAN_M:
-        return
-    min_req = max(NAV2_SPLIT_MIN_SPAN_M, 0.5 * max_span)
-    cands = [i for i in range(len(pts) - 1) if spans[i] >= min_req]
-
-    def rank(i: int) -> tuple[bool, bool, float, float]:
-        lo, hi = max(0, i - 2), min(len(pts) - 1, i + 2)
-        turn = max(abs(_wrap_angle(pts[k + 1][2] - pts[k][2])) for k in range(lo, hi))
-        tight = bool(walls) and _wall_clearance(pts[i][0], pts[i][1], walls) < NAV2_SPLIT_WALL_CLEAR_M
-        return (tight, turn > 0.25, round(turn, 2), -spans[i])
-
-    mid = min(cands, key=rank)
-    mx, my, myaw, _ = pts[mid]
-    pts[mid] = (mx, my, myaw, "stop")
-
-
-def sample_nav2_route(
-    graph,
-    segments: list[dict],
-    index: int,
-    s: float,
-    end_index: int,
-    *,
-    step_m: float = NAV2_ROUTE_STEP_M,
-    max_points: int = NAV2_ROUTE_MAX_POINTS,
-    walls=(),
-) -> list[tuple[float, float, float, str]]:
-    """Sample road-centerline ``pass`` points ending with one ``stop`` point along ``segments[index..end_index]``."""
-    spans = []
-    for k in range(index, end_index + 1):
-        seg = segments[k]
-        arc = graph.arcs[arc_id(seg)]
-        cur_s = min(max(seg["s_from"], s), seg["s_to"]) if k == index else seg["s_from"]
-        if seg["s_to"] - cur_s > 1e-6:
-            spans.append((arc, cur_s, seg["s_to"]))
-    if not spans:
-        last_seg = segments[end_index]
-        fx, fy, fyaw = graph.arcs[arc_id(last_seg)].point_at(last_seg["s_to"])
-        return [(fx, fy, fyaw, "stop")]
-    start_xy = spans[0][0].point_at(spans[0][1])[:2]
-    total_m = sum(s1 - s0 for _arc, s0, s1 in spans)
-    spacing = max(step_m, total_m / max(1, max_points - 1))
-
-    def point_at_distance(dist: float) -> tuple[float, float, float]:
-        rem = dist
-        for arc, s0, s1 in spans:
-            length = s1 - s0
-            if rem <= length + 1e-9:
-                return arc.point_at(min(s0 + rem, s1))
-            rem -= length
-        arc, _s0, s1 = spans[-1]
-        return arc.point_at(s1)
-
-    pts: list[tuple[float, float, float, str]] = []
-    d = spacing
-    while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(pts) < max_points - 1:
-        px, py, pyaw = point_at_distance(d)
-        if not pts or math.hypot(px - pts[-1][0], py - pts[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
-            pts.append((px, py, pyaw, "pass"))
-        d += spacing
-    fx, fy, fyaw = spans[-1][0].point_at(spans[-1][2])
-    while pts and math.hypot(fx - pts[-1][0], fy - pts[-1][1]) < NAV2_ROUTE_MIN_GAP_M:
-        pts.pop()
-    pts.append((fx, fy, fyaw, "stop"))
-    _split_closed_loop(pts, start_xy, walls=walls)
-    return pts
 
 
 def _immediate_hold(live: LiveTrip) -> bool:
@@ -423,6 +333,26 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     traffic_end = _traffic_end_index(runner, live, index)
     target_end = None if traffic_end is None else (min(index, traffic_end) if live.view["hold"] is not None else traffic_end)
     if live.active_route is not None:
+        if live.active_route.get("wait_prefix") and not live.active_route.get("superseded"):
+            from fleet.server.handoff_traffic import _fresh_stopped
+
+            end = live.active_route["end_index"]
+            prefix_receipt = live.view["detail"]["wait_prefix"]
+            if nav in _NAV_ABORTED:
+                prefix_receipt["state"] = "aborted"
+                await runner._stop(live, "stopped", "navigation", {"navigation": nav})
+                return
+            if not reservation_covers(runner, live, end):
+                prefix_receipt["state"] = "reservation_lost"
+                await runner._stop(live, "stopped", "WAIT_PREFIX_RESERVATION_LOST", {"wait_prefix": prefix_receipt})
+                return
+            if nav in ("IDLE", "ARRIVED"):
+                place = live.graph.places[prefix_receipt["place"]]
+                if (not _fresh_stopped(state) or math.dist((pose.x, pose.y), (place.x, place.y)) > runner.config.arrive_free_m):
+                    prefix_receipt["state"] = "waiting_stop_confirmation"
+                    return
+                prefix_receipt["state"] = "at_wait_place"
+                live.active_route = None
         if runner.config.map_binding_required or live.nav2_binding_scope is not None:
             await runner._recheck_binding(live, active)
             if not live.open:
@@ -436,7 +366,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 return
             await runner._stop(live, "stopped", "navigation", {"navigation": nav})
             return
-        if live.active_route.get("superseded") or target_end is None or live.active_route["end_index"] > target_end:
+        if live.active_route and (live.active_route.get("superseded") or target_end is None or live.active_route["end_index"] > target_end):
             await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
@@ -463,6 +393,15 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if not await ready_free_goal(runner, live) or not live.open:
         return
     end_index = target_end
+    detail = live.view["detail"]
+    wait = detail.get("peer_wait") or {}
+    prefix = None
+    if wait.pop("try_wait_place", False):
+        prefix, why = reserved_wait(runner, live, active, index, s, target_end)
+        if prefix is None:
+            detail["wait_prefix"] = {"state": "held", "reason": why, "waiting_on": wait["waiting_on"]}
+    if prefix is not None:
+        end_index = prefix
     site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
@@ -474,7 +413,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     ]
     options = {}
     controlled = getattr(runner, "road_speed", None) is not None and (
-        live.nav2_binding_scope is not None or runner.config.map_binding_required
+        prefix is not None or live.nav2_binding_scope is not None or runner.config.map_binding_required
         or runner._store.rules.active_rules() is not None)
     if controlled:
         if runner._route is None:
@@ -489,6 +428,15 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         if runner._strict_named_stop(live, end_index) is not None:
             options["attempt_id"] = str(uuid4())
             record_stop_dispatch(runner, live, active, options["attempt_id"], site_pts[-1][:3], robot_pts[-1][:3])
+    scope = None
+    if prefix is not None:
+        revision = live.route_rev
+        def reserved():
+            return (live.route_rev == revision and live.at is not None
+                    and reserved_wait(runner, live, active, *live.at, target_end)[0] == prefix)
+        centerline = road_centerline(live, index, s, prefix)
+        expected = [centerline[0], *(point[:2] for point in site_pts)]
+        scope = prefix_guard.set((robot_id, active[1].map_id, set(wait["waiting_on"]), reserved, expected, centerline))
     try:
         if runner._route is not None:
             reply = await runner._call(runner._route(robot_id, payload, **options)) or {}
@@ -502,11 +450,18 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             live.view["detail"]["goal_wait"] = exc.message
             return
         raise
+    finally:
+        if scope is not None:
+            prefix_guard.reset(scope)
     await runner._after_send(live)
     if not live.open:
         return
     if reply.get("accepted") is False or reply.get("queued"):
         reason = reply.get("reason") or ""
+        if prefix is not None and reason == "WAIT_PREFIX_UNVERIFIED":
+            detail["wait_prefix"] = {"place": live.place(prefix), "state": "held", "reason": reason}
+            live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
+            return
         peer_wait = (reply.get("blocked_by") not in (None, robot_id)
                        and reply.get("queued") is False
                        and (reply.get("dispatch_attempted") is False or reply.get("cancel_confirmed") is True)
@@ -518,18 +473,32 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 prior = detail.get("peer_wait") or {}
                 detail["peer_wait"] = {**proof, "since": prior.get("since", runner._clock()),
                                        "checked_at": runner._clock(), "reason": reason}
+                if prefix is None and downstream_refusal(reply, robot_id):
+                    detail["peer_wait"]["try_wait_place"] = True
+                elif prefix is not None:
+                    detail["wait_prefix"] = {"place": live.place(prefix), "state": "held", "reason": reason}
             live.active_route = None
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
             return
         raise _GoalRefused(reason, reply)
-    if wait := live.view["detail"].pop("peer_wait", None):
+    if wait := detail.pop("peer_wait", None):
         live.progress_at = runner._clock()
-        live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
+        if prefix is not None:
+            detail["wait_prefix"] = {"place": live.place(prefix), "end_index": prefix, "state": "dispatched",
+                                     "waiting_on": wait.get("waiting_on"), "at": live.progress_at}
+            detail.pop("named_stop_dispatch", None)
+        else:
+            detail["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
+    live.command_ack_mono = time.monotonic()
     live.active_route = {"end_index": end_index, "points": len(payload)}
+    if prefix is not None:
+        live.active_route["wait_prefix"] = True
+    elif detail.get("wait_prefix"):
+        detail["wait_prefix"]["state"] = "superseded"
     if "attempt_id" in options:
         live.active_route["attempt_id"] = options["attempt_id"]
     if controlled:

@@ -210,11 +210,16 @@
                   <option value="depth-verify">깊이 검증</option>
                   <option value="remap">필요한 카메라 XY 맵 재측정</option>
                   <option value="pivot-near">지정 좌표 주변 XY 편차 측정</option>
+                  <option value="post-eval">등록된 칸의 XY 위치 검증</option>
                   <option value="surface">면 높이 측정</option>
                 </select>
                 <small id="jobRemapNote" hidden>집게를 관측 높이에서 촬영해 XY 맵을 맞춥니다. 이 작업만으로 면 높이에서의 정밀 XY 측정이 완료되지는 않습니다.</small>
                 <label id="jobSurfaceLabel" hidden>측정할 면
                   <select id="jobSurface" class="ui-field"></select>
+                </label>
+                <label id="jobVisitLabel" hidden>검증할 칸
+                  <select id="jobVisitSite" class="ui-field" aria-describedby="jobVisitNote"></select>
+                  <small id="jobVisitNote">빈 집게를 관측 높이에서 촬영해 XY 편차를 측정합니다. 바닥 접촉 검증은 별도 작업입니다.</small>
                 </label>
                 <label id="jobTargetsLabel" hidden>측정 좌표 (팔 기준 미터, 한 줄에 site:x,y)
                   <textarea id="jobTargets" class="ui-field" rows="2" spellcheck="false"></textarea>

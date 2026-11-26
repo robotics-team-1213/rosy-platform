@@ -2,7 +2,7 @@ import { $, fetchJson, makeTable, addDtDd } from "./app.js";
 import { setJobData } from "./job-controls.js";
 export { setJobArm, setJobOperator } from "./job-controls.js";
 
-const JOB_STEP_LABEL = { check: "사전 점검(check)", "depth-verify": "깊이 검증(depth-verify)", "pivot-near": "피벗 근접 보정(pivot-near)", remap: "재매핑(remap)", surface: "면 높이 측정" };
+const JOB_STEP_LABEL = { check: "사전 점검(check)", "depth-verify": "깊이 검증(depth-verify)", "pivot-near": "피벗 근접 보정(pivot-near)", remap: "재매핑(remap)", surface: "면 높이 측정", "post-eval": "등록된 칸의 XY 위치 검증" };
 const JOB_RESULT = { running: ["실행 중", "warn"], done: ["종료", ""], failed: ["실패", "error"],
   interrupted: ["중단 · 완료 여부 미확인", "warn"] };
 

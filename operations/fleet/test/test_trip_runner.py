@@ -918,7 +918,12 @@ def test_lane_cancel_sends_a_stop_and_turns_line_follow_off():
     view = run(runner.cancel("p1", "bob"))
     assert view["state"] == "canceled" and view["detail"]["canceled_by"] == "bob"
     assert ports.sent[-1] == ("stop", "SE", 0.0) and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
-    assert _code(runner.cancel("p1", "bob")) == "TRIP_NOT_RUNNING"
+    stopped = list(ports.sent)
+    assert run(runner.cancel("p1", "retry"))["detail"]["canceled_by"] == "bob"
+    assert ports.sent == stopped and ports.held == ["rosy_60"]
+    runner._live.clear()
+    assert run(runner.cancel("p1", "retry"))["state"] == "canceled"
+    assert ports.sent == stopped
     assert _code(runner.cancel("zz", "bob")) == "TRIP_UNKNOWN"
 
 
@@ -1173,7 +1178,10 @@ def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_
     run(client.app.state.trip_runner.tick())
     listing = client.get("/api/fleet/trips", headers=VIEWER).json()
     assert listing["running"]["trip_id"] == plan["plan_id"] and listing["running"]["pose"]["source"] == "sighting"
-    assert client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()["state"] == "running"
+    receipt = client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()
+    assert receipt["state"] == "running"
+    assert receipt["execution"] == listing["running"]["execution"] == listing["open"][0]["execution"]
+    assert receipt["execution"]["motion"] == "unknown"
     assert client.get("/api/fleet/trips/nope", headers=VIEWER).json()["detail"]["code"] == "TRIP_UNKNOWN"
 
     # D-494 5: the activation guard is "a running trip exists"

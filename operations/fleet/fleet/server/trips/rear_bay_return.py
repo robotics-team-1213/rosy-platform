@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from uuid import UUID
 
 from core_common.protocol.evidence import STALE_POSE_S
@@ -194,6 +195,7 @@ class RearBayPort:
             op = NativeOperation.model_validate(receipt.get("operation")).model_dump(mode="json")
             if (op["kind"], op["correlation_id"], op["boot_id"]) != ("dock", plan_id, owner["boot_id"]):
                 raise TripError(409, "CHARGE_BAY_DOCK_RECEIPT_UNVERIFIED")
+            live.command_ack_mono = time.monotonic()
             info.update(phase="docking", operation=op)
             if not live.open:
                 await self.halt(live.view)

@@ -6,6 +6,7 @@ mixes it in.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import math
 from typing import Optional
@@ -227,7 +228,8 @@ class TripSteps:
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:
                 await self._step_free(live, index, pose)
-            if last and live.open and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
+            if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)
                     arrival_confirmed = live.open
@@ -443,6 +445,7 @@ class TripSteps:
             raise _JunctionAborted(reply.get("junction_seq"))
         seq, arc_before = reply.get("junction_seq"), (live.junction.get("arc") or {}).get("arc_seq")
         live.replaceable = None
+        live.command_ack_mono = time.monotonic()
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
                      "done": bool(reply.get("already_done")), "arc_before": arc_before}
         if live.first_seq is None:
@@ -584,6 +587,7 @@ class TripSteps:
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
             raise _GoalRefused(reply.get("reason") or "", reply)
+        live.command_ack_mono = time.monotonic()
         if attempt_id is not None:
             record_stop_operation(live, attempt_id, reply)
 

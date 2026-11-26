@@ -1,3 +1,4 @@
+import {tripPreviewSummary as planSummaryText} from '/console/assets/trip-preview-summary.js';
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
 import {mapPoint} from '/console/assets/geometry-edit.js';
 import {setOffBy} from '/common/cause-line.js';
@@ -10,7 +11,7 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/assets/fleet-session.js';
-import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
@@ -264,7 +265,7 @@ async function pollRobots() {
     ]);
     if (tripsRes.status === 'fulfilled') {
       state.open = tripsRes.value.open || [];
-      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
+      status('trip-run', state.open.length ? `${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
         : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
     } else {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');

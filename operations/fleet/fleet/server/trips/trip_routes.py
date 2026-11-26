@@ -279,6 +279,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         plan_data = plan_body(plan)
         if parking:
             plan_data["parking_handoff"] = parking
+            plan_data["staging_distance_m"] = round(math.dist(pose[:2], active[2].place_xy(goal)), 4)
         if bound_nav2:
             plan_data["nav2_binding_id"] = binding_id
         elif binding_id is not None:
@@ -363,7 +364,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             receipt("start_refused", exc.code, exc.detail)
             raise trip_error(exc) from exc
         receipt("start_accepted")
-        return trip
+        return runner.execution_view(trip)
 
     @app.get("/api/fleet/trip-requests", dependencies=read_guard, tags=["fleet"])
     def trip_request_history() -> dict:
@@ -375,7 +376,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                     detail = trip.get("detail") or {}
                     row["outcome"] = {"robot_id": trip["robot_id"], "state": trip["state"],
                                       "reason": trip.get("reason"), "detail": {k: detail[k] for k in
-                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait") if k in detail}}
+                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait",
+                                       "wait_prefix", "stop_sent") if k in detail}}
         return {"requests": rows}
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
@@ -413,7 +415,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
 
     @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
     def fleet_trips() -> dict:
-        return {"running": runner.running(), "open": runner.open_trips(), "trips": runner.recent()}
+        active = [runner.execution_view(row) for row in runner.open_trips()]
+        return {"running": max(active, key=lambda t: t["created_at"], default=None), "open": active,
+                "trips": [runner.execution_view(row) for row in runner.recent()]}
 
     @app.get("/api/fleet/traffic", dependencies=read_guard, tags=["fleet"])
     def fleet_traffic() -> dict:
@@ -481,4 +485,4 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         view = runner.view(trip_id)
         if view is None:
             raise _refuse("TRIP_UNKNOWN", status=404)
-        return view
+        return runner.execution_view(view)

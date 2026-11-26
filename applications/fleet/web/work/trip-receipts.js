@@ -3,10 +3,17 @@ import {tripEndText, tripErrorText, tripWaitText} from "/console/assets/trip-dis
 const PHASE = {preview: "경로 계산 완료 · 출발 전", plan_refused: "경로 계산 거절",
   start_refused: "출발 거절", start_accepted: "Fleet 출발 접수"};
 
+function outcomeText(trip) {
+  if (trip?.state === "canceled")
+    return trip.detail?.stop_sent === true ? "운행 취소 · 기체 정지 명령 수락" : "운행 취소 · 기체 정지 응답 미확인";
+  if (trip?.state === "arrived") return "Fleet 도착 판정";
+  return tripEndText(trip) || tripWaitText(trip);
+}
+
 function receiptText(row) {
   const dest = typeof row.to === "string" ? row.to : row.to ? `(${row.to.x}, ${row.to.y})` : "";
   const reason = row.code ? `${tripErrorText(row.code, row.detail || {})} [${row.code}${row.detail?.error ? " / " + row.detail.error : ""}]` : "";
-  return [dest, PHASE[row.stage], reason, tripWaitText(row.outcome) || tripEndText(row.outcome)].filter(Boolean).join(" · ");
+  return [dest, PHASE[row.stage], reason, outcomeText(row.outcome)].filter(Boolean).join(" · ");
 }
 
 export function selectedTripText(view, robotId) {
@@ -26,7 +33,7 @@ export function updateSelectedTrip(view, trips) {
   let status = "ACCEPTED", text = "Fleet 접수 · 기체 실행 확인 중";
   if (["failed", "stopped", "canceled"].includes(trip.state)) {
     status = "BLOCKED";
-    text = tripEndText(trip) || "운행 취소";
+    text = outcomeText(trip);
   } else if (trip.state === "arrived") {
     status = "ARRIVED";
     text = "Fleet 도착 판정";
@@ -65,4 +72,14 @@ export function installTripReceiptHistory(el, call) {
   };
   panel.addEventListener("toggle", () => { if (panel.open) refresh(); else ++seq; });
   el("trip-receipt-refresh").addEventListener("click", refresh);
+}
+
+export async function cancelTripReceipt(call, tripId, life) {
+  try {
+    return await call(`/api/fleet/trips/${encodeURIComponent(tripId)}/cancel`, {method: "POST"});
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    life.check();
+    return call(`/api/fleet/trips/${encodeURIComponent(tripId)}`);
+  }
 }

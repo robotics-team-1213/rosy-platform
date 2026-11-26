@@ -328,7 +328,8 @@ def test_start_history_keeps_rejection_and_retry_on_same_plan(tmp_path, monkeypa
     monkeypatch.setattr(runner, "start", reject)
     assert client.post(path, headers=OPERATOR).status_code == 422
     monkeypatch.setattr(runner, "start", accept)
-    assert client.post(path, headers=OPERATOR).status_code == 200
+    accepted = client.post(path, headers=OPERATOR)
+    assert accepted.status_code == 200 and accepted.json() == {"trip_id": plan_id}
     rows = client.get("/api/fleet/trip-requests", headers=OPERATOR).json()["requests"]
     assert [r["stage"] for r in rows] == ["start_accepted", "start_refused", "preview"]
     assert all(r["plan_id"] == plan_id and r["to"] == "NW" for r in rows)

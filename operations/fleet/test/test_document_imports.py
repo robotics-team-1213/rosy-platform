@@ -48,8 +48,10 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-wait.js",
     "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
+    "trip-preview-summary.js",  # Read-only preview distance from the plan pose to the parking staging place.
     "drawing-errors.js",
 }
 
@@ -125,6 +127,7 @@ OWN = {
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
+        "measured-motion.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",

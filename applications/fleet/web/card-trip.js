@@ -183,7 +183,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     });
     mine.to = placeOptions(to.select, places(), mine.to);
     const preview = quietButton("경로 보기");
-    setOffBy(preview, lock || (running ? "이 로봇은 이미 운행 중입니다" : mine.to ? "" : "목적지를 고르세요"));
+    setOffBy(preview, lock || (running ? "이 로봇에는 진행 중인 배차가 있습니다" : mine.to ? "" : "목적지를 고르세요"));
     preview.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       mine.busy = true;

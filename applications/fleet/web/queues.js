@@ -86,7 +86,10 @@ export function openTrip(view, robotId) {
 /** Why the robot's last trip stopped or failed ('' while a trip is open or the last one arrived or was canceled). */
 export function endedTripText(view, robotId) {
   if (openTrip(view, robotId)) return "";
-  return tripEndText((view.endedTrips || []).find((trip) => trip.robot_id === robotId));
+  const last = (view.endedTrips || []).find((trip) => trip.robot_id === robotId);
+  if (last?.state === "canceled" && (last.detail?.stop_sent === false || last.detail?.error))
+    return "운행 취소 · 기체 정지 응답 미확인";
+  return tripEndText(last);
 }
 
 // D-577 8: an escalated stuck nobody answered within this many seconds rises to the top. The robot

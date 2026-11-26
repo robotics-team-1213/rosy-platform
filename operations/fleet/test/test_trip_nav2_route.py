@@ -206,6 +206,7 @@ def test_console_route_waits_for_untrusted_peer_before_motor_dispatch():
 
 @pytest.mark.parametrize("path", ["/api/v1/navigation/route", "/api/v1/navigation/bound-route"])
 def test_peer_moving_into_route_during_lease_preparation_stops_wire_dispatch(path):
+    from fleet.server.peer_wait_prefix import check_wait_prefix
     from fleet.server.traffic_arbitration_helpers import guarded_road_send
     from fleet.swarm.dispatch_guard import check_dispatch
 
@@ -223,7 +224,7 @@ def test_peer_moving_into_route_during_lease_preparation_stops_wire_dispatch(pat
     reply = run(guarded_road_send(console, "rosy_42", [{"x": 0.4, "y": 0}], (0.4, 0),
                                   console.goal_leases.stop_token("rosy_42"),
                                   lambda _: ("site", [(0, 0), (0.4, 0)]), send,
-                                  grid_from=lambda _: None))
+                                  grid_from=lambda _: None, check_wait_prefix=check_wait_prefix))
     assert reply["waiting_on"] == ["rosy_45"] and not reply["dispatch_attempted"]
 
 

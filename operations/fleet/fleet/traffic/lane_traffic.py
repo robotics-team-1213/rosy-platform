@@ -322,6 +322,26 @@ class TrafficService(SignalService):
         refused = (live.traffic or {}).get("refused_at_m")  # D-517 3: refused before PAST_PLACE_M past the place
         return refused is not None and refused < live.progress(index, live.segments[index]["s_to"]) + PAST_PLACE_M
 
+    def owns_span(self, live, start_m, end_m):
+        """A currently held continuous span of this trip revision in route metres."""
+        rid = live.view["robot_id"]
+        route_id = f"{live.view['trip_id']}:{live.route_rev}"
+        seen = self._seen.get(rid)
+        if (self._state.route.get(rid) != route_id or seen is None or seen[:2] != (route_id, live.trim_m)
+                or not start_m <= end_m):
+            return False
+        held = self._state.held.get(rid, {})
+        covered = start_m
+        for index, span in enumerate(seen[2]):
+            if span.d1 <= start_m:
+                continue
+            if span.d0 > covered or held.get(index) != (span.unit, span.forward):
+                return False
+            covered = span.d1
+            if covered >= end_m:
+                return True
+        return False
+
     def watch(self, inflight: dict, busy, read) -> None:
         """A pinned robot without a trip or a read in flight gets one (hub cache, no forced REST read)."""
         for robot_id in self.pinned():

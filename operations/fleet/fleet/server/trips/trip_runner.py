@@ -298,12 +298,16 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 live.view["detail"].update(await self._halt(live))
                 self._save(live)
             raise TripError(409, "TRIP_LINE_FOLLOW_START_FAILED", detail) from exc
+        live.command_ack_mono = time.monotonic()
         live.view["detail"]["line_follow_started"] = True
         await self._after_send(live)  # a cancel or E-stop that landed meanwhile stops it again
         self._save(live)
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""
+        previous = self.view(trip_id)
+        if previous is not None and previous["state"] == "canceled":
+            return previous
         live = self._open(trip_id)
         live.view.update(state="canceled", reason=reason)
         live.view["detail"]["canceled_by"] = principal_id

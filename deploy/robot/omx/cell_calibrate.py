@@ -16,7 +16,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
-from cell_calibrate_bound import _load_ref_gray, map_sites, _map_write_sites
+from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
 import cell_diagnose
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
@@ -209,6 +209,7 @@ def main(argv=None):
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("step", choices=["check", "auto"])
     ap.add_argument("--route", nargs=2, metavar=("SOURCE", "DEST"), help="check named A/B depth inputs")
+    ap.add_argument("--cad-image-evidence", type=Path, help="read an offline CAD observation file for --route")
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--remeasure-surface", metavar="SITE", help="repeat a registered surface measurement, even with a saved height")
     ap.add_argument("--surface-clear", action="store_true", help="the named fixed support and the arm path are visibly clear")
@@ -220,6 +221,8 @@ def main(argv=None):
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
+    if args.cad_image_evidence is not None and not args.route:
+        ap.error("--cad-image-evidence requires check --route")
     if args.remeasure_surface is not None and (args.step != "auto" or args.only != ["surface"]
             or not args.surface_clear or args.plan_only or args.replay_frames or args.targets or args.verify):
         ap.error("--remeasure-surface requires auto --only surface --surface-clear")
@@ -254,9 +257,9 @@ def main(argv=None):
     frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
     found = check(config, calibration, targets, frame, config["params"])
     found.update(fixture_report)
-    if args.route:
-        from cell_route_calibration import route_calibration_report
-        found["route"] = route_calibration_report(config, calibration, found, *args.route)
+    if args.step == "check":
+        from cell_route_calibration import include_route_report
+        include_route_report(config, calibration, found, args, ap)
     todo = stale(found)
     if args.remeasure_surface is not None:
         import cell_surface

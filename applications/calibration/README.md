@@ -116,3 +116,16 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 - `POST /api/calibration/assessments {arm, verdict: clear|hold, reasons, evidence[{kind: frame|joints|torque, ref, sha256?}]}`: `<work>/assessments.jsonl`에 쌓는다.
 - `POST /api/calibration/incidents/<arm>/clear`: 10분 안의 최신 판정이 `clear`이고, 다른 주인의 리스와 실행 중인 `record_session`이 없을 때만 `omx_incident.py clear`를 부른다(측정이 먼저, 모델 판정만으로는 해제하지 않는다).
 - 쓰기 경로는 모두 같은 출처 + `calibration.operate` 세션이 필요하다.
+
+### B 경로의 CAD 영상 관측
+
+빈 임시대와 선박의 CAD 정합 결과를 같은 촬영 쌍으로 검증한 뒤, 보정 프로필이 참조하는 상단 사진에 중심 픽셀을 연결한다. 아래 예에서 `--reference`는 해당 보정 지도의 원본 사진이다. 도구는 받아들인 칸만 표준 출력에 쓰고 제외 사유는 표준 오류에 쓴다. 종료 코드를 확인한 뒤 생성 파일을 사용한다.
+
+```sh
+python tools/sim/omx_route_cad_evidence.py --stand stand/result.json --ship ship/result.json --reference reference-top.jpg > cad-route.json
+python deploy/robot/omx/cell_calibrate.py --config cell-arm-b-policy.json check --route tmp-b-2-l1 ship-h1r2-l0 --cad-image-evidence cad-route.json
+```
+
+웹의 **사전 점검**에도 같은 경로를 포함하려면 B 프로필의 기존 `preflight`에 `"check_route": ["tmp-b-2-l1", "ship-h1r2-l0"]`를 추가하고 최상위 `cad_image_evidence_path`에 파일 이름을 지정한다. 상대 경로는 프로필 폴더에서 찾는다. `check.route.calibration_evidence.sites`의 `recorded_image_only`는 해당 카메라 기준에서의 중심 픽셀과 검증 오차를 뜻한다. 팔 기준 XY, 지지면 높이와 이송 전 깊이 점검은 기존 절차로 확인한다.
+
+웹의 **등록된 칸의 XY 위치 검증**은 선택한 팔의 프로필에 저장된 지점과 중심 XY를 사용한다. 전원 스위치에서 감독을 확인하면 기존 post-eval 엔진이 방문 높이에서 집게 위치 오차를 재고 작업 결과를 남긴다. 부족한 좌표는 경로 사전 점검에서 확인한다. 지지면 높이에서의 중심 검증과 접촉 확인은 별도의 측정이다.

@@ -54,7 +54,7 @@ test('plan summary and refusal text', () => {
 
 test('repeat reason: map, running trip, two start places, a chosen start', () => {
   assert.equal(repeatTripReason({active: null, running: null, start: 'A'}), '활성 지도가 없습니다');
-  assert.equal(repeatTripReason({active: ACTIVE, running: {}, start: 'A'}), '이 로봇은 이미 운행 중입니다');
+  assert.equal(repeatTripReason({active: ACTIVE, running: {}, start: 'A'}), '이 로봇에 접수된 운행이 있습니다');
   const one = {version: 4, map: {places: [{id: 'A', kind: 'start'}]}};
   assert.equal(repeatTripReason({active: one, running: null, start: 'A'}), '반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
   assert.equal(repeatTripReason({active: ACTIVE, running: null, start: ''}), '출발 자리를 고르세요');
