@@ -104,7 +104,7 @@ def test_shared_gate_follows_tier_of_and_with_tiers_does_not_copy_status():
 
 
 def _unverified_config(tmp_path):
-    sites = {"belt": {"surface_z": -0.0661, "place": [0.0, 0.1], "yaw_deg": 0.0}, "pallet": BASE["pallet"],
+    sites = {"belt": {"surface_z": -0.0661, "place": [0.0, 0.1], "yaw_deg": 0.0, "auto_roi": [0, 0, 10, 10]}, "pallet": BASE["pallet"],
              "ship-h1r0": {**SHIP, "status": "unverified", "provenance": {"tool": reg.TOOL}}}
     return {"arm_id": "arm_a", "sites": sites, "work_dir": str(tmp_path)}
 
@@ -138,7 +138,8 @@ def test_return_held_task_runner_and_taught_goal_refuse_too(tmp_path):
     carry = Mock()
     task = {"schema": tr.SCHEMA, "task_id": "t1", "kind": "move", "from": "belt", "to": "ship-h1r0-l0"}
     res = tr.run_task(task, cfg_file, tmp_path / "catalog.json", tmp_path, carry=carry)
-    assert res["status"] == "refused" and "SITE_NOT_MEASURED" in res["why"] and carry.call_count == 0
+    assert res["status"] == "refused", res
+    assert "SITE_NOT_MEASURED" in res["why"] and carry.call_count == 0
     with pytest.raises(ValueError, match="SITE_NOT_MEASURED"):
         ph.validate_taught_goal(cfg, "belt", "ship-h1r0-l0", "ship-h1r0-l0", {})
 
@@ -258,7 +259,7 @@ def test_old_report_does_not_promote_replaced_values(cell, tmp_path):
 @pytest.mark.parametrize(("make", "text"), [
     (lambda c: z_receipt(c, result="no contact"), "completed touch"),
     (lambda c: z_receipt(c, arm="arm_b"), "not bound"),
-    (lambda c: z_receipt(c, site="ship-h1r1"), "completed touch"),
+    (lambda c: {**z_receipt(c), "site": "ship-h1r1"}, "completed touch"),
     (lambda c: z_receipt(c, xy=[0.2, 0.2]), "another place"),
     (lambda c: z_receipt(c, age_s=7200), "older than the registration"),
     (lambda c: z_receipt(c, touches_m=[-0.0071]), "at least two"),
