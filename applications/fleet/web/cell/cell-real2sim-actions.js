@@ -207,7 +207,7 @@ export function createCellActions(ctx) {
         return;
       }
       const {checks, note} = armIncidentClearPlan(null);
-      if (!await confirmIrreversible({message: `열린 팔 사건 없이 팔 보류만 남았습니다(${cellOrArmId}). 현장에서 ${checks.join(', ')}을 확인했나요?`,
+      if (!await confirmIrreversible({message: `"${cellOrArmId}"에는 열린 팔 사건 없이 팔 보류만 남았습니다. 현장에서 ${checks.join(', ')}을 확인했고 이 보류를 해제할까요?`,
         action: '확인했습니다 · 해제', opener})) return;
       const results = [];
       for (const arm of cellArms(cellOrArmId)) results.push([arm, await clearPipelineArmHold(request, arm, {note})]);

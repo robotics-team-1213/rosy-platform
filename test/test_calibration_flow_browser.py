@@ -98,6 +98,8 @@ def test_an_operator_walks_check_pivot_post_eval_and_forced_remap(screen, width)
             page.locator("#jobRemeasure").check()
             switch.check()
             start.click()
+            # the progress line still reads the post-eval's "종료" until the new job shows; wait for the remap row
+            expect(page.locator("#recentJobsWrap tbody tr").first).to_contain_text("재매핑", timeout=10000)
             expect(page.locator("#jobProgress")).to_contain_text("종료", timeout=10000)
             assert "--remeasure-map" in calls["spawn"][3][0]
             expect(page.locator("#jobRemeasure")).not_to_be_checked()
