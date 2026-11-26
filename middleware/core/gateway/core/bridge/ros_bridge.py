@@ -244,7 +244,9 @@ class RosBridge(RosBridgeHelpersMixin):
     def _on_odom(self, msg: Odometry) -> None:
         received_ns = time.time_ns()
         self._last_odom_ts = time.monotonic()
-        sample = odometry.receive_odom(self, msg, station=self._svc.station_docking)
+        sample = odometry.receive_odom(
+            self, msg, station=self._svc.station_docking, mission=self._svc.loc_mission
+        )
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"],

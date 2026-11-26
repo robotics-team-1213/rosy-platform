@@ -68,7 +68,7 @@ def observe_bounded_trial(bridge, msg, sample, *, now=None):
         except Exception:pass
 
 
-def receive_odom(bridge, msg, *, station=None):
+def receive_odom(bridge, msg, *, station=None, mission=None):
     """Capture the exact private parent BEFORE reading clocks or translating ROS input.
 
     Ledger's monotonic domain bounds the whole read. No parent at entry means no
@@ -114,7 +114,7 @@ def receive_odom(bridge, msg, *, station=None):
                 feed.clear()
     try:
         sample = translate.odom_sample(msg)
-        observe_odom(bridge, msg, sample, station=station, _execution=read,
+        observe_odom(bridge, msg, sample, station=station, mission=mission, _execution=read,
                      _motion_read=motion_read, _source_read=source_read)
         return sample
     except Exception:
@@ -207,7 +207,9 @@ def _observe_source(bridge, msg, sample, read, receipt):
         return False
 
 
-def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_read=None, _source_read=None):
+def observe_odom(
+    bridge, msg, sample, *, station=None, mission=None, _execution=None, _motion_read=None, _source_read=None
+):
     """RosBridge._on_odom's odom hand-over (D-758 0): the state snapshot stamps the pose (epoch from the
     message frame and header time) and the line-follow log keys the same sample on that stamp."""
     stamp = msg.header.stamp
@@ -215,7 +217,6 @@ def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_
     args = (sample['x'], sample['y'], sample['yaw'])
     kwargs = dict(frame=msg.header.frame_id, source_stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec)
     receipt = None
-    mission = getattr(bridge._svc, "loc_mission", None)
     if mission is None and _source_read is None and _execution is None and (_motion_read is None or _motion_read[0] is None):
         wall = state.set_odom_pose(*args, **kwargs)
     else:
