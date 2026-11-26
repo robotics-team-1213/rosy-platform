@@ -64,15 +64,21 @@ def test_mujoco_real_home_smooth_approach_and_park_and_cell_sim(tmp_path):
     import omx_two_arm_teacher as teacher_mod
     import omx_two_arm_world as world_mod
 
+    assert cell_sim.Cell(kin.CELL_EXAMPLE).home[5] == 1.0
     cell = cell_sim.Cell(kin.CELL_EXAMPLE, home_gripper="real")
     assert cell.home[5] == pytest.approx(kin.home_gripper_rad("real"), abs=1e-6)
+    with pytest.raises(ValueError, match="home_gripper"):
+        cell_sim.Cell(kin.CELL_EXAMPLE, home_gripper="bad")
 
     lay = sites.Layout(preset="v24-20261126-real-home")
     world = world_mod.World(lay)
     now = time.time()
     lives = {}
-    for arm_name, st in (("arm_a", [0.76, -62.25, 53.06, 51.65, 44.66, 49.18]),
-                         ("arm_b", [0.71, -62.25, 52.97, 51.6, 44.71, 49.01])):
+    pairs = (
+        ("arm_a", [0.76, -62.25, 53.06, 51.65, 44.66, 49.18]),
+        ("arm_b", [0.71, -62.25, 52.97, 51.6, 44.71, 49.01]),
+    )
+    for arm_name, st in pairs:
         p = tmp_path / f"{arm_name}.json"
         p.write_text(json.dumps({"t": now, "state": st, "target": st, "chunk": "home"}), encoding="utf-8")
         lives[arm_name] = str(p)
@@ -92,16 +98,19 @@ def test_mujoco_real_home_smooth_approach_and_park_and_cell_sim(tmp_path):
     for c in data.contact[:data.ncon]:
         b1 = world.body_name[world.model.geom_bodyid[c.geom1]]
         b2 = world.body_name[world.model.geom_bodyid[c.geom2]]
-        assert not ({b1, b2} in ({"a_link1", "a_link3"}, {"b_link1", "b_link3"}))
+        assert {b1, b2} not in ({"a_link1", "a_link3"}, {"b_link1", "b_link3"})
 
     task = tasks.get_task(lay, "stack")
-    approach_cmds = []
+    approach_cmds, park_cmds = [], []
     orig_frame = teacher.frame
     active_arm = [None]
 
     def spy_frame(d, targets, label, ctxs=None):
-        if active_arm[0] == "arm_b" and teacher.phase == "approach":
-            approach_cmds.append(float(targets["arm_b"][5]))
+        if active_arm[0] == "arm_b":
+            if teacher.phase == "approach":
+                approach_cmds.append(float(targets["arm_b"][5]))
+            elif teacher.phase == "park":
+                park_cmds.append(float(targets["arm_b"][5]))
         return orig_frame(d, targets, label, ctxs)
 
     teacher.frame = spy_frame
@@ -115,3 +124,5 @@ def test_mujoco_real_home_smooth_approach_and_park_and_cell_sim(tmp_path):
         assert data.qpos[world.q[step["arm"]]][5] == pytest.approx(real_grip, abs=0.02)
     assert approach_cmds[0] == pytest.approx(real_grip, abs=1e-3)
     assert max(abs(b - a) for a, b in zip(approach_cmds, approach_cmds[1:])) < 0.05
+    assert park_cmds[-1] == pytest.approx(real_grip, abs=1e-4)
+    assert max(abs(b - a) for a, b in zip(park_cmds, park_cmds[1:])) < 0.05
