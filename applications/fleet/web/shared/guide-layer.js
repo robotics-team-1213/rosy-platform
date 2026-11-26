@@ -242,7 +242,7 @@ function expandWaypointsOnRoad(siteMap, waypoints) {
   return dense;
 }
 
-export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, focusedRobotId = null, view = null }) {
+export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, focusedRobotId = null, view = null, reserve = null }) {
   const scaleAt = (x, y, m) => {
     const a = toPoint(x, y), b = toPoint(x + m, y);
     return Math.hypot(b.x - a.x, b.y - a.y);
@@ -471,6 +471,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
 
   if (!on || !guide?.robots?.length) return;
   const marks = guideMarks(guide, toPoint);
+  for (const { p, r } of reserve ? marks : []) { const m = ctx.getTransform(); reserve({ x: m.a * (p.x - r) + m.e, y: m.d * (p.y - r) + m.f, w: 2 * r * m.a, h: 2 * r * m.d }); }  // 위 띠를 피해 내려온 이름표가 로봇 원을 덮지 않게(사이트 보기만)
   for (const { row, p, r, ring, alert: worst, tip, target } of marks) {
     const colour = colorOf(row.robot_id);
     const alert = worst ? css(SEVERITY_TOKEN[worst]) : null;

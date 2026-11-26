@@ -43,20 +43,20 @@
   object-fit: cover;
 }
 
-/* 지도가 준비되고 천장 프레임이 있으면 왼쪽은 격자, 오른쪽은 천장이다.
-   캔버스 상자를 줄여 목표 클릭이 영상 위로 떨어지지 않게 한다. */
+/* 지도가 준비되고 천장 프레임이 있으면 위는 지도, 아래는 천장 띠다. 가로형 지도(data-map-shape=wide)는
+   넓은 창에서도 쌓는다 — 좌우로 나누면 세로 칸 가운데 떠 위아래가 빈다. 캔버스 상자를 줄여 목표 클릭이 영상 위로 떨어지지 않게 한다. */
 #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > #map-canvas {
-  inset: 0 auto 0 0;
-  width: calc(58% - var(--space-2));
-  height: 100%;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: calc(58% - var(--space-2));
 }
 
 #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]) > #map-birdseye:not([hidden]) {
   display: block;
-  inset: 0 0 0 auto;
+  inset: auto 0 0 0;
   z-index: 2;
-  width: 42%;
-  height: 100%;
+  width: 100%;
+  height: 42%;
   aspect-ratio: auto;
   object-fit: contain;
   background: var(--surface-recessed);
@@ -70,8 +70,9 @@
 }
 
 #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > .device-watch {
-  left: auto;
-  right: var(--space-3);
+  top: auto;
+  right: var(--space-2);
+  bottom: var(--space-2);
 }
 
 @media (width < 64rem) {
@@ -80,23 +81,19 @@
     left: var(--space-2);
     width: min(7.5rem, 34%);
   }
+}
 
-  /* 좁은 창은 위를 지도, 아래를 천장 띠로 쌓는다. 전방 사진은 지도 쪽에 남는다. */
-  #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > #map-canvas {
-    inset: 0 0 auto 0;
-    width: 100%;
-    height: calc(58% - var(--space-2));
+/* 넓은 창의 세로형 지도는 왼쪽 격자, 오른쪽 천장이다. 천장 단추는 두 배치 모두 영상 오른쪽 아래다. */
+@media (width >= 64rem) {
+  #fleet-main .map-stage[data-watch="pip"]:not([data-map-shape="wide"]):not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > #map-canvas {
+    inset: 0 auto 0 0;
+    width: calc(58% - var(--space-2));
+    height: 100%;
   }
 
-  #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]) > #map-birdseye:not([hidden]) {
-    inset: auto 0 0 0;
-    width: 100%;
-    height: 42%;
-  }
-
-  #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > .device-watch {
-    top: auto;
-    right: var(--space-2);
-    bottom: var(--space-2);
+  #fleet-main .map-stage[data-watch="pip"]:not([data-map-shape="wide"]):not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]) > #map-birdseye:not([hidden]) {
+    inset: 0 0 0 auto;
+    width: 42%;
+    height: 100%;
   }
 }

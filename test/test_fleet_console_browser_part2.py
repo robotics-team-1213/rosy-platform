@@ -1321,3 +1321,62 @@ def test_ceiling_split_keeps_ruler_on_the_site_edge_and_names_below_the_axis_chi
     assert min(n["top"] for n in x_row) - seen["y0"] <= 12, (x_row, seen["y0"])
     hit = lambda a, b: a["left"] < b["right"] and b["left"] < a["right"] and a["top"] < b["bottom"] and b["top"] < a["bottom"]
     assert [c["text"] for c in seen["chips"] if hit(c, seen["badge"])] == [], seen
+
+
+@pytest.mark.parametrize("width,height", [(1366, 900), (390, 844), (1920, 1080)])
+def test_ceiling_split_fills_the_map_cell_and_names_clear_their_robot(console_url, width, height):
+    """2026-11-26 field capture: a landscape site in the 58 % left column floated mid-cell with empty bands
+    above and below, and the top-edge robot's name, pushed under the 40 px chip band, covered its own circle."""
+    from playwright.sync_api import sync_playwright
+
+    pose = {"x": 0.15, "y": 1.95, "yaw": 0.0, "state": "LOCALIZED"}
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                          "polygon_m": [[0, 0], [3, 0], [3, 2], [0, 2]],
+                                          "bounds_m": {"min_x": 0, "min_y": 0, "max_x": 3, "max_y": 2}}]},
+        "/api/fleet/guide": {"robots": [{"robot_id": "rosy_46", "online": True, "pose": pose}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                    "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+    }
+    measure = """async (pose) => {
+      const { fitBox } = await import('/console/assets/site-map-model.js');
+      const { guideMarks } = await import('/console/assets/guide-layer.js');
+      const c = document.querySelector('#map-canvas').getBoundingClientRect(), s = document.querySelector('#map-stage').getBoundingClientRect();
+      // No active map: the view fits siteBounds (polygon + 0.25 m) with pad 32; the band is the height fitBox leaves over.
+      const t = fitBox({min_x: -0.25, min_y: -0.25, max_x: 3.25, max_y: 2.25}, c.width, c.height, 32), dpr = window.devicePixelRatio || 1;
+      const { p, r } = guideMarks({robots: [{robot_id: 'rosy_46', online: true, pose}]}, (x, y) => { const [px, py] = t.toPx(x, y); return {x: px, y: py}; })[0];
+      const name = (window.__mapChips || []).find((chip) => chip.text.startsWith('rosy_46'));
+      return {canvas: [c.width, c.height], stage: [s.width, s.height], band: (c.height - 64 - 2.5 * t.scale) / c.height,
+              circle: {left: p.x - r, top: p.y - r, right: p.x + r, bottom: p.y + r},
+              name: name && {left: name.x / dpr, top: name.y / dpr, right: (name.x + name.w) / dpr, bottom: (name.y + name.h) / dpr}};
+    }"""
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, init_script="sessionStorage.setItem('rosy-console-token', 'test-token');")
+        page.route("**/api/vision/sources/ceiling_north/frame", lambda route: route.fulfill(
+            status=200, content_type="image/svg+xml",
+            body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720"/></svg>',
+            headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42", "X-Frame-Age-Ms": "20"}))
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="domcontentloaded")
+        page.wait_for_function("() => (window.__mapChips || []).some((c) => c.text.startsWith('rosy_46'))", timeout=20000)
+        off = page.evaluate(measure, pose)
+        page.locator("#watch-ceiling").click()
+        page.wait_for_function("() => document.querySelector('#map-stage').dataset.watch === 'pip'"
+                               " && !document.querySelector('#map-birdseye').hidden", timeout=20000)
+        page.wait_for_function("""() => { const c = document.querySelector('#map-canvas');
+          const name = (window.__mapChips || []).find((chip) => chip.text.startsWith('rosy_46'));
+          return name && c.width === Math.round(c.getBoundingClientRect().width * devicePixelRatio)
+            && c.height === Math.round(c.getBoundingClientRect().height * devicePixelRatio); }""", timeout=10000)  # redrawn at the split size
+        on = page.evaluate(measure, pose)
+        browser.close()
+
+    assert errors == []
+    assert all(abs(a - b) <= 2 for a, b in zip(off["canvas"], off["stage"])), off  # the default view keeps the whole stage
+    assert on["canvas"][1] < on["stage"][1] - 8 or on["canvas"][0] < on["stage"][0] - 8, on  # the split is on
+    assert on["band"] <= 0.10, on
+    hit = lambda a, b: a["left"] < b["right"] and b["left"] < a["right"] and a["top"] < b["bottom"] and b["top"] < a["bottom"]
+    for seen in (off, on):
+        assert seen["name"] and not hit(seen["name"], seen["circle"]), seen
