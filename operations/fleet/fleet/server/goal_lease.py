@@ -1,4 +1,4 @@
-"""D-550 10: Fleet navigation goal leases â€” send ``lease_ttl_s`` and renew it (default off).
+"""D-550 10: Fleet navigation goal leases — send ``lease_ttl_s`` and renew it (default off).
 
 GoalLeases tracks leased and unbounded goals per robot (Rule M display).
 

@@ -253,7 +253,10 @@ def main(argv=None):
     work = Path(config["work_dir"]).expanduser() / "calibrate"
     if args.step != "check":
         work.mkdir(parents=True, exist_ok=True)
-    found = check(config, calibration, targets, cell.frame("top"), config["params"])
+    from cell_shared_pallet import fixture_check_frame, shared_pallet
+    frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
+    found = check(config, calibration, targets, frame, config["params"])
+    found.update(fixture_report)
     if args.step == "check":
         from cell_route_calibration import include_route_report
         include_route_report(config, calibration, found, args, ap)
@@ -308,6 +311,13 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
                 config_dirty = True
+            if config.get("arm_id") in ("arm_a", "arm_b") and "map_binding_error" in found and found["map_binding_error"] is None:
+                comparison = shared_pallet(config, calibration, candidate_frame=current)
+                if comparison["status"] == "mismatch":
+                    done.append({"remap": record["loo_error_mm"], "refused": "shared pallet work surfaces disagree",
+                                 "shared_pallet_surface": comparison})
+                    print(json.dumps({"done": done}), flush=True)
+                    return 2  # the geometry, map, reference and bias on disk still belong to the previous generation
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():

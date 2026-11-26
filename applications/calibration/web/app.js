@@ -1,6 +1,7 @@
 import { addDtDd, renderInspector } from "./inspector.js";
 export { addDtDd };
 import "/common/ui.js";
+import { readFixtureFrame, fixtureSummary } from "./fixture-frame.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests, requestHash } from "./requests.js";
 import { loadJobStatus, setJobArm, setJobOperator } from "./job-status.js";
@@ -88,12 +89,14 @@ function frameFor(profile, source, force = false) {
   const path = `/api/calibration/v1/profiles/${encodeURIComponent(profile.id)}/frame/${source}`;
   (async () => {
     try {
-      const res = await fetch(path, {cache: "no-store"});
+      const wantFixtures = source === "live" && ["arm_a", "arm_b"].includes(profile.arm_id);
+      const res = await fetch(path, {cache: "no-store", headers: wantFixtures ? {Accept: "application/vnd.rosy.fixture-frame+json"} : {}});
       if (!res.ok) throw new Error(String(res.status));
-      const image = await createImageBitmap(await res.blob());
+      const {image, observation} = await readFixtureFrame(res);
       if (state.frameCache.get(key) !== rec) { image.close(); return; }
       rec.image?.close();
       rec.image = image;
+      rec.observation = observation;
       rec.binding = res.headers.get("X-Rosy-Frame-Binding");
       rec.generation = res.headers.get("X-Rosy-Frame-Generation");
       rec.reference = res.headers.get("X-Rosy-Frame-Reference-Sha256");
@@ -431,8 +434,12 @@ function renderCanvases() {
   bindTag.textContent = verified ? tagged : "정합 미확인 · 오버레이 숨김";
   bindTag.title = verified ? [tagged, shiftText].filter(Boolean).join(" · ") : (shiftText || fb.title);
 
+  const fixtures = verified && source === "live" ? frame.observation?.fixtures : null;
+  const fixtureDetails = $("fixtureDetails");
+  fixtureDetails.hidden = !fixtures || !Object.keys(fixtures).length;
+  if (!fixtureDetails.hidden) $("fixtureValues").textContent = fixtureSummary(fixtures);
   const topRes = renderTopView($("topCanvas"), {
-    profile, siteName: state.siteName, image: frame.image, frameSource: source, frameVerified: verified, layers: state.layers,
+    profile, siteName: state.siteName, image: frame.image, frameSource: source, frameVerified: verified, fixtures, layers: state.layers,
     zPlane: state.zPlane, errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastTopHitTargets = topRes?.hitTargets || [];

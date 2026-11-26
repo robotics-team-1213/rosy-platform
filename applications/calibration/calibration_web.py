@@ -13,6 +13,7 @@ in, so the screen is read-only (list and view, no answers).
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -322,8 +323,12 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             stamp = None
         fresh = stamp is not None and -0.25 <= time.time() - stamp <= 2.0
+        details = (source == "live" and getattr(self, "headers", {}).get("Accept") == "application/vnd.rosy.fixture-frame+json")
         if source == "reference" or fresh:
-            body, binding = cell_calibration_view.bind_frame(entry, source, body)
+            if details:
+                body, binding = cell_calibration_view.bind_frame(entry, source, body, include_fixtures=True)
+            else:
+                body, binding = cell_calibration_view.bind_frame(entry, source, body)
             if binding["status"] == "aligned":
                 media = "image/jpeg"
         else:
@@ -335,6 +340,9 @@ class Handler(BaseHTTPRequestHandler):
                           ("Shift-Px", "max_px"), ("Inliers", "inliers")):
             if binding.get(key) is not None:
                 headers.append((f"X-Rosy-Frame-{name}", str(binding[key])))
+        if details:
+            return self.json(200, {"media": media, "image": base64.b64encode(body).decode("ascii"),
+                                   "fixture_observation": binding.get("fixture_observation")}, headers)
         return self.send(200, media, body, headers)
 
     def _serve_profile_frame(self, entry: dict, source: str):

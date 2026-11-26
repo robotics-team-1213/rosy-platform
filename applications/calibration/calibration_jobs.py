@@ -132,6 +132,7 @@ class Jobs:
         self.python = cells["python"]
         self.work = Path(cells["work"]).expanduser()
         self.arms = cells["arms"]
+        self.registry = Path(cells_path).resolve()
         self.fleet_console_url = None
         url = cells.get("fleet_cell_console_url")
         if isinstance(url, str):
@@ -185,7 +186,8 @@ class Jobs:
         return default
 
     def env(self, arm, owner):
-        return {**os.environ, **self.arms[arm].get("env", {}), "ROSY_ARM_LEASE_OWNER": owner}
+        return {**os.environ, **self.arms[arm].get("env", {}), "ROSY_ARM_LEASE_OWNER": owner,
+                "ROSY_CALIBRATION_REGISTRY": str(self.registry)}
 
     # --- status -------------------------------------------------------------------------------------------------
     def route_sites(self, arm):

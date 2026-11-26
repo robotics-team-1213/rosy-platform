@@ -1,4 +1,5 @@
 """Displayed pixels and geometry must belong to the same generation and live-frame registration."""
+import base64
 from io import BytesIO
 
 import pytest
@@ -39,15 +40,30 @@ def test_exact_frame_gate_follows_the_image_and_generation(open_screen):  # noqa
             receipt = {"X-Rosy-Frame-Binding": "aligned", "X-Rosy-Frame-Generation": generation,
                        "X-Rosy-Frame-Reference-Sha256": reference, "X-Rosy-Frame-Lifetime-Ms": "2000",
                        "X-Rosy-Frame-Shift-Px": "0.0"}
-            page.route("**/frame/live", lambda r: r.fulfill(body=encoded.getvalue(), content_type="image/png", headers=receipt))
+            observation = {"fixtures": {"pallet": {"status": "partial", "segments": [
+                {"kind": "image_edge", "points_px": [[4, 6], [21, 18]]}], "clipping_edges": ["bottom"]},
+                "temp_plate_a": {"status": "partial", "placement_slots": {"status": "candidate", "revision": "v11",
+                    "slots": {"R2": {"center_px": [28, 31], "uncertainty_px": 4.5}}}}}}
+            def frame(route):
+                if "fixture-frame+json" in route.request.headers.get("accept", ""):
+                    route.fulfill(json={"media": "image/png", "image": base64.b64encode(encoded.getvalue()).decode(),
+                                        "fixture_observation": observation}, headers=receipt)
+                else:
+                    route.fulfill(body=encoded.getvalue(), content_type="image/png", headers=receipt)
+            page.route("**/frame/live", frame)
             page.goto(open_screen + "/?arm=arm_a")
             badge = page.locator("#frameBindTag")
             expect(badge).to_have_text("실시간 영상 정합 확인")
             assert page.evaluate("window.topLabels.includes('center_px')")
+            expect(page.locator("#fixtureDetails")).to_be_visible()
+            assert page.evaluate("window.topLabels.includes('선박 외곽')")
+            assert page.evaluate("window.topLabels.includes('R2 후보')")
             receipt["X-Rosy-Frame-Generation"] = "old-map"
             page.locator("#btnRefreshFrame").click()
             expect(badge).to_have_text("정합 미확인 · 오버레이 숨김")
             assert not page.evaluate("window.topLabels.includes('center_px')")
+            expect(page.locator("#fixtureDetails")).to_be_hidden()
+            assert not page.evaluate("window.topLabels.includes('R2 후보')")
             receipt.update({"X-Rosy-Frame-Generation": generation, "X-Rosy-Frame-Binding": "unverified",
                             "X-Rosy-Frame-Shift-Px": "124.6"})
             page.goto(open_screen + "/?arm=arm_s")

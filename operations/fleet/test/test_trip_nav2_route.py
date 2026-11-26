@@ -545,7 +545,7 @@ def test_nav2_repeat_trip_rolls_across_multiple_laps_and_reanchors_robot_frame()
     store.record_plan(plan_id="p-nav2", robot_id="rosy_60", principal_id="bob",
                       map_version=plan["map_version"], request=body_req, result={"plan": plan})
 
-    # line_follow is OFF, camera is unavailable â€” Nav2 still starts and reports leg_mode == "free".
+    # line_follow is OFF, camera is unavailable — Nav2 still starts and reports leg_mode == "free".
     ports.core.mode = "OFF"
     ports.camera = {"available": False}
     started = run(runner.start("p-nav2", "bob"))
