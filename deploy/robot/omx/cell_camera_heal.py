@@ -117,10 +117,19 @@ def _cycle_hub_port(upstream: Path, port: int) -> None:
                    check=True, capture_output=True, text=True, timeout=30)
 
 
-def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None) -> str:
+def _cell_lock():
+    """The whole-cell session.lock, exclusive: arm sessions (shared), observer restarts and new API jobs all wait on it."""
+    from joint_tune_lock import session_lock
+
+    return session_lock()
+
+
+def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None, cell_lock=_cell_lock) -> str:
     """Escalation after the leaf re-authorisation failed (2026-11-26: arm_b wrist UVC -71 came back only after its
     hub port was power-cycled). The hub also feeds an OpenRB, so it runs only while no arm session exists and every
-    arm lock is free: without a session the observer keeps torque OFF, so a board reset moves nothing."""
+    arm lock is free: without a session the observer keeps torque OFF, so a board reset moves nothing. The whole-cell
+    lock is held exclusively from that check until the camera unit is back, so no session, observer restart or API job
+    can start on the hub while it is down."""
     import time
 
     device = io.device(role)
@@ -129,13 +138,20 @@ def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None) ->
     owners = list(io.sessions()) + [f"{arm} lock held" for arm in ARMS if not io.lock_free(arm)]
     if owners:  # shortcut: any session blocks, even on another hub; map board serials to arms when this bites
         return f"hub cycle for {role} skipped: an arm session is live ({owners[0][:80]})"
+    try:  # checked above, held from here: a session that started since holds the cell lock shared, so this fails
+        held = cell_lock()
+    except SystemExit as exc:
+        return f"hub cycle for {role} skipped: {exc}"
     try:
-        upstream, port, hub = find(device) if find else camera_hub_port(device, role)
-        cycle(upstream, port)
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        return f"hub cycle for {role} failed: {exc}"
-    (sleep or time.sleep)(8)
-    io.unit_restart(role)
+        try:
+            upstream, port, hub = find(device) if find else camera_hub_port(device, role)
+            cycle(upstream, port)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            return f"hub cycle for {role} failed: {exc}"
+        (sleep or time.sleep)(8)
+        io.unit_restart(role)
+    finally:
+        held.close()  # before the job's own session wrapper asks for its arm lock
     return f"power-cycled hub {hub.name} (port {port} of {upstream.name}) for {role}"
 
 

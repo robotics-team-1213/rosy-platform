@@ -96,21 +96,26 @@ class HubIo:
         return code, (b"\xff\xd8" if code == 200 else b"")
 
 
+class _FakeLock:
+    def close(self):
+        pass
+
+
 def test_hub_cycle_only_when_no_arm_session_and_reports_failures():
     cycled = []
     find = lambda _dev: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2"))
     cycle = lambda up, port: cycled.append((up.name, port))
     busy = HubIo(sessions=["python record_session.py --arm arm_a"])
-    assert "skipped" in heal.hub_cycle("arm_b_wrist", busy, find=find, cycle=cycle, sleep=lambda _s: None) and not cycled
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", busy, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock) and not cycled
     locked = HubIo(locked={"arm_s"})
-    assert "skipped" in heal.hub_cycle("arm_b_wrist", locked, find=find, cycle=cycle, sleep=lambda _s: None) and not cycled
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", locked, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock) and not cycled
     idle = HubIo()
-    note = heal.hub_cycle("arm_b_wrist", idle, find=find, cycle=cycle, sleep=lambda _s: None)
+    note = heal.hub_cycle("arm_b_wrist", idle, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock)
     assert cycled == [("3-1.4", 2)] and idle.restarted == ["arm_b_wrist"] and "power-cycled hub 3-1.4.2" in note
 
     def broken(_dev):
         raise OSError("no external hub port above the camera to cycle")
-    assert "failed" in heal.hub_cycle("arm_b_wrist", HubIo(), find=broken, cycle=cycle, sleep=lambda _s: None)
+    assert "failed" in heal.hub_cycle("arm_b_wrist", HubIo(), find=broken, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock)
 
 
 def test_heal_escalates_to_hub_cycle_after_failed_leaf_recovery(tmp_path, monkeypatch):
@@ -189,3 +194,37 @@ def test_hub_port_still_refuses_a_camera_on_a_root_port(tmp_path):
     leaf = _usb_tree(tmp_path, "3-1", "3-1.1", hubs={"3-1"})
     with pytest.raises(OSError, match="no external hub port"):
         heal.camera_hub_port(str(tmp_path / "gone"), "arm_b_wrist", leaf_finder=lambda _r: {"leaf": str(leaf)})
+
+
+def test_hub_cycle_holds_the_whole_cell_lock_exclusively_until_the_camera_is_back(tmp_path, monkeypatch):
+    """A session that starts after the idle check (it holds session.lock shared) stops the cycle; during the cycle
+    nothing can take the cell lock, and it is free again before the job's own session wrapper runs."""
+    import fcntl
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "rosy-omx"))
+    (tmp_path / "rosy-omx").mkdir()
+    lock = tmp_path / "rosy-omx" / "session.lock"
+    find = lambda _dev: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2"))
+
+    def try_shared():
+        with lock.open("a") as fh:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                return True
+            except BlockingIOError:
+                return False
+
+    seen, cycled = [], []
+    io = HubIo()
+    io.unit_restart = lambda role: (seen.append(("restart", try_shared())), io.restarted.append(role))
+    note = heal.hub_cycle("arm_b_wrist", io, find=find, cycle=lambda up, port: (cycled.append(port), seen.append(("cycle", try_shared()))),
+                          sleep=lambda _s: None)
+    assert "power-cycled" in note and seen == [("cycle", False), ("restart", False)]
+    assert try_shared()  # released before exec into the job
+
+    with lock.open("a") as session:  # an arm session started between the idle check and the cycle
+        fcntl.flock(session, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        cycled.clear()
+        note = heal.hub_cycle("arm_b_wrist", HubIo(), find=find, cycle=lambda up, port: cycled.append(port), sleep=lambda _s: None)
+    assert "skipped" in note and "session.lock" in note and not cycled
