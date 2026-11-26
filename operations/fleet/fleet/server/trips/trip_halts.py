@@ -226,8 +226,10 @@ class TripHalts:
         if (trip.get("detail") or {}).get("camera_lane_fallback"):
             lane, place, hp = False, None, True
         try:
-            result = (await self.halt_dock(trip) if self.dock_owned(trip)
-                      else await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip)))
+            if self.dock_owned(trip):
+                result = await self.halt_dock(trip)
+            else:
+                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip))
         except Exception:
             _LOG.exception("could not stop robot %s of a trip open before the restart", rid)
             return False
