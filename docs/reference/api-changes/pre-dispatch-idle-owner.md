@@ -1,9 +1,0 @@
----
-surface: core
-kind: additive
-slug: pre-dispatch-idle-owner
-date: 2026-11-26
-title: Idle navigation ownership proof
----
-
-An idle CORE may return `idle_owner` in `POST /api/v1/navigation/cancel` and `GET /api/v1/navigation/state`. The idle cancellation also returns the CORE clock value in `idle_observed_at`. The object identifies the boot, empty native owner, navigation and docking owner generations, transport generation and mode epoch. CORE supplies it only with stable, vacant Nav2 transport. For a pre-dispatch peer hold Fleet confirms a pause using the matching owner before and after a subsequent measured standstill. A successful idle observation leaves the trip waiting for ordinary traffic admission.
