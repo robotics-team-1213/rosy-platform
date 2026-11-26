@@ -5,6 +5,9 @@ import { resolve as resolvePath } from "node:path";
 const SHARED = fileURLToPath(new URL("../../../../shared/web", import.meta.url));
 
 export async function resolve(specifier, context, next) {
+  if (specifier === "/console/assets/omx-inspector.js") {
+    return next(new URL("../../../../applications/fleet/web/shared/omx-inspector.js", import.meta.url).href, context);
+  }
   if (specifier === "/console/assets/authorization.js") {
     return next(new URL("../../../../applications/fleet/web/shared/authorization.js", import.meta.url).href, context);
   }

@@ -111,6 +111,42 @@ def _seed_ready_amr(app, robot_id="rosy_46"):
     )
 
 
+def test_unrepresentable_route_refused_on_act_admission_and_recovery(tmp_path, monkeypatch):
+    app, client = _app(tmp_path, monkeypatch)
+    for task_id, cell, arm, src, dst, disp, reason in (
+        ("displaced", "cell_s", "arm_s", "pinky", "belt", "floor_front", "INVALID_EXECUTION_MODE"),
+        ("other-src", "cell_ab", "arm_a", "temp_plate_a", "ship-h1r0-l0", None, "ACT_POLICY_INVALID_TARGET"),
+        ("other-dst", "cell_ab", "arm_b", "belt", "pallet-l0", None, "ACT_POLICY_INVALID_TARGET"),
+    ):
+        route = dict(cell_id=cell, arm_id=arm, src_site=src, dst_site=dst, displaced_to=disp, tier=1)
+        rejected = client.post("/api/fleet/pipeline/cell-tasks", json={**route, "execution_mode": "act_policy"})
+        assert rejected.status_code == 422 and rejected.json()["detail"]["code"] == reason
+        _seed_abort(app, task_id, cell_id=cell, arm_id=arm)
+        app.state.omx_cell_tasks[task_id].update(route)
+        failures = client.get("/api/fleet/pipeline/recovery-tools").json()["active_failures"]
+        failure = next(f for f in failures if f["task_id"] == task_id)
+        assert failure["eligible_tools"]["enqueue_vla_act_fallback"] == {"allowed": False, "reason": reason}
+
+
+def test_cell_ab_act_fallback_preserves_failed_route_and_requires_presence(tmp_path, monkeypatch):
+    app, client = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="op-kim", role="operator"))
+    _seed_abort(app, "belt-b", cell_id="cell_ab", arm_id="arm_b")
+    app.state.omx_cell_tasks["belt-b"].update(src_site="belt", dst_site="ship-h1r0-l0", robot_kind="pinky")
+    failure = client.get("/api/fleet/pipeline/recovery-tools").json()["active_failures"][0]
+    assert failure["eligible_tools"]["enqueue_displaced_recovery"]["reason"] == "CELL_S_ONLY"
+    assert failure["eligible_tools"]["enqueue_vla_act_fallback"]["allowed"]
+    res = client.post("/api/fleet/pipeline/recovery-tools/invoke", json={
+        "tool_name": "enqueue_vla_act_fallback", "arguments": {"mode": "act", "max_chunks": 2},
+        "caller_kind": "operator", "request_id": "act-b-1", "expected_context_sha256": failure["context_sha256"],
+        "root_task_id": "belt-b", "rationale": "retry same belt route",
+    })
+    assert res.status_code == 200, res.text
+    task = res.json()["result"]["task"]
+    assert (task["cell_id"], task["arm_id"], task["src_site"], task["dst_site"]) == ("cell_ab", "arm_b", "belt", "ship-h1r0-l0")
+    assert task["fallback_from_task_id"] == "belt-b" and task["requires_presence_confirm"] is True
+    assert task["execution_mode"] == "act_policy" and task["max_chunks"] == 2
+
+
 @pytest.mark.parametrize("arm,cell", [("arm_s", "cell_s"), ("arm_a", "cell_ab"), ("arm_b", "cell_ab")])
 def test_home_recovery_binds_only_the_current_incident(tmp_path, monkeypatch, arm, cell):
     from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON

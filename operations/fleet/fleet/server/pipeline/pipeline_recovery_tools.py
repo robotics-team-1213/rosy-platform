@@ -20,6 +20,7 @@ from core_common.protocol.pipeline_recovery_tools import (
     RecoveryToolInvokeRequest,
     VisualCheckpointArgs,
 )
+from fleet.server.pipeline_port_events import TASK_IDENTITY_FIELDS
 from fleet.server.sitemap import pipeline_auto_events, pipeline_pinky_dispatch, pipeline_repark
 from fleet.server.pipeline_recovery_policy import (
     ARM_CELL,
@@ -436,10 +437,14 @@ def install_recovery_tool_routes(app, ctx) -> None:
             else:
                 if principal_obj is not None and actor_role != "operator":
                     _refuse(403, "OPERATOR_APPROVAL_REQUIRED_FOR_FALLBACK_ENQUEUE")
-                spec = {**ctx.CELL_TASK_PRESETS["s3_act_policy"], "max_chunks": req.arguments.get("max_chunks", 2),
-                        "fallback_from_task_id": req.root_task_id, "requires_presence_confirm": True,
-                        "fallback_chain_depth": int(failure["fallback_chain_depth"]) + 1,
-                        **({"robot_id": failure["robot_id"]} if failure.get("robot_id") else {})}
+                orig = app.state.omx_cell_tasks[failure["task_id"]]
+                spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site",
+                                             "tier", "col", "row", "tier_hint", "zone_id", "cable_guard_micro",
+                                             "unload_batch_id", "unload_index", "unload_expected", *TASK_IDENTITY_FIELDS)
+                        if k in orig}
+                spec.update(execution_mode="act_policy", max_chunks=req.arguments.get("max_chunks", 2),
+                            fallback_from_task_id=req.root_task_id, requires_presence_confirm=True,
+                            fallback_chain_depth=int(failure["fallback_chain_depth"]) + 1)
                 task = ctx._enqueue_one_task(ctx.active_map(), spec, principal_id=principal, principal_role=actor_role, save=False)
                 bump_dispatch = task.get("status") == "QUEUED"
                 budgets["enqueue_vla_act_fallback"] = budgets.get("enqueue_vla_act_fallback", 0) + 1

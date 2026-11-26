@@ -323,6 +323,11 @@ def main(argv: list[str] | None = None) -> None:
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = resolve_task_arm(handoff)
         if args.dry_run_hw:
+            if handoff.get("execution_mode") == "act_policy":
+                return {"arm": arm_id, "error": "ACT_POLICY_DRY_RUN", "events_count": 0,
+                        "motion_issued": False, "inference_performed": False,
+                        "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},
+                        "stop_event": {"command": "stop", "ok": False, "folded": False}}
             return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
         if args.execute_mode == "guarded-pick":
             res = execute_guarded_cell_task(handoff, prep_dir=prep_dir)

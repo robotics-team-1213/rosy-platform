@@ -1055,7 +1055,8 @@ staging_bays:
     assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]
 
 
-def test_s3_act_policy_preset_validation_presence_gate_and_retry():
+def test_act_policy_preset_validation_presence_gate_and_retry(monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "1")
     site_map = _map()
     graph = build_graph(site_map)
     maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
@@ -1066,7 +1067,16 @@ def test_s3_act_policy_preset_validation_presence_gate_and_retry():
     client = TestClient(app)
 
     assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "invalid"}).json()["detail"]["code"] == "INVALID_EXECUTION_MODE"
-    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "execution_mode": "act_policy"}).json()["detail"]["code"] == "ACT_POLICY_UNSUPPORTED_ARM"
+    for arm in ("arm_a", "arm_b"):
+        preset = f"s5_tier1_{arm}_act_policy"
+        task = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": preset}).json()["task"]
+        assert (task["cell_id"], task["arm_id"], task["execution_mode"]) == ("cell_ab", arm, "act_policy")
+        assert (task["src_site"], task["dst_site"], task["tier"]) == ("belt", "ship-h1r0-l0", 1)
+        claim = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_ab", "task_id": task["task_id"]}).json()
+        assert not claim["claimed"] and claim["reason"] == "PRESENCE_CONFIRMATION_REQUIRED"
+    for cell, arm in (("cell_s", "arm_a"), ("cell_ab", "arm_s")):
+        rejected = client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": cell, "arm_id": arm, "tier": 1, "execution_mode": "act_policy"})
+        assert rejected.status_code == 422
     assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "act_policy", "max_chunks": 7}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"
     assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "act_policy", "max_chunks": True}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"
     assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "max_chunks": 2}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"

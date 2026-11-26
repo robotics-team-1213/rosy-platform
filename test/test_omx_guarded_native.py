@@ -738,3 +738,90 @@ def test_sync_hardware_error_bit_rechecks_unicast_after_rx_drain(guard):
     with pytest.raises(ValueError, match=r"gripper: hardware error \(1") as exc_mixed:
         mixed_motion._check_hardware_errors()
     assert not isinstance(exc_mixed.value, probe.TelemetryReadError)
+
+def test_lease_bound_motor_gate_checks_seed_enable_and_each_motion_register(tmp_path, guard):
+    from native_policy_fence import NativePolicyFence, PolicyWriteRefused
+    pins = {"workcell_id": "unit", "policy_digest": "a"*64, "rig_revision": "rig",
+            "calibration_revision": "cal", "scope": "cell-task:unit:arm_b"}
+
+    class PolicyBus(Bus):
+        def sync_read(self, register, motors=None, **kwargs):
+            if register == "Torque_Enable":
+                return {n: self.torque[n] for n in motors}
+            return super().sync_read(register, motors, **kwargs)
+
+        def sync_write(self, register, values, *, normalize=True):
+            if register == "Torque_Enable":
+                assert not normalize and values == dict.fromkeys(NAMES, 1)
+                self.events.append(("policy_group_enable",))
+                self.torque.update(values)
+            else:
+                super().sync_write(register, values, normalize=normalize)
+
+    def grant(fence, number):
+        fence.receive(fence.owner_session_id, 1_500_000_000, {
+            **pins, "lease_id": f"lease{number}", "episode_id": f"ep{number}",
+            "ttl_s": 1., "seq": 1, "window_remaining_s": 3.,
+        })
+
+    now = [1_000_000_000]
+    with pytest.raises(ValueError):
+        guard.NativeJointMotion.for_policy(PolicyBus(), fence=None)
+    for expire_at in ("seed", "enable", "motion"):
+        bus = PolicyBus()
+        fence = NativePolicyFence(pins, tmp_path / f"{expire_at}.sqlite3", clock=lambda: now[0])
+        try:
+            motion = guard.NativeJointMotion.for_policy(bus, fence=fence, clock=lambda: 1.)
+            if expire_at == "seed":
+                with pytest.raises(guard.GoalRejected) as error:
+                    motion.send(action(bus))
+                assert not error.value.can_send_hold
+                assert not bus.events
+                continue
+            grant(fence, expire_at)
+            seed = motion.prepare(action(bus))
+            assert [e[0] for e in bus.events].count("goal") == 1
+            if expire_at == "enable":
+                fence.hold("window_closed")
+                with pytest.raises(PolicyWriteRefused):
+                    motion.commit(seed)
+                assert not any(bus.torque.values())
+                continue
+            motion.commit(seed)
+            assert all(bus.torque.values())
+            target = motion.prepare(action(bus))
+            before = list(bus.events)
+            now[0] = 1_500_000_000
+            with pytest.raises(PolicyWriteRefused):
+                motion.commit(target)
+            assert bus.events == before and all(bus.torque.values())
+        finally:
+            fence.close()
+
+
+@pytest.mark.parametrize("failure_point", ["read", "write"])
+def test_policy_bus_failure_concurrent_with_expiry_never_cuts_torque(tmp_path, guard, failure_point):
+    from native_policy_fence import NativePolicyFence
+    pins = {"workcell_id": "unit", "policy_digest": "a"*64, "rig_revision": "rig",
+            "calibration_revision": "cal", "scope": "cell-task:unit:arm_b"}
+    now = [10_000]
+    bus = Bus()
+    fence = NativePolicyFence(pins, tmp_path / "journal", clock=lambda: now[0])
+    try:
+        motion = guard.NativeJointMotion.for_policy(bus, fence=fence)
+        fence.receive(fence.owner_session_id, 1_000_010_000, {
+            **pins, "lease_id": "lease", "episode_id": "episode", "ttl_s": 1., "seq": 1, "window_remaining_s": 2.,
+        })
+        def lost_bus(*_a, **_kw):
+            now[0] = 1_000_010_000
+            raise OSError("lost serial reply")
+        if failure_point == "read":
+            bus.sync_read = lost_bus
+        else:
+            bus.sync_write = lost_bus
+        with pytest.raises(guard.GoalRejected) as error:
+            motion.send(action(bus))
+        assert not error.value.can_send_hold and not any(event[0] == "off" for event in bus.events)
+        assert not fence.status()["lease_current"]
+    finally:
+        fence.close()
