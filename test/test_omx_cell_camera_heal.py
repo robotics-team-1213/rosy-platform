@@ -42,11 +42,16 @@ def test_with_camera_heal_wraps_only_camera_jobs():
     wrapped = heal.with_camera_heal(argv, spec.JOBS["cell_policy_drive"], params)
     assert wrapped[:2] == ["bash", "-c"] and wrapped[3] == heal.CAMERA_HEAL_SCRIPT
     assert Path(heal.CAMERA_HEAL_SCRIPT).is_file()
-    assert wrapped[4:7] == ["--target", "arm_b=cell-arm-b-d1073.json", "--"] and wrapped[7:] == argv
+    assert wrapped[4:6] == ["--target=arm_b=cell-arm-b-d1073.json", "--"] and wrapped[6:] == argv
     two = heal.with_camera_heal(argv, spec.JOBS["cell_two_arm_policy"], {"config_a": "a.json", "config_b": "b.json"})
-    assert two[4:9] == ["--target", "arm_a=a.json", "--target", "arm_b=b.json", "--"]
+    assert two[4:7] == ["--target=arm_a=a.json", "--target=arm_b=b.json", "--"]
     assert heal.with_camera_heal(argv, spec.JOBS["home"], params) is argv
-    assert heal.with_camera_heal(argv, spec.JOBS["calibrate_check"], {"config": "c.json"})[4:6] == ["--target", "-=c.json"]
+    cal_wrapped = heal.with_camera_heal(argv, spec.JOBS["calibrate_check"], {"config": "c.json"})
+    assert cal_wrapped[4:6] == ["--target=-=c.json", "--"]
+    calls = []
+    ok_none = lambda targets: [{"check": "cameras", "status": "ok", "detail": "ok"}] if targets == [(None, "c.json")] else []
+    assert heal.main(cal_wrapped[4:], heal_fn=ok_none, exec_fn=lambda *a: calls.append(a)) == 0
+    assert calls == [(argv[0], argv)]
 
 
 def test_recovery_jobs_are_never_held_back_by_the_camera_preflight():
