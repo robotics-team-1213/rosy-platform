@@ -1,4 +1,4 @@
-import {consolePlanSummaryText as planSummaryText} from '/console/assets/localization-panel-logic.js';
+import {tripPreviewSummary as planSummaryText} from '/console/assets/trip-preview-summary.js';
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
 import {mapPoint} from '/console/assets/geometry-edit.js';
 import {setOffBy} from '/common/cause-line.js';

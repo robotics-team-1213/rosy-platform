@@ -50,6 +50,7 @@ SHARED = {
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
     "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
+    "trip-preview-summary.js",  # Read-only preview distance from the plan pose to the parking staging place.
     "drawing-errors.js",
 }
 
