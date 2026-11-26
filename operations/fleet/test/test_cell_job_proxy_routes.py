@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 from fleet.server.app import create_app
 from fleet.server.cell_job_proxy_routes import CellJobProxy, load_config
 from fleet.server.console import FleetConsole
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 
 OP = {"Authorization": "Bearer op-token"}
 VIEW = {"Authorization": "Bearer viewer-token"}
@@ -34,7 +36,8 @@ def setup(tmp_path):
     token.write_text("cell-secret\n", encoding="utf-8")
     users = {sha256(b"op-token").hexdigest(): {"principal_id": "operator-a", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "viewer-a", "role": "viewer"}}
-    app = create_app(FleetConsole([], []), site_users=users)
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.db"), robot_ids=())
+    app = create_app(FleetConsole([], []), task_service=tasks, site_users=users, start_task_dispatcher=False)
     fake = FakeJobApi()
     cells = {"cell_ab": {"url": "http://cell:8781/", "token_file": str(token),
                          "arms": {"arm_a": ARM_FILES, "arm_b": ARM_FILES}, "models": [MODEL]}}

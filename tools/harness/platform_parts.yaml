@@ -1795,6 +1795,8 @@ safety_anchors:
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.cell_job_proxy_routes.install_cell_job_proxy_routes, public: true}  # ARM-CELL proxy to :8781
+  - {symbol: fleet.server.cell_job_proxy_routes.CellJobProxy.start}  # three-job allowlist, operator != proposer
   - {symbol: fleet.server.task_reconcile_routes.install_task_reconcile_routes.reconcile_task, public: true}
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick}  # D-1024 3 lease issue only inside the window
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick_all}  # D-1024 3 ticker hook; no lease without a delivery port
