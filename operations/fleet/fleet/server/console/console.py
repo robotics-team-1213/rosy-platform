@@ -268,8 +268,10 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         *,
         mover: Optional[Callable[[str], Optional[tuple]]] = None,
         obstacle: Optional[Callable[[str], Optional[tuple]]] = None,
+        marker_clearance=None,
     ) -> None:
         self._site_mover_pose = mover
+        self._site_marker_clearance = marker_clearance
         self._site_obstacle_pose = obstacle
 
     def set_link_address_status(self, provider) -> None:
