@@ -8,7 +8,7 @@ from uuid import UUID
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.protocol.native_operation import NativeOperation
 from fleet.server.channel.execution.outcomes.evidence import safe_proof
-from fleet.server.ledger.berth_parking_helpers import BAY_DOCK_SPECS
+from fleet.server.berth_parking_helpers import BAY_DOCK_SPECS
 from fleet.server.trip_ports import TripError
 from fleet.server.named_stop_map_pose import read_precision_pose
 from fleet.hub.hub import HubError
@@ -140,10 +140,15 @@ class RearBayPort:
                 info.update(phase="waiting_for_clearance", reason=reason, next_check_at=runner._clock() + 1)
                 return
             state_map, grid = snapshot.get("map_id"), snapshot.get("map_grid_id")
-            epoch = (target.get("metadata") or {}).get("map_epoch")
+            metadata = target.get("metadata") or {}
+            frame = metadata.get("map_epoch")
+            taught_grid, generation = metadata.get("commissioned_grid_id"), metadata.get("commissioned_map_generation")
             if (not grid or not state_map or target.get("map_id") not in (state_map, grid)
-                    or (epoch is not None and epoch not in (grid, state_map))):
-                raise TripError(409, "CHARGE_BAY_TARGET_FRAME_UNVERIFIED", {"dock_id": info["dock_id"]})
+                    or (frame is not None and frame not in (grid, state_map))
+                    or (taught_grid is not None and (taught_grid, generation) != (grid, snapshot.get("map_generation")))):
+                info.update(phase="waiting_for_commission", reason="CHARGE_BAY_TARGET_FRAME_UNVERIFIED",
+                            next_check_at=runner._clock() + 3)
+                return
             sx, sy = live.graph.place_xy(info["staging_place_id"])
             velocity = snapshot.get("velocity") or {}
             if (pose is None or pose.state != "LOCALIZED" or math.dist((pose.x, pose.y), (sx, sy)) > runner.config.arrive_free_m

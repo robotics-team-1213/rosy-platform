@@ -170,7 +170,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
-        from fleet.server.trips.rear_bay_return import rear_bay
+        from fleet.server.rear_bay_return import rear_bay
         try:
             parking = rear_bay(active[2], body.to) if not body.repeat else None
         except TripError as exc:
@@ -337,7 +337,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                                           "binding_status": "MATCHED" if fit is not None else binding_status}
         return response
 
-    from fleet.server.trips.rear_bay_return import RearBayPort
+    from fleet.server.rear_bay_return import RearBayPort
     runner.rear_bay_port = RearBayPort(console, (*runner.halts.restarted, *runner.halts.gave_up))
     runner.halts.dock_stop = runner.rear_bay_port.halt
     app.state.trip_plan = plan

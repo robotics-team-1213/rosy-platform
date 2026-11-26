@@ -37,7 +37,7 @@ def test_core_line_never_falls_back_to_a_plain_nav2_goal():
 def test_selected_bay_preview_uses_its_own_spine_and_owner():
     import asyncio
     import pytest
-    from fleet.server.trips.rear_bay_return import rear_bay, RearBayPort
+    from fleet.server.rear_bay_return import rear_bay, RearBayPort
     from fleet.routing.trip import PlanRequest, RoutingConfig, plan_trip
     from fleet.server.trip_ports import TripError
     from tools.sim.bay_departure_sim import build_world_261026_site_map
@@ -63,7 +63,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
     import asyncio
     from uuid import uuid4
     from datetime import datetime, timezone
-    from fleet.server.trips.rear_bay_return import RearBayPort, rear_bay
+    from fleet.server.rear_bay_return import RearBayPort, rear_bay
     from tools.sim.bay_departure_sim import build_world_261026_site_map
     _, graph, _ = build_world_261026_site_map()
     sx, sy = graph.place_xy("P2")
@@ -112,7 +112,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
         return await Core().state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
     async def approved(*args):
         return await pose(), "binding"
-    monkeypatch.setattr("fleet.server.trips.rear_bay_return.read_precision_pose", approved)
+    monkeypatch.setattr("fleet.server.rear_bay_return.read_precision_pose", approved)
     port.clearance = clear
     asyncio.run(port.step(runner, live))
     assert (park["phase"], park["reason"]) == ("waiting_for_commission", "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED")
@@ -138,7 +138,7 @@ def test_rear_bay_checks_traffic_again_at_the_transport():
     from fleet.localization.map_binding import Fit
     from fleet.server.goal_lease import GoalLeases
     from fleet.server.trip_ports import TripError
-    from fleet.server.trips.rear_bay_return import RearBayPort, rear_bay
+    from fleet.server.rear_bay_return import RearBayPort, rear_bay
     from tools.sim.bay_departure_sim import build_world_261026_site_map
 
     _, graph, _ = build_world_261026_site_map()
