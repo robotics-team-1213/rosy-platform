@@ -13,6 +13,8 @@
       records `git merge-base <sha> main` as floor_sha in the cell's omx_autoupdate state (other keys kept,
       under the updater's lock, atomic rename) so the timer never goes back below the hotfix,
       then switches ~/rosy-test/<link> (default omx-tools-current, the cell tools) to it atomically. Prints folder and old target.
+      With --link omx-bench-current it then restarts the bench service when /api/arms reads idle with no arm locked;
+      busy or unreadable: prints "bench restart held" and exits 3 (the deploy itself stands). Never moves an arm.
   status [--host user@host] [--link omx-<name>-current]
       Prints the current link target and the five newest omx-tools-* folders.
 
@@ -21,6 +23,7 @@ The host comes from --host or OMX_HOTFIX_HOST; no live address is kept in this p
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -46,6 +49,10 @@ PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation
          "shared/web", "learning/envs/isaac/palletizing_gripper.py",
          "learning/envs/isaac/assets/omx_f_palletizing_description")
 LINK = "omx-tools-current"  # the cell tools only; a bench page deploys with --link omx-bench-current
+BENCH_LINK = "omx-bench-current"
+BENCH_SERVICE = "rosy-omx-bench-record.service"  # its ExecStart runs from ~/rosy-test/omx-bench-current
+BENCH_ARMS = "curl -fsS --max-time 5 http://127.0.0.1:8771/api/arms"
+HELD = 3  # deploy done, bench restart left to a person
 LINK_NAME = re.compile(r"omx-[a-z0-9-]+-current")
 TREE_NAME = re.compile(r"^omx-(?:bench|tools)-[0-9a-f]{7,40}$")
 STORAGE_LOCK = "storage-maintenance.lock"
@@ -218,7 +225,32 @@ def _link_ok(link: str) -> None:
         raise SystemExit(f"[omx-hotfix] not a tools link name (omx-<name>-current): {link!r}")
 
 
-def deploy(sha: str, host: str, tested_log: Path, link: str = LINK) -> tuple[str, str]:
+def bench_busy(reply: str) -> str | None:
+    """Why the bench must not restart now, from its /api/arms reply, or None when idle and unlocked."""
+    try:
+        arms = json.loads(reply)
+        status, locked = arms.get("status"), [a for a, v in arms["arms"].items() if v.get("locked_by")]
+    except (ValueError, KeyError, AttributeError, TypeError) as exc:
+        return f"unreadable /api/arms ({type(exc).__name__})"
+    return None if status == "idle" and not locked else f"status {status}, locked {','.join(locked) or 'none'}"
+
+
+def restart_bench(host: str) -> int:
+    """Restart the bench service on an idle bench so it runs the new link; 0 restarted, HELD otherwise."""
+    try:
+        reason = bench_busy(_ssh(host, BENCH_ARMS))
+    except SystemExit as exc:
+        reason = f"read failed: {exc}"
+    if reason is None:
+        # shortcut: idle is read a moment before the restart, not under the bench lock; a start in that gap is cut
+        state = _ssh(host, f"systemctl --user restart {BENCH_SERVICE} && systemctl --user is-active {BENCH_SERVICE}")
+        print(f"[omx-hotfix] {BENCH_SERVICE} restarted: {state}", flush=True)
+        return 0
+    print(f"[omx-hotfix] bench restart held: {reason}; restart when idle", flush=True)
+    return HELD
+
+
+def deploy(sha: str, host: str, tested_log: Path, link: str = LINK) -> tuple[str, str, int]:
     _link_ok(link)
     full = _sha(sha)
     problem = log_problem(tested_log, full)
@@ -242,7 +274,7 @@ def deploy(sha: str, host: str, tested_log: Path, link: str = LINK) -> tuple[str
         state = _ssh(host, floor_command(floor), data=FLOOR_SCRIPT.encode())
         print(f"[omx-hotfix] autoupdate floor {floor[:10]} recorded in {state}", flush=True)
     previous = _ssh(host, switch_script(name, link))
-    return f"~/rosy-test/{name}", previous
+    return f"~/rosy-test/{name}", previous, restart_bench(host) if link == BENCH_LINK else 0
 
 
 def status(host: str, link: str = LINK) -> str:
@@ -286,8 +318,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "test":
         return test(args.sha, args.log_dir, args.tests)
     elif args.command == "deploy":
-        folder, previous = deploy(args.sha, host_of(args.host), args.tested_log, args.link)
+        folder, previous, restart = deploy(args.sha, host_of(args.host), args.tested_log, args.link)
         print(f"deployed: {folder}\nprevious: {previous or 'none'}")
+        return restart
     else:
         print(status(host_of(args.host), args.link))
     return 0

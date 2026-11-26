@@ -257,7 +257,7 @@ function autoHomeView(ah,code){
     if(ah.ok)return {text:'홈 복귀 완료',tag:'자동 홈: 완료',tone:'good'};
     if(ah.cancelled)return {text:ah.message||'자동 홈 취소됨',tag:'자동 홈: 취소',tone:'warn'};
     if(ah.skipped)return {text:'자동 홈 생략 ('+(ah.reason||ah.message||'가드 중단')+') — 안전 확인 후 "지금 홈 포즈" 클릭',tag:'자동 홈: 생략',tone:'warn'};
-    return {text:'홈 복귀 실패('+(ah.error||ah.message||'원인 미상')+')',tag:'자동 홈: 실패',tone:'crit'};
+    return {text:'홈 복귀 실패('+(ah.error||ah.message||'원인 미확인')+')',tag:'자동 홈: 실패',tone:'crit'};
   }
   const wait=(code==='sealed'||code==='stopped_safe');
   return {text:wait?'실행 대기/미기록':'해당 없음',tag:wait?'자동 홈: 대기':'자동 홈: 해당 없음',tone:wait?'warn':''};
@@ -342,7 +342,7 @@ function renderStatus(st){
     prevCueAutoHome=ahOk;prevCueCode=code;prevCueAhFail=ahFail;
   }
 
-  $('top-checked').textContent='마지막 확인: '+nowText();
+  $('top-checked').textContent='마지막 확인 · '+nowText()+' · 브라우저 수신';
 
   $('ev-status').textContent=label;
   $('ev-arm').textContent=activeArm||'미확인';
@@ -537,7 +537,7 @@ function renderStatusKv(){
   const degree=Number.isFinite(st?.starting_deg_left)?' '+st.starting_deg_left.toFixed(1)+'도 남음':'';
   const track=fault?'차단':holdLabel||((st?.starting_step==='aligning'||d?.tracking===false)?'정렬 중'+degree:d?.tracking===true?'추종 중':'');
   setStatusCell('tel-track',track);
-  $('tel-track').dataset.tone=fault?'crit':holding?'warn':d?.tracking===true?'good':'live';
+  $('tel-track').dataset.tone=fault?'crit':holding?'warn':d?.tracking===true?'':'live';
 
   const speed=st?.teleop_speed??d?.teleop_speed;
   const rate=speed?.track_deg_s;
@@ -572,13 +572,13 @@ function renderTelemetry(d){
   syncHeaderAndSlimBar();
   const lat=$('tel-lat'), grid=$('tel-grid'), note=$('tel-note');
   if(!active){
-    lat.textContent='-- ms';lat.dataset.tone='warn';
+    lat.textContent='-- ms';lat.dataset.tone='';
     grid.hidden=true;if(note)note.hidden=false;
     return;
   }
   const ms=d.loop_latency_ms;
   lat.textContent=(typeof ms==='number')?(ms.toFixed(1)+' ms'):'-- ms';
-  lat.dataset.tone=(typeof ms==='number'&&ms>40)?'warn':'good';
+  lat.dataset.tone=(typeof ms==='number'&&ms>40)?'warn':'';
   const rows=Array.isArray(d.motors)?d.motors:[];
   if(!rows.length){grid.hidden=true;return;}
   if(note)note.hidden=true;
@@ -588,7 +588,7 @@ function renderTelemetry(d){
   for(const m of rows){
     const lRaw=m.leader_raw, fRaw=m.present_raw;
     const dl=(lRaw!=null&&fRaw!=null)?Math.abs((lRaw-fRaw)*360/4096):Math.abs(Number(m.error_deg)||0);
-    const col=dl>=5?'var(--crit)':(dl>=3?'var(--warn)':'var(--good)');
+    const col=dl>=5?'var(--crit)':(dl>=3?'var(--warn)':'var(--ink)');
     h+='<div>'+String(m.name||m.id||'')+'</div><div>'+(lRaw!=null?deg(lRaw):'--')+'</div><div>'+(fRaw!=null?deg(fRaw):'--')+'</div><div style="color:'+col+'">'+dl.toFixed(2)+'°</div>';
   }
   grid.innerHTML=h;

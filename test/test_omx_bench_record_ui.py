@@ -1428,3 +1428,21 @@ console.log('PASS');
     assert run.returncode == 0, run.stdout + run.stderr
 
 
+def test_bench_tones_keep_normal_and_idle_quiet_and_disconnect_warn():
+    import re
+    omx = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    src = {n: (omx / n).read_text(encoding='utf-8') for n in (
+        'bench_record.html', 'bench_record_cam.js', 'bench_record_app.js', 'bench_record_ui.js', 'bench_record_pipeline.js',
+        'bench_record_status.js', 'bench_record_review.js', 'bench_camera_alignment.js', 'bench_record.css')}
+    html, cam, app, st, rv = (src[n] for n in ('bench_record.html', 'bench_record_cam.js', 'bench_record_app.js',
+                                                'bench_record_status.js', 'bench_record_review.js'))
+    assert "dataset.tone=ok?'':'warn'" in cam and "setNotice('conn-error','warn'," in app
+    for n in ('bench_record_ui.js', 'bench_record_pipeline.js', 'bench_record_cam.js'):
+        assert "idle:['대기','']" in src[n], n
+    assert 'id="hdr-cam-health">' in html and 'id="mh-torque-badge" class="badge mono">' in html
+    assert 'id="manual-hold-card" aria-labelledby="h-manual-hold" hidden' in html and 'id="mh-reason" class="mh-reason" role="alert"' in html
+    assert re.search(r'id="hdr-start-now-btn"[^>]*aria-describedby="hdr-start-reasons"', html)
+    assert "stale: '조명 판정 지연'" in src['bench_camera_alignment.js'] and "missing: '조명 정보 없음'" in src['bench_camera_alignment.js']
+    assert "||'최신')" in app and "'마지막 확인 · '+nowText()+' · 브라우저 수신'" in st and '원인 미상' not in st
+    assert "setReqError('자동 복구 보류" not in rv and 'setReqError(guide)' not in rv and 'qa.replaceChildren(...qaOld)' in rv
+    assert not re.search(r'font-size:\.(6\d|7[0-4])rem', src['bench_record.css'])

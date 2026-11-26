@@ -1,5 +1,5 @@
 (function(){
-const JOB_MAP={idle:['대기','warn'],running:['실행 중','live'],blocked:['설정 필요','warn'],transferred:['전송 완료','good'],done:['전달 완료','good'],failed:['실패','crit']};
+const JOB_MAP={idle:['대기',''],running:['실행 중','live'],blocked:['설정 필요','warn'],transferred:['전송 완료','good'],done:['전달 완료','good'],failed:['실패','crit']};
 let lastPreviewReplay='';
 let lastPipeState=null;
 let pipeInFlight=false;
