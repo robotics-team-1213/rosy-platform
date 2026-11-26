@@ -3,8 +3,25 @@ import asyncio
 import logging
 import time
 
+from fleet.localization.relative_search_prior import MAX_FRAME_AGE_S
+
 _LOG = logging.getLogger(__name__)
 RENEW_S = 10.0  # The existing per-source Vision stream hold is 30 s.
+
+
+def _waiting_peers(live, map_id):
+    detail = live.view.get("detail") or {}
+    wait = detail.get("peer_wait") or {}
+    if (not live.open or live.view.get("hold") or wait.get("stage") != "pre_dispatch_peer_check"
+            or wait.get("dispatch_attempted") is not False or wait.get("site_route_map") != map_id
+            or not live.view.get("robot_id") or wait.get("command_robot_id") != live.view["robot_id"]
+            or wait.get("reason") != "LOCALIZATION_UNTRUSTED"):
+        return set()
+    peers = set(wait.get("waiting_on") or ())
+    proof = wait.get("peer_evidence") or {}
+    eligible = {"approved_marker_unavailable", "stationary_interval_pending", "keep_out_intersection"}
+    return peers if (live.view["robot_id"] not in peers and wait.get("blocked_by") in peers
+                     and all((proof.get(rid) or {}).get("reason") in eligible for rid in peers)) else set()
 
 
 class RoadVisionDemand:
@@ -14,6 +31,27 @@ class RoadVisionDemand:
         self._tasks = {}
         self._failed = set()
 
+    def new_peer_observations(self, live, map_id, now):
+        """A fresh enrolled observation can request an earlier check, never authorize motion."""
+        peers = _waiting_peers(live, map_id)
+        if not peers:
+            return None
+        wait = live.view["detail"]["peer_wait"]
+        checked = wait["checked_at"]
+        if now - checked < MAX_FRAME_AGE_S or wait.get("observation_retry"):
+            return None
+        sources = {source.source_id: dict(source.robot_markers) for source in self.sightings.sources
+                   if source.map_id == map_id}
+        samples = {}
+        for row in self.sightings.snapshot()["sightings"]:
+            rid, src = row["robot_id"], row["source_id"]
+            if (rid in peers and rid in sources.get(src, {}) and row["map_id"] == map_id
+                    and checked < row["captured_at"] <= now and now - row["captured_at"] <= MAX_FRAME_AGE_S
+                    and row.get("calibration_source") == "approved_record" and row.get("calibration_revision")
+                    and row["calibration_revision"] == self.sightings.approved_sighting_revision(src, map_id)):
+                samples[rid] = {k: row[k] for k in ("source_id", "seq", "captured_at", "calibration_revision")}
+        return {"checked_at": now, "peers": samples} if samples.keys() == peers else None
+
     def period(self, runner):
         robots = {robot for robot, live in runner._live.items() if live.open and
                   (live.nav2 or live.segment_is_lane(live.view["segment_index"]))}
@@ -22,9 +60,13 @@ class RoadVisionDemand:
         if active is not None:
             eligible = [src for src in self.sightings.sources if src.map_id == active[1].map_id]
             latest = None
-            for robot in robots:
+            movers = {rid for rid in robots if runner._live[rid].view["map_version"] == active[0]}
+            peers = {peer for rid in movers for peer in _waiting_peers(runner._live[rid], active[1].map_id)}
+            for robot in (*sorted(movers), *sorted(peers - movers)):
                 choices = {src.source_id for src in eligible if robot in src.robot_ids
-                           and runner._live[robot].view["map_version"] == active[0]}
+                           and (robot in movers or robot in dict(src.robot_markers))}
+                if robot not in movers and choices & wanted:
+                    continue
                 if len(choices) == 1:
                     wanted.update(choices)
                 elif choices:
