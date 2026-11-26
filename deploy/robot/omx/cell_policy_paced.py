@@ -82,7 +82,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         if fault or hold_needed or (authorize is not None and not eff_prefix):
             _hold_and_log(*pre_logs)
             return False, None
-        if moved and ((held and not released) or _gripper_loaded(status or last_status, library)):
+        if moved and not released and (held or _gripper_loaded(status or last_status, library)):
             _hold_and_log(*pre_logs, {"refused": "gripper holding or loaded; holding torque instead of park"})
             return False, None
         extra_logs: tuple[dict, ...] = ()
@@ -374,7 +374,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 if (facts := handoff.settled_facts(cell, log)) is not None:
                     return handoff.carry(cell, {"handoff": facts}, authorize, log)
                 park_safe, hold_needed = True, False
-            if released := (held and not _gripper_loaded(ran, library) and frames_cell[-1][5] > closed + 10.0):
+            if released := (held and frames_cell[-1][5] > closed + 10.0):
                 break
         if dry_run:
             return {"result": "dry_run", "chunks": max_chunks}
