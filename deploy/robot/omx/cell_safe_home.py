@@ -18,11 +18,10 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 DEFAULT_MAX_INCIDENTS = 3
+BY_ID = Path("/dev/serial/by-id")
 
 
-def _resolve_device(arm: str, config_path: Path, cfg: dict, explicit: str | None) -> str | None:
-    if explicit:
-        return explicit
+def _record_port(config_path: Path, cfg: dict) -> str | None:
     try:
         rec_path = (cfg.get("record") or {}).get("config")
         if rec_path:
@@ -34,12 +33,29 @@ def _resolve_device(arm: str, config_path: Path, cfg: dict, explicit: str | None
                 return str(port)
     except (OSError, ValueError, TypeError):
         pass
-    try:
-        import omx_incident_reassess
+    return None
 
-        return str(omx_incident_reassess.follower(arm)[1])
+
+def _resolve_device(arm: str, config_path: Path, cfg: dict, explicit: str | None) -> tuple[str | None, str | None]:
+    """(device, refusal): never a board the map gives another arm (2026-11-26 arm_b's record config named arm_a's
+    OpenRB). The explicit or record port is used when the map gives it this arm (explicit: or no arm); an unmapped
+    or missing record port falls back to the map's follower for the arm."""
+    import omx_incident_reassess as reassess
+
+    candidate = explicit or _record_port(config_path, cfg)
+    if candidate:
+        try:
+            owner = reassess.board_arm(candidate, BY_ID)
+        except (OSError, ValueError):
+            return candidate, "refused_board_map_unavailable"
+        if owner not in (None, arm):
+            return candidate, "refused_device_arm_mismatch"
+        if explicit or owner == arm:
+            return candidate, None
+    try:
+        return str(reassess.follower(arm, by_id=BY_ID)[1]), None
     except (OSError, ValueError, SystemExit):
-        return None
+        return None, None
 
 
 def _live_hold_active(config: dict, *, max_age_s: float = 15.0) -> bool:
@@ -126,13 +142,17 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
         "--supervised", "--arm", args.arm, "--config", str(args.config), "--library", str(args.library),
         "--site", args.site, "--roi", *map(str, args.roi), "--out", str(args.out),
     ]
+    device, device_refusal = _resolve_device(args.arm, cfg_path, cfg, args.device)
+    if device_refusal:  # before any fold: the fold and its session would command the same wrong board
+        res = {"result": device_refusal, "arm": args.arm, "device": device}
+        _write_out(Path(args.out), res)
+        return 2, res
     is_live = (live_fn or _live_hold_active)(cfg)
     if is_live:
         proc = (run_fn or subprocess.run)([*fold_cmd, "--unlatch-hold"], timeout=3600)
         out = json.loads(Path(args.out).read_text(encoding="utf-8")) if Path(args.out).is_file() else {}
         return proc.returncode, {**out, "mode": "live_hold_unlatch"}
 
-    device = _resolve_device(args.arm, cfg_path, cfg, args.device)
     hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn)
     if not hw_ok:
         res = {"result": refuse_reason or "refused_hw_error", "arm": args.arm, "device": device, "bad_motors": bad}
