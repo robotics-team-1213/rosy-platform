@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from core_common.protocol.port_events import PortEvent, event_id
+from fleet.pipeline.cell_site_targets import cell_ab_completion_verified, resolve_cell_ab_site
 from fleet.server.pipeline_unload_release import unload_release
 from fleet.server.port_event_store import PortEventConflict
 
@@ -24,6 +25,8 @@ TASK_IDENTITY_FIELDS = (
     "emit_release_permit",
 )
 CLAIM_STRIP_FIELDS = frozenset({
+    "intake_occurrence_id",
+    "placement_attempt_id",
     "object_ref",
     "identity",
     "identity_observation_ref",
@@ -97,11 +100,59 @@ def _utc_time(ts: float) -> datetime:
     return datetime.fromtimestamp(float(ts), tz=timezone.utc)
 
 
+def _tracked_placement(app, task, stage):
+    """RFID supplies the identity. A single pick and the owner's measured destination supply the location."""
+    receipt, verification, raw, clearance, place = (task.get("receipt"), stage.get("verification"),
+            stage.get("raw"), stage.get("source_clearance"), stage.get("place"))
+    if not all(isinstance(v, dict) for v in (receipt, verification, raw, clearance, place)):
+        return []
+    attempts = raw.get("attempts")
+    placed = verification.get("place_slot")
+    if (task.get("src_site") != "belt" or task.get("status") != "COMPLETED"
+            or not task.get("placement_attempt_id") or not task.get("object_ref")
+            or type(task.get("claimed_at")) not in (int, float) or type(task.get("completed_at")) not in (int, float)
+            or receipt.get("phase") != "RELEASED" or receipt.get("physical_completion") is not True
+            or receipt.get("simulated_success") is not False or receipt.get("stage_id") != task["task_id"]
+            or not task.get("handoff_lease_id") or receipt.get("handoff_lease_id") != task["handoff_lease_id"]
+            or stage.get("directive_id") != task["task_id"] or stage.get("arm_id") != task.get("arm_id")
+            or stage.get("task_verified") is not True or raw.get("result") != "placed"
+            or not isinstance(attempts, list) or not attempts or not isinstance(attempts[-1], dict)
+            or type(attempts[-1].get("observed")) is not int or attempts[-1]["observed"] != 1
+            or clearance.get("site") not in ("belt", "beltend") or type(clearance.get("objects")) is not int
+            or clearance["objects"] != 0 or verification.get("basis") != "predefined_side_and_top_target_zones"
+            or verification.get("verified") is not True or not isinstance(placed, dict) or placed.get("present") is not True
+            or not isinstance(verification.get("z_gate"), dict) or not isinstance(verification.get("target"), dict)
+            or not cell_ab_completion_verified(task, place, verification.get("z_gate") or {}, verification)):
+        return []
+    measured = verification.get("measured_at")
+    if type(measured) not in (int, float) or not task["claimed_at"] <= measured <= task["completed_at"]:
+        return []
+    target = verification.get("target") or {}
+    try:
+        slot = resolve_cell_ab_site(target.get("site_id"), tier=target.get("tier"), has_tier=True,
+                                    web_common=getattr(app.state, "web_common", None))
+    except ValueError:
+        return []
+    if not slot.get("wire_ref") or slot["wire_ref"] != task.get("dst_wire_ref"):
+        return []
+    ref = "tracked-place:" + hashlib.sha256(task["task_id"].encode()).hexdigest()
+    kind = "container.stored"
+    event = PortEvent(event_id=event_id("cell_ab", ref, kind), kind=kind, observation_ref=ref,
+                      object_ref=task["object_ref"], intake_occurrence_id=task["intake_occurrence_id"],
+                      placement_attempt_id=task["placement_attempt_id"], slot_ref=slot["wire_ref"],
+                      identity="attested", observed_at=_utc_time(measured))
+    return [{"source": "cell_ab", "event": event.model_dump(mode="json")}]
+
+
 def build_completion_events(
     app, task: dict[str, Any], *, cell_phase: str, stage_result: dict[str, Any], human_detected: bool,
 ) -> list[dict[str, Any]]:
     """Build durable D-996 pending port-event entries for a RELEASED, verified cell task completion."""
-    if cell_phase != "RELEASED" or getattr(app.state, "intake", None) is not None:
+    if cell_phase != "RELEASED":
+        return []
+    if task.get("cell_id") == "cell_ab" and task.get("intake_occurrence_id"):
+        return _tracked_placement(app, task, stage_result)
+    if getattr(app.state, "intake", None) is not None:
         return []
     completed_at = _utc_time(task["completed_at"])
     cell_id = task.get("cell_id")
@@ -160,7 +211,7 @@ def build_completion_events(
     return events
 
 
-def _apply_flush_item(store, task_id: Any, item: Any, remaining: list[dict[str, Any]], append_fn) -> int:
+def _apply_flush_item(store, receipts, task_id, task, history, item):
     try:
         source = item["source"]
         ev = PortEvent.model_validate(item["event"])
@@ -168,14 +219,19 @@ def _apply_flush_item(store, task_id: Any, item: Any, remaining: list[dict[str, 
         _LOG.error("Dropping malformed pending port event for task %s", task_id)
         return 1
     try:
-        append_fn(store, source, ev)
+        if ev.placement_attempt_id and ev.identity == "attested":
+            if store.by_observation(source, ev.observation_ref):
+                return 1  # The last flush committed before a restart.
+            if receipts is None or not receipts.tracked_source(ev.intake_occurrence_id, ev.object_ref,
+                    task.get("claimed_at"), task.get("completed_at"), history):
+                return 0
+        store.append(source, ev)
         return 1
     except (PortEventConflict, PermissionError):
         _LOG.warning("Dropping conflicting/unmatched pending port event for task %s", task_id)
         return 1
     except (OSError, sqlite3.Error):
         _LOG.exception("Port event append failed for task %s; retaining in outbox", task_id)
-        remaining.append(item)
         return 0
 
 
@@ -209,21 +265,12 @@ async def flush_pending_port_events_async(app_or_state) -> int:
         for tid, pending in work:
             remaining: list[dict[str, Any]] = []
             for item in pending:
-                try:
-                    source = item["source"]
-                    ev = PortEvent.model_validate(item["event"])
-                except (ValidationError, KeyError, TypeError):
-                    _LOG.error("Dropping malformed pending port event for task %s", tid)
+                task = dict(tasks[tid])
+                history = [dict(t) for t in tasks.values()] if task.get("placement_attempt_id") else ()
+                if await asyncio.to_thread(_apply_flush_item, store, getattr(state, "rfid_receipts", None),
+                                           tid, task, history, item):
                     changed += 1
-                    continue
-                try:
-                    await asyncio.to_thread(store.append, source, ev)
-                    changed += 1
-                except (PortEventConflict, PermissionError):
-                    _LOG.warning("Dropping conflicting/unmatched pending port event for task %s", tid)
-                    changed += 1
-                except (OSError, sqlite3.Error):
-                    _LOG.exception("Port event append failed for task %s; retaining in outbox", tid)
+                else:
                     remaining.append(item)
             _finish_task_flush(tasks, tid, remaining)
         return changed
@@ -244,6 +291,9 @@ def flush_pending_port_events(app_or_state) -> int:
     ]:
         remaining: list[dict[str, Any]] = []
         for item in pending:
-            changed += _apply_flush_item(store, tid, item, remaining, lambda s, src, ev: s.append(src, ev))
+            if _apply_flush_item(store, getattr(state, "rfid_receipts", None), tid, tasks[tid], tasks.values(), item):
+                changed += 1
+            else:
+                remaining.append(item)
         _finish_task_flush(tasks, tid, remaining)
     return changed

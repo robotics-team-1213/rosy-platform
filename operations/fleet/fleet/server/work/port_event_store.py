@@ -38,23 +38,37 @@ class PortEventStore:
         connection.row_factory = sqlite3.Row
         return connection
 
-    def append(self, source: str, event: PortEvent) -> int:
-        """The seq of this event, appending it once. PermissionError when the event_id is not this source's."""
+    @staticmethod
+    def _append(connection, source: str, event: PortEvent) -> int:
+        """Append within the caller's write transaction."""
         if not event.matches(source):
             raise PermissionError("event_id is not sha256(source|observation_ref|kind) for this source")
-        body = event.model_dump_json()
+        prior = connection.execute("SELECT seq, event_json FROM fleet_port_events WHERE event_id=?",
+                                   (event.event_id,)).fetchone()
+        if prior is not None:
+            if PortEvent.model_validate_json(prior["event_json"]) != event:
+                raise PortEventConflict("event_id was already recorded with a different event")
+            return prior["seq"]
+        if event.kind == "container.stored" and event.placement_attempt_id is not None:
+            prior = connection.execute(
+                "SELECT seq,json_extract(event_json,'$.slot_ref') AS slot FROM fleet_port_events "
+                "WHERE source=? AND json_extract(event_json,'$.kind')=? "
+                "AND json_extract(event_json,'$.intake_occurrence_id')=? "
+                "AND json_extract(event_json,'$.placement_attempt_id')=? AND json_extract(event_json,'$.object_ref')=?",
+                (source, event.kind, event.intake_occurrence_id, event.placement_attempt_id, event.object_ref),
+            ).fetchone()
+            if prior is not None:
+                if prior["slot"] != event.slot_ref:
+                    raise PortEventConflict("placement attempt was observed in a different slot")
+                return prior["seq"]
+        return connection.execute(
+            "INSERT INTO fleet_port_events (event_id, source, event_json, received_at) VALUES (?, ?, ?, ?)",
+            (event.event_id, source, event.model_dump_json(), datetime.now(timezone.utc).isoformat())).lastrowid
+
+    def append(self, source: str, event: PortEvent) -> int:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            prior = connection.execute("SELECT seq, event_json FROM fleet_port_events WHERE event_id=?",
-                                       (event.event_id,)).fetchone()
-            if prior is not None:
-                connection.execute("ROLLBACK")
-                if PortEvent.model_validate_json(prior["event_json"]) != event:
-                    raise PortEventConflict("event_id was already recorded with a different event")
-                return prior["seq"]
-            seq = connection.execute(
-                "INSERT INTO fleet_port_events (event_id, source, event_json, received_at) VALUES (?, ?, ?, ?)",
-                (event.event_id, source, body, datetime.now(timezone.utc).isoformat())).lastrowid
+            seq = self._append(connection, source, event)
             connection.execute("COMMIT")
             return seq
 

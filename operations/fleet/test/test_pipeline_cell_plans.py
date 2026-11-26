@@ -363,3 +363,31 @@ def test_cancel_cell_plan_and_refusal_visibility_and_pydantic_contracts(monkeypa
     completed_cancel = client.post(f"/api/fleet/pipeline/cell-plans/{res2['plan']['plan_id']}/cancel", headers=OP, json={"reason": "late cancel"})
     assert completed_cancel.status_code == 409
     assert completed_cancel.json()["detail"]["code"] == "CELL_PLAN_NOT_CANCELLABLE"
+
+@pytest.mark.parametrize(("receipt_reason", "hardware_error", "expected"), [
+    ("SITE_NOT_CALIBRATED", None, "SITE_NOT_CALIBRATED"),
+    ("MEASURED_PLACEMENT_MISSING", "STAND_NOT_CALIBRATED", "STAND_NOT_CALIBRATED"),
+    ("internal operator diagnostic", "/devices/private/tty:error", "MEASURED_PLACEMENT_MISSING"),
+])
+def test_completed_abort_reason_stays_with_its_task(monkeypatch, tmp_path, receipt_reason, hardware_error, expected):
+    from test_pipeline_port_events import _build_app
+
+    app, _ = _build_app(monkeypatch, tmp_path)
+    client = TestClient(app)
+    plans = "/api/fleet/pipeline/cell-plans"
+    res = client.post(plans, json={"mode": "harbor_plan", "steps": [
+        {"src_site": "belt", "dst_site": "yard-r1-c1-l1", "cargo_id": "C-1"}]})
+    assert res.status_code == 200, res.text
+    plan = res.json()["plan"]
+    tid, = plan["task_ids"]
+    tasks = "/api/fleet/pipeline/cell-tasks"
+    claim = client.post(tasks + "/claim", json={"cell_id": "cell_ab", "task_id": tid})
+    assert claim.json()["claimed"], claim.text
+    done = client.post(f"{tasks}/{tid}/complete", json={"phase": "ABORTED", "reason": receipt_reason,
+        "receipt": {"phase":"ABORTED", "reason": receipt_reason}, "hardware_telemetry": {"error": hardware_error}})
+    assert done.status_code == 200, done.text
+    app.state.cell_task_refusals.clear()
+    app.state.omx_cell_states["cell_ab"] = {"phase": "ABORTED", "stage_id": "unrelated", "reason": "another task"}
+    detail = client.get(f"{plans}/{plan['plan_id']}").json()
+    assert detail["plan"]["hold_reason"] == expected
+    assert detail["tasks"][0]["last_refusal"] == {"code": expected, "op": "complete"}

@@ -156,12 +156,18 @@ class ControlUnitPeers:
 
     async def port_events(self, unit_id, after_seq, limit):
         """D-996 7: a direct child cell's port event ledger after ``after_seq``; read only, nothing else reached."""
+        return await self._read_cell_ledger(unit_id, "port-events", after_seq, limit)
+
+    async def intake_candidates(self, unit_id, after_seq, limit):
+        return await self._read_cell_ledger(unit_id, "intake-candidates", after_seq, limit)
+
+    async def _read_cell_ledger(self, unit_id, ledger, after_seq, limit):
         self.config.topology.child(self.config.unit_id, unit_id)
         if unit_id not in self.config.peers:
             raise ValueError("CONTROL_UNIT_PEER_OUTSIDE_SCOPE")
         if type(after_seq) is not int or after_seq < 0 or type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
-        path = f"/api/fleet/control-unit/port-events?after_seq={after_seq}&limit={limit}"
+        path = f"/api/fleet/control-unit/{ledger}?after_seq={after_seq}&limit={limit}"
         return (await self._send(unit_id, "GET", path, None, 1_048_576))[1]
 
     async def execution_profile(self, unit_id):
