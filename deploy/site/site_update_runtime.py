@@ -77,7 +77,12 @@ def _robot_busy_reasons(row: object) -> list[str]:
     if not isinstance(state, dict):
         return [*reasons, f'{rid}: state unavailable'] if row.get('online') is True else reasons
     mode = state.get('mode')
-    if mode is not None and mode != 'IDLE':
+    safety = state.get('safety') if isinstance(state.get('safety'), dict) else {}
+    # A battery-policy e-stop latches the robot still until it is charged; no work is in progress for an update
+    # to interrupt (2026-11-26: it deferred every site update). Any other EMERGENCY, or motion, stays busy.
+    charging_hold = (mode == 'EMERGENCY' and safety.get('estop') is True and safety.get('source') == 'battery_policy'
+                     and safety.get('releases_when_charged') is True)
+    if mode is not None and mode != 'IDLE' and not charging_hold:
         reasons.append(f'{rid}: mode {mode}')
     nav = state.get('navigation')
     if nav is not None and nav not in _NAV_IDLE_STATES:

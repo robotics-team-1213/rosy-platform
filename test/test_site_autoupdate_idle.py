@@ -17,6 +17,11 @@ from test_site_autoupdate import (  # noqa: F401 - host is a pytest fixture
 @pytest.mark.parametrize('endpoint,payload', [
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'NAVIGATION'}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'MANUAL'}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_42', 'state': {'mode': 'EMERGENCY', 'safety': {
+        'estop': True, 'source': 'operator', 'releases_when_charged': False}}}]}),
+    ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_42', 'state': {'mode': 'EMERGENCY', 'safety': {
+        'estop': True, 'source': 'battery_policy', 'releases_when_charged': True},
+        'velocity': {'linear': 0.05, 'angular': 0.0}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'navigation': 'NAVIGATING'}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'mode': 'IDLE', 'trip_lease': {'lease_id': 'L1'}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'goal': {'target': 'bay_1'}}]}),
@@ -166,6 +171,17 @@ def test_site_check_idle_allows_retained_terminal_goal_and_dock_failed(host, mon
                         'mode': 'IDLE',
                         'navigation': nav_state,
                         'docking': {'state': 'UNDOCKED'},
+                        'velocity': {'linear': 0.0, 'angular': 0.0},
+                    },
+                },
+                {   # parked by the battery policy until charged: not work an update would interrupt
+                    'robot_id': 'rosy_42',
+                    'online': True,
+                    'goal': None,
+                    'state': {
+                        'mode': 'EMERGENCY',
+                        'navigation': 'IDLE',
+                        'safety': {'estop': True, 'source': 'battery_policy', 'releases_when_charged': True},
                         'velocity': {'linear': 0.0, 'angular': 0.0},
                     },
                 },
