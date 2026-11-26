@@ -82,6 +82,9 @@ class TripProgress:
         if not isinstance(target, str):
             return None
         place = live.graph.places.get(target)
+        if (live.nav2_binding_scope is not None and not live.repeat and place is not None
+                and place.kind in {"stop", "charge"}):
+            return place
         if (place is not None and place.kind == "stop"
                 and (place.precision_stop is not None
                      or (not live.nav2 and self.config.map_binding_required))):  # the last segment of a trip to this stop
