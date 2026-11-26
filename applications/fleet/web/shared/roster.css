@@ -699,7 +699,7 @@ details[data-more] > summary { cursor: pointer; font-size: var(--text-micro); co
 .cell-stage-joint dd { margin: 0; color: var(--text-primary); }
 .omx-pipeline-disclosure { margin-top: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); padding: var(--space-1) var(--space-2); }
 .omx-pipeline-disclosure > summary { cursor: pointer; font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); padding: var(--space-1) 0; }
-.robot-dock-count { font-size: var(--text-micro); line-height: 1; padding-inline: var(--space-1); font-variant-numeric: tabular-nums; }
+.robot-dock-count { font-size: var(--text-micro); line-height: var(--leading-flat); padding-inline: var(--space-1); font-variant-numeric: tabular-nums; }
 .robot-fault-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 .robot-fault-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .robot-fault-item[data-severity="crit"] { border-color: var(--status-crit); }
