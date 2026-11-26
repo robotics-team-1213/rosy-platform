@@ -1,4 +1,4 @@
-﻿"""The offline importer binds image observations to files and emits only verified sites."""
+"""The offline importer binds image observations to files and emits only verified sites."""
 import hashlib
 import json
 from pathlib import Path

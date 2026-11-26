@@ -1,4 +1,4 @@
-﻿"""Build an offline B-route image-observation fragment; output goes to stdout, never to cell config.
+"""Build an offline B-route image-observation fragment; output goes to stdout, never to cell config.
 
 The stand report identifies the four pins and the independent deck marks. The ship report uses
 the 38/98 mm CAD pin grid and predicts the reserved target pocket from the other pockets.
