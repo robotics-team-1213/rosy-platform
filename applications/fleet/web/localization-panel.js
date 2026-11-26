@@ -217,8 +217,7 @@ export function createLocalizationPanel({
       const res = captureBindingSample({ robot: robotSnapshot, trackRow, existingSamples: buf.samples, existingGridId: buf.gridId });
       if (!res.ok) log(`${id} 결속점 채집 보류 · ${res.reason}`, "bad");
       else {
-        buf.gridId = res.gridId;
-        buf.samples = res.samples;
+        Object.assign(buf, { gridId: res.gridId, samples: res.samples });
         log(`${id} 결속점 ${buf.samples.length}번 채집 완료 (폭 ${res.spanM.toFixed(2)} m)`, "good");
       }
       paint(robotSnapshot);
@@ -269,8 +268,7 @@ export function createLocalizationPanel({
       if (robot.online) void refresh(robot.robot_id, { force: switched });
     },
     clear() {
-      activeId = null;
-      lastRobot = null;
+      activeId = lastRobot = null;
       lastKvSig = lastCandSig = "";
       renderDom(null, kvHost);
     },
