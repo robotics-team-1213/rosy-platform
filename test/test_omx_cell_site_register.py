@@ -513,7 +513,7 @@ def test_site_surface_job_measures_a_registered_slot_under_the_existing_surface_
 
 def test_the_order_z_then_xy_is_written_where_operators_read(cell, tmp_path):
     root = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"
-    for name in ("AGENTS.md", "cell_site_register.py", "cell_site_job_spec.py"):
+    for name in ("cell_site_register.py", "cell_site_job_spec.py"):  # AGENTS.md stays slim and points here
         text = (root / name).read_text(encoding="utf-8")
         assert "site_surface" in text and ("Z first" in text or "then Z" in text or "site_register -> site_surface" in text), name
     # XY first, then Z: the Z promotion changes surface_z, so the XY report no longer describes the entry and measured is not reached
