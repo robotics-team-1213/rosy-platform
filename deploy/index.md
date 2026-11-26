@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · Calibration 화면 신선도를 서버 예산으로, 옛 지도는 점선·흐림과 문구로
 - 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
 - 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
 - 2026-11-23 · uncommitted · PC SSH 워치독 서명 갱신
 - 2026-11-21 · uncommitted · fix(omx): observer handoff keeps the reservation, the group watch and the unit topic check
-- 2026-11-21 · uncommitted · Site Fleet passes D-1057 cell pipeline env
