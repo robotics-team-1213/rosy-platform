@@ -511,3 +511,53 @@ def test_pr2_park_chunk_absorbs_transient_bus_errors() -> None:
     r3 = _new_park_runner()
     sent, ok = cpp.send_with_jaw_gate(r3, dict(zip(m.NAMES, REACH)), None, None, list(REACH))
     assert sent is None and ok is False and r3.human_hold_latched is True
+
+
+def test_peer_folded_stale_status_and_wait_session_arm_matching(tmp_path) -> None:
+    import cell_job_guards as guards
+    import cell_job_peer_health as ph
+    import cell_recovery_plan as crp
+
+    wd = tmp_path / "wd"
+    io_b, leases, health, cal = wd / "chunk-io-b", tmp_path / "leases", tmp_path / "health", tmp_path / "cal"
+    for d in (io_b, leases, health, cal):
+        d.mkdir(parents=True)
+    cal_doc = {j: {"id": 11 + i, "drive_mode": 0, "homing_offset": 0, "range_min": 0, "range_max": 4095}
+               for i, j in enumerate(ph.FOLLOWER_JOINTS)}
+    (cal / "arm_b_follower.json").write_text(json.dumps(cal_doc), encoding="utf-8")
+    raw_home = [2063, 773, 3134, 3106, 2964, 2002]
+    mh_doc = {"schema_version": "rosy.motor-health.v1", "owner_id": "arm_b", "status": "active", "observed_at": time.time(),
+              "motors": [{"id": 11 + i, "present_raw": raw_home[i], "torque_enabled": False, "fault": False, "hardware_error": 0} for i in range(6)]}
+    (health / "arm_b.json").write_text(json.dumps(mh_doc), encoding="utf-8")
+    kw = dict(session_lock_held_fn=lambda *_: False, read_json_fn=guards.read_json_dict, live_max_age_s=15.0,
+              incident_check_fn=lambda _: None, motor_health_dir=health, calibration_dir=cal)
+
+    # Fresh, missing-t, locked, or unhealthy motor-health st_row still fails closed when live.json is missing.
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH, "t": time.time()}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH, "t": time.time() - 60.0}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **{**kw, "session_lock_held_fn": lambda *_: True}) == "peer arm_b is not folded at home"
+    bad_mh = {**mh_doc, "motors": [{**mh_doc["motors"][0], "torque_enabled": True}, *mh_doc["motors"][1:]]}
+    (health / "arm_b.json").write_text(json.dumps(bad_mh), encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (health / "arm_b.json").write_text(json.dumps(mh_doc), encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) is None
+
+    # wait_session_json resolves all real owner signatures while rejecting cross-arm, unknown, and conflicting files.
+    sp = tmp_path / "session.json"
+    now_t = time.time()
+    for arm, doc, ok in (
+        ("arm_a", {"operating_profile": {"device_id": "arm_a", "instance_id": "omx_follower_arm"}, "torque_after": {"11": 0}}, True),
+        ("arm_b", {"operating_profile": {"instance_id": "arm_b_follower"}, "torque_after": {"11": 0}}, True),
+        ("arm_b", {"operating_profile": {"instance_id": "omx_follower_arm"}, "motor_health_owner": "omx_follower_arm", "chunks": {"io": "/tmp/chunk-io-b"}, "torque_after": {"11": 0}}, True),
+        ("arm_a", {"motor_health_owner": "arm_b_follower", "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"device_id": "arm_b"}, "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"instance_id": "omx_follower_arm"}, "motor_health_owner": "omx_follower_arm", "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"device_id": "arm_a"}, "chunks": {"io": "/tmp/chunk-io-b"}, "torque_after": {"11": 0}}, False),
+        ("arm_a", {"arm": "arm_c", "chunks": {"io": "/tmp/chunk-io-a"}, "torque_after": {"11": 0}}, False),
+    ):
+        sp.write_text(json.dumps(doc), encoding="utf-8")
+        got, why = crp.wait_session_json(sp, arm, now_t, lambda _s: (_ for _ in ()).throw(AssertionError("should not sleep")) if ok else None)
+        assert (got is not None and why is None) if ok else (got is None and why is not None)
