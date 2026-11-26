@@ -264,7 +264,12 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
                               stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
-                              nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0, **bounds)
+                              nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0,
+                              # Rear-bay staging within the trip's arrive radius is reached: CORE docks from there.
+                              # A shorter Nav2 goal ends before its first lease renewal, and snapping onto the exit
+                              # lane plans a whole loop back to the same staging place.
+                              arrived_m=max(ARRIVED_M, runner.config.arrive_free_m) if parking and not body.via
+                              else None, **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:

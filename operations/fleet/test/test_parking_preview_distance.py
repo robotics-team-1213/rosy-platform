@@ -17,7 +17,7 @@ from rosy.world.state.projections.map_pose import MapPose
 from test_trip_nav2_route import RouteFakeRobot
 
 
-@pytest.mark.parametrize("xy", [(-.47, -.05), (-.43002, .04266)])
+@pytest.mark.parametrize("xy", [(-.47, -.05), (-.43002, .04266), (-.43002, .24266)])
 def test_preview_measures_from_site_pose_before_snapping(tmp_path, xy):
     p1, c1 = (-.43002, .04266), (-.41816, .47)
     model = SiteMap.model_validate({
@@ -45,7 +45,9 @@ def test_preview_measures_from_site_pose_before_snapping(tmp_path, xy):
         assert reply.status_code == 200, reply.text
         plan = reply.json()
         assert plan["parking_handoff"]["staging_place_id"] == "P1"
-        assert plan["length_m"] == 0
-        assert len(plan["segments"]) == (0 if xy == p1 else 1)
+        far = math.dist(xy, p1) > .15        # TripConfig.arrive_free_m: beyond it the robot still drives to P1
+        assert (plan["length_m"] > 0) == far
+        # Within the arrive radius the staging place is reached: no short Nav2 goal, CORE docks from here.
+        assert (len(plan["segments"]) > 0) == far
         assert plan["staging_distance_m"] == round(math.dist(xy, p1), 4)
         assert not robot.routes
