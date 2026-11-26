@@ -16,6 +16,7 @@ import cell_params as prm
 import cell_pipeline as cp
 import cell_pivot
 import cell_place_fit
+import cell_site_target
 from cell_pick_geom import across, grasp_depth, jaw_open_for, parse_dest, surface_z
 from cell_transfer import RETURN_HELD
 
@@ -89,6 +90,8 @@ def run_return_held(
     dest_site, place_xy = parse_dest(config, base_site, dest)
     if dest_site not in config["sites"] or "place" not in config["sites"][dest_site]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
+    if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], dest_site)):
+        return {**out, "result": "refused", "error": refused, "site": dest_site}
     obj_id = object_id or (config.get("want") or {}).get("object") or catalog[0]["id"]
     entry = next((e for e in catalog if e["id"] == obj_id), None)
     if entry is None:

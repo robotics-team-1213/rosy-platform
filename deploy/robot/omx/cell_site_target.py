@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -170,9 +171,39 @@ def _has_place_surface(entry: Any) -> bool:
     )
 
 
+REGISTER_KEYS = ("status", "provenance", "history", "measured_xy", "measured_z")  # cell_site_register's; tier copies must not carry them
+LEGACY_NAMES = frozenset({"pallet", "belt", "beltend", "temp_plate_a", "temp_plate_b", "stand", "plate_b", "strip_b", "col1", "stack", "pinky"})
+
+
 def _unmeasured(entry: Any) -> bool:
-    """A site written by cell_site_register stays refused until a passing post_eval marks it measured; entries without status are legacy."""
+    """A site written by cell_site_register stays refused until XY and Z are both measured; entries without status are legacy."""
     return isinstance(entry, dict) and "status" in entry and entry["status"] != "measured"
+
+
+def unmeasured_refusal(sites: dict[str, Any], *names: Any) -> str | None:
+    """The one shared answer for every motion path: SITE_NOT_MEASURED if a named site (or the base of a -lN tier copy) is not measured."""
+    for name in names:
+        entry = sites.get(name) if isinstance(name, str) else None
+        if _unmeasured(entry) or (isinstance(entry, dict) and _unmeasured(sites.get(entry.get("tier_of")))):
+            return "SITE_NOT_MEASURED"
+    return None
+
+
+def designated_slot_arms(name: Any) -> tuple[str, ...]:
+    """Arms of a designated slot base name from cell-site-map (ship-h1r0, tmp-a-1 ...); () for anything else, legacy names included."""
+    if not isinstance(name, str) or name in LEGACY_NAMES:
+        return ()
+    arms = {a for rec in _load_index()["by_sim"].values() if rec["base_site"] == name and not rec["is_legacy_pallet"] and rec["area"] != "stand" for a in rec["arms"]}
+    return tuple(sorted(arms))
+
+
+def site_digest(entry: dict[str, Any]) -> str:
+    """Short digest of what a measurement is about: place, yaw and surface height."""
+    try:
+        key = [[round(float(v), 6) for v in entry["place"]], round(float(entry.get("yaw_deg", 0.0)), 6), round(float(entry["surface_z"]), 6)]
+    except (KeyError, TypeError, ValueError):
+        return "invalid"
+    return hashlib.sha256(json.dumps(key).encode()).hexdigest()[:16]
 
 
 def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any) -> str | None:
@@ -185,7 +216,7 @@ def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any
         d_ok = _has_place_surface(cfg_sites.get(d["sim_site"])) or _has_place_surface(cfg_sites.get(d["base_site"]))
         if not d_ok:
             return "STAND_NOT_CALIBRATED" if d["area"] == "stand" else "SITE_NOT_CALIBRATED"
-        if _unmeasured(cfg_sites.get(d["sim_site"])) or _unmeasured(cfg_sites.get(d["base_site"])):
+        if unmeasured_refusal(cfg_sites, d["sim_site"], d["base_site"]):
             return "SITE_NOT_MEASURED"
     s = resolve_cell_ab_site(src, None, allow_belt_temp=True, allow_pallet_src=True)
     if s is None and (is_canonical_37site(src) or src in STAND_ALIASES):
@@ -195,7 +226,7 @@ def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any
         s_ok = isinstance(exact, dict) or (isinstance(base, dict) and "surface_z" in base)
         if not s_ok:
             return "STAND_NOT_CALIBRATED" if s["area"] == "stand" else "SITE_NOT_CALIBRATED"
-        if _unmeasured(exact) or (not isinstance(exact, dict) and _unmeasured(base)):
+        if unmeasured_refusal(cfg_sites, s["sim_site"] if isinstance(exact, dict) else s["base_site"]):
             return "SITE_NOT_MEASURED"
     return None
 
