@@ -42,6 +42,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
+from cell_camera_heal import with_camera_heal  # noqa: E402,F401  (re-exported for cell_job_api)
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
