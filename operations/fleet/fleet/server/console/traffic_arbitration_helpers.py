@@ -263,6 +263,7 @@ def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
     here = self._pose_of(robot_id)
     if here is None or self._verdict(robot_id) != "trusted":
         return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
+                "stage": "pre_dispatch_mover_check",
                 "command_robot_id": robot_id, "blocked_by": robot_id, "waiting_on": [robot_id],
                 "dispatch_attempted": False, "cancel_confirmed": False}
     route = [here] + [(p["x"], p["y"]) for p in route_points]

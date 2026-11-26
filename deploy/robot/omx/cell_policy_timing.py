@@ -61,21 +61,21 @@ def library_home(library) -> list[float] | None:
     return pose6(frames[-1]) if isinstance(frames, (list, tuple)) and frames else None
 
 
-def rest_diagnosis(status, home) -> dict:
+def rest_diagnosis(status, home, library=None) -> dict:
     """Why a refusal before any command does or does not need human-hold: off_home (max body-joint gap to the library home),
     folded (cell_job_peer_health.live_folded, what torque_off_folded uses) and no_hold, true for a clean status at home
     (cell_auto_fold.at_rest within PRE_SETTLE_TOL) or folded. A fault, contact, hold latch or ok!=True is never no_hold."""
     from cell_auto_fold import at_rest
-    from cell_job_peer_health import live_folded
+    from cell_job_peer_health import fold_basis, live_folded
 
-    out = {"off_home": None, "folded": None, "no_hold": False}
+    out = {"off_home": None, "folded": None, "fold_basis": fold_basis(library), "no_hold": False}
     if not isinstance(status, dict):
         return out
     state = status.get("state")
     try:
         if home is not None and isinstance(state, (list, tuple)) and len(state) >= 5:
             out["off_home"] = round(max_diff(list(state), home, 5), 3)
-        out["folded"] = live_folded({"state": state})  # from the state itself, never a reported `folded` flag
+        out["folded"] = live_folded({"state": state}, library)  # from the state itself, never a reported `folded` flag
         # folded counts only for an empty, still gripper with no chunk running; a loaded or shaking arm keeps its hold
         folded_ok = (out["folded"] is True and status.get("holding") is False and status.get("chunk") is None
                      and not (status.get("jitter") or {}).get("shaking"))
@@ -87,9 +87,9 @@ def rest_diagnosis(status, home) -> dict:
     return out
 
 
-def idle_at_home(status, home) -> bool:
+def idle_at_home(status, home, library=None) -> bool:
     """With no command sent yet, a refusal of a clean status that is at home or folded needs no human-hold."""
-    return rest_diagnosis(status, home)["no_hold"]
+    return rest_diagnosis(status, home, library)["no_hold"]
 
 
 def best_effort_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict | None:
@@ -208,12 +208,12 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
 
     def stopped(n, reason, row, status=None):
         nonlocal park_safe, hold_needed, safety_done
-        rest = not dry_run and not moved and rest_diagnosis(status, library_home(library))["no_hold"]  # no command sent, at home or folded
+        rest = not dry_run and not moved and rest_diagnosis(status, library_home(library), library)["no_hold"]  # no command sent, at home or folded
         park_safe, hold_needed = False, hold_needed or not (dry_run or rest)
         stop = None if dry_run or rest else send_hold(cell, log=log)
         safety_done = safety_done or not dry_run
         # only before any command: after motion the hold goes first and nothing slow (the diagnosis imports modules) may follow it
-        facts = ({k: v for k, v in rest_diagnosis(status, library_home(library)).items() if k != "no_hold"}
+        facts = ({k: v for k, v in rest_diagnosis(status, library_home(library), library).items() if k != "no_hold"}
                  if status is not None and not moved else {})
         for entry in ({**row, "policy_stop": reason, **facts, "hold_kept": not (dry_run or rest)}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
             log(entry)
