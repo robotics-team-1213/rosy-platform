@@ -41,8 +41,7 @@ except ImportError:  # Windows unit tests
 
 JOB_TTL_S, LIVE_MAX_AGE_S = 900.0, 15.0
 _REAL_POPEN = subprocess.Popen
-_check_arm_incident = check_arm_incident_hold
-_check_depth_lock_held = is_depth_lock_held
+_check_arm_incident, _check_depth_lock_held = check_arm_incident_hold, is_depth_lock_held
 
 
 def _flock_held(lock_path: Path, mode: int) -> bool:
