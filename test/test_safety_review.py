@@ -209,3 +209,18 @@ def test_installed_hook_blocks_the_commit_in_a_linked_worktree_too(repo, tmp_pat
     refused = commit()
     assert refused.returncode == 1 and "Safety-Review:" in refused.stderr
     assert commit("-m", TRAILER).returncode == 0
+
+
+def test_installed_hook_passes_with_a_warning_when_the_worktree_script_predates_commit_msg(repo, tmp_path):
+    # a worktree based before #1019: its safety_review.py has no --commit-msg, the shared hook must not die
+    hooks_src = Path(__file__).resolve().parents[1] / "tools"
+    (tmp_path / "tools/harness").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tools/harness/safety_review.py").write_text("import sys\nsys.exit(2)  # old script\n", encoding="utf-8")
+    hook = tmp_path / ".git/hooks/commit-msg"
+    hook.write_bytes((hooks_src / "hooks/commit-msg").read_bytes().replace(b"\r\n", b"\n"))
+    hook.chmod(0o755)
+    (tmp_path / "guard/g.py").write_text("g = 7\n", encoding="utf-8")
+    repo("add", "guard/g.py")
+    done = subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "edit guard"], capture_output=True, text=True)
+    assert done.returncode == 0
+    assert "git merge origin/main" in done.stderr and "predates --commit-msg" in done.stderr

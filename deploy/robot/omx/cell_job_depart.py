@@ -28,6 +28,24 @@ def measured_verdict(workdir: Path, params: dict, exit_code: int | None, result:
                        home=plan_home(cfg), live_fold=measured_fold(params["arm"], workdir))
 
 
+def fill_depart_dest(name: str, params: dict, workdir: Path) -> dict:
+    """At submission: a depart_robot without dest_site gets the config's act_policy default (dest_site/dest_tier, else belt tier 1,
+    the same belt the task path defaults to); with none readable, ValueError so the 400 comes before the arm moves, not a blocked depart after."""
+    if name != "cell_policy_drive" or not params.get("depart_robot") or params.get("dest_site") or params.get("dry_run") is True:
+        return params
+    try:
+        cfg = json.loads((workdir / str(params.get("config"))).read_text(encoding="utf-8"))
+        policy = cfg.get("act_policy") if isinstance(cfg.get("act_policy"), dict) else {}
+        site = policy.get("dest_site") or "belt"
+        tier = params.get("dest_tier", policy.get("dest_tier", 1))
+        ok = isinstance(cfg.get("sites"), dict) and isinstance(cfg["sites"].get(site.rsplit("-l", 1)[0]), dict) and type(tier) is int
+    except (OSError, ValueError, AttributeError):
+        ok = False
+    if not ok:
+        raise ValueError("depart_robot needs dest_site (no act_policy default destination in the cell config)")
+    return {**params, "dest_site": site, "dest_tier": tier}
+
+
 def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: dict | None, verdict: dict | None = None) -> str | None:
     """Why no depart command is sent, or None when the arm really took one item and the shared verdict is verified."""
     if job != "cell_policy_drive" or not params.get("depart_robot"):

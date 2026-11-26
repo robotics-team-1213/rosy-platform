@@ -164,3 +164,26 @@ def test_post_depart_body_and_fleet_errors(tmp_path):
     assert r["sent"] is False and "unreachable" in r["reason"]
     assert depart.post_depart("r", "depart_s1", "t", fleet_r_url=None, token_file=None)["sent"] is False
     assert depart.post_depart("r", "depart_s1", "t", fleet_r_url="http://f", token_file=tok)["sent"] is False
+
+
+def _cfg(tmp_path, cfg):
+    (tmp_path / "cell-s.json").write_text(json.dumps(cfg), encoding="utf-8")
+
+
+def test_depart_without_dest_site_takes_the_act_policy_default(tmp_path):
+    p = {k: v for k, v in PARAMS.items() if k not in ("dest_site", "dest_tier")}
+    _cfg(tmp_path, {"sites": {"belt": {}, "stand": {}}, "act_policy": {"dest_site": "stand", "dest_tier": 2}})
+    assert depart.fill_depart_dest("cell_policy_drive", p, tmp_path) | {} == {**p, "dest_site": "stand", "dest_tier": 2}
+    _cfg(tmp_path, {"sites": {"belt": {}}})  # no act_policy: belt tier 1, the task path's default
+    assert depart.fill_depart_dest("cell_policy_drive", p, tmp_path)["dest_site"] == "belt"
+    assert depart.fill_depart_dest("cell_policy_drive", PARAMS, tmp_path) is PARAMS  # given: untouched
+    assert depart.fill_depart_dest("cell_policy_drive", {**p, "dry_run": True}, tmp_path).get("dest_site") is None
+
+
+def test_submit_without_dest_site_and_no_default_is_a_400_before_any_run(tmp_path, monkeypatch):
+    for n in ("cell-s.json", "chunks-s.json"):
+        (tmp_path / n).write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(api.subprocess, "Popen", lambda *a, **kw: pytest.fail("must not start"))
+    runner = api.Runner(tmp_path, incident_check_fn=lambda a: None, fleet_safety_check_fn=lambda a: {"online": False, "blocked": False})
+    res = runner.start("cell_policy_drive", {k: v for k, v in PARAMS.items() if k not in ("dest_site", "dest_tier")})
+    assert res["code"] == 400 and "depart_robot needs dest_site" in res["error"]
