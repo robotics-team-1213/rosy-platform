@@ -1,4 +1,4 @@
-import { mapEvidence, placeText, stamp } from "./map-rules.js";
+import { mapEvidence, placeText, stamp } from "./common/map-rules.js";
 
 export function activeSiteMap({ canvas, placeSelect, showMap, mapData, onUpdate }) {
   let entries;

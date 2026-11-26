@@ -4,7 +4,8 @@ import { updateSelectedTrip } from "/console/assets/trip-receipts.js";
 import { classifySightings, surveyedRoadPoints } from "./site-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
-import { mapEvidence, trafficClock, viewTurnOf } from "/console/assets/site-map-model.js";
+import { activeMapEvidence, trafficClock } from "/console/assets/site-map-model.js";
+import { viewTurnOf } from "/common/map-rules.js";
 
 const guideSummarySig = (guide, unavailable) => JSON.stringify([
   Boolean(unavailable),
@@ -61,7 +62,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
   function showActiveMap(active) {
     view.activeSiteMap = active;
     view.siteViewTurn = viewTurnOf(active?.map);
-    const line = el("map-evidence"), evidence = mapEvidence(active, surveyedRoadPoints);
+    const line = el("map-evidence"), evidence = activeMapEvidence(active, surveyedRoadPoints);
     if (line && line.textContent !== evidence.text) Object.assign(line, { textContent: evidence.text, title: evidence.title });
   }
 

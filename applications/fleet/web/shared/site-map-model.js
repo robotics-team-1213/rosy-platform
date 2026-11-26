@@ -1,5 +1,6 @@
 import { OPERATOR_REASON, operatorReason } from "./authorization.js";
 import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
+import {VIEW_TURNS, mapEvidence} from '/common/map-rules.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
 export {routeAttention} from './route-attention.js';
 
@@ -72,14 +73,12 @@ export function fitBox(b, width, height, pad = 24, turn = 0) {
   };
 }
 
-// 2026-11-26 지도 근거 줄: 지도 vN · 활성 HH:MM:SS(KST) · 출처 · 측량 근거. UTC 원문은 title. drawn(edge): 그 측량선을 그렸는가.
-export function mapEvidence(active, drawn) {
+// 2026-11-26 지도 근거 줄(/common/map-rules.js 형식) 뒤에 측량 근거, title 앞에 map_id. drawn(edge): 그 측량선을 그렸는가.
+export function activeMapEvidence(active, drawn, now = Date.now()) {
   if (!active?.map) return {text: '활성 지도 없음', title: ''};
-  const at = new Date(active.activated_at * 1000), known = Number.isFinite(at.getTime());
   const surveys = new Set((active.map.edges || []).filter(drawn).map(({display_source: s}) => `측량 ${s.surveyed_at} ${s.plane}`));
-  const time = known ? at.toLocaleTimeString('en-GB', {timeZone: 'Asia/Seoul', hourCycle: 'h23'}) : '시각 모름';
-  return {text: `지도 v${active.version} · 활성 ${time} · 출처 Fleet 활성 지도 · ${[...surveys].join(' · ') || '측량선 없음'}`,
-    title: `${active.map.map_id}${known ? ` · 활성 ${at.toISOString()} (UTC)` : ''}`};
+  const line = mapEvidence({version: active.version, timeLabel: '활성', time: active.activated_at, source: '출처 Fleet 활성 지도'}, now);
+  return {text: `${line.text} · ${[...surveys].join(' · ') || '측량선 없음'}`, title: [active.map.map_id, line.title].filter(Boolean).join(' · ')};
 }
 
 export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
@@ -143,8 +142,6 @@ export function planPolylines(map, plan) {
 }
 
 export function copyMap(map) { return JSON.parse(JSON.stringify(map)); }
-const VIEW_TURNS = [0, 90, 180, 270];
-export function viewTurnOf(map) { return VIEW_TURNS.includes(map?.view_turn_deg) ? map.view_turn_deg : 0; }
 export function editViewTurn(map, turn) {
   const value = Number(turn);
   if (!VIEW_TURNS.includes(value)) throw new Error('화면 방향은 0·90·180·270° 중 하나입니다');

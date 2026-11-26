@@ -6,7 +6,8 @@ import {
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, mapUpTurn,
   roadOverlayPoints, surveyedRoadPoints, surveyText, unmeasuredRoadPoints,
 } from "../../../../applications/fleet/web/map/site-layer.js";
-import { fitBox, viewTurnOf } from "../../../../applications/fleet/web/shared/site-map-model.js";
+import { fitBox } from "../../../../applications/fleet/web/shared/site-map-model.js";
+import { viewTurnOf } from "../../../../shared/web/map-rules.js";
 import { project as projectHomography } from "../../../../shared/web/plane-math.js";
 
 test("world_261026 charging bay overlays draw straight, leaving source geometry intact", () => {
@@ -147,7 +148,7 @@ test("D-513 7: the picture turns so map +y points up — no installation key", (
   assert.equal(mapUpTurn(undefined), 0);
 })
 
-test("D-513 7: the site map's view turn comes from the active map, else 0 (one check, site-map-model viewTurnOf)", () => {
+test("D-513 7: the site map's view turn comes from the active map, else 0 (one check, /common/map-rules.js viewTurnOf)", () => {
   const turnOf = (active) => viewTurnOf(active?.map);
   assert.equal(turnOf({ map: { view_turn_deg: 90 } }), 90);
   assert.equal(turnOf({ map: { view_turn_deg: 45 } }), 0);

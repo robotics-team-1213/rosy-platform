@@ -2,7 +2,7 @@ import { showCad, showCell, showFieldPlane, showMap } from "./scene.js";
 import { initFactoryTab } from "./factory-live.js";
 import { initLiveFeeds, isLayoutSha } from "./live-feeds.js";
 import { activeSiteMap } from "./active-site-map.js";
-import { mapEvidence, stamp, viewTurnOf } from "./map-rules.js";
+import { mapEvidence, stamp, viewTurnOf } from "./common/map-rules.js";
 
 const byId = (id) => document.getElementById(id);
 if (["/world/", "/world/index.html"].includes(location.pathname)) byId("world-experiments-link").hidden = false;

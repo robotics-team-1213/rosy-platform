@@ -1,6 +1,6 @@
 import { showMap } from "./scene.js";
 import { initPlay } from "./play.js";
-import { simFreshness } from "./map-rules.js";
+import { simFreshness } from "./sim-freshness.js";
 import { EVIDENCE_LABEL, evidenceAgeText } from "./common/core_ui_logic.js";
 const ISAAC_STATES = {
   waiting: "SIM 관측 대기 중",
