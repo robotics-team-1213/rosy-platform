@@ -1205,3 +1205,19 @@
 - 변경: `map/map-polling.js` — `refreshTraffic()`에서 `traffic.map_version` 변경으로 `/api/fleet/site-map/active`를 다시 읽을 때 `refreshCalibrations()`도 함께 호출해, 30초 폴링 지연 없이 새 지도 오버레이와 카메라 정사 보정이 같은 주기에 맞물리도록 수정했다.
 - 증거: `node --test operations/fleet/test/web/map-view.test.mjs` 및 원격 pytest 통과.
 - gate 변화: 없음.
+
+## 2026-11-26 · uncommitted · 관제·현장 지도·보정 맞춤을 fitBox 하나로
+
+- 변경: site-map-model.js에 mapBounds·fitBox(축척·px 여백·y 뒤집기·화면 방향·3×3 matrix)를 두고 fitView, 관제 지도(map-view·camera-backdrop의 fitTransform+quarterTurn), 보정 topDownLayout이 그것을 부름. 관제 지도는 같은 좌표계의 활성 지도가 있으면 현장 지도와 같은 범위(장소·도로·시설)로 맞추고, 없을 때만 카메라 사각형. 화면 방향 검사는 viewTurnOf 하나(siteViewTurn 삭제). D-515 이후 호출자 없는 cameraScreenToMap·quarterTurn 삭제, test_only_exports 상한 4→3
+- 증거: node --test operations/fleet/test/web 624 통과(site-layer·map-plane·map-datum·trail-view 시험을 fitBox로 같은 기대값 유지)
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 추천안(사용자 승인)
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · 지도 근거 줄: 지도 vN · 활성 시각 · 출처 · 측량
+
+- 변경: 관제 지도(index.html map-board 바닥)와 현장 지도(site-map.html)에 ui-text #map-evidence. site-map-model.js mapEvidence가 '지도 vN · 활성 HH:MM:SS(KST) · 출처 Fleet 활성 지도 · 측량 날짜 평면' 또는 '측량선 없음'을 만들고 UTC 원문은 title. map-polling.js는 활성 지도를 다시 읽을 때(버전 변경 포함) showActiveMap으로 이 줄을 갱신. 측량선은 서버 display_polyline만 그림
+- 증거: node --test operations/fleet/test/web 625 통과(site-map.test mapEvidence, site-layer.test 측량 필드)
+- gate 변화: 없음
+- 결정: 2026-11-26 지도 패널 결정 2(사용자 승인)
+- 교훈: 없음
