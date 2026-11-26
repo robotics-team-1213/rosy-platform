@@ -89,7 +89,7 @@ JOBS = {
     "remap": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
-        "params": {"arm": _match(ARM), "config": _match(FILE)}, "optional": {"remeasure": _bool},
+        "params": {"arm": _match(ARM), "config": _match(FILE)}, "optional": {"remeasure": _bool, "obstacle_mm": _num(1.0, 220.0)},
     },
     "surface": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
@@ -367,7 +367,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     for option in (
         "site", "dest_site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
-        "post_eval", "z_evidence", "tier_evidence", "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
+        "post_eval", "z_evidence", "tier_evidence", "obstacle_mm", "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
         "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts", "min_score",

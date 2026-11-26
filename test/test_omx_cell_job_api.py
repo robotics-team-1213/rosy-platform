@@ -958,3 +958,21 @@ def test_runner_answers_400_when_the_release_path_cannot_be_resolved(tmp_path, m
     res = api.Runner(wd, lock_dir=wd).start("cell_policy_drive", {"dry_run": True})
     assert res["code"] == 400 and "symlink loop" in res["error"]
     popen.assert_not_called()
+
+
+def test_remap_obstacle_mm_validation_and_argv(tmp_path):
+    wd = _make_workdir(tmp_path)
+    argv = api.build_argv(
+        api.JOBS["remap"],
+        {"arm": "arm_a", "config": "cell-a.json", "obstacle_mm": 80, "person_at_switch": True},
+        wd,
+    )
+    idx = argv.index("--obstacle-mm")
+    assert argv[idx + 1] == "80"
+    for bad in (0, -5, 250, True, "80"):
+        with pytest.raises(ValueError):
+            api.build_argv(
+                api.JOBS["remap"],
+                {"arm": "arm_a", "config": "cell-a.json", "obstacle_mm": bad, "person_at_switch": True},
+                wd,
+            )
