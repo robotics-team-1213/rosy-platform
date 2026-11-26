@@ -558,6 +558,10 @@
       "path": "shared/site-map-model.js",
       "media_type": "application/javascript"
     },
+    "trip-wait.js": {
+      "path": "work/trip-wait.js",
+      "media_type": "application/javascript"
+    },
     "trip-display.js": {
       "path": "shared/trip-display.js",
       "media_type": "application/javascript"
