@@ -23,6 +23,9 @@ import statistics
 import sys
 
 _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts/learning/src"
+if str(_CONTRACTS_SRC) not in sys.path:
+    sys.path.insert(0, str(_CONTRACTS_SRC))
+from rosy.contracts.learning.omx_canonical import default_canonical_spec  # noqa: E402
 
 ROLES = ("top", "side", "wrist")  # D-1065 cell A/B roles
 LEGACY_TABLE = {"rs": "top"}  # 11-20~21 sim/mix data called the D435 rs (D-1065 §4); a real Purple-SY source passes its own map
@@ -32,7 +35,9 @@ GOAL_SCOPES = {
     "h2": re.compile(r"from \S+ to (ship-h2r[0-2]-l[0-2])\.$"),
     "unload": re.compile(r"from ship-(?:h[12]r[0-2]-)?l[0-2] to (temp-plate|tmp-[ab]-[1-3](?:-l[0-2])?|belt|stand)\.$"),
 }
-HOME = {"arm_a": (0.023, -1.965, 1.666, 1.618, 1.41), "arm_b": (0.023, -1.967, 1.667, 1.626, 1.399)}  # sim radians
+# The folded home is the canonical spec's idle_park (sim radians). Until 2026-11-26 this held per-arm measured values up to 0.011 rad
+# away (library home 0.8,-62.2,53.1,51.6,45.2 converts to idle_park exactly); only the start-from-home review reads it.
+HOME = {arm: tuple(pose["sim_rad"][:5]) for arm, pose in default_canonical_spec()["idle_park"].items()}
 LIMITS = dict(home_review_rad=0.35, black_mean=8.0, black_reject_s=1.0, frozen_diff=0.5, frozen_review_s=3.0,
               min_frames=60, gripper=(0.0, 1.3))
 RECEIPT = "gate-receipt.json"
