@@ -140,7 +140,7 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
         except Exception:
             state = None
         status = trust.status_of(state)
-        report = await _candidates(robot_id)
+        report = await _candidates(robot_id, report_rate_limit=True)
         ladder = trust.ladder_for_state(state, service.view(robot_id), state_age_s=clock() - started)
         return {"robot_id": robot_id,
                 "localization": None if status is None else status.model_dump(mode="json"),

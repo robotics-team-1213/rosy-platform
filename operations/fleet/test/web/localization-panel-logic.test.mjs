@@ -7,11 +7,18 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   bindingSpanM,
   buildBindingPayload,
+  candidateHeadingLabel,
   captureBindingSample,
   confirmReason,
   relocalizeReason,
   summarizeLocalizationPanel,
 } = await import("../../../../applications/fleet/web/localization-panel-logic.js");
+
+test("opposite candidate headings are distinguishable to the operator", () => {
+  assert.equal(candidateHeadingLabel(Math.PI / 2), "방향 90°");
+  assert.equal(candidateHeadingLabel(-Math.PI / 2), "방향 -90°");
+  assert.equal(candidateHeadingLabel(undefined), "방향 미확인");
+});
 
 const SAMPLE_ROBOT = {
   robot_id: "rosy_45",
