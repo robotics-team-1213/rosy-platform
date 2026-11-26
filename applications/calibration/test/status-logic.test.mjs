@@ -10,6 +10,7 @@ const {
   profileForArm,
   postEvalRequest,
   postEvalFollowUp,
+  checkFollowUp,
   freshLiveTcp,
   kstStamp,
   mapEvidenceInput,
@@ -158,4 +159,14 @@ test("a post-eval result names what it saved and the follow-up steps it escalate
   });
   assert.equal(postEvalFollowUp({ applied: [], escalated: [] }), null);
   assert.equal(postEvalFollowUp(null), null);
+});
+
+test("a check result offers its todo steps and a pivot near each uncovered working point once", () => {
+  assert.deepEqual(checkFollowUp({
+    todo: ["remap", "pivot-near belt:0.1,0.2", "review-camera-reference"],
+    check: { bias_coverage_gaps: [{ site: "belt", suggested_pivot: [0.1, 0.2] }, { site: "pallet", suggested_pivot: [0.15, 0.03] },
+                                  { site: "bad", suggested_pivot: [NaN, 1] }, { site: "a.b", suggested_pivot: [0.1, 0.1] }] },
+  }), { steps: [{ step: "remap" }, { step: "pivot-near", target: "belt:0.1,0.2" }, { step: "pivot-near", target: "pallet:0.15,0.03" }] });
+  assert.equal(checkFollowUp({ todo: [], check: {} }), null);
+  assert.equal(checkFollowUp(undefined), null);
 });
