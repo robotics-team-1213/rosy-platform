@@ -32,6 +32,7 @@ import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 import omx_ladder as ladder  # noqa: E402
 import omx_physics as physics  # noqa: E402
+from omx_two_arm_kin import home_gripper_rad  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
 
 FPS, SHAPE = 15, (240, 320)
@@ -63,12 +64,12 @@ def norm_to_rad(value):
 
 
 class Cell:
-    def __init__(self, path, physics_name="design"):
+    def __init__(self, path, physics_name="design", home_gripper="open"):
         self.values = json.loads(Path(path).read_text(encoding="utf-8"))
         self.physics = physics.Physics(physics_name)
         v = self.values
         self.pick, self.place = v["sites"]["pallet"], v["sites"]["slot1"]
-        self.home = np.append(norm_to_rad(v["plan"]["home"]), 1.0)
+        self.home = np.append(norm_to_rad(v["plan"]["home"]), home_gripper_rad(home_gripper))
         limits = np.array([v["plan"]["limits"]["joints_rad"][j] for j in JOINTS[:5]])
         limits[:, 0] = np.minimum(limits[:, 0], self.home[:5])  # the real park pose sits past the nominal joint2 limit
         self.limits, self.top, self.side = limits, v["pnp"]["top"], v["pnp"]["side"]
@@ -409,6 +410,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--cell", required=True)
     parser.add_argument("--physics", default="design", help="candidate in cell_physics.yaml (omx_physics.py)")
+    parser.add_argument("--home-gripper", choices=("open", "real"), default="open")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check").add_argument("count", type=int)
     one = commands.add_parser("collect")
@@ -429,7 +431,7 @@ def main(argv=None):
     one.add_argument("state")
     one.add_argument("--out", required=True)
     args = parser.parse_args(argv)
-    cell = Cell(args.cell, args.physics)
+    cell = Cell(args.cell, args.physics, args.home_gripper)
     if args.command == "check":
         return check(cell, args.count)
     if args.command == "collect":

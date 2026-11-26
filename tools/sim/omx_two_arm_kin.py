@@ -6,6 +6,7 @@ Geometry only (D-947). Joint values are radians; the real arm's normalised units
 import json
 import math
 from pathlib import Path
+import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 URDF = ROOT / "learning/envs/isaac/assets/omx_f_palletizing_description/urdf/omx_f_palletizing.urdf"
 CELL_EXAMPLE = ROOT / "deploy/robot/omx/sim/ladder-cell.example.json"  # plan.home and plan.limits: the same numbers as cell_profile.yaml
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
+REAL_HOME_GAP_M = .012  # closed-jaw floor matching cell_act_inputs.sim_gripper and omx_cell_sim.real_q
 _REG_EYE6 = 1e-4 * np.eye(6)  # ik's damped-least-squares regulariser, built once
 _CHAIN_CACHE = {}  # (resolved path, mtime_ns, size) -> (chain, tcp): every Arm() shares one URDF parse
 _PLAN_VALUES_CACHE = {}  # same-key cache for the cell file's plan block
@@ -56,12 +58,26 @@ def chain(urdf=URDF):
     return [(o.copy(), a.copy()) for o, a in pairs], tcp.copy()
 
 
-def plan_values(path=CELL_EXAMPLE):
+def home_gripper_rad(kind="open"):
+    """Home gripper_joint_1 angle in rad: 'open' (legacy 1.0) or 'real' (closed cell home, ~0.1368 rad)."""
+    if kind == "open":
+        return 1.0
+    if kind == "real":
+        isaac = str(ROOT / "learning/envs/isaac")
+        if isaac not in sys.path:
+            sys.path.insert(0, isaac)
+        import palletizing_gripper as jaw
+        return float(jaw.angle_for_gap_clipped(REAL_HOME_GAP_M))
+    raise ValueError(f"unknown home_gripper {kind!r}: expected 'open' or 'real'")
+
+
+def plan_values(path=CELL_EXAMPLE, home_gripper="open"):
     """(home joints rad with the gripper, limits (5, 2)) from the cell file's plan block; copies of the cached parse."""
-    key = _stat_key(path)
+    grip = home_gripper_rad(home_gripper)
+    key = (*_stat_key(path), home_gripper)
     if key not in _PLAN_VALUES_CACHE:
         plan = json.loads(Path(key[0]).read_text(encoding="utf-8"))["plan"]
-        home = np.append(norm_to_rad(plan["home"]), 1.0)
+        home = np.append(norm_to_rad(plan["home"]), grip)
         limits = np.array([plan["limits"]["joints_rad"][n] for n in JOINTS])
         limits[:, 0] = np.minimum(limits[:, 0], home[:5])  # the real park pose sits past the nominal joint2 limit
         _PLAN_VALUES_CACHE[key] = (home, limits)
@@ -72,14 +88,14 @@ def plan_values(path=CELL_EXAMPLE):
 class Arm:
     """One arm: base position (x, y, z) and yaw in the shared world frame, the kinematic chain, tool-down IK."""
 
-    def __init__(self, name, base_xyz, yaw, tcp_x=None, urdf=URDF, cell=CELL_EXAMPLE):
+    def __init__(self, name, base_xyz, yaw, tcp_x=None, urdf=URDF, cell=CELL_EXAMPLE, home_gripper="open"):
         self.name, self.base, self.yaw = name, np.array(base_xyz, float), float(yaw)
         self.chain, self.tcp = chain(urdf)
         self.j1_offset_xy = self.chain[0][0][:2].copy()  # URDF link0->joint1 xy; base[:2] is the joint1 axis on PR33_C02_BASE
         self.chain[0] = (np.array([0., 0., self.chain[0][0][2]]), self.chain[0][1])
         if tcp_x is not None:
             self.tcp = np.array([tcp_x, self.tcp[1], self.tcp[2]])
-        self.home, self.limits = plan_values(cell)
+        self.home, self.limits = plan_values(cell, home_gripper=home_gripper)
         self._limits_low, self._limits_high = self.limits.T  # ik's clip bounds, unpacked once
         self.R0 = _rot([0, 0, 1], self.yaw)
 
