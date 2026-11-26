@@ -1243,6 +1243,10 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
 # static layer, so map-canvas clears do not repaint it); a resize or clear restarts that canvas.
 MAP_RULER_NUMBERS = r"""(() => {
   const byCanvas = new Map(); let seq = 0;
+  for (const key of ['width', 'height']) {
+    const size = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, key);
+    Object.defineProperty(HTMLCanvasElement.prototype, key, {...size, set(v) { byCanvas.delete(this); size.set.call(this, v); }});
+  }
   const clear = CanvasRenderingContext2D.prototype.clearRect;
   CanvasRenderingContext2D.prototype.clearRect = function (...args) { byCanvas.delete(this.canvas); return clear.apply(this, args); };
   const fill = CanvasRenderingContext2D.prototype.fillText;
