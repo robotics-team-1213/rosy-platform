@@ -206,7 +206,7 @@ def _load_lerobot_arm(
 
             chunk = policy.predict_action_chunk(pre(batch))
             arr = np.asarray(post(chunk).detach().cpu().numpy(), dtype=np.float64).reshape(-1, len(JOINT_NAMES))
-        return [[float(x) for x in r] for r in arr[:n_action_steps]]
+        return [[float(x) for x in r] for r in arr]  # the whole chunk; PolicyRegistry.infer trims to n_action_steps
 
     return predict
 
@@ -359,6 +359,9 @@ class PolicyRegistry:
         fields, bad = visoff.parse_episode_fields(req)
         if bad:
             return 400, {"ok": False, "error": bad}
+        full_chunk = req.get("full_chunk", False)
+        if not isinstance(full_chunk, bool):
+            return 400, {"ok": False, "error": "full_chunk must be a boolean"}
 
         t0 = time.perf_counter()
         try:
@@ -375,6 +378,10 @@ class PolicyRegistry:
         raw_chunk, visoff_diag = visoff.visoff_output(raw_out)
         if not isinstance(raw_chunk, (list, tuple)) or not (1 <= len(raw_chunk) <= entry.chunk_size):
             return 500, {"ok": False, "error": "invalid predicted chunk length"}
+        # A timed single-arm client drops rows its observation age already passed (cell_policy_timing.action_window),
+        # so it asks for the whole chunk; the two-arm client plays every row it gets and keeps n_action_steps.
+        if not full_chunk:
+            raw_chunk = raw_chunk[:entry.n_action_steps]
         validated: list[list[float]] = []
         for row in raw_chunk:
             vec = _is_finite_floats(row, 6)

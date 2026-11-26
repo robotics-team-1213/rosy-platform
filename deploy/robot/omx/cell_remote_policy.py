@@ -356,7 +356,7 @@ class RemotePolicyShadow:
     def infer(self, obs: dict[str, Any], *, state: Any = None) -> SimpleNamespace:
         t0 = time.perf_counter()
         req_id = f"{self.arm_id}-{uuid.uuid4().hex[:16]}"
-        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id})
+        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id, **({"full_chunk": True} if getattr(self, "full_chunk", False) else {})})
         rtt_s = time.perf_counter() - t0
         if not isinstance(reply, dict) or reply.get("ok") is not True:
             raise RemotePolicyError(f"inference error reply: {reply!r}")
