@@ -66,7 +66,7 @@ def test_restart_stops_both_possible_owners_of_an_uncertain_camera_change():
         observed.append((robot_id, lane, place, handoff_pending))
         return {"stop_sent": True}
 
-    halts = NS(halt_robot=halt, _clock=lambda: 1., _store=NS(put_trip=lambda _trip: None))
+    halts = NS(dock_owned=TripHalts.dock_owned, halt_robot=halt, _clock=lambda: 1., _store=NS(put_trip=lambda _trip: None))
     trip = {"robot_id": "r1", "drive_mode": "nav2", "next_place": "finish",
             "detail": {"camera_lane_fallback": {"phase": "starting"}}}
     assert run(TripHalts._retry_trip_entry(halts, trip))
