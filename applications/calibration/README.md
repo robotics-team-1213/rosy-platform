@@ -11,6 +11,16 @@
 
 ## 보정 순서
 
+### 카메라 배치 실시간 비교
+
+관제 노트북에서 `python tools/remote/camera_alignment_view.py <profiles.json> --config <agent-bridge.json>`을 실행하고 출력된 로컬 주소를 연다. OpenCV와 NumPy가 필요하다. 프로필마다 카메라 역할, 해당 설치의 기준 JPEG, 고정물의 목표 픽셀 좌표를 등록한다. 기준 파일 경로는 프로필 파일의 위치를 기준으로 해석하며 좌표의 원점은 기준 영상의 왼쪽 위다.
+
+```json
+[{"name":"Cell S 상부","view":"arm_s_top","reference":"reference-top.jpg","points":[[282,200],[443,204]]}]
+```
+
+현재 프레임의 특징으로 기준점을 투영하고 각 점 주변의 무늬를 다시 대조한다. 십자는 목표, 원은 추적된 위치, 점선 길이는 이동량이다. 새 설치에는 해당 설치에서 촬영한 기준과 움직이지 않는 고정점을 사용한다. 보정 수용은 아래 엔진의 실측 절차로 판정한다.
+
 | 단계 | 엔진 | 결과 | 팔 동작 |
 |---|---|---|---|
 | 1. 장치 | `omx_devices.py scan`, `omx_cameras.py inventory` | 역할별 장치, 문제 0 | 없음 |
