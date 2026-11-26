@@ -110,8 +110,6 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
         return jaw_zone_error(poses, kin, jaw_spec) if jaw_spec is not None else None
 
-    if paced_chunks and handoff is not None:
-        raise ValueError("paced_chunks cannot be combined with handoff")
     if not paced_chunks and (getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None):
         def infer(state, frames):
             model_state = np.asarray(state) if sim_units else np.asarray(state) + off
@@ -156,7 +154,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                             goal=goal, sim_units=sim_units, open_g=open_g, model_closed=model_closed, closed=closed,
                             low=low, high=high, fastest=fastest, kin=kin, jaw_spec=jaw_spec,
                             resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s,
-                            pre_home=paced_chunks, n_action=n_action, home_roll=home_roll)
+                            pre_home=paced_chunks, n_action=n_action, home_roll=home_roll, handoff=handoff)
 
 
 def main(argv=None) -> int:
@@ -211,8 +209,8 @@ def main(argv=None) -> int:
         parser.error("--token-file requires --endpoint-url")
     if args.mask_pick_goal and args.endpoint_url:
         parser.error("--mask-pick-goal cannot be used with --endpoint-url")
-    if args.paced_chunks and args.mode != "act":
-        parser.error("--paced-chunks requires act mode")
+    if args.paced_chunks and args.mode == "taught":
+        parser.error("--paced-chunks requires act or hybrid mode")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")

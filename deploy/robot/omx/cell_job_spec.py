@@ -302,8 +302,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         validate_dual_routes(checked["task_a"], checked["task_b"], moving=moves_arm(job, params))
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
-        if opt_checked.get("paced_chunks") and mode != "act":
-            raise ValueError("paced_chunks requires mode='act'")
+        if opt_checked.get("paced_chunks") and mode not in ("act", "hybrid"):
+            raise ValueError("paced_chunks requires mode='act' or 'hybrid'")
         if "token_file" in opt_checked and "endpoint_url" not in opt_checked:
             raise ValueError("token_file requires endpoint_url")
         if "endpoint_url" in opt_checked:
