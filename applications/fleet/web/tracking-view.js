@@ -1,4 +1,4 @@
-// D-457 관제 카메라 추적 상태줄. "배경 다시 학습"은 설치·보정 문서의 tracking-relearn.js 다(D-540 5). 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
+// D-457 관제 카메라 추적 상태줄. "배경 다시 학습"은 설치 문서의 tracking-relearn.js 다(D-540 5). 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
 // 표시 전용 — 목표·교통정리·미션에 넘기지 않는다.
 
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,

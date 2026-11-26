@@ -868,7 +868,7 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
 
 
 def test_the_install_document_owns_enrollment_and_calibration(console_url):
-    """D-410 — 설치·보정 문서 렌더 계약.
+    """D-410 — 설치 문서 렌더 계약.
 
     /console/install 은 기기 등록·카메라 연결 승인·경기장/맵 보정을 소유하고
     운용 표면(로스터·지도·대형·신호등)을 갖지 않는다. 전체 정지는 설치 문서의
@@ -914,7 +914,7 @@ def test_the_install_document_owns_enrollment_and_calibration(console_url):
 
         shell = page.locator("ui-shell")
         assert shell.get_attribute("grammar") == "procedure"
-        assert "설치·보정" in page.title()
+        assert page.title() == "Rosy Fleet — 설치"
         # 설치 문서의 소유물.
         for needle in ("#robot-enrollment", "#camera-link", "#vision-adjustments", "#field-detect"):
             assert page.locator(needle).count() == 1, needle

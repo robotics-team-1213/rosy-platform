@@ -71,7 +71,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* D-406 — 설치·보정 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
+/* D-406 — 설치 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .vision-controls select { flex: 1; min-width: 0; }
 .vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }

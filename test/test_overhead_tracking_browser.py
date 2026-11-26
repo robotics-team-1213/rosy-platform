@@ -40,7 +40,7 @@ def test_coordinates_switch_from_marker_to_anonymous_and_clear_when_stale(consol
         body["robots"] = []
         body["unknown"] = [{"x": .25, "y": -.5}]
         page.wait_for_function("document.querySelector('#tracking-position-rows').textContent.includes('미확인')")
-        assert row.locator("td").all_text_contents() == ["미확인 1", "0.25", "-0.50", "무마커 추론 · 이름 미확정"]
+        assert row.locator("td").all_text_contents() == ["미확인 1", "0.25", "-0.50", "무마커 추정 · 이름 미확정"]
         assert "rosy_01" not in page.locator("#tracking-position-rows").inner_text()
 
         body["unknown"] = []
@@ -88,7 +88,7 @@ def test_position_expires_even_when_the_next_poll_never_returns(console_url):  #
 
 
 def test_background_relearn_requires_the_owned_confirmation(console_url):  # noqa: F811
-    """D-540 5: 배경 다시 학습은 설치·보정 `카메라 설치·보정`에만 있고 확인 뒤에 보낸다."""
+    """D-540 5: 배경 다시 학습은 설치 `카메라 설치·보정`에만 있고 확인 뒤에 보낸다."""
     from playwright.sync_api import sync_playwright
 
     posts = []

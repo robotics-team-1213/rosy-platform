@@ -429,8 +429,8 @@ export function renderArmGrid(canvas, state) {
 
   // Origin + axis arrows (+X right, +Y up)
   const [ox, oy] = toCanvas(0, 0);
-  drawArrow(ctx, ox, oy, ox + 28, oy, tone("--status-crit"), 6, false);
-  drawArrow(ctx, ox, oy, ox, oy - 28, tone("--status-good"), 6, false);
+  drawArrow(ctx, ox, oy, ox + 28, oy, tone("--ink-quiet"), 6, false);
+  drawArrow(ctx, ox, oy, ox, oy - 28, tone("--ink-quiet"), 6, false);
   ctx.save();
   ctx.font = font("micro", "mono");
   ctx.fillStyle = tone("--ink");

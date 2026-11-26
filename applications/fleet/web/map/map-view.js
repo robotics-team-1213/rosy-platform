@@ -145,7 +145,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const calibration = camera.calibration();
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
-    // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
+    // 보정을 바꾸는 것은 설치의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
@@ -417,7 +417,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       placeList.hidden = !places.length;
       placeList.replaceChildren(...places.map(place => {
         const row = document.createElement("li");
-        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+        row.textContent = `${place.name || place.id} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
         return row;
       }));
     }
