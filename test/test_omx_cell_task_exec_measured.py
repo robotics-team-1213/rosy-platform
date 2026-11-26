@@ -474,7 +474,7 @@ def _act_task(tmp_path, monkeypatch, drive_out, *, took_one_zone=True):
     """An S act_policy task whose drive (the subprocess) printed `drive_out`; fold and zone are the measured values."""
     import hashlib
 
-    import cell_task_act_run as run_mod
+    import cell_act_verdict as verdict_mod
 
     checkpoint = tmp_path / "model"
     checkpoint.mkdir()
@@ -492,7 +492,7 @@ def _act_task(tmp_path, monkeypatch, drive_out, *, took_one_zone=True):
     monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0})
     wrote = []
     monkeypatch.setattr(cte, "write_context", lambda *a, **k: wrote.append(a))
-    monkeypatch.setattr(run_mod, "zone_acceptance", lambda *a: took_one_zone)
+    monkeypatch.setattr(verdict_mod, "zone_acceptance", lambda *a: took_one_zone)
     monkeypatch.setattr(cte.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
         cmd, 0, stdout=json.dumps(drive_out), stderr=""))
     task = {**HANDOFF, "execution_mode": "act_policy", "presence": {"operator": "onsite", "at": time.time()}}

@@ -17,6 +17,7 @@ PARAMS = {
     "arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "max_chunks": 4, "operator": "op_a",
     "mode": "act", "policy_root": "models/p", "policy_revision": "a" * 64, "cell_calibration": "cal/s.json",
     "model_calibration": "cal/m.json", "person_at_switch": True, "depart_robot": "rosy_46",
+    "dest_site": "pinky-s1", "dest_tier": 1,
 }
 
 
@@ -29,6 +30,19 @@ class _Proc:
 
     def poll(self):
         return self.code
+
+
+@pytest.fixture(autouse=True)
+def measured(monkeypatch):
+    """The shared act_verdict's inputs: live fold, park readback and zone_acceptance, each switchable per test."""
+    import cell_act_verdict as verdict_mod
+
+    state = {"live": True, "zone": True}
+    monkeypatch.setattr(depart, "measured_fold", lambda *a, **k: {"folded": state["live"], "state": None})
+    monkeypatch.setattr(depart, "fold_readback", lambda *a, **k: {"folded": True, "state": [0] * 6})
+    monkeypatch.setattr(depart, "plan_home", lambda cfg: [0] * 6)
+    monkeypatch.setattr(verdict_mod, "zone_acceptance", lambda *a: state["zone"])
+    return state
 
 
 def _run(tmp_path, monkeypatch, result, *, exit_code=0, post=None, **extra):
@@ -78,6 +92,13 @@ def test_no_post_and_reason_recorded(tmp_path, monkeypatch, result, exit_code, e
     assert d["sent"] is False and why in d["reason"]
 
 
+@pytest.mark.parametrize(("flag", "why"), [("live", "measured fold not confirmed"), ("zone", "zone_acceptance not met")])
+def test_no_depart_without_measured_fold_or_zone(tmp_path, monkeypatch, measured, flag, why):
+    measured[flag] = False
+    info, calls, *_ = _run(tmp_path, monkeypatch, OK)
+    assert calls == [] and why in info["structured_result"]["depart"]["reason"]
+
+
 def test_fleet_exception_keeps_arm_result(tmp_path, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("fleet down")
@@ -90,9 +111,20 @@ def test_fleet_exception_keeps_arm_result(tmp_path, monkeypatch):
     assert info["exit"] == 0 and info["structured_result"]["took_one"] is True
 
 
+def test_job_api_imports_without_the_adapter_path():
+    """The job API service has no omx_adapter on its path: the depart verdict must not need it (review finding 2026-11-27)."""
+    import subprocess
+    omx = str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx")
+    code = f"import sys; sys.path[:0] = [{omx!r}]; import cell_job_api, cell_act_verdict; assert 'omx_adapter' not in sys.modules"
+    done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+
+
 def test_skip_reason_unit():
-    base = {"job": "cell_policy_drive", "params": PARAMS, "exit_code": 0, "result": OK}
+    ok_verdict = {"verified": True, "folded": True, "zone_ok": True, "took_one": True, "live_fold": {"folded": True}}
+    base = {"job": "cell_policy_drive", "params": PARAMS, "exit_code": 0, "result": OK, "verdict": ok_verdict}
     assert depart.depart_skip_reason(**base) is None
+    assert "not evaluated" in depart.depart_skip_reason(**{**base, "verdict": None})
     assert "only for arm_s" in depart.depart_skip_reason(**{**base, "params": {**PARAMS, "arm": "arm_b"}})
     assert depart.depart_skip_reason(**{**base, "params": {"arm": "arm_s"}}) == "depart not requested"
     assert depart.depart_skip_reason(**{**base, "result": None}) == "no structured result"

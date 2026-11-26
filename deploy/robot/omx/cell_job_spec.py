@@ -161,6 +161,7 @@ JOBS = {
             "site": _match(NAME),
             "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
             "paced_chunks": _bool,
+            "dest_site": _match(NAME), "dest_tier": _int_range(0, 9),  # depart needs the zone_acceptance target (D-1057)
             "depart_robot": _match(NAME), "depart_action": _match(re.compile(r"depart_s1")),  # arm_s: Fleet R pinky depart after took_one
         },
     },
@@ -364,7 +365,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         if option in opt_checked:
             args += ["--" + option, *opt_checked[option]]
     for option in (
-        "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
+        "site", "dest_site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
         "post_eval", "z_evidence", "tier_evidence", "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
