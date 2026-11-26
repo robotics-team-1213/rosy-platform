@@ -60,6 +60,41 @@ class RearBayPort:
             raise TripError(409, "CHARGE_BAY_REAR_TYPE_REQUIRED", info)
         return dock, offset
 
+    async def prerequisites(self, robot, info):
+        """Read native dock registration and owner capabilities independently of traffic admission."""
+        client = self.console.clients().get(robot)
+        target_error = status_error = None
+        if client is None:
+            target_error = status_error = "CHARGE_BAY_OWNER_UNAVAILABLE"
+            status = None
+        else:
+            async def status_view():
+                return await client.docking_status()
+
+            target, status = await asyncio.gather(
+                asyncio.wait_for(self.target(robot, info), 2.), asyncio.wait_for(status_view(), 2.),
+                return_exceptions=True)
+            if isinstance(target, TripError):
+                target_error = target.code
+            elif isinstance(target, BaseException):
+                target_error = "CHARGE_BAY_TARGET_READ_UNAVAILABLE"
+            if not isinstance(status, dict):
+                status_error = "CHARGE_BAY_STATUS_READ_UNAVAILABLE"
+            if self.console.clients().get(robot) is not client:
+                target_error = status_error = "CHARGE_BAY_OWNER_CHANGED"
+        checks = {"target": target_error, "scoped_cancel": status_error, "owner": status_error}
+        if not status_error:
+            if status.get("operation_cancel_supported") is not True:
+                checks["scoped_cancel"] = "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED"
+            owner = status.get("owner") or {}
+            if "owner_run_id" not in owner or type(owner.get("owner_generation")) is not int:
+                checks["owner"] = "CHARGE_BAY_DOCK_OWNER_UNVERIFIED"
+            elif owner["owner_run_id"] is not None:
+                checks["owner"] = "CHARGE_BAY_DOCK_OWNER_BUSY"
+        return {"robot_id": robot, "bay_id": info["bay_id"], "dock_id": info["dock_id"],
+                "checked_at": time.time(), "checks": checks,
+                "reasons": list(dict.fromkeys(reason for reason in checks.values() if reason))}
+
     async def clearance(self, runner, live, client, info, target, offset):
         from fleet.server.handoff_traffic import _inside_corridor, read_peers, site_corridor
         robot = live.view["robot_id"]

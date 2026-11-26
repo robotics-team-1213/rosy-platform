@@ -60,3 +60,11 @@ test('parking reports request and device receipt separately from observed motion
   trip.execution = {phase: 'stationary', motion: 'stationary'};
   assert.match(tripStatusText(trip), /C2 후진 주차 명령 접수 · 현재 정지/);
 });
+
+test('a peer-held parking trip also shows the time-scoped independent dock diagnostics', () => {
+  const trip = {state: 'running', robot_id: 'rosy_42', detail: {
+    peer_wait: {stage: 'pre_dispatch_peer_check', dispatch_attempted: false, waiting_on: ['rosy_45']},
+    parking_handoff: {bay_id: 'C1', phase: 'approaching', plan_prerequisites: {
+      reasons: ['CHARGE_BAY_TARGET_NOT_TAUGHT', 'CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED']}}}};
+  assert.match(tripWaitText(trip), /통행 대기.*명령 대상 rosy_42.*rosy_45.*계획 시 C1.*도킹 위치 미등록.*작업별 정지 미지원/);
+});

@@ -3,6 +3,18 @@ const WAIT_LABEL = {
   fleet_hold_unconfirmed: '일시정지 · 기체 정지 응답 확인 중', fleet_hold: '일시정지 · 정지 확인됨',
   route_replan_hold: '변경 경로 확인', signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
 
+const DOCK_PREREQUISITE = {
+  CHARGE_BAY_TARGET_NOT_TAUGHT: '도킹 위치 미등록', CHARGE_BAY_REAR_TYPE_REQUIRED: '후진 도킹 유형 확인 필요',
+  CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED: '작업별 정지 미지원', CHARGE_BAY_DOCK_OWNER_BUSY: '기존 도킹 작업 있음',
+  CHARGE_BAY_DOCK_OWNER_UNVERIFIED: '도킹 작업 상태 미확인', CHARGE_BAY_OWNER_UNAVAILABLE: '기체 연결 미확인',
+  CHARGE_BAY_STATUS_READ_UNAVAILABLE: '도킹 상태 조회 불가', CHARGE_BAY_TARGET_READ_UNAVAILABLE: '도킹 위치 조회 불가',
+  CHARGE_BAY_OWNER_CHANGED: '도킹 연결 변경'};
+
+export function dockPlanIssues(parking) {
+  const reasons = parking?.plan_prerequisites?.reasons;
+  return reasons?.length ? ` · 계획 시 ${parking.bay_id} 도킹 확인 결과 · ${reasons.map(r => DOCK_PREREQUISITE[r] || r).join(' · ')}` : '';
+}
+
 export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
   if (trip?.hold?.reason === 'fleet_hold') {
     return trip.hold.stop?.confirmed ? '일시정지 · 정지 확인됨' : '일시정지 · 기체 정지 응답 확인 중';
@@ -17,7 +29,7 @@ export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fl
   if (peer) {
     const ids = peer.waiting_on?.length ? peer.waiting_on : [peer.blocked_by].filter(Boolean);
     const stage = peer.stage === 'pre_dispatch_peer_check' && peer.dispatch_attempted === false ? ' · 주행 명령 전송 전' : '';
-    return `통행 대기${stage} · 명령 대상 ${trip.robot_id}${ids.length ? ' · 안전거리 확인 대상 ' + ids.join(', ') : ''} · 자동 재확인 중`;
+    return `통행 대기${stage} · 명령 대상 ${trip.robot_id}${ids.length ? ' · 안전거리 확인 대상 ' + ids.join(', ') : ''} · 자동 재확인 중` + dockPlanIssues(parking);
   }
   return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
 }

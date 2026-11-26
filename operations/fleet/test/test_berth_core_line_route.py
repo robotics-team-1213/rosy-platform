@@ -180,3 +180,25 @@ def test_rear_bay_checks_traffic_again_at_the_transport():
             clock[0] += STALE_POSE_S + .01
         with pytest.raises((TripError, HubError)):
             verify()
+
+
+def test_read_only_dock_prerequisites_report_target_and_cancel_while_peer_held():
+    import asyncio
+    from fleet.server.rear_bay_return import RearBayPort
+
+    calls = []
+    class ReadOnlyCore:
+        async def _get(self, path):
+            calls.append(path)
+            return {"docks": [{"id": "bay_c2"}]}
+        async def docking_status(self):
+            calls.append("dock status")
+            return {"operation_cancel_supported": False, "owner": {"owner_run_id": None, "owner_generation": 3}}
+    core = ReadOnlyCore()
+    port = RearBayPort(SimpleNamespace(clients=lambda: {"rosy_42": core}))
+    result = asyncio.run(port.prerequisites("rosy_42", {"bay_id": "C1", "dock_id": "bay_c1"}))
+    assert set(calls) == {"/api/v1/docking/docks", "dock status"}
+    assert result["checks"] == {"target": "CHARGE_BAY_TARGET_NOT_TAUGHT",
+                                "scoped_cancel": "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED", "owner": None}
+    assert result["reasons"] == ["CHARGE_BAY_TARGET_NOT_TAUGHT", "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED"]
+    assert result["robot_id"] == "rosy_42" and result["bay_id"] == "C1" and result["checked_at"] > 0

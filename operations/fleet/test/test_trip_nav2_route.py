@@ -377,6 +377,11 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         assert not runner.human_hold_fn()
         assert not runner.config.map_binding_required
         if case == "ordinary_parking":
+            check = client.get("/api/fleet/robots/rosy_42/bays/C2/dock-prerequisites", headers=headers)
+            assert check.status_code == 200
+            observed = check.json()
+            assert (observed["robot_id"], observed["bay_id"], observed["dock_id"]) == ("rosy_42", "C2", "bay_c2")
+            assert observed["checks"]["target"] == "CHARGE_BAY_TARGET_NOT_TAUGHT"
             store.map_bindings.revoke("rosy_42", "bob")
             strict = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
             assert strict.status_code == 409 and strict.json()["detail"]["code"] == "TRIP_POSE_UNTRUSTED"

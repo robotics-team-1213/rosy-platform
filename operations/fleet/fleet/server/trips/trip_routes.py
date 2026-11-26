@@ -279,7 +279,10 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         plan_data = plan_body(plan)
         if parking:
             plan_data["parking_handoff"] = parking
-            plan_data["staging_distance_m"] = round(math.dist(pose[:2], active[2].place_xy(goal)), 4)
+            staging_distance = math.dist(pose[:2], active[2].place_xy(goal))
+            plan_data["staging_distance_m"] = round(staging_distance, 4)
+            if staging_distance <= runner.config.arrive_free_m:
+                parking["plan_prerequisites"] = await runner.rear_bay_port.prerequisites(robot_id, parking)
         if bound_nav2:
             plan_data["nav2_binding_id"] = binding_id
         elif binding_id is not None:
@@ -343,6 +346,22 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
     runner.rear_bay_port = RearBayPort(console, (*runner.halts.restarted, *runner.halts.gave_up))
     runner.halts.dock_stop = runner.rear_bay_port.halt
     app.state.trip_plan = plan
+
+    @app.get("/api/fleet/robots/{robot_id}/bays/{bay_id}/dock-prerequisites", dependencies=read_guard, tags=["fleet"])
+    async def dock_prerequisites(robot_id: str, bay_id: str) -> dict:
+        from fleet.server.rear_bay_return import rear_bay
+        if robot_id not in console.robot_ids:
+            raise _refuse("UNKNOWN_ROBOT", status=404)
+        active = site_maps.active()
+        if active is None:
+            raise _refuse("TRIP_NO_ACTIVE_MAP")
+        try:
+            info = rear_bay(active[2], bay_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+        if info is None:
+            raise _refuse("CHARGE_BAY_APPROACH_UNAVAILABLE", status=404)
+        return await runner.rear_bay_port.prerequisites(robot_id, info)
 
     def trip_error(exc: TripError) -> HTTPException:
         return _refuse(exc.code, exc.detail, exc.status)
