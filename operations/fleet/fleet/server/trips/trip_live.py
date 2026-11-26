@@ -36,7 +36,7 @@ def _measured_motion(robot_id, sample):
         return "unknown", None, None
     velocity = state.get("velocity") or {}
     evidence = (state.get("evidence") or {}).get("velocity") or {}
-    stamp = evidence.get("sampled_at", evidence.get("received_at"))
+    stamp = evidence.get("sampled_at")
     sampled, captured = parse_utc(stamp), parse_utc(state.get("timestamp"))
     ttl = evidence.get("stale_after_s", STALE_VELOCITY_S)
     speeds = (velocity.get("linear"), velocity.get("angular"))

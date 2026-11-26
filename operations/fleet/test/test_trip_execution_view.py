@@ -35,7 +35,7 @@ def test_measurement_can_follow_or_predate_an_accepted_command_and_show_motion_u
 
 
 @pytest.mark.parametrize("change", ["negative_age", "stale_source", "stale_cache", "bool", "nan", "other_robot",
-                                    "delayed", "no_sample", "offline", "short_ttl"])
+                                    "delayed", "no_sample", "legacy_receipt_only", "offline", "short_ttl"])
 def test_stale_invalid_and_other_device_velocity_cannot_establish_motion(change):
     row = snapshot(.04)
     ev = row["evidence"]["velocity"]
@@ -54,6 +54,9 @@ def test_stale_invalid_and_other_device_velocity_cannot_establish_motion(change)
         ev["evidence"] = "delayed"
     elif change == "no_sample":
         ev.update(sampled_at=None, received_at=row["timestamp"])
+    elif change == "legacy_receipt_only":
+        del ev["sampled_at"]
+        ev["received_at"] = row["timestamp"]
     elif change == "offline":
         row["online"] = False
     else:
@@ -62,3 +65,24 @@ def test_stale_invalid_and_other_device_velocity_cannot_establish_motion(change)
     view = {"robot_id": "rosy_42", "state": "running", "detail": {}}
     result = trip_execution(view, live, (row, start, now))
     assert (result["phase"], result["motion"], result["sampled_at"]) == ("dispatched", "unknown", None)
+
+
+def test_cache_read_is_bound_to_current_transport_and_generation():
+    from fleet.server.map_pose_service import MapPoseService
+
+    transport = object()
+    current = {"rosy_42": transport}
+    poses = MapPoseService(lambda: current.keys(), client_identity=current.get, clock=lambda: 10.1)
+    key = ("rosy_42", True)
+    generation = poses._source_scopes.generation("rosy_42")
+    row = snapshot()
+    def keep(client, scope):
+        poses._kept[key] = (10., 2, (row, SimpleNamespace(client=client, generation=scope)))
+
+    keep(transport, generation)
+    assert poses.cached_motion_sample("rosy_42") == (row, 10., 10.1)
+    keep(object(), generation)
+    assert poses.cached_motion_sample("rosy_42") is None
+    keep(transport, generation + 1)
+    assert poses.cached_motion_sample("rosy_42") is None
+    assert poses.cached_motion_sample("rosy_45") is None
