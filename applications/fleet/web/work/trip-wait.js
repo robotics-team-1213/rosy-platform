@@ -11,7 +11,8 @@ export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fl
   if (parking?.phase === "waiting_for_commission")
     return `${parking.staging_place_id} 대기 · ${parking.bay_id} 도킹 보정 필요 (${parking.reason})`;
   if (parking?.phase === "waiting_for_clearance") return `${parking.staging_place_id} 대기 · ${parking.bay_id} 진입 확인 (${parking.reason})`;
-  if (parking?.phase === "docking" || parking?.phase === "submitting") return `${parking.bay_id} 후진 주차 중`;
+  if (parking?.phase === "submitting") return `${parking.bay_id} 후진 주차 명령 전송 중`;
+  if (parking?.phase === "docking") return `${parking.bay_id} 후진 주차 명령 접수`;
   const peer = trip?.detail?.peer_wait;
   if (peer) {
     const ids = peer.waiting_on?.length ? peer.waiting_on : [peer.blocked_by].filter(Boolean);
@@ -30,7 +31,7 @@ export function tripExecutionText(trip) {
     pre_dispatch_wait: '통행 대기 · 주행 명령 전송 전', goal_wait: '주행 명령 대기', paused: '일시정지'}[execution.phase];
   if (!label) return '';
   if (!trip.detail?.peer_wait && execution.waiting_on?.length) label += ' · 안전거리 확인 대상 ' + execution.waiting_on.join(', ');
-  if (execution.motion === 'moving' && execution.phase !== 'moving') return label + ' · 실제 이동 중';
-  if (execution.motion === 'stationary' && execution.phase !== 'stationary') return label + ' · 현재 정지';
+  if (execution.motion === 'moving' && (wait || execution.phase !== 'moving')) return label + ' · 실제 이동 중';
+  if (execution.motion === 'stationary' && (wait || execution.phase !== 'stationary')) return label + ' · 현재 정지';
   return label;
 }

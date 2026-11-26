@@ -86,3 +86,17 @@ def test_cache_read_is_bound_to_current_transport_and_generation():
     keep(transport, generation + 1)
     assert poses.cached_motion_sample("rosy_42") is None
     assert poses.cached_motion_sample("rosy_45") is None
+
+
+def test_parking_wait_submission_and_dock_receipt_do_not_inherit_staging_motion():
+    parking = {"phase": "waiting_for_clearance", "reason": "CHARGE_BAY_STAGING_STOP_UNVERIFIED"}
+    view = {"state": "running", "robot_id": "rosy_42", "detail": {"parking_handoff": parking}}
+    live = SimpleNamespace(command_ack_mono=5.)
+    sample = snapshot(.04), 10., 10.1
+    assert trip_execution(view, live, sample)["phase"] == "goal_wait"
+    parking.update(phase="submitting")
+    assert trip_execution(view, live, sample)["phase"] == "received"
+    parking.update(phase="docking", operation={"run_id": "dock-a"})
+    live.command_ack_mono = 10.
+    assert trip_execution(view, live, sample)["phase"] == "dispatched"
+    assert trip_execution(view, live, (snapshot(), 11., 11.1))["phase"] == "stationary"

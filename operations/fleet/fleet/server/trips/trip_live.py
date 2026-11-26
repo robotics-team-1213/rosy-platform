@@ -25,6 +25,9 @@ def trip_wait_reason(view):
     if peer := detail.get("peer_wait"):
         before_send = peer.get("stage") == "pre_dispatch_peer_check" and peer.get("dispatch_attempted") is False
         return "peer_pre_dispatch" if before_send else "peer_clearance"
+    parking = detail.get("parking_handoff") or {}
+    if parking.get("phase") in ("waiting_for_commission", "waiting_for_clearance"):
+        return parking.get("reason") or parking["phase"]
     return None
 
 
@@ -54,6 +57,7 @@ def trip_execution(view, live=None, sample=None):
     """Read-only command phase and independently measured base motion, scoped to this trip."""
     detail = view.get("detail") or {}
     peer = detail.get("peer_wait") or {}
+    parking = detail.get("parking_handoff") or {}
     reason = trip_wait_reason(view)
     motion, sampled_at, mono = _measured_motion(view["robot_id"], sample if view["state"] in OPEN else None)
     if view["state"] not in OPEN:
@@ -65,6 +69,12 @@ def trip_execution(view, live=None, sample=None):
     elif reason or detail.get("goal_wait") or (view.get("wait") or {}).get("waiting"):
         phase = "goal_wait"
         reason = reason or detail.get("goal_wait") or view["wait"].get("reason")
+    elif parking.get("phase") == "submitting":
+        phase, reason = "received", "dock_submitting"
+    elif parking.get("phase") == "docking" and parking.get("operation"):
+        ack = live.command_ack_mono if live is not None else None
+        phase = motion if ack is not None and mono is not None and mono >= ack else "dispatched"
+        reason = "dock_accepted"
     elif live is not None and live.command_ack_mono is not None and (
             (live.active_route and not live.active_route.get("superseded")) or live.last_goal is not None
             or detail.get("line_follow_started") or live.sent):

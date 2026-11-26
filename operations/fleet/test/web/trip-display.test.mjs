@@ -50,3 +50,13 @@ test("receipt and measured motion remain distinct when waiting and stopped", () 
   assert.match(show("pre_dispatch_wait", "stationary"), /전송 전.*현재 정지/);
   assert.doesNotMatch(show("pre_dispatch_wait", "unknown"), /현재 정지|실제 이동 중/);
 });
+
+test('parking reports request and device receipt separately from observed motion', () => {
+  const parking = {phase: 'submitting', bay_id: 'C2'};
+  const trip = {state: 'running', robot_id: 'rosy_42', detail: {parking_handoff: parking},
+    execution: {phase: 'received', motion: 'unknown'}};
+  assert.match(tripStatusText(trip), /C2 후진 주차 명령 전송 중/);
+  parking.phase = 'docking';
+  trip.execution = {phase: 'stationary', motion: 'stationary'};
+  assert.match(tripStatusText(trip), /C2 후진 주차 명령 접수 · 현재 정지/);
+});
