@@ -347,6 +347,14 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
     stop = next(row for row in rows if "stopped" in row)
     assert stop["runner"] == {"health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
+    def full_log(row):
+        if "stopped" in row:
+            raise OSError("log storage full")
+
+    interrupted = Cell()
+    with pytest.raises(OSError, match="log storage full"):
+        cc.remap(interrupted, config, points, tmp_path, log=full_log)
+    assert interrupted.cmds[-1] == "park"
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
     import time

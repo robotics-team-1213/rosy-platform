@@ -179,10 +179,12 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
                 failed = command
                 break
         if failed:
-            rp.record_stop(status, failed, [x, y], speed=motion["plan"].get("transit_speed", 0.85),
-                           log=log, at_stop=at_stop, timeout=AT_STOP_S)
-            if not fold(cell).get("ok"):
-                raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
+            try:
+                rp.record_stop(status, failed, [x, y], speed=motion["plan"].get("transit_speed", 0.85),
+                               log=log, at_stop=at_stop, timeout=AT_STOP_S)
+            finally:
+                if not fold(cell).get("ok"):
+                    raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             break
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
