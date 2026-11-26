@@ -53,8 +53,10 @@ def passive_motor_health_folded(
     max_age_s: float,
     read_json_fn: Callable[[Path], dict[str, Any] | None],
     calibration_dir: Path | None = None,
+    gripper_max: float | None = None,
 ) -> bool:
-    """True only when a fresh passive motor-health snapshot proves peer is torque-off, fault-free, and folded."""
+    """True only when a fresh passive motor-health snapshot proves peer is torque-off, fault-free, and folded
+    (and, with `gripper_max`, the jaws shut at or below it)."""
     if health_dir is None:
         return False
     doc = read_json_fn(health_dir / f"{peer}.json")
@@ -81,35 +83,60 @@ def passive_motor_health_folded(
     if any(m.get("torque_enabled") is not False or m.get("fault") is not False
            or type(m.get("hardware_error")) is not int or m["hardware_error"] != 0 for m in motors):
         return False
-    return calibrated_positions_folded([m.get("present_raw") for m in motors], cal)
+    pose = calibrated_pose([m.get("present_raw") for m in motors], cal)
+    return (pose is not None and live_folded({"state": pose}) is True
+            and (gripper_max is None or pose[5] <= gripper_max))
 
 
 def calibrated_positions_folded(positions, cal) -> bool:
+    pose = calibrated_pose(positions, cal)
+    return pose is not None and live_folded({"state": pose}) is True
+
+
+def calibrated_pose(positions, cal) -> list[float] | None:
+    """The six raw readings as joint values (degrees-like for joints, 0..100 for the gripper), or None when unusable."""
     if len(positions) != 6 or not isinstance(cal, dict):
-        return False
+        return None
     pose: list[float] = []
     for idx, (jname, position) in enumerate(zip(FOLLOWER_JOINTS, positions)):
         jcal = cal.get(jname)
         if not isinstance(jcal, dict):
-            return False
+            return None
         if "id" in jcal and (type(jcal["id"]) is not int or jcal["id"] != 11 + idx):
-            return False
+            return None
         if type(jcal.get("drive_mode")) is not int or jcal["drive_mode"] != 0:
-            return False
+            return None
         if type(jcal.get("homing_offset")) is not int or jcal["homing_offset"] != 0:
-            return False
+            return None
         lo, hi = jcal.get("range_min"), jcal.get("range_max")
         if type(lo) is not int or type(hi) is not int or not (0 <= lo < hi <= 4095):
-            return False
+            return None
         rval = finite_float(position)
         if rval is None or not 0.0 <= rval <= 4095.0:
-            return False
+            return None
         frac = (rval - lo) / (hi - lo)
         val = frac * (100.0 if idx == 5 else 200.0) - (0.0 if idx == 5 else 100.0)
         if not math.isfinite(val):
-            return False
+            return None
         pose.append(val)
-    return live_folded({"state": pose}) is True
+    return pose
+
+
+# pivot.grip_closed 50.5 + the grip_to tolerance 1.5: open jaws (56-62) or jaws stopped on an object stay latched
+LATCH_GRIPPER_SHUT_MAX = 52.0
+
+
+def stale_latch_superseded(arm: str, live: dict[str, Any] | None, *, locked: bool, leased: bool, max_age_s: float,
+                           health_dir: Path | None, read_json_fn: Callable[[Path], dict[str, Any] | None],
+                           calibration_dir: Path | None = None) -> bool:
+    """A human-hold latch left in live.json by a runner that is gone: no session lock or lease, the row is stale, and a
+    fresh passive motor-health read shows the arm torque-off, fault-free and folded. The held torque the latch guarded
+    no longer exists, and a new runner starts unlatched (2026-11-27 arm_b: a USB loss one second after the latch left it
+    blocking the whole A/B cell, with no incident for the console to clear)."""
+    return (isinstance(live, dict) and live.get("human_hold_latched") is True and not locked and not leased
+            and is_stale_row(live, max_age_s)
+            and passive_motor_health_folded(arm, health_dir, max_age_s=max_age_s, read_json_fn=read_json_fn,
+                                            calibration_dir=calibration_dir, gripper_max=LATCH_GRIPPER_SHUT_MAX))
 
 
 def is_stale_row(row: dict[str, Any], max_age_s: float) -> bool:

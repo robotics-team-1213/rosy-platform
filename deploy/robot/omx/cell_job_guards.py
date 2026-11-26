@@ -24,6 +24,7 @@ from cell_job_peer_health import (  # noqa: F401
     latest_status_row as _latest_status_row,
     live_folded as _live_folded,
     passive_motor_health_folded as _passive_motor_health_folded,
+    stale_latch_superseded as _stale_latch_superseded,
 )
 
 ROLE_HUMAN = "cell-job-human"
@@ -145,10 +146,11 @@ def check_peer_ab_folded(
     peer_locked = bool(session_lock_held_fn(peer, lock_dir))
     peer_lease = True if (lease is None and lease_path.is_file()) else bool(lease and cell_arm_lease.live(lease))
     live_err = None
+    health_dir = motor_health_dir if motor_health_dir is not None else (Path.home() / ".local" / "state" / "rosy" / "motor-health")
     if live is not None:
-        if live.get("human_hold_latched"):
-            return f"peer {peer} is active or latched"
-        if live.get("chunk") is not None or live.get("fault") or live.get("interrupt"):
+        if live.get("human_hold_latched") and not _stale_latch_superseded(peer, live, locked=peer_locked, leased=peer_lease, max_age_s=live_max_age_s, health_dir=health_dir, read_json_fn=read_json_fn, calibration_dir=calibration_dir):
+            return f"peer {peer} is active or latched"  # only a latch a gone runner left on a folded, torque-off, jaws-shut arm passes
+        elif live.get("chunk") is not None or live.get("fault") or live.get("interrupt"):
             live_err = f"peer {peer} is active or latched"
         elif _live_folded(live) is False:
             live_err = f"peer {peer} is not folded at home"
@@ -156,7 +158,6 @@ def check_peer_ab_folded(
         live_err = f"peer {peer} is not folded at home"
     if live_err is not None:
         stale_live = _is_stale_row(live, live_max_age_s) if live is not None else False
-        health_dir = motor_health_dir if motor_health_dir is not None else (Path.home() / ".local" / "state" / "rosy" / "motor-health")
         if not (not peer_locked and not peer_lease and stale_live
                 and _passive_motor_health_folded(
                     peer, health_dir, max_age_s=live_max_age_s,
