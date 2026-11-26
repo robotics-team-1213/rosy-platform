@@ -20,10 +20,10 @@ colcon_roots: [learning, operations, middleware, contracts, integrations, shared
 
 parts: [middleware, operations, learning, contracts, integrations, shared_web, shared_android, profiles, deploy, tools, test, docs]
 
-# D-427 §2. Same-part imports are always allowed. Parts not listed here
+# D-427 Â§2. Same-part imports are always allowed. Parts not listed here
 # (profiles, deploy, tools, test, docs) are outside the import rules.
 #
-# D-429 §4 api rule, on top of the table: a root is an api root only when it sets
+# D-429 Â§4 api rule, on top of the table: a root is an api root only when it sets
 # `api: true` and every import_prefix ends in `.api`. An api root imports only
 # contracts and other api roots. An integration imports contracts and the api roots
 # of the parts whose `integrations:` list admits its kind.
@@ -45,17 +45,17 @@ import_rules:
     allow: [contracts]
     integrations: [models, perception, policies/lerobot_training, simulation, storage]
 
-# D-429 §1 five-concern view plus D-430 §1 `safety`. Every root carries one
+# D-429 Â§1 five-concern view plus D-430 Â§1 `safety`. Every root carries one
 # `concern:`. The view does not change import_rules above. `safety` is not only a
-# view: D-430 §3 invariants (test/architecture/test_safety_separation.py) and the
-# §5 `Safety-Review:` trailer check (tools/harness/safety_review.py) read it.
+# view: D-430 Â§3 invariants (test/architecture/test_safety_separation.py) and the
+# Â§5 `Safety-Review:` trailer check (tools/harness/safety_review.py) read it.
 concerns: [learning, decision, control, safety, contracts, other]
 
 # Capability view (2026-10-27): every root also carries one `capability:`, the
 # Jira role Epic that reviews it. It does not change part, concern or import
 # rules; folders stay where D-427 put them. `platform` is shared code with no
 # role owner (reviewed by the `*` CODEOWNERS default). Owners are GitHub logins;
-# docs/reference/team-guide.md §5.1 maps them to people.
+# docs/reference/team-guide.md Â§5.1 maps them to people.
 # Checked against .github/CODEOWNERS by test/architecture/test_capability_owners.py.
 capabilities:
   fleet: {epic: KAN-19, owners: [livsbittt]}
@@ -74,9 +74,9 @@ capabilities:
 # `repo` (2026-11-19, D-1036 addendum 2) is what never ships and is no gate:
 # docs, root test/ infrastructure and app-ambiguous root tests, and operator-only
 # tools. It is never deployed and adds no app to a publish delta; shared runtime,
-# deploy, tools/release·packaging·sim and .github stay `core`.
+# deploy, tools/releaseÂ·packagingÂ·sim and .github stay `core`.
 # 2026-11-19 (release-split-1118 panel): `tooling` is the landing and publish gate
-# (tools/harness·hooks, tools/land*·publish*·urgent_lane, test/test_land_*); like
+# (tools/harnessÂ·hooks, tools/land*Â·publish*Â·urgent_lane, test/test_land_*); like
 # `core` it keeps the whole-repo rule. `neutral` paths (`app_neutral`: folder
 # notes and ADRs) belong to no app and add none to a delta. An `app_subtrees` key
 # with `*` is an fnmatch pattern (longest key still wins): tools/sim/omx_* and
@@ -206,7 +206,7 @@ roots:
       D-427 wave 2a (Q5, Q9): wheel rosy-contracts-skill. SkillInvocation and the
       AttemptIdentity/ReceiptBinding receipt identity; rosy.skills.api and
       rosy.execution.local.receipts re-export the same objects. Not an api root
-      (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
+      (D-429 Â§4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
     capability: platform
     app: core
@@ -290,7 +290,7 @@ roots:
     legacy: src/runtime/services/core_features/safety
     wave: "4d"
     import_prefix: [core_features.safety]
-    note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
+    note: D-430 Â§1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
     capability: platform
     app: pinky
@@ -303,7 +303,7 @@ roots:
     wave: "4d"
     import_prefix: [core_features.decision]
     note: >-
-      D-429 §1 "device local rules" (lane, router, contract), not deliberative decision.
+      D-429 Â§1 "device local rules" (lane, router, contract), not deliberative decision.
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
     capability: platform
@@ -558,7 +558,7 @@ roots:
     wave: "3a"
     import_prefix: [rosy.execution.api]
     note: >-
-      PlanBundle API is internal to the execution module (D-413 §3), not contracts;
+      PlanBundle API is internal to the execution module (D-413 Â§3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
     capability: fleet
@@ -613,7 +613,7 @@ roots:
     concern: other
     capability: pinky
     app: pinky
-  # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
+  # D-429 Â§2: site devices (signal, dock) are operations-owned, listed here so the
   # firmware entries stay together.
   - path: operations/site_devices/dock
     part: operations
@@ -621,7 +621,7 @@ roots:
     legacy: firmware/dock
     wave: "3b"
     note: >-
-      D-429 §2 site device owner: firmware and device contract only. The robot keeps
+      D-429 Â§2 site device owner: firmware and device contract only. The robot keeps
       polling the dock /status directly (core_features/docking stays middleware).
     concern: control
     capability: fleet
@@ -631,7 +631,7 @@ roots:
     d427_target: operations/site_devices/dock/firmware
     legacy: firmware/dock/firmware
     wave: "3b"
-    note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
+    note: D-430 Â§1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
     capability: fleet
     app: site-fleet
@@ -641,8 +641,8 @@ roots:
     legacy: firmware/signal
     wave: "3b"
     note: >-
-      D-429 §2 site device owner: firmware, device contract and the driver library Fleet
-      imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
+      D-429 Â§2 site device owner: firmware, device contract and the driver library Fleet
+      imports. Fleet stays the only command path and the signal sequence owner (D-337 Â§2).
     concern: control
     capability: fleet
     app: site-fleet
@@ -651,7 +651,7 @@ roots:
     d427_target: operations/site_devices/signal/firmware
     legacy: firmware/signal/firmware
     wave: "3b"
-    note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
+    note: D-430 Â§1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
     capability: fleet
     app: site-fleet
@@ -662,7 +662,7 @@ roots:
     legacy: firmware/signal/observer
     wave: "3b"
     note: >-
-      D-163 read-only observation plane, carved out of the site device owner (D-429 §2).
+      D-163 read-only observation plane, carved out of the site device owner (D-429 Â§2).
       Target is D-429's example; the run host stays undecided (D-163).
     concern: other
     capability: vision_ai
@@ -1068,7 +1068,7 @@ roots:
     legacy: src/sim/gz_sim/launch
     wave: "4c"
     deferred: gz_sim split follow-up
-    note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
+    note: Launch files start the sim device owner on the same middleware pipeline (D-427 Â§5).
     concern: control
     capability: platform
     app: learning
@@ -1276,8 +1276,8 @@ roots:
     capability: platform
     app: repo
 
-# D-430 §1: safety files inside mixed folders, tagged per file so no folder is
-# split. A mixed file is safety as a whole (§5 change control); `concern: safety`
+# D-430 Â§1: safety files inside mixed folders, tagged per file so no folder is
+# split. A mixed file is safety as a whole (Â§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
   - operations/fleet/fleet/swarm/session_lifecycle.py  # Actual lifecycle, stop, resume and epoch guards
@@ -1390,7 +1390,7 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_port.py  # D-858 S1 real bus port: HOLD, stop latch, gate
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_motion.py  # D-858 legacy motion thread, same port state and bus
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_bus.py  # D-858 S1 RAM-only writes, exclusive SDK bus, one-writer claim
-  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 §4 motion gate evidence, tracking bounds
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 Â§4 motion gate evidence, tracking bounds
   - middleware/devices/omx/adapter/omx_adapter/real/commissioning_record.py  # D-858 S3 measured record, MotionEvidence loader, revision
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py  # D-858 S3 V-016 timed stop test and its CLI
   - middleware/devices/omx/agent/src/rosy_agent/barrier_supervisor.py  # D-780 barrier timeout, coordinator liveness HOLD
@@ -1399,7 +1399,7 @@ safety_modules:
   - middleware/devices/omx/agent/src/rosy_agent/workcell_coordinator.py  # D-780 coupled stop, barrier release
   - operations/fleet/fleet/server/dispatch_admission.py
   - operations/fleet/fleet/server/ledger/action_claims.py  # D-779 per-Action arm/zone claim release
-  - operations/fleet/fleet/server/cell/cell_arm_claims.py  # D-779 §5/§6 multi-arm arm/zone claim phases
+  - operations/fleet/fleet/server/cell/cell_arm_claims.py  # D-779 Â§5/Â§6 multi-arm arm/zone claim phases
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
@@ -1407,7 +1407,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_reconcile_routes.py  # D-1071 named-operator UNKNOWN task quiescence reconcile
   - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
-  - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 §1); imports stdlib only
+  - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 Â§1); imports stdlib only
   - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
@@ -1426,12 +1426,13 @@ safety_modules:
   - operations/fleet/fleet/server/console/traffic_arbitration_helpers.py  # D-766 traffic_arbitration.py split: state remember, snapshot traffic release, localization holds
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/peer_motion_wire.py  # peer motion generations used by rear-dock wire admission
   - operations/fleet/fleet/server/road_route_lease.py  # Same route/lease owner after extracting scoped speed grants
   - operations/fleet/fleet/server/named_stop_motion.py  # D-1051 named-stop custody claim and repark alignment
   - operations/fleet/fleet/swarm/motion_ingress.py  # D-1051 which robot calls start or sustain motion
   - operations/fleet/fleet/server/tether_watch.py
 
-# D-430 §5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
+# D-430 Â§5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
 # filter that decision. No anchor or import invariant applies (chunk_runner imports lerobot); see safety_review.py.
 safety_review_paths:
   - deploy/robot/omx/chunk_runner.py
@@ -1560,12 +1561,12 @@ safety_review_paths:
   - tools/harness/safety_review.py  # the check itself
   - tools/harness/safety_review_exempt.json
 
-# D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
+# D-430 Â§1 drift anchors and Â§3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
 # `string` anchors are operation literals compared with `==` inside `in`.
-# `public: true` marks what decision/learning code may import (D-430 §3); a class
+# `public: true` marks what decision/learning code may import (D-430 Â§3); a class
 # or function that holds a public anchor is importable as its owner.
-# D-430 §4 approval record (validated on tracked YAML only, not on the runtime
+# D-430 Â§4 approval record (validated on tracked YAML only, not on the runtime
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
@@ -1576,6 +1577,8 @@ safety_anchors:
   - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
   - {symbol: fleet.server.estop_fanout.stop_robots}  # E-stop delivery to every robot (console helper)
   - {symbol: fleet.server.traffic_arbitration.TrafficArbitration}  # moved from console.py: yield/hold/cancel (FleetConsole mixin)
+  - {symbol: fleet.server.traffic_arbitration_helpers.guarded_road_send, public: true}  # fence the route before CORE submission
+  - {symbol: fleet.server.traffic_arbitration_helpers.peer_proof, public: true}  # read the evidence behind peer clearance
   - {symbol: fleet.server.traffic_arbitration_helpers.run_snapshot_traffic}  # traffic_arbitration helper: snapshot release and localization hold
   - {symbol: fleet.server.formation_control.FormationControl}  # moved from console.py: formation session (FleetConsole mixin)
   - {symbol: fleet.server.estop_fanout.deliver}  # one robot's E-stop with short re-sends (console helper)
@@ -1746,18 +1749,18 @@ safety_anchors:
   - {symbol: fleet.server.arm_transfer_policy_admission.arm_transfer_policy_loop, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
   - {symbol: fleet.server.action_claims.release_keys, public: true}  # D-779 per-Action arm/zone release
-  - {symbol: fleet.server.action_claims.release_held_keys, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.reserve_step, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.set_phase, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.release_succeeded, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.release_for_resume, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.action_resources, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.arm_key, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.held_anywhere, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.job_claims_runnable, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.park_job_claims, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.phases, public: true}  # D-779 §5/§6
-  - {symbol: fleet.server.cell_arm_claims.resource_keys, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.action_claims.release_held_keys, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.reserve_step, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.set_phase, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.release_succeeded, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.release_for_resume, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.action_resources, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.arm_key, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.held_anywhere, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.job_claims_runnable, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.park_job_claims, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.phases, public: true}  # D-779 Â§5/Â§6
+  - {symbol: fleet.server.cell_arm_claims.resource_keys, public: true}  # D-779 Â§5/Â§6
   - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}
   - {symbol: fleet.server.cancel_all.DriveCancelFence, public: true}
   - {symbol: fleet.server.cancel_all.DispatchCanceled, public: true}
@@ -1774,6 +1777,7 @@ safety_anchors:
   - {symbol: fleet.server.berth_parking_helpers._pin_robot_on_fleet, public: true}
   - {symbol: fleet.server.task_dispatch_helpers.compute_road_plan}  # refuses without measured site and robot poses
   - {symbol: fleet.server.task_dispatch_helpers.standalone_named_stop_allowed, public: true}  # D-1051 free two-way guard
+  - {symbol: fleet.server.peer_motion_wire.PeerMotionWire.motion_wire}  # peer generations invalidate pending motion evidence
   - {symbol: fleet.server.road_route_lease.RoadRouteLeases}  # Native road route speed ownership
   - {symbol: fleet.server.road_route_lease.RoadSpeedRefused, public: true}  # Read-only refusal code
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)

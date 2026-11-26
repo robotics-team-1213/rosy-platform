@@ -184,7 +184,7 @@ def test_console_route_goal_lease_and_trip_guard():
     assert robot._state["navigation"] == "CANCELED"
 
 
-def test_console_route_untrusted_peer_cancels_without_single_point_queue():
+def test_console_route_waits_for_untrusted_peer_before_motor_dispatch():
     r42 = RouteFakeRobot("rosy_42")
     r45 = RouteFakeRobot("rosy_45")
     r45._state["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
@@ -198,9 +198,33 @@ def test_console_route_untrusted_peer_cancels_without_single_point_queue():
     assert reply["accepted"] is False
     assert reply["queued"] is False
     assert reply["reason"] == "LOCALIZATION_UNTRUSTED"
-    assert reply["cancel_confirmed"] is True
-    assert r42._state["navigation"] == "CANCELED"
+    assert reply["command_robot_id"] == "rosy_42" and reply["waiting_on"] == ["rosy_45"]
+    assert reply["cancel_confirmed"] is False and reply["dispatch_attempted"] is False
+    assert r42.routes == []
     assert console._queued == {}
+
+
+@pytest.mark.parametrize("path", ["/api/v1/navigation/route", "/api/v1/navigation/bound-route"])
+def test_peer_moving_into_route_during_lease_preparation_stops_wire_dispatch(path):
+    from fleet.server.traffic_arbitration_helpers import guarded_road_send
+    from fleet.swarm.dispatch_guard import check_dispatch
+
+    r42, r45 = RouteFakeRobot("rosy_42"), RouteFakeRobot("rosy_45")
+    _, console, *_ = _console_runner(r42, _south_loop_map(), peers=[r45])
+    r45._state["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
+    obstacle = {"point": (3.0, 3.0)}
+    console.set_site_pose_providers(mover=lambda _: ("site", 0, 0, 0),
+                                    obstacle=lambda _: ("site", *obstacle["point"], 0))
+    async def send():
+        obstacle["point"] = (0.2, 0.0)
+        check_dispatch(path=path)
+        pytest.fail("peer on route reached the motion writer")
+
+    reply = run(guarded_road_send(console, "rosy_42", [{"x": 0.4, "y": 0}], (0.4, 0),
+                                  console.goal_leases.stop_token("rosy_42"),
+                                  lambda _: ("site", [(0, 0), (0.4, 0)]), send,
+                                  grid_from=lambda _: None))
+    assert reply["waiting_on"] == ["rosy_45"] and not reply["dispatch_attempted"]
 
 
 def test_sample_nav2_route_splits_closed_loop_and_keeps_open_path_single_stop():
@@ -290,13 +314,23 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "no_speed_authority", "terminal"])
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "no_speed_authority", "terminal", "parking", "ordinary_parking"])
 def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
 
     store = SiteMapStore(tmp_path / "site.sqlite")
-    store.import_if_empty(_south_loop_map(), source="test")
+    model = _south_loop_map()
+    if case in ("parking", "ordinary_parking"):
+        import json
+        layout = json.loads(model.model_dump_json(by_alias=True).replace('"S5"', '"P2"'))
+        next(p for p in layout["places"] if p["id"] == "P2").update(kind="junction", yaw=None)
+        layout["places"].append({"id": "C2", "name": "C2", "x": .91, "y": -.68, "kind": "charge",
+                                 "yaw": math.pi/2})
+        layout["edges"].append({"id":"bay2", "from":"P2", "to":"C2", "direction":"two_way",
+                                "drive_mode":"lane", "width_m":.2, "speed_cap_mps":.1, "polyline":[[.91,-.48],[.91,-.68]]})
+        model = SiteMap.model_validate(layout)
+    store.import_if_empty(model, source="test")
     robot = RouteFakeRobot("rosy_42")
     robot.power_health_value = fresh_power_health()
     robot.bound_route_supported = case != "older_core"
@@ -334,13 +368,25 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     runner.map_pose = wrong_camera_pose
     headers = {"Authorization": "Bearer op-tok"}
     body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
-    if case == "terminal":
+    if case in ("terminal", "parking", "ordinary_parking"):
         body.pop("start_at")
-        body.update(to="S5", via=[])
+        body.update(to="C2" if "parking" in case else "S5", via=[])
     with TestClient(app) as client:
         tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
         assert not runner.human_hold_fn()
         assert not runner.config.map_binding_required
+        if case == "ordinary_parking":
+            store.map_bindings.revoke("rosy_42", "bob")
+            strict = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+            assert strict.status_code == 409 and strict.json()["detail"]["code"] == "TRIP_POSE_UNTRUSTED"
+            async def site_pose(_):
+                return MapPose(.17, -.48, 0., "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
+            runner.map_pose = site_pose
+            body["approved_slam_required"] = False
+            ordinary = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+            assert ordinary.status_code == 200, ordinary.text
+            assert ordinary.json()["places"][-1] == "P2" and ordinary.json()["parking_handoff"]["bay_id"] == "C2"
+            return
         plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
         if case == "older_core":
             assert plan.status_code == 409 and plan.json()["detail"]["code"] == "NAV2_BOUND_ROUTE_UNSUPPORTED"
@@ -384,7 +430,10 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
         assert not read_legacy_pose
 
-        if case == "terminal":
+        if case in ("terminal", "parking"):
+            if case == "parking":
+                assert plan.json()["parking_handoff"]["bay_id"] == "C2"
+                assert plan.json()["places"][-1] == "P2"
             op = live.view["detail"]["named_stop_operation"]
             assert op["correlation_id"] == robot.routes[-1][1]
             native_x, native_y = fit.inverse((.88, -.48))
@@ -405,6 +454,16 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
             read_core()
             client.portal.call(runner.tick)
             done = runner.view(plan_id)
+            if case == "parking":
+                assert done["state"] == "running" and done["detail"]["parking_handoff"]["phase"] == "staging_confirmed"
+                async def empty_docks(_path):
+                    return {"docks": []}
+                robot._get = empty_docks
+                client.portal.call(runner.tick)
+                parked = runner.view(plan_id)
+                assert parked["state"] == "running"
+                assert parked["detail"]["parking_handoff"]["phase"] == "waiting_for_commission"
+                return
             assert done["state"] == "arrived" and done["detail"]["named_stop_completion"]["operation"] == terminal
             return
 
@@ -461,7 +520,7 @@ def test_nav2_repeat_trip_rolls_across_multiple_laps_and_reanchors_robot_frame()
     store.record_plan(plan_id="p-nav2", robot_id="rosy_60", principal_id="bob",
                       map_version=plan["map_version"], request=body_req, result={"plan": plan})
 
-    # line_follow is OFF, camera is unavailable — Nav2 still starts and reports leg_mode == "free".
+    # line_follow is OFF, camera is unavailable â€” Nav2 still starts and reports leg_mode == "free".
     ports.core.mode = "OFF"
     ports.camera = {"available": False}
     started = run(runner.start("p-nav2", "bob"))

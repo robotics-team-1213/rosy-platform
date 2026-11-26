@@ -214,6 +214,13 @@ class TrafficArbitration:
 
     def _claim_blocker(self, mover: str, route, *, site_route=None) -> tuple[Optional[str], bool]:
         """``(blocker, is_conflict)`` for a dispatched goal's route (D-1010)."""
+        for other, (map_id, claim) in getattr(self, "rear_bay_claims", {}).items():
+            if other == mover:
+                continue
+            if site_route is None or site_route[0] != map_id:
+                return other, False
+            if traffic.blocking_robot(site_route[1], {other: claim}, self._clearance_m) is not None:
+                return other, True
         site_claims = getattr(self, "_site_claims", {})
         mover_frame = self._frame_of(mover)
         mismatch: Optional[str] = None

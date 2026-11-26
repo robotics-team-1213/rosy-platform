@@ -153,6 +153,14 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             repeat = bool(request_data.get("repeat"))
             nav2 = request_data.get("drive_mode") == "nav2"
             graph = self._graph_for(plan["map_version"])
+            if self.halts.unconfirmed_dock(robot_id):
+                raise TripError(409, "DOCK_CANCEL_UNCONFIRMED")
+            parking = plan.get("parking_handoff")
+            if parking:
+                request_data = {**request_data, "to": parking["staging_place_id"]}
+                if any((lv.view["detail"].get("parking_handoff") or {}).get("bay_id") == parking["bay_id"]
+                       for lv in self._live.values() if lv.open):
+                    raise TripError(409, "CHARGE_BAY_RESERVED", parking)
             precision = commissioned_stop(graph, request_data.get("to"))
             if nav2 and precision is not None:
                 raise TripError(422, "PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
@@ -216,12 +224,15 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                     raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
                 caps_view = _caps_view(caps)
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
-                    self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
+                    self._store.active(), plan, request_data, caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
                 if start_at is not None and moved is not None:
                     raise TripError(422, "TRIP_START_PLACE_MOVED", moved)
                 if precision is not None and not self._precision_terminal_matches(graph, plan["segments"], precision):
                     raise TripError(422, "PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
+                if parking and any((lv.view["detail"].get("parking_handoff") or {}).get("bay_id") == parking["bay_id"]
+                                   for lv in self._live.values() if lv.open):
+                    raise TripError(409, "CHARGE_BAY_RESERVED", parking)
                 leader = _check_start_traffic(self, robot_id, plan, request, arcs, caps, repeat)
             except BaseException:  # the lease opened for a trip that did not start
                 if lease is not None:
@@ -239,13 +250,15 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 view["detail"]["precision_binding_id"] = precision_scope[1]
             if nav2_scope is not None:
                 view["detail"]["nav2_binding_id"] = nav2_scope[1]
+            if parking:
+                view["detail"]["parking_handoff"] = dict(parking, phase="approaching" if plan["segments"] else "staging_confirmed")
             live = LiveTrip(view, graph, request)
             live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
             self.halts.clear_robot(robot_id)  # this trip owns it
             if not plan["segments"]:  # D-489 부록 4: already there
-                view["state"] = "arrived"
+                view["state"] = "running" if parking else "arrived"
             else:
                 self._describe(live)
             self._save(live)
@@ -330,11 +343,13 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 if not halt_unconfirmed(detail):
                     self.halts.clear_trip(trip_id)
                     return trip
-                halted = await self.halts.halt_robot(
-                    robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
-                    handoff_pending=bool(detail.get("named_stop_handoff_pending")),
-                    **pause_proof_args(trip),
-                )
+                if self.halts.dock_owned(trip):
+                    halted = await self.halts.halt_dock(trip)
+                else:
+                    halted = await self.halts.halt_robot(
+                        robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
+                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), **pause_proof_args(trip),
+                    )
                 detail.update(halted)
                 if halted.get("stop_sent") and "error" not in halted:
                     detail.pop("error", None)
@@ -551,6 +566,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
+        if self.halts.dock_owned(live.view):
+            return await self.halts.halt_dock(live.view)
         self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
         camera = live.view["detail"].get("camera_lane_fallback")

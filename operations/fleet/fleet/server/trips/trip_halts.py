@@ -49,6 +49,7 @@ class TripHalts:
         self._store, self._junction, self._config, self._call, self._clock = store, junction, config, call, clock
         self._cancel_goal, self._release_queue, self._busy, self.roster = cancel_goal, release_queue, busy, roster
         self._lock_for = lock_for
+        self.dock_stop = None
         self.reconcile_handoff = None
         self.pending_handoffs = {}
         self.read_stop_state = None
@@ -73,7 +74,26 @@ class TripHalts:
                 seen_ids.add(trip["trip_id"])
         self.restarted = [trip for trip in self.restarted if trip["robot_id"] not in self.pending_handoffs]
 
+    @staticmethod
+    def dock_owned(trip):
+        return ((trip.get("detail") or {}).get("parking_handoff") or {}).get("phase") in {
+            "submitting", "docking", "staging_confirmed", "waiting_for_commission", "waiting_for_clearance"}
+
+    def unconfirmed_dock(self, robot):
+        return any(t["robot_id"] == robot and self.dock_owned(t)
+                   for t in (*self.restarted, *self.gave_up))
+
+    async def halt_dock(self, trip):
+        try:
+            return await self._call(self.dock_stop(trip))
+        except Exception:
+            return {"stop_sent": False, "error": "DOCK_CANCEL_UNCONFIRMED"}
+
     def track_handoff_stop(self, trip):
+        if self.dock_owned(trip) and trip["state"] not in OPEN:
+            self.clear_trip(trip["trip_id"])
+            if halt_unconfirmed(trip.get("detail")):
+                self.gave_up.append(trip)
         if trip["state"] not in OPEN and trip["detail"].get("named_stop_handoff_pending"):
             self.pending_handoffs[trip["robot_id"]] = trip
 
@@ -206,7 +226,10 @@ class TripHalts:
         if (trip.get("detail") or {}).get("camera_lane_fallback"):
             lane, place, hp = False, None, True
         try:
-            result = await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip))
+            if self.dock_owned(trip):
+                result = await self.halt_dock(trip)
+            else:
+                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip))
         except Exception:
             _LOG.exception("could not stop robot %s of a trip open before the restart", rid)
             return False

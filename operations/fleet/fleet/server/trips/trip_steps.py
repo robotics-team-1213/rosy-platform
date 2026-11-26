@@ -59,6 +59,18 @@ class TripSteps:
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
         arrival_confirmed = False
+        parking = live.view["detail"].get("parking_handoff")
+        if parking and parking["phase"] != "approaching":
+            try:
+                await self._call(self.rear_bay_port.step(self, live))
+            except (TripError, RobotApiError, HubError, OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+                if parking["phase"] == "waiting_for_clearance" and live.open:
+                    self._save(live)
+                    return
+                await self._stop(live, "stopped", _code(exc))
+                return
+            self._save(live)
+            return
         if self._precision_terminal_mismatch(live):
             return await self._stop(live, "failed", "TRIP_GOAL_REFUSED",
                                     {"goal_reason": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
@@ -208,6 +220,9 @@ class TripSteps:
                     await self._step_free(live, index + 1, pose, staging=index)
             elif live.nav2:
                 await step_nav2_route(self, live, index, s, pose)
+                if live.view["detail"].get("peer_wait"):
+                    self._save(live)
+                    return
                 if live.view["detail"].get("camera_lane_fallback"):
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:
@@ -216,6 +231,12 @@ class TripSteps:
                 if camera:
                     await finish_camera_line(self, live)
                     arrival_confirmed = live.open
+                elif parking and live.nav2_binding_scope is None:
+                    # An ordinary approach may use the site's normal pose. Keep its owner until native standstill.
+                    from fleet.server.handoff_traffic import _fresh_stopped
+                    state = await self._call(self.named_stop_state(robot_id))
+                    arrival_confirmed = bool(live.active_route and live.active_route.get("end_index") == index
+                                             and state.get("navigation") == "ARRIVED" and _fresh_stopped(state))
                 elif self._strict_named_stop(live, index) is None:
                     arrival_confirmed = True
                 elif lane:
@@ -253,6 +274,10 @@ class TripSteps:
                     self._save(live)
                 return  # waiting for a fresh sighting, or ended STATION_ALIGN_*
             live.view["detail"].pop("named_stop_handoff_pending", None)
+            if parking:
+                parking["phase"] = "staging_confirmed"
+                self._save(live)
+                return
             live.view["state"] = "arrived"
             if lane and not camera and (live.sent or {}).get("action") == STOP:
                 self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
