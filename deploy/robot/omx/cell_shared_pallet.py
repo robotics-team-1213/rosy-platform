@@ -102,3 +102,27 @@ def shared_pallet(config, calibration, *, candidate_frame=None, peer_path=None):
         return {**report, "arm": arm, "peer": peer}
     except (KeyError, TypeError, OSError, ValueError, cv2.error, np.linalg.LinAlgError) as exc:
         return {"status": "unverified", "arm": arm, "peer": peer, "reason": type(exc).__name__ + ": " + str(exc)}
+
+def fixture_check_frame(cell, config, calibration, step, config_path):
+    """The regular check and the fixture report use one timestamped camera sample."""
+    if config.get("arm_id") not in ("arm_a", "arm_b"):
+        return cell.frame("top"), {}
+    report = {"shared_pallet_surface": shared_pallet(config, calibration)}
+    if step != "check":
+        return cell.frame("top"), report
+    from cell_calibration_view_frame import bind_frame
+
+    receipt = None
+    reason = "source_stamp_missing"
+    if hasattr(cell, "frame_receipt"):
+        try:
+            receipt = cell.frame_receipt("top", max_age_s=2.0)
+        except (OSError, TimeoutError, ValueError) as exc:
+            reason = str(exc)
+    if receipt is None:
+        report["fixture_observation"] = {"status": "unverified", "reason": reason}
+        return cell.frame("top"), report
+    _, binding = bind_frame({"config_path": str(config_path)}, "live", receipt["jpeg_bytes"], include_fixtures=True)
+    report["fixture_observation"] = {**binding.get("fixture_observation", {"status": "unverified"}),
+                                     "source_stamp": receipt["source_stamp"], "source_seq": receipt["source_seq"]}
+    return receipt["image"], report

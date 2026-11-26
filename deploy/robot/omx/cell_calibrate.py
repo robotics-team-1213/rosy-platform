@@ -16,7 +16,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
-from cell_calibrate_bound import _load_ref_gray
+from cell_calibrate_bound import _load_ref_gray, map_sites, _map_write_sites
 import cell_diagnose
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
@@ -126,24 +126,6 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         out["low_zone_gaps"] = gaps
     out.update(coverage_advisories(config, calibration, bias, params))
     return out
-
-
-def map_sites(config: dict) -> list:
-    """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt."""
-    return config.get("calibrate", {}).get("map_sites") or [
-        s for s in ("floor", "pinky", "belt") if s in config["sites"]
-    ]
-
-
-def _map_write_sites(config: dict) -> list:
-    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
-    sites = list(map_sites(config))
-    seen = set(sites)
-    for name, site in (config.get("sites") or {}).items():
-        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
-            sites.append(name)
-            seen.add(name)
-    return sites
 
 
 def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=None) -> dict:
@@ -268,25 +250,10 @@ def main(argv=None):
     work = Path(config["work_dir"]).expanduser() / "calibrate"
     if args.step != "check":
         work.mkdir(parents=True, exist_ok=True)
-    receipt, receipt_error = None, None
-    if args.step == "check" and config.get("arm_id") in ("arm_a", "arm_b") and hasattr(cell, "frame_receipt"):
-        try:
-            receipt = cell.frame_receipt("top", max_age_s=2.0)
-        except (OSError, TimeoutError, ValueError) as exc:
-            receipt_error = str(exc)
-    frame = receipt["image"] if receipt else cell.frame("top")
+    from cell_shared_pallet import fixture_check_frame, shared_pallet
+    frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
     found = check(config, calibration, targets, frame, config["params"])
-    if config.get("arm_id") in ("arm_a", "arm_b"):
-        from cell_shared_pallet import shared_pallet
-        found["shared_pallet_surface"] = shared_pallet(config, calibration)
-        if args.step == "check":
-            from cell_calibration_view_frame import bind_frame
-            if receipt:
-                _, binding = bind_frame({"config_path": str(args.config)}, "live", receipt["jpeg_bytes"], include_fixtures=True)
-                found["fixture_observation"] = binding.get("fixture_observation", {"status": "unverified"})
-                found["fixture_observation"].update(source_stamp=receipt["source_stamp"], source_seq=receipt["source_seq"])
-            else:
-                found["fixture_observation"] = {"status": "unverified", "reason": receipt_error or "source_stamp_missing"}
+    found.update(fixture_report)
     if args.route:
         from cell_route_calibration import route_calibration_report
         found["route"] = route_calibration_report(config, calibration, found, *args.route)
