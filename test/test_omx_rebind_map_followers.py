@@ -57,6 +57,20 @@ def test_follower_only_addition_rebinds_without_remap(cell):
     assert cc.stale(_check(cfg, saved)) == []
 
 
+def test_rebind_refuses_while_a_sibling_profile_lacks_the_followers(cell):
+    cfg, cal, _, cal_path = cell
+    me, sib = cal_path.parent / "cell-arm-a-policy.json", cal_path.parent / "cell-arm-a-stack.json"
+    me.write_text(json.dumps(cfg), encoding="utf-8")
+    old_sites = {n: s for n, s in cfg["sites"].items() if not n.startswith("ship-")}
+    sib.write_text(json.dumps(dict(cfg, sites=old_sites)), encoding="utf-8")
+    found = _check(cfg, cal)
+    before = cal_path.read_bytes()
+    out = mf.rebind(cfg, cal, cal_path, found, 6.0, me)
+    assert out["held"] == ["cell-arm-a-stack.json"] and cal_path.read_bytes() == before
+    sib.write_text(json.dumps(cfg), encoding="utf-8")  # followers added to both profiles
+    assert mf.rebind(cfg, cal, cal_path, found, 6.0, me) == {"rebind-followers": ["ship-h0", "ship-h1"]}
+
+
 def test_changed_existing_site_keeps_remap(cell):
     cfg, cal, _, _ = cell
     cfg["sites"]["floor"]["auto_roi"] = [0, 0, 11, 10]

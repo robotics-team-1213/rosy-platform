@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
-from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference, sync_siblings  # noqa: E402,F401
 from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
 import cell_calibrate_args, cell_diagnose, cell_map_followers
 import cell_calibration as cal, cell_config_io, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402  (cell_config_io: one locked writer for every config rewrite)
@@ -291,7 +291,7 @@ def main(argv=None):
     if not set(todo) <= {"depth-verify", "rebind-followers"} and not (args.commissioning and args.person_at_switch):  # no-motion steps
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo, **({"z_view": z_info} if z_info else {})}), flush=True)
         return 2
-    done, config_dirty = [], False
+    done, config_dirty, old_geometry = [], False, None
     for step in todo:
         if step == "remap":
             ref_path = Path(remap_config["preflight"]["reference_top"]).expanduser()
@@ -322,6 +322,7 @@ def main(argv=None):
                                  "shared_pallet_surface": comparison})
                     print(json.dumps({"done": done}), flush=True)
                     return 2  # the geometry, map, reference and bias on disk still belong to the previous generation
+            old_geometry = calibration.get("reference_geometry_sha") or ""  # the binding this remap replaces
             save_bound_map_reference(cal_path, ref_path, calibration, remap_config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
@@ -334,12 +335,10 @@ def main(argv=None):
         elif step == "regions":
             continue
         elif step == "rebind-followers":
-            done.append(cell_map_followers.rebind(config, calibration, cal_path, found, prm.get(config["params"], "calibrate.max_shift_px")))
+            done.append(cell_map_followers.rebind(config, calibration, cal_path, found, prm.get(config["params"], "calibrate.max_shift_px"), args.config))
         elif step == "consensus-repair":
             from cell_auto_evidence import bound_reference_image
-
-            ref_name = (config.get("preflight") or {}).get("reference_top")
-            ref_path = Path(ref_name).expanduser() if ref_name else None
+            ref_path = Path(ref_name).expanduser() if (ref_name := (config.get("preflight") or {}).get("reference_top")) else None
             reference, error = bound_reference_image(calibration, config, ref_path)
             if error:
                 done.append({"consensus-repair": error})
@@ -360,7 +359,6 @@ def main(argv=None):
             done.append(pivot_near(cell, config, calibration, cal_path, step, work))  # pivot_precheck before any motion
         elif step.startswith("surface"):
             import cell_surface
-
             if args.remeasure_surface is not None:
                 res = cell_surface.remeasure_surface(cell, config, calibration, step, work)
                 if res.get(step) != "touched":
@@ -391,6 +389,8 @@ def main(argv=None):
         if err := cell_config_io.write_config_checked(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, 1, done):
             print(json.dumps({"config_write_failed": err, "done": done}, default=str), flush=True)
             return 2
+    if old_geometry is not None:  # the stack and policy profiles share one map: carry the moved geometry to the other
+        done.append({"siblings": sync_siblings(args.config, config, cal_path, old_geometry)})
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

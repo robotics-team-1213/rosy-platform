@@ -156,3 +156,54 @@ def test_a_moved_camera_carries_the_regions_before_the_depth_check(tmp_path):
         cc.rp.site_obstacle_mm, cell_cal_eval.top_has_depth = orig
     assert seen["roi"][0] == moved["sites"]["pallet"]["auto_roi"][0] and view["sites"] is config["sites"]  # only the depth moved
 
+
+def _profiles(tmp_path, roi):
+    import json
+    cal = tmp_path / "arm-b" / "stack-calibration.json"
+    cal.parent.mkdir()
+    cal.write_text("{}", encoding="utf-8")
+    sites = {"pallet": {"auto_roi": list(roi), "surface_px": [[1, 1], [9, 1], [9, 9]], "z": 0.0},
+             "pallet_t1": {"tier_of": "pallet", "auto_roi": [0, 0, 1, 1]}}
+    stack = {"arm_id": "arm_b", "calibration_path": str(cal), "sites": sites}
+    policy = {**json.loads(json.dumps(stack)), "payload": {"kg": 0.05}, "zone_rois": {"ship": [1, 2, 3, 4]}}
+    for name, cfg in (("cell-arm-b-stack.json", stack), ("cell-arm-b-policy.json", policy)):
+        (tmp_path / name).write_text(json.dumps(cfg), encoding="utf-8")
+    return cal, stack
+
+
+def test_a_remap_through_one_profile_carries_the_moved_geometry_to_the_other(tmp_path):
+    """2026-11-27: stack and policy share one map; a remap through one left the other held on 'site geometry changed'."""
+    import hashlib
+    import json
+    import cell_attempts
+    import cell_calibrate_bound as cb
+    from cell_auto_evidence import bound_map_error
+
+    cal, stack = _profiles(tmp_path, (10, 10, 50, 50))
+    old = cb.geometry_sha(stack)
+    stack["sites"]["pallet"]["auto_roi"] = [40, 12, 80, 52]  # move_regions after the camera moved
+    out = cb.sync_siblings(tmp_path / "cell-arm-b-stack.json", stack, cal, old)
+    policy = json.loads((tmp_path / "cell-arm-b-policy.json").read_text(encoding="utf-8"))
+    assert out == {"synced": ["cell-arm-b-policy.json"], "held": []}
+    assert policy["sites"]["pallet"]["auto_roi"] == [40, 12, 80, 52] and policy["payload"] == {"kg": 0.05}
+    assert cb.geometry_sha(policy) == cb.geometry_sha(stack)
+    bound = {"reference_top_sha256": hashlib.sha256(b"jpg").hexdigest(), "reference_map_sha": cell_attempts.digest(None),
+             "reference_geometry_sha": cb.geometry_sha(stack)}
+    assert bound_map_error(bound, policy, b"jpg") is None
+    assert list(tmp_path.glob("cell-arm-b-policy.json.bak-*"))  # the previous file is kept
+
+
+def test_a_sibling_that_had_drifted_from_the_old_binding_stays_held(tmp_path):
+    import json
+    import cell_calibrate_bound as cb
+
+    cal, stack = _profiles(tmp_path, (10, 10, 50, 50))
+    old = cb.geometry_sha(stack)
+    policy_path = tmp_path / "cell-arm-b-policy.json"
+    drifted = json.loads(policy_path.read_text(encoding="utf-8"))
+    drifted["sites"]["pallet"]["auto_roi"] = [11, 10, 50, 50]  # hand-edited: not what the replaced map was measured with
+    policy_path.write_text(json.dumps(drifted), encoding="utf-8")
+    stack["sites"]["pallet"]["auto_roi"] = [40, 12, 80, 52]
+    assert cb.sync_siblings(tmp_path / "cell-arm-b-stack.json", stack, cal, old) == {"synced": [], "held": ["cell-arm-b-policy.json"]}
+    assert json.loads(policy_path.read_text(encoding="utf-8")) == drifted
+    assert cb.sync_siblings(tmp_path / "cell-arm-b-stack.json", stack, cal, "") == {"synced": [], "held": ["cell-arm-b-policy.json"]}

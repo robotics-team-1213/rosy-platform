@@ -6,6 +6,7 @@ is the same and the camera has not shifted, copying the parent records and re-bi
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import cell_attempts
@@ -59,7 +60,24 @@ def added_followers(calibration: dict, config: dict, reference_bytes: bytes, shi
     return added
 
 
-def rebind(config: dict, calibration: dict, cal_path: Path, found: dict, limit_px: float) -> dict:
+def bound_siblings(config_path, cal_path, old_sha: str) -> list:
+    """Other profiles of the arm on the same calibration file still bound to old_sha (a rebind would hold them)."""
+    from cell_calibrate_bound import geometry_sha
+
+    me, cal, out = Path(config_path).resolve(), Path(cal_path).expanduser().resolve(), []
+    for path in sorted(me.parent.glob("cell-arm-*.json")):
+        try:
+            sib = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if path.resolve() != me and isinstance(sib, dict) and isinstance(sib.get("calibration_path"), str) \
+                and Path(sib["calibration_path"]).expanduser().resolve() == cal and isinstance(sib.get("sites"), dict) \
+                and geometry_sha(sib) == old_sha:
+            out.append(path.name)
+    return out
+
+
+def rebind(config: dict, calibration: dict, cal_path: Path, found: dict, limit_px: float, config_path=None) -> dict:
     """Copy each parent record to its new follower and re-save the binding with the same reference bytes."""
     from cell_calibrate_bound import save_bound_map_reference
 
@@ -71,6 +89,9 @@ def rebind(config: dict, calibration: dict, cal_path: Path, found: dict, limit_p
     added = added_followers(calibration, config, raw, found.get("camera_shift"), limit_px)
     if not added or added != sorted(found.get("rebind_followers") or []):
         return {"rebind-followers": "binding changed since check; run check again"}
+    if config_path is not None and (held := bound_siblings(config_path, cal_path, calibration["reference_geometry_sha"])):
+        # the stack/policy profiles share one map: rebinding only this one would break the other's binding
+        return {"rebind-followers": "add the same follower sites to the other profiles first", "held": held}
     for name in added:
         calibration["sites"][name] = dict(calibration["sites"][config["sites"][name]["map_from"]])
     save_bound_map_reference(cal_path, ref_path, calibration, config, None, raw=raw)
