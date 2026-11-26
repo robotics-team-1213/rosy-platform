@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.477
+**Version:** v1.478
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.478 Assigned station release and timeout hold (Fleet)
+
+Submit the `station_stop` action with the configured `place_id` and `role` for an external load or wait stop. The task exposes `station_operation` with the assigned place, role, retained trip ID, state and deadline. A named operator can post `robot_id`, `trip_id`, `place_id` and `role` to `/api/fleet/pipeline/pinky-tasks/{task_id}/station-release`. Repeating the same release returns its stored receipt. Timeouts retain the hold. Cell S unload release checks the matching batch, final cell task, empty bed and parked arm.
 
 ### v1.477 Correlated native docking cancellation (CORE)
 
@@ -5128,6 +5132,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.478 | 2026-11-26 | [Fleet] Assigned station release and timeout hold |
 | v1.477 | 2026-11-26 | [CORE] Correlated native docking cancellation |
 | v1.476 | 2026-11-26 | [CORE] Leased speed ceilings for Nav2 road routes |
 | v1.475 | 2026-11-26 | [CORE] Stationary rear dock registration |
