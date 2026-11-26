@@ -757,7 +757,7 @@ def test_concurrent_premature_sigusr2_and_fifo_human_hold_sends_zero_post_intake
     assert hold_rows[-1].get("released") is True
 
 
-def test_interrupt_hold_overload_clears_torque_hold_commanded_and_blocks_fifo_live_fallback(tmp_path, monkeypatch):
+def test_interrupt_hold_overload_keeps_torque_ack_and_blocks_fifo_live_fallback(tmp_path, monkeypatch):
     import time
 
     sys.path.insert(0, str(OMX))
@@ -776,10 +776,12 @@ def test_interrupt_hold_overload_clears_torque_hold_commanded_and_blocks_fifo_li
     r._interrupt = {"signal": signal.SIGINT, "phase": "hold", "seen": 1, "may_move": False, "since": 0.0,
                     "still": 0, "last": None, "deadline": 60.0, "release_from": 1}
 
+    assert ci._hold_tick(r) is False  # the hold pose went out with torque ON: the ack stands under the shed (2026-11-26)
+    assert r.torque_hold_commanded is True and r._human_hold_ack_pending is False
+    assert not any(row.get("command") == "human-hold" and row.get("ok") is False for row in status)
     assert ci._hold_tick(r) is False
-    assert r.torque_hold_commanded is False and r._human_hold_ack_pending is False
-    assert status[-1]["command"] == "human-hold" and status[-1]["ok"] is False and status[-1]["person_needed"] is True
-    assert "guard overload" in status[-1]["error"]
+    assert status[-1]["command"] == "human-hold" and status[-1]["ok"] is True and status[-1]["person_needed"] is True
+    assert status[-1]["overload_shed"] == ["wrist_flex"] and r.torque_hold_commanded is True
 
     io_dir = tmp_path / "io"
     io_dir.mkdir()
@@ -823,9 +825,9 @@ def test_interrupt_hold_overload_clears_torque_hold_commanded_and_blocks_fifo_li
         assert hold_ack_ok(cell.act("human-hold")) is False
         assert hold_ack_ok(cell.act("human-hold")) is True
 
-    r._human_hold_ack_pending = True  # FIFO retry on already-overloaded hold must not re-arm pending ack
+    r._human_hold_ack_pending = True  # FIFO retry on an already-overloaded hold: acked again, never left pending
     assert ci._hold_tick(r) is False
-    assert r.torque_hold_commanded is False and r._human_hold_ack_pending is False
+    assert r.torque_hold_commanded is True and r._human_hold_ack_pending is False
 
     robot2, status2 = Robot(), []
     robot2.motion = type("M", (), {"failed": True})()

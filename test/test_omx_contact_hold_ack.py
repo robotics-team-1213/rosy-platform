@@ -117,11 +117,11 @@ def test_recover_hold_and_safe_home_accept_the_shedding_hold(tmp_path):
     assert err is None
     assert safe_home._live_hold_active({"io": str(io)}) is True
 
+    r.command("recover-unlatch")  # the guard's own refusal still stands while it sheds: no motion before relief
+    assert rows[-1]["ok"] is False and "overload hold active on shoulder_lift" in rows[-1]["error"]
+    assert r.human_hold_latched is True and r.torque_hold_commanded is True
+
+    r.robot.motion.held = {}  # the guard released the joint (release_when_clear); before the fix the ack never came back
+    r.tick()
     r.command("recover-unlatch")
     assert rows[-1]["ok"] is True and rows[-1]["unlatched_from_hold"] is True
-    r.tick()  # the guard still holds shoulder_lift: the runner holds again, the guard is not bypassed
-    assert r.fault.startswith("contact (overload-hold") and robot_held(r)
-
-
-def robot_held(r):
-    return bool(r.robot.motion.held)
