@@ -239,3 +239,45 @@ def test_hub_cycle_holds_the_whole_cell_lock_exclusively_until_the_camera_is_bac
         cycled.clear()
         note = heal.hub_cycle("arm_b_wrist", HubIo(), find=find, cycle=lambda up, port: cycled.append(port), sleep=lambda _s: None)
     assert "skipped" in note and "session.lock" in note and not cycled
+
+
+def _dev(parent, name, vendor="0c45", product="6367", serial=None, hub=False):
+    path = parent / name
+    path.mkdir()
+    (path / "idVendor").write_text(vendor + "\n")
+    (path / "idProduct").write_text(product + "\n")
+    (path / "bDeviceClass").write_text("09\n" if hub else "ef\n")
+    (path / f"{name}:1.0").mkdir()  # an interface directory, not a device
+    if serial:
+        (path / "serial").write_text(serial + "\n")
+    return path
+
+
+def test_hub_cycle_refuses_a_hub_that_also_feeds_anything_but_this_arms_openrb(tmp_path):
+    """The 2026-11-26 arm_b wrist hub held the camera and arm_b's OpenRB: that may be cycled. Another arm's board,
+    an unregistered board, a second camera or a device behind a nested hub may not."""
+    boards = tmp_path / "omx-arm-boards.json"
+    boards.write_text(json.dumps({"RB-B": "arm_b", "RB-A": "arm_a"}))
+    leaf = _usb_tree(tmp_path, "3-1", "3-1.4", "3-1.4.2", "3-1.4.2.1", hubs={"3-1", "3-1.4", "3-1.4.2"})
+    hub = leaf.parent
+    find = lambda _r: {"leaf": str(leaf)}
+    port = lambda role="arm_b_wrist", path=boards: heal.camera_hub_port(str(tmp_path / "gone"), role, leaf_finder=find, boards_path=path)
+    _dev(hub, "3-1.4.2.3", vendor="2f5d", product="2202", serial="RB-B")
+    assert port()[1] == 2  # camera + its own arm's OpenRB
+    with pytest.raises(OSError, match="OpenRB of arm_b, not arm_a"):
+        port(role="arm_a_wrist")
+    with pytest.raises(OSError, match="unreadable"):
+        port(path=tmp_path / "missing.json")
+    cases = [("3-1.4.2.4", {"vendor": "2f5d", "serial": "RB-A"}, "OpenRB of arm_a"),
+             ("3-1.4.2.4", {"vendor": "2f5d", "serial": "RB-X"}, "unknown arm"),
+             ("3-1.4.2.4", {"vendor": "8086", "product": "0b07"}, "would also lose power")]  # a D435
+    for name, kw, text in cases:
+        extra = _dev(hub, name, **kw)
+        with pytest.raises(OSError, match=text):
+            port()
+        import shutil
+        shutil.rmtree(extra)
+    nested = _dev(hub, "3-1.4.2.2", vendor="05e3", product="0610", hub=True)
+    _dev(nested, "3-1.4.2.2.1", vendor="0403", product="6014", serial="U2D2")  # behind a second hub
+    with pytest.raises(OSError, match="3-1.4.2.2.1 .*would also lose power"):
+        port()

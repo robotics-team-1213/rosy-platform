@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -101,15 +102,62 @@ def _camera_leaf(device: str, role: str | None, leaf_finder) -> Path:
         return Path(found["leaf"])
 
 
-def camera_hub_port(device: str, role: str | None = None, *, leaf_finder=None) -> tuple[Path, int, Path]:
+OPENRB_VENDOR = "2f5d"
+ARM_BOARDS = Path("/etc/rosy/omx-arm-boards.json")
+_USB_NAME = re.compile(r"\d+-[\d.]+")
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return ""
+
+
+def _usb_children(path: Path):
+    for child in sorted(path.iterdir()):
+        if child.is_dir() and not child.is_symlink() and _USB_NAME.fullmatch(child.name):
+            yield child
+            yield from _usb_children(child)
+
+
+def hub_subtree_refusal(hub: Path, leaf: Path, role: str | None, boards_path: Path = ARM_BOARDS) -> str | None:
+    """Cycling the port that feeds `hub` drops every USB device below it. Allowed only when that is the camera
+    itself (and hubs) plus OpenRB boards registered to the camera's own arm: no other camera, D435, U2D2 or board."""
+    m = re.fullmatch(r"(arm_[a-z])_.+", role or "")
+    arm = m.group(1) if m else None
+    try:
+        raw = json.loads(boards_path.read_text(encoding="utf-8"))
+        boards = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else None
+    except (OSError, ValueError):
+        boards = None
+    for dev in _usb_children(hub):
+        if dev == leaf or _is_hub(dev):
+            continue
+        ids = f"{_read(dev / 'idVendor')}:{_read(dev / 'idProduct')}"
+        if _read(dev / "idVendor").lower() == OPENRB_VENDOR:
+            serial = _read(dev / "serial")
+            if boards is None:
+                return f"{dev.name} ({ids}) is an OpenRB under hub {hub.name} and {boards_path} is unreadable"
+            if arm is None or boards.get(serial) != arm:
+                return f"{dev.name} ({ids}) is an OpenRB of {boards.get(serial, 'an unknown arm')}, not {arm or role}"
+            continue
+        return f"{dev.name} ({ids}) would also lose power under hub {hub.name}"
+    return None
+
+
+def camera_hub_port(device: str, role: str | None = None, *, leaf_finder=None, boards_path: Path = ARM_BOARDS) -> tuple[Path, int, Path]:
     """(upstream hub, its port number, camera's own hub) for the camera behind a /dev/v4l/by-id name.
-    Root-hub ports are refused: cycling one drops every device on that controller port."""
+    Root-hub ports are refused: cycling one drops every device on that controller port. So is any hub that also
+    feeds something other than this camera and its own arm's OpenRB."""
     if leaf_finder is None:
         from cell_upkeep_usb_leaf import unconfigured_usb_leaf as leaf_finder
     leaf = _camera_leaf(device, role, leaf_finder)
     hub = leaf.parent
     if not (_is_hub(hub) and _is_hub(hub.parent) and "." in hub.name):
         raise OSError(f"{leaf.name}: no external hub port above the camera to cycle")
+    if refusal := hub_subtree_refusal(hub, leaf, role, boards_path):
+        raise OSError(refusal)
     return hub.parent, int(hub.name.rsplit(".", 1)[1]), hub
 
 
