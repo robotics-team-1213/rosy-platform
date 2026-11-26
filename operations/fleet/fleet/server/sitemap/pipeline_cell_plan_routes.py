@@ -1,6 +1,8 @@
 """Dual-mode Fleet cell-plan HTTP routes (/api/fleet/pipeline/cell-plans*)."""
 from __future__ import annotations
 
+from core_common.cell_failure_reason import persisted_abort_reason
+
 from contextlib import nullcontext
 import json
 import time
@@ -98,37 +100,39 @@ def install_cell_plan_routes(app, ctx) -> None:
     def _enriched_plan_task(tid: str, request: Request | None = None) -> dict[str, Any]:
         raw_task = _enrich_task_health(app.state.omx_cell_tasks[tid])
         refusals = getattr(app.state, "cell_task_refusals", None) or {}
-        if tid in refusals and refusals[tid] is not None:
+        if reason := persisted_abort_reason(raw_task):
+            raw_task = {**raw_task, "last_refusal": {"code": reason, "op": "complete"}}
+        elif tid in refusals and refusals[tid] is not None:
             raw_task = {**raw_task, "last_refusal": refusals[tid]}
         return task_view_for_request(raw_task, request) if request is not None else raw_task
 
     def _plan_view(plan_id: str, request: Request | None = None) -> dict[str, Any]:
         rec = app.state.omx_cell_plans[plan_id]
         raw_tasks = [
-            _enrich_task_health(app.state.omx_cell_tasks[tid])
+            _enriched_plan_task(tid)
             for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
         ]
         completed = sum(1 for t in raw_tasks if t.get("status") == "COMPLETED")
         status = _aggregate_plan_status(raw_tasks)
-        refusals = getattr(app.state, "cell_task_refusals", None) or {}
         cell_state = (getattr(app.state, "omx_cell_states", None) or {}).get(rec["cell_id"])
         cell_phase = (cell_state.get("phase") or cell_state.get("cell_phase")) if isinstance(cell_state, dict) else None
-        hold_reason: str | None = None
+        hold_reason = next((t["last_refusal"]["code"] for t in raw_tasks if t.get("status") == "ABORTED"), None)
         for t in raw_tasks:
-            for field in ("cancel_reason", "abort_reason"):
-                if isinstance(t.get(field), str) and t[field].strip():
-                    hold_reason = t[field].strip()
-                    break
             if hold_reason:
                 break
-            refusal = refusals.get(t["task_id"])
+            cancel = t.get("cancel_reason")
+            if isinstance(cancel, str) and cancel.strip():
+                hold_reason = cancel.strip()
+                break
+            refusal = t.get("last_refusal")
             if isinstance(refusal, dict) and refusal.get("code"):
                 hold_reason = str(refusal["code"])
                 break
             if isinstance(refusal, str) and refusal.strip():
                 hold_reason = refusal.strip()
                 break
-        if hold_reason is None and status in ("PAUSED_HUMAN", "ABORTED", "CANCELLED") and isinstance(cell_state, dict):
+        if (hold_reason is None and status in ("PAUSED_HUMAN", "CANCELLED") and isinstance(cell_state, dict)
+                and cell_state.get("stage_id") in rec["task_ids"]):
             if isinstance(cell_state.get("reason"), str) and cell_state["reason"].strip():
                 hold_reason = cell_state["reason"].strip()
         principal = getattr(getattr(request, "state", None), "site_principal", None)
@@ -156,6 +160,21 @@ def install_cell_plan_routes(app, ctx) -> None:
             created_at=rec["created_at"],
         ).model_dump(by_alias=True)
 
+    def placement_binding(body, moves, *, request_key=None, preview=False):
+        occurrence = body.get("intake_occurrence_id")
+        attempt = body.get("placement_attempt_id")
+        if occurrence is None and attempt is None:
+            return {}
+        if (not isinstance(occurrence, str) or not occurrence or len(occurrence) > 128
+                or len(moves) != 1 or body.get("mode") != "harbor_plan"
+                or moves[0]["src_site"] != "belt" or not moves[0].get("cargo_id")
+                or not preview and (not request_key or attempt != request_key)):
+            raise HTTPException(422, detail={"code": "INVALID_INTAKE_PLACEMENT_BINDING"})
+        receipts = getattr(app.state, "rfid_receipts", None)
+        if receipts is None or not receipts.received(occurrence, moves[0]["cargo_id"]):
+            raise HTTPException(409, detail={"code": "INTAKE_RECEIPT_NOT_FOUND"})
+        return {"intake_occurrence_id": occurrence, "placement_attempt_id": attempt}
+
     @app.post("/api/fleet/pipeline/cell-plans/dry-run", dependencies=read_guard)
     async def preview_cell_plan(request: Request):
         body = await request.json()
@@ -168,6 +187,7 @@ def install_cell_plan_routes(app, ctx) -> None:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_PLAN_INPUT"}) from None
         if not planned["ok"]:
             raise HTTPException(422, detail={"code": planned["why"] or "NO_LEGAL_PLAN"})
+        placement_binding(body, planned["moves"], preview=True)
         principal = getattr(getattr(request, "state", None), "site_principal", None)
         is_service = getattr(principal, "role", None) == "service"
         moves = [
@@ -212,6 +232,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                 raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_PLAN_INPUT"}) from None
             if not planned["ok"]:
                 raise HTTPException(422, detail={"code": planned["why"] or "NO_LEGAL_PLAN"})
+            binding = placement_binding(body, planned["moves"], request_key=req_key)
 
             station = resolve_omx_cells(active[1], active[2]).get("cell_ab")
             if station is None:
@@ -299,6 +320,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                     "dst_area": targets["dst_area"],
                     "dst_slot": targets["dst_slot"],
                     **meta,
+                    **binding,
                     "tier": tier,
                     "depends_on": dep_id,
                     "plan_id": plan_id,
@@ -327,6 +349,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                 "request_key": req_key,
                 "scoped_request_key": scoped_key,
                 "request_digest": canonical_digest(body),
+                **binding,
                 "task_ids": [t["task_id"] for t in built],
                 "moves": [{**m, "task_id": built[i]["task_id"]} for i, m in enumerate(planned["moves"])],
                 "created_at": round(time.time(), 3),

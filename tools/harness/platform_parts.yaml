@@ -1549,6 +1549,7 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_governance_store.py
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
+  - operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py

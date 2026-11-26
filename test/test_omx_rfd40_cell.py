@@ -25,6 +25,11 @@ class SelectionTests(unittest.TestCase):
     def test_strong_repeated_candidate_wins(self):
         self.assertEqual(choose_epc(HEADER + report(A, -42, 2) + report(B, -55, 1)), A)
 
+    def test_ordered_intake_keeps_two_epcs_ambiguous_even_if_one_dominates(self):
+        reports = HEADER + report(A, -35, 19) + report(B, -90, 1)
+        self.assertIsNone(choose_epc(reports, require_single=True))
+        self.assertEqual(choose_epc(HEADER + report(A, -40, 4) + report(A, -42, 2), require_single=True), A)
+
     def test_tie_or_weak_candidate_stays_empty(self):
         self.assertIsNone(choose_epc(HEADER + report(A, -42, 2) + report(B, -45, 1)))
         self.assertIsNone(choose_epc(HEADER + report(A, -75, 8)))

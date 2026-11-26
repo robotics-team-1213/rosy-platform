@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import math
+from uuid import uuid4
 
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
+from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
@@ -157,6 +159,7 @@ def _traffic_end_index(runner, live: LiveTrip, index: int) -> int | None:
 async def _cancel_active_route(runner, live: LiveTrip, robot_id: str, nav: str | None) -> None:
     if live.active_route is None:
         return
+    live.view["detail"].pop("named_stop_operation", None)
     if nav not in ("ARRIVED", "IDLE") and runner._cancel_goal is not None:
         await runner._call(runner._cancel_goal(robot_id))
     if not live.open:
@@ -496,6 +499,9 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         frame = live.view["detail"]["goal_frame"]
         options["route_binding"] = {"site_map_id": frame["map_id"], "site_map_version": frame["map_version"],
                                     "map_grid_id": frame["map_grid_id"], "binding_id": frame["binding_id"]}
+        if runner._strict_named_stop(live, end_index) is not None:
+            options["attempt_id"] = str(uuid4())
+            record_stop_dispatch(runner, live, active, options["attempt_id"], site_pts[-1][:3], robot_pts[-1][:3])
     try:
         if runner._route is not None:
             reply = await runner._call(runner._route(robot_id, payload, **options)) or {}
@@ -521,7 +527,11 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             runner._fence(robot_id)
             return
         raise _GoalRefused(reason, reply)
+    if "attempt_id" in options:
+        record_stop_operation(live, options["attempt_id"], reply)
     live.active_route = {"end_index": end_index, "points": len(payload)}
+    if "attempt_id" in options:
+        live.active_route["attempt_id"] = options["attempt_id"]
     if controlled:
         owner = reply.get("road_speed_owner")
         if not owner:

@@ -214,7 +214,8 @@ async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
 
 
 async def route(self, robot_id: str, points: Sequence[dict], *,
-                lease_source: str | None = None, route_binding: dict | None = None, road_speed_controlled=False) -> dict:
+                lease_source: str | None = None, route_binding: dict | None = None,
+                attempt_id: str | None = None, road_speed_controlled=False) -> dict:
     """Dispatch one D-1009 pass/stop route under the console's goal admission & traffic arbitration."""
     pts = list(points)
     if not pts:
@@ -226,7 +227,7 @@ async def route(self, robot_id: str, points: Sequence[dict], *,
     try:
         return await self._goal(robot_id, float(end["x"]), float(end["y"]),
                                 float(0.0 if end.get("yaw") is None else end["yaw"]),
-                                task_id=None, attempt_id=None, attempt_seq=None, lease_source=lease_source,
+                                task_id=None, attempt_id=attempt_id, attempt_seq=None, lease_source=lease_source,
                                 route_points=pts, route_binding=route_binding, road_speed_controlled=road_speed_controlled)
     finally:
         self._goal_busy.discard(robot_id)

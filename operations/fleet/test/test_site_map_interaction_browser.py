@@ -12,7 +12,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="opt-in real Chromium browser scenario")
 
 
-def test_world_charge_bay_overlay_joins_both_place_markers_with_a_straight_line(page_site):
+def test_world_road_overlay_separates_surveyed_paint_and_stored_maneuver(page_site):
     from playwright.sync_api import expect
 
     page, store, _ = page_site
@@ -22,22 +22,55 @@ def test_world_charge_bay_overlay_joins_both_place_markers_with_a_straight_line(
         "places": [
             {"id": "P1", "name": "P1", "kind": "junction", "x": -.43002, "y": .04266},
             {"id": "C1", "name": "C1", "kind": "charge", "x": -.41816, "y": .47},
+            {"id": "S5", "name": "S5", "kind": "stop", "x": .89822, "y": -.48152},
+            {"id": "S3", "name": "S3", "kind": "stop", "x": .745, "y": -.207},
+            {"id": "J_in", "name": "J_in", "kind": "junction", "x": .31418, "y": -.25008},
         ],
-        "edges": [{"id": "bay_1", "from": "P1", "to": "C1", "direction": "two_way",
-                   "drive_mode": "lane", "speed_cap_mps": .02,
-                   "polyline": [[-.43002, .04266], [-.4354, .3294], [-.41816, .47]]}],
+        "edges": [
+            {"id": eid, "from": source, "to": target, "direction": "two_way",
+             "drive_mode": "lane", "speed_cap_mps": .02, "polyline": points}
+            for eid, source, target, points in [
+                ("bay_1", "P1", "C1", [[-.43002, .04266], [-.4354, .3294], [-.41816, .47]]),
+                ("loop_right", "S5", "S3", [[.89822, -.48152], [.9756, -.4676],
+                     [1.0593, -.3424], [.9756, -.2173], [.9238, -.207], [.745, -.207]]),
+                ("upper_east", "S3", "J_in", [[.745, -.207], [.56, -.207], [.31418, -.25008]]),
+            ]
+        ],
     }
     page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": map_body}))
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
-    edge = page.locator('#site-map-svg [data-edge="bay_1"]')
-    expect(edge).to_be_attached()
-    endpoints = []
-    for place_id in ("P1", "C1"):
-        marker = page.locator(f'#site-map-svg [data-place="{place_id}"] circle.place')
-        endpoints.append(f"{marker.get_attribute('cx')},{marker.get_attribute('cy')}")
-    expect(edge).to_have_attribute('points', ' '.join(endpoints))
+
+    svg = page.locator("#site-map-svg")
+    bay = svg.locator('[data-edge="bay_1"]')
+    loop = svg.locator('[data-edge="loop_right"]')
+    upper = svg.locator('[data-edge="upper_east"]')
+    for paint in (bay, loop, upper):
+        expect(paint).to_have_class(re.compile(r"\bsurveyed\b"))
+        expect(paint).to_have_css("stroke-dasharray", "none")
+        assert len(paint.get_attribute("points").split()) == 2
+    expect(upper.locator("title")).to_have_text("upper_east · 영상에서 읽은 차선 양쪽 경계의 중점")
+    expect(svg.locator(".arrow")).to_have_count(0)
+
+    prefix = svg.locator('[data-road-prefix="loop_right"]')
+    expect(prefix).to_have_css("stroke-dasharray", "5px, 4px")
+    prefix_points = prefix.get_attribute("points").split()
+    assert len(prefix_points) == 5
+    expect(svg.locator("[data-stored-road]")).to_have_count(0)
+
+    prefix.dispatch_event("click")
+    stored_loop = svg.locator('[data-stored-road="loop_right"]')
+    expect(stored_loop.locator("title")).to_contain_text("저장 주행 경로")
+    expect(stored_loop).to_have_css("stroke-dasharray", "5px, 4px")
+    expect(prefix).to_have_count(0)
+    actual = stored_loop.get_attribute("points").split()
+    assert actual[:-1] == prefix_points and len(actual) == 6
+    expect(svg.locator(".stored-road-arrow")).not_to_have_count(0)
+
+    page.locator("#map-source").select_option("draft")
+    expect(loop).to_have_attribute("points", " ".join(actual))
+    expect(svg.locator(".surveyed, .stored-road")).to_have_count(0)
     assert store.active_view() == active
 
 

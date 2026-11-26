@@ -265,6 +265,71 @@ def test_console_traffic_layer_card_line_and_queue_row(site, theme):
             browser.close()
 
 
+def test_console_canvas_shows_stored_route_only_when_requested(site, monkeypatch):
+    from playwright.sync_api import expect, sync_playwright
+
+    bay = [[-.43002, .04266], [-.4354, .3294], [-.41816, .47]]
+    loop = [[.89822, -.48152], [.9756, -.4676], [1.0593, -.3424],
+            [.9756, -.2173], [.9238, -.207], [.745, -.207]]
+    places = [{"id": key, "name": key, "kind": kind, "x": point[0], "y": point[1]}
+              for key, kind, point in [("P1", "junction", bay[0]), ("C1", "charge", bay[-1]),
+                                       ("S5", "stop", loop[0]), ("S3", "stop", loop[-1])]]
+    edges = [{"id": eid, "from": start, "to": end, "direction": "two_way",
+              "drive_mode": "lane", "width_m": .2, "speed_cap_mps": .02, "polyline": points}
+             for eid, start, end, points in [("bay_1", "P1", "C1", bay), ("loop_right", "S5", "S3", loop)]]
+    map_body = {**ACTIVE["map"], "map_id": "world_261026", "places": places, "edges": edges}
+    monkeypatch.setitem(API, "/api/fleet/site-map/active", {**ACTIVE, "map": map_body})
+    survey = {**API["/api/fleet/site-map"]["maps"][0], "map_id": "world_261026",
+              "bounds_m": {"min_x": -.6, "max_x": 1.2, "min_y": -.7, "max_y": .6},
+              "polygon_m": [[-.6, -.7], [1.2, -.7], [1.2, .6], [-.6, .6]]}
+    monkeypatch.setitem(API, "/api/fleet/site-map", {"maps": [survey]})
+
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, "/console", posts)
+        try:
+            page.clock.run_for(1500)
+            page.locator("#map-options > summary").click()
+            routes = page.get_by_role("button", name="저장 경로", exact=True)
+            lanes = page.get_by_role("button", name="도로·장소", exact=True)
+            expect(routes).to_have_attribute("aria-pressed", "false")
+            page.evaluate("""() => {
+                const ctx = CanvasRenderingContext2D.prototype;
+                const log = window.__roadStrokes = [];
+                const {beginPath, moveTo, lineTo, stroke} = ctx;
+                ctx.beginPath = function () { this.roadPoints = []; return beginPath.call(this); };
+                ctx.moveTo = function (x, y) { this.roadPoints?.push([x, y]); return moveTo.call(this, x, y); };
+                ctx.lineTo = function (x, y) { this.roadPoints?.push([x, y]); return lineTo.call(this, x, y); };
+                ctx.stroke = function (...args) {
+                    if (!this.canvas.id && this.roadPoints?.length >= 2)
+                        log.push({points: this.roadPoints, dash: this.getLineDash()});
+                    return stroke.apply(this, args);
+                };
+            }""")
+            # Repaint the static layer at its normal defaults before trying the optional overlay.
+            lanes.click()
+            lanes.click()
+            page.wait_for_function("window.__roadStrokes.some(row => row.points.length === 2 && !row.dash.length)")
+            baseline = page.evaluate("window.__roadStrokes.splice(0)")
+            # The unmeasured U-turn is the only dashed route by default.
+            assert {len(row["points"]) for row in baseline if row["dash"] == [5, 4]} == {5}
+
+            routes.click()
+            expect(routes).to_have_attribute("aria-pressed", "true")
+            page.wait_for_function("window.__roadStrokes.some(row => row.dash.join() === '5,4' && row.points.length === 3)")
+            recorded = page.evaluate("window.__roadStrokes")
+            assert {len(row["points"]) for row in recorded if row["dash"] == [5, 4]} == {3, 6}
+            raw = next(row["points"] for row in recorded if row["dash"] == [5, 4] and len(row["points"]) == 3)
+            assert raw[1][0] < raw[0][0] < raw[-1][0]
+            assert any(len(row["points"]) == 2 and row["dash"] == [] and
+                       row["points"][1][0] < row["points"][0][0] and row["points"][1][1] < row["points"][0][1]
+                       for row in recorded)
+            assert not posts, posts
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 def test_map_context_keeps_place_names_off_the_floor(site):
     from playwright.sync_api import expect, sync_playwright
 

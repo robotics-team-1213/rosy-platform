@@ -12,9 +12,7 @@ from typing import Optional
 from uuid import uuid4
 
 import httpx
-from pydantic import ValidationError
 
-from core_common.protocol.native_operation import NativeOperation
 
 from fleet.hub.hub import HubError
 from fleet.routing.cost import LEFT, RIGHT, STOP
@@ -29,7 +27,8 @@ from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
 from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
-from fleet.server.named_stop_confirm import GoalRefused, confirm_free_stop, confirm_lane_stop
+from fleet.server.named_stop_confirm import (GoalRefused, confirm_free_stop, confirm_lane_stop,
+                                            record_stop_dispatch, record_stop_operation)
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic.route_guide import route_guided
 
@@ -158,8 +157,9 @@ class TripSteps:
             if index != live.view["segment_index"]:
                 live.view["segment_index"] = index
                 live.last_goal = None
-                live.view["detail"].pop("named_stop_operation", None)
-                live.view["detail"].pop("named_stop_dispatch", None)
+                if not live.nav2:  # one native route can cover multiple segments
+                    live.view["detail"].pop("named_stop_operation", None)
+                    live.view["detail"].pop("named_stop_dispatch", None)
             self.authority.record_guidance(live, pose, self._store.active(), index, s, self._clock())
             self._describe(live)
             last = index == len(live.segments) - 1
@@ -508,17 +508,8 @@ class TripSteps:
         options = {"attempt_id": attempt_id} if attempt_id is not None else {}
         if stop is not None:
             frame = live.view["detail"].get("goal_frame") or {}
-            map_view = self._store.active_view()
-            if (map_view is None or map_view["version"] != active[0]
-                    or not frame.get("map_grid_id") or not self._matches_precision_binding(live, frame)):
-                raise _GoalRefused("NAMED_STOP_BINDING_UNVERIFIED")
-            live.view["detail"]["named_stop_dispatch"] = {
-                "attempt_id": attempt_id, "robot_id": live.view["robot_id"], "place": live.request["to"],
-                "map_id": active[1].map_id, "map_version": active[0], "map_sha256": map_view["sha256"],
-                "binding_id": frame["binding_id"], "map_grid_id": frame["map_grid_id"],
-                "site_target": dict(zip(("x", "y", "yaw"), (stop.x, stop.y, stop.yaw) if exact else (x, y, stop.yaw))),
-                "robot_target": dict(zip(("x", "y", "yaw"), goal)),
-            }
+            site_target = (stop.x, stop.y, stop.yaw) if exact else (x, y, stop.yaw)
+            record_stop_dispatch(self, live, active, attempt_id, site_target, goal)
             options["stop_binding"] = {"site_map_id": frame["map_id"], "site_map_version": frame["map_version"],
                                        "binding_id": frame["binding_id"], "map_grid_id": frame["map_grid_id"]}
         if stop is not None and stop.precision_stop is not None:
@@ -564,14 +555,7 @@ class TripSteps:
         if reply.get("accepted") is False or reply.get("queued"):
             raise _GoalRefused(reply.get("reason") or "", reply)
         if attempt_id is not None:
-            try:
-                operation = NativeOperation.model_validate(reply.get("operation"))
-            except ValidationError as error:
-                raise _GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED") from error
-            if (reply.get("accepted") is not True or operation.kind != "navigate"
-                    or operation.correlation_id != attempt_id):
-                raise _GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED")
-            live.view["detail"]["named_stop_operation"] = operation.model_dump(mode="json")
+            record_stop_operation(live, attempt_id, reply)
 
     def _confirm_lane_stop(self, live: LiveTrip, index: int) -> bool:
         return confirm_lane_stop(self, live, index)
