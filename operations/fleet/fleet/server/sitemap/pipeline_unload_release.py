@@ -104,6 +104,9 @@ def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fo
     cell = state.omx_cell_states.get("cell_s") or {}
     if cell.get("phase") != "RELEASED" or cell.get("amr_motion_inhibited"):
         reasons.append("CELL_NOT_RELEASED")
+    elif done and (cell.get("robot_id") != robot_id or cell.get("unload_batch_id") != batch
+                   or not last.get("task_id") or cell.get("stage_id") != last["task_id"]):
+        reasons.append("CELL_RELEASE_IDENTITY_MISMATCH")
     arm = state.arm_live_states.get("arm_s") or {}
     updated = arm["folded_updated_at"] if "folded_updated_at" in arm else arm.get("updated_at")
     if arm.get("folded") is not True or not _fresh(updated, now, fold_max_age_s):
@@ -195,7 +198,7 @@ def _fence_ambiguous_depart(state, *, batch: str, robot_id: str, target_place: s
 
 
 async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None,
-                      flush_port_events=None, dispatch_open=None) -> list[dict]:
+                      flush_port_events=None, dispatch_open=None, stage_trip=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
     human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
 
@@ -282,6 +285,19 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             seen.pop(batch, None)
             continue
         target = exit_target(rules, site)
+        if stage_trip is not None:
+            from fleet.server.work.pipeline_station_stop import stop_reason
+            if stop_reason(state, robot_id):
+                continue
+            if target is not None and record is None:
+                stage_trip(robot_id, batch, target[0], release, now)
+            elif record is not None:
+                record.update(state="HELD", reason="DEPART_LEGACY_ATTEMPT_REQUIRES_REVIEW")
+                save()
+            else:
+                state.unload_releases[batch] = {"robot_id": robot_id, "state": "HELD", "reason": "NO_EXIT_PLACE"}
+                save()
+            continue
         if record is None:
             candidate = {"robot_id": robot_id, "state": "SENDING", "attempts": 0,
                          "at": round(now, 3), "operator": None, "release": release}
@@ -402,6 +418,9 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
     return sent
 
 
+from fleet.server.work.pipeline_station_stop import _stage_departure_trip
+
+
 def install_unload_release_routes(app, ctx) -> None:
     import asyncio
     import logging
@@ -449,6 +468,8 @@ def install_unload_release_routes(app, ctx) -> None:
             task_log=getattr(ctx, "record_depart_task", None),
             flush_port_events=lambda: flush_pending_port_events_async(app),
             dispatch_open=_dispatch_open,
+            stage_trip=lambda robot, batch, place, release, now: _stage_departure_trip(
+                app.state, robot, batch, place, release, now, active[0], ctx._save_ledger),
         )
 
     app.state.depart_tick = _depart_tick

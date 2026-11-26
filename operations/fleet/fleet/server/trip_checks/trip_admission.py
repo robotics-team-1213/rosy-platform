@@ -84,6 +84,8 @@ class TripAdmission:
 
     async def _guard_start(self, robot_id, token, guard):
         self._check_start_token(robot_id, token)
+        if (check := getattr(self, "station_stop_reason", None)) and (reason := check(robot_id)):
+            raise TripError(409, reason)
         self._check_human_hold()
         if guard is not None:
             await guard()

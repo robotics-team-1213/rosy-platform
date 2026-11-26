@@ -500,6 +500,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                             for state in app.state.omx_cell_states.values())):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
         task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
+        if task_id in app.state.pinky_tasks:
+            raise HTTPException(409, detail={"code": "PINKY_TASK_ID_IN_USE"})
         cable_guard = bool(body.get("cable_guard_micro", True))
         max_step_m = checked_finite_float(body.get("max_step_m", 0.015 if cable_guard else 0.10))
         max_speed_mps = checked_finite_float(body.get("max_speed_mps", 0.02 if cable_guard else 0.08))
@@ -508,32 +510,30 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spawned_cell_task = unload_batch_id = None
         v_cmd, duration_s = 0.0, 0.0
         place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
-        if action in ("dock_s3", "dock_and_unload_s3"):
+        from fleet.server.work.pipeline_station_stop import assigned_rule
+        station = None
+        if action == "station_stop":
+            from fleet.server.work.pipeline_station_stop import plan_station
+            station = plan_station(body, active[2], rules())
+            target_place = place_id = station["place_id"]
+        elif action in ("dock_s3", "dock_and_unload_s3"):
             if _aborted("cell_s"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S3"
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
+                if any(s.place == "S3" for s in getattr(rules(), "stops", ())):
+                    station = assigned_rule(rules(), "S3", "unload")
                 batch_id = f"unload-{uuid.uuid4().hex[:8]}"  # the camera adds the next carry (continue_unload)
                 spawned_cell_task = _enqueue_one_task(active, {
                     **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id, "task_id": f"{batch_id}-1",
                     "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
                 })
         elif action == "depart_s3":
-            release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
-            if not release["ready"]:
-                raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
-            target = exit_target(rules(), active[1])
-            if target is None:
-                raise HTTPException(409, detail={"code": "NO_EXIT_PLACE"})
-            principal = getattr(request.state, "site_principal", None)
-            unload_batch_id = release["batch_id"]
-            app.state.unload_releases[unload_batch_id] = {
-                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
-                "operator": getattr(principal, "principal_id", None), "target": target[0], "release": release}
-            place_id = target[0]
-            target_place = target[0]
+            from fleet.server.work.pipeline_station_stop import operator_departure
+            place_id, unload_batch_id = operator_departure(app.state, request, robot_id, task_id, rules(), active[1], _is_human_detected())
+            target_place = place_id
             v_cmd = max_speed_mps
             duration_s = 0.35
         elif action == "dock_s5":
@@ -586,15 +586,15 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": cable_guard, "max_step_m": max_step_m, "v_cmd_mps": v_cmd, "duration_s": duration_s,
             "decision": dec_row, "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
             **({"unload_batch_id": unload_batch_id} if unload_batch_id else {}),
+            **({"station_operation": station} if station else {}),
             "status": "QUEUED", "created_at": round(time.time(), 3), **dispatch_fields(active, request, place_id),
         }
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
-    def record_depart_task(robot_id, batch, place, now):
-        app.state.pinky_tasks[f"depart-{batch}"] = {"task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3",
-                                                    "target_place": place, "status": "SENT", "auto": True, "created_at": round(now, 3)}
-    ctx.record_depart_task = record_depart_task
+    from functools import partial
+    from fleet.server.work.pipeline_station_stop import record_depart_task
+    ctx.record_depart_task = partial(record_depart_task, app.state)
     install_pinky_dispatch(app, ctx)
     install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS, ctx._enqueue_one_task = CELL_TASK_PRESETS, _enqueue_one_task
