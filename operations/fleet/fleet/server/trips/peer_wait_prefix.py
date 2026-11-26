@@ -1,5 +1,6 @@
 """Dispatch a reserved prefix to an intermediate waiting place on the original road plan."""
 import math
+import time
 from contextvars import ContextVar
 
 from core_common.protocol.evidence import STALE_POSE_S
@@ -95,3 +96,39 @@ def reserved_wait(runner, live, active, pos, along, limit):
             return None, "wait_place_outside_authority"
         return i, "reserved_wait_place"
     return None, "no_intermediate_wait_place"
+
+
+def check_wait_prefix(console, robot_id, points, site_route_of):
+    """Additional reservation and localization veto for an intermediate waiting place."""
+    from fleet.localization import trust
+    from fleet.server.named_stop_map_pose import fresh_native_slam
+    from fleet.server.nav2_route_sampling import NAV2_ROUTE_MIN_GAP_M
+
+    prefix = prefix_guard.get()
+    if prefix is None:
+        return True
+    here = console._pose_of(robot_id)
+    route = site_route_of([here, *((p["x"], p["y"]) for p in points)]) if here is not None else None
+    mover, map_id, original_peers, reserved, expected, centerline = prefix
+    peers = set(console._order) - {robot_id}
+    now = time.time()
+    if (robot_id != mover or not original_peers <= peers or not reserved() or not route
+            or fresh_native_slam(console._seen.get(robot_id), now) is None or route[0] != map_id
+            or len(route[1]) != len(expected)
+            or any(math.dist(pt, xy) > NAV2_ROUTE_MIN_GAP_M for pt, xy in zip(route[1], expected))):
+        return False
+    clearance = getattr(console, "_site_keep_out_m", 0.32) + NAV2_ROUTE_MIN_GAP_M
+    markers = getattr(console, "_site_marker_clearance", None)
+    for rid in peers:
+        for corridor in (route, (map_id, centerline)):
+            if markers is not None and rid in markers.offline:
+                # Its old pin can corroborate current marker observations but cannot replace them.
+                independent = console._site_obstacle_pose(rid) if console._site_obstacle_pose else None
+                if markers.clear(console, rid, corridor, clearance, independent) is not True:
+                    return False
+            else:
+                pose = console._site_mover_pose(rid) if console._site_mover_pose else None
+                if (not pose or pose[0] != map_id or fresh_native_slam(console._seen.get(rid), now) is None
+                        or trust.blocks(corridor[1], pose[1:3], keep_out_m=clearance)):
+                    return False
+    return True

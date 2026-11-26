@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from fleet.server import trip_nav2_route as nav2
-from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait
+from fleet.server.peer_wait_prefix import check_wait_prefix, downstream_refusal, prefix_guard, reserved_wait
 from fleet.server.traffic_arbitration_helpers import guarded_road_send
 from fleet.swarm.dispatch_guard import check_dispatch
 from fleet.traffic.lane_traffic import TrafficService
@@ -138,7 +138,7 @@ def test_full_refusal_then_prefix_uses_both_normal_wire_gates(monkeypatch, chang
         def project(pts):
             return helpers.site_route_for(console, rid, pts, trust_mod=trust)
         return await guarded_road_send(console, rid, points, (points[-1]["x"], 0.), "token", project, send,
-                                       grid_from=lambda _: None)
+                                       grid_from=lambda _: None, check_wait_prefix=check_wait_prefix)
 
     runner._route = route
     runner._robot_state = lambda _: asyncio.sleep(0, result=native)
