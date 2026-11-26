@@ -42,6 +42,8 @@ class PlanRequest:
     stop_offset: bool = True
     #: When True (Nav2 road-following), allow any start yaw on the lane (Nav2 rotates in place).
     ignore_start_heading: bool = False
+    #: When True (Nav2 road-following), allow arrival from any arc tangent (Nav2 rotates at the goal).
+    ignore_arrive_heading: bool = False
     nav2_off_lane_margin_m: float = 0.0
     #: How close to the goal place counts as already there (a rear-bay staging uses the trip's arrive radius).
     arrived_m: float | None = None
@@ -99,7 +101,8 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     for index, (via, target) in enumerate(legs):
         last = index == len(legs) - 1
         goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config,
-                            request.body_front_m, stop_offset=request.stop_offset)
+                            request.body_front_m, stop_offset=request.stop_offset,
+                            ignore_heading=request.ignore_arrive_heading and last)
         kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=via)
         stats: dict = {}
         found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
@@ -152,33 +155,36 @@ def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan 
             return None
     elif math.dist((x, y), graph.place_xy(request.goal)) > limit:
         return None
-    if want is not None and not heading_ok(yaw, want, config):
+    if want is not None and not (request.ignore_arrive_heading and request.arrived_m is not None) and not heading_ok(yaw, want, config):
         return None
     return Plan(segments=(), places=(request.goal,), actions=((request.goal, STOP, 0.0),),
                 length_m=0.0, eta_s=0.0, map_version=graph.version)
 
 
 def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig,
-          front_m: float = FALLBACK_FRONT_M, *, stop_offset: bool = True) -> tuple[Goal, Goal | None]:
+          front_m: float = FALLBACK_FRONT_M, *, stop_offset: bool = True,
+          ignore_heading: bool = False) -> tuple[Goal, Goal | None]:
     """The goal and, when an arrive yaw narrows a place goal, the same goal without it."""
     if isinstance(target, str):
         place = graph.places[target]
         yaw = arrive_yaw if arrive_yaw is not None else getattr(place, "yaw", None)
+        eff_yaw = None if ignore_heading else yaw
         if _mid_lane(graph, target):  # D-517 2: a part-way place is its coordinates and yaw
-            point, on_arcs = snap_goal(graph, *graph.place_xy(target), yaw, config)
-            if yaw is None:
+            point, on_arcs = snap_goal(graph, *graph.place_xy(target), eff_yaw, config)
+            if eff_yaw is None:
                 return Goal(point, on_arcs=on_arcs), None
             any_way, any_arcs = snap_goal(graph, *graph.place_xy(target), None, config)
             return Goal(point, on_arcs=on_arcs), Goal(any_way, on_arcs=any_arcs)
         loose = Goal(graph.place_xy(target), place=target)
-        line = loose if yaw is None else Goal(loose.xy, place=target,
-                                              arrive_ok=lambda arc: heading_ok(yaw, arc.end_tangent, config))
+        line = loose if eff_yaw is None else Goal(loose.xy, place=target,
+                                                  arrive_ok=lambda arc: heading_ok(eff_yaw, arc.end_tangent, config))
         stops = stop_goals(graph, target, yaw, config, front_m) if stop_offset else []
         if stops:  # a stop line: the body front on it, so the centre is back by the front offset
             return Goal(stops[0][2], on_arcs={arc.id: s for arc, s, _xy in stops}), loose
-        return line, (None if yaw is None else loose)
+        return line, (None if eff_yaw is None else loose)
     x, y, yaw = target
-    point, on_arcs = snap_goal(graph, x, y, yaw if yaw is not None else arrive_yaw, config)
+    snap_yaw = None if ignore_heading else (yaw if yaw is not None else arrive_yaw)
+    point, on_arcs = snap_goal(graph, x, y, snap_yaw, config)
     return Goal(point, on_arcs=on_arcs), None
 
 

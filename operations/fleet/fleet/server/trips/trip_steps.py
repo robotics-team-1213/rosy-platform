@@ -1,7 +1,4 @@
-"""D-494 5 / D-495 / D-520 per-period steps of the trip loop: lane junction instructions, bends, keeper
-sighting dismissals, sends and free-segment goals. Moved out of ``trip_runner`` unchanged (D-798); ``TripRunner``
-mixes it in.
-"""
+"""D-494 5 / D-495 / D-520 per-period steps of the trip loop (D-798 ``TripRunner`` mixin)."""
 
 from __future__ import annotations
 
@@ -13,7 +10,6 @@ from typing import Optional
 from uuid import uuid4
 
 import httpx
-
 
 from fleet.hub.hub import HubError
 from fleet.routing.cost import LEFT, RIGHT, STOP
@@ -80,7 +76,8 @@ class TripSteps:
             await self._check_pause(live)
             self._save(live)
             return
-        if self._renew_lease is not None and live.view["state"] != "link_wait":  # D-760 4: a free robot then stops
+        if (self._renew_lease is not None and live.view["state"] != "link_wait"
+                and not (live.active_route or {}).get("road_speed_owner")):  # road_speed.renew already renews it
             # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
             # renewal that fails lets CORE cancel the goal when its lease runs out.
             try:
@@ -91,6 +88,8 @@ class TripSteps:
         try:
             pose = await self._progress_pose(live, robot_id)
         except RobotApiError as exc:  # D-760 8 review: the robot answered the state read, with an error
+            if exc.status == 429 and await self._link_wait(live, "rate_limited"):
+                return
             return await self._stop(live, "failed", exc.code, {"status": exc.status})
         if not live.open:
             return
@@ -256,6 +255,8 @@ class TripSteps:
             await self._stop(live, "failed", exc.code, exc.detail)
             return
         except RobotApiError as exc:
+            if exc.status == 429 and await self._link_wait(live, "rate_limited"):
+                return
             lane = live.segment_is_lane(live.view["segment_index"])
             code = "TRIP_ROBOT_JUNCTION_UNSUPPORTED" if lane and exc.status == 404 else exc.code
             await self._stop(live, "failed", code, {"status": exc.status})

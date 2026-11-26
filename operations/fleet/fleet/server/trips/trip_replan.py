@@ -65,13 +65,14 @@ class TripReplan:
         robot_id = live.view["robot_id"]
         stop["confirmed"] = False
         stop.pop("proof", None)
+        retry_s = min(2.0, self.config.restart_retry_s)
         try:
             pred = live.active_route is None and live.last_goal is None and pre_dispatch_wait(live.view)
             if not pred:
                 stop.pop("idle_owner", None)
             if not stop.get("cancel_ack") and not stop.get("idle_owner"):
                 last = stop.get("attempted_at")
-                if last is not None and self._clock() - last < self.config.restart_retry_s:
+                if last is not None and self._clock() - last < retry_s:
                     return False
                 stop["attempted_at"] = self._clock()
                 wire = self.halts.idle_wire(robot_id) if pred else None

@@ -57,7 +57,8 @@ def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConf
             dist, s_m, tangent = arc.project(x, y)
             if math.isclose(dist - arc.width_m / 2, off, abs_tol=1e-9):
                 nearest.append((arc, s_m, tangent))
-        if len({arc.edge_id for arc, _, _ in nearest}) == 1:
+        if (len({arc.edge_id for arc, _, _ in nearest}) == 1
+                or (len(nearest) > 1 and set.intersection(*({arc.start_place, arc.end_place} for arc, _, _ in nearest)))):
             permitted = [(abs(wrap(yaw - tangent)), arc.id, s_m) for arc, s_m, tangent in nearest
                          if allowed is None or allowed(arc)]
             if permitted:

@@ -210,6 +210,15 @@ def test_centerline_evaluation_flags_misaligned_dock_for_immediate_reseat():
     assert act_ok["docking"]["verdict"] == "CONTACT_STOP"
 
 
+def test_offline_robot_located_in_bay_only_marks_that_bay():
+    bays = ChargeBays()
+    fleet = [robot("dead_in_c1", 50.0, (BAYS[0].x, BAYS[0].y), online=False), robot("low", 9.0)]
+    bays.observe(0.0, fleet, BAYS)
+    plan = bays.plan(fleet, BAYS)
+    assert [r["state"] for r in plan["bays"]] == ["planned", "planned", "free"]
+    assert actions(plan)["low"] == {"robot_id": "low", "action": "go", "bay": "C2", "reason": "low_battery"}
+
+
 def _world_261026_charge_graph():
     from fleet.routing.graph import build_graph
     from fleet.site_map import SiteMap

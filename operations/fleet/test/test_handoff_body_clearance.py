@@ -57,3 +57,29 @@ def test_peer_parked_two_bays_away_does_not_block():
 def test_peer_too_close_or_of_unknown_geometry_blocks(peer_xy, caps):
     with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
         _run(peer_xy, peer_caps=caps)
+
+
+def test_stopped_deadband_and_offline_absent_peer_do_not_block():
+    from fleet.server.handoff_traffic import _fresh_stopped, read_peers
+    jitter = _state(-.42 + .226, .47) | {"velocity": {"linear": 0.005, "angular": -0.015}}
+    assert _fresh_stopped(jitter) is True
+    # Offline peer cleared by OfflineMarkerClearance does not block bay handoff.
+    fit = Fit(0., 0., 0., (.037,))
+    clients = {"mover": NS(state=lambda: asyncio.sleep(0, _state(-.42, .04)))}
+    async def dead():
+        raise OSError("offline")
+    all_clients = {**clients, "peer": NS(state=dead)}
+    clearance = NS(clear=lambda *_a: True, evidence=lambda *_a: {"reason": "peer_absent_from_track"})
+    console = NS(clients=lambda: all_clients, robot_ids=("mover", "peer"), _clearance_m=.7,
+                 goal_leases=NS(pending={}), _goal_busy=set(), _site_marker_clearance=clearance,
+                 _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda *_a: (fit, None))),
+                 _capability_display=NS(_kept=lambda *_a: PINKY_CAPS))
+    import asyncio
+    peers = asyncio.run(read_peers(console, "mover"))
+    site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1},
+                  None, (-.42, .47), peers, route=[(-.42, .15)])
+    clearance.clear = lambda *_a: False
+    clearance.evidence = lambda *_a: {"reason": "keep_out_intersection"}
+    with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
+        site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1},
+                      None, (-.42, .47), peers, route=[(-.42, .15)])

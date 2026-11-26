@@ -128,8 +128,17 @@ class ChargeBays:
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
         go_percent, leave_percent = self.thresholds()
         held = {v.bay: rid for rid, v in self._visits.items()}
-        # a robot with no visit that is offline or unlocated may be sitting in any bay (e.g. after a restart)
-        blind = any(not r.online or r.pose is None for r in robots if r.robot_id not in self._visits)
+        # Only an unlocated robot without a visit makes free bays unknown; a located offline robot marks its own bay.
+        blind = False
+        for r in robots:
+            if r.robot_id in self._visits or (r.online and r.pose is not None):
+                continue
+            bay_hit = (next((b.id for b in bays if math.dist(r.pose, (b.x, b.y)) <= AT_BAY_M), None)
+                       if r.pose is not None else None)
+            if bay_hit is not None and bay_hit not in held:
+                held[bay_hit] = r.robot_id
+            elif bay_hit is None:
+                blind = True
         dock_evals: dict[str, dict] = {}
         if graph is not None:
             for r in robots:

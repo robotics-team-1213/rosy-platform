@@ -56,11 +56,13 @@ def _traffic_end_index(runner, live: LiveTrip, index: int) -> int | None:
 async def _cancel_active_route(runner, live: LiveTrip, robot_id: str, nav: str | None) -> None:
     if live.active_route is None:
         return
-    live.view["detail"].pop("named_stop_operation", None)
     if nav not in ("ARRIVED", "IDLE") and runner._cancel_goal is not None:
-        await runner._call(runner._cancel_goal(robot_id))
+        receipt = await runner._call(runner._cancel_goal(robot_id))
+        if not _cancel_ack(receipt):
+            return
     if not live.open:
         return
+    live.view["detail"].pop("named_stop_operation", None)
     live.active_route = None
     runner._fence(robot_id)
 

@@ -545,3 +545,16 @@ def test_nav2_margin_respects_nearest_lane_closures_direction_and_mode():
     ]:
         with pytest.raises(PlanError):
             _plan(site, start, goal, **{**options, **changes})
+
+
+def test_nav2_ignore_arrive_heading_and_junction_off_lane_snap():
+    site = _map({"A": (0.0, 0.0), "B": (1.0, 0.0), "C": (1.0, 1.0)},
+                [("ab", "A", "B", False), ("bc", "B", "C", False)])
+    with pytest.raises(PlanError) as err:
+        _plan(site, (0.2, 0.0, 0.0), "B", arrive_yaw=math.pi, ignore_arrive_heading=False)
+    assert err.value.code == "TRIP_ARRIVE_YAW_UNREACHABLE"
+    plan = _plan(site, (0.2, 0.0, 0.0), "B", arrive_yaw=math.pi, ignore_arrive_heading=True)
+    assert _edges(plan) == ["ab"]
+    # 1 cm outside a shared junction vertex still snaps when ignore_start_heading=True
+    corner = _plan(site, (1.0, -0.11, math.pi / 2), "C", ignore_start_heading=True, nav2_off_lane_margin_m=0.06)
+    assert _edges(corner) == ["bc"]

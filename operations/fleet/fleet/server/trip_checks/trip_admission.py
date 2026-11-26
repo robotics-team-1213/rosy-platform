@@ -19,6 +19,8 @@ from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN, TRA
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
+from fleet.server.trip_runner_helpers import _ROBOT_ERRORS
+from fleet.swarm.transport import RobotApiError
 from fleet.server.trip_start_checks import (
     BATTERY_START_LEVELS,
     BATTERY_TRANSIENT,
@@ -465,7 +467,24 @@ class TripAdmission:
                     "stale": status.get("source") not in (None, "NONE"), "age_ms": status.get("age_ms"),
                     "source": status.get("source")})
             return
-        status = await self._call(self._junction.front_camera(robot_id), "TRIP_LANE_CAMERA_UNAVAILABLE") or {}
+        try:
+            status = await self._call(self._junction.front_camera(robot_id)) or {}
+        except _ROBOT_ERRORS as exc:
+            if isinstance(exc, RobotApiError) and exc.status == 429:
+                wait_s = float((exc.detail or {}).get("retry_after_s") or 1.0)
+                if 0.0 < wait_s <= 2.0:
+                    await asyncio.sleep(wait_s)
+                    try:
+                        status = await self._call(self._junction.front_camera(robot_id)) or {}
+                    except _ROBOT_ERRORS as retry_exc:
+                        if isinstance(retry_exc, RobotApiError) and retry_exc.status == 429:
+                            retry_wait = float((retry_exc.detail or {}).get("retry_after_s") or wait_s)
+                            raise TripError(429, "RATE_LIMITED", {"retry_after_s": retry_wait, "camera": True}) from retry_exc
+                        raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {"error": getattr(retry_exc, "code", None) or type(retry_exc).__name__}) from retry_exc
+                else:
+                    raise TripError(429, "RATE_LIMITED", {"retry_after_s": wait_s, "camera": True}) from exc
+            else:
+                raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {"error": getattr(exc, "code", None) or type(exc).__name__}) from exc
         if status.get("available") is not True:
             raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {"stale": status.get("stale"),
                                                                     "age_ms": status.get("age_ms")})
