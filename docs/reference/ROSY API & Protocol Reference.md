@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.476
+**Version:** v1.477
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.477 Correlated native docking cancellation (CORE)
+
+The docking status advertises `operation_cancel_supported`. Operators can cancel the current dock or undock with `POST /api/v1/docking/cancel-operation` using `run_id`, `expected_boot_id` and `expected_owner_generation`. The native owner compares all three before stopping and returns its readback. Fleet named charging-bay trips keep the requested dock and expose the staging place and operation phase in `parking_handoff`.
 
 ### v1.476 Leased speed ceilings for Nav2 road routes (CORE)
 
@@ -5124,6 +5128,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.477 | 2026-11-26 | [CORE] Correlated native docking cancellation |
 | v1.476 | 2026-11-26 | [CORE] Leased speed ceilings for Nav2 road routes |
 | v1.475 | 2026-11-26 | [CORE] Stationary rear dock registration |
 | v1.474 | 2026-11-26 | [Fleet] RFID intake receipt and observed inbound placement |
