@@ -7,6 +7,7 @@ import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } f
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
+  const matrixBtns = [];
   const frames = () => ctx.cellFrames;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
   const selectInspectorTarget = (...args) => ctx.selectInspectorTarget(...args);
@@ -220,7 +221,12 @@ export function createCellViews(ctx) {
 
   function renderCameraMatrix() {
     const wall = $('cell-camera-matrix');
-    if (!wall || wall.childElementCount) return;
+    if (!wall) return;
+    const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
+    if (wall.childElementCount) {
+      for (const btn of matrixBtns) setOffBy(btn, reason);
+      return;
+    }
     const pendingBinds = [];
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
@@ -257,7 +263,8 @@ export function createCellViews(ctx) {
         actBtn.setAttribute('kind', 'quiet');
         actBtn.setAttribute('type', 'button');
         actBtn.textContent = qAct.label;
-        if (typeof ctx.namedReason === 'function' && ctx.namedReason()) setOffBy(actBtn, ctx.namedReason());
+        setOffBy(actBtn, reason);
+        matrixBtns.push(actBtn);
         actBtn.addEventListener('click', ev => {
           ev.stopPropagation();
           if (qAct.preset) void runQuickPreset(qAct.preset, null, ev.currentTarget);
