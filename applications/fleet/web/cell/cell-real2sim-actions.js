@@ -1,5 +1,8 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
+import {confirmIrreversible} from '/common/ui.js';
+import {OBS_BASE, normalizeWorkcellObservations} from '/console/assets/cell-obs-model.js';
+import {armIncidentClearPlan, armIncidentRowFor, cellArms, clearPipelineArmHold} from './arm-incident-clear.js';
 import {
   pinkyCancelPath,
   reparkClosePath,
@@ -17,7 +20,6 @@ import {
   STATION_ZONES_DISPATCH_PATH,
   CABLE_GUARD_PATH,
   VISION_CHECK_PATH,
-  ARM_HOLDS_CLEAR_PATH,
   BED_CONFIRM_TTL_S,
   bedConfirmPath,
   presenceConfirmPath,
@@ -53,7 +55,7 @@ export function createCellActions(ctx) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void toggleCableGuard(); });
     } else if (b.clearArmHold) {
       btn.dataset.clearArmHold = b.clearArmHold;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runClearArmHold(b.clearArmHold); });
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runClearArmHold(b.clearArmHold, btn); });
     } else if (b.humanSafetyCell) {
       btn.dataset.humanSafetyCell = b.humanSafetyCell;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, targetRobotId); });
@@ -193,26 +195,30 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runClearArmHold(cellOrArmId) {
+  // Clearing lives in arm-incident-clear.js: an open incident opens its alert-drawer row (one check, one confirm,
+  // which also clears the Fleet hold); a hold with no open incident is cleared by the same shared step after a confirm.
+  async function runClearArmHold(cellOrArmId, opener = null) {
     const current = ctx.bump();
-    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `팔 홀드(${cellOrArmId}) 점검 및 해제를 요청하는 중입니다.`;
+    const status = text => { if ($('cell-tasks-status')) $('cell-tasks-status').textContent = text; };
     try {
-      const res = await request(ARM_HOLDS_CLEAR_PATH, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          arm_id: cellOrArmId,
-          note: 'Fleet 콘솔 카메라로 홈 복귀(folded: true) 및 간섭 없음 확인 후 홀드 해제',
-        }),
-      });
+      const row = armIncidentRowFor(cellOrArmId, normalizeWorkcellObservations(await request(OBS_BASE)));
+      if (row) {
+        location.assign(`/console?arm=${encodeURIComponent(row.arm.sourceId)}&arm_incident=${encodeURIComponent(row.incident.incident_id)}`);
+        return;
+      }
+      const {checks, note} = armIncidentClearPlan(null);
+      if (!await confirmIrreversible({message: `열린 팔 사건 없이 팔 보류만 남았습니다(${cellOrArmId}). 현장에서 ${checks.join(', ')}을 확인했나요?`,
+        action: '확인했습니다 · 해제', opener})) return;
+      const results = [];
+      for (const arm of cellArms(cellOrArmId)) results.push([arm, await clearPipelineArmHold(request, arm, {note})]);
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
-      if ($('cell-tasks-status')) {
-        $('cell-tasks-status').textContent = `팔 홀드 해제 완료: ${(res.cleared_arms || []).join(', ')}`;
-      }
+      const step = results.find(([, r]) => r.nextStep);
+      const cleared = results.filter(([, r]) => r.holdCleared).map(([a]) => a);
+      status(step ? `다음 단계 · ${step[1].nextStep}` : cleared.length ? `팔 보류 해제 완료: ${cleared.join(', ')}` : '풀 팔 보류가 없습니다.');
     } catch (error) {
       if (current !== ctx.gen()) return;
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `팔 홀드 해제 실패: ${error.message}`;
+      status(`팔 보류 확인 실패: ${error.message}`);
     }
   }
 

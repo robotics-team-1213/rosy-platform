@@ -16,7 +16,6 @@ export const STATION_ZONES_PATH = '/api/fleet/pipeline/station-zones';
 export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/dispatch';
 export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
-export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 export const bedConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/bed-confirm`;
 // D-1057 commissioning presence: a named operator is at the power switch; the next claim uses it up (T18).
 export const presenceConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/presence-confirm`;
