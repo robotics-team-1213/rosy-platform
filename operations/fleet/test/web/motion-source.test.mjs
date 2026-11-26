@@ -89,6 +89,9 @@ test("rotation counts as movement; incomplete, expired and disconnected readings
   assert.equal(measuredMotion(r, view(), T0), true);
   assert.equal(measuredMotion(r, view(), T0 + 150), null);
   assert.equal(measuredMotion(r, view({ stateUnavailable: true }), T0), null);
+  r.state.timestamp = new Date(21000).toISOString();
+  r.state.evidence.velocity.sampled_at = new Date(19900).toISOString();
+  assert.equal(measuredMotion(r, view(), T0), null);
   r.state.evidence.velocity.sampled_at = null;
   assert.equal(measuredMotion(r, view(), T0), null);
   assert.equal(measuredMotion(robot({ velocity: { linear: null, angular: 0 } }), view(), T0), null);

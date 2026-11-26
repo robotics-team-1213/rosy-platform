@@ -18,7 +18,9 @@ export function measuredMotion(robot, view, nowMs = Date.now()) {
   const sourceStamped = velocity && Object.hasOwn(velocity, "sampled_at");
   const sampled = Date.parse(sourceStamped ? velocity.sampled_at : velocity?.received_at) / 1000;
   if (sourceStamped && !Number.isFinite(sampled)) return null;
-  const sampleAge = Number.isFinite(sampled) && Number.isFinite(state?.ts) ? Math.max(0, state.ts - sampled) : 0;
+  const snapshot = state?.timestamp ? Date.parse(state.timestamp) / 1000 : state?.ts;
+  if (sourceStamped && (!Number.isFinite(snapshot) || sampled > snapshot)) return null;
+  const sampleAge = Number.isFinite(sampled) && Number.isFinite(snapshot) ? Math.max(0, snapshot - sampled) : 0;
   if (Number.isFinite(velocity?.stale_after_s)
       && sampleAge + (robot.state_age_s ?? 0) + elapsed > velocity.stale_after_s) return null;
   return movingNow(state, staleAgeS(robot, view.receivedAtMs, nowMs));
