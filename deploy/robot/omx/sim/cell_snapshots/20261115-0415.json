@@ -157,10 +157,10 @@
    }
   },
   "ship": {
-   "stern_x_m": 0.1505,
-   "centre_y_m": 0.02,
-   "yaw_deg": -0.11,
-   "iou": 0.807,
+   "stern_x_m": 0.149,
+   "centre_y_m": 0.042,
+   "yaw_deg": 0.46,
+   "iou": 0.799,
    "model": "r08"
   },
   "belt": {
@@ -208,22 +208,22 @@
    "spacer_dy_nominal_mm": 32.0,
    "spacer_dx_mm": 0.0,
    "stern_hook_mm": 0.0,
-   "arm_a_gap_dy_mm": 52.0,
-   "arm_b_gap_dy_mm": 12.0,
+   "arm_a_gap_dy_mm": 74.0,
+   "arm_b_gap_dy_mm": -10.0,
    "nearest_spacer_step_mm": {
     "arm_a": 32.0,
     "arm_b": 32.0
    },
-   "hull_yaw_deg": -0.11,
+   "hull_yaw_deg": 0.46,
    "within_v16_yaw_budget": true,
-   "stopper_flat_x_m": 0.158,
-   "stopper_tip_x_m": 0.167,
-   "belt_to_stopper_flat_mm": 26.1,
+   "stopper_flat_x_m": 0.1565,
+   "stopper_tip_x_m": 0.1655,
+   "belt_to_stopper_flat_mm": 27.6,
    "repeatability_rss_mm": 0.22,
    "nominal_spacer_dy_mm": 32.0,
    "stopper_drop_mm": 20.0,
-   "measured_stern_x_m": 0.1505,
-   "measured_centre_y_m": 0.02
+   "measured_stern_x_m": 0.149,
+   "measured_centre_y_m": 0.042
   }
  }
 }
