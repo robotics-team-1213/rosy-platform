@@ -73,8 +73,8 @@ def test_exact_frame_gate_follows_the_image_and_generation(open_screen):  # noqa
             expect(page.locator('#biasTableWrap td[data-evidence="delayed"]')).to_have_count(1)
             expect(page.locator('#biasTableWrap td[data-level="warn"]')).to_have_count(0)
             evidence = page.locator("#topEvidence")
-            expect(evidence).to_have_text("지도 없음 · 관측 09:05:03 · 실시간 카메라")
-            expect(evidence).to_have_attribute("title", "관측 UTC 2026-11-26T00:05:03.200Z")
+            expect(evidence).to_have_text("지도 v? · 관측 09:05:03 · 실시간 카메라")  # shared /common/map-rules.js line
+            expect(evidence).to_have_attribute("title", "관측 2026-11-26T00:05:03.200Z (UTC)")
             expect(page.locator("#fixtureDetails")).to_be_visible()
             assert page.evaluate("window.topLabels.includes('선박 외곽')")
             assert page.evaluate("window.topLabels.includes('R2 후보')")

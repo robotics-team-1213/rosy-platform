@@ -131,12 +131,13 @@ export function kstStamp(value) {
   return Number.isNaN(date.getTime()) ? null : { text: KST.format(date), title: `UTC ${date.toISOString()}` };
 }
 
-/** Evidence line under the camera map (element props): map SHA head · when the frame was seen (KST) · where it came from. */
-export function mapEvidence(digest, observedMs, source) {
-  const seen = kstStamp(observedMs);
-  const from = source === "reference" ? "기준 영상" : "실시간 카메라";
+/** Arguments for the shared evidence line (/common/map-rules.js mapEvidence): the cell map has no
+ * version, so its SHA head stands in; the camera frame time is milliseconds, the shared rule reads seconds. */
+export function mapEvidenceInput(digest, observedMs, source) {
   return {
-    textContent: `지도 ${digest ? String(digest).slice(0, 8) : "없음"} · 관측 ${seen ? seen.text : "—"} · ${from}`,
-    title: seen ? `관측 ${seen.title}` : "",
+    version: digest ? String(digest).slice(0, 8) : undefined,
+    timeLabel: "관측",
+    time: Number.isFinite(observedMs) ? observedMs / 1000 : null,
+    source: source === "reference" ? "기준 영상" : "실시간 카메라",
   };
 }
