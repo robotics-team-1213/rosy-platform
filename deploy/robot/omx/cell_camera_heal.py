@@ -27,6 +27,8 @@ def with_camera_heal(argv: list[str], job: dict, params: dict) -> list[str]:
 
     if not job.get("camera"):
         return argv
+    if job.get("attach_live_hold") or job.get("recovery_home"):  # folding a held arm / incident home must not wait on a camera
+        return argv
     arms = job_arms(job, params)
     keyed = (("config", arms[0] if len(arms) == 1 else None), ("config_a", "arm_a"), ("config_b", "arm_b"))
     targets = [f"{arm or '-'}={params[key]}" for key, arm in keyed if params.get(key)]

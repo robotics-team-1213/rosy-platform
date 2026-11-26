@@ -49,6 +49,17 @@ def test_with_camera_heal_wraps_only_camera_jobs():
     assert heal.with_camera_heal(argv, spec.JOBS["calibrate_check"], {"config": "c.json"})[4:6] == ["--target", "-=c.json"]
 
 
+def test_recovery_jobs_are_never_held_back_by_the_camera_preflight():
+    """recover_hold folds an arm still holding under torque and safe_home brings an incident arm home: a dead
+    camera (or a hub cycle the live session would skip) must not refuse them; the job itself decides, as before."""
+    argv = ["bash", "-c", "x", "cell_auto_fold.py"]
+    params = {"arm": "arm_b", "config": "cell-arm-b.json"}
+    recovery = [name for name, job in spec.JOBS.items() if job.get("camera") and (job.get("attach_live_hold") or job.get("recovery_home"))]
+    assert {"recover_hold", "safe_home"} <= set(recovery)
+    for name in recovery:
+        assert heal.with_camera_heal(argv, spec.JOBS[name], params) is argv, name
+
+
 def test_seeded_dry_run_is_not_aged_by_an_idle_encoder_sample():
     import time
 
