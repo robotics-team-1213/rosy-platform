@@ -176,3 +176,32 @@ def test_job_is_not_moving_and_needs_no_person(tmp_path):
     params = {"arm": "arm_s", "config": "rc.json"}
     argv = cell_job_spec.build_argv(spec, params, tmp_path)
     assert argv[-4:] == ["--arm", "arm_s", "--config", "rc.json"] and not cell_job_spec.moves_arm(spec, params)
+
+
+def test_main_releases_the_incident_hold_only_after_torque_off_succeeded(tmp_path, capsys):
+    cfg = tmp_path / "rc.json"
+    cfg.write_text(json.dumps({"robot": {"port": "/dev/serial/by-id/x", "id": "arm_s_follower"}}))
+    released = []
+    for positions, code in ((EXTENDED, 2), (FOLDED, 0)):
+        bus = Bus(motors(positions))
+        session = record_session.Session(open_bus=lambda w, b=bus: b, systemctl=lambda *a: "", run=None, log=lambda **k: None)
+        rc = job.main(["--arm", "arm_s", "--config", str(cfg)], open_bus=lambda b=bus: b, session=session,
+                      lock=lambda arm: Guard(), calibration=CAL, release=lambda arm: released.append(arm) or {"cleared": True})
+        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert (rc, "incident_release" in out) == (code, code == 0)
+    assert released == ["arm_s"]
+
+
+def test_main_keeps_the_torque_off_result_when_the_release_raises(tmp_path, capsys):
+    cfg = tmp_path / "rc.json"
+    cfg.write_text(json.dumps({"robot": {"port": "/dev/serial/by-id/x", "id": "arm_s_follower"}}))
+    bus = Bus(motors(FOLDED))
+    session = record_session.Session(open_bus=lambda w, b=bus: b, systemctl=lambda *a: "", run=None, log=lambda **k: None)
+
+    def boom(arm):
+        raise OSError("fleet down")
+
+    rc = job.main(["--arm", "arm_s", "--config", str(cfg)], open_bus=lambda: bus, session=session, lock=lambda arm: Guard(),
+                  calibration=CAL, release=boom)
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == 0 and out["ok"] is True and out["incident_release"]["cleared"] is False and "fleet down" in out["incident_release"]["why"]

@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · lesson: the active site map is the only owner of place coordinates
 - 2026-11-23 · uncommitted · D-1076 Proposed: 셀 자리 이름 고정과 Rosy 인식의 Harbor 제공
 - 2026-11-21 · uncommitted · step-back size limits block unless Size-Exception
 - 2026-11-21 · uncommitted · pixel-measuring browser files run as lab evidence
 - 2026-11-21 · uncommitted · fix action pin comment added by #333
-- 2026-11-21 · uncommitted · D-1067 step-back check: a PR that drops other PRs' recent lines names them

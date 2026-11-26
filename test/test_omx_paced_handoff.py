@@ -126,6 +126,16 @@ def test_no_hold_keeps_parking(tmp_path, monkeypatch):
     assert cell.calls[-1] == "park" and "human-hold" not in cell.calls
 
 
+def test_paced_run_row_carries_per_chunk_phase_stamps(tmp_path, monkeypatch):
+    handoff, _ = _handoff(tmp_path, monkeypatch, GOOD)
+    rows = []
+    _run(HoldCell(holding=False), handoff, tmp_path, rows)
+    phases = next(r for r in rows if r.get("command") == "run policy")["phase_t"]
+    assert list(phases) == ["obs", "infer", "auth", "load", "run", "snapshot"]
+    stamps = list(phases.values())
+    assert all(a <= b for a, b in zip(stamps, stamps[1:]))
+
+
 def test_carry_failure_ends_in_hold_not_park(tmp_path, monkeypatch):
     handoff, _ = _handoff(tmp_path, monkeypatch, GOOD)
     cell = HoldCell(lift_holds=False)

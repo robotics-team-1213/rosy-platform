@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · 193197c657 · zone blueprint 3D labels under the canvas palette contract
 - 2026-11-26 · uncommitted · World·Fleet 2D 지도 규칙 사본을 /common/map-rules.js 하나로
 - 2026-11-26 · uncommitted · 지도·용어 일관성(UI 패널 2라운드 합의 항목)
 - 2026-11-26 · uncommitted · 3×3 평면 투영 사본 4벌을 plane-math.js 하나로
 - 2026-11-26 · uncommitted · World 2D 지도가 Fleet 지도 규칙을 따름
-- 2026-11-21 · uncommitted · Robot 3D assets: vendored three.js, OMX and Pinky meshes, asset boundary (slice S3 of #378)

@@ -5425,6 +5425,14 @@
           "request_ids": [
             "GET:/api/fleet/site-points"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/site-map/active",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/active"
+          ]
         }
       ],
       "requests": [

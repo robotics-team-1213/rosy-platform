@@ -141,13 +141,18 @@ class World:
             world.add_geom(name=f"{PREFIX[arm]}plate", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=bp_mesh,
                            pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["base"])
             clamp_dy = .01125 if tag == "a" else -.01125
+            world.add_geom(name=f"{PREFIX[arm]}plate_col", type=box, size=[.075, .060, .0065],
+                           pos=[a.base[0], a.base[1] + clamp_dy, L.table_z + .0065], rgba=[0, 0, 0, 0])
             world.add_geom(name=f"{PREFIX[arm]}clamp", type=box, size=[.015, .0275, .0012],
-                           pos=[a.base[0] - .060, a.base[1] + clamp_dy, L.table_z + .0142], contype=0, conaffinity=0, rgba=[.78, .81, .84, 1])
+                           pos=[a.base[0] - .060, a.base[1] + clamp_dy, L.table_z + .0142], rgba=[.78, .81, .84, 1])
             if c.get("temp_bridge", "v7") == "v7":
                 br_mesh = f"temp_slot_bridge_{tag}"
                 spec.add_mesh(name=br_mesh, file=self._asset(br_mesh), scale=[.001] * 3)
                 world.add_geom(name=f"{PREFIX[arm]}bridge", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=br_mesh,
                                pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
+                bridge_dy = .009625 if tag == "a" else -.009625
+                world.add_geom(name=f"{PREFIX[arm]}bridge_col", type=box, size=[.036615, .059625, .004995],
+                               pos=[a.base[0] - .091115, a.base[1] + bridge_dy, L.table_z + .011805], rgba=[0, 0, 0, 0])
         self._ship(spec)
         self._temp(spec)
         self._stand(spec)
@@ -297,6 +302,12 @@ class World:
         spec.add_mesh(name="pocket_side", uservert=wall(section(H["hw"]), 2 * (H["hl"] + reach) * mm, True))
         spec.add_mesh(name="pocket_end", uservert=wall(section(H["hl"]), 2 * (H["hw"] + reach) * mm, False))
         box = mujoco.mjtGeom.mjGEOM_BOX
+        if kit == "v24-docks":  # convex boxes outside hull & belt cutout; concave berth STLs stay visual-only
+            for nm, cx, cy, cz, hx, hy, hz in (("dock", 60., 92.075, 8.5, 71., 23.775, 8.5), ("cradle", 105.5, 74.31, 7., 97.5, 9.19, 7.), ("stopper", -10.25, 36.25, 6., 6.25, 5.25, 6.)):
+                for side in (-1, 1):
+                    world.add_geom(name=f"berth_v24_{nm}_{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, cx, side * cy, cz),
+                                   size=[hx * mm, hy * mm, hz * mm], rgba=[0, 0, 0, 0])
+            world.add_geom(name="berth_v24_stopper_col", type=box, pos=sites.ship_cell(L, -4.525, 0., 6.), size=[2.975 * mm, 31. * mm, 6. * mm], rgba=[0, 0, 0, 0])
         for k, (x0_, x1_, y0_, y1_, z1_) in enumerate(sites.STERN["boxes"]):  # stern floor, aft and fore deck, side decks, rails (ship mm, z from table)
             for side in ((1,) if y0_ == -y1_ else (-1, 1)):
                 world.add_geom(name=f"stern{k}{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, (x0_ + x1_) / 2, side * (y0_ + y1_) / 2, (3 + z1_) / 2),

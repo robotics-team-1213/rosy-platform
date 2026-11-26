@@ -1,0 +1,14 @@
+[Unit]
+Description=ROSY cell-a automatic update from signed site candidates
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# D-805 site-wide freeze gate; a missing gate skips the run (fail closed).
+ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
+ExecStart=/usr/bin/python3 -I /usr/local/lib/rosy-cell/cell_a_autoupdate.py
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=idle
