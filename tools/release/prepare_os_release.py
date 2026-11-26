@@ -27,7 +27,7 @@ from os_update_rollout import _shape as validate_rollout, verify as verify_rollo
 from os_state_layout import _pairs
 from tools.release.deployment_targets import require_image_backend
 from tools.release.prepare_os_tools import prepare as prepare_tools, _ensure_directory as ensure_private_directory
-from tools.release.os_tools_vm import WindowsGuest
+from tools.release.os_tools_vm import WindowsGuest, default_cache
 from tools.release.external_os_signing import _local_private_key, _openssl_run, _public_certificate, sign_inline_cms
 
 
@@ -209,6 +209,16 @@ def _remove_owned(path, parent):
         shutil.rmtree(path)
 
 
+def require_free_space(*paths):
+    """Refuse before an attempt: a failed run keeps its ~35 GB workspace and CD retries filled C: (2026-11-27)."""
+    for path in map(Path, paths):
+        while not path.exists():
+            path = path.parent
+        if shutil.disk_usage(path).free < MIN_FREE_BYTES:
+            raise OSError(f'OS preparation needs {MIN_FREE_BYTES // 1024**3} GiB free in {path}; '
+                          'inspect and remove old release-prep-* workspaces and os-* attempts')
+
+
 def prepare_release(target, dist, output, private_key, public_key, cms_private_key, *,
                     release_id, source_revision, canary, guest_factory=None, tools_source=None,
                     stage_timeout=8 * 3600):
@@ -234,10 +244,7 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
     cache = prepare_tools()
     if any(key.is_relative_to(parent) for key in (private_key, cms_private_key) for parent in (dist, output, cache)):
         raise ValueError('product private keys must remain outside image and tools workspaces')
-    if shutil.disk_usage(cache).free < MIN_FREE_BYTES:
-        # A failed run keeps its ~35 GB workspace; repeated CD retries filled the laptop's C: (2026-11-27).
-        raise OSError(f'OS preparation needs {MIN_FREE_BYTES // 1024**3} GiB free in {cache}; '
-                      'inspect and remove old release-prep-* workspaces')
+    require_free_space(cache)
     work = cache / ('release-prep-' + uuid.uuid4().hex)
     staged = output.with_name('.' + output.name + '-' + uuid.uuid4().hex + '.staging')
     complete = False
