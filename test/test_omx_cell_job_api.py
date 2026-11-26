@@ -36,7 +36,8 @@ def test_baseline_recovery_is_bound_to_supervised_ab_remap(tmp_path, monkeypatch
     assert runner.start(job, params)["code"] == 202
     assert popen.call_args.kwargs["env"].get("ROSY_BASELINE_RECOVERY_ARM") == expected
     if expected:
-        wrapper = Path(popen.call_args.args[0][0])
+        launched = popen.call_args.args[0]
+        wrapper = Path(launched[launched.index("--") + 1])  # remap is a camera job: cell_camera_heal runs first
         assert wrapper == Path(api.__file__).parent / "session-wrappers" / Path(api.SESSION[arm]).name
         assert wrapper.is_file()
         assert popen.call_args.kwargs["env"]["TOOLS_ROOT"] == str(wrapper.parents[4])

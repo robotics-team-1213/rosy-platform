@@ -149,6 +149,20 @@ class CellJobClient:
             time.sleep(poll_s)
 
 
+def start_when_lock_free(client, job: str, params: dict, *, idempotency_key=None, wait_s: float = 0.0,
+                         poll_s: float = 5.0, clock=time.monotonic, sleep=time.sleep) -> dict:
+    """A refused or ended job's session wrapper keeps the arm lock ~100 s after the API reports the job done
+    (2026-11-26); with wait_s > 0 retry only that 409, never another refusal. Opt-in: a held lock may be a live job."""
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return client.start(job, params, idempotency_key=idempotency_key)
+        except CellJobError as exc:
+            if exc.status_code != 409 or "session lock for" not in exc.detail or clock() >= deadline:
+                raise
+            sleep(poll_s)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--url", help="cell-job-api base URL (default: ROSY_CELL_JOB_URL or http://127.0.0.1:8781)")
@@ -178,6 +192,9 @@ def main(argv=None) -> int:
     p_run.add_argument("--timeout", type=float, default=600.0)
     p_run.add_argument("--idempotency-key")
     p_run.add_argument("--wait", action="store_true")
+    p_run.add_argument("--lock-wait", type=float, default=0.0,
+                       help="opt-in: seconds to retry a 409 while a finished job's arm session still releases its lock "
+                            "(default 0: a held lock may be a live job)")
     args = ap.parse_args(argv)
 
     client = CellJobClient(args.url, token_file=args.token_file)
@@ -208,7 +225,7 @@ def main(argv=None) -> int:
         print(json.dumps({"view": args.view, "out": str(args.out)}))
         return 0
     params = json.loads(args.params_json)
-    started = client.start(args.job, params, idempotency_key=args.idempotency_key)
+    started = start_when_lock_free(client, args.job, params, idempotency_key=args.idempotency_key, wait_s=args.lock_wait)
     if not args.wait:
         print(json.dumps(started))
         return 0

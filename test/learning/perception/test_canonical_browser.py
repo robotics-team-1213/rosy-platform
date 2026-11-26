@@ -182,7 +182,7 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                 expect(page.locator("#canon-hosts")).to_be_visible()
                 expect(page.locator("#canon-evidence-badge")).to_contain_text("실물 제어 아님")
                 expect(page.locator("#canonical-main")).to_contain_text("실물 로봇 제어·적용 권한이 없습니다")
-                expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
+                expect(page.locator("#canon-kpis")).to_contain_text("0.261 < 0.35 rad")
                 for theme in ("light", "dark"):
                     page.evaluate("t => document.documentElement.dataset.theme = t", theme)
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -250,7 +250,7 @@ def test_unconfigured_canonical_page_shows_builtin_spec_and_blocks_start(tmp_pat
             browser.contexts[0].add_cookies([{"name": "rosy_learning_session", "value": "reviewer", "url": base}])
             try:
                 page.goto(base + "/learning/canonical", wait_until="domcontentloaded")
-                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
+                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.261 < 0.35 rad")
                 playwright.expect(page.locator("#canon-hosts-empty")).to_be_visible()
                 playwright.expect(page.locator("#canon-todo-empty")).to_be_visible()
                 playwright.expect(page.locator("#canon-job-submit")).to_be_disabled()
@@ -258,7 +258,7 @@ def test_unconfigured_canonical_page_shows_builtin_spec_and_blocks_start(tmp_pat
                 page.route("**/api/learning/canonical/recording-todo", lambda route: route.fulfill(status=503))
                 page.reload(wait_until="domcontentloaded")
                 playwright.expect(page.locator("#canon-todo-meta")).to_contain_text("unavailable")
-                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
+                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.261 < 0.35 rad")
                 assert errors == []
             finally:
                 browser.close()

@@ -143,6 +143,7 @@ SCOPE: dict[str, list[str]] = {
     "applications/fleet/web/": FLEET,
     # Verified /console/cell and cell-*.js consumers (grep of web + *_browser.py).
     "applications/fleet/web/cell/": FLEET_SAMPLE + [
+        "operations/fleet/test/test_arm_incident_alert_browser.py",
         "operations/fleet/test/test_cell_app_browser.py",
         "operations/fleet/test/test_console_card_trips_browser.py",
         "operations/fleet/test/test_development_console_browser.py",

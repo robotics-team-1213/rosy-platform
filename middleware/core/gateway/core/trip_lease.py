@@ -88,6 +88,7 @@ class TripLeaseManager:
         # whose listener calls end() back in here.
         self._lock = threading.Lock()
         self._lease: Optional[_Lease] = None
+        self._open_generation = 0
         self._ended: Optional[tuple[float, dict]] = None
         self._ended_ids: OrderedDict[str, dict] = OrderedDict()
         #: ``halt(reason)``: stop line-follow / navigation and go IDLE. Wired by CORE.
@@ -164,6 +165,7 @@ class TripLeaseManager:
                     origin=origin, since=_iso(self._clock()), renewed_mono=now, event_mono=now,
                     job_id=None if job_id is None else str(job_id).strip(), purpose=purpose)
                 self._ended = None
+                self._open_generation += 1
                 public = self._public(current, now)
                 renewed = False
         p = public
@@ -258,6 +260,24 @@ class TripLeaseManager:
     def current(self) -> Optional[dict]:
         with self._lock:
             return self._public(self._lease, self._monotonic()) if self._lease is not None else None
+
+    def repark_authority(self, owner_id: str, operator_name: str) -> Callable[[], bool]:
+        """Keep the original trip (renewals allowed) or the named operator's unleased window."""
+        named = bool(operator_name.strip())
+        with self._lock:
+            original = self._lease
+            generation = self._open_generation
+
+        def still_allowed() -> bool:
+            with self._lock:
+                if self._lease is not original:
+                    return False
+                if original is None:
+                    return named and self._open_generation == generation
+                elapsed = self._monotonic() - original.renewed_mono
+                return original.owner_id == owner_id and 0 <= elapsed < original.ttl_s
+
+        return still_allowed
 
     def charge_return_active(self) -> bool:
         """D-1029: a live (not lapsed) lease opened for a charge return."""

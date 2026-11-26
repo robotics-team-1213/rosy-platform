@@ -6,6 +6,6 @@ export TOOLS_ROOT
 export OMX=$TOOLS_ROOT/deploy/robot/omx
 # shortcut: the extra site-packages is the cell's hand-made venv that tools-env-current.sh carried; drop it once ~/rosy-omx/current-env has those packages
 ROSY_OMX_EXTRA_SITE=${ROSY_OMX_EXTRA_SITE-$HOME/rosy-test/venvs/9a8fedb7a16a451a/lib/python3.12/site-packages}
-export PYTHONPATH=$TOOLS_ROOT/contracts/foundation:$TOOLS_ROOT/operations/overhead:$TOOLS_ROOT/middleware/devices/omx/adapter:$OMX${ROSY_OMX_EXTRA_SITE:+:$ROSY_OMX_EXTRA_SITE}${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$TOOLS_ROOT/contracts/foundation:$TOOLS_ROOT/contracts/learning/src:$TOOLS_ROOT/operations/overhead:$TOOLS_ROOT/middleware/devices/omx/adapter:$OMX${ROSY_OMX_EXTRA_SITE:+:$ROSY_OMX_EXTRA_SITE}${PYTHONPATH:+:$PYTHONPATH}
 export ROSY_OMX_TCP_X_M=0.0740  # v2.1 jaws on arm_a, arm_b, arm_s (arm_s confirmed by wrist photo 2026-11-15)
 export ROSY_LOAD_MODEL=$HOME/rosy-test/omx-record-prep-20261019/load-model-20261116.json

@@ -9,6 +9,8 @@ const {
   linkedArm,
   profileForArm,
   postEvalRequest,
+  postEvalFollowUp,
+  checkFollowUp,
   freshLiveTcp,
   kstStamp,
   mapEvidenceInput,
@@ -149,4 +151,22 @@ test("the map evidence line uses the shared rule with map SHA, observation time 
   // Missing parts are said, never invented.
   assert.deepEqual(mapEvidence(mapEvidenceInput(null, null, "reference"), now),
     {text: "지도 v? · 관측 확인되지 않음 · 기준 영상", title: ""});
+});
+
+test("a post-eval result names what it saved and the follow-up steps it escalated", () => {
+  assert.deepEqual(postEvalFollowUp({ applied: [{}, {}], escalated: ["pivot-near belt:0.135,0.105", "remap", "bias_refused:belt:x"] }), {
+    saved: 2, steps: [{ step: "pivot-near", target: "belt:0.135,0.105" }, { step: "remap" }],
+  });
+  assert.equal(postEvalFollowUp({ applied: [], escalated: [] }), null);
+  assert.equal(postEvalFollowUp(null), null);
+});
+
+test("a check result offers its todo steps and a pivot near each uncovered working point once", () => {
+  assert.deepEqual(checkFollowUp({
+    todo: ["remap", "pivot-near belt:0.1,0.2", "review-camera-reference"],
+    check: { bias_coverage_gaps: [{ site: "belt", suggested_pivot: [0.1, 0.2] }, { site: "pallet", suggested_pivot: [0.15, 0.03] },
+                                  { site: "bad", suggested_pivot: [NaN, 1] }, { site: "a.b", suggested_pivot: [0.1, 0.1] }] },
+  }), { steps: [{ step: "remap" }, { step: "pivot-near", target: "belt:0.1,0.2" }, { step: "pivot-near", target: "pallet:0.15,0.03" }] });
+  assert.equal(checkFollowUp({ todo: [], check: {} }), null);
+  assert.equal(checkFollowUp(undefined), null);
 });

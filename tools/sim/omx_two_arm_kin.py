@@ -6,19 +6,29 @@ Geometry only (D-947). Joint values are radians; the real arm's normalised units
 import json
 import math
 from pathlib import Path
+import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 URDF = ROOT / "learning/envs/isaac/assets/omx_f_palletizing_description/urdf/omx_f_palletizing.urdf"
-CELL_EXAMPLE = ROOT / "deploy/robot/omx/sim/ladder-cell.example.json"  # plan.home and plan.limits: the same numbers as cell_profile.yaml
+CELL_EXAMPLE = ROOT / "deploy/robot/omx/sim/ladder-cell.example.json"  # plan.limits: the same numbers as cell_profile.yaml; plan.home is only kept equal to idle_park (test_omx_home_single_source)
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 REAL_HOME_GAP_M = .012  # closed-jaw floor matching cell_act_inputs.sim_gripper and omx_cell_sim.real_q
 REAL_HOME_GRIPPER_RAD = 0.13675807934711404  # palletizing_gripper.angle_for_gap_clipped(REAL_HOME_GAP_M) for v2.1 jaw
 _REG_EYE6 = 1e-4 * np.eye(6)  # ik's damped-least-squares regulariser, built once
 _CHAIN_CACHE = {}  # (resolved path, mtime_ns, size) -> (chain, tcp): every Arm() shares one URDF parse
 _PLAN_VALUES_CACHE = {}  # same-key cache for the cell file's plan block
+
+
+def canonical_home_norm():
+    """The folded home (normalised units) the twin parks in: idle_park of the canonical start spec, the single source of home."""
+    src = str(ROOT / "contracts/learning/src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from rosy.contracts.learning.omx_canonical import default_canonical_spec
+    return default_canonical_spec()["idle_park"]["arm_a"]["norm"]  # arm_b's idle_park is the same numbers (tested)
 
 
 def _stat_key(path):
@@ -73,7 +83,7 @@ def plan_values(path=CELL_EXAMPLE, home_gripper="open"):
     key = (*_stat_key(path), home_gripper)
     if key not in _PLAN_VALUES_CACHE:
         plan = json.loads(Path(key[0]).read_text(encoding="utf-8"))["plan"]
-        home = np.append(norm_to_rad(plan["home"]), grip)
+        home = np.append(norm_to_rad(canonical_home_norm()), grip)
         limits = np.array([plan["limits"]["joints_rad"][n] for n in JOINTS])
         limits[:, 0] = np.minimum(limits[:, 0], home[:5])  # the real park pose sits past the nominal joint2 limit
         _PLAN_VALUES_CACHE[key] = (home, limits)

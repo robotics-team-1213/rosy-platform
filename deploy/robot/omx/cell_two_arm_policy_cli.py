@@ -17,11 +17,13 @@ import cell_params
 import cell_pipeline_io
 import cell_pivot
 from cell_policy_entry import dry_no_runner_fallback
+from cell_policy_start_gate import build_gate
 import cell_policy_handoff
 import cell_policy_shape
 import cell_remote_policy
 import cell_robot_profile
 import cell_two_arm
+from cell_two_arm_entry import run_two_arm_entry
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, config_site_key
 from cell_two_arm_policy import run_two_arm_policy
 from cell_two_arm_verification import transfer_refusal
@@ -109,6 +111,15 @@ def _build_jaw_spec(
     return spec
 
 
+def _arm_state_gate(arm: str, root: Path | None, dry_run: bool, lib: Mapping[str, Any], shadow: Any, offset: Sequence[float], cfg: Mapping[str, Any]) -> Any:
+    """The arm's start gate from its checkpoint folder. Live without the folder cannot judge a state, so it refuses; a dry run skips."""
+    if root is None:
+        if dry_run:
+            return None
+        raise ValueError(f"arm {arm}: --policy-root-{arm} is required to read the checkpoint state range (POLICY_STATE_STATS_MISSING)")
+    return build_gate(root, dict(lib), shadow, offset, (cfg.get("params") or {}).get("policy.state_margin_frac"))
+
+
 class _PassiveDryRunCell:
     """Read-only `--dry-run` wrapper supplying library home pose for `state` when `no runner`."""
 
@@ -120,6 +131,10 @@ class _PassiveDryRunCell:
         if command == "state":
             return {"ok": True, "state": list(self._pose), "holding": False, "t": time.time(), "passive_source": "library_home"}
         return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses {command!r}"}
+
+    def seed(self, pose: Sequence[float]) -> None:
+        """A dry run's stand-in for the arm having taken the entry chunk."""
+        self._pose = [float(x) for x in pose]
 
     def checked(self, command: str, assessment: Mapping[str, Any], timeout: float | None = None) -> dict[str, Any]:
         return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses checked {command!r}"}
@@ -274,18 +289,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             jaw_specs[arm] = _build_jaw_spec(arm, configs[arm], libs[arm], kins[arm], tasks[arm])
 
+        state_gates: dict[str, Any] = {}
+        for arm, root in (("a", args.policy_root_a), ("b", args.policy_root_b)):  # each arm against its own checkpoint's trained state range
+            try:
+                if gate := _arm_state_gate(arm, root, args.dry_run, libs[arm], shadows[arm], offsets[arm], configs[arm]):
+                    state_gates[arm] = gate
+            except ValueError as error:  # the usual refusal output: nothing moved
+                print(json.dumps({"result": "refused", "reason": str(error)}))
+                return 1
+
         guard = TwoArmChunkGuard(kins, rigid_map, tips, margin_m=args.margin_m, min_z_m=args.min_z_m)
         authorizers = (
             {arm: cell_policy_handoff.Authorization(cfg) for arm, cfg in configs.items()}
             if not args.dry_run
             else None
         )
+        entry = run_two_arm_entry(
+            cells, libs, guard, work_dir / "entry", authorizers=authorizers, jaw_specs=jaw_specs, kins=kins,
+            state_gates=state_gates, dry_run=args.dry_run,
+        )
+        if entry["result"] in ("refused", "fault"):  # nothing but entry commands went out: no policy chunk
+            receipt = {"schema": "rosy.omx-two-arm-policy-run.v1", "result": entry["result"], "stopped_reason": entry["reason"], "entry": entry}
+            (work_dir / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            print(json.dumps({"result": entry["result"], "reason": entry["reason"], "receipt": str(work_dir / "receipt.json")}))
+            return 1
+        for arm in passive_arms:
+            if entry["arms"].get(arm, {}).get("entry_end"):
+                cells[arm].seed(entry["arms"][arm]["entry_end"])
         receipt = run_two_arm_policy(
             cells, shadows, libs, guard, tasks["a"], tasks["b"], work_dir,
             offsets=offsets, demo_ranges=demo_ranges, goals=goals, jaw_specs=jaw_specs, kins=kins,
             max_chunks=args.max_chunks, dry_run=args.dry_run, authorizers=authorizers,
+            state_gates=state_gates,
             fold_context={"kin": kins, "rigids": rigid_map, "tips": tips, "margin_m": args.margin_m},
         )
+        receipt["entry"] = entry
         receipt["proposer"] = args.proposer.strip()
         receipt["operator"] = args.operator.strip()
         if passive_arms:

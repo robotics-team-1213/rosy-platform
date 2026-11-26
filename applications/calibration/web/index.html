@@ -222,7 +222,7 @@
                 </label>
                 <label id="jobVisitLabel" hidden>검증할 칸
                   <select id="jobVisitSite" class="ui-field" aria-describedby="jobVisitNote"></select>
-                  <small id="jobVisitNote">빈 집게를 관측 높이에서 촬영해 XY 편차를 측정합니다. 바닥 접촉 검증은 별도 작업입니다.</small>
+                  <small id="jobVisitNote">빈 집게를 관측 높이에서 촬영해 XY 편차를 측정하고, 허용 오차를 넘으면 편차 보정값으로 저장합니다(이전 값은 calibration-history에 보관). 바닥 접촉 검증은 별도 작업입니다.</small>
                 </label>
                 <label id="jobTargetsLabel" hidden>측정 좌표 (팔 기준 미터, 한 줄에 site:x,y)
                   <textarea id="jobTargets" class="ui-field" rows="2" spellcheck="false"></textarea>
@@ -234,6 +234,7 @@
               <p id="jobActionNote" role="status" aria-live="polite"></p>
               <div id="jobDetail" hidden>
                 <p id="jobProgress" role="status" aria-live="polite"></p>
+                <div id="jobFollow" hidden></div>
                 <details><summary>작업 결과 및 로그</summary><pre id="jobOutput"></pre></details>
               </div>
               <h3 class="cal-subhead">셀별 리스 점유</h3>

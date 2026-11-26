@@ -310,6 +310,7 @@ function render() {
   tripReplan.render();
   stationRecovery.render();
   personRequests.render();
+  cellStage?.renderAlertSlots();
 
   formation.fillLeaders();
   // Map labels always show for 최우선 robots (warn causes are often fleet-wide); the rest declutter.

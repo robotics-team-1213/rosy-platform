@@ -10,8 +10,8 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
   const contextTabs = [...document.querySelectorAll("[data-context-tab]")];
   const params = new URLSearchParams(location.search);
   const hasIncidentParam = params.has("incident");
-  const linkedRobot = params.get("robot") || "";
-  let pendingDrawerDeepLink = !hasIncidentParam && (params.get("inbox") === "1" || params.get("queue") === "1");
+  const linkedRobot = params.get("robot") || params.get("arm") || "", linkedArmIncident = params.get("arm_incident") || "";
+  let pendingDrawerDeepLink = !hasIncidentParam && (params.get("inbox") === "1" || params.get("queue") === "1" || Boolean(linkedArmIncident));
   let contextChoice = hasIncidentParam ? "evidence" : "status";
   let drawerOpen = false;
 
@@ -93,7 +93,7 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
     const toggle = target.dataset.decision ? target.querySelector(".queue-row") : null;
     if (toggle) {
       if (toggle.getAttribute("aria-expanded") !== "true") toggle.click();
-      toggle.focus?.({ preventScroll: true });
+      (target.dataset.decision === "arm-incident" && target.querySelector("[data-decision-slot] input, [data-decision-slot] a") || toggle).focus?.({ preventScroll: true });
       return true;
     }
     const details = target.querySelector("details");
@@ -185,14 +185,14 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
   function refreshInbox() {
     paintInboxMessages();
     paintBadge();
-    if (pendingDrawerDeepLink && !isLocked() && readView().stateLoaded) openPendingDeepLink();
+    if (pendingDrawerDeepLink && !isLocked() && (linkedArmIncident ? readView().workcellObs : readView().stateLoaded)) openPendingDeepLink();
   }
 
   function openPendingDeepLink() {
     if (!pendingDrawerDeepLink || isLocked()) return;
     pendingDrawerDeepLink = false;
     if (linkedRobot) {
-      const stuckKey = `${linkedRobot}|stuck`;
+      const stuckKey = linkedArmIncident ? `${linkedRobot}|arm-incident-${linkedArmIncident}` : `${linkedRobot}|stuck`;
       const hit = [...document.querySelectorAll("#critical-list > li, #warning-list > li")]
         .some((node) => node.dataset?.key === stuckKey);
       if (hit) {

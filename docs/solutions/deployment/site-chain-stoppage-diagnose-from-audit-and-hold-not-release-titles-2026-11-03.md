@@ -51,3 +51,28 @@ SSH로 업데이터를 즉시 시작해 폴링 대기를 없애고, (b) 서명�
 
 - 2026-11-03: 위 순서로 hold(D-960 fix pending)를 5분 내 진단, 검토된 main 도구 설치·resume로
   복구, `retitle-repaired` 2건 즉시 교정 확인. 시험 `test/test_site_auto_sign.py` 31통과.
+
+## 추가 (2026-11-26): 일부 서비스만 돌리는 호스트와 증분 후보
+
+증상: 셀(cell-a, fleet·vision·proxy만 운영)이 18:44부터 새 후보를 하나도 설치하지 않았다. 저널은
+`held reused-image-missing-or-mismatched service=account`만 남기고 유닛은 성공으로 끝났다.
+
+원인 세 겹:
+
+1. 증분 후보(manifest v2)는 바뀌지 않은 서비스 이미지를 `reused_images`로 표시만 한다. 셀 갱신기
+   `/usr/local/lib/rosy-cell/cell_a_autoupdate.py`(저장소 밖 호스트 파일)는 셀이 돌리지 않는
+   account·monitoring·postgres·world까지 로컬에 있어야 한다고 검사했다.
+2. 갱신기는 항상 가장 최신 서명 후보만 봤다. 최신 후보가 바로 앞 후보에서 빌드한 vision을 재사용하면,
+   그 앞 후보를 건너뛴 셀은 영영 설치하지 못한다.
+3. `deploy/site/verify_candidate.py`의 로드 이미지 검사도 모든 서비스를 요구했다.
+
+조치: (1)(2) 셀 갱신기를 호스트에서 고침(재사용 검사는 셀 서비스만, 재사용 이미지가 다 있는
+가장 최신 후보를 고름; 백업 `*.bak-20261126-*`). (3) PR #987: `--services`가 로드 이미지 검사만
+좁히고 서명·아카이브 해시·SBOM·매니페스트 검사는 전체 유지. 셀은 99d090 → 8decccf 순서로
+2026-11-27 00:06 설치(fleet·vision healthy).
+
+함께 본 것: 셀의 여러 갱신기가 GitHub 익명 API 한도(시간당 60회)를 나눠 써서 `403 rate limit`으로
+한 시간씩 멈출 수 있다. 수동 재실행을 반복하면 한도를 더 빨리 쓴다.
+
+재발 방지: `cell_a_autoupdate.py`는 아직 저장소에 없다. 다시 설치하면 위 (1)(2) 수정이 사라지므로
+설치 원본을 저장소로 옮기기 전까지 호스트 백업과 이 절을 기준으로 삼는다.

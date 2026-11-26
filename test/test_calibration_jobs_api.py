@@ -412,7 +412,7 @@ def test_post_eval_uses_one_registered_point_and_existing_movement_guards(screen
         thread.join(5)
     assert calls["spawn"][0][0] == [
         "wrap.sh", "py", jobs.engine("cell_post_eval.py"), "--config", str(jobs.arm_config("arm_b")[0]),
-        "--targets", "floor:0.1,-0.2", "--commissioning", "--person-at-switch",
+        "--targets", "floor:0.1,-0.2", "--apply", "--commissioning", "--person-at-switch",
     ]
 
 

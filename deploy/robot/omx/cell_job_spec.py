@@ -42,6 +42,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
+from cell_camera_heal import with_camera_heal  # noqa: E402,F401  (re-exported for cell_job_api)
 from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job

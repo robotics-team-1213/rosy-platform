@@ -14,6 +14,7 @@ import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
 import { personHeadline, requestsFor } from "./person-request.js";
+import { armIncidentAlertRows } from "/console/assets/arm-incident-clear.js";
 
 /** A row's text after its robot name. Rows read "<b>rosy_41</b>: …"; a later row of the same robot hides the
  * name, so it drops the leading ": " (field check 2026-10-10: ": Rosy Cam이 …" with no name). */
@@ -323,7 +324,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // ADR-1000: Populate Queues
     const warnList = el("warning-list");
     const critList = el("critical-list");
-    const rows = { crit: [], warn: [] };
+    const rows = armIncidentAlertRows(view.workcellObs);  // open arm incidents first; each row opens on its clear step
     for (const r of view.stateUnavailable ? [] : view.robots) {
       for (const item of attentionItems(r)) {
         const list = item.severity === "crit" ? rows.crit : rows.warn;

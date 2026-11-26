@@ -1512,6 +1512,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_pre_home.py
   - deploy/robot/omx/cell_remote_policy.py
   - deploy/robot/omx/cell_two_arm_guard.py
+  - deploy/robot/omx/cell_two_arm_entry.py
   - deploy/robot/omx/cell_two_arm_policy.py
   - deploy/robot/omx/cell_two_arm_policy_cli.py
   - deploy/robot/omx/cell_two_arm_verification.py
