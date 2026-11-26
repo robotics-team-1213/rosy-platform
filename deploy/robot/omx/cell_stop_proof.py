@@ -76,13 +76,40 @@ def measure(job_id: str, arms: tuple[str, ...], observe: Callable[[str], dict[st
     return proof
 
 
-def session_proof(cell, job_id: str, arm: str, *, max_age_s: float = 15.0) -> dict[str, Any]:
+def session_proof(cell, job_id: str, arm: str, *, max_age_s: float = 15.0, state: dict | None = None) -> dict[str, Any]:
     """The drive's own measurement from the running session's live.json. Fleet is the job API's check, so it is not asked again.
     shortcut: `at_home` is taken as true because cell_policy_pre_home refuses an arm off home before any command; upgrade
     when the live row carries a library-home verdict."""
+    now = time.time()
     live = cell.policy_state() if hasattr(cell, "policy_state") else None
-    obs = {"live": {**live, "at_home": True} if isinstance(live, dict) else None, "session": True, "cold_folded": False, "fleet": {}}
-    return measure(job_id, (arm,), lambda _arm: obs, max_age_s=max_age_s)
+    if isinstance(live, dict):
+        merged = {**live, "at_home": True}
+        if isinstance(state, dict):
+            if (
+                merged.get("chunk") is not None
+                and merged.get("chunk") not in ("park-slow", "fold-from-hold")
+                and state.get("ok") is True
+                and state.get("chunk") is None
+                and state.get("command") in (None, "state")
+                and _fresh(state, now, max_age_s)
+                and _fresh(live, now, max_age_s)
+                and float(state["t"]) > float(live["t"])
+            ):
+                merged["chunk"] = None  # live.json lags up to one publish interval after chunk end
+            if state.get("contact") or str(state.get("fault") or "").startswith("contact"):
+                merged["contact"] = True
+            if state.get("fault") and not merged.get("fault"):
+                merged["fault"] = state["fault"]
+            elif state.get("ok") is False and not merged.get("fault"):
+                merged["fault"] = state.get("error") or "state not ok"
+            if state.get("human_hold_latched"):
+                merged["human_hold_latched"] = True
+            if state.get("settled") is False:
+                merged["settled"] = False
+    else:
+        merged = None
+    obs = {"live": merged, "session": True, "cold_folded": False, "fleet": {}}
+    return measure(job_id, (arm,), lambda _arm: obs, now=now, max_age_s=max_age_s)
 
 
 def verify(proof: Any, *, job_id: str | None = None, arms: tuple[str, ...] | None = None, now: float | None = None,

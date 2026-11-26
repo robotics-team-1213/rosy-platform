@@ -61,7 +61,7 @@ def run(runner, lines) -> None:
         return
     runner.last_input = runner.clock()
     while True:
-        started = runner.clock()
+        started, prev_chunk = runner.clock(), runner.chunk
         try:
             arrived = lines()
         except OSError as error:
@@ -110,6 +110,6 @@ def run(runner, lines) -> None:
         ):
             publish_live(runner, best_effort=True)
             return  # interrupted: idle stop and a judge's stop fold give way to interrupt_tick's verdict
-        if runner.chunk == "policy" or runner.ticks % max(1, runner.fps // 10) == 0:
+        if runner.chunk == "policy" or (prev_chunk == "policy" and runner.chunk is None) or runner.ticks % max(1, runner.fps // 10) == 0:
             publish_live(runner)
         runner.sleep(max(0.0, period - (runner.clock() - started)))
