@@ -62,6 +62,7 @@ function showFollowUp(follow) {
   box.appendChild(p);
   for (const next of follow.steps) {
     const button = document.createElement("ui-button");
+    button.setAttribute("kind", "quiet");
     button.textContent = `다음 작업 채우기: ${STEP_TEXT[next.step]}${next.target ? " · " + next.target : ""}`;
     button.addEventListener("click", () => {
       $("jobStep").value = next.step;
