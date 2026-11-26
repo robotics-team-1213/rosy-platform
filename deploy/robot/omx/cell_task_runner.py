@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 
 import cell_place_fit
+import cell_site_target
 
 SCHEMA = "rosy.omx-cell-task.v1"
 HERE = Path(__file__).resolve().parent
@@ -188,6 +189,8 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         plan = plan_steps(task, config["sites"])
     except (ValueError, KeyError) as exc:
         return {**out, "status": "rejected", "why": str(exc)}
+    if not dry_run and (refused := next((r for item in plan if (r := cell_site_target.unmeasured_refusal(config["sites"], item["from"], item["to"]))), None)):
+        return {**out, "status": "refused", "why": refused}
     if preflight is not None:
         failed = [f"{name}: {why}" for name, ok, why in preflight(config) if not ok]
         if failed:

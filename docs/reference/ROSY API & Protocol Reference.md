@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.487
+**Version:** v1.488
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.488 Registered cell slots refused until measured (Cell)
+
+A designated slot registered by cell_site_register is refused with SITE_NOT_MEASURED (v1.488) until XY and Z measurements exist for its current place, yaw, surface height and tier step; layers 1 and 2 also need a measured tier step. The code is one of the hardware refusals the cell worker reports and Fleet publishes as tasks[].last_refusal.code and the plan hold_reason. Entries without a status key (pallet, belt, temp_plate_*) behave as before.
 
 ### v1.487 Localization candidate reads retain CORE backoff (Fleet)
 
@@ -87,7 +91,7 @@ Without a visual cargo label, Fleet can carry the RFID identity across one exclu
 
 ### v1.473 Task-specific cell plan refusal codes (Fleet)
 
-A physically aborted step reports its own persisted and sanitized error as tasks[].last_refusal.code with op=complete, and the plan exposes the code in hold_reason. The proposal retains the requested slot. A service proposal and a dry run do not establish calibration. SITE_NOT_CALIBRATED and STAND_NOT_CALIBRATED are emitted only from the cell's actual local calibration check. The service also preserves typed structural, configuration, interlock and hardware refusals. Unrecognized hardware diagnostic text yields MEASURED_PLACEMENT_MISSING.
+A physically aborted step reports its own persisted and sanitized error as tasks[].last_refusal.code with op=complete, and the plan exposes the code in hold_reason. The proposal retains the requested slot. A service proposal and a dry run do not establish calibration. SITE_NOT_CALIBRATED, SITE_NOT_MEASURED and STAND_NOT_CALIBRATED are emitted only from the cell's actual local calibration check; SITE_NOT_MEASURED means a registered designated slot lacks current XY and Z measurements. The service also preserves typed structural, configuration, interlock and hardware refusals. Unrecognized hardware diagnostic text yields MEASURED_PLACEMENT_MISSING.
 
 ### v1.472 Operator trip request history (Fleet)
 
@@ -5180,6 +5184,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.488 | 2026-11-26 | [Cell] Additive: SITE_NOT_MEASURED hardware refusal for registered slots |
 | v1.487 | 2026-11-26 | [Fleet] Localization candidate reads retain CORE backoff |
 | v1.486 | 2026-11-26 | [Fleet] Additive: rosy.site_map/1 edge display_polyline + display_source (survey), GET /api/fleet/site-map/active 가 측량표에서 덧붙임 |
 | v1.485 | 2026-11-26 | [CORE] Native OMX policy lease ingress |

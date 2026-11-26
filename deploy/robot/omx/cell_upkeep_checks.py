@@ -10,6 +10,7 @@ from pathlib import Path
 
 import cell_params as prm
 import cell_preflight
+from omx_incident_reassess import foreign_board
 from omx_tcp import mismatch as tcp_mismatch
 
 TCP_STOCK = 0.09193
@@ -88,6 +89,8 @@ def check_registers(arm, device, io, fix, out_dir, stamp):
         ]
         return notes, caps
 
+    if other := foreign_board(arm, device):
+        return row("registers", "fail", f"{device} is {other}'s board in the board map; not read or written")
     try:
         notes, caps = problems(io.bus_read(device))
     except Exception as error:
@@ -127,6 +130,8 @@ def check_pose(arm, device, io, library):
     home = ((library.get("chunks") or {}).get("home") or [None])[-1]
     if not home:
         return row("pose", "ok", "library has no home chunk to compare")
+    if other := foreign_board(arm, device):
+        return row("pose", "fail", f"{device} is {other}'s board in the board map; not read")
     try:
         raw = {r["id"]: r.get("position_raw") for r in io.bus_read(device)}
     except Exception as error:

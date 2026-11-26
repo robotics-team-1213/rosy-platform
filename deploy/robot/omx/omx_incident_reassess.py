@@ -49,11 +49,38 @@ BOARDS = Path("/etc/rosy/omx-arm-boards.json")  # board serial -> arm, the cell'
 CALIBRATION = Path.home() / ".cache/huggingface/lerobot/calibration/robots/omx_follower"
 
 
+def boards() -> dict:
+    """The board map {serial: arm}; OSError or ValueError when it cannot be read."""
+    raw = json.loads(Path(os.environ.get("ROSY_OMX_ARM_BOARDS") or BOARDS).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("board map is not a JSON object")
+    return raw
+
+
+def board_arm(device, by_id=Path("/dev/serial/by-id")) -> str | None:
+    """The arm the board map names for `device` (its by-id name carries a mapped serial, or a mapped by-id link resolves
+    to the same node), else None. 2026-11-26: every arm_b record config named arm_a's board."""
+    name, node = Path(device).name, os.path.realpath(device)
+    for serial, arm in boards().items():
+        if serial in name or any(os.path.realpath(p) == node for p in by_id.glob(f"*{serial}*")):
+            return arm
+    return None
+
+
+def foreign_board(arm, device) -> str | None:
+    """The other arm the board map gives `device`, else None. shortcut: an unreadable map passes, for read-only
+    upkeep checks (their baseline write needs torque 0); cell_safe_home refuses on an unreadable map instead."""
+    try:
+        owner = board_arm(device)
+    except (OSError, ValueError):
+        return None
+    return owner if owner not in (None, arm) else None
+
+
 def follower(arm, device=None, by_id=Path("/dev/serial/by-id")) -> tuple[str, Path]:
     """(board serial, by-id path) of `arm`'s follower from the board map; SystemExit unless exactly one board maps to
     it and is plugged in, or when `device` is given and is not that path."""
-    boards = json.loads(Path(os.environ.get("ROSY_OMX_ARM_BOARDS") or BOARDS).read_text(encoding="utf-8"))
-    serials = [s for s, a in boards.items() if a == arm]
+    serials = [s for s, a in boards().items() if a == arm]
     paths = sorted(by_id.glob(f"*{serials[0]}*")) if len(serials) == 1 else []
     if len(paths) != 1:
         raise SystemExit(f"{arm}: {len(serials)} boards mapped, {len(paths)} plugged in; not read")

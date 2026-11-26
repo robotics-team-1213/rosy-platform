@@ -132,6 +132,9 @@ HELPERS = (
     {"name": "iconSvg", "module": "shared/web/ui.js", "aliases": ["iconNode"], "ceiling": 0},
     # 2026-11-26 패널 C-1: 3×3 투영 사본 4벌(#893 Calibration 포함)을 하나로. Calibration 화면도 본다(HELPER_ROOTS).
     {"name": "invert3", "module": "shared/web/plane-math.js", "aliases": ["invert3x3", "applyH", "applyHomography"], "ceiling": 0},
+    # 2026-11-26: World 2D 지도 규칙 사본(#922 map-rules.js)과 Fleet 사본을 /common/map-rules.js 하나로. World 화면도 본다.
+    {"name": "scaleBar", "module": "shared/web/map-rules.js", "aliases": ["viewTurnOf", "placeText", "stamp", "mapEvidence"], "ceiling": 0,
+     "roots": ["applications/world/web"]},
 )
 #: 도우미 재정의는 /common 을 읽는 다른 화면에서도 찾는다. 이름·중복 래칫의 범위(PRODUCT_ROOTS)는 그대로 둔다.
 HELPER_ROOTS = (*PRODUCT_ROOTS, REPO / "applications" / "calibration" / "web")
@@ -206,7 +209,8 @@ def test_helpers_are_defined_once_and_direct_writes_only_go_down():
     helper_scripts = list(product_scripts(HELPER_ROOTS))
     for row in HELPERS:
         assert (REPO / row["module"]).is_file() and re.search(rf"\b{re.escape(row['name'])}\b", (REPO / row["module"]).read_text(encoding="utf-8")), row
-        _ratchet(f"redefined {row['name']}", helper_redefinitions(helper_scripts, row), row["ceiling"])
+        seen = list(product_scripts((*HELPER_ROOTS, *(REPO / r for r in row["roots"])))) if "roots" in row else helper_scripts
+        _ratchet(f"redefined {row['name']}", helper_redefinitions(seen, row), row["ceiling"])
     for row in DIRECT:
         assert row["owners"] and all((REPO / owner).is_file() for owner in row["owners"]), row
         _ratchet(f"direct {row['what']}", direct_uses(scripts, row), row["ceiling"])

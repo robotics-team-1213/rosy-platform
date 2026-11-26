@@ -42,6 +42,7 @@
     "workflow-controls.js": "text/javascript",
     "cause-line.js": "text/javascript",
     "plane-math.js": "text/javascript",
+    "map-rules.js": "text/javascript",
     "preact-ui.js": "text/javascript",
     "component-controls.css": "text/css",
     "component-gallery.css": "text/css",

@@ -4,6 +4,7 @@ export function addDtDd(dl, term, value) {
   const dd = document.createElement("dd");
   dd.textContent = value;
   dl.append(dt, dd);
+  return dd;
 }
 
 export function renderInspector(d) {

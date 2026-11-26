@@ -220,6 +220,9 @@ def test_stand_with_floor_rois_and_worker_slot_arm_calibration_guards(monkeypatc
     assert cst.validate_cell_ab_handoff("temp_a:r1-s1-t1", "temp_b:r1-s1-t1", 1, "") == "UNKNOWN_SITE"
     assert cst.calibration_refusal({"stand": {"place": [0.2, -0.1], "surface_z": 0.02}}, "belt", "stand:r1-s1", 2) == "STAND_NOT_CALIBRATED"
     assert cst.calibration_refusal({"pallet-l0": {"place": [0.0, 0.0], "surface_z": 0.0}}, "temp_plate_a", "pallet-l0", 1) == "SITE_NOT_CALIBRATED"
+    unverified = {"stand": {"place": [0.2, -0.1], "surface_z": 0.02, "status": "unverified"}}
+    assert cst.calibration_refusal(unverified, "belt", "stand:r1-s1", 1) == "SITE_NOT_MEASURED"
+    assert cst.calibration_refusal({"stand": {**unverified["stand"], "status": "measured"}}, "belt", "stand:r1-s1", 1) is None
 
     # Strict slot, site_id, and verification.target binding at zone_acceptance and cell_ab_place_verified.
     handoff = {"cell_id": "cell_ab", "arm_id": "arm_b", "dst_site": "ship-h1r0-l1", "dst_site_id": "yard:r1-s2-t2",
