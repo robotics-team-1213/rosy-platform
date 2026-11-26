@@ -251,7 +251,7 @@ def test_config_io_rewrite_keeps_evidence_of_a_promote_made_meanwhile(cell, tmp_
     stale["sites"]["pallet"]["note"] = "regions moved"
     reg.register(cfg, "arm_a", "tmp-a-1", evidence=cell[1], **TMP)  # registered after calibrate started
     stale2 = {k: v for k, v in stale.items()}
-    cio.write_config(cfg, stale2, indent=1)
+    cio.write_config(cfg, stale2, indent=1, changed={"ship-h1r0": ("surface_z",)})
     now = sites_of(cfg)
     assert now["ship-h1r0"]["surface_z"] == -0.0091 and "measured_xy" in now["ship-h1r0"] and now["pallet"]["note"] == "regions moved"
     assert now["tmp-a-1"]["status"] == "unverified"
@@ -521,3 +521,61 @@ def test_the_order_z_then_xy_is_written_where_operators_read(cell, tmp_path):
     reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=write(tmp_path / "xy.json", xy_report(cfg)))
     assert reg.promote(cfg, "arm_a", "ship-h1r0", z_evidence=write(tmp_path / "z.json", z_receipt(cfg)))["status"] == "unverified"
     assert reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=write(tmp_path / "xy2.json", xy_report(cfg)))["status"] == "measured"
+
+
+def test_source_tier_is_gated_like_the_destination_tier(cell, tmp_path):
+    cfg = measured_slot(cell, tmp_path)
+    sites = sites_of(cfg)
+    assert [refusal(sites, f"ship-h1r0-l{t}", "pallet-l0", 1) for t in (0, 1, 2)] == [None, "SITE_NOT_MEASURED", "SITE_NOT_MEASURED"]
+    reg.promote(cfg, "arm_a", "ship-h1r0", tier_evidence=write(tmp_path / "t.json", tier_receipt(cfg, 1)))
+    assert [refusal(sites_of(cfg), f"ship-h1r0-l{t}", "pallet-l0", 1) for t in (0, 1, 2)] == [None, None, None]
+    sites = sites_of(cfg)
+    sites["ship-h1r0"]["surface_z"] += 0.002
+    assert refusal(sites, "ship-h1r0-l1", "pallet-l0", 1) == "SITE_NOT_MEASURED"
+
+
+def test_auto_pick_source_tier_needs_the_tier_step_too(cell, tmp_path, monkeypatch):
+    import cell_auto_pick as ap
+    cfg = measured_slot(cell, tmp_path)
+    sites = {**sites_of(cfg), "belt": {"surface_z": -0.0661, "place": [0.0, 0.1], "yaw_deg": 0.0, "auto_roi": [0, 0, 10, 10]}}
+    config = {"arm_id": "arm_a", "sites": sites, "work_dir": str(tmp_path)}
+    monkeypatch.setattr(ap.cell_auto_evidence, "map_pose_preflight", lambda *a, **k: "reached preflight")
+    run = lambda src: ap._run_auto_core(Mock(), config, {}, tmp_path / "c.json", [], None, src, "belt", tmp_path, None,  # noqa: E731
+                                        False, None, print, None, None, None, {})
+    assert run("ship-h1r0-l0")["result"] == "held: reached preflight"
+    out = run("ship-h1r0-l1")
+    assert out["result"] == "refused" and out["error"] == "SITE_NOT_MEASURED"
+
+
+def test_rewrite_keeps_a_registered_slots_disk_geometry_unless_the_writer_names_the_key(cell, tmp_path):
+    import cell_config_io as cio
+    cfg = registered(cell)
+    stale = json.loads(cfg.read_text())  # a calibrate run started here
+    stale["sites"]["ship-h1r0"]["surface_px"] = [[1, 2], [3, 4]]  # a non-geometry key the writer owns
+    stale["sites"]["pallet"]["surface_z"] = -0.0042  # a legacy site: the writer's value stays as before
+    reg.register(cfg, "arm_a", "ship-h1r0", evidence=cell[1], replace=True, **dict(SHIP, place=[0.14, 0.04], yaw_deg=3.0))
+    cio.write_config(cfg, stale, indent=1)
+    now = sites_of(cfg)["ship-h1r0"]
+    assert now["place"] == [0.14, 0.04] and now["yaw_deg"] == 3.0 and now["surface_z"] == SHIP["surface_z"]  # the replace was not reverted
+    assert now["surface_px"] == [[1, 2], [3, 4]] and now["history"] and sites_of(cfg)["pallet"]["surface_z"] == -0.0042
+    stale["sites"]["ship-h1r0"]["surface_z"] = -0.0099
+    cio.write_config(cfg, stale, indent=1, changed={"ship-h1r0": ("surface_z",)})
+    assert sites_of(cfg)["ship-h1r0"]["surface_z"] == -0.0099 and sites_of(cfg)["ship-h1r0"]["place"] == [0.14, 0.04]
+
+
+def test_a_failed_write_after_the_arm_moved_keeps_the_measured_height_in_a_sidecar(cell, tmp_path, monkeypatch):
+    fcntl = pytest.importorskip("fcntl")
+    import cell_config_io as cio
+    cfg = registered(cell)
+    before = cfg.read_bytes()
+    config = json.loads(before)
+    config["sites"]["ship-h1r0"]["surface_z"] = -0.0088
+    monkeypatch.setattr(cio, "LOCK_TIMEOUT_S", 0.2)
+    done = [{"surface ship-h1r0": "touched", "surface_z": -0.0088}, {"surface tmp-a-1": "no contact", "surface_z": None}]
+    with open(str(cfg) + ".lock", "a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        err = cio.write_config_checked(cfg, config, 1, done)
+    assert err and "locked by another writer" in err and "saved in" in err and cfg.read_bytes() == before
+    side = list(tmp_path.glob("cell-arm-a-stack.json.unwritten-*.json"))
+    assert len(side) == 1 and json.loads(side[0].read_text())["surface_z"] == {"ship-h1r0": -0.0088}
+    assert cio.write_config_checked(cfg, config, 1, done) is None and sites_of(cfg)["ship-h1r0"]["surface_z"] == -0.0088

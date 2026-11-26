@@ -82,9 +82,18 @@ def atomic_write(path, text: str, expect_sha: str | None = None) -> None:
             os.close(dfd)
 
 
-def write_config(path, config: dict, indent: int = 2) -> None:
-    """Whole-file rewrite by a writer that read the config earlier (calibrate, surface): under the lock the file is read again and the
-    slot evidence keys of every site on disk are carried into config, so a promote or registration made meanwhile is kept."""
+GEOMETRY_KEYS = ("place", "surface_z", "yaw_deg", "tier_step_m", "map_from")  # what a registered slot's measurements are about
+
+
+def _registered(entry) -> bool:
+    return isinstance(entry, dict) and str((entry.get("provenance") or {}).get("tool", "")).startswith("cell_site_register/")
+
+
+def write_config(path, config: dict, indent: int = 2, changed: dict | None = None) -> None:
+    """Whole-file rewrite by a writer that read the config earlier (calibrate, surface). Under the lock the file is read again; for
+    every site made by cell_site_register the disk entry's geometry and evidence keys win over the writer's stale copy, except the
+    keys the writer names in changed ({site: (key, ...)}, e.g. the surface_z it just touched). A site registered meanwhile is kept."""
+    changed = changed or {}
     with locked(path):
         raw = Path(path).resolve().read_bytes()
         disk = json.loads(raw.decode("utf-8")).get("sites") or {}
@@ -96,7 +105,32 @@ def write_config(path, config: dict, indent: int = 2) -> None:
                 if any(k in entry for k in SLOT_KEYS):
                     sites[name] = entry
                 continue
-            for key in SLOT_KEYS:
+            keys = (*SLOT_KEYS, *GEOMETRY_KEYS) if _registered(entry) else SLOT_KEYS
+            mine = {k: sites[name][k] for k in changed.get(name, ()) if k in sites[name]}
+            for key in keys:
                 if key in entry:
                     sites[name][key] = entry[key]
+            sites[name].update(mine)
         atomic_write(path, dump(config, indent), sha256_bytes(raw))
+
+
+def write_config_checked(path, config: dict, indent: int = 2, done: list | None = None) -> str | None:
+    """write_config for a writer whose arm has already moved. A failed write (lock timeout, file changed) must not lose what was
+    measured: the touched heights go to <config>.unwritten-<time>.json and the returned message says so. None when written.
+    done: the writer's step results; {"surface <site>": "touched", "surface_z": z} marks a measured height."""
+    touched = {}
+    for res in done or ():
+        for step, outcome in res.items():
+            if step.startswith("surface ") and outcome == "touched" and isinstance(res.get("surface_z"), (int, float)):
+                touched[step.split()[1]] = res["surface_z"]
+    try:
+        write_config(path, config, indent, {name: ("surface_z",) for name in touched})
+    except (ConfigError, OSError, ValueError) as exc:
+        side = Path(f"{Path(path).resolve()}.unwritten-{time.strftime('%Y%m%dT%H%M%S')}.json")
+        try:
+            side.write_text(json.dumps({"config": str(path), "error": str(exc), "surface_z": touched}, indent=1), encoding="utf-8")
+            where = f"; measured heights saved in {side}"
+        except OSError:
+            where = f"; could not save the measured heights {touched}"
+        return f"config not written: {exc}{where}"
+    return None

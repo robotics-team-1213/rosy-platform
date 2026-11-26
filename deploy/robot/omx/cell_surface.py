@@ -254,7 +254,9 @@ def main(argv=None):
     if args.write and out["result"] == "touched":
         site["surface_z"] = out["surface_z"]
         import cell_config_io
-        cell_config_io.write_config(args.config, config, indent=1)
+        if err := cell_config_io.write_config_checked(args.config, config, 1, [{f"surface {args.site}": "touched", "surface_z": out["surface_z"]}]):
+            print(json.dumps({"result": "touched", "config_write_failed": err, "site": args.site}))
+            return 2
     print(json.dumps({k: v for k, v in out.items() if k != "steps"}))
     return 0 if out["result"] == "touched" else 1
 

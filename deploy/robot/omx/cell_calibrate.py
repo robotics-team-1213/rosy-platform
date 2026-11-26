@@ -388,7 +388,9 @@ def main(argv=None):
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
     if config_dirty:
         import cell_config_io  # one lock and one writer for every config rewrite (also keeps a registered slot's evidence)
-        cell_config_io.write_config(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1)
+        if err := cell_config_io.write_config_checked(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, 1, done):
+            print(json.dumps({"config_write_failed": err, "done": done}, default=str), flush=True)
+            return 2
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

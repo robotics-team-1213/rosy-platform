@@ -250,7 +250,7 @@ def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any
         s_ok = isinstance(exact, dict) or (isinstance(base, dict) and "surface_z" in base)
         if not s_ok:
             return "STAND_NOT_CALIBRATED" if s["area"] == "stand" else "SITE_NOT_CALIBRATED"
-        if unmeasured_refusal(cfg_sites, s["sim_site"] if isinstance(exact, dict) else s["base_site"]):
+        if unmeasured_refusal(cfg_sites, s["sim_site"]):  # a missing -lN entry maps to its base with the layer kept
             return "SITE_NOT_MEASURED"
     return None
 
