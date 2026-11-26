@@ -22,7 +22,7 @@ for p in (str(LEARN_OMX), str(ROOT / "contracts" / "learning" / "src")):
 import act_policy_http_server as srv  # noqa: E402
 import canonical_serve  # noqa: E402
 
-TOKEN = "load-token"
+TOKEN = "load-token-0123456789"
 
 
 def _ckpt(root: Path, name: str, payload: bytes) -> tuple[Path, str]:
