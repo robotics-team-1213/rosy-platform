@@ -148,10 +148,14 @@ def test_run_uses_adaptive_poll_intervals_within_poll_s(tmp_path, monkeypatch):
     assert sleeps == [0.5] * 6
 
 
-def test_ship_skips_origin_fetch_when_bundle_verifies():
+def test_ship_refreshes_origin_main_before_the_bundle_check():
+    # Lint diffs merge-base(HEAD, origin/main); a fetch skipped when the bundle verified left the lab
+    # ref stale and failed the records cutover rule on every run (2026-11-26, reverts #460 LOC-5).
     import remote_pytest as rp
 
-    assert "if ! git bundle verify" in rp.SHIP and rp.SHIP.index("git bundle verify") < rp.SHIP.index("git fetch -q \"$3\"")
+    fetch = rp.SHIP.index("git fetch -q \"$3\" +refs/heads/main:refs/remotes/origin/main")
+    assert "if ! git bundle verify" not in rp.SHIP
+    assert fetch < rp.SHIP.index("git bundle verify")
 
 
 def test_ssh_call_bounds_remote_bash_with_timeout(monkeypatch):
