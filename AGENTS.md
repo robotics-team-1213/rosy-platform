@@ -36,20 +36,20 @@ Top-level folder roles: [folder responsibility guide](docs/reference/platform-fo
 
 ### 같이 하는 깃
 
-여러 세션이 `main` 체크아웃과 git 인덱스 하나를 같이 쓴다. 아래는 늘 지킬 요약이고, 명령 전문·예외는 [shared-checkout](docs/reference/shared-checkout.md#같이-하는-깃)과 스킬 `rosy-land-on-main`이 소유한다. 워크트리 한도, 도구 거절·멈춤, 처음 보는 상태(`landed-dirty`, `stale-history`, PR `DIRTY`)에서는 진행하지 말고 그 문서를 읽는다. 브랜치·남의 미커밋을 지우지 않는다(D-372).
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 아래는 모든 세션이 늘 지킬 요약이다. 명령 전문·예외·도구 동작은 [`docs/reference/shared-checkout.md`](docs/reference/shared-checkout.md#같이-하는-깃)이고, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 워크트리 한도에 닿았을 때, 도구가 거절하거나 멈췄을 때, 처음 보는 상태(`landed-dirty`, `stale-history`, PR의 `DIRTY` 등)가 나왔을 때는 진행하지 말고 그 문서를 읽는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
 
-1. **작업 위치:** `git status --short --branch`·`git worktree list`를 본 뒤 `python tools/worktrees.py new <짧은이름> <type>/<topic>`(type: feat·fix·refactor·docs·uiux, 한 브랜치 한 주제). 맨손 `git worktree add` 금지. 한도는 main 포함 15개(D-886). 스크래치는 `$ROSY_SCRATCH`.
-2. **스테이징:** 만들거나 고친 경로만 `git add <path>`. `git add -A`·`.`·디렉터리 add 금지, 커밋 전 `git diff --cached --name-only` 확인. 공유 체크아웃에서 `--amend`·`rebase`·`reset --hard`·`stash` 금지. 남의 경로 때문에 거절되면 사용자에게 알린다.
+1. **작업 위치:** 저장소 루트에서 `git status --short --branch`와 `git worktree list`를 본 다음 `python tools/worktrees.py new <짧은이름> <type>/<topic>`을 실행한다. 맨손 `git worktree add`는 쓰지 않는다. `<type>`은 `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나, 한 브랜치에 한 주제다. 한도는 main 포함 15개다([슬롯 운영 규칙](docs/reference/shared-checkout.md#워크트리-한도와-슬롯-운영), D-886). 스크래치·로그는 저장소 밖 `$ROSY_SCRATCH`에 둔다.
+2. **스테이징:** 이번 작업으로 만들거나 고친 경로만 `git add <path> ...`에 적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 커밋 전에 `git diff --cached --name-only`가 자신의 목록과 같아야 한다. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash`는 쓰지 않는다. 자신이 쓰지 않은 경로는 그대로 두고, 그 파일 때문에 거절되면 거절 문구를 사용자에게 알린다.
 3. **계약:** 제품 파일을 고치기 전에 README 「핵심 계약」과 아래 Working In This Directory, 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연다.
 4. **ADR 번호:** 파일을 만들기 직전에 `python tools/harness/adr_reserve.py next "<주제>"`로 선점한다. ADR 파일과 Log 행은 한 커밋이고, 뒤에 `python tools/harness/rosy_harness.py lint`를 돌린다.
-5. **시험:** 아래 Testing Requirements(D-584). 시험 PC가 닿지 않으면 "확인 못 함"이고 착지·push하지 않는다. 호스트 pytest 통과는 장치·ARM64 이미지·현장 수용을 대신하지 않는다.
-6. **제출과 push는 사용자가 말한 뒤에만 한다.** 브랜치 워크트리에서 `python tools/pr_land.py --evidence`로 낸다(Merge Queue, D-1055). `DIRTY`·`CONFLICTING`일 때만 `git merge origin/main` 후 증거를 다시 돌린다. squash·rebase 병합과 force-push 금지.
+5. **시험:** pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`로만 돌리고(D-584), 결과는 `python test/known_failures.py`로 비교한다. 시험 PC가 닿지 않으면 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
+6. **제출과 push는 사용자가 말한 뒤에만 한다.** 브랜치 워크트리에서 `python tools/pr_land.py --evidence`로 내면 GitHub Merge Queue가 merge commit으로 병합한다(D-1055). PR이 `DIRTY`·`CONFLICTING`일 때만 `git merge origin/main`을 하고 증거를 다시 돌린다. `BEHIND`는 그대로 둔다. squash·rebase 병합과 force-push는 하지 않는다.
 
 다른 PR이 최근 7일 안에 main에 넣은 줄을 지우거나 고치면 PR 본문에 `Replaces: #N (이유)`(또는 `Step-Back: none (이유)`)를 적는다(D-1067, [못 잡는 것](docs/reference/shared-checkout.md#다른-pr의-최근-작업을-되돌리지-않는다)).
 
-멈추는 신호: `git add -A`, `known_failures.py` 없이 "기존 실패"라 부를 때, ADR 번호를 다시 확인하지 않고 쓸 때, 동료 변경을 stash 했다 되돌리려 할 때.
+멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
 
 ### GitHub 게시와 두 에이전트 검토
 

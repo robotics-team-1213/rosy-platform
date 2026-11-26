@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power-bench, acceptance, release key/retention. `ls` lists them. **Runtime model:** the product robot runs natively on Ubuntu Server 24.04 arm64 + ROS 2 Jazzy + systemd (D-161). Docker is development/CI tooling only, never a product-image dependency (D-197); a container sidecar is allowed only for a declared workload outside the safety plan (D-246).
+Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power-bench, acceptance, release key/retention. `ls` lists them. **Runtime model:** the product robot runs **natively** on Ubuntu Server 24.04 arm64 + ROS 2 Jazzy + systemd (D-161). Docker is development/CI tooling only, never a product-image dependency (D-197); a container sidecar is allowed only for a declared workload outside the safety plan (D-246).
 
 ## For AI Agents
 
@@ -26,3 +26,8 @@ Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power
 ### Testing Requirements
 
 Contracts: `test/test_robot_runtime.py`, `test/test_pi_wifi_deployment.py`, `test/test_dds_identity_contracts.py`. Hardware steps are manual (D-584 for the pytest part, remote). Operator prose is Korean with copy-pasteable bash/pwsh.
+
+### Dependencies
+
+- Product: Ubuntu Server 24.04 arm64, native ROS 2 Jazzy, systemd.
+- Development/CI only: Raspberry Pi OS Lite 64-bit, Docker Compose, nmcli.

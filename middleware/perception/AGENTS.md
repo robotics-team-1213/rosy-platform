@@ -23,7 +23,7 @@ Source holders and installed identities: `control/_source_layout.py` (`CONTROL_R
 - Learned loop (D-356): `learned_lane_node` is shadow-only and never publishes a command. Weights never live in `src/`; training and delivery tooling is in `learning/training/perception/`.
 - Legacy chain: wander → raw command → safety_node → motors. The OS target selects the final command in CORE and publishes in RosBridge (D-38); never start both final publishers.
 - One fused status label (`control/modes.pick_mode`) on `/robot/mode`; `/safety/mode` is a deprecated alias. Each node = `rclpy.Node` + one-concern mixins (wander = Senses/Judge/Contact/Motion; safety = Bumper/Hazard/Gate/Scale).
-- Device install and enabling (scripts in `deploy/robot/pinky_pro/`): keep the runtime stationary during install and readback. `install-pi.sh` derives `ROS_DOMAIN_ID`/`ROSY_NAMESPACE`; never write identity values into `.env` by hand.
+- Device install and enabling (scripts in `deploy/robot/pinky_pro/`): keep the runtime stationary during install and readback. Order: `install-pi.sh` → `verify-pi.sh` → `device-readback.sh --json`. `install-pi.sh` derives `ROS_DOMAIN_ID`/`ROSY_NAMESPACE`; never write identity values into `.env` by hand.
 - Enable `motor` or `hardware` only after the stationary core, immutable image digest, ROS graph and single-publisher checks are GO. Enable calibration and camera profiles only after matching generation and sensor readback are retained.
 - Record source/local/ROS-simulation results separately from artifact, Device and FIELD results. A host test or build does not prove a Device install, sensor capture, motor motion or arm operation; ARM64 image, Pi readback, CSI timing,
 - motor deadman and OMX acceptance each need their own evidence.
