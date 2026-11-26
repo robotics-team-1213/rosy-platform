@@ -20,17 +20,19 @@ def test_arm_route_panels_show_only_the_requested_slots_and_preserve_both_result
             page.context.add_cookies([{"name": web.SESSION_COOKIE, "value": "valid", "url": url}])
             arms = {arm: {"sites": {}, "route_sites": pair} for arm, pair in pairs.items()}
             arms["arm_s"] = {"sites": {"pinky": {"place_xy_m": [0.2, 0.03], "surface_z": 0.01}}}
-            page.route("**/api/calibration/status", lambda r: r.fulfill(json={"arms": arms}))
+            page.route("**/api/calibration/status", lambda r: r.fulfill(json={"arms": arms,
+                "fleet_cell_console_url": "https://fleet.example/cell"}))
             sent = []
 
             def handle(route):
                 if route.request.method == "GET":
-                    return route.fulfill(json={"jobs": []})
+                    return route.fulfill(json={"jobs": [{"id": "unrelated-check", "arm": "arm_s", "step": "check",
+                        "targets": ["floor:0.1,0.2"], "status": "done", "result": {"check": {"camera_issue": "foreign-result"}}}]})
                 body = route.request.post_data_json
                 sent.append(body)
                 arm = body["arm"]
                 if arm == "arm_s":
-                    return route.fulfill(status=202, json={"id": "s-check", "arm": arm, "step": "check", "status": "done",
+                    return route.fulfill(status=202, json={"id": "s-check", "arm": arm, "step": "check", "supply_route": True, "status": "done",
                         "result": {"check": {"camera_shift": {"ok": True}}, "todo": []}})
                 route.fulfill(status=202, json={"id": arm + "-test", "arm": arm, "step": "check", "route": pairs[arm],
                     "route_config": arm + ".json", "status": "done", "result": {"todo": ["remap"] if arm == "arm_a" else [],
@@ -39,11 +41,13 @@ def test_arm_route_panels_show_only_the_requested_slots_and_preserve_both_result
 
             page.route("**/api/calibration/jobs", handle)
             page.goto(url + "/?arm=arm_b")
+            expect(page.get_by_role("link", name="연결된 셀 작업")).to_have_attribute("href", "https://fleet.example/cell")
             supply = page.locator("#routePanels article").filter(has_text="S팔 경로 점검")
             expect(supply).to_contain_text("pinky → belt")
+            expect(supply).not_to_contain_text("foreign-result")
             supply.get_by_text("경로 사전 점검", exact=True).click()
             expect(supply).to_contain_text("카메라 · 기준 영상 확인")
-            assert sent.pop() == {"arm": "arm_s", "step": "check", "targets": ["pinky:0.2,0.03"]}
+            assert sent.pop() == {"arm": "arm_s", "step": "check", "supply_route": True}
             for arm, name in (("arm_a", "A"), ("arm_b", "B")):
                 panel = page.locator("#routePanels article").filter(has_text=name + "팔 경로 점검")
                 expect(panel.get_by_label("출발칸")).to_have_value(pairs[arm][0])

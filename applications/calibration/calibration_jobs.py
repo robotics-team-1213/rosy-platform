@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 OPERATE = "calibration.operate"
 STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "pivot-near": ["--only", "pivot-near"],
@@ -115,6 +116,15 @@ class Jobs:
         self.python = cells["python"]
         self.work = Path(cells["work"]).expanduser()
         self.arms = cells["arms"]
+        self.fleet_console_url = None
+        url = cells.get("fleet_cell_console_url")
+        if isinstance(url, str):
+            try:
+                parts = urlsplit(url)
+                if parts.scheme == "https" and parts.hostname and not parts.username and not parts.password:
+                    self.fleet_console_url = url
+            except ValueError:
+                pass
         self.spawn, self.probe, self.incident_tool = spawn, probe, incident_tool
         self.threads: list[threading.Thread] = []
         self._lease = None
@@ -202,7 +212,8 @@ class Jobs:
                 arms[arm]["route_sites"] = self.route_sites(arm)
             except (OSError, ValueError, KeyError, TypeError):
                 arms[arm]["route_sites"] = []
-        return {"revision": self.revision(), "leases_error": leases.get("error"), "arms": arms}
+        return {"revision": self.revision(), "leases_error": leases.get("error"), "arms": arms,
+                "fleet_cell_console_url": self.fleet_console_url}
 
     # --- jobs ---------------------------------------------------------------------------------------------------
     def job_file(self, job_id, ext="json"):
@@ -243,6 +254,15 @@ class Jobs:
                 return 422, {"error": "이송 설정과 두 칸이 선택한 팔에 속하는지 확인하세요."}
         else:
             config_path, config = self.arm_config(arm)
+        if "supply_route" in body:
+            if (body["supply_route"] is not True or arm != "arm_s" or step != "check" or targets
+                    or route or "site" in body or config.get("arm_id") != arm):
+                return 422, {"error": "공급 경로 점검에는 S팔 실행기 설정이 필요합니다."}
+            for name in ("pinky", "belt"):
+                site = (config.get("sites") or {}).get(name)
+                xy = site_point(name, site) if isinstance(site, dict) else None
+                if xy:
+                    targets.append(f"{name}:{xy[0]},{xy[1]}")
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
         if targets:
@@ -283,6 +303,8 @@ class Jobs:
             proc = None
             if route:
                 record.update(route=route, route_config=config_path.name)
+            if body.get("supply_route") is True:
+                record.update(supply_route=True, route_config=config_path.name)
             if "site" in body:
                 record["site"] = body["site"]
                 record["surface_clear"] = True

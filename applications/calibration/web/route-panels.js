@@ -49,17 +49,14 @@ function createPanel(arm, api) {
     panel.sending = true;
     const route = selects.map(s => s.value);
     const body = {arm, step: "check"};
-    if (arm === "arm_s") {
-      body.targets = defaults.arm_s.flatMap(name => {
-        const xy = panel.siteStatus?.[name]?.place_xy_m;
-        return xy ? [name + ":" + xy.join(",")] : [];
-      });
-    } else body.route = route;
+    if (arm === "arm_s") body.supply_route = true;
+    else body.route = route;
     render(panel);
     try {
       const job = await api("/api/calibration/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify(body)});
-      if (job.arm !== arm || (job.route || []).join("|") !== route.join("|")) throw new Error("팔과 경로가 일치하지 않습니다.");
+      if (job.arm !== arm || (arm === "arm_s" ? job.supply_route !== true : job.route?.join("|") !== route.join("|")))
+        throw new Error("팔과 경로가 일치하지 않습니다.");
       panel.rows.unshift(job);
     } catch (error) {
       panel.notice = {route, text: error.message};
@@ -117,7 +114,8 @@ function render(panel) {
   clearTimeout(panel.timer);
   const route = panel.selects.map(s => s.value);
   const active = panel.rows.find(j => j.status === "running");
-  const job = panel.rows.find(j => j.step === "check" && (j.route || []).join("|") === route.join("|"));
+  const job = panel.rows.find(j => j.step === "check"
+    && (panel.arm === "arm_s" ? j.supply_route === true : j.route?.join("|") === route.join("|")));
   const reason = !panel.operator ? "작업 권한으로 로그인하세요." : active ? "팔에서 작업 실행 중 · " + active.id
     : panel.sending ? "점검 요청 중" : panel.arm !== "arm_s" && (!route[0] || !route[1]) ? "이송 실행기 설정과 칸 목록을 확인하세요."
     : route.length && route[0] === route[1] ? "서로 다른 칸을 선택하세요." : "";
