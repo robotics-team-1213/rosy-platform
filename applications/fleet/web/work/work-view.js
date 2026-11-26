@@ -65,6 +65,29 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     textContent: "만들 수 있는 작업을 확인하고 있습니다."});
   el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
+  const kindFilter = el("work-filter"), statusFilter = el("work-status-filter");
+  let restoreKey = active ? history.state?.fleetWork?.selection : null;
+  if (active) {
+    const kind = history.state?.fleetWork?.kind;
+    if ([...kindFilter.options].some(option => option.value === kind)) kindFilter.value = kind;
+    for (const link of statusFilter.querySelectorAll("a")) {
+      if (new URL(link.href).searchParams.get("show") === (shown ? query.get("show") : null)) {
+        link.setAttribute("aria-current", "true");
+      }
+      scope.listen(link, "click", event => {
+        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        if (link.hasAttribute("aria-current")) { event.preventDefault(); return; }
+        if (kindFilter.value === "all" && !selected) return;
+        // Keep the existing login-return URLs; each status entry owns its filter and selection.
+        event.preventDefault();
+        history.pushState({fleetWork: {kind: kindFilter.value, selection: selected}}, "", link.href);
+        location.reload();
+      });
+    }
+  }
+  function rememberSelection() {
+    history.replaceState({...history.state, fleetWork: {kind: kindFilter.value, selection: selected}}, "");
+  }
   const anchor = el("work-integrations-anchor");
   el("work-integrations").open = query.has("arm_transfer") || query.has("trip_proposal");
   const units = createControlUnitView({scope, call, anchor, active, approveReason, principal});
@@ -178,6 +201,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   }
   async function select(row) {
     selected = workKey(row); refusal = ""; paint(); showDetail(row);
+    rememberSelection();
     const version = ++detailVersion, life = scope.capture();
     patchText(el("work-evidence"), "결과 근거 조회 중");
     try {
@@ -195,7 +219,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     }
   }
   function paint() {
-    const filter = el("work-filter").value;
+    const filter = kindFilter.value;
     const selection = rows.find(row => workKey(row) === selected);
     if (selection && filter !== "all" && selection.source !== filter) {
       selected = null; detailVersion++; clear();
@@ -276,13 +300,30 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정",
         result.cell_jobs_available ? "팔레트 적재 작업 원장" : "팔레트 적재 작업 원장 미설정", "운행 기록"].join(" · "));
       const current = rows.find(row => workKey(row) === selected);
-      if (selected && !current) { selected = null; detailVersion++; clear(); patchText(el("work-evidence"), "선택한 작업이 현재 조회 범위에 없습니다."); }
+      if (selected && !current) {
+        selected = null;
+        detailVersion++;
+        clear();
+        rememberSelection();
+        patchText(el("work-evidence"), "선택한 작업이 현재 조회 범위에 없습니다.");
+      }
       if (current) showDetail(current);
       paint();
+      if (restoreKey) {
+        const row = rows.find(candidate => workKey(candidate) === restoreKey
+          && (kindFilter.value === "all" || candidate.source === kindFilter.value));
+        restoreKey = null;
+        if (row) await select(row);
+        else rememberSelection();
+      }
       await refreshRequests(life);
       await channelRequestView.refresh();
     } catch (error) {
-      if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.", true);
+      if (!life.current()) return;
+      const denied = error.status === 401 || error.status === 403;
+      restoreKey = denied ? null : selected ?? restoreKey;
+      reset(denied ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.", true);
+      if (denied && active) rememberSelection();
     } finally { inFlight = false; }
   }
   async function refreshRequests(life) {
@@ -319,7 +360,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       clearRequests(requestsNotice(error.status));
     }
   }
-  scope.listen(el("work-filter"), "change", paint);
+  scope.listen(kindFilter, "change", () => { paint(); rememberSelection(); });
   scope.listen(el("work-refresh"), "click", refresh);
   scope.listen(admit, "click", approve);
   return {active, refresh, reset};

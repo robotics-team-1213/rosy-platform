@@ -1,6 +1,5 @@
 import { showMap } from "./scene.js";
 import { initPlay } from "./play.js";
-
 const ISAAC_FRESH_MS = 3000;
 const ISAAC_STATES = {
   waiting: "SIM 관측 대기 중",
@@ -23,13 +22,12 @@ const vector = (values, length) => Array.isArray(values) && values.length === le
 
 export function initLiveFeeds({
   byId, status, readout, date, text, readJson, mapData, recordingData,
-  manifestRead, mapPromise, directRun, getMode, getCadView, getArchiveLayout, getFactoryTab,
+  manifestRead, mapPromise, autoplayRecording, recordingReturn, recordingEntry, getMode, getCadView, getArchiveLayout, getFactoryTab,
 }) {
   let isaacSession;
   let simSession;
   let cameraSource = "gazebo";
   let cameraSession;
-
   function validIsaac(sample) {
     return sample?.schema === "rosy.world.isaac-state.v1" && text(sample.run_id) &&
       (sample.scene === "ab" ? isLayoutSha(sample.layout_sha256)
@@ -44,7 +42,6 @@ export function initLiveFeeds({
         text(object?.id) && text(object.frame_id) &&
         vector(object.position_m, 3) && vector(object.orientation_xyzw, 4));
   }
-
   function isaacStatus(state, message, summary = message) {
     const node = byId("isaac-status");
     if (node.getAttribute("state") !== state || node.textContent !== message) {
@@ -578,17 +575,26 @@ export function initLiveFeeds({
       }
       tick = requestAnimationFrame(advance);
     });
-    document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
     const panel = byId("panel-rec");
     new MutationObserver(() => { if (panel.hidden) stop(); }).observe(panel, {
       attributes: true, attributeFilter: ["hidden"],
     });
-    render(0);
+    const recordKey = JSON.stringify([source, captured_at, map.id, map_version, duration]);
+    const pauseAndSave = () => {
+      stop();
+      try {
+        if (panel.hidden) sessionStorage.removeItem(recordingEntry);
+        else sessionStorage.setItem(recordingEntry, JSON.stringify({recordKey, offset}));
+      } catch { /* The browser can disable storage for offline bundles. */ }
+    };
+    document.addEventListener("visibilitychange", () => { if (document.hidden) pauseAndSave(); });
+    window.addEventListener("pagehide", pauseAndSave);
+    const savedOffset = recordingReturn?.recordKey === recordKey ? recordingReturn.offset : null;
+    render(Number.isFinite(savedOffset) && savedOffset >= 0 && savedOffset <= duration ? savedOffset : 0);
     status("rec-status", "ready", recording.kind === "simulation" ? "시뮬레이션 실행 재생" : "보관 위치 기록");
     byId("rec-player").hidden = false;
-    if (directRun && !panel.hidden && duration > 0) play.click();
+    if (autoplayRecording && !panel.hidden && duration > 0) play.click();
   }
-
   void loadRecording();
   return { startPinkySim, stopPinkySim, startPinkyCamera, stopPinkyCamera };
 }

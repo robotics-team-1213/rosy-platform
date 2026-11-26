@@ -266,7 +266,7 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page.go_forward()
     expect(page.locator(f"#{field}")).to_be_visible()
     expect(step).to_have_attribute("aria-current", "step")
-    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).not_to_have_attribute("aria-current", "page")
+    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_count(0)
 
 
 def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):

@@ -242,6 +242,10 @@ def test_task_tabs_keep_one_panel_and_keyboard_selection_across_refresh(workflow
     page.keyboard.press('Home')
     expect(tabs.get_by_role('tab', name='준비', exact=True)).to_be_focused()
     expect(page.locator('#workflow-prepare')).to_be_visible()
+    assert tabs.get_by_role('tab', name='준비', exact=True).evaluate("""el =>
+        el.dispatchEvent(new KeyboardEvent('keydown',
+            {key:'ArrowRight', altKey:true, bubbles:true, cancelable:true}))""")
+    expect(page.locator('#workflow-prepare')).to_be_visible()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#workflow-record')).to_be_visible()
     expect(page.get_by_role('tabpanel')).to_have_count(1)

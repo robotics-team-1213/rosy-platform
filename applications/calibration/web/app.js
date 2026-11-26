@@ -1,11 +1,9 @@
 import "/common/ui.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
-import { initRequests } from "./requests.js";
+import { initRequests, requestHash } from "./requests.js";
 import { loadJobStatus, setJobArm, setJobOperator } from "./job-status.js";
 import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm } from "./status-logic.js";
-
 export const $ = (id) => document.getElementById(id);
-
 const state = {
   bundle: null,
   jobStatus: null,
@@ -539,11 +537,18 @@ function wireControls(reqs) {
     tabReq.setAttribute("aria-selected", !isGrid ? "true" : "false");
     $("panelGrid").hidden = !isGrid;
     $("panelRequests").hidden = isGrid;
-    if (!isGrid) reqs.refresh();
   };
-  tabGrid.addEventListener("click", () => switchTab(true));
-  tabReq.addEventListener("click", () => switchTab(false));
-
+  const syncRequestTab = () => {
+    if (requestHash()) switchTab(false);
+    else if (!location.hash) switchTab(true);
+  };
+  tabGrid.addEventListener("click", () => {
+    if (requestHash()) history.pushState(null, "", location.pathname + location.search);
+    switchTab(true);
+  });
+  tabReq.addEventListener("click", () => { switchTab(false); reqs.refresh(); });
+  window.addEventListener("hashchange", syncRequestTab);
+  syncRequestTab();
   $("btnTheme").addEventListener("click", () => {
     const next = (window.RosyTheme?.resolved?.() || "dark") === "dark" ? "light" : "dark";
     window.RosyTheme?.set?.(next);
