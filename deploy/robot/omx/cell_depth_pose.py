@@ -92,6 +92,56 @@ def height_map_in_colour(depth_mm: np.ndarray, factory: dict, roi: tuple = (40, 
     return colour_depth * ray_dot + float(plane["height_mm"]), plane
 
 
+def patch_ray_coverage(depth, grid, box, height, plane, factory):
+    """Count native rays expected at the local surface, including missing/out-of-sensor rays.
+
+    Only an expected ray that actually projects into the patch and wins the colour
+    z-buffer is evidence. At a discontinuity an entering ray cannot replace one
+    that left the patch or was hidden behind a foreground return.
+    """
+    kd, kc, rot, trans = calibration(factory)
+    a, b, c, d = box
+    normal = np.asarray(plane["normal"])
+    offset = float(plane["height_mm"]) - height
+    corners = np.array([[a-.5, b-.5, 1], [c-.5, b-.5, 1], [a-.5, d-.5, 1], [c-.5, d-.5, 1]])
+    rays = corners @ np.linalg.inv(kc).T
+    dots = rays @ normal
+    if np.any(dots >= -1e-6) or offset <= 0:
+        return 0, 0
+    depth_corners = (rays * (-offset / dots)[:, None] - trans) @ rot
+    if np.any(depth_corners[:, 2] <= 0):
+        return 0, 0
+    pix = depth_corners @ kd.T
+    bounds = pix[:, :2] / pix[:, 2:]
+    lo, hi = np.floor(bounds.min(axis=0)).astype(int), np.ceil(bounds.max(axis=0)).astype(int)
+    if np.any(hi - lo > 2 * np.array(depth.shape[::-1])):
+        return 0, 0
+    v, u = np.mgrid[lo[1]:hi[1]+1, lo[0]:hi[0]+1]
+    u, v = u.ravel(), v.ravel()
+    rays = np.column_stack([u, v, np.ones(len(u))]) @ np.linalg.inv(kd).T @ rot.T
+
+    def project(z):
+        points = rays * z[:, None] + trans
+        pixels = points @ kc.T
+        uv = np.rint(pixels[:, :2] / pixels[:, 2:]).astype(int)
+        x, y = uv.T
+        return x, y, (points[:, 2] > 0) & (x >= a) & (x < c) & (y >= b) & (y < d), points[:, 2]
+
+    nominal = -(offset + normal @ trans) / (rays @ normal)
+    _, _, expected, _ = project(nominal)
+    sensor = (u >= 0) & (u < depth.shape[1]) & (v >= 0) & (v < depth.shape[0])
+    raw = depth[np.clip(v, 0, depth.shape[0]-1), np.clip(u, 0, depth.shape[1]-1)]
+    measured = expected & sensor & np.isfinite(raw) & (raw > 0)
+    x, y, inside, z = project(np.where(measured, raw, nominal))
+    visible = measured & inside
+    x, y, z = x[visible], y[visible], z[visible]
+    dot = (np.column_stack([x, y, np.ones(len(x))]) @ np.linalg.inv(kc).T) @ normal
+    winners = np.isclose(z * dot + plane["height_mm"], grid[y, x], rtol=0, atol=1e-5)
+    # Two native rays rounding onto one colour pixel provide one visible sample.
+    observed = np.unique(y[winners] * grid.shape[1] + x[winners]).size
+    return int(observed), int(expected.sum())
+
+
 def capture_median_depth(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth",
                          n: int = 5, timeout_s: float = 12.0) -> np.ndarray | None:
     """Capture `n` locked depth frames and return their median, falling back to locked single-frame capture."""
