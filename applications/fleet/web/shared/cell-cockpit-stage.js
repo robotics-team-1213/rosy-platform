@@ -7,6 +7,8 @@ import { UiButton } from "/common/preact-ui.js";
 import { patchHidden } from "/common/control-dom.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
 import { createCellContextPanel } from "/console/assets/cell-context-panel.js";
+import { armIncidentAlertRows, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import {
   OBS_BASE,
@@ -385,10 +387,25 @@ export function createCellCockpitStage({
     }
   }
 
+  // The alert drawer's arm-incident rows (queues.js) open into this clear step; one confirm sends the clear POST.
+  function renderAlertSlots() {
+    const lockReason = !isOperator() ? OPERATOR_REASON : namedReason?.() || "";
+    const { crit, warn } = armIncidentAlertRows(view.workcellObs);
+    for (const row of [...crit, ...warn]) {
+      const slot = document.querySelector(`[data-decision-slot="${CSS.escape(row.key)}"]`);
+      if (!slot) continue;
+      const reason = typeof row.incident.decision?.reason === "string" ? row.incident.decision.reason : "";
+      renderDom(html`${reason ? html`<p class="stuck-resolver">${reason}</p>` : null}
+        <${IncidentClearBody} key=${row.key} arm=${row.arm} incident=${row.incident} clearReason=${lockReason}
+          onClearIncident=${clearIncident} />`, slot);
+    }
+  }
+
   return {
     element: section,
     refresh,
     render,
+    renderAlertSlots,
     setAreaHidden(nextHidden) {
       areaHidden = Boolean(nextHidden);
       render();
