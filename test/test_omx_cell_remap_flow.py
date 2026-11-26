@@ -85,3 +85,44 @@ def test_remap_scene_check_skips_the_folded_arms_own_body(tmp_path, monkeypatch)
     record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path / "again", log=lambda row: None)
     assert len(record["points"]) == len(points)
 
+
+def test_planned_hovers_pick_the_order_without_raised_transits():
+    """2026-11-26 arm_a: one 87 s transit (close, rise, turn, descend, open) between the grid's two clusters."""
+    direct_move = cc.rp.direct_move
+    points = [(0.10, 0.0), (0.11, 0.0), (0.14, 0.0), (0.16, 0.0)]  # S, A, B, C; A is S's nearest neighbour
+    hovers = [[pan, -20.0, 10.0, 50.0, 0.0] for pan in (10.0, 40.0, 20.0, 30.0)]  # but A is 30 deg of pan away
+
+    def transits(order):
+        h = [hovers[points.index(p)] for p in order]
+        return sum(not direct_move(a, b) for a, b in zip(h, h[1:]))
+
+    plain = cc.rp.visit_order(points)
+    assert plain == [points[0], points[1], points[2], points[3]] and transits(plain) == 2
+    planned = cc.rp.visit_order(points, hovers)
+    assert planned == [points[0], points[2], points[3], points[1]] and transits(planned) == 0
+    assert cc.rp.visit_indices(points, hovers, budget=0) == [0, 1, 2, 3]  # no search: the nearest chain
+    assert cc.rp.visit_order(points, [*hovers[:3], None]) == plain  # a point without a plan: the nearest chain
+
+
+def test_direct_move_matches_transit_path():
+    """The order's straight-move test must stay the one transit_path uses."""
+    import itertools
+
+    from omx_adapter.chunk_library import PARK_SPEED, RISE_SPEED, transit_path
+    from omx_adapter.motion_profile import flow
+
+    base = [20.0, -20.0, 10.0, 50.0, 0.0, 62.0]
+    steps = {0: (0, 14, 16), 1: (0, -14, -16, 23, 26), 2: (0, 23, 25), 3: (0, 23, 25), 4: (0, 44, 46)}
+    seen = set()
+    for start in (base, [20.0, -34.0, 10.0, 50.0, 0.0, 62.0], [20.0, -36.0, 10.0, 50.0, 0.0, 62.0]):
+        for i, deltas in steps.items():
+            for d in deltas:
+                goal = list(base)
+                goal[i] += d
+                straight = flow([list(start), goal], 30, 0.85 * PARK_SPEED, blend=[False, False], blend_s=0.25,
+                                rise_speed=RISE_SPEED)
+                same = transit_path(start, goal, 50.5, 30, None, 0.85) == straight
+                assert cc.rp.direct_move(start, goal) == same, (start[1], i, d)
+                seen.add(same)
+    assert seen == {True, False}
+

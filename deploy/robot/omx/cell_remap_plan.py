@@ -16,7 +16,7 @@ from pathlib import Path
 
 import cell_pipeline_io as cio
 import cell_remap_depth as rd
-from cell_remap_order import fit_naming_stop, scene_ignore, visit_order  # noqa: F401 - cell_calibrate reads them here
+from cell_remap_order import JOINTS, direct_move, fit_naming_stop, remap_order, scene_ignore, visit_indices, visit_order  # noqa: F401 - cell_calibrate reads them here
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
 REMAP_CLEAR_MM = 35.0
@@ -158,7 +158,7 @@ def plan(config: dict, points: list) -> list:
     """One row per point in visit order: the above_pick joints, and the error that would refuse it."""
     rows, cfg = [], scoped(config)
     limit = config.get("calibrate", {}).get("max_reach_m")
-    for x, y in visit_order(points):
+    for x, y in points:
         target, row = view(config, x, y), {"point": [x, y]}
         try:
             library = cio.plan_library(cfg, target, target, check=False)
@@ -170,7 +170,8 @@ def plan(config: dict, points: list) -> list:
         if limit is not None and r > limit + 1e-9:
             row["error"] = "; ".join(filter(None, [row.get("error"), f"r {r:.3f} m is beyond max_reach_m {limit}"]))
         rows.append(row)
-    return rows
+    hovers = [[row["above_pick"][n] for n in JOINTS] if row.get("above_pick") else None for row in rows]
+    return [rows[i] for i in visit_indices(points, hovers)]
 
 
 def refusal(rows: list) -> str | None:
