@@ -222,6 +222,7 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
     np.testing.assert_array_equal(seen[0][drive.lrs.GOAL], [1] + [0] * 9)
     np.testing.assert_array_equal(seen[1][drive.lrs.GOAL], [0] * 9 + [1])
     start, row, _, override, *_ = map(json.loads, (tmp_path / "policy-drive.jsonl").read_text().splitlines())
+    assert start["library"] == Path(args[args.index("--library") + 1]).name and start["policy_root"] == root.name
     assert start["goal_site"] == "yard:r1-s2-t1" and start["goal_destination"] == "ship-h1r0-l0"
     assert start["goal_site_slot"] == start["goal_slot"] == override["goal_site_slot"] == 0
     assert override["goal_slot"] == 9
