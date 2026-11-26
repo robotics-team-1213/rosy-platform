@@ -583,11 +583,16 @@ def test_black_fixture_parts_have_collision_without_false_contacts():
         _, _, tilt = world.pose(data, cid)
         assert tilt < 5.0, (cid, tilt)
 
+    home_world = tw.World(sites.Layout(preset="v24-20261126-real-home"))
+    assert not home_world.contact_report(home_world.reset())["arm_other"]
+
     box_q, box_v = world.box_q["bar-1"], world.box_v["bar-1"]
-    for name in ("b_bridge_col", "b_plate_col", "berth_v24_dock_s"):
+    for name in ("b_bridge_col", "b_plate_col", "b_clamp", "berth_v24_dock_s", "berth_v24_cradle_s", "berth_v24_stopper_col"):
         data = world.reset()
         gid = model.geom(name).id
-        data.qpos[box_q:box_q + 7] = [*data.geom_xpos[gid], 1, 0, 0, 0]
+        pos = data.geom_xpos[gid].copy()
+        pos[2] += model.geom_size[gid][2] + world.layout.box[2] / 2 - 0.002
+        data.qpos[box_q:box_q + 7] = [*pos, 1, 0, 0, 0]
         data.qvel[box_v:box_v + 6] = 0
         mujoco.mj_forward(model, data)
         pairs = {tuple(world.geom_name[g] for g in (c.geom1, c.geom2)) for c in data.contact[:data.ncon]}
