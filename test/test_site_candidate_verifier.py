@@ -512,6 +512,28 @@ def test_reports_docker_inspect_failure_without_leaking_command_data(candidate):
         )
 
 
+def test_host_service_subset_inspects_only_its_loaded_images(candidate):
+    """cell-a runs fleet/vision/proxy only; reused images of other services never reach it (2026-11-26 hold)."""
+    root, fake, image_ids, trusted_key = candidate
+    inspected = []
+
+    def runner(args, **kwargs):
+        if "pkeyutl" not in args:
+            service = args[-1].split(":", 1)[0].removeprefix("rosy-site-")
+            inspected.append(service)
+            if service != "fleet":
+                raise subprocess.CalledProcessError(1, args, stderr="No such image")
+        return fake(args, **kwargs)
+
+    summary = _load_verifier().verify_candidate(
+        root, trusted_key_id=TEST_KEY_ID, trusted_public_key=trusted_key, runner=runner, loaded_services=["fleet"])
+    assert inspected == ["fleet"] and summary["image_ids"] == {"fleet": image_ids["fleet"]}
+    for bad in ([], ["fleet", "nope"]):
+        with pytest.raises(ValueError, match="non-empty subset"):
+            _load_verifier().verify_candidate(
+                root, trusted_key_id=TEST_KEY_ID, trusted_public_key=trusted_key, runner=fake, loaded_services=bad)
+
+
 def test_rejects_unsigned_candidate(candidate):
     root, _, _, _ = candidate
     (root / "release.json.sig").unlink()

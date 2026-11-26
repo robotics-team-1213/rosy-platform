@@ -396,6 +396,7 @@ def _archive_image_ids(
 def verify_candidate(
     candidate_dir: Path, *, trusted_key_id: str, trusted_public_key: Path,
     runner: Runner = subprocess.run, inspect_loaded_images: bool = True,
+    loaded_services: list[str] | None = None,
 ) -> dict:
     """Authenticate a candidate and check contents, optionally inspect loaded images."""
     root = Path(candidate_dir).resolve(strict=True)
@@ -452,7 +453,11 @@ def verify_candidate(
         archive_ids[service] = {i: "signed-reuse" for i in identities}
     image_ids: dict[str, str] = {}
     id_forms: dict[str, str] = {}
-    for service in summary["verified_images"]:
+    # A host that runs only some services (cell-a: fleet/vision/proxy) checks only those loaded images;
+    # signature, archive and manifest checks above still cover every service.
+    if loaded_services is not None and (not loaded_services or set(loaded_services) - set(summary["verified_images"])):
+        raise CandidateVerificationError("loaded services must be a non-empty subset of the signed services")
+    for service in loaded_services or summary["verified_images"]:
         row = summary["manifest"]["images"][service]
         reference = row["reference"]
         accepted = archive_ids[service]
@@ -490,12 +495,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="public key installed outside the candidate bundle")
     parser.add_argument("--signature-only", action="store_true",
                         help="verify signature and package hashes before docker image load")
+    parser.add_argument("--services", help="comma-separated services this host runs; only their loaded images are inspected")
     args = parser.parse_args(argv)
     try:
         result = verify_candidate(
             args.candidate_dir, trusted_key_id=args.trusted_key_id,
             trusted_public_key=args.trusted_public_key,
             inspect_loaded_images=not args.signature_only,
+            loaded_services=args.services.split(",") if args.services else None,
         )
     except (CandidateVerificationError, OSError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
