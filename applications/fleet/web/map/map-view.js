@@ -249,9 +249,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.font = font("micro"); ctx.fillStyle = css("--ink-quiet");
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("N", 0, 3.5);
     ctx.restore();
-    const sx = cx + 16, sy = 25, scale = scaleBar(pxPerM, rightBound - sx);
-    if (!scale) return;
-    const { stepM, barPx } = scale;
+    const sx = cx + 16, sy = 25, { stepM, barPx } = scaleBar(pxPerM, rightBound - sx) ?? {};
+    if (!stepM) return;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.strokeStyle = css("--ink-quiet"); ctx.fillStyle = css("--ink-quiet"); ctx.lineWidth = 1.2;

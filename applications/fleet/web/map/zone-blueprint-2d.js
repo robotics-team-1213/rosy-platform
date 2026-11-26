@@ -1,7 +1,6 @@
 // SVG-only 2D site-floor & arm-cell slot/tier blueprint renderer using CSS tokens only.
 
 import { placeText } from "/common/map-rules.js";
-
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function svgNode(tag, attrs = {}, text = null) {
