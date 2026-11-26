@@ -250,7 +250,7 @@ async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, s
 def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
 
     here = self._pose_of(robot_id)
-    if here is None or self._verdict(robot_id) != "TRUSTED":
+    if here is None or self._verdict(robot_id) != "trusted":
         return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
                 "command_robot_id": robot_id, "blocked_by": robot_id, "waiting_on": [robot_id],
                 "dispatch_attempted": False, "cancel_confirmed": False}
