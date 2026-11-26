@@ -26,6 +26,7 @@ from cell_job_guards import (  # noqa: E402
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
+from cell_job_depart import depart_once, with_depart  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
@@ -66,14 +67,11 @@ def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
     return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
 
 
-def _tools_tree(workdir: Path) -> str | None:
-    return tools_tree_name(workdir)
+_tools_tree = tools_tree_name
 
 
 def _dirty_arms(run: dict) -> tuple[str, ...]:
-    if run.get("arms"):
-        return tuple(run["arms"])
-    return (run["arm"],) if run.get("arm") else ()
+    return tuple(run.get("arms") or ((run["arm"],) if run.get("arm") else ()))
 
 
 class Runner:
@@ -243,7 +241,7 @@ class Runner:
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
                 "proposer": eff_params.get("proposer"), "fleet_online": fleet_online,
-                "start": now, "expires_at": now + JOB_TTL_S,
+                "start": now, "expires_at": now + JOB_TTL_S, "depart": None, "depart_lock": threading.Lock(),
                 "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
@@ -259,6 +257,7 @@ class Runner:
             if isinstance(proc, _REAL_POPEN):
                 def _reap(jid=jid, run=run):
                     code = run["proc"].wait()
+                    depart_once(self, jid, run)
                     with self.lock:
                         self._audit_locked(jid, run, code)
 
@@ -295,6 +294,7 @@ class Runner:
                 run["_parsed_result"] = (structured_result, failure_bundle_id)
         else:
             structured_result, failure_bundle_id = None, None
+        structured_result = with_depart(structured_result, depart_once(self, jid, run) if code is not None else None)
         return {
             "id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code,
             "log": data, "structured_result": structured_result, "failure_bundle_id": failure_bundle_id,

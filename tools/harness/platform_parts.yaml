@@ -1537,6 +1537,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_spec.py
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
+  - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_media_jobs.py
