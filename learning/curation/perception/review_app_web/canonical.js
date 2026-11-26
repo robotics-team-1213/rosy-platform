@@ -106,7 +106,7 @@ function renderSpec() {
   $('canon-spec-sha').textContent = `sha256: ${(snap.spec_sha256 || '').slice(0, 12)} · ${snap.spec_source || 'builtin'}`;
 
   const lib = spec.envelope_margins?.arm_b_reviewed_lib || {};
-  const gateBase = lib.data_gate_home_max_j234_rad ?? 0.239;
+  const gateBase = lib.data_gate_home_max_j234_rad ?? 0.226;
   const jitter = spec.start_jitter_rad ?? 0.035;
   const gateSum = (gateBase + jitter).toFixed(3);
   const gateLim = lib.data_gate_limit_rad ?? 0.35;
