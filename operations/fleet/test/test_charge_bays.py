@@ -381,3 +381,24 @@ def test_road_nav2_http_route_dispatches_along_road_polyline(tmp_path):
     # No camera sighting, pin or auto-locate fit: the robot's own SLAM pose is not a site pose, so nothing goes out.
     assert res.status_code == 409 and res.json()["detail"]["code"] == "SITE_POSE_UNKNOWN"
     assert not any("goal" in str(call) or "navigat" in str(call) for call in bot.log)
+
+
+def test_pipeline_cell_action_maps_charge_c3(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    from fleet.server.sitemap import pipeline_routes as routes
+    from fleet.server.sitemap.pipeline_cell_task_routes import PLACE_OF_ACTION
+
+    assert PLACE_OF_ACTION["charge_c3"] == "C3"
+    site, graph, _ = build_world_261026_site_map()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
+    app = FastAPI()
+    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (3, site, graph, None)))
+    app.state.omx_cell_states = {"cell_a": {"robot_id": "rosy_46", "status": "ABORTED"}}
+    res = TestClient(app).post("/api/fleet/pipeline/pinky-tasks", json={"action": "charge_c3", "robot_id": "rosy_46"})
+    assert res.status_code == 200
+    task = res.json()["pinky_task"]
+    assert (task["place_id"], task["target_place"], task["status"]) == ("C3", "C3", "QUEUED")
