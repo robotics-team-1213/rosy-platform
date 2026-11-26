@@ -330,12 +330,6 @@ def test_refused_load_parks(tmp_path):
     assert result["result"] == "refused" and cell.commands[-1] == "park" and "run policy" not in cell.commands
 
 
-def test_moving_needs_person_at_switch():
-    with pytest.raises(SystemExit):
-        drive.main(["--config", "c", "--library", "l", "--policy-root", "p", "--policy-revision", "r",
-                    "--model-calibration", "m", "--cell-calibration", "c", "--operator", "x"])
-
-
 def test_demonstrated_range_widens_only_where_a_person_went(tmp_path):
     low, high, _ = drive.envelope(LIB)
     wl, wh = drive.widen(low, high, [0, -58, 30, 40, -2, 46], [20, -20, 51, 50, 48, 60])

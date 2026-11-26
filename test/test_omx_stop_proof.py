@@ -85,7 +85,7 @@ def test_session_proof_reads_the_runners_own_live_state():
     assert sp.session_proof(cell, "run-1", "arm_s")["basis"] == {"arm_s": "live"}
     cell.policy_state.return_value = {**live, "human_hold_latched": True}
     assert sp.session_proof(cell, "run-1", "arm_s")["code"] == "STOP_PROOF_LATCH"
-    assert sp.session_proof(object(), "run-1", "arm_s")["code"] == "STOP_PROOF_ARM_STATE_UNKNOWN"
+    assert sp.session_proof(object(), "run-1", "arm_s")["code"] == "STOP_PROOF_LIVE_STALE"  # a session with nothing fresh to show
 
 
 def _runner(tmp_path, monkeypatch, *, live=None, fleet=ONLINE, popen=None):

@@ -29,6 +29,12 @@ import cell_feel  # noqa: E402
 import cell_fleet_handoff as cfh  # noqa: E402
 import cell_fleet_pipeline as cfp  # noqa: E402
 import cell_job_api as cja  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
+    monkeypatch.setattr(cja, "prove_job", lambda *a, **k: (None, None))
 import cell_job_client as cjc  # noqa: E402
 import cell_job_spec as cjs  # noqa: E402
 import cell_pinch  # noqa: E402
