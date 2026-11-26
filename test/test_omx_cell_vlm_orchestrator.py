@@ -96,6 +96,8 @@ def _install_fake_popen(monkeypatch, *, incidents=None, dry_pick=None, live_outp
     motion_procs = []
 
     def fake_popen(argv, **kwargs):
+        if len(argv) > 3 and str(argv[3]).endswith("cell_camera_heal.py"):  # camera jobs heal cameras first
+            argv = argv[argv.index("--") + 1:]
         p = Mock()
         p.argv = argv
         fh = kwargs.get("stdout")
