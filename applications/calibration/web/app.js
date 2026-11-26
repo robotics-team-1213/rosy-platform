@@ -6,7 +6,7 @@ import { readFixtureFrame, fixtureSummary } from "./fixture-frame.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests, requestHash } from "./requests.js";
 import { loadJobStatus, setJobArm, setJobOperator } from "./job-status.js";
-import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm } from "./status-logic.js";
+import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm, freshLiveTcp, mapEvidence } from "./status-logic.js";
 export const $ = (id) => document.getElementById(id);
 const state = {
   bundle: null,
@@ -98,11 +98,10 @@ function frameFor(profile, source, force = false) {
       rec.image?.close();
       rec.image = image;
       rec.observation = observation;
-      rec.binding = res.headers.get("X-Rosy-Frame-Binding");
-      rec.generation = res.headers.get("X-Rosy-Frame-Generation");
-      rec.reference = res.headers.get("X-Rosy-Frame-Reference-Sha256");
-      rec.shift = res.headers.get("X-Rosy-Frame-Shift-Px");
-      rec.expires = started + Number(res.headers.get("X-Rosy-Frame-Lifetime-Ms") || 0);
+      const receipt = (name) => res.headers.get(`X-Rosy-Frame-${name}`);
+      Object.assign(rec, {binding: receipt("Binding"), generation: receipt("Generation"), reference: receipt("Reference-Sha256"), shift: receipt("Shift-Px")});
+      rec.expires = started + Number(receipt("Lifetime-Ms") || 0);
+      rec.observedAt = Number(receipt("Observed-At")) * 1000 || null;
       clearTimeout(rec.expiryTimer);
       if (source === "live" && rec.binding === "aligned" && rec.expires > performance.now()) {
         rec.expiryTimer = setTimeout(renderCanvases, rec.expires - performance.now() + 1);
@@ -344,7 +343,7 @@ function renderRobotAndBias(profile) {
       tr.appendChild(td);
     }
     const tdSha = document.createElement("td");
-    tdSha.setAttribute("data-level", r.stale_map ? "warn" : "ok");
+    tdSha.setAttribute(r.stale_map ? "data-evidence" : "data-level", r.stale_map ? "delayed" : "ok");
     tdSha.textContent = `${r.map_sha || "-"} (${r.stale_map ? EVIDENCE_LABEL.delayed : EVIDENCE_LABEL.fresh})`;
     tr.appendChild(tdSha);
     tr.addEventListener("click", () => {
@@ -435,18 +434,20 @@ function renderCanvases() {
   bindTag.textContent = verified ? tagged : "정합 미확인 · 오버레이 숨김";
   bindTag.title = verified ? [tagged, shiftText].filter(Boolean).join(" · ") : (shiftText || fb.title);
 
+  Object.assign($("topEvidence"), mapEvidence(siteObj?.map?.digest, frame.image ? frame.observedAt : null, source));
   const fixtures = verified && source === "live" ? frame.observation?.fixtures : null;
   const fixtureDetails = $("fixtureDetails");
   fixtureDetails.hidden = !fixtures || !Object.keys(fixtures).length;
   if (!fixtureDetails.hidden) $("fixtureValues").textContent = fixtureSummary(fixtures);
+  const tcp = freshLiveTcp(profile.robot_status?.live, performance.now() - state.bundleSentAt);
   const topRes = renderTopView($("topCanvas"), {
-    profile, siteName: state.siteName, image: frame.image, frameSource: source, frameVerified: verified, fixtures, layers: state.layers,
+    profile, tcp, siteName: state.siteName, image: frame.image, frameSource: source, frameVerified: verified, fixtures, layers: state.layers,
     zPlane: state.zPlane, errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastTopHitTargets = topRes?.hitTargets || [];
 
   const armRes = renderArmGrid($("armCanvas"), {
-    profile, siteName: state.siteName, layers: state.layers,
+    profile, tcp, siteName: state.siteName, layers: state.layers,
     errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastArmHitTargets = armRes?.hitTargets || [];
@@ -510,8 +511,8 @@ async function loadSnapshot() {
     },
   });
   try {
-    const data = await fetchJson("/api/calibration/v1/profiles");
-    state.bundle = data;
+    const sentAt = performance.now(), data = await fetchJson("/api/calibration/v1/profiles");  // budget counts from send
+    Object.assign(state, {bundle: data, bundleSentAt: sentAt});
     state.profileId = currentProfile()?.id || null;
     if (!state.siteName) state.siteName = defaultSiteForProfile(currentProfile());
     renderAll();

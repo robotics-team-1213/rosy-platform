@@ -114,3 +114,29 @@ export function postEvalRequest(arm, sites, site, attended) {
   if (attended !== true || !Object.hasOwn(sites || {}, site) || sites[site]?.can_post_eval !== true) return null;
   return {arm, step: "post-eval", site, person_at_switch: true};
 }
+
+/** Live TCP while the server's freshness budget lasts. `elapsedMs` is performance.now() since the snapshot request was sent,
+ * so a skewed browser wall clock can neither hide a fresh TCP nor keep a stale one. */
+export function freshLiveTcp(live, elapsedMs) {
+  return live?.stale === false && Number.isFinite(live.fresh_for_ms) && elapsedMs >= 0 && elapsedMs < live.fresh_for_ms
+    ? live.tcp ?? null : null;
+}
+
+const KST = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+
+/** Screen time is KST HH:MM:SS; the UTC original goes in a title. Missing or unreadable → null. */
+export function kstStamp(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : { text: KST.format(date), title: `UTC ${date.toISOString()}` };
+}
+
+/** Evidence line under the camera map (element props): map SHA head · when the frame was seen (KST) · where it came from. */
+export function mapEvidence(digest, observedMs, source) {
+  const seen = kstStamp(observedMs);
+  const from = source === "reference" ? "기준 영상" : "실시간 카메라";
+  return {
+    textContent: `지도 ${digest ? String(digest).slice(0, 8) : "없음"} · 관측 ${seen ? seen.text : "—"} · ${from}`,
+    title: seen ? `관측 ${seen.title}` : "",
+  };
+}
