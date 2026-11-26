@@ -158,6 +158,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const dpr = window.devicePixelRatio || 1;
     const ctx = clearCanvas(canvas, Math.round(width * dpr), Math.round(height * dpr));
     ctx.scale(dpr, dpr);
+    reserveBox({ x: 0, y: 0, w: canvas.width, h: 40 * dpr });  // 이름표도 위 좌표 칩·축척 띠(40)를 피한다
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
     // 돌린다. 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로 돌리므로 글자는 똑바로 선다.
     // 범위는 현장 지도와 같은 활성 지도(장소·도로·시설)이고, 활성 지도가 없을 때만 카메라 사각형이다.
@@ -165,14 +166,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const activeMap = view.activeSiteMap?.map;
     const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
     const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
-    // 눈금자는 격자 범위 중 보이는 칸(여백 32, 위 좌표 칩 띠 40 안쪽)만 — 밖 눈금은 가장자리로 몰려 겹친다.
-    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32), { max, min } = Math;
-    const ruler = { min_x: max(bounds.min_x, min(ax, bx)), max_x: min(bounds.max_x, max(ax, bx)), min_y: max(bounds.min_y, min(ay, by)), max_y: min(bounds.max_y, max(ay, by)) };
+    // 눈금자는 여백 없는 사이트 사각형 중 보이는 칸(여백 32, 위 칩 띠 40 안쪽)만 — 밖 눈금은 몰려 겹치고, 여백은 분할 칸에서 그림과 떨어뜨린다.
+    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32), { max, min } = Math, site = siteBounds(view.siteMap, 0);
+    const ruler = { min_x: max(site.min_x, min(ax, bx)), max_x: min(site.max_x, max(ax, bx)), min_y: max(site.min_y, min(ay, by)), max_y: min(site.max_y, max(ay, by)) };
     const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
     view.siteToWorld = (x, y) => { const [mx, my] = t.toMap(x, y); return { x: mx, y: my }; };
-    ctx.fillStyle = css("--ground-deep");
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = css("--ground-deep"); ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
     const showLanes = layerOn("lanes") && sameFrame;
     const polygons = layerOn("site") ? sitePolygons() : [];
