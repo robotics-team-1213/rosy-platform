@@ -32,7 +32,7 @@ def safe_stderr(row: dict) -> None:
         pass
 
 
-def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) -> None:
+def hold_runner(runner, present, reason, *, human: bool, empty_margin: float, strain_sample=None) -> None:
     """Freeze at the measured body pose; human hold also latches the command path."""
     saved, runner._committed_grip = getattr(runner, "_committed_grip", None), None
     if saved is not None and runner.target is not None and len(runner.target) >= 6:
@@ -81,11 +81,13 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
     if recovery or (rec_active and not caller_human):
         from chunk_policy_playback import report_policy_halt
         report_policy_halt(runner, present, True, command=f"run {chunk}" if chunk else ("run jog" if jogging else "fault"),
-                           ok=False, settled=False, error=reason, person_needed=True, contact=reason.startswith("contact"))
+                           ok=False, settled=False, error=reason, person_needed=True, contact=reason.startswith("contact"),
+                           **({"strain_sample": strain_sample} if strain_sample else {}))
     elif not human:
         fields = dict(
             command=f"run {chunk or 'jog'}" if chunk or jogging else "fault",
             ok=False, error=runner.fault, contact=True, **({"sway": sway} if sway else {}),
+            **({"strain_sample": strain_sample} if strain_sample else {}),
             **({"hold": True, "folded": False, "person_needed": True} if fold_abort else {}),
         )
         if gated or fold_park:

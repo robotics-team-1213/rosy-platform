@@ -101,13 +101,41 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
         pinky_dispatch_enabled: false,
         repark_requests: {rosy_77: {request_id: "rp-1", robot_id: "rosy_77", state: "REQUESTED", need_site_dxdy_m: [0.01, -0.02]}},
         pinky_tasks: [{task_id: "pt-1", robot_id: "rosy_77", action: "dock_s3", status: "QUEUED"}],
-        tasks: [],
+        calibration_origin: "https://cal.test:9449",
+        tasks: [
+          {task_id: "source", arm_id: "arm_s", status: "CANCELLED"},
+          {task_id: "move", arm_id: "arm_a", status: "QUEUED", depends_on: "source"},
+          {task_id: "ship", arm_id: "arm_b", status: "QUEUED", depends_on: "move",
+            src_site: "tmp-b-2-l1", dst_site: "ship-h1r2-l0", cell_id: "cell_ab", src_site_id: "temp_b:r1-s2:l2", dst_site_id: "yard:r1-s1:l1"},
+          {task_id: "supply:1", cell_id: "cell_s", arm_id: "arm_s", src_site: "pinky", dst_site: "belt"},
+          {task_id: "invalid&1", cell_id: "cell_s", arm_id: "arm_s", src_site: "pinky", dst_site: "belt"},
+          {task_id: "recovery", cell_id: "cell_s", arm_id: "arm_s", src_site: "pinky", dst_site: "belt", displaced_to: "belt_far"},
+          {task_id: "legacy", cell_id: "cell_ab", arm_id: "arm_a", src_site: "belt", dst_site: "pallet-l0"},
+          {task_id: "unrelated", arm_id: "arm_s", status: "FAILED"},
+          {task_id: "orphan", arm_id: "arm_b", status: "QUEUED", depends_on: "missing"},
+        ],
       },
       {robot_layer: {robots: [{robot_id: "rosy_77"}]}},
       {batch_id: "u-1", completed: 0, expected: 1, ready: false, reasons: ["UNLOAD_IN_PROGRESS"]},
     );
     const panelEl = root.children[0];
     registerIds(panelEl);
+    const tables = panelEl.children.flatMap(node => node.children).filter(node => node.tagName === "TABLE");
+    const chain = tables.find(table => table.children[0].textContent === "셀 작업과 경로 점검");
+    const rows = chain.children[2].children.map(row => row.children.map(cell => cell.textContent));
+    assert.deepEqual(rows.map(row => row[0]), ["source", "move", "ship", "supply:1", "orphan"]);
+    assert.deepEqual(rows[1].slice(4, 6), ["source", "CANCELLED"]);
+    assert.deepEqual(rows[2].slice(2, 6), ["tmp-b-2-l1 → ship-h1r2-l0", "QUEUED", "move", "QUEUED"]);
+    assert.deepEqual(rows[4].slice(4, 6), ["missing", "상태 미확인"]);
+    const actions = chain.children[2].children.map(row => row.children[6].children[0]);
+    assert.equal(actions[0], undefined);
+    const links = actions.filter(Boolean).map(link => new URL(link.href));
+    assert.deepEqual(links.map(link => link.origin), ["https://cal.test:9449", "https://cal.test:9449"]);
+    assert.deepEqual(links.map(link => link.hash), ["#route-arm_b", "#route-arm_s"]);
+    assert.deepEqual(links.map(link => Object.fromEntries(link.searchParams)), [
+      {arm: "arm_b", src_site: "tmp-b-2-l1", dst_site: "ship-h1r2-l0", task_id: "ship"},
+      {arm: "arm_s", src_site: "pinky", dst_site: "belt", task_id: "supply:1"},
+    ]);
     assert.equal(panelEl.id, "cell-pipeline-panel");
     const buttons = [];
     const walk = n => {

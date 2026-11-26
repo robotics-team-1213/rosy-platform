@@ -157,6 +157,8 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
+    motion = rp.scoped(config)
+    visits = []
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
     if not fold(cell).get("ok"):
@@ -166,7 +168,7 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
-            lib = cp.write_library(rp.scoped(config), view, view, work / f"remap-{i}.json")
+            lib = cp.write_library(motion, view, view, work / f"remap-{i}.json")
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
@@ -177,20 +179,12 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
                 failed = command
                 break
         if failed:
-            if at_stop is not None:  # evidence never stands between a stop and the fold: a stuck camera's
-                import threading      # frame() could hold the arm in contact for ~60 s, so it gets AT_STOP_S
-
-                def grab():
-                    try:
-                        at_stop(status.get("state"), status)
-                    except BaseException:
-                        pass
-                grabber = threading.Thread(target=grab, daemon=True)
-                grabber.start()
-                grabber.join(timeout=AT_STOP_S)
-            if not fold(cell).get("ok"):
-                raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
-            log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
+            try:
+                rp.record_stop(status, failed, [x, y], speed=motion["plan"].get("transit_speed", 0.85),
+                               log=log, at_stop=at_stop, timeout=AT_STOP_S)
+            finally:
+                if not fold(cell).get("ok"):
+                    raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             break
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
@@ -202,10 +196,14 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
             keep=frames / f"{i:02d}", report=report,
         )
         row = {"point": [x, y], "mark": mark, "near": near}
+        visit = {"point": [x, y], "status": "observed" if mark is not None else "missed", "pixel": mark}
+        visits.append(visit)
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
         if mark:
-            fk_x, fk_y, _, fk_yaw = rp.measured_tcp_yaw(cell, config, lib, (x, y))
+            fk_x, fk_y, fk_z, fk_yaw = rp.measured_tcp_yaw(cell, config, lib, (x, y))
+            if fk_z is not None:
+                visit["measured_tcp_m"] = [fk_x, fk_y, fk_z]
             if tcp_marks and fk_yaw is None:
                 row["why"], mark = "no planned FK yaw for the jaw labelling", None
             elif tcp_marks:
@@ -220,7 +218,8 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    return rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+    record = rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+    return {**record, "planned_visits": visits}
 
 
 def main(argv=None):
