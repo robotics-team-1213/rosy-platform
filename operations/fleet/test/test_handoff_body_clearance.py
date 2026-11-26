@@ -18,19 +18,26 @@ def _state(x, y):
                 evidence={channel: {"evidence": "fresh"} for channel in ("pose", "velocity")})
 
 
-def _run(peer_xy, *, peer_caps=PINKY_CAPS, fit_error=.037):
+def _run(peer_xy, *, peer_caps=PINKY_CAPS, fit_error=.037, peer_shift=.001):
     fit = Fit(0., 0., 0., (fit_error,))
+    # A different transform for the peer by default (its error counts); peer_shift=0 shares the mover's.
+    fits = {"mover": fit, "peer": Fit(0., peer_shift, 0., (fit_error,))}
     clients = {"mover": NS(), "peer": NS()}
     kept = {"mover": PINKY_CAPS, "peer": peer_caps}
     console = NS(clients=lambda: clients, robot_ids=clients.keys(), _clearance_m=.7,
                  goal_leases=NS(pending={}), _goal_busy=set(),
-                 _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda *_: (fit, None))),
+                 _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda robot, *_: (fits[robot], None))),
                  _capability_display=NS(_kept=lambda robot, _client: kept[robot]))
     # C1-like bay entry: from P1 (y .04) to staging (y .15) then reversing to the seat (y .47).
     mover = _state(-.42, .04)
     peers = ({"peer": clients["peer"]}, {"peer": _state(*peer_xy)})
     site_corridor(console, "mover", mover, {"site_map_id": "m", "site_map_version": 1}, None, (-.42, .47),
                   peers, route=[(-.42, .15)])
+
+
+def test_peer_off_centre_shares_the_binding_and_does_not_block():
+    # Same grid, same transform: 0.208 m from the entry lane (2.6 cm off its bay centre) clears 0.139 m.
+    _run((-.42 + .208, .47), peer_shift=0.)
 
 
 def test_peer_parked_in_the_neighbour_bay_does_not_block():
