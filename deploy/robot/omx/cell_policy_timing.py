@@ -212,9 +212,9 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
         park_safe, hold_needed = False, hold_needed or not (dry_run or rest)
         stop = None if dry_run or rest else send_hold(cell, log=log)
         safety_done = safety_done or not dry_run
-        # after the hold: the first diagnosis imports modules, and the hold must not wait behind that import
+        # only before any command: after motion the hold goes first and nothing slow (the diagnosis imports modules) may follow it
         facts = ({k: v for k, v in rest_diagnosis(status, library_home(library)).items() if k != "no_hold"}
-                 if status is not None else {})
+                 if status is not None and not moved else {})
         for entry in ({**row, "policy_stop": reason, **facts, "hold_kept": not (dry_run or rest)}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
             log(entry)
         return {"result": "refused", "at": n, "reason": reason, **facts, **({"status": status} if status else {})}
