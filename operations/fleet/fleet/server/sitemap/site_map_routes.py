@@ -18,7 +18,7 @@ from fleet.map_reality import compare, transform_map
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_camera_source import CameraDraftError, CameraDraftRequest, camera_draft
 from fleet.server.site_map_store import SiteMapError
-from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
+from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph, with_floor_surveys
 
 #: camera candidate points arrive over the wire; Infinity/NaN must refuse, not crash the judge
 FiniteXY = tuple[Annotated[float, Field(allow_inf_nan=False)], Annotated[float, Field(allow_inf_nan=False)]]
@@ -208,7 +208,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise site_map_error(exc.status_code, exc.code, exc.args[0]) from exc
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
-        return {**view, "route_active": bool(route_active())}
+        return {**view, "map": with_floor_surveys(view["map"]), "route_active": bool(route_active())}
 
     @app.get("/api/fleet/site-map/lane-graph-crosswalks", dependencies=read_guard, tags=["site-map"])
     def site_map_lane_graph_crosswalks() -> dict:

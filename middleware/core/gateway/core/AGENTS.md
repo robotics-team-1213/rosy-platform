@@ -1,35 +1,14 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-20 -->
 
 # core (Python package)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the process and starts the API thread; `services.py` builds `CoreServices` by assembling managers from `core_features`, schemas/profile/identity/capability from `core_common`, and the event bus / audit log from `core_events`. All ROS I/O is confined to `bridge/ros_bridge`.
+Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the process and starts the API thread; `services.py` builds `CoreServices` from `core_features` managers, `core_common` schemas/profile/identity/capability, and `core_events` (event bus, audit log). All ROS I/O is confined to `bridge/ros_bridge`. `trip_lease.py` is D-541 `TripLeaseManager` (one lease, monotonic TTL, policy only); `line_follow_wiring.py` only re-exports `drive/line_follow.py` (D-627). `bridge/`, `system/` and `drive/` (no new runtime or writer, D-627) have their own guides.
 
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `main.py` | Entry (`core=core.main:main`): applies Cyclone RMW via `core_common.rmw`, then `rclpy.init` → `RosyCoreNode.run` → shutdown |
-| `node.py` | Assembles profile/capabilities/services (`SOFTWARE_VERSION` from `core_common.identity`), starts uvicorn thread |
-| `trip_lease.py` | D-541 `TripLeaseManager` (one lease, TTL on the monotonic clock, policy only) and `build_trip_lease` (ends it on leaving NAVIGATION / e-stop, `halt` to IDLE on expiry, takeover, non-owner stop) |
-| `services.py` | `CoreServices` DI: ModeMachine/CommandManager, Docking*, Navigation*, Swarm, Power*, SafetyManager, StateManager (`core_features`), EventBus/FileAuditLog (`core_events`), inventory/protocol/evidence (`core_common`); `SHUTDOWN_SENTINEL_NAME` |
-| `line_follow_wiring.py` | Compatibility exports; implementation is `drive/line_follow.py` (D-627) |
-
-## Subdirectories
-
-| Directory | Purpose |
-|-----------|---------|
-| `bridge/` | All ROS I/O (see `bridge/AGENTS.md`) |
-| `system/` | Host probe, ROS graph (see `system/AGENTS.md`) |
-| `drive/` | CORE Drive composition: line-follow binding and docking/swarm assembly; no new runtime or writer (D-627) |
-
-Feature managers, protocol schemas, config/identity/profile, and the API no longer live here: see `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, and `../../api/core_api_web/AGENTS.md`. Operator screens are `middleware/robot_ui/robot`.
+Feature managers, schemas/config/identity, events and the API live elsewhere: `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, `../../api/core_api_web/AGENTS.md`. Operator screens are `middleware/robot_ui/robot`.
 
 ## For AI Agents
 
@@ -37,37 +16,23 @@ Feature managers, protocol schemas, config/identity/profile, and the API no long
 
 #### Split criteria — before making a module a package, or splitting a file
 
-Full reasoning: `docs/plans/2026-09-06-module-split-criteria.md` (repo root). Operative rules:
+Full reasoning: `docs/plans/2026-09-06-module-split-criteria.md`. Operative rules:
 
-- **Size is never a reason.** `waypoints/` is 85 lines and is a package; `docking/manager.py` is 511 and is one file.
-- **Promote a module only if all three hold:** it owns a requirement family no package claims, it needs a second file with a
-  different role *today* (or one is scheduled under a requirement ID), and ≥2 packages import it. One file, one role → stays.
-- **Split a file only on a defect.** C1: it cannot be imported by host pytest and hides a decision → extract a ROS-free sibling
-  (`bridge/translate.py`, `bridge/goal_tracker.py`). C6: a dependency reached via `hasattr`/`getattr` → declare the member;
-  `test/test_module_criteria.py` fails on any new reach. C7: one service field spanning two requirement families.
-- **Record the "leave it alone" verdicts too.** They are what stops the next round of churn.
+- **Size is never a reason.** `waypoints/` is 85 lines and a package; `docking/manager.py` is 511 and one file.
+- **Promote a module only if all three hold:** it owns a requirement family no package claims, it needs a second file with a different role *today* (or one is scheduled under a requirement ID), and ≥2 packages import it.
+- **Split a file only on a defect.** C1: host pytest cannot import it and it hides a decision → extract a ROS-free sibling (`bridge/translate.py`, `bridge/goal_tracker.py`). C6:
+- a dependency reached via `hasattr`/`getattr` → declare the member (`test/test_module_criteria.py` fails on any new reach).
+- C7: one service field spanning two requirement families.
+- **Record the "leave it alone" verdicts too.** They stop the next round of churn.
 
-- `SOFTWARE_VERSION` lives in `core_common.identity` and must match this package's `package.xml`. `node.py` imports it.
-- Waypoint store (`core_features.waypoints`) defaults to `~/.rosy/waypoints.json` (on Pi, `HOME=/var/lib/rosy`).
-- `SHUTDOWN_SENTINEL_NAME = "battery-shutdown-request.json"` in `services.py`. Dock database JSON lives beside waypoints.
+- `SOFTWARE_VERSION` lives in `core_common.identity` and must match this package's `package.xml`.
+- Waypoint store defaults to `~/.rosy/waypoints.json` (on Pi, `HOME=/var/lib/rosy`); dock database JSON lives beside it. `SHUTDOWN_SENTINEL_NAME = "battery-shutdown-request.json"` in `services.py`.
 - Optional ROS pkgs: wrap slam_toolbox (and similar) in constructor try/except.
+- Managers take an injected clock. Events via `EventBus.publish(type, source, data)`.
+- `core_common`, `core_events`, `core_features`, `core_api_web` are assembled only in `node.py` / `services.py`.
 
 ### Testing Requirements
 
 See sibling `../test/AGENTS.md`.
-
-### Common Patterns
-
-Managers take an injected clock. Events via `EventBus.publish(type, source, data)` (bus lives in `core_events`).
-
-## Dependencies
-
-### Internal
-
-- `core_common` (schemas, config, identity, profile, capability, domain, rmw), `core_events`, `core_features`, `core_api_web` — assembled only in `node.py` / `services.py`
-
-### External
-
-- rclpy (node/main/bridge only), yaml, fastapi/uvicorn (API thread via `core_api_web`)
 
 <!-- MANUAL: -->

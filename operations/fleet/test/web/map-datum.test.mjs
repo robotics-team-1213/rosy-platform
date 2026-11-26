@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {axisOrientation, drawMapDatum, gridCellOf} from "../../../../applications/fleet/web/map/map-datum.js";
-import {quarterTurn} from "../../../../applications/fleet/web/map/site-layer.js";
+import {fitBox} from "../../../../applications/fleet/web/shared/site-map-model.js";
 
 globalThis.window = {RosyPalette: {canvasFont: () => "16px monospace"}};
 
@@ -26,8 +26,8 @@ test("metre ticks and cell labels keep their projected positions through all fou
   const bounds = {min_x: -1, max_x: 2, min_y: -1, max_y: 2};
   const orientations = ["+X → · +Y ↑", "+X ↓ · +Y →", "+X ← · +Y ↓", "+X ↑ · +Y ←"];
   for (const [index, rot] of [0, 90, 180, 270].entries()) {
-    const turn = quarterTurn(rot, 300, 300);
-    const project = (x, y) => turn.point((x + 1) * 100, (2 - y) * 100);
+    const fit = fitBox(bounds, 300, 300, 0, rot);
+    const project = (x, y) => { const [px, py] = fit.toPx(x, y); return {x: px, y: py}; };
     const labels = drawMapDatum(fakeCtx(), project, bounds, {css});
     const horizontalAxis = rot % 180 === 0 ? "X" : "Y";
     assert.equal(axisOrientation(rot), orientations[index]);

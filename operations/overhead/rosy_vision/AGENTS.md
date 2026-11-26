@@ -1,35 +1,12 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # rosy_vision
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest of Rosy Cam frames, CPU ArUco detection, projection to the site map, and publication of derived sightings to Fleet (D-257, D-261). ROS-free; no `cmd_vel`. Fleet receives sighting JSON only, never JPEG.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `protocol.py` | Wire protocol: 20-byte frame header, `hello`/`config` JSON, `rosyov://` URI. Pure stdlib |
-| `ingest.py` | `IngestServer`: one connection per source, latest-frame-only |
-| `detect.py` | CPU ArUco detector; OpenCV isolated here |
-| `project.py` | Marker observations to site map (uses `core_common.homography`) |
-| `publish.py` | Source-token-only Fleet sighting client |
-| `worker.py` | Latest-frame camera-to-Fleet pipeline, no queues |
-| `post_guard.py` | Age re-check (0.8 s) before every Fleet POST plus posted/dropped_stale/post_errors counters; the `vision` stats line prints them every 30 s |
-| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`), display-only head tracker (`anchor_head_tracker.py`; `anchor_feed.py` runs it at most 1 Hz and POSTs its states to Fleet from a single-flight task after the detections), D-587 `marker_sightings.py` (identified robot markers through the approved record become sightings) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
-| `vision_config.py` | Validated camera/map config; secrets resolved by env name |
-| `pairing_sync.py` | Paired camera credentials synced from Fleet (token hashes only, D-341) |
-| `rectify.py` | Display-only lens/plane rectification for preview (D-318) |
-| `field_detect.py` | Field boundary proposal for operator review (D-360) |
-| `map_register.py`, `map_worker.py` | D-375 lane-paint map registration proposal, run in a separate low-priority process |
-| `stack_tiers.py` | Container tier count (1 or 2) from one front-camera frame for Fleet's queued-vehicle look (2026-11-19); Fleet takes only the JSON verdict, not wired to a Vision endpoint yet |
-| `correspondence.py` | D-1007 offline robot pose/marker correspondences to a review-only calibration candidate (not wired to Fleet) |
-| `cli.py` | `rosy-vision` entry point (`receive` etc.) |
 
 ## For AI Agents
 
@@ -37,29 +14,17 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 
 - `protocol.py` must match the Kotlin app (`operations/site_ui/cam`) byte for byte; the shared vector file `test/fixtures/protocol/overhead-ingest.v1.json` decides, not a local edit.
 - Keep OpenCV out of `protocol.py`, `ingest.py`, `publish.py`; it belongs in `detect.py` and the proposal modules.
-- Latest-only everywhere: do not add frame queues. Never trust the phone clock; use the receiver's own time minus `age_ms`.
-- Proposals (field, map fit) and rectification are display-only; they never alter the raw frame used for sightings or become policy evidence.
-- Every Fleet POST goes through `PostGuard.post` (stale payloads are dropped and counted, never queued); the httpx clients keep `keepalive_expiry` at 30 s, below Fleet's 75 s and Caddy's idle pool. A Pinky pose without its own marker in the frame is a home guess: never a sighting, never in the anchors POST.
-- Never log or forward tokens; the worker publishes with a source token only.
+- Latest-only everywhere (`ingest.py`, `worker.py`): no frame queues. Never trust the phone clock; use the receiver's time minus `age_ms`.
+- Proposals (`field_detect.py` D-360, `map_register.py` D-375) and rectification (`rectify.py`, D-318) are display-only; they never alter the raw frame used for sightings or become policy evidence. `stack_tiers.py` and `correspondence.py` (D-1007, review-only) are not wired to Fleet.
+- Every Fleet POST goes through `PostGuard.post` (`post_guard.py`: stale payloads over 0.8 s are dropped and counted, never queued); httpx clients keep `keepalive_expiry` at 30 s, below Fleet's 75 s and Caddy's idle pool.
+- A Pinky pose without its own marker in the frame is a home guess: never a sighting, never in the anchors POST.
+- `track/` is display-only (D-457 blob tracking, anchor head tracker at most 1 Hz, D-587 marker sightings); `led_identity.py` (D-472) is a pure blink detector and sends Fleet numbers only.
+- Never log or forward tokens; publish with a source token only. `pairing_sync.py` syncs token hashes only (D-341).
 
 ### Testing Requirements
 
 ```bash
-python -m pytest operations/overhead/test -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/vision" -- operations/overhead/test -q
 ```
 
-Key tests: `test_protocol.py`, `test_ingest.py`, `test_vision_detect.py`, `test_vision_project.py`, `test_vision_worker.py`, `test_vision_publish.py`, `test_vision_config.py`, `test_pairing_sync.py`, `test_pairing_e2e.py`, `test_preview_rectification.py`, `test_field_detect.py`, `test_map_register.py`, `test_vision_cli.py`, `test_led_identity.py`. Needs `websockets>=14`.
-
-### Common Patterns
-
-Small single-purpose modules; config validated up front; fake frames in `test/map_paint_frames.py`.
-
-## Dependencies
-
-### Internal
-
-- `core_common.homography` (via `project.py`, `field_calib.py`), `core_common.protocol.sightings` payload, Fleet sighting API
-
-### External
-
-- websockets>=14, opencv-contrib-python-headless, numpy, httpx
+D-584: remote only. Needs `websockets>=14`. Fake frames: `test/map_paint_frames.py`. Deps: `core_common.homography`, `core_common.protocol.sightings`, Fleet sighting API.

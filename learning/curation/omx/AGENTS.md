@@ -1,54 +1,30 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-03 | Updated: 2026-10-03 -->
+<!-- Generated: 2026-10-03 | Updated: 2026-11-26 -->
 
 # omx curation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427 learning part, wave 1 row 1c). Never connects to a robot, never uploads. Not installed on any device and not a ROS package.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `lerobot_export.py` | `python learning/curation/omx/lerobot_export.py <episode> <output> [--repo-id ...]`: validates the episode, writes the dataset, reads every frame back, copies the source into `rosy_provenance/` |
-| `world_model_dataset.py` | D-782 W1: closed collection sessions (including failed and aborted attempts) into session-split action-conditioned windows with human labels; `load()` checks the receipt digest |
-| `camera_setup_intake.py` | D-792 S3: shadow camera setup checks at intake (`collection_intake.py`/`collection_pipeline.py prepare --camera-reference ROLE=PATH`): first/last frame of each selected episode per role -> `camera-setup.json` (`rosy.omx-camera-setup-intake/1`) with reference revisions and camera_info fingerprints; never blocks |
-| `test/test_lerobot_export.py` | Schema, frame and refusal checks; the full LeRobot round trip skips without `lerobot` |
-| `arm_incident_labels.py` | Arm incidents a person cleared with a cause (Fleet `arm-incidents/labelled`, API v1.375) to label rows: the person's cause and basis, the cell's measured reading and the AI PC's explanation kept apart; truth only for a repeat or a measurement; `score` the rule against truth. Test `test/test_arm_incident_labels.py` |
-| `sim_batch_export.py` | Teacher reach results + recordings -> one `lerobot_export.py` run per complete successful episode, refusals with reasons, eval = highest seed, `batch-manifest.json` with `act_job.py` args. Test `test/test_sim_batch_export.py` |
-| `carry_dataset.py` | The cell's own carries -> ACT/VLA experiment dataset: raw `episode_recorder` recordings join `cell_attempts` rows by the run/attempt id the cell stamps in `task.json` (recordings without it are refused, never time-matched); only placed+verified carries with a person success label become episodes (forced stops, failures, interventions and unreviewed carries stay in `refusals`), train/eval split per run, source SHA-256s in the receipt; actions are the targets the runner sent, shadow predictions are never read. Test `test/test_carry_dataset.py` |
-| `two_arm_export.py` | Rosy Learning producer directories (arm_a/arm_b + four cameras) + carry windows (from `cell_attempts` rows, `placed` only) -> a two-arm LeRobot dataset with the sim `collect` features/fps via `cell_act_inputs` conversions, dropped-tick counts in `<out>.steps.json`; mix into a round with `omx_two_arm_policy.py round --extra-dataset ... --extra-dataset-weight N`. Read only. Test `test/test_two_arm_export.py` |
-| `data_gate.py` | Admission gate before training: per episode decoded video frames 1:1 with rows (catches dropped frames the LeRobot reader hides), camera role names (D-1065, declared legacy maps only), black/frozen runs, sim-radian and gripper ranges, start pose, goal text; per source a fixed-layout declaration keeps it out of randomized sets. `gate` writes `gate-receipt.json` with file hashes; `check_receipt` is what a trainer calls (stale files, dataset rejects and open reviews refuse). Test `test/test_data_gate.py` |
+Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427 learning part, wave 1 row 1c). Never connects to a robot, never uploads. Not installed on any device and not a ROS package. Scripts and their tests are listed by `ls`; each has a docstring with its usage.
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Production demonstration validation is `rosy.contracts.learning.omx.validate_demonstration` in `contracts/learning/src/rosy/contracts/learning/omx.py`; `lerobot_export.py` retains its local `validate_episode` alias. `common_episode.py` also validates the common Episode and OMX profile through the learning contracts. The old learning-to-adapter validation violation has been removed.
-- Both source entrypoints add the exact `contracts/learning/src` loader root themselves. `common_episode.py` adds `contracts/foundation` only for optional owner receipt wire validation. Adapter imports in tests supply existing recorded-demonstration fixtures; they are not the production validator. For export dependencies, the export venv and its pins are in `deploy/robot/omx/README.md` and `deploy/robot/omx/requirements-lerobot-export.txt`. Never install LeRobot into a ROS runtime.
+- Production demonstration validation is `rosy.contracts.learning.omx.validate_demonstration` in `contracts/learning/src/rosy/contracts/learning/omx.py`; `lerobot_export.py` keeps a local `validate_episode` alias. `common_episode.py` validates the common Episode and OMX profile via the learning contracts.
+- Both source entrypoints add the exact `contracts/learning/src` loader root themselves; `common_episode.py` adds `contracts/foundation` only for optional owner receipt validation. Adapter imports in tests supply fixtures only, not the production validator.
+- Export venv and pins: `deploy/robot/omx/README.md`, `deploy/robot/omx/requirements-lerobot-export.txt`. Never install LeRobot into a ROS runtime.
+- `carry_dataset.py`: recordings without the run/attempt id in `task.json` are refused, never time-matched; only placed+verified carries with a person success label become episodes; shadow predictions are never read.
+- `arm_incident_labels.py`: the person's cause, the cell's measured reading and the AI PC's explanation stay apart; truth only for a repeat or a measurement.
+- `data_gate.py` (D-1065 camera roles, declared legacy maps only) is the admission gate before training: `gate` writes `gate-receipt.json`; trainers call `check_receipt` (stale files, dataset rejects and open reviews refuse).
+- `camera_setup_intake.py` (D-792 S3) is a shadow check and never blocks intake. `two_arm_export.py` is read only. `world_model_dataset.py` (D-782 W1): `load()` checks the receipt digest.
 
 ### Testing Requirements
 
 ```bash
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/omx-curation" -- learning/curation/omx/test/ -q -p no:cacheprovider
-python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/omx-curation/run-1.txt"
 ```
-
-## Dependencies
-
-### Internal
-
-- `contracts/learning/src/rosy/contracts/learning/omx.py` (`validate_demonstration`, `validate_profile`, owner correlations).
-- `contracts/learning/src/rosy/contracts/learning/__init__.py` (common Episode sealing and validation).
-- `contracts/foundation/core_common/protocol/schemas.py` for optional owner receipt validation.
-- `middleware/devices/omx/adapter/test/test_demonstration.py` and the adapter package are retained fixture sources only.
-
-### External
-
-- `lerobot==0.4.4`, `numpy`, `Pillow`
 
 <!-- MANUAL: -->

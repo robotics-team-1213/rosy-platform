@@ -10,7 +10,7 @@ test('drawing and candidate failures explain the next action in operator languag
   }
 });
 import assert from 'node:assert/strict';
-import {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {arrowMarks, fitView, mapEvidence, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
 import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 import {
   editEdge, editPlace,
@@ -684,4 +684,16 @@ test('placeHitRadius clamps 14..18 and placeLabel/drawSitePointsOverlay deconfli
       assert.equal(overlaps, false, `labels overlap: ${a.text} vs ${b.text}`);
     }
   }
+});
+
+test('the map evidence line names version, KST activation time, source and survey or its absence', () => {
+  const edge = (id, source) => ({id, polyline: [[0, 0], [1, 0]], ...(source ? {display_polyline: [[0, 0], [1, 0]], display_source: source} : {})});
+  const survey = {kind: 'survey', surveyed_at: '2026-11-26', plane: 'ceiling_north', anchors: [[0, 0], [1, 0]]};
+  const active = {version: 7, activated_at: Date.UTC(2026, 10, 26, 0, 12, 3) / 1000, map: {map_id: 'world_261026', edges: [edge('a', survey), edge('b', survey), edge('c')]}};
+  assert.deepEqual(mapEvidence(active, e => Boolean(e.display_source)), {
+    text: '지도 v7 · 활성 09:12:03 · 출처 Fleet 활성 지도 · 측량 2026-11-26 ceiling_north',
+    title: 'world_261026 · 활성 2026-11-26T00:12:03.000Z (UTC)'});
+  assert.equal(mapEvidence(active, () => false).text, '지도 v7 · 활성 09:12:03 · 출처 Fleet 활성 지도 · 측량선 없음');
+  assert.equal(mapEvidence({...active, activated_at: undefined}, () => false).text, '지도 v7 · 활성 시각 모름 · 출처 Fleet 활성 지도 · 측량선 없음');
+  assert.deepEqual(mapEvidence(null, () => true), {text: '활성 지도 없음', title: ''});
 });

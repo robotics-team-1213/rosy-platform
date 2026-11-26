@@ -40,6 +40,7 @@ install(FILES
   interaction-controls.js
   workflow-controls.js
   cause-line.js
+  plane-math.js
   preact-ui.js
   component-controls.css
   component-gallery.css

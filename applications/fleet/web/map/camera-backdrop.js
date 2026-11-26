@@ -4,7 +4,8 @@
 import { setOffBy } from "/common/cause-line.js";
 import { evidenceAgeText } from "/common/core_ui_logic.js";
 
-import { siteBounds, fitTransform, project } from "./site-layer.js";
+import { siteBounds } from "./site-layer.js";
+import { fitBox } from "/console/assets/site-map-model.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 import { createPlaneFeed, planeCalibration, planeToMap } from "/console/assets/vision-view.js";
@@ -226,8 +227,8 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     lastCorrectedImage = image;
     canvas.width = 480; canvas.height = 270;
     const ctx = canvas.getContext("2d");
-    const transform = fitTransform(bounds, canvas.width, canvas.height, 8);
-    const toPx = (x, y) => { const p = project(transform, x, y); return {x: p.px, y: p.py}; };
+    const fit = fitBox(bounds, canvas.width, canvas.height, 8);
+    const toPx = (x, y) => { const [px, py] = fit.toPx(x, y); return {x: px, y: py}; };
     drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0, pic);
   }
   function redraw() {

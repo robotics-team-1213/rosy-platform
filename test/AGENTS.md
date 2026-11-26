@@ -1,107 +1,42 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
-## Purpose
-
-ROS-free repository architecture, installation, deployment, motor/network and cross-owner learning tests. Pytest runs on remote test PCs or CI, never this laptop (D-584). These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the current package-level `test` suites. `conftest.py` inserts `deploy/robot/pinky_pro/release` onto `sys.path` so modules shipped as scripts remain importable.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `conftest.py` | Adds `deploy/robot/pinky_pro/release` to `sys.path` |
-| `test_motor_control.py` | Differential-drive contracts: geometry, limits, APPLIED/LIMITED/REJECTED |
-| `test_bringup_motor_contracts.py` | Bringup wiring of MotorController |
-| `test_dynamixel_driver_safety.py` | RPM cap and encoder rollover in Dynamixel driver |
-| `test_dynamixel_probe.py` | UART probe helpers |
-| `test_host_agent.py` | Host Agent decision layer (refusals, roles, audit) |
-| `test_image_checks.py` | Image content/layout checks |
-| `test_image_pipeline.py` | Image build input lock / pipeline |
-| `test_pinky_release_impact.py` | D-325 changed-path scope and conservative artifact precedence |
-| `test_network_provisioner.py` | Wi-Fi / nmcli provisioning |
-| `test_network_topology_contracts.py` | Pins ADR D-26 / CORE SRS / OS design / Implementation Plan on `SITE_STA` + opt-in `RELAY_AP_STA` |
-| `test_pi_wifi_deployment.py` | SD-card Wi-Fi/SSH first-boot contracts |
-| `test_pinky_commissioning.py` | Ordered G0-G5 session, evidence hashing, and first-device runbook contracts |
-| `test_dds_identity_contracts.py` | Pins ADR D-33: identity derives from one robot number, with no default in the template, installer or compose. Drives the real installer through bash rather than asserting the call exists |
-| `test_nav2_bandwidth_contracts.py` | Pins ADR D-34 publish rates against the dashboard poll they are matched to, including the launch-time rewritten params file |
-| `test_release_boundary_guards.py` | CORE must not hold host privilege (D-22) |
-| `test_release_layout.py` | On-disk release layout |
-| `test_release_manifest.py` | Manifest schema |
-| `test_release_signing.py` | Ed25519 signing |
-| `test_arm64_payload_workflow.py` | Manual native ARM64 workflow, digest pin, unsigned artifact and retention contracts |
-| `test_release_storage.py` | Release store / retention |
-| `test_release_updater.py` | Activate/rollback updater |
-| `robot_contracts.py` | Shared ROOT/DEPLOY/compose helpers |
-| `g1_layout.py`, `g1_sim_harness.py` | D-778/D-781 G1 SIM support: IK reach audit, capsule swept separation, schedule model; Fleet multi-arm dispatcher to two real OMX cell owners and the coordinator in one process (bridges listed in its header). `python test/g1_layout.py` prints the layout report |
-| `test_platform_g1_layout.py`, `test_platform_g1_sim.py`, `test_platform_g1_timing.py` | G1 SIM layout, end-to-end/fault and timing tests (`ROSY_G1_EVIDENCE_DIR` writes run evidence); record in `docs/validation/bimanual-g1-sim-2026-10-17` |
-| `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
-| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure, or a `--must-fail NODEID` (an id the landing adds) that did not fail. A failure listed in `flaky_quarantine.txt` whose one rerun (appended after `RERUN_MARKER` by `tools/remote/remote_pytest.py`) shows `PASSED` prints `FLAKY`, not `NEW` |
-| `flaky_quarantine.txt` | D-762 stage 1: tests seen flaky on an unchanged sha (node id + `  # ` reason, evidence, "remove when ...", date, owner). Listed failures rerun once in CI and on the lab PCs; fails twice = NEW; unlisted never rerun. Add only with flake evidence, never to hide your own failure; browser follow-ups (not rerun anywhere) are comments in the file |
-| `test_known_failures.py` | The comparison and that every listed id names a real test |
-| `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling); `browser_tests_enabled()` opt-in, `safe_listener()`/`free_port()` never return a Chromium-restricted port |
-| `browser_scope.py` | `SCOPE` map from source path prefix to the browser tests that load those pages; `python test/browser_scope.py <paths>` prints pytest targets |
-| `test_robot_runtime.py` | compose/D-22/D-27/runtime-mode contracts |
-| `test_nav2_hardware_slice.py` | Hardware Nav2 launch, D-2/D-4, packaging |
-| `test_dashboard_browser.py` | Optional Chromium regression (teleop zero + field-settings saves + traffic stage/apply + camera lifecycle + irreversible mode-change confirm + D-153 G2 state-matrix captures); skipped unless `ROSY_RUN_BROWSER_TESTS=1` |
-| `test_dashboard_drive.py` | `tools/dashboard_drive.py` against the `test_dashboard_browser.py` fixtures; skips without Playwright/Chromium |
-| `test_games_board_browser.py` | Optional Chromium regression for the D-101 laptop match board (real `games/host/preview` server + `games/web` assets); skipped unless `ROSY_RUN_BROWSER_TESTS=1` |
-| `test_dock_contract.py` | Dock firmware contract: `/status` fields, no Wi-Fi secrets in `operations/site_devices/dock/` sources |
-| `test_signal_contract.py` | Signal controller contract (ROSY-SIGNAL-001): fail-safe boot, conflict guard, token fail-closed, no secrets in `operations/site_devices/signal/` sources |
-| `test_sd_personalization.py` | Pinky public identity, one-time bundle schema, checksum, and secret-redaction contracts |
-| `test_sd_writer_contract.py` | Non-destructive Windows PlanOnly, two-probe physical-disk, credential, confirmation, and writer boundary |
+ROS-free repository architecture, installation, deployment, motor/network and cross-owner learning tests. Pytest runs on remote test PCs or CI, never this laptop (D-584). CI runs `python3 -m pytest test/ -v` apart from the package-level suites. `conftest.py` adds `deploy/robot/pinky_pro/release` to `sys.path`.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `learning/perception/` | Existing 99-file learning regression suite; shared private-delivery fixtures and browser harness retained, callers point to the four learning owners and `tools/perception` |
-| `architecture/` | Repo-structure tests: folder layout, package names, document placement, layer and app boundaries (see `architecture/AGENTS.md`) |
-
-Ignore `__pycache__/`.
+| `learning/perception/` | 99-file learning regression suite; fixtures shared |
+| `architecture/` | Repo-structure tests (see `architecture/AGENTS.md`) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Keep tests ROS-free. Import `bringup.motor_control` / `deploy/robot/pinky_pro/release` modules directly.
-- If you add a deploy script, add a contract test here — CI only started covering this tree after a comment in `.github/workflows/ci.yml`.
+- Inject clocks, command ports and filesystem roots; never call `nmcli`/`reboot`. Assert explicit result enums (`APPLIED` / `LIMITED` / `REJECTED` / `DRIVER_ERROR`).
+- Keep tests ROS-free. Import `bringup.motor_control` and `deploy/robot/pinky_pro/release` modules directly.
+- A new deploy script gets a contract test here; CI covers this tree.
 - Do not mock away the refusal paths in Host Agent; they are the product.
+- `known_failures.txt`: delete a line in the commit that fixes it; never add one to hide your own failure. `flaky_quarantine.txt` (D-762): only with flake evidence, never to hide your own failure.
 - Changing SITE_STA / relay wording in one doc without the others fails `test_network_topology_contracts.py`.
-- In `test_dashboard_browser.py`, waiting on `window.__apiCalls` proves the click fired, not that the handler finished — the fetch stub records the call before it answers. Wait on the visible outcome (the message element) or the assertion races the promise.
-- Run it before shipping dashboard JS: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. Opt-in tests that are never run are not coverage.
-- Browser opt-in: gate every real-Chromium test with `pytest.mark.skipif(not browser_tests_enabled(), ...)` from `browser_harness.py`. `ROSY_RUN_BROWSER_TESTS=1` is canonical; `ROSY_BROWSER_TESTS=1` still works. Do not read either variable directly — a second name silently skipped the Fleet start-point tests until 2026-10-07.
-- Local servers a page loads must bind through `safe_listener()` or `free_port()`, not port 0: this laptop's dynamic range starts at 1024 and port 0 handed out 2049 (`net::ERR_UNSAFE_PORT`). A new browser test that loads a new page family gets a `SCOPE` entry in `browser_scope.py`.
-- Browser tests run on the test PCs, never this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). `tools/land.py` adds the ones `browser_scope.py` maps the changed paths to, opted in; by hand: `-- ROSY_RUN_BROWSER_TESTS=1 <paths>` to `tools/remote/remote_pytest.py`. `docs/reference/developer-guide.md` 「브라우저 시험」.
-- A new guard, gate or contract test is not believed until it has been **mutation-proven**: change the thing it guards, watch it go red, restore, watch it go green — and confirm the mutation actually landed before trusting the red. Assertions on source text are the easiest to write as tautologies, so mutate them harder, not less (`docs/solutions/workflow-issues/inability-to-check-recorded-as-clean-result.md`).
+- In `test_dashboard_browser.py`, `window.__apiCalls` proves the click fired, not that the handler finished; wait on the visible outcome. Run it before shipping dashboard JS.
+- Gate every real-Chromium test with `pytest.mark.skipif(not browser_tests_enabled(), ...)` from `browser_harness.py`; never read `ROSY_RUN_BROWSER_TESTS` or `ROSY_BROWSER_TESTS` directly (a second name silently skipped tests until 2026-10-07).
+- Bind local servers through `safe_listener()` or `free_port()`, not port 0 (`net::ERR_UNSAFE_PORT`). A test loading a new page family gets a `SCOPE` entry in `browser_scope.py`.
+- Browser tests run on the test PCs, never this laptop (34 min to 2 h 26 min, MemoryError flakes). `land.py` adds the mapped ones; by hand: `-- ROSY_RUN_BROWSER_TESTS=1 <paths>` to `remote_pytest.py`. See `docs/reference/developer-guide.md` 「브라우저 시험」.
+- A new guard, gate or contract test is not believed until mutation-proven: change the guarded thing, see red, restore, see green, and confirm the mutation landed (`docs/solutions/workflow-issues/inability-to-check-recorded-as-clean-result.md`).
+- Safety contracts stay: `test_release_boundary_guards.py` (CORE holds no host privilege, D-22), `test_dynamixel_driver_safety.py` (RPM cap), `test_signal_contract.py` (fail-safe boot, token fail-closed).
 
 ### Testing Requirements
 
 ```bash
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/repo-test" -- test/ -v
-python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/motor-test" -- test/test_motor_control.py test/test_host_agent.py -v
 # Browser tests: leading ROSY_*=value words are the job's environment on the test PC.
 t=$(python test/browser_scope.py <changed paths...>) && python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/browser" -- ROSY_RUN_BROWSER_TESTS=1 $t
 ```
 
-### Common Patterns
 
-- Inject clocks, command ports, and filesystem roots. Do not call `nmcli`/`reboot` in tests.
-- Assert explicit result enums (`APPLIED` / `LIMITED` / `REJECTED` / `DRIVER_ERROR`).
 
-## Dependencies
-
-### Internal
-
-- `middleware/devices/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
-- `deploy/robot/pinky_pro/release/*`, `deploy/robot/pinky_pro/*`, `deploy/robot/pinky_pro/image/*`
-
-### External
-
-- pytest, PyYAML; OpenSSL only if a test shells out to signing fixtures
-
-<!-- MANUAL: -->

@@ -5,8 +5,7 @@ import {
   createPlaneFeed, mapToPlane, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
 } from "../../../../applications/fleet/web/shared/vision-view.js";
 import { planeAffine } from "../../../../applications/fleet/web/map/camera-backdrop.js";
-import { fitTransform, project, quarterTurn } from "../../../../applications/fleet/web/map/site-layer.js";
-import { planeView } from "../../../../applications/fleet/web/shared/site-map-model.js";
+import { fitBox, planeView } from "../../../../applications/fleet/web/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
@@ -42,11 +41,8 @@ test("plane pixel ↔ map follows x = min_x + u/ppm, y = max_y − v/ppm both wa
 test("the console lays plane pixels where toPx puts the same map point, with and without a view turn", () => {
   const bounds = { min_x: -0.4, min_y: -0.4, max_x: 6.8, max_y: 4.0 };
   for (const rot of [0, 90, 180, 270]) {
-    const side = rot === 90 || rot === 270;
-    const fw = side ? 700 : 1200, fh = side ? 1200 : 700;
-    const t = fitTransform(bounds, fw, fh, 32);
-    const turn = quarterTurn(rot, fw, fh);
-    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    const t = fitBox(bounds, 1200, 700, 32, rot);
+    const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     const [a, b, c, d, e, f] = planeAffine(PLANE, 2680, 1560, toPx);
     for (const [x, y] of [[0, 0], [6.4, 3.6], [1.25, 2.5]]) {
       const { u, v } = mapToPlane(PLANE, x, y);

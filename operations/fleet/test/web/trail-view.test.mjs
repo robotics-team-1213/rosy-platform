@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {drawTrails, mapPose, mergePath, pathQuery, tripFor} from '../../../../applications/fleet/web/map/trail-view.js';
-import {quarterTurn} from '../../../../applications/fleet/web/map/site-layer.js';
 
 const LOCALIZED = {state: 'LOCALIZED', pose_frame: 'map'};
 const at = (x, y, id = 'a', localization = LOCALIZED) => [{robot_id: id, state: {pose: {x, y, yaw: 0}, localization}}];
@@ -77,8 +76,7 @@ test('paths are fetched from Fleet for each shown robot, not built from polled p
 test('trail and tether draw through the caller projection, so they turn with the map', () => {
   globalThis.window = {RosyPalette: {cssColor: name => name}};
   const ctx = recordingCtx();
-  const turn = quarterTurn(90, 100, 50);
-  const toPx = (x, y) => turn.point(x, y);
+  const toPx = (x, y) => ({x: 50 - y, y: x}); // a 90° clockwise turn of a 100×50 view
   const view = {map: {map_id: 'track'}, robots: at(30, 0), colors: ['robot-colour'], trailRange: '120', watchAge: 0.5,
     paths: new Map([['a', {now: 100, points: [pt(99, 10), pt(100, 30)]}]]),
     tethers: [{robot_id: 'a', anchor_xy: [10, 20], radius_m: 5}]};

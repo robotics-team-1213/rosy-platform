@@ -124,8 +124,8 @@ def test_deploy_refuses_a_log_without_the_sha_marker(fake, tmp_path):
 
 def test_deploy_ships_archive_then_switches(fake, tmp_path):
     fake.rules.update({"archive": b"TARGZ", "readlink": "omx-tools-aaaaaaaaaa"})
-    folder, previous = oh.deploy("HEAD", "user@host", passing_log(tmp_path))
-    assert (folder, previous) == (f"~/rosy-test/omx-tools-{SHORT}", "omx-tools-aaaaaaaaaa")
+    folder, previous, restart = oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    assert (folder, previous, restart) == (f"~/rosy-test/omx-tools-{SHORT}", "omx-tools-aaaaaaaaaa", 0)
     archive = [cmd for cmd, _ in fake.calls if "archive" in cmd][0]
     assert f"--add-virtual-file=omx-tools-{SHORT}/REVISION:{SHORT}\n" in archive
     assert archive[-1 - len(oh.PATHS):] == [SHA, *oh.PATHS]
@@ -140,7 +140,7 @@ def test_deploy_ships_archive_then_switches(fake, tmp_path):
 
 def test_deploy_switches_only_the_named_link_and_rejects_other_names(fake, tmp_path):
     oh.deploy("HEAD", "user@host", passing_log(tmp_path), "omx-bench-current")
-    last = fake.ssh_scripts()[-1]
+    last = [s for s in fake.ssh_scripts() if "mv -T" in s][-1]
     assert "mv -T .omx-bench-current.tmp omx-bench-current" in last and "omx-tools-current" not in last
     oh.deploy("HEAD", "user@host", passing_log(tmp_path))
     assert "mv -T .omx-tools-current.tmp omx-tools-current" in fake.ssh_scripts()[-1]  # default stays the cell link
@@ -395,3 +395,65 @@ def test_reuse_and_switch_guards_run_in_bash(tmp_path, monkeypatch):
     sw = subprocess.run(["bash", "-c", oh.switch_script(new_name)], cwd=tmp_path, capture_output=True, text=True)
     assert sw.returncode == 0, sw.stderr
     assert os.readlink(rt / oh.LINK) == new_name
+
+
+IDLE = json.dumps({"status": "idle", "arms": {"arm_a": {"locked_by": []}, "arm_s": {"locked_by": []}}})
+BUSY = json.dumps({"status": "idle", "arms": {"arm_a": {"locked_by": [{"lock": "session-arm_a.lock", "pid": 7}]},
+                                              "arm_s": {"locked_by": []}}})
+
+
+def ssh_stub(monkeypatch, arms, fake):
+    """Stub _ssh by script: /api/arms answers `arms` (an exception raises), systemctl answers active."""
+    seen = []
+
+    def stub(host, script, data=None):
+        seen.append(script)
+        if script == oh.BENCH_ARMS:
+            if isinstance(arms, BaseException):
+                raise arms
+            return arms
+        return "active" if "systemctl" in script else ""
+    monkeypatch.setattr(oh, "_ssh", stub)  # git still goes through the `fake` subprocess.run
+    return seen
+
+
+def restarts(seen):
+    return [s for s in seen if "systemctl --user restart" in s]
+
+
+def test_bench_deploy_restarts_an_idle_bench_after_the_switch(fake, monkeypatch, tmp_path, capsys):
+    seen = ssh_stub(monkeypatch, IDLE, fake)
+    assert oh.deploy("HEAD", "user@host", passing_log(tmp_path), oh.BENCH_LINK)[2] == 0
+    switch = next(i for i, s in enumerate(seen) if "mv -T" in s)
+    assert seen[switch + 1:] == [oh.BENCH_ARMS, f"systemctl --user restart {oh.BENCH_SERVICE}"
+                                 f" && systemctl --user is-active {oh.BENCH_SERVICE}"]
+    assert "restarted: active" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("arms, why", [
+    (BUSY, "locked arm_a"),
+    (json.dumps({"status": "recording", "arms": {"arm_a": {"locked_by": []}}}), "status recording"),
+    (SystemExit("[omx-hotfix] ssh user@host failed (exit 7)"), "read failed"),
+    ("<html>", "unreadable"),
+    (json.dumps({"status": "idle"}), "unreadable"),
+], ids=["locked", "recording", "ssh-failed", "not-json", "no-arms"])
+def test_bench_deploy_holds_the_restart_when_busy_or_unread(fake, monkeypatch, tmp_path, capsys, arms, why):
+    seen = ssh_stub(monkeypatch, arms, fake)
+    folder, _, code = oh.deploy("HEAD", "user@host", passing_log(tmp_path), oh.BENCH_LINK)
+    assert code == oh.HELD != 0 and folder == f"~/rosy-test/omx-tools-{SHORT}"  # the deploy itself stands
+    assert not restarts(seen) and any("mv -T" in s for s in seen)
+    out = capsys.readouterr().out
+    assert "[omx-hotfix] bench restart held: " in out and why in out and "; restart when idle" in out
+
+
+def test_cell_link_deploy_never_reads_or_restarts_the_bench(fake, monkeypatch, tmp_path):
+    seen = ssh_stub(monkeypatch, IDLE, fake)
+    assert oh.deploy("HEAD", "user@host", passing_log(tmp_path))[2] == 0
+    assert oh.BENCH_ARMS not in seen and not any("systemctl" in s for s in seen)
+
+
+def test_main_returns_the_held_status(fake, monkeypatch, tmp_path):
+    ssh_stub(monkeypatch, BUSY, fake)
+    argv = ["deploy", "--sha", "HEAD", "--tested-log", str(passing_log(tmp_path)), "--host", "u@h", "--link"]
+    assert oh.main([*argv, oh.BENCH_LINK]) == oh.HELD
+    assert oh.main([*argv, oh.LINK]) == 0

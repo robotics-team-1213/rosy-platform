@@ -41,7 +41,7 @@ PRODUCT_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
 CONSUMERS = {".js", ".mjs", ".html", ".inc", ".py", ".ts"}
 #: 시험만 쓰는 export 중 시험 이음매(지우면 시험이 제품을 못 건드림). 이유 필수, 늘리지 않는다.
 TEST_SEAMS: dict[str, str] = {}
-UNUSED_CEILING = {"exports": 0, "test_only_exports": 5, "css_classes": 1, "html_ids": 0}
+UNUSED_CEILING = {"exports": 0, "test_only_exports": 3, "css_classes": 1, "html_ids": 0}
 _IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 _HYPHEN_WORD = re.compile(r"[A-Za-z_][\w-]*")
 _EXPORT = re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)", re.M)
@@ -130,7 +130,11 @@ HELPERS = (
     {"name": "node", "module": "shared/web/control-dom.js", "aliases": ["nodeWithText"], "ceiling": 1},
     {"name": "setOff", "module": "shared/web/cause-line.js", "aliases": ["setOffBy", "guard", "gate", "blockWith", "setReason"], "ceiling": 0},
     {"name": "iconSvg", "module": "shared/web/ui.js", "aliases": ["iconNode"], "ceiling": 0},
+    # 2026-11-26 패널 C-1: 3×3 투영 사본 4벌(#893 Calibration 포함)을 하나로. Calibration 화면도 본다(HELPER_ROOTS).
+    {"name": "invert3", "module": "shared/web/plane-math.js", "aliases": ["invert3x3", "applyH", "applyHomography"], "ceiling": 0},
 )
+#: 도우미 재정의는 /common 을 읽는 다른 화면에서도 찾는다. 이름·중복 래칫의 범위(PRODUCT_ROOTS)는 그대로 둔다.
+HELPER_ROOTS = (*PRODUCT_ROOTS, REPO / "applications" / "calibration" / "web")
 DIRECT = (
     {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 4},
     {"what": "운영자 역할 직접 비교", "pattern": r"""role\s*[!=]==?\s*["']operator["']""", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
@@ -153,8 +157,8 @@ def js_without_comments(text):
     return _JS_STRINGS_KEPT.sub(lambda match: match.group(1) or "", text)
 
 
-def product_scripts():
-    for root in PRODUCT_ROOTS:
+def product_scripts(roots=PRODUCT_ROOTS):
+    for root in roots:
         for path in sorted(root.rglob("*.js")):
             if not ({"test", "vendor", "node_modules"} & set(path.relative_to(REPO).parts)):
                 yield path.relative_to(REPO).as_posix(), path.read_text(encoding="utf-8", errors="ignore")
@@ -199,9 +203,10 @@ def _ratchet(label, found, ceiling):
 
 def test_helpers_are_defined_once_and_direct_writes_only_go_down():
     scripts = list(product_scripts())
+    helper_scripts = list(product_scripts(HELPER_ROOTS))
     for row in HELPERS:
         assert (REPO / row["module"]).is_file() and re.search(rf"\b{re.escape(row['name'])}\b", (REPO / row["module"]).read_text(encoding="utf-8")), row
-        _ratchet(f"redefined {row['name']}", helper_redefinitions(scripts, row), row["ceiling"])
+        _ratchet(f"redefined {row['name']}", helper_redefinitions(helper_scripts, row), row["ceiling"])
     for row in DIRECT:
         assert row["owners"] and all((REPO / owner).is_file() for owner in row["owners"]), row
         _ratchet(f"direct {row['what']}", direct_uses(scripts, row), row["ceiling"])

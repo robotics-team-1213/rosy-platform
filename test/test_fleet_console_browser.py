@@ -1318,15 +1318,15 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         assert {"mode": "map"} in [body.get("rectification") for body in leases]
         page.select_option("#map-display-mode", "overlay")
         # Known map points land on the canvas pixel the map's own toPx gives (siteBounds 0.25 margin,
-        # fitTransform pad 32, no view turn): red inside the square, blue outside, ground beyond the plane.
+        # fitBox pad 32, no view turn, no active map): red inside the square, blue outside, ground beyond the plane.
         # Points stay off the 0.5 m grid lines.
         sample = """async (points) => {
-          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const { fitBox } = await import('/console/assets/site-map-model.js');
           const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
           const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
-          return Object.fromEntries(Object.entries(points).map(([name, [x, y]]) => { const p = project(t, x, y);
-            return [name, [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data]]; }));
+          const t = fitBox({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          return Object.fromEntries(Object.entries(points).map(([name, [x, y]]) => { const [px, py] = t.toPx(x, y);
+            return [name, [...g.getImageData(Math.round(px * dpr), Math.round(py * dpr), 1, 1).data]]; }));
         }"""
         colours = page.evaluate(sample, {"red": [0.25, 0.75], "blue": [0.75, 0.25],
                                          "edge": [-0.1, 0.3], "out": [-0.22, 0.3]})

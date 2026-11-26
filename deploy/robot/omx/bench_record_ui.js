@@ -2,7 +2,7 @@ const H={'Content-Type':'application/json','X-Bench':'1'};
 const $=id=>document.getElementById(id);
 const f=$('bench-form');
 const STATUS_MAP={
-  idle:['대기','good'],
+  idle:['대기',''],
   handing_over:['시작 중 (인계)','live'],
   homing:['리더가 움직입니다 — 손을 대지 마세요','live'],
   recording:['녹화 중','live'],

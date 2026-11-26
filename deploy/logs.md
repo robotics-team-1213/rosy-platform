@@ -5088,3 +5088,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. AI PC 외 장비의 수용은 별도다.
 - 결정: 없음
 - 교훈: 현장에서 systemd가 모르는 `ConditionPathIsExecutable=` 지시어를 무시했다. 실행 파일 조건을 `ConditionFileIsExecutable`로 고치고, 현장 문제의 원인을 systemd 파서 회귀로 고정했다.
+
+## 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
+
+- 변경: tools/remote/omx_hotfix.py: after a bench link switch, read /api/arms on the cell; idle with no arm locked -> systemctl --user restart rosy-omx-bench-record.service and print is-active; busy or unreadable -> print 'bench restart held' and exit 3 (deploy stands). BENCH_RECORD_GUIDE.md section 3 drops the manual restart step.
+- 증거: 2026-11-26: link switched 04:57 but the service kept old code from 03:59; test/test_omx_hotfix.py idle/busy/read-failure/cell-link cases
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
