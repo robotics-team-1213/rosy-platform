@@ -149,10 +149,10 @@ class CellJobClient:
             time.sleep(poll_s)
 
 
-def start_when_lock_free(client, job: str, params: dict, *, idempotency_key=None, wait_s: float = 180.0,
+def start_when_lock_free(client, job: str, params: dict, *, idempotency_key=None, wait_s: float = 0.0,
                          poll_s: float = 5.0, clock=time.monotonic, sleep=time.sleep) -> dict:
     """A refused or ended job's session wrapper keeps the arm lock ~100 s after the API reports the job done
-    (2026-11-26); retry only that 409, never another refusal."""
+    (2026-11-26); with wait_s > 0 retry only that 409, never another refusal. Opt-in: a held lock may be a live job."""
     deadline = clock() + wait_s
     while True:
         try:
@@ -192,8 +192,9 @@ def main(argv=None) -> int:
     p_run.add_argument("--timeout", type=float, default=600.0)
     p_run.add_argument("--idempotency-key")
     p_run.add_argument("--wait", action="store_true")
-    p_run.add_argument("--lock-wait", type=float, default=180.0,
-                       help="seconds to retry a 409 while a finished job's arm session still releases its lock")
+    p_run.add_argument("--lock-wait", type=float, default=0.0,
+                       help="opt-in: seconds to retry a 409 while a finished job's arm session still releases its lock "
+                            "(default 0: a held lock may be a live job)")
     args = ap.parse_args(argv)
 
     client = CellJobClient(args.url, token_file=args.token_file)
