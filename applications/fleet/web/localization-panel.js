@@ -26,7 +26,7 @@ export function createLocalizationPanel({
   const root = node("div", "", "ui-control-stack");
   const kvHost = document.createElement("div");
   const candRow = node("div", "", "ui-control-stack");
-  const candSelect = Object.assign(document.createElement("select"), { className: "ui-field" });
+  const candSelect = document.createElement("select"); candSelect.className = "ui-field";
   candSelect.dataset.workRead = "";
   candSelect.setAttribute("aria-label", "확정할 위치 후보 선택");
   candRow.append(candSelect);
