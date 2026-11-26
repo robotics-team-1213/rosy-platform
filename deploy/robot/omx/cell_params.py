@@ -20,6 +20,7 @@ SOURCES = ("measured", "taught", "theory", "tuned", "default")
 DEFAULTS = {
     # Provisional until simulator results are recorded in handoff-thresholds.md.
     "policy.hold_frames": (8, "count", 1, 30),
+    "policy.state_margin_frac": (1.0, "ratio", 0.0, 1.0),  # share of the state-range slack (cell_policy_start_gate); 1 is the most, never wider
     "policy.rim_margin_m": (0.025, "m", 0.005, 0.05),
     "policy.source_rim_z_m": (0.0, "m", 0.0, 0.5),
     "policy.pose_xy_tol_m": (0.012, "m", 0.002, 0.05),

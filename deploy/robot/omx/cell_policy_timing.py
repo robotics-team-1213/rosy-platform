@@ -136,7 +136,7 @@ def step_count(shadow, n_action):
 
 def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, max_obs_age_s,
               max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep,
-              jaw_gate: dict | None = None, kin=None, jaw_spec: dict | None = None):
+              jaw_gate: dict | None = None, kin=None, jaw_spec: dict | None = None, state_gate=None):
     fps = library.get("fps", 30)
     model_fps = SIM_FPS if getattr(shadow, "sim_rule", None) is not None else fps
     steps = step_count(shadow, n_action)
@@ -190,6 +190,8 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             ok, _, err_msg = valid_state(init_state)
             if not ok:
                 return stopped(0, err_msg or "policy start state unavailable", {"chunk": 0, "dry_run": False})
+            if state_gate is not None and (why := state_gate.roll_error(init_state["state"])):
+                return stopped(0, why, {"chunk": 0, "dry_run": False}, init_state)
             home_pose = pose6(library["chunks"]["home"][-1])
             if (max_diff(init_state["state"], home_pose, 5) > ENTRY_START_TOL
                     or not empty_gripper_ok(init_state, now=time.time())):
@@ -203,6 +205,8 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             if not _entry_ready(post_entry, entry_pose):
                 return stopped(0, "POST_ENTRY_STATE_MISMATCH: arm not settled at entry pose with empty gripper",
                                {"chunk": 0, "dry_run": False}, post_entry if isinstance(post_entry, dict) else None)
+            if state_gate is not None and (why := state_gate.verdict(post_entry["state"], after_entry=True)):
+                return stopped(0, why, {"chunk": 0, "dry_run": False}, post_entry)  # before any camera frame
             hold_needed = False
         for n in range(max_chunks):
             row = {"chunk": n, "dry_run": dry_run, "model_fps": model_fps, "library_fps": fps}
@@ -220,6 +224,8 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                 state = {"state": prediction.state, "ok": True} if dry_run else cell.act("state")
                 if not state.get("ok") or state.get("fault"):
                     raise ValueError("policy start state unavailable")
+                if state_gate is not None and (n > 0 or entry_pose is None or dry_run) and (why := state_gate.verdict(state["state"], after_entry=n == 0 and entry_pose is not None)):
+                    return stopped(n, why, row, state)
                 if n == 0 and entry_ran and not dry_run and not _entry_ready(state, entry_pose):
                     return stopped(n, "POST_ENTRY_STATE_MISMATCH: arm not at entry pose before chunk 0", row, state)
                 target = state["state"] if dry_run else (state.get("target") or state["state"])
