@@ -68,7 +68,7 @@ def observe_bounded_trial(bridge, msg, sample, *, now=None):
         except Exception:pass
 
 
-def receive_odom(bridge, msg, *, station=None):
+def receive_odom(bridge, msg, *, station=None, mission=None):
     """Capture the exact private parent BEFORE reading clocks or translating ROS input.
 
     Ledger's monotonic domain bounds the whole read. No parent at entry means no
@@ -114,7 +114,7 @@ def receive_odom(bridge, msg, *, station=None):
                 feed.clear()
     try:
         sample = translate.odom_sample(msg)
-        observe_odom(bridge, msg, sample, station=station, _execution=read,
+        observe_odom(bridge, msg, sample, station=station, mission=mission, _execution=read,
                      _motion_read=motion_read, _source_read=source_read)
         return sample
     except Exception:
@@ -207,7 +207,9 @@ def _observe_source(bridge, msg, sample, read, receipt):
         return False
 
 
-def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_read=None, _source_read=None):
+def observe_odom(
+    bridge, msg, sample, *, station=None, mission=None, _execution=None, _motion_read=None, _source_read=None
+):
     """RosBridge._on_odom's odom hand-over (D-758 0): the state snapshot stamps the pose (epoch from the
     message frame and header time) and the line-follow log keys the same sample on that stamp."""
     stamp = msg.header.stamp
@@ -215,7 +217,7 @@ def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_
     args = (sample['x'], sample['y'], sample['yaw'])
     kwargs = dict(frame=msg.header.frame_id, source_stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec)
     receipt = None
-    if _source_read is None and _execution is None and (_motion_read is None or _motion_read[0] is None):
+    if mission is None and _source_read is None and _execution is None and (_motion_read is None or _motion_read[0] is None):
         wall = state.set_odom_pose(*args, **kwargs)
     else:
         receipt = state._record_odom_pose(*args, **kwargs)
@@ -230,6 +232,18 @@ def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_
         observe_station_motion(bridge, msg, sample, station, _receipt=receipt, _read=_motion_read)
     observe_bounded_trial(bridge, msg, sample)
     observe_lane_return(bridge, msg, sample, wall=wall)
+    if mission is not None:
+        _observe_localization_mission(bridge, mission, msg, sample, receipt)
+
+
+def _observe_localization_mission(bridge, mission, msg, sample, receipt):
+    try:
+        stamp_ns, _, _ = _original_odom(bridge, msg, sample, receipt)
+        source_now_ns = bridge._node.get_clock().now().nanoseconds
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return
+    mission.observe_odom(sample["x"], sample["y"], sample["yaw"],
+                         source=(stamp_ns, source_now_ns, receipt[1]))
 
 
 def observe_station_motion(bridge, msg, sample, station, *, _receipt=None, _read=None):

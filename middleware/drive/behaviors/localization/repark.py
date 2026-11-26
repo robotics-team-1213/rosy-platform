@@ -56,11 +56,6 @@ def plan_repark(forward_m: float, left_m: float) -> list[tuple[str, float]]:
     return plan
 
 
-def _in_frame(start, end) -> dict:
-    forward, left = offset_in_frame(start, end)
-    return {"forward_m": round(forward, 4), "left_m": round(left, 4)}
-
-
 class ReparkRunner:
     """One repark at a time on top of a LocalizationMission; `tick()` is called from the mission's tick."""
 
@@ -70,6 +65,7 @@ class ReparkRunner:
         self._next_idle_epoch = None
         self._navigation_scope = None
         self._admit_segment = nullcontext
+        self._authority = None
         self._lock = threading.RLock()        # runner -> mission gate -> mission lock; never taken from inside the mission
         self._run_n: Optional[int] = None     # the mission run number of the running segment
         self._asked = (0.0, 0.0)
@@ -116,7 +112,7 @@ class ReparkRunner:
 
     def start_scoped(self, forward_m: float, left_m: float, *, correlation_id: str,
                      expected_boot_id: UUID, expected_owner_generation: int,
-                     expected_idle_epoch: int, expected_navigation: dict, admission) -> dict:
+                     expected_idle_epoch: int, expected_navigation: dict, admission, authority=None) -> dict:
         with self._lock:
             try:
                 self._receipts.expect(expected_boot_id, expected_owner_generation)
@@ -126,24 +122,25 @@ class ReparkRunner:
                 raise MissionRefused("REPARK_REQUEST_ALREADY_ADMITTED", "read the original repark receipt")
             self.start(forward_m, left_m, correlation_id=correlation_id,
                        expected_idle_epoch=expected_idle_epoch, expected_navigation=expected_navigation,
-                       admission=admission)
+                       admission=admission, authority=authority)
             return self.scoped_status()
 
     def start(self, forward_m: float, left_m: float, *, correlation_id: str | None = None,
               expected_idle_epoch: int | None = None, expected_navigation: dict | None = None,
-              admission=nullcontext) -> dict:
+              admission=nullcontext, authority=None) -> dict:
         """Start, or raise ValueError (400) / MissionRefused (409). Nothing moves on a refusal."""
         plan = plan_repark(float(forward_m), float(left_m))
         with self._lock:
             if self._last["state"] == "running":
                 raise MissionRefused("MOTION_BUSY", "a repark is running")
-            start = self._m.odom_pose()
+            start, self._odom_epoch = self._m.odom_snapshot()
             if start is None:
                 raise MissionRefused("ODOMETRY_STALE", "no fresh odometry to close the shift on")
             operation = self._receipts.admit("repark", correlation_id)
             self._next_idle_epoch = expected_idle_epoch
             self._navigation_scope = expected_navigation
             self._admit_segment = admission
+            self._authority = authority
             self._plan, self._i, self._start, self._kind = plan, 0, start, None
             self._asked = (float(forward_m), float(left_m))
             self._deadline = self._m._clock() + 45.0
@@ -187,15 +184,17 @@ class ReparkRunner:
                 self._finish("aborted", seg.get("reason") or "segment_lost")
                 return
             kind, value = self._plan[self._i]
-            end = m.odom_pose()
-            if (kind == "drive" and self._seg_start is not None and end is not None
-                    and abs(offset_in_frame(self._seg_start, end)[0] - value) > SHORTFALL_M):
+            end = m.odom_pose(epoch=self._odom_epoch)
+            if end is None:
+                self._finish("aborted", "odometry_stale")
+                return
+            if kind == "drive" and abs(offset_in_frame(self._seg_start, end)[0] - value) > SHORTFALL_M:
                 # A LiDAR-shortened leg still ends "done"; later legs would be planned from a leg never made.
                 self._finish("aborted", "short_of_request")
                 return
             self._i += 1
             if self._i >= len(self._plan):
-                self._finish("done", None)
+                self._finish("done", None, end)
                 return
             try:
                 self._begin(self._plan[self._i])
@@ -207,6 +206,9 @@ class ReparkRunner:
         scope = {} if epoch is None else {
             "expected_idle_epoch": epoch, "expected_navigation": self._navigation_scope,
         }
+        if self._authority is not None:
+            scope["repark_authority"] = self._authority
+        scope["repark_odom_epoch"] = self._odom_epoch
         with self._admit_segment():
             self._start_segment(segment, scope)
         if epoch is not None:
@@ -216,10 +218,12 @@ class ReparkRunner:
     def _start_segment(self, segment, scope: dict) -> None:
         kind, value = segment
         m = self._m
-        self._seg_start = m.odom_pose()
+        self._seg_start = m.odom_pose(epoch=self._odom_epoch)
+        if self._seg_start is None:
+            raise MissionRefused("ODOMETRY_STALE", "no fresh odometry for the repark segment")
         if kind in ("turn", "restore"):
             rate_dps = math.degrees(MAX_RATE_RPS) - 0.2   # just under the cap, the goal check is inclusive
-            now_yaw = (m.odom_pose() or self._start)[2]
+            now_yaw = self._seg_start[2]
             turn = value if kind == "turn" else math.atan2(math.sin(self._start[2] - now_yaw), math.cos(self._start[2] - now_yaw))
             timeout = min(15.0, 2.0 * math.degrees(abs(turn)) / rate_dps + 3.0)
             request = {"delta_deg": math.degrees(value)} if kind == "turn" else {"yaw_odom": self._start[2]}
@@ -230,15 +234,18 @@ class ReparkRunner:
             m.start(self._kind, abs(value), 2.0 * abs(value) / MAX_SPEED_MPS + 3.0, speed=MAX_SPEED_MPS, **scope)
         self._run_n = m.runs_started
 
-    def _finish(self, state: str, reason: Optional[str]) -> None:
-        end = self._m.odom_pose()
+    def _finish(self, state: str, reason: Optional[str], end=None) -> None:
+        if state == "done" and end is None:
+            state, reason = "aborted", "odometry_stale"
+        elif state != "done" and reason != "odometry_stale":
+            end = self._m.odom_pose(epoch=self._odom_epoch)
         self._last = {"state": state, "reason": reason}
         if self._start is not None and end is not None:
-            moved = _in_frame(self._start, end)
-            self._last["moved_robot_dxdy_m"] = moved
+            forward, left = offset_in_frame(self._start, end)
+            self._last["moved_robot_dxdy_m"] = {"forward_m": round(forward, 4), "left_m": round(left, 4)}
             # A nudge the LiDAR shortened still ends "done"; the shift is not made, so it is not done.
-            if (state == "done" and (abs(moved["forward_m"] - self._asked[0]) > SHORTFALL_M
-                                     or abs(moved["left_m"] - self._asked[1]) > SHORTFALL_M)):
+            if state == "done" and (abs(forward - self._asked[0]) > SHORTFALL_M
+                                    or abs(left - self._asked[1]) > SHORTFALL_M):
                 self._last["state"], self._last["reason"] = "aborted", "short_of_request"
         self._plan = []
         operation = self._receipts.current
