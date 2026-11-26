@@ -1,56 +1,30 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # core_common
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-The importable Python package of the `core_common` module: config loading, identity, hardware profile, capability checks, shared stdlib utilities, and the ROS-free concept domain (`domain/`). Wire schemas live in `protocol/` (own AGENTS.md). Nothing here imports rclpy or a workspace package.
+The importable Python package of the `core_common` module: config loading, identity, hardware profile, capability checks, shared stdlib utilities, and the ROS-free concept domain (`domain/`). Wire schemas live in `protocol/` (own AGENTS.md, D-766 size unit). Nothing here imports rclpy or a workspace package.
 
 `observation.py` (D-667) owns immutable observation references and pure D-665 camera/anchor input validity. World compatibility imports and offline learning consume the same objects; valid metadata does not prove physical calibration or authorize driving.
 
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `config.py` | Layered YAML config (defaults, robot `core.yaml`, `~/.rosy/rosy.yaml`, `ROSY_CONFIG`); dev-auth overlay only with `ROSY_DEV_AUTH=1` outside device mode |
-| `identity.py` | Robot id pattern and `SOFTWARE_VERSION` (IDN-001~003) |
-| `profile.py` | Robot Profile loader (HWA-001); `DEFAULT_ROBOT` names the robot package |
-| `capability.py` | `Capability` flags and `CapabilityError` (CAP-001~003) |
-| `rmw.py` | CycloneDDS selection applied before `rclpy.init`; does not import rclpy |
-| `calibration_store.py` | Per-robot immutable calibration records plus append-only status events; stdlib only (D-47) |
-| `robot_state.py` | One five-state robot state for buzzer, lamp, LCD, dashboard (D-260); stdlib only, also loaded by the boot display |
-| `device_poll.py` | Shared HTTP polling with a unified failure vocabulary (D-352/353); stdlib only |
-| `discover.py` | mDNS/DNS-SD discovery with zeroconf, avahi, dns-sd fallbacks (D-354); optional, never required |
-| `camera_quality.py` | Photometric screening of original frames and the two-camera `Readiness` gate (policy omx-photometric-v3); numpy only inside `frame_quality`. `deploy/robot/omx/camera_quality.py` is a shim |
-| `intent.py` | Translates operator intent into robot tasks or site commands; never takes ROS topic names |
-| `perception_model.py` | `rosy.perception.model/1·2` learned-model manifest (D-356/D-423): schema, roles, classes, input spec, file hashes; stdlib only. Shared by learning tools and the robot runtime; `perception_runtime.perception.learned.manifest` re-exports it |
-| `startup_profile.py` | Pure startup selection of the legacy full stack (moved from drive/calibration so `robot.launch.py` imports no drive module). Process selection never grants motion readiness |
-| `navigation_options.py` | `STRATEGIES` and `validate_options` for bounded navigation sessions; imported by `drive/tracking/navigation_session.py` and `robot_web/web_http.py` |
-| `succession.py` | Deterministic leader choice from roster plus dead set, so two robots cannot appoint two leaders |
-
-## Subdirectories
-
-| Directory | Purpose |
-|-----------|---------|
-| `protocol/` | Wire schemas, evidence and pairing vectors (see `protocol/AGENTS.md`). D-766 size unit (`test/architecture/size_units.txt`). |
-| `domain/` | Concept snapshot types, covered below |
-
-### domain/
-
-ROS-free snapshots, "not a second runtime". `model.py` (Node/Device/Component/Asset, `DeviceState`), `capabilities.py` (CAP-001 flags to concept descriptor ids; false flags omitted), `tasks.py` (`TaskKind` atomic REST actions mapped to capability flags, not a workflow engine), `command_mapping.py` (where an external call lands after CORE, D-74), `adapters.py` (YAML-only adapter registry; CORE must not import `omx_adapter`).
+`domain/` holds ROS-free snapshots, "not a second runtime": `adapters.py` is a YAML-only adapter registry (CORE must not import `omx_adapter`); `tasks.py` maps `TaskKind` atomic REST actions to capability flags (not a workflow engine); `command_mapping.py` says where an external call lands after CORE (D-74).
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - Leaf of the core chain: import only stdlib, pydantic/yaml, and sibling modules. A new import of another workspace package fails the architecture test.
-- Modules shared with root-side or PC tools (`robot_state`, `calibration_store`, `device_poll`) must stay stdlib only.
+- Modules shared with root-side or PC tools (`robot_state`, `calibration_store`, `device_poll`, `perception_model`) must stay stdlib only; `camera_quality` uses numpy only inside `frame_quality` (`deploy/robot/omx/camera_quality.py` is a shim); `discover.py` (mDNS, D-354) is optional,
+- never required.
+- `config.py` layers defaults, robot `core.yaml`, `~/.rosy/rosy.yaml`, `ROSY_CONFIG`; the dev-auth overlay applies only with `ROSY_DEV_AUTH=1` outside device mode. It is the single place defaults are resolved: do not hardcode robot geometry elsewhere (URDF is nominal, calibration refines).
+- `rmw.py` selects CycloneDDS before `rclpy.init` and does not import rclpy. `calibration_store.py` is append-only status events (D-47). `startup_profile.py` process selection never grants motion readiness. `intent.py` never takes ROS topic names.
+- `perception_model.py` is re-exported by `perception_runtime.perception.learned.manifest`.
 - Changing a wire shape belongs in `protocol/` together with the API reference (D-18), not here.
 - Package tier, coupling and 600-line budget: D-168. Docstrings mix Korean and English; keep each module's existing language.
+- Dataclasses and enums for snapshots, pure functions for decisions, explicit error classes (`CapabilityError`).
 
 ### Testing Requirements
 
@@ -58,20 +32,6 @@ ROS-free snapshots, "not a second runtime". `model.py` (Node/Device/Component/As
 python -m pytest contracts/foundation/test -q
 ```
 
-Covers `calibration_store`, `robot_state`, robot selection and core-layer rules, plus protocol vectors. `test/architecture/test_module_structure.py` enforces the structure rules.
-
-### Common Patterns
-
-Dataclasses and enums for snapshots, pure functions for decisions, explicit error classes (`CapabilityError`). Config merging is the single place defaults are resolved: do not hardcode robot geometry elsewhere (URDF is nominal, calibration refines).
-
-## Dependencies
-
-### Internal
-
-None (leaf). Consumed by `core`, the sensing nodes, bringup, fleet, and PC tools.
-
-### External
-
-PyYAML, pydantic (in `protocol/`); optional `zeroconf`.
+`test/architecture/test_module_structure.py` enforces the structure rules.
 
 <!-- MANUAL: -->

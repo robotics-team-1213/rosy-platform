@@ -1,83 +1,28 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-25 -->
 
 # deployment
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power-bench, acceptance, and release key/retention.
-
-**Runtime model:** the product robot runs **natively** — Ubuntu Server 24.04 arm64
-+ ROS 2 Jazzy + systemd (D-161). Docker is development/CI tooling only, never a
-product-image dependency (D-197). Per-device difference is a profile/slice
-choice; a container sidecar is allowed only for a declared workload outside the
-safety plan (D-246).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `raspberry-pi-runtime.md` | Device permissions, native systemd product runtime plus the development/CI Compose path, core/motor/hardware modes |
-| `pinky-pro-board-support.md` | First ROSY OS board: mode-specific capabilities, LiDAR hardware slice |
-| `raspberry-pi-wifi-image.md` | Headless SD burn, Wi-Fi, SSH, Windows deploy |
-| `arm64-build-notes.md` | Current ARM64/Pi build and runtime boundary notes |
-| `rasptank-pi4-preparation.md` | RaspTank Pi 4 parts, sensor/camera interfaces, downloaded OS inputs and unverified SD/runtime gates |
-| `multi-device-onboarding.md` | Native vs SDK-host deployment intake, evidence gates and DJI Neo 2 SDK limitation |
-| `deployment-tools.md` | Shared trust code, target descriptors, deployment CLI and product profile binding migration |
-| `legacy-arm64-guide.md` | Historical upstream instructions kept for provenance; do not use for deployment |
-| `pi5-acceptance-checklist.md` | Physical acceptance tests |
-| `power-bench-verification.md` | Power/idle/standby bench |
-| `release-signing-key.md` | Ed25519 signing key handling |
-| `release-retention.md` | How many signed releases to keep |
-| `pinky-pro-first-device-runbook.md` | Fail-closed G0-G5 first physical Pinky Pro commissioning, including the hardware SLAM/MCAP map run |
-| `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
-| `github-updates.md` | Legacy container-bundle updater for development/compatibility. Start product deployment with `pinky-release-artifact-selection.md` |
-| `site-overlay-return-to-signed.md` | R의 손 덮어쓰기 이미지(authgap2·sitepose)를 로컬 main에서 만든 서명 후보로 되돌리는 순서(D-868)와 설치 뒤 확인 |
-| `site-ceiling-camera-console-runbook.md` | 현장 천장 카메라(Rosy Cam)·관제 운영: CA 고정 페어링, mDNS 사이트 찾기(D-391), 카메라 위치, 맵 자동 맞춤(D-375), 로봇 등록·모드, 규칙 점검, 문제 해결 |
-| `site-map-change-and-robot-recognition-runbook.md` | 트랙이 바뀔 때: CAD 페인트 추출, 카메라 정합 판정(흰 선만), 사이트 반영, 배경 다시 학습·LED로 로봇 인식, 증상별 원인 |
-| `pinky-pro-ir-line-calibration-runbook.md` | D-344 §12 IR line calibration with the read-only tool: four placements, checks, sign check, where the YAML and CORE revision go |
-| `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
-| `learned-perception-operators.md` | D-373 operator guide: `rosy_ml` setup and doctor, shadow deliver/rollback/harvest, lock and history, site auto-delivery install |
-| `robot-ssh-access.md` | D-418 운영자·수신자 안내: 화면 코드 기기 키 등록(`tools/ssh/rosy_ssh_enroll.py`), 임시 비밀번호 API(curl/PowerShell, 끄기), 팀 키 묶음 만들기·넘기기·회수(`tools/ssh/rosy_ssh_share.py`), R1–R3 보안 메모 |
-| `tailnet-remote-access.md` | D-477 테일넷 운영 안내: tailnet 승격·초대·ACL, auth key 보관(`private/`), 로봇 가입(번들·수동 join)과 확인, site 방화벽 `tailscale0`, 팀원 접속 요약, 회수 |
-| `learned-perception-pinky.md` | D-373 Pinky first-deploy runbook: layer table, new SD vs bench card, unit hand-install, `/etc/rosy/learned-perception.env` switch, first shadow measurement, capture/harvest, rollback |
-
-## Subdirectories
-
-None.
+Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power-bench, acceptance, release key/retention. `ls` lists them. **Runtime model:** the product robot runs natively on Ubuntu Server 24.04 arm64 + ROS 2 Jazzy + systemd (D-161). Docker is development/CI tooling only, never a product-image dependency (D-197); a container sidecar is allowed only for a declared workload outside the safety plan (D-246).
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Align steps with `deploy/robot/pinky_pro/` scripts (`install-pi.sh`, `deploy-from-windows.ps1`, `runtime-mode.sh`). Modes are `core` / `motor` / `hardware`. Those three drive the **development Compose** path; the product path is `deploy/robot/pinky_pro/native/` units under `rosy-runtime.target` (D-161/D-246).
-- Do not write an operator step that requires Docker to reach the motor UART or a safety gate. Every gate must be passable with the container runtime absent (D-246).
-- UART on Pi 5 is documented in `deploy/robot/pinky_pro/configure-uart-pi5.sh` (default motor device `/dev/ttyAMA4`).
-- Do not enable `lidar.standby_stop` until `power-bench-verification.md` passes. `pi5-acceptance-checklist.md` gates are HOLD until field sign-off.
-- A simulated or host-built map never satisfies G5. The device session must retain bounded MCAP telemetry, the generated YAML/PGM pair, their hashes, navigation evidence, and the final stopped/E-stop state.
-- D-145's native GitHub workflow produces an unsigned payload only. Offline Ed25519 signing and publication verification remain separate mandatory gates.
-- Use `pinky-release-artifact-selection.md` before a Pinky build. `artifact_impact.py` is advisory and fails closed; it never grants signing, install, motion, or acceptance approval.
+- Align steps with `deploy/robot/pinky_pro/` scripts. Modes `core`/`motor`/`hardware` drive the development Compose path; the product path is `deploy/robot/pinky_pro/native/` units under `rosy-runtime.target` (D-161/D-246). UART on Pi 5: `configure-uart-pi5.sh` (motor device `/dev/ttyAMA4`).
+- Never write an operator step that needs Docker to reach the motor UART or a safety gate; every gate must pass with the container runtime absent (D-246).
+- Do not enable `lidar.standby_stop` until `power-bench-verification.md` passes. `pi5-acceptance-checklist.md` gates stay HOLD until field sign-off.
+- A simulated or host-built map never satisfies G5: the device session keeps bounded MCAP telemetry, the generated YAML/PGM pair and hashes, navigation evidence and the final stopped/E-stop state (`pinky-pro-first-device-runbook.md` G0-G5;
+- body templates in `pinky-pro-commissioning-body-templates.md` are invalid until physically measured).
+- D-145's native GitHub workflow produces an unsigned payload only; offline Ed25519 signing (`release-signing-key.md`) and publication verification stay separate mandatory gates.
+- Open `pinky-release-artifact-selection.md` (D-325) before any Pinky build; `artifact_impact.py` is advisory, fails closed, and never grants signing, install, motion or acceptance approval. `site-overlay-return-to-signed.md` (D-868) returns hand-overlaid R images to a signed candidate.
+- Do not deploy from `legacy-arm64-guide.md` (provenance only) or `github-updates.md` (legacy container-bundle updater); start with the artifact selection.
+- Topic runbooks: IR line calibration D-344 section 12, learned perception D-373 (`learned-perception-operators.md`, `learned-perception-pinky.md`), robot SSH D-418, tailnet D-477, site camera/console D-391 and map fit D-375 (`site-ceiling-camera-console-runbook.md`,
+- `site-map-change-and-robot-recognition-runbook.md`).
 
 ### Testing Requirements
 
-Contracts: `test/test_robot_runtime.py`, `test/test_pi_wifi_deployment.py`, `test/test_dds_identity_contracts.py` (the commissioning and renumber procedures in these runbooks). Hardware steps are manual (`pi5-acceptance-checklist.md`).
-
-### Common Patterns
-
-Korean operator prose; commands are copy-pasteable bash/pwsh.
-
-## Dependencies
-
-### Internal
-
-- `deploy/robot/pinky_pro/`, `deploy/robot/pinky_pro/image/`, `deploy/robot/pinky_pro/release/`
-
-### External
-
-- Product: Ubuntu Server 24.04 arm64, native ROS 2 Jazzy, systemd.
-- Development/CI only: Raspberry Pi OS Lite 64-bit, Docker Compose, nmcli.
-
-<!-- MANUAL: -->
+Contracts: `test/test_robot_runtime.py`, `test/test_pi_wifi_deployment.py`, `test/test_dds_identity_contracts.py`. Hardware steps are manual (D-584 for the pytest part, remote). Operator prose is Korean with copy-pasteable bash/pwsh.

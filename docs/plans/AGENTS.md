@@ -1,135 +1,23 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-23 -->
 
 # plans
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Dated design and execute plans (2026-08-31 onward). These are the working trail for Pi runtime, motors, power, dashboard, docking, battery integrity, Wi-Fi, ROS graph observability, and OS image/release.
-
-`docs/plan/` 은 2026-09-20 에 폐쇄됐다 — 역사 WBS(`ROSY Implementation Plan.md`)와
-Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 근거가 아니라
-기록이다.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `ROSY Implementation Plan.md` | 역사 WBS (ROSY-PLN-001 v2.0): phases P0–P6, Pn-xx tasks, AT/FAT/MAT matrix — 추적용 |
-| `ROSY Flask Parity Checklist.md` | 역사 D-3/P0-7: 구 Flask nav server 가 FastAPI 로 커버해야 했던 기능 목록 — 추적용 |
-| `2026-08-31-raspberry-pi-runtime.md` | Pi runtime split (core/motor/io) |
-| `2026-09-01-raspberry-pi-wifi-deployment.md` (+ `-design`) | Headless Wi-Fi/SSH image |
-| `2026-09-01-motor-control-contracts.md` (+ `-design`) | ROS-free MotorController contracts |
-| `2026-09-01-pi-motor-commissioning.md` (+ `-design`) | UART / Dynamixel bench |
-| `2026-09-01-deep-power-states-design.md` | IDLE/STANDBY duty cycling (D-24/D-25) |
-| `2026-09-01-proximity-wake-standby.md` (+ `-design`) | Ultrasonic wake |
-| `2026-09-01-rosy-dashboard.md` (+ `-design`) | Embedded FastAPI dashboard (D-23) |
-| `2026-09-01-ros-network-observability.md` (+ `-design`) | ROS graph / DDS telemetry |
-| `2026-09-01-rosy-os-v1-image-release-design.md` | Signed image + Host Agent |
-| `2026-09-02-battery-integrity-low-battery-alert.md` (+ `-design`) | SAF-005 curve, hysteresis, D-27 shutdown sentinel |
-| `2026-09-02-docking-station.md` (+ `-design`) | Dock SM; last cm is sensor-closed-loop |
-| `2026-09-03-runtime-maintainability-rules.md` | Runtime slice module rules (catalog, launch compose, Nav2 policy) |
-| `2026-09-05-vision-accelerator-shield-design.md` | Pi 5 HAT/M.2 AI Kit vision offload (D-29 proposed; compose profile `vision`) |
-| `2026-09-08-swarm-formation-slice-design.md` | Fleet-less N-robot formation slice: `rosy_fleet` seed (geometry, slot assignment, relay, FOR-004 session), `gz_multi core:=true`, sim bench; D-35 candidate |
-| `2026-09-08-swarm-formation-slice.md` (+ `-results`) | Execution plan for that slice (15 TDD tasks, ROS-free until the sim bench) and the results file that records what the sim bench measured and what it could not |
-| `2026-09-13-rosy-os-device-validation-implementation-plan.md` | Rosy OS 기능 구현·자동화 시험·ARM64 artifact·Pi Device 설치/readback·Pinky Pro/OMX 현장 승격 gate |
-| `2026-09-14-site-middleware-role-fabric-design.md` | 관제 PC Fleet 서버가 모으고 흩뜨림. 디바이스는 계약 버스만. 역할 단일 (D-59) |
-| `2026-09-14-site-middleware-role-fabric.md` | D-59 실행: 역할 가드 + ROS-free SiteHub gather/scatter (UI·영상·outbound·Pi 제외) |
-| `2026-09-15-navigation-swarm-split-design.md` | 추종을 navigation에서 분리해 `rosy_core.swarm`으로 (D-60) |
-| `2026-09-15-navigation-swarm-split.md` | D-60 실행: poses/manager 이동, navigation import 금지, 동작 불변 |
-| `2026-09-15-module-harness-design.md` | 모듈별 progress·logs·생성 index와 `tools/harness` 계약 시험 (D-61 Accepted) |
-| `2026-09-16-optional-runtime-slices-design.md` | CORE 필수, motor/io/nav/vision/omx/ai 선택 설치 (D-62) |
-| `2026-09-16-optional-runtime-slices.md` | D-62 실행: board 카탈로그, capability 암전, install preset, CORE import 가드 |
-| `2026-09-16-modular-middleware-goal-design.md` | 모듈형 미들웨어 끝 상태 (D-63) |
-| `2026-09-16-core-control-import-boundary.md` | D-64: rosy_control import는 센서 어댑터만 |
-| `2026-09-16-concept-runtime-alignment-design.md` | Concept Node/Device/Capability mapped onto CORE + D-62; apt/rosyctl deferred (D-65) |
-| `2026-09-16-concept-runtime-alignment.md` | Execution: identity one plane, inventory API, adapter manifests, TaskKind, Control launch guard |
-| `2026-09-17-arm64-artifact-native-pi-plan.md` | D-66 ARM64 after QEMU HOLD: native Pi (or pinned digest), not Hub hollow ros-base |
-| `2026-09-17-concept-folder-adr-plan.md` | concept 00–15 → D-67–D-71; 09–12 and apt/rosyctl are not v1 |
-| `2026-09-17-remaining-gates-adr-plan.md` | leftover gates → D-78–D-81; G0–G3 reuse Proposed D-41–D-56 |
-| `2026-09-17-remaining-runtime-adr-plan.md` | leftover runtime → D-83–D-86; ROS-SIM 묶음, hardware 이미지, dock ESP32, POSIX identity |
-| `2026-09-17-remaining-execution-adr-plan.md` | leftover execution → D-87–D-91; Device ADR park, D-54–D-56 source Accepted |
-| `2026-09-17-robot-soccer-game-host-design.md` | 실기 Pinky 1v1 푸시볼. 경기는 `rosy_games` 소유, Fleet은 통로, Isaac은 학습 어댑터 (D-90). CORE 모드 없음 |
-| `2026-09-18-rosy-games-local-host.md` | rosy_games LOCAL 실행 계획: 스켈레톤 → gate·MatchHost·teleop 클라이언트. Isaac/overhead 제외 |
-| `2026-09-18-rosy-games-overhead-plan.md` | 천장 카메라 관측 어댑터. OpenCV는 overhead만. 합성 시험 ≠ DEVICE (D-94, D-95) |
-| `2026-09-18-rosy-games-remaining-adr-plan.md` | 남은 games 트랙 → D-95–D-100; 골은 ArUco 20/21+영역, 온보드/Isaac은 FIELD 뒤 |
-| `2026-09-20-camera-placement-design.md` | 카메라 배치 실측 설계 — Picamera2/CSI 캡처를 host service로 둘지 least-privilege container로 둘지 같은 시나리오 실측으로 결정 (Task 5, D-52) |
-| `2026-09-20-dock-build-design.md` | 실물 도크 조립 설계 — bench 1기분 조립·통전·플래시, DNC-007 태그 검증, teach-by-docking까지 (DNC) |
-| `2026-09-20-pi-bench-commissioning-design.md` | Pi 벤치 커미셔닝 설계 — 서명 artifact→설치→readback→단계 승격의 순서와 통과 조건 고정 (D-66) |
-| `2026-09-21-pinky-device-commissioning-design.md` (+ implementation plan) | Fail-closed G0-G5 first physical Pinky Pro session and evidence workflow |
-| `2026-09-21-hardware-mapping-g5-design.md` (+ implementation plan) | D-144 hardware SLAM backend, writable map output, and MCAP/hash-bound G5 evidence |
-| `2026-09-21-ubuntu-native-ros-runtime-design.md` | D-161 immediate transition to Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy product runtime |
-| `2026-09-21-ubuntu-native-ros-runtime.md` | Test-first execution plan for native image, services, payload, SD and device evidence |
-| `2026-09-22-pinky-pro-flashable-image-design.md` | D-164: signed `.img.xz` product artifact, native image customization, trust and gate design |
-| `2026-09-22-pinky-pro-flashable-image.md` | Test-first implementation plan from Canonical Pi image through SD readback and Pinky acceptance |
-| `2026-09-22-pinky-first-boot-fixes.md` | D-174: first-boot defects (recovery import, live hostname, operator key, ROS home, reflash identity, card diagnostics) and boot status indicator T0 |
-| `2026-09-22-rosy-debug-log-system.md` | D-175: layered debug logs outside CORE — journald ledger, FAT32 boot black box, SSH/card collector, native readback, later API |
-| `2026-09-23-boot-config-and-fallback-ap.md` | D-176: editable boot-partition `rosy-config.yaml` (applied then scrubbed) and per-card fallback AP |
-| `2026-09-21-traffic-light-controller-research.md` | 알리 신호등(접점 스위치)을 ESP32+릴레이로 관제 제어하는 조사 보고서 — 제품/릴레이/보드/펌웨어/통신/안전 비교와 ROSY-SIGNAL-001 근거 |
-| `2026-09-21-fleet-signals-integration-design.md` | G-S3 설계: Fleet 콘솔이 ROSY-SIGNAL-001 장치를 gather/scatter — signals.yaml, SignalConsole(재단언·all_red scatter), snapshot/UI 통합 |
-| `2026-09-22-fleet-signals-integration.md` | G-S3 실행 계획: T-S3-1~6. 상시 폴링 루프를 throttled refresh 로 바꾼 변경 기록 |
-| `2026-09-22-signals-acceptance-plan.md` | 신호등 실물 수용 계획 — 증거 등급(E1–E3), 수용 기준 AC-01~26(정량 합격선, AC-24~26은 속도 설계에서 승격), 고장 주입 S-01~12, 벤치 절차 B0–B7, 구조적 약점 W1–W9, 버튼 맵핑 갈래·특성화 시트(방전 조건·cross-talk·분리비 ≥3배 포함) |
-| `2026-09-22-signals-button-contract-v2-proposal.md` | ROSY-SIGNAL-001 v2 제안 — 모드 사이클 버튼용 펄스 프리미티브, 피드백 등급 F1+F2 채택(2026-09-26 결정, F-EXT 별도·F0 기각), 페일세이프 재정의 |
-| `2026-09-22-signal-observer-vision-design.md` | 신호등 관측 평면 설계 — 카메라+OpenCV(고전 분할 v1)/YOLO(선택 v2)를 제어와 분리한 읽기 전용 관측 서비스, 명령↔컨트롤러↔실측 3자 교차 검증 |
-| `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26(2026-09-22 수용 계획 §3 으로 승격 완료 — 판정의 기록 위치는 거기), D-166(과속 반응 기록 전용) |
-| `2026-09-22-scene-context-road-design.md` | D-162 장면 상황 프로파일 설계 — 닫힌 context 집합, 오프라인 리비전 프로파일, 제네릭 보수 폴백, 첫 소비자는 도로 인식 파라미터 |
-| `2026-09-22-scene-context-road.md` | D-162 실행 플랜 T1–T5 — 순수 로직(T1/T2 착지), 노드 wiring(T3), CORE 수용(T5) |
-| `2026-09-23-core-dev-overlay-design.md` | D-179 설계: 벤치 CORE는 `/var/lib/rosy-dev` 읽기 전용 바인드. `/opt/rosy`·서명 릴리스·GitHub 설치와 분리 |
-| `2026-09-23-core-dev-overlay.md` | D-179 실행: 허용 목록·해시 성공·readback HOLD·네이티브 drop-in·Windows 호출. 두 번째부터는 재시작만, 재부팅은 이미지로 복귀, compose 프로젝트는 `rosy-runtime` |
-| `2026-09-24-folder-layout.md` | D-186 실행: 루트는 `env.sh`만, 벤치·설치 셸은 `tools/`와 `deploy/`, 텔레옵·주행 기록은 `data/` |
-| `2026-09-25-ownership-naming-control-plane.md` | D-227: 여섯 책임은 지금 트리의 이름. 목표 루트·명령 봉투·AI 워커는 열지 않는다 |
-| `2026-09-25-decision-lane-recovery.md` | D-228 실행: 차선 판단은 FOLLOW/STOP id. 속도는 line_follow 에 남긴다 |
-| `2026-09-25-ownership-naming-input-v0.2.md` | 입력 노트. D-227이 채택한 범위만 실행 기준이다 |
-| `2026-09-25-decision-fabric-input-v0.8.md` | 입력 노트. 판단 경계는 D-228·D-229다. `src/runtime` 트리는 폴더가 아니다 |
-| `2026-09-25-folder-map.md` | D-229 이후의 현재 폴더를 읽는 지도 |
-| `2026-09-25-d231-layered-move.md` | D-231 실행 기록. 층 이동은 로컬 main `a3eca209`에 있다. OMX 제품 설정은 D-232 |
-| `2026-09-28-source-folder-roles-and-runtime-audit.md` | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
-| `2026-09-28-control-and-contract-boundary-audit.md` | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
-| `2026-09-29-rosy-pilot-teleop-app-design.md` | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 HUD·클릭 조종·카메라 증거 재사용 |
-| `2026-09-29-rosy-pilot-teleop-app.md` | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록부터 stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록까지 |
-| `2026-09-29-pilot-lobby-and-live-video-design.md` | D-343·D-368 로비(mDNS 방)·운전석 한 자리·운전자 MJPEG 실시간 영상 설계 — 방 목록, 좌석 임대, 영상 발행 상향 범위 |
-| `2026-09-29-uiux-craft-improvement-plan.md` | D-280 후속 전 표면 크래프트 개선 계획 — Impeccable 렌즈(critique→특화 패스→polish, 유한 검증), G3 사람 평가 프로토콄, G2 보존형 증거, ADR 후보 A-1(표정 어휘)·A-2(온기 문구) |
-| `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
-| `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |
-| `2026-09-29-er2-adr-consistency-review.md` | D-326/D-327/D-328과 실행 계획의 모델 권한·사람 확인·Fleet 예약·정지·장애 복구 경계 검토 |
-| `2026-09-29-fleet-mission-control-arbitration-implementation.md` | D-330 실행 순서: Fleet 단일 claim, stop generation, 감사 장애 중 전용 정지, OMX 접수 후 장애 조정 |
-| `2026-09-29-d329-surface-registry.md` | D-329 실행 계획 — `src/hmi/web/surfaces.yaml` 스키마, 등록 누락 시험(변이 확인 5건), 세 `SURFACES` 상수를 로더로 바꾸기, 셸 점검 추적 파일 한정. `matrix.json`·픽셀 게이트는 범위 밖 |
-| `2026-09-29-d268-policy-evidence-disposition.md` | D-268 처분 — Proposed 유지(승격 전제 5개 대조표: 증거 계약/권한/정답 시험/30분 스트림/입회 수용 전부 미충족), D-268 발의 자격 증거와 D-328 목표 성공 증거의 면 구분, 승격 준비 사다리 5단계 |
-| `2026-09-29-policy-evidence-contract-design.md` | 승격 사다리 1단계 설계 — `PolicyEvidencePayload` 필드·source-token 제출·거절 사유 enum·발의 binding, 제출 기반 공유 확정(어휘 공유·소비 분리), 밸브·fail-closed 불변식 |
-| `2026-09-29-policy-evidence-contract.md` | 실행 계획 T1~T7 — schema→설정 로더→저장·제출 검증→발의 binding→경로·인증→API Ref v1.48→harness. 밸브 False·빈 등록부·미설정 age 거절 불변 단언 포함 |
-| `2026-09-30-goal-evidence-producer-and-verifier-design.md` | D-348 근거 설계 — 목표 증거 생산자 등록·source-token 제출면(정책 증거와 분리)·마지막 Action 종단 뒤 자동 `verify_goal()` 전이·유예 창 HOLD·fail-closed 불변식. 실물 생산자는 P4 ROS-SIM에서 별도 지정 |
-| `2026-09-30-goal-evidence-producer-and-verifier.md` | D-348 실행 계획 T1~T7 — 등록부→제출 보관→자동 검증 트리거→REST→검증자 연결→API Ref v1.59→harness. TDD, 가짜 생산자·가짜 시계, 불변 단언 6종(verifier 미설정 거절·빈 등록부 거절·증거 없는 종단 성공 금지·호출자 max_age 무시·밸브 False·정책 증거 무변경) |
-## Subdirectories
-
-None.
+Dated design and execute plans (2026-08-31 onward): the working trail for Pi runtime, motors, power, dashboard, docking, battery integrity, Wi-Fi, ROS graph observability, OS image/release, Fleet, signals, Pilot and policy evidence. `ls docs/plans` is the index; filenames are `YYYY-MM-DD-kebab.md`, design (`-design`) and execute plans are separate files. `docs/plan/` was closed on 2026-09-20; its historical WBS (`ROSY Implementation Plan.md`) and Flask parity checklist live here as records, not as execution basis.
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Read the matching `-design.md` before changing power, docking, battery, or release code.
-- Do not treat these as the API contract; that remains `docs/reference/`.
-- Branch `feat/swarm-formation-slice` maps to `2026-09-08-swarm-formation-slice-design.md`.
+- Read the matching `-design.md` before changing power, docking, battery or release code. Plans are not the API contract; that stays in `docs/reference/`.
+- Input notes (`*-input-v0.*.md`) bind only the scope the ADR adopted: ownership naming D-227, decision lane D-228/D-229 (`2026-09-25-folder-map.md` is the folder reading map after D-229), layered move D-231.
+- D-315 (`2026-09-28-source-folder-roles-and-runtime-audit.md`) is source-role interpretation plus a separately gated runtime/sensing ownership audit; D-317 audits `control` and `core_common` boundaries before any further move.
+- Policy evidence plans (D-268 disposition, `2026-09-29-policy-evidence-contract*.md`, D-348 goal evidence) keep the invariants: dispatch valve False, empty registry rejects, no success without evidence, caller `max_age` ignored. Do not relax them in code without the plan's promotion ladder.
+- Branch `feat/swarm-formation-slice` maps to `2026-09-08-swarm-formation-slice-design.md` (D-35 candidate).
 
 ### Testing Requirements
 
-Each execute plan names pytest modules (usually `src/core/core/test/test_power.py`, `test_battery.py`, `test_docking.py`, or repo `test/`).
-
-### Common Patterns
-
-Filename `YYYY-MM-DD-kebab.md`; design and execute are separate files.
-
-## Dependencies
-
-### Internal
-
-- Code under `src/runtime/gateway`, `src/products/pinky_pro/bringup`, `deploy/`
-
-### External
-
-None.
-
-<!-- MANUAL: -->
+Each execute plan names its pytest modules (usually `test_power.py`, `test_battery.py`, `test_docking.py` or repo `test/`); run them through the remote test PC (D-584).
