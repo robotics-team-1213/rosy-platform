@@ -1786,6 +1786,36 @@ When the updater, verifier, signing helper, I/O helper or `site_update_runtime.p
 changes on `main`, the administrator reinstalls the complete five-file unit from the
 same reviewed commit by the path above; the updater never copies them from a candidate.
 
+### Arm cell updater (cell-a)
+
+The arm cell runs only fleet, vision and proxy under the `cell-a` Compose project, so it has its
+own updater, `cell_a_autoupdate.py`, with `rosy-cell-autoupdate.service`/`.timer` (15 min, D-805
+gate). It reads the same signed releases, checks reused images only for its three services, picks the
+newest signed release whose reused images are already loaded (an incremental release can reuse an
+image an older one built), holds while an arm session, `session.lock` or a `~/rosy-jobs/*.lock` is
+active, and rolls `cell-a.env` back when the new containers do not match the verified images.
+The cell's updaters share GitHub's anonymous 60/h API limit: the release list is an ETag request
+(a 304 is not counted) and the ancestry comparison of a commit pair is cached in
+`/var/lib/rosy/cell-a-autoupdate/`.
+
+Install or replace on the cell (read the diff against the running copy first; the installed copy was
+hand-patched on 2026-11-26 and this file is that copy plus the API savings):
+
+```bash
+diff -u /usr/local/lib/rosy-cell/cell_a_autoupdate.py deploy/site/cell_a_autoupdate.py
+sudo install -o root -g root -m 0755 deploy/site/cell_a_autoupdate.py /usr/local/lib/rosy-cell/
+sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py deploy/site/candidate_signing.py \
+  /usr/local/lib/rosy-cell/
+sudo install -o root -g root -m 0644 deploy/site/rosy-cell-autoupdate.service \
+  deploy/site/rosy-cell-autoupdate.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo /usr/bin/python3 -I /usr/local/lib/rosy-cell/cell_a_autoupdate.py --dry-run
+sudo systemctl enable --now rosy-cell-autoupdate.timer
+```
+
+`rosy_site_autoupdate.py` cannot serve the cell by configuration: it switches one
+`ROSY_SITE_IMAGE_TAG` and the `/opt/rosy/candidate` link and restarts `rosy-site-stack.service`.
+
 ### Local maintenance and manual installation (D-441 follow-up)
 
 Local Git edits and commits are source work: they do not replace the running
