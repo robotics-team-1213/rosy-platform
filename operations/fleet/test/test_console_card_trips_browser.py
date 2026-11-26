@@ -91,6 +91,30 @@ def _settle(page, posts, path, count=1):
             return
 
 
+def test_s5_refusal_and_later_preview_are_separate_records(site):
+    from playwright.sync_api import expect
+
+    preview = {"at": 1795639225, "robot_id": "rosy_46", "to": "S5", "plan_id": "second", "stage": "preview"}
+    refusal = {**preview, "plan_id": "first", "stage": "plan_refused", "code": "TRIP_LANE_CAMERA_UNAVAILABLE",
+               "detail": {"error": "RATE_LIMITED"}}
+    canceled = {**preview, "robot_id": "rosy_42", "to": "C2", "plan_id": "prior", "stage": "start_accepted",
+                "outcome": {"state": "canceled", "detail": {"stop_sent": False,
+                            "peer_wait": {"waiting_on": ["rosy_45"]}}}}
+    browser, page, errors = _open(None, site, {**API, "/api/fleet/trip-requests": {"requests": [preview, canceled, refusal]}}, [])
+    try:
+        page.locator("#context-evidence-tab").click()
+        page.locator("#trip-receipt-history summary").click()
+        rows = page.locator("#trip-receipt-rows li")
+        expect(rows).to_have_count(3)
+        expect(rows.nth(1)).to_contain_text("운행 취소 · 기체 정지 응답 미확인")
+        expect(rows.nth(1)).not_to_contain_text("자동 재확인")
+        expect(rows.first).to_contain_text("S5 · 경로 계산 완료 · 출발 전")
+        expect(rows.last).to_contain_text("RATE_LIMITED")
+        assert not errors
+    finally:
+        browser.close()
+
+
 def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
     from playwright.sync_api import expect
 
@@ -356,16 +380,22 @@ def test_convoy_follows_the_leader_from_the_formation_block(site):  # noqa: F811
         browser.close()
 
 
-def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
+@pytest.mark.parametrize("reply_lost", [False, True])
+def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site, reply_lost):  # noqa: F811
     """D-540 1: one `운행 취소` per card, quiet, no confirm: the open trip if there is one, else the goal plus
     lane driving that is on. A stopped trip opens its card with the lease end reason (D-541 7)."""
 
+    from playwright.sync_api import expect
+
     posts = []
-    answers = {"/api/fleet/trips/t-1/cancel": (200, {**LEAD, "state": "canceled"}),
+    receipt = {**LEAD, "state": "canceled", "detail": {"stop_sent": False}}
+    answers = {"/api/fleet/trips/t-1/cancel": (503, {}) if reply_lost else (200, receipt),
                "/api/fleet/robots/rosy_02/cancel": (200, {"ok": True}),
                "/api/fleet/robots/rosy_02/line-follow": (200, {"result": {"state": "OFF"}})}
     browser, page, errors = _open(None, site, API, posts, answers)
     try:
+        if reply_lost:
+            page.route("**/api/fleet/trips/t-1", lambda route: route.fulfill(json=receipt))
         lead = _card(page, "rosy_01")
         assert lead.get_attribute("data-collapsed") is None
         assert "반복 운행 2바퀴째" in lead.inner_text()
@@ -380,6 +410,7 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
         assert stop.get_attribute("kind") == "quiet" and stop.inner_text().strip() == "운행 취소"
         stop.click()
         _settle(page, posts, "/api/fleet/trips/t-1/cancel")
+        expect(page.locator("#log")).to_contain_text("운행 취소 · 기체 정지 응답 미확인 · t-1")
         assert ("/api/fleet/trips/t-1/cancel", None) in posts
         assert not any(path == "/api/fleet/robots/rosy_01/cancel" for path, _ in posts)
 
@@ -460,25 +491,26 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
         browser.close()
 
 
-def test_a_failed_trip_cancel_still_stops_lane_driving(site):  # noqa: F811
-    """Review 1: if the trip cancel fails, the fallback also turns lane driving OFF (Fleet's trip guard then
-    ends the open trip), not only the goal cancel."""
+def test_unconfirmed_trip_cancel_keeps_retry_scoped_to_the_trip(site):
+    """A transport failure leaves ownership ambiguous, even with lane tracking active."""
+    from playwright.sync_api import expect
 
     lead = _robot("rosy_01")
     lead["state"]["line_follow"] = {"mode": "CAMERA_LINE", "state": "TRACKING"}
-    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [lead, LANE, _robot("rosy_03"), OFFLINE]}}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [lead, LANE, OFFLINE]}}
+    path = "/api/fleet/trips/t-1/cancel"
     posts = []
-    answers = {"/api/fleet/trips/t-1/cancel": (503, {"detail": "busy"}),
-               "/api/fleet/robots/rosy_01/cancel": (200, {"ok": True}),
-               "/api/fleet/robots/rosy_01/line-follow": (200, {"result": {"state": "OFF"}})}
+    answers = {path: (503, {"detail": "busy"})}
     browser, page, errors = _open(None, site, api, posts, answers)
     try:
-        card = _card(page, "rosy_01")
-        card.locator('ui-button[data-cancel-scope="trip"]').click()
-        _settle(page, posts, "/api/fleet/robots/rosy_01/line-follow")
-        assert ("/api/fleet/trips/t-1/cancel", None) in posts
-        assert ("/api/fleet/robots/rosy_01/cancel", None) in posts
-        assert ("/api/fleet/robots/rosy_01/line-follow", '{"mode":"OFF"}') in posts
+        page.route("**/api/fleet/trips/t-1", lambda route: route.fulfill(json=LEAD))
+        cancel = _card(page, "rosy_01").locator('ui-button[data-cancel-scope="trip"]')
+        cancel.click()
+        expect(page.locator("#log")).to_contain_text("운행 취소 미확인")
+        answers[path] = (200, {**LEAD, "state": "canceled", "detail": {"stop_sent": True}})
+        cancel.click()
+        expect(page.locator("#log")).to_contain_text("기체 정지 명령 수락")
+        assert posts == [(path, None), (path, None)]
         assert not errors
     finally:
         browser.close()
@@ -621,7 +653,8 @@ def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):
         page.goto(site + "/console?view=work&show=new")
         page.clock.run_for(2500)
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
+        assert screens.locator('a[aria-current="page"]').count() == 0
+        assert page.locator("#console-screen").inner_text() == "새 작업"
         page.locator("#work-new-move").click()
         page.locator("#work-move-robot").select_option("rosy_02")
         form = page.locator("#work-move .card-trip")

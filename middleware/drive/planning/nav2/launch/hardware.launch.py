@@ -41,6 +41,9 @@ def _include_nav2(context, *args, **kwargs):
     backend = LaunchConfiguration("navigation_backend").perform(context).strip().lower()
     if backend not in {"localization", "slam"}:
         raise ValueError("navigation backend must be localization or slam")
+    amcl_laser_model = LaunchConfiguration("amcl_laser_model").perform(context)
+    if backend != "localization" and amcl_laser_model != "configured":
+        raise ValueError("an AMCL laser model override requires saved-map localization")
     profile_path = LaunchConfiguration("profile_file").perform(context)
     limits = load_motion_limits(profile_path)
     footprint_file = LaunchConfiguration("footprint_profile_file").perform(context).strip()
@@ -83,6 +86,7 @@ def _include_nav2(context, *args, **kwargs):
         namespace,
         footprint_points=footprint_points,
         speed=(float(requested_linear), float(requested_angular)),
+        amcl_laser_model=amcl_laser_model,
     )
     if backend == "localization":
         fallback_map = os.path.join(nav_share, "map", "my_map.yaml")
@@ -217,6 +221,10 @@ def generate_launch_description():
             default_value=os.environ.get("ROSY_MAP", "/var/lib/rosy/maps/site.yaml"),
         ),
         DeclareLaunchArgument("params_file", default_value=default_params),
+        DeclareLaunchArgument(
+            "amcl_laser_model",
+            default_value=os.environ.get("ROSY_AMCL_LASER_MODEL", "configured"),
+        ),
         DeclareLaunchArgument("mapper_params_file", default_value=default_mapper_params),
         DeclareLaunchArgument("allow_demo_map", default_value="false"),
         DeclareLaunchArgument(

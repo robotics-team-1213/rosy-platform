@@ -356,12 +356,17 @@ class LocAssist:
         self._empty_streak = 0
         self._auto_unique_fails = 0
 
+    def search_window_ready(self, now_s):
+        return (self.machine.state in (LocState.UNKNOWN, LocState.SUSPECT)
+                and self.machine.check is None and not self.held
+                and not self._mission_running(now_s) and self._is_settled(now_s))
+
     def search_started(self, now_s, odom, *, scan_stamp=None):
         self._searching = (tuple(odom), self._epoch, float(now_s), scan_stamp)
         self._due_since = None
 
     def search_finished(self, now_s, odom, candidates, unmapped=(), sightings=(), paint_scores=None,
-                        evidence_s=None):
+                        evidence_s=None, *, allow_unique=True):
         """Offer what the search found. `sightings`: SquareObservation-like objects;
         `paint_scores`: one score (or None) per candidate, None for no camera paint;
         `evidence_s`: when that camera evidence was seen. Evidence from before the
@@ -395,7 +400,7 @@ class LocAssist:
         }
         self._candidate_scan_s, self._candidate_mismatches = self._report['stamp'], 0
         out = [self._candidates(now_s)]
-        if (self._auto_unique and self._auto_unique_fails < AUTO_UNIQUE_MAX_FAILS
+        if (allow_unique and self._auto_unique and self._auto_unique_fails < AUTO_UNIQUE_MAX_FAILS
                 and self._is_settled(now_s) and len(candidates) == 1
                 and getattr(candidates[0], 'unique_margin', None) is not None):
             auto = self.machine.auto_lock_unique(now_s)

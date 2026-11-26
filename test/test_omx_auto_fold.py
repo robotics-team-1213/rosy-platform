@@ -46,7 +46,7 @@ class Cell:
         return {"ok": True, "state": self.state, "target": self.target}
 
 
-def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None):
+def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None, require_empty_gripper=False):
     seen, booked, released = [], [], []
 
     def look(frames):
@@ -59,7 +59,7 @@ def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None):
 
     result = af.recover(cell, HOME, CLOSED, plan=lambda s: [s, HOME], look=look, reserve=reserve,
                         release=lambda: released.append(1), release_and_rise=lambda c: {"result": rise},
-                        low=lambda s: low, order=order)
+                        low=lambda s: low, order=order, require_empty_gripper=require_empty_gripper)
     return result, seen, booked, released
 
 
@@ -160,6 +160,21 @@ def test_jaws_on_a_box_low_let_go_after_the_rise_is_checked():
 def test_open_approach_jaws_are_not_holding():
     assert af.holding([*REACH[:5], 60.0], [*REACH[:5], 60.0], CLOSED) is False
     assert af.holding([*REACH[:5], 56.0], [*REACH[:5], CLOSED], CLOSED) is True
+
+
+@pytest.mark.parametrize(("holding", "jaw_gap", "allowed"), [
+    (True, 0, False), (None, 0, False), (False, 3, False), (False, 0, True),
+])
+def test_usb_homing_requires_empty_jaws_before_any_release_or_park(holding, jaw_gap, allowed):
+    cell = Cell([*REACH[:5], CLOSED + jaw_gap], target=[*REACH[:5], CLOSED])
+    act = cell.act
+    cell.act = lambda cmd: {**act(cmd), "holding": holding}
+    result, seen, booked, _ = run(cell, require_empty_gripper=True)
+    if allowed:
+        assert result["result"] == "folded"
+    else:
+        assert result["reason"] == "PLACEMENT_REQUIRED_BEFORE_HOME"
+        assert not seen and not booked and cell.commands == ["state", "human-hold"]
 
 
 def test_other_arm_reservation_or_a_short_park_holds():

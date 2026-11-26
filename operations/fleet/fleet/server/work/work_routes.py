@@ -9,6 +9,7 @@ from core_common.protocol.schemas import FleetWorkOverview
 from fleet.server.console_view import trip_caps
 from fleet.server.step_action_kinds import open_kinds, required_approval
 from fleet.server.work_read import work_summaries
+from fleet.server.trip_live import trip_execution, trip_wait_reason
 
 #: D-763 8: the visible state of a ledger status; an open trip whose wait answer is ``waiting`` shows 기다림.
 _SHOWN = {"PROPOSED": "approval_pending",
@@ -31,13 +32,22 @@ def _shown(row: dict) -> dict:
     return {**row, "visible_state": state, "approval": approval}
 
 
+def _trip_wait(view: dict) -> dict | None:
+    # Closed receipts can retain both the last tick's wait and its peer evidence.
+    if view["state"] not in ("started", "running", "link_wait"):
+        return None
+    reason = trip_wait_reason(view)
+    if reason:
+        return {"waiting": True, "reason": reason}
+    wait = view.get("wait")
+    return {key: wait.get(key) for key in ("reason", "waiting", "bound_s", "over_bound")} if wait else None
+
+
 def _trip_row(view: dict) -> dict:
-    # A closed trip keeps its last wait answer in storage; only an open trip has a wait to show (as f79947c25)
-    wait = view.get("wait") if view["state"] in ("started", "running", "link_wait") else None
     return {"source": "trip", "source_id": view["trip_id"], "action_kind": "trip", "status": view["state"],
             "device_id": view["robot_id"], "workcell_id": None, "reason": view.get("reason"),
             "updated_at": datetime.fromtimestamp(view["updated_at"], timezone.utc).isoformat(timespec="milliseconds"),
-            "wait": {key: wait.get(key) for key in ("reason", "waiting", "bound_s", "over_bound")} if wait else None}
+            "wait": _trip_wait(view), "execution": view.get("execution") or trip_execution(view)}
 
 
 def install_work_routes(app, *, task_service, mission_service, require_viewer, require_named, read_guard):
@@ -95,7 +105,8 @@ def install_work_routes(app, *, task_service, mission_service, require_viewer, r
         scoped = {"mission": owner, "cell_job": {**owner, "named": named(principal),
                                                  "operator": principal.permits_site("fleet.operate", {"operator"})}}
         # Open trips are copied on the loop (the runner mutates them there); D-517 1: one may be older than the stored ones
-        live = {view["trip_id"]: _trip_row(view) for view in app.state.trip_runner.open_trips()}
+        runner = app.state.trip_runner
+        live = {view["trip_id"]: _trip_row(runner.execution_view(view)) for view in runner.open_trips()}
         rows, truncated, saved = await asyncio.to_thread(stored, cells, scoped, limit)
         trips = {view["trip_id"]: _trip_row(view) for view in saved} | live
         if len(trips) > limit:

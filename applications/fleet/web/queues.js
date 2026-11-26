@@ -86,7 +86,10 @@ export function openTrip(view, robotId) {
 /** Why the robot's last trip stopped or failed ('' while a trip is open or the last one arrived or was canceled). */
 export function endedTripText(view, robotId) {
   if (openTrip(view, robotId)) return "";
-  return tripEndText((view.endedTrips || []).find((trip) => trip.robot_id === robotId));
+  const last = (view.endedTrips || []).find((trip) => trip.robot_id === robotId);
+  if (last?.state === "canceled" && (last.detail?.stop_sent === false || last.detail?.error))
+    return "운행 취소 · 기체 정지 응답 미확인";
+  return tripEndText(last);
 }
 
 // D-577 8: an escalated stuck nobody answered within this many seconds rises to the top. The robot
@@ -143,7 +146,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const localization = localizationAttention(robot.localization, staleS === null ? state.localization : null,
-      view.guideUnavailable ? null : guideRow);
+      view.guideUnavailable ? null : guideRow, staleS !== null);
     if (localization) items.push(localization);
     if (localization?.severity !== "crit" && state.hitl_requested === true) {
       // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는

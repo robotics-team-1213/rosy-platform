@@ -63,8 +63,11 @@ class DockingManager(DockingPhasesMixin):
                  motion_admission: Optional[Callable[..., None]] = None,
                  odom_pose_provider: Optional[Callable[[], Any]] = None,
                  map_generation_provider: Optional[Callable[[], Optional[int]]] = None,
+                 map_grid_id_provider: Optional[Callable[[], Optional[str]]] = None,
                  ) -> None:
         self._db = database
+        self._commission_frame = lambda: (map_grid_id_provider() if map_grid_id_provider else None,
+                                          map_generation_provider() if map_generation_provider else None)
         self.motion_admission = motion_admission or (lambda *args: None)
         self._safety = safety
         self._cfg = config or DockingConfig()
@@ -147,6 +150,12 @@ class DockingManager(DockingPhasesMixin):
         return method(*args, **kwargs)
 
     # --- 조회 -----------------------------------------------------------------
+
+    @property
+    def tray_extents_m(self) -> tuple[float, float, float]:
+        """Applied bay footprint, measured from base_link (front, rear, half width)."""
+        return (self._cfg.bay_body_front_m, self._cfg.bay_turn_rear_overhang_m,
+                self._cfg.bay_body_half_width_m)
 
     @property
     def database(self) -> DockDatabase:
@@ -268,6 +277,9 @@ class DockingManager(DockingPhasesMixin):
         dock, dock_type = dock_target(
             self._db, self._safety, self._state, dock_id, supported=self._capability_provider,
             line_active=self._line_follow_active, localized=self.localization_ok, map_id=self._map_id_provider)
+        if "commissioned_grid_id" in dock.metadata and self._commission_frame() != (
+                dock.metadata["commissioned_grid_id"], dock.metadata.get("commissioned_map_generation")):
+            raise DockError("MAP_FRAME_CHANGED", "the commissioned stop face belongs to a different native SLAM frame")
         epoch, now_key = dock.metadata.get("map_epoch"), self._db.frame_key()
         if dock_type.approach == "line" and epoch is not None and now_key is not None and epoch != str(now_key):
             raise DockError("MAP_FRAME_CHANGED",
@@ -358,6 +370,21 @@ class DockingManager(DockingPhasesMixin):
         with self._lock:
             try:
                 self._cancel_locked(receipt_sink=receipt_sink)
+            finally:
+                self._release_mode_when_done()
+
+    def cancel_operation(self, *, run_id, boot_id, owner_generation):
+        """Only cancel the native docking operation observed by the caller."""
+        with self._lock:
+            try:
+                self.native.expect(boot_id, owner_generation)
+            except ValueError as exc:
+                raise DockError("OWNER_GENERATION_CHANGED", str(exc)) from exc
+            current = self.native.current
+            if current is None or current.run_id != run_id or current.kind != "dock":
+                raise DockError("OWNER_GENERATION_CHANGED", "dock run changed")
+            try:
+                self._cancel_locked()
             finally:
                 self._release_mode_when_done()
 

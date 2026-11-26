@@ -1,7 +1,10 @@
 import { $, fetchJson, makeTable, addDtDd } from "./app.js";
+import { setJobData } from "./job-controls.js";
+export { setJobArm, setJobOperator } from "./job-controls.js";
 
-const JOB_STEP_LABEL = { check: "사전 점검(check)", "depth-verify": "깊이 검증(depth-verify)", "pivot-near": "피벗 근접 보정(pivot-near)", remap: "재매핑(remap)" };
-const JOB_RESULT = { running: ["실행 중", "warn"], done: ["성공", "ok"], failed: ["실패", "error"] };
+const JOB_STEP_LABEL = { check: "사전 점검(check)", "depth-verify": "깊이 검증(depth-verify)", "pivot-near": "피벗 근접 보정(pivot-near)", remap: "재매핑(remap)", surface: "면 높이 측정", "post-eval": "등록된 칸의 XY 위치 검증" };
+const JOB_RESULT = { running: ["실행 중", "warn"], done: ["종료", ""], failed: ["실패", "error"],
+  interrupted: ["중단 · 완료 여부 미확인", "warn"] };
 
 function leaseText(lease) {
   if (!lease) return "비어 있음";
@@ -43,11 +46,19 @@ export async function loadJobStatus({ onStatus } = {}) {
   const note = $("jobStatusNote");
   const tag = $("jobStatusTag");
   let status;
+  const fleet = $("fleetCellConsole");
+  fleet.hidden = true;
+  fleet.removeAttribute("href");
   try {
     status = await fetchJson("/api/calibration/status");
+    if (status.fleet_cell_console_url) {
+      fleet.href = status.fleet_cell_console_url;
+      fleet.hidden = false;
+    }
     onStatus?.(status);
   } catch (err) {
     onStatus?.(null);
+    setJobData(null, []);
     const noCells = err.status === 404;
     const login = err.status === 401;
     tag.setAttribute("status", noCells || login ? "neutral" : "crit");
@@ -62,16 +73,19 @@ export async function loadJobStatus({ onStatus } = {}) {
   }
   const leaseDl = $("jobLeaseDl");
   leaseDl.replaceChildren();
-  note.textContent = "읽기 전용입니다. 화면에서 작업을 시작하지 않습니다.";
+  note.textContent = "";
   tag.setAttribute("status", "active");
   tag.textContent = "표시 중";
   if (status.leases_error) addDtDd(leaseDl, "리스 조회", `실패: ${status.leases_error}`);
   for (const [arm, info] of Object.entries(status.arms || {})) addDtDd(leaseDl, arm, leaseText(info?.lease));
   if (!leaseDl.children.length) addDtDd(leaseDl, "팔", "cells.json에 등록된 팔이 없습니다.");
   try {
-    renderRecentJobs((await fetchJson("/api/calibration/jobs")).jobs || []);
+    const rows = (await fetchJson("/api/calibration/jobs")).jobs || [];
+    renderRecentJobs(rows);
+    setJobData(status, rows, renderRecentJobs);
   } catch (err) {
     renderRecentJobs([]);
+    setJobData(null, []);
     note.textContent = `상태는 표시했지만 최근 작업을 불러오지 못했습니다: ${err.message}`;
   }
   $("jobStatusBody").hidden = false;

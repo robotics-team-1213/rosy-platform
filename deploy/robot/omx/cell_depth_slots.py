@@ -165,13 +165,22 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
         rdot = (mx - cam_k[0, 2]) * (nx / cam_k[0, 0]) + (my - cam_k[1, 2]) * (ny / cam_k[1, 1]) + nz
         return (val - float(plane_info["height_mm"])) / rdot if abs(rdot) > 1e-6 else val
 
+    def read_patch(box, label):
+        x, y, z, ratio = _patch(grid, box, finite_valid=finite_valid)
+        if finite_valid and len(z):
+            seen, total = cell_depth_pose.patch_ray_coverage(
+                depth, grid, box, float(np.median(z)), plane_info, factory)
+            out.setdefault("native_ray_support", {})[label] = {"visible": seen, "expected": total}
+            ratio = seen / total if total else 0.0
+        return x, y, z, ratio
+
     patches = []
     for index, roi in enumerate(floor_rois):
         box = _depth_roi(to_depth, roi, margin, grid.shape)
         if box is None:
             out["reasons"].append(f"floor patch {index} is outside the depth frame or too small")
             continue
-        x, y, z, valid = _patch(grid, box, finite_valid=finite_valid)
+        x, y, z, valid = read_patch(box, f"floor_{index}")
         if valid < MIN_VALID_RATIO or len(z) < 50:
             out["reasons"].append(f"floor patch {index}: valid depth ratio below 0.80 (covered or missing)")
             continue
@@ -210,7 +219,7 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
     if box is None:
         out["reasons"].append("slot ROI is outside the depth frame or too small")
         return out
-    sx, sy, sz, slot_valid = _patch(grid, box, finite_valid=finite_valid)
+    sx, sy, sz, slot_valid = read_patch(box, "slot")
     out["valid_depth_ratio"] = round(slot_valid, 4)
     if slot_valid < MIN_VALID_RATIO:
         out["reasons"].append("slot valid depth ratio below 0.80")

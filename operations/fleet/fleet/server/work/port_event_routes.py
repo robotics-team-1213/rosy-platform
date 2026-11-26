@@ -15,9 +15,10 @@ import httpx
 from fastapi import Depends, Header, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
-from core_common.protocol.port_events import IntakeReading, PortEvent, PortEventLedgerPage, PortEventPage
+from core_common.protocol.port_events import IntakeCandidatePage, IntakeReading, PortEvent, PortEventLedgerPage, PortEventPage
 from fleet.server.control_unit_arm_coordinator import direct_child_unit_ids
 from .port_event_store import PortEventConflict, PortEventStore
+from .rfid_receipts import RfidReceipts, supply_intervals
 
 PORT_EVENT_BODY_BYTES = 4096
 LOCAL = "local"
@@ -95,6 +96,8 @@ async def read_page(store, control, cursor: str | None, limit: int) -> dict:
 def install_port_event_routes(app, observations, task_service, *, authorize, require_viewer):
     store = PortEventStore(task_service.store.path) if task_service is not None else None
     app.state.port_event_store = store
+    rfid = RfidReceipts.configured(store) if store is not None else None
+    app.state.rfid_receipts = rfid
 
     def available():
         if store is None:
@@ -125,6 +128,18 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             parsed = IntakeReading.model_validate_json(data)
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_INTAKE_READING"}) from None
+        if parsed.point == "rfid_intake" and rfid is not None and rfid.reader_workcell:
+            try:
+                await asyncio.to_thread(rfid.record, workcell_id, parsed)
+            except PermissionError:
+                raise HTTPException(403, detail={"code": "RFID_WORKCELL_UNBOUND"}) from None
+            except PortEventConflict:
+                raise HTTPException(409, detail={"code": "INTAKE_READING_CONFLICT"}) from None
+            except (OSError, sqlite3.Error):
+                raise HTTPException(503, detail={"code": "INTAKE_READINGS_UNAVAILABLE"}) from None
+            return {"observation_ref": parsed.observation_ref, "seqs": []}
+        if parsed.reader_epoch is not None:
+            raise HTTPException(503, detail={"code": "RFID_INTAKE_NOT_CONFIGURED"})
         intake, arms = getattr(app.state, "intake", None), getattr(app.state, "arm_transfer_job_store", None)
         if store is None or intake is None or arms is None:
             raise HTTPException(503, detail={"code": "INTAKE_READINGS_UNAVAILABLE"})
@@ -148,7 +163,7 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             event = PortEvent.model_validate_json(data)
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_PORT_EVENT"}) from None
-        if event.kind == "vehicle.release_permitted":  # only Fleet, from its own supply job receipt (release_vehicles)
+        if event.intake_occurrence_id or event.placement_attempt_id or event.kind == "vehicle.release_permitted":
             raise HTTPException(422, detail={"code": "PORT_EVENT_KIND_NOT_ALLOWED"})
         try:
             seq = await asyncio.to_thread(available().append, workcell_id, event)
@@ -167,6 +182,31 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             raise HTTPException(403, detail={"code": "CONTROL_UNIT_PARENT_ONLY"})
         return principal
 
+    @app.get("/api/fleet/control-unit/intake-candidates", response_model=IntakeCandidatePage, tags=["control-unit"])
+    async def candidates(after_seq: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
+                         principal=Depends(parent_only)):
+        if rfid is None or not rfid.reader_workcell:
+            raise HTTPException(503, detail={"code": "RFID_INTAKE_NOT_CONFIGURED"})
+        return await asyncio.to_thread(rfid.page, after_seq, limit)
+
+    async def reconcile_rfid(control):
+        if control.unit.parent is not None:
+            return False
+        owners = [u.unit_id for u in control.topology.units.values()
+                  if u.parent == control.unit.unit_id and f"observation-workcell:{rfid.workcell}" in u.resources]
+        if len(owners) != 1:
+            return False
+        peer = owners[0]
+        after = await asyncio.to_thread(rfid.cursor, peer)
+        # Ask for one extra pass after a full page, before committing possibly quarantined labels.
+        page = await control.peer.intake_candidates(peer, after, 200)
+        count = await asyncio.to_thread(rfid.accept_page, peer, after, page)
+        if count == 200 or getattr(app.state, "_pipeline_ledger_fault", False):
+            return False
+        tasks = supply_intervals(getattr(app.state, "omx_cell_tasks", {}).values(), rfid.workcell)
+        await asyncio.to_thread(rfid.reconcile, peer, tasks)
+        return True
+
     @app.get("/api/fleet/control-unit/port-events", response_model=PortEventLedgerPage, tags=["control-unit"])
     async def ledger(after_seq: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
                      principal=Depends(parent_only)):
@@ -181,6 +221,15 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
                    limit: int = Query(100, ge=1, le=200), principal=Depends(require_viewer)):
         response.headers["Cache-Control"] = "no-store"
         try:
-            return await read_page(store, getattr(app.state, "control_unit", None), after, limit)
+            control = getattr(app.state, "control_unit", None)
+            caught_up = True
+            if rfid is not None and rfid.workcell:
+                try:
+                    caught_up = control is not None and await reconcile_rfid(control)
+                except (OSError, sqlite3.Error, httpx.HTTPError, asyncio.TimeoutError, ValueError):
+                    caught_up = False
+            page = await read_page(store, control, after, limit)
+            page["complete"] = page["complete"] and caught_up
+            return page
         except ValueError:
             raise HTTPException(400, detail={"code": "PORT_EVENT_CURSOR_INVALID"}) from None

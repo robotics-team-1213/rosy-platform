@@ -297,6 +297,19 @@ def test_marks_on_one_line_predict_nothing():
     assert cc.predicted(line, (0.13, 0.10)) is None
 
 
+def test_remap_speed_only_slows_calibration_without_mutating_the_arm_plan():
+    import cell_remap_plan
+    import pytest
+
+    config = {"plan": {"transit_speed": 0.4}, "calibrate": {"remap_transit_speed": 0.2}}
+    assert cell_remap_plan.scoped(config)["plan"]["transit_speed"] == 0.2
+    assert config["plan"]["transit_speed"] == 0.4
+    for bad in (0.5, 0.0, True, float("nan")):
+        config["calibrate"]["remap_transit_speed"] = bad
+        with pytest.raises(ValueError):
+            cell_remap_plan.scoped(config)
+
+
 def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     """arm_b 2026-11-05: 8 marks in, the next goto stalled on wrist roll -13; the remap threw them all away."""
     import types
@@ -318,7 +331,8 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
                 self.next = next(p for p in points if f"remap-{sorted(points, key=lambda q: math.hypot(*q)).index(p)}." in command)
             if command == "goto above_pick":
                 if self.next == [0.30, 0.30]:
-                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag"}
+                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag",
+                            "health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
                 self.at = self.next
             return {"ok": command != "park" or self.park_ok}
 
@@ -331,6 +345,16 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
     assert len(seen) == 1 and "park" not in seen[0][0][1:] and "wrist_roll lag" in seen[0][1]["error"]
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
+    stop = next(row for row in rows if "stopped" in row)
+    assert stop["runner"] == {"health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
+    def full_log(row):
+        if "stopped" in row:
+            raise OSError("log storage full")
+
+    interrupted = Cell()
+    with pytest.raises(OSError, match="log storage full"):
+        cc.remap(interrupted, config, points, tmp_path, log=full_log)
+    assert interrupted.cmds[-1] == "park"
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
     import time
@@ -842,8 +866,7 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         path = tmp_path / "config.json"
         path.write_text(json.dumps(config))
         seen.clear()
-        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
-                        "--commissioning", "--person-at-switch"]) == 0
+        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify"]) == 0
         assert seen["depth"] is expect
 
 
@@ -912,6 +935,53 @@ def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch
         assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
     else:
         assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
+
+
+@pytest.mark.parametrize("mode", ["success", "moved", "missing_map", "held", "no_contact", "missing_samples"])
+def test_explicit_surface_remeasures_only_selected_existing_height(tmp_path, monkeypatch, mode):
+    import cell_pipeline
+    import cell_robot_profile
+    import cell_surface
+    import time
+
+    site = {"surface_z": .04, "place": [.1, -.2], "yaw_deg": 0}
+    mapping = {"reference_top_sha256": "a" * 64, "reference_map_sha": "b" * 12,
+               "reference_geometry_sha": "c" * 12, "sites": {"floor": {"homography": [[1]]}}}
+    cal_file, plan_file, cfg_file = (tmp_path / k for k in ("cal.json", "plan.json", "cfg.json"))
+    cal_file.write_text(json.dumps(mapping))
+    plan_file.write_text(json.dumps({"grip_closed": 35}))
+    config = {"sites": {"floor": site, "board": {**site, "surface_z": .05}}, "arm_id": "arm_s",
+              "operating_profile_path": "profile", "tcp_x_m": .074, "calibration_path": str(cal_file),
+              "plan_path": str(plan_file), "io": str(tmp_path), "work_dir": str(tmp_path), "cameras": {}}
+    cfg_file.write_text(json.dumps(config))
+    profile = {"device_id": "selected"}
+    state = {"ok": True, "t": time.time(), "holding": mode == "held", "human_hold_latched": False,
+             "state": [0] * 6, "target": [0] * 6, "operating_context": {"scope": "hardware", "session_id": "s",
+             "sha256": "d" * 64, "operating_profile": profile}}
+    cell = type("Cell", (), {"frame": lambda *_: None, "act": lambda self, cmd: dict(state, t=time.time())})()
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: cell)
+    monkeypatch.setattr(cell_robot_profile, "load", lambda *_: {"binding": profile})
+    monkeypatch.setattr(cc, "check", lambda *_: {"camera_shift": {"ok": True}, "camera_moved": mode == "moved",
+                        "missing_map": ["floor"] if mode == "missing_map" else []})
+    monkeypatch.setattr(cell_surface, "probe_library", lambda *a, **kw: {})
+    calls = []
+
+    def touch(_, path, **kwargs):
+        calls.append((path.name, kwargs["repeat"]))
+        if mode == "no_contact":
+            return {"result": "no contact"}
+        if mode == "missing_samples":
+            return {"result": "touched", "surface_z": .022}
+        return {"result": "touched", "surface_z": .022, "touches_m": [.022, .022], "spread_mm": 0}
+
+    monkeypatch.setattr(cell_surface, "touch", touch)
+    argv = ["--config", str(cfg_file), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]
+    assert cc.main(argv) == 0 and not calls
+    assert cc.main([*argv, "--remeasure-surface", "floor", "--surface-clear"]) == (0 if mode == "success" else 2)
+    assert calls == ([] if mode in ("moved", "missing_map", "held") else [("surface-floor.library.json", 2)])
+    saved = json.loads(cfg_file.read_text())["sites"]
+    assert saved["floor"]["surface_z"] == (.022 if mode == "success" else .04)
+    assert saved["board"] == config["sites"]["board"]
 
 
 def test_check_reports_low_zone_gaps_for_mapped_low_site(tmp_path):

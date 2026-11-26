@@ -20,7 +20,7 @@ from threading import RLock
 import time
 from typing import Any, Callable, Optional, Protocol
 
-from core_features.command.manager import ZERO, Twist, CommandManager
+from core_features.command.manager import ZERO, Twist, RoadSpeedTwist, CommandManager
 from core_features.command._execution_fence import CONTEXT_CHANGED
 from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, MotionKind,
                                    PortCapabilities, PortDecision, PortState)
@@ -251,12 +251,19 @@ def _cmd_vel_cycle(command, power, send, readiness, warn, *, trial_guard,
             warn(f"cmd_vel guard failed: {exc}")
         return
     submission_error = None
+    def write():
+        if not isinstance(out, RoadSpeedTwist):
+            return port.submit(guarded)
+        return out.road_speed_authority.submit(
+            guarded.payload.linear_mps, guarded.payload.angular_radps, lambda: port.submit(guarded),
+            lambda: PortDecision(False, "hold", "road_speed_authority_changed"))
+
     def submit():
         if execution_fence is None:
-            return port.submit(guarded)
+            return write()
         decision = execution_fence.submit(
             receipt, out, (guarded.payload.linear_mps, guarded.payload.angular_radps),
-            lambda: port.submit(guarded))
+            write)
         return (PortDecision(False, "hold", "execution_context_changed")
                 if decision is CONTEXT_CHANGED else decision)
     try:

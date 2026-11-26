@@ -163,7 +163,7 @@ export function oneLapBody(map, start, via) {
 
 export function oneLapReason({active, running, start, via}) {
   if (!active) return '활성 지도가 없습니다';
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   const stops = (active.map?.places || []).filter(place => ['start', 'stop'].includes(place.kind));
   if (stops.length < 2) return '한 바퀴에는 정지 장소가 두 곳 이상 필요합니다';
   return start && via && start !== via ? '' : '서로 다른 출발·경유 장소를 고르세요';
@@ -189,13 +189,13 @@ export function tripPoseReason(guide, robotId, active, corePose = null) {
 export function planTrip(request, robotId, body) { return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)}); }
 export function startTrip(request, planId) { return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'}); }
 export function tripRefusalText(error) { return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error); }
-export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+export function planSummaryText(plan, distance = `${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`) {
+  return `${plan.segments.length}개 차로 · ${distance} · 지도 v${plan.map_version}`
     + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 export function repeatTripReason({active, running, start}) {
   if (!active) return '활성 지도가 없습니다';
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   if (repeatPlaces(active.map).length < 2) return '반복 운행에는 출발 자리가 두 곳 이상 필요합니다';
   return start ? '' : '출발 자리를 고르세요';
 }
@@ -204,7 +204,7 @@ export function convoyLeaders(open, robotId) { return (open || []).filter(trip =
 export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
   const denied = operatorReason(role);
   if (denied) return denied;
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
@@ -388,7 +388,7 @@ export function trafficCardLine(traffic, robotId) {
   const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);
   if (resolver?.trigger === "wait_cycle") parts.push(`교착 · ${RESOLVER_DECISION_LABEL[resolver.decision] || RESOLVER_DECISION_LABEL.human}`);
   else if (traffic.wait_cycle?.includes(robotId)) parts.push("대기 순환 후보 · 지속 여부 확인 중");
-  if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
+  if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 접수");
   if (robot.advice?.signal) parts.push(`신호 참고 전송 · seq ${robot.advice.sent_seq}${robot.advice.accepted ? "" : ` · ${robot.advice.reason || "미수락"}`}`);
   if (robot.preview?.events?.length) parts.push(`예고: ${robot.preview.events.slice(0, 2).map((e) => `${e.at_m.toFixed(2)} m ${{left: "왼쪽 회전", right: "오른쪽 회전", straight: "교차로 직진", stop: "정지", bend: "굽이", arc: "호", crosswalk: "횡단보도", signal: "신호", authority_end: "통행권 끝"}[e.kind === "turn" ? e.params.action : e.kind] || e.kind}`).join(" · ")}`);
   return parts.join(" · ");

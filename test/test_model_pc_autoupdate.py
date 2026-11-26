@@ -218,6 +218,19 @@ def test_road_fitness_archive_requires_signed_observation_contract(tmp_path, key
     subprocess.run(m.bootstrap_command(sys.executable, release, probe, []), check=True)
 
 
+def test_model_archive_requires_world_experiment_assets_when_route_is_present(tmp_path, keys):
+    m = module()
+    files = {m.WORLD_EXPERIMENT_ENTRY: b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=files)
+    with pytest.raises(ValueError, match="World experiment dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    files.update({name: b"source\n" for name in m.WORLD_EXPERIMENT_FILES})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=files)
+    release = tmp_path / "complete"
+    m.unpack(folder / "code.tar", release)
+    assert all((release / name).read_bytes() == b"source\n" for name in m.WORLD_EXPERIMENT_FILES)
+
+
 @pytest.mark.parametrize("path", ["middleware/drive/planning/nav2/node.py",
                                   "middleware/drive/unknown/code.py",
                                   "middleware/control/arm/safety/code.py"])

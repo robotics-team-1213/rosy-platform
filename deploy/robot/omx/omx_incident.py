@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """An arm session that ends in trouble is measured here and reported to Fleet (D-971, 2026-11-03).
 
-The control PC measures and reports. Fleet owns the incident ledger and the AI PC explains the frames.
-record_session runs this at the end of every session:
+At session end the control PC reports measurements, Fleet owns the ledger, and the AI PC explains the frames.
 
 1. collect: session.json, the runner's status rows, the motor-fault records and the health log of the session;
 2. facts (measured only): latched hardware errors (decoded), torque after, folded at home or not, joint_push's
@@ -51,6 +50,7 @@ from omx_incident_fleet import (  # noqa: E402
     link_for,
     outbox,
     report_for,
+    remember_report_cargo,
     send,
     upload_evidence,
 )
@@ -270,6 +270,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
+            remember_report_cargo(arm, sid, session.get("recovery_cargo") if d["hold"] else None)
             box = incidents_dir() / ("outbox" if d["hold"] else "labels")  # a label-only report never blocks a start
             box.mkdir(parents=True, exist_ok=True)
             (box / f"{arm}-{sid}.json").write_text(report.model_dump_json())

@@ -138,7 +138,7 @@ _BF = None
 _REF_ORB_CACHE: dict = {}
 
 
-def camera_shift_px(reference, current) -> dict:
+def camera_shift_px(reference, current, *, include_transform=False) -> dict:
     """Largest displacement of the image grid between the map's reference frame and now (ORB + RANSAC homography)."""
     import cv2
     import numpy as np
@@ -160,7 +160,8 @@ def camera_shift_px(reference, current) -> dict:
     if reference is current or (current.shape == reference.shape and np.array_equal(reference, current)):
         if d1 is None:
             return {"ok": False, "why": "no features"}
-        return {"ok": True, "max_px": 0.0, "inliers": int(len(pts1))}
+        return {"ok": True, "max_px": 0.0, "inliers": int(len(pts1)),
+                **({"reference_to_current": np.eye(3).tolist()} if include_transform else {})}
     k2, d2 = _ORB.detectAndCompute(current, None)
     if d1 is None or d2 is None:
         return {"ok": False, "why": "no features"}
@@ -170,9 +171,12 @@ def camera_shift_px(reference, current) -> dict:
     q_idx = [m.queryIdx for m in matches]
     p2 = np.float32([k2[m.trainIdx].pt for m in matches])
     H, inliers = cv2.findHomography(pts1[q_idx], p2, cv2.RANSAC, 3.0)
+    if H is None or inliers is None or not np.isfinite(H).all():
+        return {"ok": False, "why": "homography unavailable"}
     grid = np.float32([[[x, y]] for x in (0.1 * w, 0.5 * w, 0.9 * w) for y in (0.1 * h, 0.5 * h, 0.9 * h)])
     moved = np.linalg.norm(cv2.perspectiveTransform(grid, H) - grid, axis=2)
-    return {"ok": True, "max_px": round(float(moved.max()), 1), "inliers": int(inliers.sum())}
+    return {"ok": True, "max_px": round(float(moved.max()), 1), "inliers": int(inliers.sum()),
+            **({"reference_to_current": H.tolist()} if include_transform else {})}
 
 
 def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subprocess.run) -> list:

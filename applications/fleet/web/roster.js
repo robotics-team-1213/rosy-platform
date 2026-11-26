@@ -1,3 +1,4 @@
+import {cancelTripReceipt} from "/console/assets/trip-receipts.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { node, patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
@@ -10,6 +11,7 @@ import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { capabilityReason, estopText, motionCommandReason } from "./motion-readiness.js";
+import { measuredMotion, motionLabel } from "/console/assets/measured-motion.js";
 import { staleAgeS } from "./state-age.js";
 import { createBatteryMeter, patchBatteryMeter } from "/console/assets/cockpit-telemetry.js";
 import { createQueues } from "./queues.js";
@@ -83,11 +85,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const yawText = pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—";
     const moreOpen = expandedMoreIds.has(robot.robot_id);
     const nav = navTag(state, robot.robot_id, now);
+    const motion = motionLabel(measuredMotion(robot, view, now));
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, now) !== null;
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
-    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow, stateStale ? null : state.localization);
+    const locCurrent = robot.online && robot.state && !stateStale;
+    const loc = view.stateUnavailable ? null
+      : positionTag(robot.localization, guideRow, locCurrent ? state.localization : null, !locCurrent);
     const sitePose = !view.stateUnavailable ? sitePoseText(guideRow) : null;
     const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
@@ -107,6 +112,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const cached = workspaceCards.get(robot.robot_id);
     if (cached && cached.sig === sig) {
       const query = selector => cached.article.querySelector(selector);
+      patchText(query("[data-measured-motion]"), motion);
       patchText(query('[data-fact="last-seen"]'), lastSeenText(robot, now));
       patchText(query('[data-fact="pose"] strong'), poseText);
       patchText(query('[data-fact="pose"] .fact-detail'), sitePose);
@@ -167,6 +173,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     } else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     if (laneOn) modeTag.dataset.lineFollow = lane.mode;
     head.appendChild(modeTag);
+    const motionTag = inlineIfCalm(tag(motion, ""), "");
+    motionTag.dataset.measuredMotion = "";
+    head.appendChild(motionTag);
     if (!view.stateUnavailable && robot.online) {
       const powerMode = state.power?.mode;
       if (powerMode) {
@@ -211,7 +220,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     const navCls = blocked ? "crit" : robot.queued ? "warn" : nav.cls;
     head.appendChild(inlineIfCalm(tag(
-      view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : nav.text,
+      view.stateUnavailable ? "—" : robot.yielding ? "양보 요청" : robot.queued ? "출발 대기" : nav.text,
       navCls), navCls));
     const formation = view.stateUnavailable ? null : view.formation;
     const role = formation?.active ? (formation.leader === robot.robot_id ? "대형 리더"
@@ -369,7 +378,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
     setOffBy(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
+        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "기존 배차 있음" : ""));
     pin.addEventListener("click", scope.guard(() => {
       view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
       if (view.pinning) {
@@ -508,15 +517,22 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     try {
       if (stop.trip) {
         try {
-          await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+          const receipt = await cancelTripReceipt(call, stop.trip, life);
           life.check();
+          if (receipt?.trip_id !== stop.trip || receipt?.robot_id !== robot.robot_id || receipt.state !== "canceled") {
+            log(`${robot.robot_id} 운행 취소 미확인 · 다시 취소하세요 · ${stop.trip}`, "bad");
+            return;
+          }
           view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+          view.endedTrips = [receipt, ...(view.endedTrips || []).filter((row) => row.trip_id !== stop.trip)];
           render();
-          log(`${robot.robot_id} 운행 취소`, "good");
+          const acknowledged = receipt.detail?.stop_sent === true && !receipt.detail.error;
+          log(`${robot.robot_id} 운행 취소 · ${acknowledged ? "기체 정지 명령 수락" : "기체 정지 응답 미확인"} · ${stop.trip}`, acknowledged ? "good" : "bad");
           return;
         } catch (err) {
           if (err.name === "AbortError") return;
-          log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
+          log(`${robot.robot_id} 운행 취소 미확인 · ${stop.trip} · ${err.message}`, "bad");
+          return;
         }
       }
       const pending = view.pendingTasks[robot.robot_id];

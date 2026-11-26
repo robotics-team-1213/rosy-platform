@@ -79,6 +79,13 @@ def _segment_distance(p: Point, a: Point, b: Point) -> float:
     return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
 
 
+def route_distance(route: Sequence[Point], point: Point) -> float:
+    """Minimum Euclidean distance to the polyline, infinity for an empty route."""
+    if len(route) < 2:
+        return math.dist(point, route[0]) if route else math.inf
+    return min(_segment_distance(point, a, b) for a, b in zip(route, route[1:]))
+
+
 def blocks(route: Sequence[Point], last_trusted: Optional[Point],
            keep_out_m: float = UNTRUSTED_KEEP_OUT_M) -> bool:
     """Whether an untrusted robot blocks `route`.
@@ -87,12 +94,7 @@ def blocks(route: Sequence[Point], last_trusted: Optional[Point],
     route is not blocked by a located obstacle (traffic's "unknown never blocks")."""
     if last_trusted is None:
         return True
-    if not route:
-        return False
-    if len(route) == 1:
-        return math.dist(route[0], last_trusted) < keep_out_m
-    return any(_segment_distance(last_trusted, route[i], route[i + 1]) < keep_out_m
-               for i in range(len(route) - 1))
+    return route_distance(route, last_trusted) < keep_out_m
 
 
 def native_pose_freshness(state: Mapping, state_age_s: float = 0.0) -> Optional[bool]:
@@ -143,6 +145,8 @@ def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
     trusted = classify(state) == TRUSTED and pose_fresh is not False and not lapsed
     status = status_of(state)
     view = _without_resolved_ladder(view, trusted and pose_fresh is True)
+    pose_request = (view or {}).get("pose_request") or {}
+    pose_request_needs_human = pose_request.get("state") == "needs_human"
     needs_human = bool((view or {}).get("needs_human")) or bool(status and status.needs_human)
     label = (NEEDS_HUMAN_LABEL if needs_human
              else STATE_LABELS[status.state] if status is not None and (trusted or status.state is not LocState.LOCALIZED)
@@ -150,4 +154,4 @@ def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
     return {"state": status.state.value if status else LocState.UNKNOWN.value,
             "pose_frame": status.pose_frame.value if status else None,
             "trusted": trusted, "legacy": False, "needs_human": needs_human,
-            "label": label}
+            "label": label, **({"pose_request_needs_human": True} if pose_request_needs_human else {})}

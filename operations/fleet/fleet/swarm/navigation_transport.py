@@ -77,12 +77,13 @@ class NavigationTransport:
             return await self._post("/api/v1/navigation/bound-goal", body)
         return await self._post("/api/v1/navigation/goal", body)
 
-    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
+    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float, *, speed_grant=None) -> dict:
         """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not active."""
         return await self._post("/api/v1/navigation/goal/lease",
-                                {"correlation_id": correlation_id, "ttl_s": ttl_s})
+                                {"correlation_id": correlation_id, "ttl_s": ttl_s,
+                                 **({"speed_grant": speed_grant} if speed_grant is not None else {})})
 
-    async def navigation_route(self, points: list[dict], *,
+    async def navigation_route(self, points: list[dict], *, road_speed_controlled=False,
                                expected_map_grid_id: str | None = None,
                                correlation_id: str | None = None,
                                lease_ttl_s: float | None = None,
@@ -92,6 +93,8 @@ class NavigationTransport:
         if not points:
             raise ValueError("ROUTE_POINTS_REQUIRED")
         body: dict = {"points": points}
+        if road_speed_controlled:
+            body["road_speed_controlled"] = True
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
         if lease_ttl_s is not None:

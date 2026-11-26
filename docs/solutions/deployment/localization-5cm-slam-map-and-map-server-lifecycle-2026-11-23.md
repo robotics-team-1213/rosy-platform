@@ -40,3 +40,13 @@ tags: ["pinky", "localization", "map_server", "loc_assist", "os-state", "fleet"]
 
 - **원인**: `site_map_host.py`는 `os_state_config.commit_runtime`으로 `/etc/rosy/runtime.env`를 OS 표준 세대(`/var/lib/rosy-device/state/current.json`)에 커밋한다. 실험 복원 시 `cp -p`로 `runtime.env`만 되돌리면 `rosy-sd-provision.service`의 `os_state_ready.projection_facts()`가 해시 불일치로 `OS_STATE_HOLD`를 반환해 `rosy-core` 의존성 기동을 막는다.
 - **예방**: A/B OS 이미지 기기에서 `runtime.env`를 복구·변경할 때는 반드시 `os_state_config.configuration_update` + `os_state_ready.publish_ready` + `os_storage_dispatch.py --projected` 검증 경로를 거친다.
+
+## 5. C1에서 후보가 하나여도 AMCL 검증이 실패할 때
+
+2026-11-26 Pinky 42의 C1 정차 시험에서 후보 위치의 스캔 점수는 높았지만 CORE는 `inject_rejected`를 반환했다. CORE의 `needs_human`은 거짓이었고 Fleet은 286.4초 동안 후보가 확정되지 않아 사람 확인 단계로 올렸다. 화면의 현장 좌표는 천장 관측을 이어받은 값이었다. 경고의 주체는 같은 시각에 두 상태를 읽어 구별할 수 있었다.
+
+실패 후 같은 자리에서 수집한 스캔 30개를 요청 좌표와 측정 시각의 AMCL 좌표에 각각 투영했다. 요청 좌표에서는 30개, AMCL 좌표에서는 12개가 검증을 통과했다. AMCL 좌표의 Y만 13.7 mm 되돌렸을 때도 30개가 통과했다. 한 프레임에서 벽을 통과했다고 판정한 광선 43개 중 26개가 같은 5 cm 점유 셀 모서리를 먼저 만났다. 최초 거절 로그에는 당시 광선이 남지 않아 이 결과는 같은 자리에서의 재현으로 기록한다.
+
+릴리스 666에서 42번에 서명된 `beam` 설정을 적용하고 정차 상태와 서로 다른 최신 천장 프레임 두 개를 확인했다. 후보 확인 요청 `221436-1`의 기체 검증은 3.57초 뒤 통과했다. 측정 위치는 후보와 6 mm 차이였고 스캔 나이는 111 ms였다. 같은 요청 이후 CORE는 `LOCALIZED`, Fleet은 `trusted=true`, `needs_human=false`를 보고했다. 다른 자리의 스캔도 따로 확인해야 한다. 46번 C3의 이동 전 스캔 다섯 개를 재생했을 때 기존 모델은 네 개, 빔 모델은 세 개를 통과했다.
+
+재발 시 기체 검증 로그의 요청 ID에서 측정 좌표·검증 경과 시간·스캔 나이·좌표 변환 오류·벽을 가로지른 빔 수를 읽고, 같은 스캔을 두 좌표에서 재생한다. 복구 설정은 승인된 기체와 지도에서만 선택한다. 원복은 저장해 둔 원래 설정을 정본에 게시한 뒤 기동한 AMCL 모델과 위치 상태를 모두 확인한다. [검증 로그 변경](https://github.com/robotics-team-1213/rosy-platform/pull/848) · [기체별 AMCL 설정](https://github.com/robotics-team-1213/rosy-platform/pull/853)

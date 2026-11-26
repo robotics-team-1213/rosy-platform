@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from core_common.protocol.native_operation import NativeOperation
+from pydantic import ValidationError
+
 from fleet.routing.cost import STOP
 from fleet.server.auto_repark import evaluate_named_stop
 from fleet.server.channel.execution.outcomes.evidence import safe_proof
@@ -18,9 +21,37 @@ class GoalRefused(RuntimeError):
         if reply is not None:
             evidence = {key: reply[key] for key in (
                 "blocked_by", "waiting_on", "dispatch_attempted", "cancel_confirmed",
+                "command_robot_id", "stage", "site_route_map", "peer_evidence",
             ) if key in reply}
             if evidence:
                 self.detail["goal_admission"] = evidence
+
+
+def record_stop_dispatch(steps, live, active, attempt_id, site_target, robot_target):
+    frame = live.view["detail"].get("goal_frame") or {}
+    live.view["detail"].pop("named_stop_operation", None)
+    map_view = steps._store.active_view()
+    if (map_view is None or map_view["version"] != active[0]
+            or not frame.get("map_grid_id") or not steps._matches_precision_binding(live, frame)):
+        raise GoalRefused("NAMED_STOP_BINDING_UNVERIFIED")
+    live.view["detail"]["named_stop_dispatch"] = {
+        "attempt_id": attempt_id, "robot_id": live.view["robot_id"], "place": live.request["to"],
+        "map_id": active[1].map_id, "map_version": active[0], "map_sha256": map_view["sha256"],
+        "binding_id": frame["binding_id"], "map_grid_id": frame["map_grid_id"],
+        "site_target": dict(zip(("x", "y", "yaw"), site_target)),
+        "robot_target": dict(zip(("x", "y", "yaw"), robot_target)),
+    }
+
+
+def record_stop_operation(live, attempt_id, reply):
+    try:
+        operation = NativeOperation.model_validate(reply.get("operation"))
+    except ValidationError as error:
+        raise GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED") from error
+    if (reply.get("accepted") is not True or operation.kind != "navigate"
+            or operation.correlation_id != attempt_id):
+        raise GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED")
+    live.view["detail"]["named_stop_operation"] = operation.model_dump(mode="json")
 
 
 def confirm_lane_stop(steps, live: LiveTrip, index: int) -> bool:
@@ -44,6 +75,9 @@ async def confirm_free_stop(steps, live: LiveTrip) -> bool:
     """Confirm CORE completed the Nav2 free-segment stop and any precision repark."""
     expected = live.view["detail"].get("named_stop_operation")
     if expected is None or steps.navigation_readback is None:
+        return False
+    if live.nav2 and ((live.active_route or {}).get("attempt_id") != expected["correlation_id"]
+                      or live.active_route.get("superseded")):
         return False
     view = await steps._call(steps.navigation_readback(live.view["robot_id"], expected["run_id"]))
     if not isinstance(view, dict) or view.get("lookup") != "FOUND":

@@ -76,3 +76,13 @@ def test_a_slow_place_slows_like_a_stripe_but_never_stops():
     table = speed_table(SiteMap.model_validate(site_map), [("lower", True, 0.0, 0.8)], start_mps=0.15)
     assert table["stripes"] == [{"place": "S4", "s_m": 0.4}]
     assert at(table, 0.4) <= STRIPE_MPS and at(table, 0.4) > 0.0 and at(table, 0.2) == 0.15
+
+
+def test_route_profile_caps_every_crossing_on_a_return_trip():
+    table = speed_table(site(), [("lower", True, 0., 1.), ("uturn", True, 0., math.pi * R),
+                                 ("uturn", False, 0., math.pi * R), ("lower", False, 0., 1.)],
+                        start_mps=math.inf, stop_at_end=False)
+    assert len(table["stripes"]) == 2
+    for stripe in table["stripes"]:
+        assert at(table, stripe["s_m"]) <= STRIPE_MPS
+    assert table["rows"][0][1] == table["rows"][-1][1] == .15

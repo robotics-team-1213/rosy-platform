@@ -110,3 +110,12 @@ test("Nav2 preview blocks a required binding and displays optional binding evide
   assert.equal(consoleTripStartReason(check), "");
   assert.match(consolePlanSummaryText(plan), /Nav2.*지도 결속 미확인/);
 });
+
+test('parking preview shows the source pose offset independently of the road length', async () => {
+  const {consolePlanSummaryText} = await import('/console/assets/localization-panel-logic.js');
+  const parking = {segments: [{}], length_m: 0, eta_s: 0, map_version: 394,
+    parking_handoff: {bay_id: 'C1', staging_place_id: 'P1'}, staging_distance_m: .1009};
+  assert.match(consolePlanSummaryText(parking), /차로 경로 0\.00 m · 계획 시 위치에서 P1까지 직선 0\.10 m/);
+  assert.match(consolePlanSummaryText({...parking, staging_distance_m: 0}), /P1까지 직선 0\.00 m/);
+  assert.doesNotMatch(consolePlanSummaryText({...parking, staging_distance_m: undefined}), /직선/);
+});

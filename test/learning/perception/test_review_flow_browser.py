@@ -1152,6 +1152,7 @@ def test_arrow_keys_move_between_photos(browser_workspace):
     photo_loaded('사진 1')
     page.locator('#canvas').focus()
     expect(page.locator('#next-frame')).not_to_have_attribute('disabled', '')
+    assert page.locator('#canvas').evaluate("el => el.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', altKey:true, bubbles:true, cancelable:true}))")
     page.keyboard.press('ArrowRight')
     photo_loaded('사진 2')
     expect(page.locator('#prev-frame')).not_to_have_attribute('disabled', '')

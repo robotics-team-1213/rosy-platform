@@ -233,6 +233,26 @@ def _reader(handler, **kwargs):
     return reader, client
 
 
+def test_road_reader_uses_only_scoped_status_metadata():
+    from core_common.protocol.vision_preview import VisionLeaseSigner
+    seen = []
+    def handler(request):
+        seen.append(request.url.path)
+        token = request.headers["Authorization"].removeprefix("Bearer ")
+        claims = VisionLeaseSigner(SECRET).verify(token, source_id="ceiling_north")
+        assert claims["sub"] == "fleet-road-tracking"
+        assert request.headers["Accept"] == "application/json"
+        return httpx.Response(200, json={})
+    reader, client = _reader(handler, principal_id="fleet-road-tracking")
+    async def check():
+        try:
+            await reader.hold_stream("ceiling_north")
+        finally:
+            await client.aclose()
+    asyncio.run(check())
+    assert seen == ["/api/vision/sources/ceiling_north/measured-status"]
+
+
 def test_reader_fetches_the_proposal_with_a_signed_lease():
     seen = {}
 

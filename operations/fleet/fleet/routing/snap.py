@@ -24,7 +24,7 @@ def heading_ok(yaw: float, tangent: float, config: RoutingConfig) -> bool:
 
 def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConfig,
                allowed: Callable[[Arc], bool] | None = None,
-               *, ignore_heading: bool = False) -> tuple[str, float]:
+               *, ignore_heading: bool = False, off_lane_margin_m: float = 0.0) -> tuple[str, float]:
     """Closest arc within half its lane width whose direction matches ``yaw``: ``(arc id, s)``.
 
     An ``allowed`` arc wins over a closer excluded one (blocked, wrong kind or mode): at a place
@@ -49,6 +49,20 @@ def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConf
                 best = (*key, s_m)
         if arc_min > arc.width_m / 2:
             off = min(off, arc_min - arc.width_m / 2)
+    if best is None and near is None and ignore_heading and 0 < off <= off_lane_margin_m:
+        # Only join the nearest physical lane. A closure or kind restriction may not displace
+        # the start onto a neighbouring lane, and equidistant parallel lanes are ambiguous.
+        nearest = []
+        for arc in graph.arcs.values():
+            dist, s_m, tangent = arc.project(x, y)
+            if math.isclose(dist - arc.width_m / 2, off, abs_tol=1e-9):
+                nearest.append((arc, s_m, tangent))
+        if len({arc.edge_id for arc, _, _ in nearest}) == 1:
+            permitted = [(abs(wrap(yaw - tangent)), arc.id, s_m) for arc, s_m, tangent in nearest
+                         if allowed is None or allowed(arc)]
+            if permitted:
+                _, arc_id, s_m = min(permitted)
+                return arc_id, s_m
     if best is None:
         raise (PlanError("TRIP_HEADING_CONFLICT", {"heading_err_deg": round(near, 1)}) if near is not None
                else PlanError("TRIP_START_OFF_MAP", {"off_lane_m": round(off, 3) if off < math.inf else None}))

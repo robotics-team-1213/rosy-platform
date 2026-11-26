@@ -11,6 +11,7 @@ import uuid
 from experiment_io import identifier, read_json, write_json, sync_directory
 from experiment_jobs import launch
 from experiment_process import process_stamp
+from experiment_world import MODE as WORLD_MODE
 import experiment_lerobot_source as source
 import experiment_study_upload as upload
 
@@ -123,7 +124,8 @@ class Studies:
             active = next((run for run in runs if run['status'] in ACTIVE), None)
             return dict(configured=True, host_id=self.center.host_id, methods=self.center.methods,
                 studies=[self._public(db, self._sync(db, row), detail=False) for row in rows],
-                busy=active is not None, active_run=active)
+                busy=active is not None,
+                active_run=active if active and active.get('execution_mode') != WORLD_MODE else None)
 
     def get(self, uid):
         with self._db() as db:

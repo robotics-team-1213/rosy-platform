@@ -253,6 +253,8 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
     ap.add_argument("--safety-fence", default=None)
     ap.add_argument(BOUND_INCIDENT_OPTION)
     ap.add_argument("--supervised", action="store_true")
+    ap.add_argument("--commissioning", action="store_true", help="trial the exact incident-bound cargo placement")
+    ap.add_argument("--person-at-switch", action="store_true", help="confirm a person is at the power switch for this trial")
     ap.add_argument("--unlatch-hold", action="store_true")
     ap.add_argument("--vlm-url")
     ap.add_argument("--vlm-model", default="qwen3-vl:8b-instruct")
@@ -260,6 +262,12 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
     ap.add_argument("--vlm-config", type=Path)
     ap.add_argument("--vlm-timeout", type=float, default=25.0)
     args = ap.parse_args(args_list)
+    if args.commissioning != args.person_at_switch:
+        ap.error("--commissioning and --person-at-switch require each other")
+    if args.commissioning and (not args.expected_incident_id or args.stage != "full" or args.supervised
+                               or args.unlatch_hold or not args.safety_fence or args.stop_generation is None
+                               or args.expires_at is None):
+        ap.error("placement commissioning requires a fenced, incident-bound full command")
     if args.expected_incident_id is not None:
         import omx_incident
         if (args.supervised or args.expected_incident_id != os.environ.get("ROSY_RECOVERY_INCIDENT")
@@ -281,7 +289,30 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
             return {"schema": schema, "result": "held", "reason": fence_bad,
                     "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
         with FencedCell(cell, lambda: _safety_fence_error(args)) as fenced:
+            placement = None
+            if args.expected_incident_id is not None:
+                from cell_bound_home_placement import before_bound_home
+                from cell_recovery_placement import place_nearest
+                from cell_recovery_placement_context import load_context
+                from cell_recovery_placement_journal import PlacementJournal
+                from cell_recovery_placement_live import build_backend
+                from omx_incident_fleet import incidents_dir
+                import sqlite3
+
+                kw["require_empty_gripper"] = True
+                directory = incidents_dir()
+                try:
+                    placement = before_bound_home(
+                        args, fenced, closed, kw, PlacementJournal(directory, args.arm), directory,
+                        load_context=load_context, build_backend=build_backend, place_nearest=place_nearest)
+                except (sqlite3.Error, OSError, ValueError) as exc:
+                    placement = {"result": "held", "reason": f"PLACEMENT_UNAVAILABLE: {exc}"}
+                if placement is not None and placement.get("result") != "placed":
+                    return {"schema": schema, **placement, "result": "held",
+                            "hold_ok": fenced.act("human-hold").get("ok"), "steps": placement.get("steps", [])}
             out = recover_fn(fenced, home, closed, stage=args.stage, **kw)
+            if placement is not None:
+                out["placement"] = placement
             if fenced.tripped_reason is not None:
                 if out.get("result") != "held":
                     held = cell.act("human-hold")

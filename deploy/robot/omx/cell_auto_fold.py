@@ -39,7 +39,7 @@ RISE_UNITS = 12.0  # cell_unwedge.CLEAR: release_and_rise lifts shoulder_lift th
 
 def _ok_state(status) -> list | None:
     state = status.get("state") if isinstance(status, dict) else None
-    if status.get("ok") is not True or not isinstance(state, list) or len(state) < 6 \
+    if not isinstance(state, list) or status.get("ok") is not True or len(state) < 6 \
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in state[:6]):
         return None
     return list(state[:6])
@@ -77,7 +77,8 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             release_unmoved: bool = False, moved_out: list | None = None, latched_out: list | None = None,
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
-            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full") -> dict:
+            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
+            require_empty_gripper: bool = False) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
     if stage not in ("full", "release_and_lift", "park_only"):
@@ -118,16 +119,20 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     target = status.get("target") if isinstance(status, dict) and isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
     known["state"] = state
     if state is None:
-        return hold("STATE_UNREADABLE")
+        return hold("STATE_UNREADABLE", is_holding=require_empty_gripper)
+    if require_empty_gripper and _ok_state({"ok": True, "state": status.get("target")}) is None:
+        return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if latched["active"] and not allow_live_unlatch:
         return hold("LIVE_HOLD_LATCHED")
     at_home = folded(state, home)
     is_holding = bool(
         holding(state, target, closed)
         or ((latched["started"] or at_home or stage in ("park_only", "release_and_lift")) and status.get("holding"))
-        or ((at_home or stage in ("park_only", "release_and_lift"))
+        or ((require_empty_gripper or at_home or stage in ("park_only", "release_and_lift"))
             and target[5] <= closed + 1.0 and state[5] > target[5] + 2.0)
     )
+    if require_empty_gripper and (status.get("holding") is not False or is_holding):
+        return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if at_home:
         from cell_auto_fold_stages import resolve_folded_at_home
 

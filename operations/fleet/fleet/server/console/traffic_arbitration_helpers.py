@@ -15,6 +15,9 @@ def remember_traffic_states(console, robots: Sequence[dict], *, trust_mod) -> No
     for row in robots:
         if row["robot_id"] not in console._clients:
             continue
+        marker_clearance = getattr(console, "_site_marker_clearance", None)
+        if marker_clearance is not None:
+            marker_clearance.link(row)
         state = row.get("state") or {}
         if state:
             robot_id = row["robot_id"]
@@ -177,9 +180,14 @@ def site_frame_clear(console, other_id: str, site_route: Optional[tuple[str, lis
                      keep_out_m: float, *, trust_mod) -> Optional[bool]:
     """Whether `other_id` is measured clear of `site_route` on the same active site map (None = unproven)."""
     provider = getattr(console, "_site_obstacle_pose", None)
+    marker_clearance = getattr(console, "_site_marker_clearance", None)
     if site_route is None or provider is None:
-        return None
+        return marker_clearance.clear(console, other_id, None, keep_out_m, None) if marker_clearance is not None else None
     other = provider(other_id)
+    if marker_clearance is not None:
+        result = marker_clearance.clear(console, other_id, site_route, keep_out_m, other)
+        if result is not None:
+            return result
     if other is None or other[0] != site_route[0]:
         return None
     return not trust_mod.blocks(site_route[1], (other[1], other[2]), keep_out_m=keep_out_m)
@@ -215,3 +223,63 @@ async def hold_robots_for_localization(console, mover: str, *, trust_mod) -> lis
         await console.formation_stop()
         held.append("formation")
     return held
+
+
+def peer_proof(self, peers):
+    provider = getattr(self, "_site_marker_clearance", None)
+    if provider is None:
+        return {}
+    return {"peer_evidence": {rid: sample for rid in peers if (sample := provider.evidence(rid))}}
+
+
+async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from, check_wait_prefix):
+    from fleet.swarm.dispatch_guard import dispatch_guard
+
+    await self._observe()
+    grid = grid_from(await self.map()) if len(self._order) > 1 else None
+
+    class PeerWait(Exception):
+        pass
+
+    def check():
+        self.goal_leases.check_stop(robot_id, stop)
+        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid)
+        if wait is not None:
+            raise PeerWait(wait)
+        if not check_wait_prefix(self, robot_id, points, site_route_of):
+            raise PeerWait({"accepted": False, "queued": False, "dispatch_attempted": False,
+                            "stage": "pre_dispatch_peer_check", "reason": "WAIT_PREFIX_UNVERIFIED"})
+
+    try:
+        check()
+        with dispatch_guard(check, paths={"/api/v1/navigation/route", "/api/v1/navigation/bound-route"}):
+            return await send()
+    except PeerWait as exc:
+        return exc.args[0]
+
+
+def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
+
+    here = self._pose_of(robot_id)
+    if here is None or self._verdict(robot_id) != "trusted":
+        return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
+                "command_robot_id": robot_id, "blocked_by": robot_id, "waiting_on": [robot_id],
+                "dispatch_attempted": False, "cancel_confirmed": False}
+    route = [here] + [(p["x"], p["y"]) for p in route_points]
+    site_route = site_route_of(route)
+    peers = [rid for rid in self._order if rid != robot_id
+             and self._untrusted_blocks(rid, route, site_route=site_route)]
+    reason = "LOCALIZATION_UNTRUSTED"
+    if not peers:
+        blocker, conflict = self._claim_blocker(robot_id, route, site_route=site_route)
+        if blocker is not None:
+            peers = [blocker]
+            reason = "ROUTE_CONFLICT" if conflict else "MAP_FRAME_MISMATCH"
+        elif len(self._order) > 1:
+            peers = self._standing_in_the_way(robot_id, route, grid, goal, site_route=site_route)
+            reason = "YIELDING"
+    if peers:
+        return {"accepted": False, "queued": False, "reason": reason, **peer_proof(self, peers),
+                "command_robot_id": robot_id, "blocked_by": peers[0], "waiting_on": peers,
+                "stage": "pre_dispatch_peer_check", "site_route_map": site_route[0] if site_route else None,
+                "dispatch_attempted": False, "cancel_confirmed": False}

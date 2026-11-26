@@ -68,6 +68,10 @@ def test_account_issuer_routes_to_independent_signed_process():
 def test_site_fleet_passes_cell_pipeline_env_through():
     env = yaml.safe_load((ROOT/'deploy/site/compose.yaml').read_text())['services']['fleet']['environment']
     example = (ROOT/'deploy/site/.env.example').read_text()
-    for key in ('ROSY_FLEET_CELL_OWNERS', 'ROSY_FLEET_CELL_AB_RELEASE_ENABLED'):
+    for key in ('ROSY_FLEET_CELL_OWNERS', 'ROSY_FLEET_CELL_AB_RELEASE_ENABLED',
+                'ROSY_INTAKE_RFID_WORKCELL', 'ROSY_INTAKE_RFID_READER_EPOCH',
+                'ROSY_PLACEMENT_CAMERA_SOURCE', 'ROSY_PLACEMENT_CALIBRATION_REVISION'):
         assert env[key] == '${%s:-}' % key
         assert '\n%s=\n' % key in example
+    assert env['ROSY_INTAKE_RFID_WINDOW_SECONDS'] == '${ROSY_INTAKE_RFID_WINDOW_SECONDS:-300}'
+    assert '\nROSY_INTAKE_RFID_WINDOW_SECONDS=300\n' in example

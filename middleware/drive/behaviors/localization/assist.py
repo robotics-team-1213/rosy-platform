@@ -101,6 +101,9 @@ class LocalizationAssist:
         #: Bound by the bridge to the `localization/decision|suspect` publishers.
         self.publish_decision: Optional[Callable[[dict], None]] = None
         self.publish_suspect: Optional[Callable[[dict], None]] = None
+        self.publish_search_window: Optional[Callable[[dict], None]] = None
+        self.search_window_listener: Callable[[], bool] = lambda: False
+        self._window_sent_ns = -15_000_000_000
         #: CORE's navigation cancel path, run on LOCALIZED (D-395 §7).
         self.on_localized = on_localized
         #: CORE's stop paths when the effective LOCALIZED/map condition is lost.
@@ -349,6 +352,24 @@ class LocalizationAssist:
             while len(self._decisions) > _KEEP_DECISIONS:
                 self._decisions.popitem(last=False)
         send(payload)
+
+    @property
+    def search_window_available(self) -> bool:
+        return self.publish_search_window is not None and self.search_window_listener()
+
+    def search_window(self, window: dict) -> None:
+        send = self.publish_search_window
+        if send is None or not self.search_window_listener():
+            raise RuntimeError("localization search window transport unavailable")
+        issued_ns = time.monotonic_ns()
+        with self._lock:
+            status = self._effective(held=False)
+            if status is None or status.state not in (LocState.UNKNOWN, LocState.SUSPECT):
+                raise ValueError("a trusted pose or open candidate request already exists")
+            if issued_ns - self._window_sent_ns < 15_000_000_000:
+                raise ValueError("a search window was already sent in the last 15 seconds")
+            self._window_sent_ns = issued_ns
+        send({"window": window, "issued_ns": issued_ns})
 
     def suspect(self, reason: str) -> None:
         send = self.publish_suspect

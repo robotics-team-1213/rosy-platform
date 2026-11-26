@@ -87,18 +87,25 @@ def _cell_refusal(state, place, robot_id) -> str | None:
     return None
 
 
+def _auto_depart(task: dict) -> bool:
+    return (task.get("action") == "depart_s3" and task.get("auto") is True
+            and task.get("requested_by") == "fleet:auto-depart" and bool(task.get("unload_batch_id"))
+            and task.get("task_id") == f"depart-{task['unload_batch_id']}")
+
+
 def _depart_refusal(state, task: dict, *, now: float, human_detected: bool) -> str | None:
     if task.get("action") != "depart_s3":
         return None
-    from fleet.server.sitemap.pipeline_unload_release import unload_release
+    from fleet.server.pipeline_unload_release import DEPART_FOLD_AGE_S, FOLD_MAX_AGE_S, unload_release
 
     batch_id = task.get("unload_batch_id")
     rec = (getattr(state, "unload_releases", None) or {}).get(batch_id) if batch_id else None
-    if (rec is None or rec.get("state") != "OPERATOR" or rec.get("task_id") != task.get("task_id")
+    if (rec is None or rec.get("state") != ("TRIP_QUEUED" if _auto_depart(task) else "OPERATOR") or rec.get("task_id") != task.get("task_id")
             or (rec.get("target") and task.get("place_id") != rec.get("target"))
             or (rec.get("robot_id") and task.get("robot_id") != rec.get("robot_id"))):
         return "DEPART_RESERVATION_MISMATCH"
-    rel = unload_release(state, task.get("robot_id") or "", now=now, human_detected=human_detected, allow_used=True)
+    rel = unload_release(state, task.get("robot_id") or "", now=now, human_detected=human_detected, allow_used=True,
+                         fold_max_age_s=DEPART_FOLD_AGE_S if _auto_depart(task) else FOLD_MAX_AGE_S)
     if not rel["ready"] or rel.get("batch_id") != batch_id:
         return (rel.get("reasons") or ["DEPART_NOT_PERMITTED"])[0]
     return None
@@ -112,7 +119,7 @@ def refusal(state, task: dict, *, now: float, active, robot_row, human_detected:
         return "ACTION_NOT_DISPATCHABLE"  # micro steps, stop_now, depart_s3: not a place goal
     if not task.get("requested_by"):
         return "REQUESTER_UNKNOWN"
-    if task.get("requester_named") is not True:  # parity with the trip routes' require_named_operator
+    if task.get("requester_named") is not True and not _auto_depart(task):  # parity with the trip routes' require_named_operator
         return "REQUESTER_NOT_NAMED"
     created = float(task.get("created_at") or 0.0)
     if now - created > MAX_QUEUE_AGE_S:
@@ -158,7 +165,10 @@ def _cleanup_on_end(state, task: dict, status: str, now: float) -> None:
         releases = getattr(state, "unload_releases", None)
         if batch_id and isinstance(releases, dict):
             rec = releases.get(batch_id)
-            if rec is not None and rec.get("state") == "OPERATOR" and rec.get("task_id") == task.get("task_id"):
+            if rec is not None and _auto_depart(task) and rec.get("task_id") == task.get("task_id"):
+                rec.update(state="HELD", reason=task.get("reason") or status)
+                _event(state, task["robot_id"], batch_id, "HELD", rec["reason"], now)
+            elif rec is not None and rec.get("state") == "OPERATOR" and rec.get("task_id") == task.get("task_id"):
                 releases.pop(batch_id, None)
     if task.get("action") == "dock_and_unload_s3":
         cid = task.get("spawned_cell_task_id")
@@ -198,6 +208,8 @@ def settle(task: dict, runner, now: float, state=None) -> bool:
         task["receipt"] = {**(task.get("receipt") or {}), "trip_state": state_str}
         return changed
     if state_str == "arrived":
+        from fleet.server.pipeline_station_stop import arrived
+        arrived(task, now)
         _end(task, "ARRIVED", None, now, state=state)
     elif state_str in ("canceled", "stopped"):
         if _unconfirmed(view) or (task.get("cancel_requested") and _unconfirmed(task.get("cancel_receipt"))):
@@ -254,12 +266,14 @@ def _dispatch_open_for_trip(state, task_service) -> bool:
 
 
 async def dispatch_tick(state, *, console, runner, plan, task_service, active, human_detected, save,
-                        now: float, trip_request) -> list[dict]:
+                        now: float, trip_request, departure_request=None) -> list[dict]:
     """One pass: retry native cancels, settle in-flight rows, then dispatch each QUEUED place task at most once."""
     await retry_native_cancels(state, console=console, save=save, now=now)
     if not enabled():
         return []
     human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
+    from fleet.server.pipeline_station_stop import supervise
+    supervise(state, now, human_now(), save, state.pinky_tasks)
     for task in list(state.pinky_tasks.values()):
         if not (_ours(task) and task.get("status") in IN_FLIGHT):
             continue
@@ -334,7 +348,9 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
         sending.add(tid)
         try:
             awaited = True
-            planned = await plan(robot_id, trip_request(task["place_id"]), task["requested_by"])
+            needs_binding = task.get("action") == "depart_s3" or task.get("station_operation")
+            request = departure_request if needs_binding and departure_request else trip_request
+            planned = await plan(robot_id, request(task["place_id"]), task["requested_by"])
             task["plan_id"] = planned["plan_id"]
             save()  # a restart finds the plan id and never starts a second trip
             if task.get("cancel_requested") or task["status"] != "SENDING":
@@ -371,6 +387,9 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
             continue
         task.update(status="SENT", trip_id=trip["trip_id"], sent_at=round(now, 3),
                     receipt={"trip_state": trip.get("state"), "lease": (trip.get("lease") or {}).get("lease_id")})
+        if _auto_depart(task):
+            state.unload_releases[task["unload_batch_id"]].update(state="SENT", trip_id=trip["trip_id"], sent_at=now)
+            _event(state, robot_id, task["unload_batch_id"], "SENT", task["place_id"], now, trip["trip_id"])
         save()
         sent.append(task)
     return sent
@@ -477,22 +496,27 @@ def install_pinky_dispatch(app, ctx) -> None:
     """The cancel route and ``app.state.task_dispatch_tick`` (run by the pipeline's 1 s loop in pipeline_unload_release)."""
     import time
 
+    from fleet.server.pipeline_station_stop import install as install_station_stops
+    install_station_stops(app, ctx, lambda: app.state.pinky_tasks,
+                          "/api/fleet/pipeline/pinky-tasks/{task_id}/station-release", requester_named)
+
     def active_or_none():
         try:
             return ctx.active_map()
         except HTTPException:
             return None
 
-    def trip_request(place_id):
+    def trip_request(place_id, **options):
         from fleet.server.trip_routes import TripRequest  # late: the routes module pulls in the whole trip stack
 
-        return TripRequest(to=place_id)
+        return TripRequest(to=place_id, **options)
 
     app.state.task_dispatch_tick = lambda: dispatch_tick(
         app.state, console=ctx.console, runner=getattr(app.state, "trip_runner", None),
         plan=getattr(app.state, "trip_plan", None), task_service=getattr(app.state, "task_service", None),
         active=active_or_none(), human_detected=ctx._is_human_detected, save=ctx._save_ledger,
-        now=time.time(), trip_request=trip_request)
+        now=time.time(), trip_request=trip_request,
+        departure_request=lambda place: trip_request(place, drive_mode="nav2", approved_slam_required=True))
 
     @app.post("/api/fleet/pipeline/pinky-tasks/{task_id}/cancel", dependencies=ctx.operator_guard)
     async def cancel_pinky_task(task_id: str, request: Request):
