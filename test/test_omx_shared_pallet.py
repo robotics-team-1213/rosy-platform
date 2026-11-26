@@ -76,6 +76,6 @@ def test_remap_mismatch_preserves_existing_generation(tmp_path, monkeypatch, cap
     monkeypatch.setattr(cc, "map_agrees", lambda *_: True)
     monkeypatch.setattr(cc, "move_regions", lambda *_: None)
     monkeypatch.setattr(cell_shared_pallet, "shared_pallet", lambda *a, **kw: {"status": "mismatch"})
-    assert cc.main(["--config", str(path), "auto", "--only", "remap", "--commissioning", "--person-at-switch"]) == 2
+    assert cc.main(["--config", str(path), "auto", "--only", "remap", "--obstacle-mm", "10", "--commissioning", "--person-at-switch"]) == 2
     assert "shared pallet work surfaces disagree" in capsys.readouterr().out
     assert all(p.read_bytes() == content for p, content in files.items())
