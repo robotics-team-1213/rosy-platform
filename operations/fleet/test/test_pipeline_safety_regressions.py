@@ -365,7 +365,9 @@ def test_unresolved_fleet_estop_latch_blocks_pinky_dispatch_and_runner_start(tmp
     direct_ctrl.clear()
     direct_ctrl.update({"dispatch_enabled": False, "reason": "STARTUP_HOLD", "generation": 1})
     r_startup = c_direct.post("/api/fleet/trips/p-direct/start")
-    assert r_startup.status_code == 409 and r_startup.json()["detail"]["code"] == "HUMAN_HOLD"
+    # The closed dispatch latch alone still refuses, under its own name with the rearm facts (not a human hazard).
+    assert r_startup.status_code == 409 and r_startup.json()["detail"]["code"] == "DISPATCH_REARM_REQUIRED"
+    assert r_startup.json()["detail"]["detail"]["reason"] == "STARTUP_HOLD"
 
     direct_ctrl.clear()
     r_missing = c_direct.post("/api/fleet/trips/p-direct/start")

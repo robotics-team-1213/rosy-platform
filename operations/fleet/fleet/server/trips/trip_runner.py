@@ -134,7 +134,9 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
     def _check_human_hold(self) -> None:
         check = getattr(self, "human_hold_fn", None)
         if callable(check) and check():
-            raise TripError(409, "HUMAN_HOLD")
+            state = getattr(self, "hold_state_fn", None)
+            code, detail = (state() or ("HUMAN_HOLD", {})) if callable(state) else ("HUMAN_HOLD", {})
+            raise TripError(409, code, detail)
 
     async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None,
                     start_guard=None, purpose: Optional[str] = None) -> dict:
