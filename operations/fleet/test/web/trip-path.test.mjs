@@ -46,6 +46,11 @@ test('plan and start call the D-494 routes with the escaped id', async () => {
 });
 
 test('plan summary and refusal text', () => {
+  const parking = {segments: [{}], length_m: 0, eta_s: 0, map_version: 394,
+    parking_handoff: {bay_id: 'C1', staging_place_id: 'P1'}, staging_distance_m: .1009};
+  assert.match(planSummaryText(parking), /차로 경로 0\.00 m · 계획 시 위치에서 P1까지 직선 0\.10 m/);
+  assert.match(planSummaryText({...parking, staging_distance_m: 0}), /P1까지 직선 0\.00 m/);
+  assert.doesNotMatch(planSummaryText({...parking, staging_distance_m: undefined}), /직선/);
   assert.equal(planSummaryText({segments: [1, 2, 3], length_m: 2.1, eta_s: 13.6, map_version: 4}),
     '3개 차로 · 2.10 m · 약 14 s · 지도 v4');
   assert.match(tripRefusalText({code: 'TRIP_CONVOY_SELF', detail: {}}), /./);

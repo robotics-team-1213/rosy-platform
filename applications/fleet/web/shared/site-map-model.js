@@ -190,7 +190,12 @@ export function planTrip(request, robotId, body) { return request(`/api/fleet/ro
 export function startTrip(request, planId) { return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'}); }
 export function tripRefusalText(error) { return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error); }
 export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+  const staging = plan.parking_handoff?.staging_place_id;
+  const road = `${plan.length_m.toFixed(2)} m`;
+  const distance = staging && Number.isFinite(plan.staging_distance_m)
+    ? `차로 경로 ${road} · 계획 시 위치에서 ${staging}까지 직선 ${plan.staging_distance_m.toFixed(2)} m`
+    : `${road} · 약 ${Math.round(plan.eta_s)} s`;
+  return `${plan.segments.length}개 차로 · ${distance} · 지도 v${plan.map_version}`
     + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 export function repeatTripReason({active, running, start}) {
