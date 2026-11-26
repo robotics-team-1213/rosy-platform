@@ -1,6 +1,6 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
 import { evidenceAgeText } from "/common/core_ui_logic.js";
-import { invert3, project as projectHomography } from "/console/assets/map-fit.js";
+import { project as projectHomography } from "/console/assets/map-fit.js";
 
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
@@ -66,20 +66,6 @@ export function canvasSizeFor(bounds, base = 1200) {
   return { width: base, height: Math.round(base * ratio) };
 }
 
-// map 프레임 m → 캔버스 px. 캔버스 y 는 아래로 자라므로 뒤집는다(격자 뷰와 같은 규칙).
-export function fitTransform(bounds, width, height, pad = 48) {
-  const bw = Math.max(bounds.max_x - bounds.min_x, 1e-6);
-  const bh = Math.max(bounds.max_y - bounds.min_y, 1e-6);
-  const scale = Math.min((width - 2 * pad) / bw, (height - 2 * pad) / bh);
-  const ox = pad + ((width - 2 * pad) - bw * scale) / 2 - bounds.min_x * scale;
-  const oy = height - pad - ((height - 2 * pad) - bh * scale) / 2 + bounds.min_y * scale;
-  return { scale, ox, oy };
-}
-
-export function project(t, x, y) {
-  return { px: t.ox + x * t.scale, py: t.oy - y * t.scale };
-}
-
 // [lo, hi] 안에 드는 step 의 배수들. 부동소수 오차로 끝 값을 놓치지 않게 여유를 둔다.
 export function gridLines(lo, hi, step = GRID_STEP_M) {
   const out = [];
@@ -109,42 +95,6 @@ export function streamEvidence(formation, robotId) {
   return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
 }
 
-// w×h 원본을 시계 방향 rot 만큼 돌린 화면: 크기, 점 변환, ctx.transform 행렬 [a, b, c, d, e, f].
-export function quarterTurn(rot, w, h) {
-  const m = rot === 90 ? [0, 1, -1, 0, h, 0] : rot === 180 ? [-1, 0, 0, -1, w, h]
-    : rot === 270 ? [0, -1, 1, 0, 0, w] : [1, 0, 0, 1, 0, 0];
-  const side = rot === 90 || rot === 270;
-  return {
-    width: side ? h : w, height: side ? w : h, matrix: m,
-    point: (x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }),
-    // 돌린 화면 점 → 원본 영상 점 (quarter turn 이라 det 은 ±1).
-    unpoint: (x, y) => {
-      const det = m[0] * m[3] - m[1] * m[2], dx = x - m[4], dy = y - m[5];
-      return { x: (m[3] * dx - m[2] * dy) / det, y: (-m[1] * dx + m[0] * dy) / det };
-    },
-  };
-}
-
-// 돌린 카메라 화면의 점 → 지도 m. map_to_image 를 뒤집어 쓴다. 지평선 뒤면 null.
-// 역행렬의 부호는 지도 위 기준점 ``ref``(트랙 중심)가 앞쪽(w > 0)이 되게 한 번 맞춘다 —
-// 부호를 점마다 바꾸면 지평선 뒤 픽셀이 거울 위치의 바닥 점으로 돌아온다.
-export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
-  let inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
-  const seen = inverse && ref ? projectHomography(mapToImage, ref.x, ref.y) : null;
-  if (!seen) return null;
-  if (inverse[6] * seen[0] + inverse[7] * seen[1] + inverse[8] < 0) inverse = inverse.map((v) => -v);
-  const raw = turn.unpoint(x, y);
-  const p = projectHomography(inverse, raw.x, raw.y);
-  return p ? { x: p[0], y: p[1] } : null;
-}
-
-// D-513 7: 현장 지도(D-488 활성 지도)의 화면 방향 — 기본(+y 위) 화면을 시계 방향으로 돌릴 각.
-// 모든 지도·카메라 화면이 이 값 하나를 따른다. 응답이 없거나 값이 이상하면 0.
-export function siteViewTurn(activeView) {
-  const turn = activeView?.map?.view_turn_deg;
-  return [90, 180, 270].includes(turn) ? turn : 0;
-}
-
 // D-513 7: 실영상은 지도 방향으로 보인다 — 지도 +y 가 화면 위로 오는 가장 가까운 quarter turn(시계 방향 도).
 // 방향의 근거는 지도 좌표계와 보정 하나뿐이다. 설치 키를 따로 두지 않는다. 보정이 없으면 0(원본 그대로).
 export function mapUpTurn(record) {
@@ -166,34 +116,21 @@ export function roadOverlayPoints(mapId, edge) {
   return points;
 }
 
-// world_261026, ceiling_north floor plane, 2026-11-26 (400 px/m).
-// C1 follows the visible pink stripe. The upper lane is halfway between two white stripes.
-// No centreline is painted through the U-turn; only its straight approach was measured.
-const floorSurvey = {
-  bay_1: {from: "P1", to: "C1", anchors: [[-0.43002, 0.04266], [-0.41816, 0.47]],
-    points: [[-0.4222, 0.0433], [-0.4386, 0.4400]]},
-  upper_east: {from: "S3", to: "J_in", anchors: [[0.745, -0.207], [0.31418, -0.25008]],
-    points: [[0.745, -0.25008], [0.31418, -0.25008]]},
-  loop_right: {from: "S5", to: "S3", anchors: [[0.89822, -0.48152], [0.745, -0.207]],
-    points: [[0.9238, -0.25008], [0.745, -0.25008]]},
-};
-
-export function surveyedRoadPoints(map, edge) {
-  if (map?.map_id !== "world_261026" || !Object.hasOwn(floorSurvey, edge.id)) return null;
-  const survey = floorSurvey[edge.id];
-  if (edge.from !== survey.from || edge.to !== survey.to || edge.polyline.length < 2) return null;
-  const ends = [edge.polyline[0], edge.polyline.at(-1)];
-  // A relocated edge needs a new field comparison. Allow only coordinate rounding (1 mm).
-  const sameAnchors = ends.every(([x, y], i) =>
-    Math.hypot(x - survey.anchors[i][0], y - survey.anchors[i][1]) <= 0.001);
-  return sameAnchors ? survey.points : null;
+// 2026-11-26: the measured line comes from the server's map record (display_polyline + display_source,
+// a floor survey). A relocated edge needs a new survey, so only coordinate rounding (1 mm) is allowed.
+const near = ([x, y], [u, v]) => Math.hypot(x - u, y - v) <= 0.001;
+export function surveyedRoadPoints(edge) {
+  const line = edge.display_polyline, anchors = edge.display_source?.anchors;
+  if (edge.display_source?.kind !== "survey" || !(line?.length >= 2) || anchors?.length !== 2 || edge.polyline.length < 2) return null;
+  return near(edge.polyline[0], anchors[0]) && near(edge.polyline.at(-1), anchors[1]) ? line : null;
 }
 
-export function unmeasuredRoadPoints(map, edge) {
-  if (edge.id !== "loop_right") return null;
-  const survey = surveyedRoadPoints(map, edge);
-  if (!survey) return null;
-  const approachY = edge.polyline.at(-1)[1];
-  const tangent = edge.polyline.findIndex(([x, y]) => Math.hypot(x - survey[0][0], y - approachY) <= 0.001);
+// The stored line up to display_source.stored_until stays drawn as not surveyed (an unpainted U-turn).
+export function unmeasuredRoadPoints(edge) {
+  const until = edge.display_source?.stored_until;
+  if (!until || !surveyedRoadPoints(edge)) return null;
+  const tangent = edge.polyline.findIndex((point) => near(point, until));
   return tangent > 0 ? edge.polyline.slice(0, tangent + 1) : edge.polyline;
 }
+
+export const surveyText = (source) => `측량 ${source.surveyed_at} · ${source.plane}${source.note ? ` · ${source.note}` : ""}`;
