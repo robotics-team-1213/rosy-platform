@@ -379,13 +379,22 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
             store.map_bindings.revoke("rosy_42", "bob")
             strict = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
             assert strict.status_code == 409 and strict.json()["detail"]["code"] == "TRIP_POSE_UNTRUSTED"
+            # Real parking start: the robot centre is just outside the painted width.
+            start_y = -.48 - .1 - runner.config.nav2_off_lane_margin_m - .001
             async def site_pose(_):
-                return MapPose(.17, -.48, 0., "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
+                return MapPose(.55, start_y, 0., "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
             runner.map_pose = site_pose
             body["approved_slam_required"] = False
+            outside = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+            assert outside.status_code == 422 and outside.json()["detail"]["code"] == "TRIP_START_OFF_MAP"
+            start_y = -.59  # 10 mm outside the 200 mm-wide lane
             ordinary = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
             assert ordinary.status_code == 200, ordinary.text
-            assert ordinary.json()["places"][-1] == "P2" and ordinary.json()["parking_handoff"]["bay_id"] == "C2"
+            preview = ordinary.json()
+            assert preview["places"][-1] == "P2" and preview["parking_handoff"]["bay_id"] == "C2"
+            assert preview["start_check"]["code"] is None and preview["start_check"]["off_lane_m"] == .01
+            started = client.post(f"/api/fleet/trips/{preview['plan_id']}/start", headers=headers)
+            assert started.status_code == 200, started.text
             return
         plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
         if case == "older_core":

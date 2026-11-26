@@ -331,6 +331,7 @@ async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, po
             body, _hold = plan_again(
                 active, (pose.x, pose.y, pose.yaw), live.request, live.view.get("caps") or {},
                 frozenset(runner._blocked()) | closed, passed, runner._routing, runner.config.max_turn_deg,
+                nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m,
             )
             if body is None or route_key(body["segments"]) == route_key(live.segments[index:]):
                 continue

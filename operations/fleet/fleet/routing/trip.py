@@ -42,6 +42,7 @@ class PlanRequest:
     stop_offset: bool = True
     #: When True (Nav2 road-following), allow any start yaw on the lane (Nav2 rotates in place).
     ignore_start_heading: bool = False
+    nav2_off_lane_margin_m: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,8 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     def arc_speed(arc: Arc) -> float:
         return speed(arc.speed_cap_mps, request.max_speed_mps, request.speed_cap)
 
-    at = snap_start(graph, *request.start_pose, config, allowed, ignore_heading=request.ignore_start_heading)
+    at = snap_start(graph, *request.start_pose, config, allowed, ignore_heading=request.ignore_start_heading,
+                    off_lane_margin_m=request.nav2_off_lane_margin_m)
     eta, segments, done = 0.0, [], 0
     legs = _legs(graph, request)
     for index, (via, target) in enumerate(legs):

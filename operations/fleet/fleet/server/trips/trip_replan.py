@@ -124,7 +124,7 @@ class TripReplan:
                 body, failed = plan_again(
                     active, (pose.x, pose.y, pose.yaw), live.request, live.view.get("caps") or {},
                     frozenset(self._blocked()) | frozenset(blocked_edges), passed,
-                    self._routing, self.config.max_turn_deg,
+                    self._routing, self.config.max_turn_deg, nav2_off_lane_margin_m=self.config.nav2_off_lane_margin_m,
                 )
                 if failed is not None:
                     raise TripError(409, "TRIP_REPLAN_FAILED", {
@@ -281,4 +281,4 @@ class TripReplan:
             self._store.active(), origin,
             live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()) | closed,
             {live.place(i) for i in range(index)}, live.view["map_version"], self._routing,
-            self.config.max_turn_deg)
+            self.config.max_turn_deg, nav2_off_lane_margin_m=self.config.nav2_off_lane_margin_m)
