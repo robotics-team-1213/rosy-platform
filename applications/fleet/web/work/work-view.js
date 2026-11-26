@@ -12,7 +12,7 @@ const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", 
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
   CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료",
-  started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+  started: "운행 요청 접수", running: "운행 요청 처리 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
 const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 있는 운영자가 승인", proposer_only: "제안한 사람이 승인", one_person: "한 사람 · 이름 있는 운영자"};
 // D-763 8 — 서버가 준 보이는 상태(읽기 투영). 원장 상태는 상세의 「상태」 그대로다.
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
@@ -25,7 +25,8 @@ const approvable = row => (row.source === "mission" || row.source === "cell_job"
 export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 const idTail = v => String(v ?? "").split("-").pop().slice(0, 8);
 const shortStamp = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : ""; };
-export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status),
+const tripWait = row => ["started", "running", "link_wait"].includes(row.status) ? tripWaitText(row) : "";
+export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWait(row) || visible[row.visible_state] || workStatus(row.status),
   ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
 export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
 export const requestsPause = status => status === 403;
@@ -156,7 +157,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       ["담당 장치", row.device_id],
       ["작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음"],
       ["실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔"],
-      ["상태", workStatus(row.status)],
+      ["상태", tripWait(row) || workStatus(row.status)],
       ...(row.approval ? [["승인 조건", approvals[row.approval] || "승인 조건 확인 필요"]] : []),
       ...(autoText ? [["자동 승인", autoText]] : []),
       ["최근 원장 갱신", formatWorkTime(row.updated_at)],
@@ -185,10 +186,10 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       const result = await call(`/api/fleet/${path}/${encodeURIComponent(row.source_id)}`);
       life.check();
       if (version !== detailVersion) return;
-      const current = result.task || result.mission || result.job || {...result, status: result.state};
+      const current = result.task || result.mission || result.job || {...result, status: result.state, wait: result.wait || null};
       showDetail({...row, ...current, source: row.source, source_id: row.source_id, device_id: row.device_id});
       const count = result.history?.length || 0;
-      patchText(el("work-evidence"), `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`);
+      patchText(el("work-evidence"), `${tripWait(current) || workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`);
     } catch (error) {
       if (!life.current() || version !== detailVersion) return;
       patchText(el("work-evidence"), error.status === 404 ? "이 작업의 상세를 조회할 수 없습니다." : "결과 근거를 확인할 수 없습니다.");
