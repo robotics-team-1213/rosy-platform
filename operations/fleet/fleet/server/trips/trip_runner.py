@@ -113,6 +113,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self._start_cancels: dict[str, int] = {}
         self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
+        self.road_vision_demand = None
         self.charge_goal_ready = None  # Explicit charge-only native-readiness dependency.
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
@@ -504,6 +505,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
         observe(self._live.values(), self._inflight, self.traffic, self._store, self._routing, self.config, self._clock())
+        if self.road_vision_demand is not None:
+            self.road_vision_demand.period(self)
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""

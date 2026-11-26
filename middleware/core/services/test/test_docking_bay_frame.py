@@ -72,3 +72,38 @@ def test_a_nav2_start_the_lidar_agrees_with_goes_on():
     p.manager.dock()
     run_row(p, row, until=answer_kinds(zone=good(x=1.0)))
     assert p.world.goals and "map frame" not in (p.manager._error or "")
+
+
+def test_stationary_commission_is_create_only_idempotent_and_rolls_back_on_write_failure(tmp_path, monkeypatch):
+    from core_features.docking.database import DockDatabase, DockInstance, DockType
+    db = DockDatabase(tmp_path/"docks.json")
+    db.frame_key = lambda: "map42"
+    kind = DockType(name="line", approach="line", detector="camera_line")
+    dock = DockInstance(id="bay_c2", type="line", x=.2, y=.3, yaw=0., map_id="map42")
+    with pytest.raises(DockError, match="map changed"):
+        db.commission(kind, dock, "old")
+    with monkeypatch.context() as m:
+        m.setattr(db, "_save", lambda: (_ for _ in ()).throw(OSError("disk full")))
+        with pytest.raises(OSError):
+            db.commission(kind, dock, "map42")
+        assert not db.list() and not db.types()
+    registered = db.commission(kind, dock, "map42")
+    assert db.commission(kind, dock, "map42") == registered
+    with pytest.raises(DockError):
+        db.commission(kind, dock.model_copy(update={"x":2.}), "map42")
+    assert DockDatabase(tmp_path/"docks.json").get("bay_c2") == registered
+
+
+def test_every_core_entry_rechecks_the_commissioned_grid_and_slam_origin():
+    p = a_bay()
+    db = p.manager._db
+    dock = db.get("bay1")
+    db._docks["bay1"] = dock.model_copy(update={"metadata": {"commissioned_grid_id":"grid", "commissioned_map_generation":3}})
+    for frame in (("older",3), ("grid",4), (None,None)):
+        p.manager._commission_frame = lambda: frame
+        with pytest.raises(DockError, match="different native SLAM frame"):
+            p.manager.dock("bay1")
+        assert p.manager.state is not DockState.DOCKING
+    p.manager._commission_frame = lambda: ("grid",3)
+    p.manager.dock("bay1")
+    assert p.manager.state is DockState.DOCKING

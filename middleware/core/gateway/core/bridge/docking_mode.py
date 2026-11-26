@@ -90,5 +90,9 @@ def route_nav_cmd_vel(svc, twist) -> bool:
         setter(twist)
         return False
 
-    return svc.nav.observe_twist(
-        lambda: svc.modes.commit_input(mode, lambda: setter(twist), epoch=epoch))
+    def commit(authority):
+        # observe_twist holds the navigation owner lock until the input is bound.
+        options = {"speed_authority": authority} if mode is Mode.NAVIGATION and authority is not None else {}
+        return svc.modes.commit_input(mode, lambda: setter(twist, **options), epoch=epoch)
+
+    return svc.nav.observe_twist(commit)

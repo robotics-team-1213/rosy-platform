@@ -39,6 +39,9 @@ class RouteFakeRobot(FakeRobot):
         self.routes: list[tuple] = []
         self.route_grids: list[str | None] = []
         self.bound_route_supported = False
+        self.speed_supported = True
+        self.speed_grants = []
+        self.controlled_routes = []
         self.renewals: list[tuple] = []
         self.active_cid: str | None = None
         self._state = {
@@ -49,7 +52,8 @@ class RouteFakeRobot(FakeRobot):
 
     async def capabilities(self) -> dict:
         return {
-            "navigation": {"goal_navigation": True, "bound_route": self.bound_route_supported},
+            "navigation": {"goal_navigation": True, "bound_route": self.bound_route_supported,
+                           "route_speed_authority": self.speed_supported},
             "controls": {
                 "schema": "rosy.controls/1",
                 "items": [{
@@ -64,6 +68,7 @@ class RouteFakeRobot(FakeRobot):
         self._record("navigation_route", points, correlation_id, lease_ttl_s)
         self.routes.append((points, correlation_id, lease_ttl_s))
         self.route_grids.append(kwargs.get("expected_map_grid_id"))
+        self.controlled_routes.append(kwargs.get("road_speed_controlled"))
         self.active_cid = correlation_id
         self._state["navigation"] = "NAVIGATING"
         if self.bound_route_supported and correlation_id:
@@ -71,11 +76,13 @@ class RouteFakeRobot(FakeRobot):
                     "kind": "navigate", "phase": "RUNNING", "correlation_id": correlation_id}}
         return {"accepted": True}
 
-    async def navigation_goal_lease(self, correlation_id, ttl_s) -> dict:
+    async def navigation_goal_lease(self, correlation_id, ttl_s, *, speed_grant=None) -> dict:
+        if speed_grant is not None:
+            self.speed_grants.append((correlation_id, speed_grant))
         self.renewals.append((correlation_id, ttl_s))
         if correlation_id != self.active_cid:
             raise RobotApiError(self.robot_id, 409, "GOAL_LEASE_NOT_ACTIVE", "not active")
-        return {"renewed": True}
+        return {"renewed": True, "correlation_id": correlation_id}
 
     async def navigation_cancel(self) -> dict:
         self._state["navigation"] = "CANCELED"
@@ -283,7 +290,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal"])
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "no_speed_authority", "terminal"])
 def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
@@ -293,6 +300,7 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     robot = RouteFakeRobot("rosy_42")
     robot.power_health_value = fresh_power_health()
     robot.bound_route_supported = case != "older_core"
+    robot.speed_supported = case != "no_speed_authority"
     fit = Fit(math.pi / 2, .31, -.22, ())
     native_x, native_y = fit.inverse((.17, -.48))
 
@@ -357,12 +365,20 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
 
             console.goal_leases.prepare_send = change_grid
         client.portal.call(runner.tick)
+        if case == "no_speed_authority":
+            assert runner.view(plan_id)["reason"] == "ROAD_SPEED_AUTHORITY_UNAVAILABLE"
+            assert not robot.routes
+            return
         if case == "changed_grid":
             stopped = runner.view(plan_id)
             assert stopped["state"] in {"failed", "stopped"}
             assert not robot.routes and not read_legacy_pose
             return
         assert robot.routes and robot.route_grids == ["occupancy:0123456789ab"]
+        assert robot.controlled_routes == [True]
+        cid, grant = robot.speed_grants[-1]
+        assert cid == robot.routes[0][1] and 0 < grant["limit_mps"] <= .2
+        assert grant["issued_at"] < grant["expires_at"] <= grant["issued_at"] + 1.5
         assert console._site_claims["rosy_42"][0] == site[0]
         first = robot.routes[0][0][0]
         assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)

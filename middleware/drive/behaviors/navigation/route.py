@@ -48,6 +48,12 @@ class RouteRun:
     result: Optional[str] = None  # None while active, then succeeded | failed | canceled
     accepted: bool = False   # Nav2 took the first action: later ones must not restart NAV-006's clock
     skipped: list[int] = field(default_factory=list)
+    speed_authority: object | None = None
+
+    def finish(self, result):
+        self.result = result
+        if self.speed_authority is not None:
+            self.speed_authority.close()
 
 
 def _blocked(grid: Optional[dict], x: float, y: float) -> bool:
@@ -111,9 +117,15 @@ def _validated(points) -> list[RoutePoint]:
 def route(self, points, source: str = "api", correlation_id: str | None = None,
           lease_ttl_s: float | None = None, *, receipt_sink=None, lease_owner: str | None = None,
           expected_boot_id: UUID | None = None, expected_owner_generation: int | None = None,
-          reservation: UUID | None = None) -> RouteRun:
+          reservation: UUID | None = None, road_speed_controlled: bool = False) -> RouteRun:
     """Admit a route like a goal (same gates, receipt and lease) and send its first leg."""
+    from .manager import NavigationError
+    from .road_speed import RoadSpeedAuthority
     run = RouteRun(_validated(points))
+    if road_speed_controlled:
+        if not correlation_id or lease_ttl_s is None or not lease_owner:
+            raise NavigationError("VALIDATION_ERROR", "a controlled road route needs an owned goal lease")
+        run.speed_authority = RoadSpeedAuthority()
     with self._lock:
         run.leg_end = _next_stop(run, 0)
         self.goal(_leg_spec(self, run), source=source, correlation_id=correlation_id,
@@ -147,14 +159,14 @@ def route_continue(self, succeeded: bool, error: str | None, native_run_id: UUID
                 if run.points[i].state == "pending":
                     run.points[i].state = "reached"
             if run.leg_end + 1 >= len(run.points):
-                run.result = "succeeded"
+                run.finish("succeeded")
                 return False
             run.leg_first = run.leg_end + 1
             run.leg_end = _next_stop(run, run.leg_first)
         else:
             ahead = [i for i in range(run.leg_first, run.leg_end) if run.points[i].state == "pending"]
             if not ahead:
-                run.result = "failed"
+                run.finish("failed")
                 return False
             run.points[ahead[0]].state = "skipped"
             run.skipped.append(ahead[0])
@@ -169,7 +181,7 @@ def route_continue(self, succeeded: bool, error: str | None, native_run_id: UUID
             else:
                 self.executor.send_goal(spec, correlation_id=cid)
         except Exception:
-            run.result = "failed"
+            run.finish("failed")
             return SEND_FAILED
         self._active_spec = spec  # fleet_goal() (SAF-003) follows the leg in progress
         run.actions += 1
@@ -199,7 +211,7 @@ def route_progress(self, x: float, y: float) -> None:
 def route_closed(self, result: str) -> None:
     run = self._route
     if run is not None and run.result is None:
-        run.result = result
+        run.finish(result)
 
 
 def route_status(self) -> Optional[dict]:

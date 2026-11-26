@@ -79,7 +79,14 @@ class HomeRequest(BaseModel):
     expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
 
 
+class RoadSpeedGrant(BaseModel):
+    issued_at: float = Field(allow_inf_nan=False)
+    expires_at: float = Field(allow_inf_nan=False)
+    limit_mps: float = Field(ge=0, allow_inf_nan=False)
+
+
 class GoalLeaseRequest(BaseModel):
+    speed_grant: RoadSpeedGrant | None = None
     correlation_id: str = Field(min_length=1, max_length=128)
     ttl_s: float = Field(gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
 
@@ -276,6 +283,7 @@ class RoutePointRequest(BaseModel):
 
 
 class RouteRequest(BaseModel):
+    road_speed_controlled: bool = Field(default=False, strict=True)
     points: list[RoutePointRequest] = Field(min_length=1, max_length=MAX_POINTS)
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
     lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
@@ -302,6 +310,8 @@ def bound_navigation_route(body: BoundRouteRequest, auth: AuthContext = Depends(
 
 
 def _navigation_route(body, auth, svc, *, expected_grid=None):
+    if body.road_speed_controlled and not (body.correlation_id and body.lease_ttl_s and auth.token_id):
+        raise ApiError("VALIDATION_ERROR", 400, "road speed control requires an owned goal lease")
     _goal_gates(body, auth, svc)
     points = [RoutePoint(p.x, p.y, p.kind, p.yaw) for p in body.points]
     gate = svc.state.map_grid_gate if expected_grid is not None else nullcontext()
@@ -313,7 +323,7 @@ def _navigation_route(body, auth, svc, *, expected_grid=None):
         receipt = []
         try:
             enter_navigation_mode(svc, auth)
-            svc.nav.route(points, source=f"api:{auth.role}", correlation_id=body.correlation_id,
+            svc.nav.route(points, road_speed_controlled=body.road_speed_controlled, source=f"api:{auth.role}", correlation_id=body.correlation_id,
                           lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
                           receipt_sink=receipt.append)
         finally:
@@ -332,7 +342,8 @@ def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(op
                           svc: CoreServicesLike = Depends(get_services)):
     """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not the active goal.
     D-760 9: 403 FORBIDDEN from a token other than the one that sent the goal."""
-    svc.nav.renew_goal_lease(body.correlation_id, body.ttl_s, owner=auth.token_id)
+    svc.nav.renew_goal_lease(body.correlation_id, body.ttl_s, owner=auth.token_id,
+                             **({"speed_grant": body.speed_grant.model_dump()} if body.speed_grant else {}))
     return {"renewed": True, "correlation_id": body.correlation_id, "ttl_s": body.ttl_s}
 
 

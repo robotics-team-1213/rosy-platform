@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.474
+**Version:** v1.475
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.475 Stationary rear dock registration (CORE)
+
+Administrators can use `POST /api/v1/docking/commission` to create a dock and its detector type together. Supply `robot_id`, `map_id`, `map_grid_id`, `map_generation`, `dock` and `dock_type`. CORE checks localization, standstill and native ownership under the grid gate. An identical registration returns the existing dock. A different existing dock, a frame change or an active owner returns 409. Registration leaves the base stationary.
 
 ### v1.474 RFID intake receipt and observed inbound placement (Fleet)
 
@@ -5114,6 +5118,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.475 | 2026-11-26 | [CORE] Stationary rear dock registration |
 | v1.474 | 2026-11-26 | [Fleet] RFID intake receipt and observed inbound placement |
 | v1.473 | 2026-11-26 | [Fleet] Task-specific cell plan refusal codes |
 | v1.472 | 2026-11-25 | [Fleet] Operator trip request history |
