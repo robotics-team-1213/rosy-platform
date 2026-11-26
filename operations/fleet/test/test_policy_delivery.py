@@ -352,3 +352,76 @@ def test_a_slow_lease_hold_never_delays_the_stop_response():
         release.set()
         routes.STOP_LEASE_HOLDS.pop()
     assert result['stopped'] is True and elapsed < routes.STOP_LEASE_HOLD_WAIT_S + 0.5
+
+def test_native_challenge_is_minted_before_grant_and_wire_scope_is_bound():
+    nonce = "3" * 64
+    core = Core(Reply(json.dumps({"challenge": nonce}).encode()), Reply())
+    delivery = CoreLeaseDelivery({"cell-1": ("https://core.example", "tok", True)}, opener=core)
+    approvals = PolicyApprovals(deliver=delivery.deliver, hold=delivery.hold, challenge=delivery.challenge)
+    scope = "cell-task:t1:arm_b"
+    ident = approvals.propose(workcell_id="cell-1", proposer="a", policy_digest=DIGEST, rig_revision="r",
+                              calibration_revision="c", scope=scope, window_s=2)["id"]
+    approvals.approve(ident, "b")
+    assert approvals.tick(ident)["challenge"] == nonce
+    assert [call[0].split("/")[-1] for call in core.calls] == ["lease-challenge", "lease"]
+    assert core.calls[0][1] == {"workcell_id": "cell-1", "scope": scope}
+    assert core.calls[1][1]["scope"] == scope and core.calls[1][1]["challenge"] == nonce
+    with pytest.raises(ValueError):
+        CoreLeaseDelivery({"cell-1": ("http://127.0.0.1", "tok", True)})
+
+
+def test_native_hold_requires_explicit_motor_confirmation():
+    core = Core(Reply(b'{"hold_reason":"core_hold"}'))
+    native = CoreLeaseDelivery({"cell-1": ("https://core.example", "tok", True)}, opener=core)
+    with pytest.raises(OSError, match="did not confirm HOLD"):
+        native.hold("cell-1", "stop")
+
+
+def test_read_only_status_distinguishes_gateway_owner_and_motion_readiness():
+    seen = []
+    def op(request, timeout):
+        seen.append((request.get_method(), request.full_url, request.get_header("Authorization")))
+        return Reply(b'{"workcell_id":"cell-1","arm_id":"arm_b","ready":false,"owner_session_id":"boot-1","reason":"native_motor_writer_not_enrolled"}')
+    delivery = CoreLeaseDelivery({"cell-1": ("https://core.example", "tok", True)}, opener=op)
+    row = delivery.target_status("cell-1")
+    assert seen == [("GET", "https://core.example/api/v1/arm/lease-status", "Bearer tok")]
+    assert row["transport_verified"] and row["owner_verified"] and not row["ready"]
+    assert row["reason"] == "native_motor_writer_not_enrolled"
+    assert not delivery.target_status("other")["configured"]
+
+
+def test_target_status_does_not_rejuvenate_or_expand_owner_readback(monkeypatch):
+    import fleet.server.policy_delivery as module
+
+    feedback = dict(arm_id="arm_b", basis="readonly_motor_registers", state="fresh", age_ms=1990,
+                    observed_at_monotonic_ns=10_000_000, observed_at_unix_ns=1_795_000_000_000_000_000,
+                    motors=[dict(id=i, model_number=1200, position_raw=2000, torque_enabled=0, hardware_error=0)
+                            for i in range(11, 17)])
+    reply = dict(workcell_id="b", arm_id="arm_b", owner_session_id="boot", ready=False,
+                 reason="native_motor_writer_not_enrolled", hardware_readback=feedback)
+    delivery = CoreLeaseDelivery({"b": ("https://core.example", "tok", True)},
+                                 opener=lambda *_args, **_kw: Reply(json.dumps(reply).encode()))
+    # The two hosts need not share a monotonic clock: only the HTTPS round-trip duration is added.
+    ticks = iter([10_000_000_000, 10_003_000_001, 12_000_000_000, 12_011_000_000])
+    monkeypatch.setattr(module, 'time', type("Time", (), {"monotonic_ns": lambda: next(ticks)}))
+    fresh = delivery.target_status("b")
+    assert fresh["owner_verified"] and not fresh["ready"]
+    assert fresh["hardware_readback"] == {**feedback, "age_ms": 1994}
+    stale = delivery.target_status("b")["hardware_readback"]
+    assert stale == {"arm_id": "arm_b", "basis": "readonly_motor_registers", "state": "stale"}
+
+
+def test_window_expired_during_challenge_cannot_mint_grant():
+    clock = Clock()
+    delivered = []
+    held = []
+    def challenge(cell, scope):
+        clock.now += 5.0
+        return "3" * 64
+    approvals = PolicyApprovals(monotonic=clock, deliver=lambda g: delivered.append(g),
+                                hold=lambda *args: held.append(args), challenge=challenge)
+    ident = approvals.propose(workcell_id="cell-1", proposer="a", policy_digest=DIGEST, rig_revision="r",
+                              calibration_revision="c", scope="cell-task:t:arm_b", window_s=2)["id"]
+    approvals.approve(ident, "b")
+    assert approvals.tick(ident) is None
+    assert delivered == [] and held == [("cell-1", "window_ended")]

@@ -257,7 +257,7 @@ def seed_follower_pose(motion, current: dict, target: dict, started: float, raw:
     use_sync = "read" not in vars(motion.follower) and hasattr(motion.follower, "model_ctrl_table")
     origin = dict(current)
     for _ in range(3):
-        motion.follower.sync_write("Goal_Position", current, normalize=False)
+        motion.write_goal(current)
         goals = motion.follower.sync_read("Goal_Position", motors=list(motion.active), normalize=False, num_retry=READ_RETRY)
         fresh = motion.follower.sync_read("Present_Position", motors=list(motion.active), normalize=False, num_retry=READ_RETRY)
         detail = f"initial goal readback mismatch: expected={current}, readback={goals}, fresh={fresh}"

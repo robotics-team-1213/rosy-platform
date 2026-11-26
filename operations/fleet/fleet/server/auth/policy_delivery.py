@@ -10,6 +10,9 @@ import math
 from pathlib import Path
 import ssl
 import threading
+import time
+
+from core_common.protocol.native_policy_feedback import native_policy_feedback
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
@@ -32,22 +35,28 @@ class CoreLeaseDelivery:
                 or not targets):
             raise ValueError('targets and a timeout of at most 0.25 s required')
         self._targets = {}
-        for workcell, (origin, token) in targets.items():
+        self._native = set()
+        for workcell, target in targets.items():
+            origin, token = target[:2]
+            if len(target) == 3 and target[2] is True:
+                self._native.add(workcell)
+            elif len(target) != 2:
+                raise ValueError('invalid native target setting')
             parsed = urlsplit(origin)
             loopback = parsed.hostname in ('localhost', '127.0.0.1', '::1')
             if (not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment
                     or parsed.path not in ('', '/') or parsed.scheme not in ('http', 'https')
-                    or (parsed.scheme == 'http' and not loopback) or not token or any(c.isspace() for c in token)):
+                    or (parsed.scheme == 'http' and (not loopback or workcell in self._native)) or not token or any(c.isspace() for c in token)):
                 raise ValueError(f'CORE origin and credential for {workcell} are invalid')
             self._targets[workcell] = (origin.rstrip('/'), token)
         self._timeout = timeout_s
         context = ssl.create_default_context(cafile=ca_file) if ca_file else ssl.create_default_context()
         self._open = opener or build_opener(ProxyHandler({}), _NoRedirect(), HTTPSHandler(context=context)).open
 
-    def _post(self, workcell_id, path, body):
+    def _request(self, workcell_id, path, body=None):
         origin, token = self._targets[workcell_id]  # KeyError: an unconfigured workcell fails closed
-        request = Request(origin + '/api/v1/arm/' + path, data=json.dumps(body, allow_nan=False).encode(),
-                          method='POST', headers={'Authorization': 'Bearer ' + token,
+        request = Request(origin + '/api/v1/arm/' + path, data=json.dumps(body, allow_nan=False).encode() if body is not None else None,
+                          method='POST' if body is not None else 'GET', headers={'Authorization': 'Bearer ' + token,
                                                   'Content-Type': 'application/json'})
         # urlopen's timeout is per socket operation; a trickling reply would outlast it, so the whole exchange runs
         # under one hard deadline and an overrun is abandoned (a daemon thread ends when its socket times out).
@@ -71,17 +80,54 @@ class CoreLeaseDelivery:
             raise box['error']
         return box['value']
 
+    def target_status(self, workcell_id):
+        configured = workcell_id in self._targets
+        row = dict(workcell_id=workcell_id, configured=configured, transport_verified=False,
+                   owner_verified=False, ready=False)
+        if workcell_id not in self._native:
+            return {**row, 'reason': 'native_target_not_configured'}
+        started = time.monotonic_ns()
+        try:
+            ok, reply = self._request(workcell_id, 'lease-status')
+        except (OSError, ValueError):
+            ok, reply = False, {}
+        if (not ok or not isinstance(reply, dict) or reply.get('workcell_id') != workcell_id
+                or reply.get('arm_id') not in ('arm_a', 'arm_b', 'arm_s') or type(reply.get('ready')) is not bool):
+            return {**row, 'reason': 'native_gateway_unverified'}
+        owner = isinstance(reply.get('owner_session_id'), str) and bool(reply['owner_session_id'])
+        status = {**row, 'arm_id': reply['arm_id'], 'transport_verified': True, 'owner_verified': owner,
+                  'ready': owner and reply['ready'], 'reason': reply.get('reason')}
+        if owner and reply['arm_id'] == 'arm_b' and 'hardware_readback' in reply:
+            status['hardware_readback'] = native_policy_feedback(reply['hardware_readback'],
+                                                                 transit_ns=time.monotonic_ns() - started)
+        return status
+
+    def challenge(self, workcell_id, scope):
+        if workcell_id not in self._native:
+            return None
+        ok, reply = self._request(workcell_id, 'lease-challenge', {'workcell_id': workcell_id, 'scope': scope})
+        nonce = reply.get('challenge') if ok and isinstance(reply, dict) else None
+        if not isinstance(nonce, str) or len(nonce) != 64:
+            raise OSError('CORE did not issue a native lease challenge')
+        return nonce
+
     def deliver(self, grant):
         """PolicyApprovals.deliver port: True only when CORE accepted the lease."""
         try:
-            ok, reply = self._post(grant['workcell_id'], 'lease', {k: grant[k] for k in _GRANT_KEYS})
+            payload = {k: grant[k] for k in _GRANT_KEYS}
+            if grant['workcell_id'] in self._native:
+                payload.update(scope=grant['scope'], challenge=grant['challenge'])
+            ok, reply = self._request(grant['workcell_id'], 'lease', payload)
             return ok and isinstance(reply, dict) and reply.get('accepted') is True
         except Exception:
             return False
 
     def hold(self, workcell_id, reason):
         """PolicyApprovals.hold port: raises when CORE did not confirm, so the approval retries the HOLD."""
-        ok, _ = self._post(workcell_id, 'hold', {'reason': str(reason)[:96] or 'hold'})
+        ok, reply = self._request(workcell_id, 'hold', {'reason': str(reason)[:96] or 'hold'})
+        if workcell_id in self._native:
+            ok = (ok and isinstance(reply, dict) and reply.get('accepted') is True
+                  and reply.get('motor_hold_confirmed') is True and bool(reply.get('hold_reason')))
         if not ok:
             raise OSError('CORE did not confirm HOLD')
 
@@ -120,8 +166,13 @@ class PolicyApprovalTicker:
 def targets_from_file(path):
     """JSON ``{workcell_id: {"url": ..., "token_file": ...}}``; the token stays in its own file."""
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
-    return {cell: (row['url'], Path(row['token_file']).read_text(encoding='utf-8').strip())
-            for cell, row in raw.items()}
+    targets = {}
+    for cell, row in raw.items():
+        if type(row.get('native', False)) is not bool:
+            raise ValueError('native must be boolean')
+        target = row['url'], Path(row['token_file']).read_text(encoding='utf-8').strip()
+        targets[cell] = (*target, True) if row.get('native') else target
+    return targets
 
 
 def build_policy_approvals(environ):
@@ -136,7 +187,8 @@ def build_policy_approvals(environ):
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         _LOG.exception('policy lease targets unusable; no delivery port, so no approval window can open')
         return PolicyApprovals(), None
-    approvals = PolicyApprovals(deliver=delivery.deliver, hold=delivery.hold)
+    approvals = PolicyApprovals(deliver=delivery.deliver, hold=delivery.hold, challenge=delivery.challenge,
+                                target_status=delivery.target_status)
     return approvals, PolicyApprovalTicker(approvals)
 
 

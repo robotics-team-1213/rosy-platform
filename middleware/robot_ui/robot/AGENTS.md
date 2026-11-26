@@ -38,7 +38,7 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 
 - Read DESIGN.md color-role laws and shared component catalog before UI changes (D-624). Paint belongs to shared/web tokens and components; surfaces own placement and actions. Keep gallery and responsive/accessibility checks aligned.
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Assets install through `CMakeLists.txt`. Keep filenames `index.html`, `styles.css`, `app.js`.
 - CSP forbids inline script/style. Do not add `onclick=` handlers or `<style>` blocks.
 - Talk only to `/api/v1` and `/ws/*` on the same origin.
