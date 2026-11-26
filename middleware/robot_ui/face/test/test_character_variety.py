@@ -1,4 +1,4 @@
-"""The procedural character: determinism, mood differentiation and the D-504 no-blink guard."""
+"""The procedural character: determinism, mood differentiation and the D-504 no-blink rule (eyes breathe but never shut)."""
 
 from itertools import combinations
 

@@ -94,18 +94,3 @@ def test_resting_is_a_quiet_slow_face_and_still_has_open_eyes():
     assert ImageChops.difference(normal, resting).getbbox()
     for center in (108, 212):
         assert resting.crop((center - 35, 160, center + 35, 190)).getbbox()
-
-
-def test_character_frames_are_deterministic_and_varied_across_moods():
-    from emotion.character import NAMES, frame
-
-    rendered = {}
-    for name in NAMES:
-        first = frame(name, 0, gaze_x=2.5, resting=0.0)
-        repeat = frame(name, 0, gaze_x=2.5, resting=0.0)
-        assert first.size == (320, 240) and first.tobytes() == repeat.tobytes()
-        assert ImageChops.difference(frame(name, 0), frame(name, 15)).getbbox() is not None
-        rendered[name] = first
-    for left, right in combinations(NAMES, 2):
-        assert ImageChops.difference(rendered[left], rendered[right]).getbbox() is not None
-

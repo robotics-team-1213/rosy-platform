@@ -1,7 +1,7 @@
 """Rebuild the LCD faces of one character: python make_faces.py.
 
 D-504 keeps 20 frames at 100 ms and calm motion without alarm-like flashing.
-Life is a slow breath, natural soft lid dips, dual catchlights, and distinct
+Life is a slow breath and a slow look with no blink (D-504), dual catchlights, and distinct
 brow/eye/mouth expressions. Pink on black, drawn at 3x and scaled to 320x240.
 
 The 32x24 glance test only sees thick pink (luma > 90). Operating and
@@ -29,7 +29,7 @@ EYE_R = 212
 
 def frame(name: str, phase: float, *, gaze_x: float | None = None,
           resting: float = 0.0) -> Image.Image:
-    """One face. Breath, blink, and gaze stay legible at 320x240 and 32x24."""
+    """One face. Breath and gaze stay legible at 320x240 and 32x24; the lids never blink."""
     image = Image.new("RGB", (SIZE[0] * SCALE, SIZE[1] * SCALE), BLACK)
     draw = ImageDraw.Draw(image)
     angle = 2 * pi * phase / 20
@@ -39,9 +39,6 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
     bob = (8 - 6 * resting) * breath
     look = 9 * cos(angle)
     openness = 0.90 + 0.10 * breath
-    # Smooth lid dip centered at phase 15; phase 0 and 5 remain wide open.
-    blink_dist = abs((phase % 20.0) - 15.0) / 2.0
-    blink = 0.5 * (1.0 + cos(pi * blink_dist)) if blink_dist < 1.0 else 0.0
 
     def sc(value: float) -> int:
         return int(round(value * SCALE))
@@ -67,11 +64,10 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
             ellipse((cx - rx * pulse, cy - ry * pulse, cx + rx * pulse, cy + ry * pulse), BLUSH)
 
     def open_eye(cx: float, cy: float, rx: float, ry: float, pdx: float, pdy: float,
-                 *, do_blink: float = 0.0, top_lid: float = 0.0, slant: float = 0.0,
+                 *, top_lid: float = 0.0, slant: float = 0.0,
                  sparkle: bool = False, watery: bool = False) -> None:
         cy += bob
-        raw_h = max(16.0, ry * openness)
-        height = max(6.0, raw_h * (1.0 - 0.80 * do_blink))
+        height = max(16.0, ry * openness)
         ellipse((cx - rx, cy - height, cx + rx, cy + height), PINK)
         if top_lid > 0.0 or slant != 0.0:
             # Clip upper lid gently for narrowed or slanted expressions.
@@ -83,8 +79,6 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
                 (sc(cx + rx + 2), sc(lid_y + sl)),
                 (sc(cx - rx - 2), sc(lid_y - sl)),
             ], fill=BLACK)
-        if height < 10.5:
-            return
         prx = max(7.0, min(rx * 0.30, 10.0))
         pry = min(height * 0.40, prx * 1.05)
         px = min(cx + rx - prx - 4, max(cx - rx + prx + 4, cx + (pdx if gaze_x is None else gaze_x)))
@@ -155,33 +149,31 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
         ellipse((px - 5.2, py - 4.2, px + 5.2, py + 3.6), BLACK)
         ellipse((px - 1.8, py - 2.4, px + 1.1, py + 0.2), CATCH)
 
-    def heavy_eye(cx: float, y: float, *, do_blink: float = 0.0) -> None:
+    def heavy_eye(cx: float, y: float) -> None:
         """Solid low lid. A small pupil stays in the lid; the lid is the mass."""
         cy = y + bob
-        top_offset = 11 - 5.5 * do_blink
-        ellipse((cx - 40, cy - top_offset, cx + 40, cy + 9), PINK)
-        if do_blink < 0.7:
-            px = cx + (look * 0.16 if gaze_x is None else gaze_x)
-            ellipse((px - 6, cy + 0, px + 6, cy + 8), BLACK)
-            ellipse((px - 2.0, cy + 1.2, px + 1.2, cy + 4.2), CATCH)
+        ellipse((cx - 40, cy - 11, cx + 40, cy + 9), PINK)
+        px = cx + (look * 0.16 if gaze_x is None else gaze_x)
+        ellipse((px - 6, cy + 0, px + 6, cy + 8), BLACK)
+        ellipse((px - 2.0, cy + 1.2, px + 1.2, cy + 4.2), CATCH)
 
     if name == "basic":
         stroke(bow(EYE_L, 74 + bob, 16, -3), 5.5)
         stroke(bow(EYE_R, 74 + bob, 16, -3), 5.5)
-        open_eye(EYE_L, 108, 28, 26, look * 0.45, 1, do_blink=blink)
-        open_eye(EYE_R, 108, 28, 26, look * 0.45, 1, do_blink=blink)
+        open_eye(EYE_L, 108, 28, 26, look * 0.45, 1)
+        open_eye(EYE_R, 108, 28, 26, look * 0.45, 1)
         filled_smile(36, 18, 152)
     elif name == "hello":
         cheeks(132)
         stroke(bow(EYE_L, 64 + bob, 19, -5.5), 6.5)
         stroke(bow(EYE_R, 64 + bob, 19, -5.5), 6.5)
-        open_eye(EYE_L, 100, 30, 26, -5 + look * 0.25, -2, do_blink=blink * 0.85, sparkle=True)
-        open_eye(EYE_R, 100, 30, 26, 5 + look * 0.25, -2, do_blink=blink * 0.85, sparkle=True)
+        open_eye(EYE_L, 100, 30, 26, -5 + look * 0.25, -2, sparkle=True)
+        open_eye(EYE_R, 100, 30, 26, 5 + look * 0.25, -2, sparkle=True)
         filled_smile(52, 26, 158)
     elif name == "interest":
         # Asymmetric curious brows; mouth stays independent of gaze_x for D-922 tests.
-        open_eye(EYE_L, 68, 27, 24, look * 0.55, -8, do_blink=blink * 0.7, sparkle=True)
-        open_eye(EYE_R, 68, 27, 24, look * 0.55, -8, do_blink=blink * 0.7, sparkle=True)
+        open_eye(EYE_L, 68, 27, 24, look * 0.55, -8, sparkle=True)
+        open_eye(EYE_R, 68, 27, 24, look * 0.55, -8, sparkle=True)
         stroke(bow(EYE_L, 38 + bob, 18, -6.0), 7.5)
         stroke(bow(EYE_R, 42 + bob, 18, -3.5), 7.5)
         filled_smile(34, 18, 122)
@@ -199,8 +191,8 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
         # Low lids, droopy brows, thick frown. Lower edge stays above y=224.
         stroke([(EYE_L - 22, 155 + bob), (EYE_L + 18, 159 + bob)], 6)
         stroke([(EYE_R - 18, 159 + bob), (EYE_R + 22, 155 + bob)], 6)
-        heavy_eye(EYE_L, 176, do_blink=blink * resting * 0.6)
-        heavy_eye(EYE_R, 176, do_blink=blink * resting * 0.6)
+        heavy_eye(EYE_L, 176)
+        heavy_eye(EYE_R, 176)
         heavy_frown(204, 8 - 12 * resting, 62 - 26 * resting, 7, 10)
     elif name == "sad":
         open_eye(EYE_L, 116, 24, 22, look * 0.15, 7, watery=True)
@@ -241,8 +233,8 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
     elif name == "worry":
         # Inner-raised brows over eyes that look down with a gentle nervous micro-shift.
         quiver = 0.9 * sin(2 * angle)
-        open_eye(EYE_L, 84, 28.75, 27.6, look * 0.3 + quiver, 4, do_blink=blink * 0.75)
-        open_eye(EYE_R, 84, 28.75, 27.6, look * 0.3 + quiver, 4, do_blink=blink * 0.75)
+        open_eye(EYE_L, 84, 28.75, 27.6, look * 0.3 + quiver, 4)
+        open_eye(EYE_R, 84, 28.75, 27.6, look * 0.3 + quiver, 4)
         stroke([(EYE_L - 24, 60 + bob), (EYE_L + 20, 46 + bob)], 12.8)
         stroke([(EYE_R - 20, 46 + bob), (EYE_R + 24, 60 + bob)], 12.8)
         stroke(bow(160, 172 + bob, 24, -8), 19.2)
