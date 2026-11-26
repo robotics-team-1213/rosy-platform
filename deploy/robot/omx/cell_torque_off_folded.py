@@ -18,6 +18,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import cell_incident_release  # noqa: E402
 from cell_job_peer_health import calibrated_positions_folded  # noqa: E402
 from record_session_baseline import BaselineMismatch  # noqa: E402
 
@@ -131,6 +132,12 @@ def main(argv=None, **inject) -> int:
                       out_dir=args.out_dir / f"baseline-{args.arm}-{int(time.time())}", result=out)
         out.update(ok=True, reason_code=None)
         code = 0
+        # shortcut: injected runs skip the release; production calls main() bare
+        if (hook := inject.get("release", None if inject else cell_incident_release.after_torque_off)) is not None:
+            try:
+                out["incident_release"] = hook(args.arm)
+            except (SystemExit, Exception) as exc:  # the torque-off result above stands either way
+                out["incident_release"] = {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:120]}"}
     except Refused as exc:
         out.update(ok=False, reason_code=exc.code, error=str(exc))
         code = exc.exit_code
