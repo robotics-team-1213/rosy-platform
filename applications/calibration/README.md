@@ -1,6 +1,6 @@
 # ROSY Calibration
 
-셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 실측 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
+셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 보정 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
 
 ## 경계
 
@@ -65,7 +65,7 @@ python3 deploy/robot/omx/cell_checkerboard.py intrinsics \
 - 세션 잠금은 팔마다다(`joint_tune.session_lock(arm)`, `record_session --arm`).
 - 움직이기 전에 경로 점검(`cell_corridor`)과 통로 예약(`cell_space`)을 거친다.
 
-## 실측 요청
+## 보정 요청
 
 사람만 확인할 수 있는 것(줄자 거리, 감독 시험으로 보는 자세)은 엔진 `deploy/robot/omx/cell_requests.py`가 요청으로 연다([D-951 덧붙임 2026-11-09](../../docs/adr/D-951-rosy-calibration-application.md)). 요청은 후보마다 예측값을 적고, 사람의 답은 어느 후보를 지지하는지만 정한다. 값을 직접 바꾸지 않는다.
 
@@ -81,7 +81,7 @@ python3 deploy/robot/omx/cell_requests.py answer <id> --value <mm> --by <이름>
 
 ## 화면
 
-실측 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
+보정 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
 
 ```
 python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/cell-requests --account-config <receiver.json> --port 8776

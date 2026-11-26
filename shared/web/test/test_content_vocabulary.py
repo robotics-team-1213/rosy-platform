@@ -197,3 +197,29 @@ def test_screen_head_modules_never_write():
     offenders = [path for path in files if WRITE_REQUEST.search((REPO / path).read_text(encoding="utf-8"))]
     assert offenders == [], f"화면 머리 모듈이 쓰기 요청을 보낸다: {offenders}"
     assert WRITE_REQUEST.search("request(path, {method: 'POST'})") and WRITE_REQUEST.search("api.post(x)")
+
+
+#: 2026-11-15 사용자 결정(R2-19, term-fleet.md): 화면에서 폐기한 이름. `카메라 설치·보정`은 작업 이름이라 남는다.
+RETIRED_WORDS = re.compile(r"실측 요청|실측 교정|(?<!카메라 )설치·보정")
+
+
+def retired_word_hits(text: str) -> list[str]:
+    return [match.group(0) for match in RETIRED_WORDS.finditer(text)]
+
+
+def test_product_surfaces_do_not_show_retired_screen_names():
+    """'실측 요청'→'보정 요청', '설치·보정'→'설치', '실측 교정'→'보정'. 제품 화면(HTML·JS·CSS)에 0건이다."""
+    offenders = []
+    for row in registry.load(REPO):
+        path = row.get("path")
+        if not isinstance(path, str):
+            continue
+        for suffix in (".html", ".js", ".css"):
+            for page in registry._pages(REPO, path, suffix):
+                if "/test/" in page.as_posix():
+                    continue
+                hits = retired_word_hits(page.read_text(encoding="utf-8", errors="replace"))
+                offenders += [f"{page.relative_to(REPO).as_posix()}: {hit}" for hit in hits]
+    assert offenders == [], f"폐기한 화면 이름이 남았다: {sorted(set(offenders))}"
+    assert retired_word_hits("설치·보정 · 실측 요청 · 실측 교정") == ["설치·보정", "실측 요청", "실측 교정"]
+    assert retired_word_hits("카메라 설치·보정 · 보정 요청 · 실측 카메라 교정") == [], "허용 이름까지 막는다"

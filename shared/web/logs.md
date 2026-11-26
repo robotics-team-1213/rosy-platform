@@ -1249,3 +1249,11 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-26 · uncommitted · 지도·용어 일관성(UI 패널 2라운드 합의 항목)
+
+- 변경: Fleet 관제 경로의 프록시·Fleet·Vision 끊김을 crit→warn(대열 relay 끊김 crit 유지). 화면 이름 '실측 요청'→'보정 요청'(Calibration), '설치·보정'→'설치', '실측 교정'→'보정'(Fleet; '카메라 설치·보정'은 유지). Calibration 원점 축 화살표를 상태색에서 --ink-quiet로, STALE/FRESH 문구를 EVIDENCE_LABEL(지연·최신)로. World 3D aria 팔 A 색을 실제(파란색)로. '무마커 추론'→'무마커 추정'. 관제 지도 장소 목록이 이름 없는 장소를 id로 적는다. test_content_vocabulary.py에 폐기 이름 0건 게이트 추가.
+- 증거: node --test site-path·tracking-layer·site-path-place 23 passed, harness lint 0 error; 원격 pytest·브라우저는 PR 본문.
+- gate 변화: 없음
+- 결정: 근거 D:/DevTemp/ui-map-panel-1126/round2-*.md, 결정 정본 term-fleet.md(R2-19)
+- 교훈: 없음

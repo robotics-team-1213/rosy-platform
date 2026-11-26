@@ -118,7 +118,7 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
 def test_every_area_document_heads_the_workspace_with_one_pathbar():
     """D-926 2 — 경로 줄이 문서 제목(h1)과 현재 화면(strong)을 본문 머리에 보인다. h1은 문서에 이 하나뿐이다."""
     docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
-            "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
+            "install.html": ("설치", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
             "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">팔 관측·사건</strong>'),
             "policy.html": ("학습 정책 승인", "<strong>정책</strong>")}

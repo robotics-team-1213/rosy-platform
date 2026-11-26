@@ -1,6 +1,7 @@
 import { addDtDd, renderInspector } from "./inspector.js";
 export { addDtDd };
 import "/common/ui.js";
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { readFixtureFrame, fixtureSummary } from "./fixture-frame.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests, requestHash } from "./requests.js";
@@ -258,7 +259,7 @@ function renderRobotAndBias(profile) {
   addDtDd(dl, "hold 상태", hold.detail);
   if (live.tcp) {
     addDtDd(dl, "Live TCP", `[${live.tcp.x}, ${live.tcp.y}, ${live.tcp.z}] m · yaw ${live.tcp.yaw_deg}°`);
-    addDtDd(dl, "수집 시각 / Chunk", `${live.stale ? "STALE" : "FRESH"} (${live.age_s ?? "?"}s) · ${live.chunk || "-"}`);
+    addDtDd(dl, "수집 시각 / Chunk", `${live.stale ? EVIDENCE_LABEL.delayed : EVIDENCE_LABEL.fresh} (${live.age_s ?? "?"}s) · ${live.chunk || "-"}`);
   } else {
     addDtDd(dl, "Live TCP", "live.json 없음 / 파싱 불가");
   }
@@ -344,7 +345,7 @@ function renderRobotAndBias(profile) {
     }
     const tdSha = document.createElement("td");
     tdSha.setAttribute("data-level", r.stale_map ? "warn" : "ok");
-    tdSha.textContent = `${r.map_sha || "-"} (${r.stale_map ? "stale" : "fresh"})`;
+    tdSha.textContent = `${r.map_sha || "-"} (${r.stale_map ? EVIDENCE_LABEL.delayed : EVIDENCE_LABEL.fresh})`;
     tr.appendChild(tdSha);
     tr.addEventListener("click", () => {
       state.selectedKey = `bias:${r.site}`;
