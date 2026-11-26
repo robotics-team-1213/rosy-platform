@@ -15,6 +15,13 @@ export function dockPlanIssues(parking) {
   return reasons?.length ? ` · 계획 시 ${parking.bay_id} 도킹 확인 결과 · ${reasons.map(r => DOCK_PREREQUISITE[r] || r).join(' · ')}` : '';
 }
 
+const PEER_REASON_LABEL = {
+  YIELDING: '경로 앞 정차 기체 대기', ROUTE_CONFLICT: '경로 겹침 대기',
+  LOCALIZATION_UNTRUSTED: '상대 위치 확인 대기', MAP_FRAME_MISMATCH: '지도 좌표계 확인 대기'};
+const WAIT_PREFIX_STATE = {
+  dispatched: '대기 지점 이동 중', at_wait_place: '대기 지점 정차 중',
+  waiting_stop_confirmation: '대기 지점 정지 확인 중'};
+
 export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
   if (trip?.hold?.reason === 'fleet_hold') {
     return trip.hold.stop?.confirmed ? '일시정지 · 정지 확인됨' : '일시정지 · 기체 정지 응답 확인 중';
@@ -29,7 +36,17 @@ export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fl
   if (peer) {
     const ids = peer.waiting_on?.length ? peer.waiting_on : [peer.blocked_by].filter(Boolean);
     const stage = peer.stage === 'pre_dispatch_peer_check' && peer.dispatch_attempted === false ? ' · 주행 명령 전송 전' : '';
-    return `통행 대기${stage} · 명령 대상 ${trip.robot_id}${ids.length ? ' · 안전거리 확인 대상 ' + ids.join(', ') : ''} · 자동 재확인 중` + dockPlanIssues(parking);
+    const reason = peer.reason ? ` · ${PEER_REASON_LABEL[peer.reason] || peer.reason}` : '';
+    const wp = trip?.detail?.wait_prefix;
+    const wpText = wp?.place && WAIT_PREFIX_STATE[wp.state] ? ` · ${wp.place} ${WAIT_PREFIX_STATE[wp.state]}` : '';
+    return `통행 대기${stage} · 명령 대상 ${trip.robot_id}${ids.length ? ' · 안전거리 확인 대상 ' + ids.join(', ') : ''}${reason}${wpText} · 자동 재확인 중` + dockPlanIssues(parking);
+  }
+  const prob = trip?.detail?.nav2_problem;
+  if (prob?.state === 'retry_wait') {
+    return `Nav2 경로 재시도 대기 (${prob.attempt}/${prob.max_retries}) · 자동 재확인 중`;
+  }
+  if (prob?.state === 'held' || trip?.hold?.reason === 'nav2_problem') {
+    return `Nav2 주행 문제 정지 · 확인 후 재개 대기${prob?.code ? ` (${prob.code})` : ''}`;
   }
   return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
 }
