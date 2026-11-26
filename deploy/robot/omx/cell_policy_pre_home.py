@@ -64,3 +64,20 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
             except Exception:
                 pass
         return None, {"result": "refused", "at": 0, "reason": "START_POSE_OFF_HOME", "parked": False}
+
+
+def trim_backtrack_prefix(chunk, start, *, tol: float = 3.0, joints: int = 6):
+    """Drop a leading ACT backtrack prefix when arr[0] jumps off start and a later row returns closer."""
+    import numpy as np
+
+    arr = np.asarray(chunk, dtype=float)
+    start_arr = np.asarray(start, dtype=float)
+    if (arr.ndim != 2 or arr.shape[1] != joints or len(arr) < 2
+            or start_arr.ndim != 1 or len(start_arr) < 5
+            or not np.isfinite(arr).all() or not np.isfinite(start_arr[:5]).all()):
+        return arr
+    dists = np.abs(arr[:, :5] - start_arr[:5]).max(axis=1)
+    best = int(np.argmin(dists))
+    if best > 0 and dists[0] > tol and dists[best] < dists[0] - tol:
+        return arr[best:]
+    return arr
