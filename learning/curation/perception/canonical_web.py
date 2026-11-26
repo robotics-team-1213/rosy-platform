@@ -173,6 +173,15 @@ def post(handler, path: str, body: dict, center, accounts=None) -> bool:
             except KeyError:
                 handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
             return True
+        if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r')/serve', path):
+            if body:
+                raise ValueError('서빙 요청 본문은 비어 있어야 합니다.')
+            from canonical_serve import serve_run
+            try:
+                handler.send(serve_run(service, match[1]))
+            except KeyError:
+                handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
+            return True
         if match := re.fullmatch(PREFIX + r'/peers/(' + _ID_RE + r')/refresh', path):
             if body:
                 raise ValueError('피어 새로고침 본문은 비어 있어야 합니다.')

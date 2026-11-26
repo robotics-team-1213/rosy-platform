@@ -320,7 +320,22 @@ function renderRuns() {
   syncCancel();
 }
 
+function syncServe() {
+  const done = selectedRun?.kind === 'train_stage' && selectedRun.status === 'succeeded';
+  $('canon-serve').hidden = !done;
+  const reason = !snap?.act_serve ? 'ACT 서빙 서버가 이 작업대에 설정되지 않았습니다.'
+    : !manager ? '서빙에 올리기는 프로젝트 관리 권한이 필요합니다.' : busy ? '요청 처리 중입니다.' : '';
+  setOff($('canon-serve'), !done || Boolean(reason), reason);
+}
+
+function serveText(r) {
+  if (r.ok) return `서빙에 올렸습니다 · ${r.arm_id} · sha ${r.sha256.slice(0, 12)} (이전 ${String(r.reply.previous_revision).slice(0, 12)}) · `
+    + (r.reply.persisted ? '재시작 뒤에도 유지됩니다.' : `재시작하면 이전 모델로 돌아갑니다: ${r.reply.reason}`);
+  return `서빙에 올리지 못했습니다. 기존 모델을 그대로 씁니다 · ${r.error || r.reply?.error || 'HTTP ' + r.http_status}`;
+}
+
 function syncCancel() {
+  syncServe();
   const active = selectedRun && (selectedRun.status === 'running' || selectedRun.status === 'stopping');
   const reason = !snap?.configured ? '실행기가 설정되지 않았습니다.'
     : !manager ? '중지는 프로젝트 관리 권한이 필요합니다.'
@@ -330,6 +345,7 @@ function syncCancel() {
 }
 
 async function openRun(rid) {
+  if (rid !== selectedRunId) $('canon-serve-result').hidden = true;
   selectedRunId = rid;
   selectedRun = await api('/runs/' + rid);
   $('canon-run-detail').hidden = false;
@@ -439,6 +455,17 @@ $('canon-job-cancel').addEventListener('click', () => work(async () => {
   if (!selectedRunId) return;
   selectedRun = await api(`/jobs/${selectedRunId}/cancel`, {});
   await loadSnapshot();
+}));
+$('canon-serve').addEventListener('click', () => work(async () => {
+  if (!selectedRunId) return;
+  const out = $('canon-serve-result');
+  out.hidden = false;
+  out.textContent = '체크포인트를 확인하고 ACT 서버에 올리는 중입니다.';
+  try {
+    out.textContent = serveText(await api(`/runs/${selectedRunId}/serve`, {}));
+  } catch (err) {
+    out.textContent = `서빙에 올리지 못했습니다: ${err.message}`;
+  }
 }));
 $('canon-job-form').addEventListener('submit', (e) => {
   e.preventDefault();
