@@ -261,8 +261,9 @@ class Jobs:
             for name in ("pinky", "belt"):
                 site = (config.get("sites") or {}).get(name)
                 xy = site_point(name, site) if isinstance(site, dict) else None
-                if xy:
-                    targets.append(f"{name}:{xy[0]},{xy[1]}")
+                if xy is None:
+                    return 422, {"error": f"S팔 공급 경로의 {name} 중심 XY를 검증해 등록하세요."}
+                targets.append(f"{name}:{xy[0]},{xy[1]}")
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
         if targets:

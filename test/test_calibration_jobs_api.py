@@ -114,16 +114,21 @@ def test_route_check_binds_the_executor_config_and_arm_scoped_slots(screen):
 def test_supply_check_binds_its_own_profile_targets_and_provenance(screen):
     url, _, calls, jobs, cell = screen
     path = cell.parent / "supply.json"
-    path.write_text(json.dumps({"arm_id": "arm_s", "sites": {"pinky": {"place": [0.2, 0.1]}, "belt": {}}}))
+    config = {"arm_id": "arm_s", "sites": {"pinky": {"place": [0.2, 0.1]}, "belt": {}}}
+    path.write_text(json.dumps(config))
     jobs.arms["arm_s"] = {"config": str(path)}
     body = {"arm": "arm_s", "step": "check", "supply_route": True}
     endpoint = "/api/calibration/jobs"
     assert post(url, endpoint, {**body, "arm": "arm_b"})[0] == 422
     assert post(url, endpoint, {**body, "targets": ["pinky:1,2"]})[0] == 422
+    status, missing = post(url, endpoint, body)
+    assert status == 422 and "belt" in missing["error"] and not calls["spawn"]
+    config["sites"]["belt"]["place"] = [0.1, -0.1]
+    path.write_text(json.dumps(config))
     status, job = post(url, endpoint, body)
     assert status == 202 and job["supply_route"] and job["route_config"] == path.name
-    assert job["targets"] == ["pinky:0.2,0.1"] and "route" not in job
-    assert calls["spawn"][0][0][-3:] == ["check", "--targets", "pinky:0.2,0.1"]
+    assert job["targets"] == ["pinky:0.2,0.1", "belt:0.1,-0.1"] and "route" not in job
+    assert calls["spawn"][0][0][-4:] == ["check", "--targets", *job["targets"]]
     for thread in jobs.threads:
         thread.join()
 
