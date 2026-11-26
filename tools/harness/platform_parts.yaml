@@ -1493,6 +1493,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_task_live_executor.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_incident_release.py
   - deploy/robot/omx/cell_auto_pick.py
   - deploy/robot/omx/cell_return_held.py
   - deploy/robot/omx/cell_cycle.py
@@ -1537,6 +1538,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_spec.py
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
+  - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_media_jobs.py

@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 # %h/.config/rosy/omx-act-http.env (0600) sets ROSY_ACT_HTTP_PYTHON, ROSY_ACT_HTTP_SERVER, ROSY_ACT_HTTP_ARGS.
+# Model swap without ssh: add "--load-root <checkpoint root> --env-file %h/.config/rosy/omx-act-http.env" to
+# ROSY_ACT_HTTP_ARGS; POST /arms/{arm}/load then rewrites that arm's --arm token only after a successful load.
 EnvironmentFile=%h/.config/rosy/omx-act-http.env
 ExecStart=/bin/bash -c 'exec "$ROSY_ACT_HTTP_PYTHON" "$ROSY_ACT_HTTP_SERVER" $ROSY_ACT_HTTP_ARGS'
 Restart=on-failure

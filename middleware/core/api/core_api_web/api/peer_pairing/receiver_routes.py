@@ -150,9 +150,10 @@ async def revoke(request: Request, relationship_id: str = Path(pattern=r'^[A-Za-
 def admit(request, candidate, *, identity=False):
     try:
         candidate.admit_proof(request.client.host if request.client else 'unknown', identity=identity)
-    except ValueError:
+    except ValueError as exc:
+        wait = max(1, min(60, int(getattr(exc, 'retry_after_s', 60))))
         detail = 'anonymous identity rate limit reached' if identity else 'anonymous proof rate limit reached'
-        raise ReasonError(429, 'RATE_LIMITED', detail, {'retry_after_s': 60}, {'Retry-After': '60'}) from None
+        raise ReasonError(429, 'RATE_LIMITED', detail, {'retry_after_s': wait}, {'Retry-After': str(wait)}) from None
 
 
 def proof_service(request, *, identity=False):

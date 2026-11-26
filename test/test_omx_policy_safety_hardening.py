@@ -237,8 +237,8 @@ def test_off_home_refusal_latches_hold_and_blocks_owner_idle_park_and_retry(tmp_
     monkeypatch.setattr(timing.time, "sleep", lambda _s: None)
     monkeypatch.setattr(paced.time, "sleep", lambda _s: None)
     home = [0.0, -58.0, 50.0, 50.0, -5.0, 49.0]
-    sag = [0.0, -58.0, 55.0, 50.0, -5.0, 49.0]
-    sag_pre = [list(sag), [0.0, -58.0, 52.5, 50.0, -5.0, 49.0], list(home)]
+    sag = [0.0, -30.0, 50.0, 50.0, -5.0, 49.0]  # not folded (a folded rest ends without a hold, 11-26)
+    sag_pre = [list(sag), [0.0, -44.0, 50.0, 50.0, -5.0, 49.0], list(home)]
     base_lib = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 46.6,
                 "chunks": {"home": [home], "reach": [home, [20, -20, 30, 40, -5, 60]]}}
     pre_lib = {**base_lib, "chunks": {**base_lib["chunks"], "presettle": sag_pre}}
@@ -436,7 +436,7 @@ def test_r13_hardware_jaw_telemetry_and_chunk0_post_inference_recheck(tmp_path, 
     assert timing.empty_gripper_ok(rep_hw[-1], now=clk[0]) is False
     assert timing.empty_gripper_ok({**rep_hw[-1], "health": {"current_ma": [0] * 6}, "health_t": clk[0] - 2.0, "t": clk[0]}, now=clk[0]) is False
 
-    # 2: Hardware initial/sample-2 `state` lacking fresh `health`/`health_t` OR high jaw current refuses with confirmed HOLD before ACT.
+    # 2: Hardware initial/sample-2 `state` lacking fresh `health`/`health_t` OR high jaw current refuses before ACT; at home, fault-free, no command sent, so no HOLD.
     bad_hw_cases = (
         {"holding": False, "operating_context": ctx},  # health=None
         {"holding": False, "operating_context": ctx, "health": {"current_ma": [0] * 6}},  # cached, no health_t
@@ -458,7 +458,7 @@ def test_r13_hardware_jaw_telemetry_and_chunk0_post_inference_recheck(tmp_path, 
                 return np.zeros((4, 4, 3), np.uint8)
 
         res_b = drive.run_episode(BadHwCell(), pol, ev_lib, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
-        assert res_b["result"] == "refused" and cmds_b == ["state", "human-hold"]
+        assert res_b["result"] == "refused" and cmds_b == ["state"]
 
     # 3: Chunk-0 post-inference `auth_status` recheck catches holding=True, 150 mA, missing hardware health, AND off-home drift BEFORE load/authorize (with and without authorize).
     good_hw = {"holding": False, "operating_context": ctx, "t": 100.0, "health_t": 100.0, "health": {"current_ma": [0] * 5 + [10]}}

@@ -20,14 +20,52 @@ def finite_float(val: Any) -> float | None:
     return num if math.isfinite(num) else None
 
 
-def live_folded(row: dict[str, Any]) -> bool | None:
+# Per-joint slack around the arm's own park/home/standby poses: pan, lift, elbow, wrist flex, wrist roll (the jaw does not count).
+FOLD_TOL = (20.0, 10.0, 15.0, 12.0, 20.0)  # elbow is wider: a limp arm sags there first (11-26 pose, test_omx_policy_drive)
+FOLD_POSES = ("park", "home", "standby")
+
+
+def _poses(source: Any) -> list[list[float]]:
+    """Fold poses from a chunk library (chunks.park/home/standby: last frame) or a cell config (plan.home/park: one pose or frames)."""
+    if not isinstance(source, dict):
+        return []
+    if isinstance(source.get("chunks"), dict):
+        entries = [source["chunks"].get(n) for n in FOLD_POSES]
+    else:
+        plan = source.get("plan") if isinstance(source.get("plan"), dict) else source
+        entries = [plan.get(n) for n in FOLD_POSES]
+    out = []
+    for ent in entries:
+        pose = ent[-1] if isinstance(ent, list) and ent and isinstance(ent[-1], list) else ent
+        if isinstance(pose, list) and len(pose) >= 5 and all(finite_float(v) is not None for v in pose[:5]):
+            out.append([float(v) for v in pose[:5]])
+    return out
+
+
+def fold_ranges(*sources: Any) -> list[tuple[float, float]] | None:
+    """Per-joint (lo, hi) allowed while folded, from the arm's own library/config; None means no usable pose (coarse rule)."""
+    poses = [p for src in sources for p in _poses(src)]
+    if not poses:
+        return None
+    return [(min(p[i] for p in poses) - FOLD_TOL[i], max(p[i] for p in poses) + FOLD_TOL[i]) for i in range(5)]
+
+
+def fold_basis(*sources: Any) -> str:
+    return "calibrated" if fold_ranges(*sources) else "coarse"
+
+
+def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
+    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range."""
     if isinstance(row.get("folded"), bool):
         return row["folded"]
     st = row.get("state")
     if isinstance(st, list) and len(st) >= 6 and all(
         isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) for v in st[:6]
     ):
-        return float(st[1]) <= -50.0 and float(st[2]) >= 45.0
+        if not (float(st[1]) <= -50.0 and float(st[2]) >= 45.0):
+            return False
+        ranges = fold_ranges(*sources)
+        return ranges is None or all(lo <= float(st[i]) <= hi for i, (lo, hi) in enumerate(ranges))
     return None
 
 
@@ -53,8 +91,11 @@ def passive_motor_health_folded(
     max_age_s: float,
     read_json_fn: Callable[[Path], dict[str, Any] | None],
     calibration_dir: Path | None = None,
+    gripper_max: float | None = None,
+    library: Any = None,
 ) -> bool:
-    """True only when a fresh passive motor-health snapshot proves peer is torque-off, fault-free, and folded."""
+    """True only when a fresh passive motor-health snapshot proves peer is torque-off, fault-free, and folded
+    (and, with `gripper_max`, the jaws shut at or below it)."""
     if health_dir is None:
         return False
     doc = read_json_fn(health_dir / f"{peer}.json")
@@ -81,35 +122,60 @@ def passive_motor_health_folded(
     if any(m.get("torque_enabled") is not False or m.get("fault") is not False
            or type(m.get("hardware_error")) is not int or m["hardware_error"] != 0 for m in motors):
         return False
-    return calibrated_positions_folded([m.get("present_raw") for m in motors], cal)
+    pose = calibrated_pose([m.get("present_raw") for m in motors], cal)
+    return (pose is not None and live_folded({"state": pose}, library) is True
+            and (gripper_max is None or pose[5] <= gripper_max))
 
 
-def calibrated_positions_folded(positions, cal) -> bool:
+def calibrated_positions_folded(positions, cal, library: Any = None) -> bool:
+    pose = calibrated_pose(positions, cal)
+    return pose is not None and live_folded({"state": pose}, library) is True
+
+
+def calibrated_pose(positions, cal) -> list[float] | None:
+    """The six raw readings as joint values (degrees-like for joints, 0..100 for the gripper), or None when unusable."""
     if len(positions) != 6 or not isinstance(cal, dict):
-        return False
+        return None
     pose: list[float] = []
     for idx, (jname, position) in enumerate(zip(FOLLOWER_JOINTS, positions)):
         jcal = cal.get(jname)
         if not isinstance(jcal, dict):
-            return False
+            return None
         if "id" in jcal and (type(jcal["id"]) is not int or jcal["id"] != 11 + idx):
-            return False
+            return None
         if type(jcal.get("drive_mode")) is not int or jcal["drive_mode"] != 0:
-            return False
+            return None
         if type(jcal.get("homing_offset")) is not int or jcal["homing_offset"] != 0:
-            return False
+            return None
         lo, hi = jcal.get("range_min"), jcal.get("range_max")
         if type(lo) is not int or type(hi) is not int or not (0 <= lo < hi <= 4095):
-            return False
+            return None
         rval = finite_float(position)
         if rval is None or not 0.0 <= rval <= 4095.0:
-            return False
+            return None
         frac = (rval - lo) / (hi - lo)
         val = frac * (100.0 if idx == 5 else 200.0) - (0.0 if idx == 5 else 100.0)
         if not math.isfinite(val):
-            return False
+            return None
         pose.append(val)
-    return live_folded({"state": pose}) is True
+    return pose
+
+
+# pivot.grip_closed 50.5 + the grip_to tolerance 1.5: open jaws (56-62) or jaws stopped on an object stay latched
+LATCH_GRIPPER_SHUT_MAX = 52.0
+
+
+def stale_latch_superseded(arm: str, live: dict[str, Any] | None, *, locked: bool, leased: bool, max_age_s: float,
+                           health_dir: Path | None, read_json_fn: Callable[[Path], dict[str, Any] | None],
+                           calibration_dir: Path | None = None) -> bool:
+    """A human-hold latch left in live.json by a runner that is gone: no session lock or lease, the row is stale, and a
+    fresh passive motor-health read shows the arm torque-off, fault-free and folded. The held torque the latch guarded
+    no longer exists, and a new runner starts unlatched (2026-11-27 arm_b: a USB loss one second after the latch left it
+    blocking the whole A/B cell, with no incident for the console to clear)."""
+    return (isinstance(live, dict) and live.get("human_hold_latched") is True and not locked and not leased
+            and is_stale_row(live, max_age_s)
+            and passive_motor_health_folded(arm, health_dir, max_age_s=max_age_s, read_json_fn=read_json_fn,
+                                            calibration_dir=calibration_dir, gripper_max=LATCH_GRIPPER_SHUT_MAX))
 
 
 def is_stale_row(row: dict[str, Any], max_age_s: float) -> bool:

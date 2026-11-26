@@ -30,8 +30,10 @@ except ImportError:
     from learning.training.omx.act_gpu_lock import gpu_training_status
 try:
     import act_visoff_runtime as visoff
+    from act_policy_http_load import LOAD_PATH, handle_load, read_json_body
 except ImportError:
     from learning.training.omx import act_visoff_runtime as visoff
+    from learning.training.omx.act_policy_http_load import LOAD_PATH, handle_load, read_json_body
 
 SCHEMA = "rosy.omx-act-http.v1"
 WEIGHTS = "model.safetensors"
@@ -211,6 +213,23 @@ def _load_lerobot_arm(
     return predict
 
 
+def build_entry(arm_id: str, pdir: Path, revision: str, *, device: str, loader: Any = None, visoff_builder: Any = None) -> ArmEntry:
+    """Verify a checkpoint (dir, pinned weights sha256, ACT config) and load it; startup and /arms/{arm}/load share this."""
+    if not pdir.is_dir():
+        raise ValueError(f"policy_dir {pdir} does not exist")
+    weights = pdir / WEIGHTS
+    if not weights.is_file():
+        raise ValueError(f"missing {weights}")
+    actual = file_sha256(weights)
+    if actual != revision:
+        raise ValueError(f"{arm_id}: {WEIGHTS} sha256 {actual} != pinned {revision}")
+    views, _dim, goal_size, n_steps, chunk_sz = read_policy_spec(pdir)
+    n_steps = int(spec["n_action_steps"]) if (spec := visoff.read_visoff_spec(pdir, chunk_size=chunk_sz) or {}) and spec.get("n_action_steps") is not None else n_steps
+    predict = (loader or _load_lerobot_arm)(pdir, views, n_steps, goal_size, device)
+    predict, visoff_meta = visoff.visoff_entry(pdir, spec, predict, n_steps, device, loader is None, visoff_builder)
+    return ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict, visoff_meta=visoff_meta)
+
+
 class PolicyRegistry:
     """Thread-safe pinned multi-arm ACT inference registry."""
 
@@ -218,6 +237,7 @@ class PolicyRegistry:
         self,
         entries: Sequence[ArmEntry],
         *,
+        device: str = "cpu", loader: Any = None, visoff_builder: Any = None,
         gpu_lock_file: Path | None = None,
         jobs_dir: Path | None = None,
         reject_when_training_busy: bool = False,
@@ -231,6 +251,7 @@ class PolicyRegistry:
                 raise ValueError(f"duplicate arm_id {entry.arm_id!r}")
             self._arms[entry.arm_id] = entry
         self.infer_lock = threading.Lock()
+        self._load_args = {"device": device, "loader": loader, "visoff_builder": visoff_builder}
         self._reject_when_training_busy = bool(reject_when_training_busy)
         self._gpu_status_fn = (
             gpu_status_fn
@@ -251,30 +272,21 @@ class PolicyRegistry:
         reject_when_training_busy: bool = False,
         gpu_status_fn: Callable[[], tuple[bool, str | None]] | None = None,
     ) -> "PolicyRegistry":
-        load_fn = loader or _load_lerobot_arm
-        entries: list[ArmEntry] = []
-        for raw in specs:
-            arm_id, pdir, revision = parse_arm_spec(raw)
-            if not pdir.is_dir():
-                raise ValueError(f"policy_dir {pdir} does not exist")
-            weights = pdir / WEIGHTS
-            if not weights.is_file():
-                raise ValueError(f"missing {weights}")
-            actual = file_sha256(weights)
-            if actual != revision:
-                raise ValueError(f"{arm_id}: {WEIGHTS} sha256 {actual} != pinned {revision}")
-            views, _dim, goal_size, n_steps, chunk_sz = read_policy_spec(pdir)
-            n_steps = int(spec["n_action_steps"]) if (spec := visoff.read_visoff_spec(pdir, chunk_size=chunk_sz) or {}) and spec.get("n_action_steps") is not None else n_steps
-            predict = load_fn(pdir, views, n_steps, goal_size, device)
-            predict, visoff_meta = visoff.visoff_entry(pdir, spec, predict, n_steps, device, loader is None, visoff_builder)
-            entries.append(ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict, visoff_meta=visoff_meta))
-        return cls(
-            entries,
-            gpu_lock_file=gpu_lock_file,
-            jobs_dir=jobs_dir,
-            reject_when_training_busy=reject_when_training_busy,
-            gpu_status_fn=gpu_status_fn,
-        )
+        entries = [build_entry(*parse_arm_spec(raw), device=device, loader=loader, visoff_builder=visoff_builder) for raw in specs]
+        return cls(entries, device=device, loader=loader, visoff_builder=visoff_builder, gpu_lock_file=gpu_lock_file,
+                   jobs_dir=jobs_dir, reject_when_training_busy=reject_when_training_busy, gpu_status_fn=gpu_status_fn)
+
+    def revision_of(self, arm_id: str) -> str | None:
+        return entry.revision if (entry := self._arms.get(arm_id)) else None
+
+    def load_entry(self, arm_id: str, pdir: Path, revision: str) -> ArmEntry:
+        return build_entry(arm_id, pdir, revision, **self._load_args)
+
+    def swap(self, entry: ArmEntry) -> ArmEntry:
+        """Replace one arm by rebinding a copied dict, so /infer and /health always see one whole mapping."""
+        previous = self._arms[entry.arm_id]
+        self._arms = {**self._arms, entry.arm_id: entry}
+        return previous
 
     def _training_status(self) -> tuple[bool, str | None]:
         return (False, None) if self._gpu_status_fn is None else self._gpu_status_fn()
@@ -286,6 +298,7 @@ class PolicyRegistry:
             "arms": {
                 arm_id: {
                     "revision": e.revision,
+                    "dir": str(e.policy_dir),
                     "views": {role: [hw[0], hw[1]] for role, hw in e.views.items()},
                     "n_action_steps": e.n_action_steps,
                     "chunk_size": e.chunk_size,
@@ -307,9 +320,9 @@ class PolicyRegistry:
         if req_id is not None and (not isinstance(req_id, str) or not (1 <= len(req_id) <= 128) or not req_id.strip()):
             return 400, {"ok": False, "error": "request_id must be a non-empty string (<=128 chars)"}
         arm_id = req.get("arm_id")
-        if not isinstance(arm_id, str) or arm_id not in self._arms:
+        entry = self._arms.get(arm_id) if isinstance(arm_id, str) else None
+        if entry is None:
             return 404, {"ok": False, "error": f"unknown arm_id {arm_id!r}"}
-        entry = self._arms[arm_id]
 
         revision = req.get("revision")
         if revision != entry.revision:
@@ -400,6 +413,8 @@ def make_server(
     *,
     token: str | None = None,
     max_body_bytes: int = MAX_BODY_BYTES,
+    load_roots: Sequence[Path] = (),
+    env_file: Path | None = None,
 ) -> ThreadingHTTPServer:
     """Create a multi-threaded HTTP server enforcing Bearer auth off-loopback and bounded bodies."""
     if token is not None and (not isinstance(token, str) or not token.strip()):
@@ -407,6 +422,7 @@ def make_server(
     if bind not in _LOOPBACK_HOSTS and token is None:
         raise ValueError(f"refusing unauthenticated bind on non-loopback host {bind!r}")
     expected_token = token.encode("utf-8") if token is not None else None
+    roots = [Path(r).expanduser().resolve() for r in load_roots]
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -442,7 +458,8 @@ def make_server(
             self._send_json(200, registry.health_payload(), close=close)
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path != "/infer":
+            load = LOAD_PATH.fullmatch(self.path)
+            if self.path != "/infer" and load is None:
                 self._send_json(404, {"ok": False, "error": "not found"}, close=True)
                 return
             if expected_token is not None:
@@ -455,37 +472,13 @@ def make_server(
                     self._send_json(401, {"ok": False, "error": "invalid bearer token"}, close=True)
                     return
 
-            if "Transfer-Encoding" in self.headers:
-                self._send_json(400, {"ok": False, "error": "Transfer-Encoding not supported"}, close=True)
-                return
-            raw_lens = self.headers.get_all("Content-Length") or []
-            if not raw_lens:
-                self._send_json(411, {"ok": False, "error": "Content-Length required"}, close=True)
-                return
-            if len(raw_lens) > 1:
-                self._send_json(400, {"ok": False, "error": "multiple Content-Length headers"}, close=True)
-                return
-            raw_len = raw_lens[0].strip(" \t")
-            if not raw_len or not raw_len.isascii() or not raw_len.isdigit():
-                self._send_json(400, {"ok": False, "error": "invalid Content-Length"}, close=True)
-                return
-            norm_len = raw_len.lstrip("0") or "0"
-            if len(norm_len) > len(str(max_body_bytes)) or int(norm_len) > max_body_bytes:
-                self._send_json(413, {"ok": False, "error": "request body exceeds max_body_bytes"}, close=True)
-                return
-            content_len = int(norm_len)
-
-            raw_body = self.rfile.read(content_len)
-            if len(raw_body) != content_len:
-                self._send_json(400, {"ok": False, "error": "truncated request body"}, close=True)
-                return
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except Exception:
-                self._send_json(400, {"ok": False, "error": "invalid JSON"}, close=True)
+            payload, err = read_json_body(self, max_body_bytes)
+            if err is not None:
+                self._send_json(err[0], {"ok": False, "error": err[1]}, close=True)
                 return
 
-            status, reply = registry.infer(payload)
+            status, reply = (handle_load(registry, load[1], payload, roots=roots, env_file=env_file) if load
+                             else registry.infer(payload))
             self._send_json(status, reply)
 
     class _HTTPServer(ThreadingHTTPServer):
@@ -554,6 +547,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--gpu-lock-file", type=Path)
     parser.add_argument("--jobs-dir", type=Path)
     parser.add_argument("--reject-when-training-busy", action="store_true")
+    parser.add_argument("--load-root", action="append", default=[], type=Path, help="POST /arms/{arm}/load accepts dirs only under these")
+    parser.add_argument("--env-file", type=Path, help="service env file whose --arm token a successful load rewrites")
     args = parser.parse_args(argv)
 
     cfg = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
@@ -565,6 +560,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs_dir = Path(cfg["jobs_dir"]).expanduser() if "jobs_dir" in cfg else args.jobs_dir
     reject_busy = bool(cfg.get("reject_when_training_busy", args.reject_when_training_busy))
     arms = list(cfg.get("arms", [])) + list(args.arm)
+    load_roots = [Path(r) for r in cfg.get("load_roots", [])] + list(args.load_root)
+    env_file = Path(cfg["env_file"]).expanduser() if "env_file" in cfg else args.env_file
     if not arms:
         raise SystemExit("at least one --arm spec (or config arms) is required")
 
@@ -586,7 +583,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         jobs_dir=jobs_dir,
         reject_when_training_busy=reject_busy,
     )
-    server = make_server(bind, port, registry, token=token)
+    server = make_server(bind, port, registry, token=token, load_roots=load_roots, env_file=env_file)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

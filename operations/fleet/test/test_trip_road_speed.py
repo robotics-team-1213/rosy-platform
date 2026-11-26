@@ -81,4 +81,36 @@ def test_ring_leader_gap_common_frame_and_expiry_bound_the_grant():
         pose.odom_stamp = None
         assert (await tick())["limit_mps"] == 0.
         assert live.view["detail"]["road_speed"]["reason"] == "pose_stale"
+        # Off-loop peer with a short stale stamp cannot reach the loop yet, whereas a long-stale stamp still holds.
+        pose.odom_stamp = 9.8
+        runner._live["second"].road_pose = None
+        peer.map_id, peer.x, peer.y, peer.odom_stamp = "road", .5, .5, 8.6
+        assert (await tick())["limit_mps"] == .15
+        peer.odom_stamp = 1.0
+        assert (await tick())["limit_mps"] == 0.
+        assert live.view["detail"]["road_speed"]["reason"] == "peer_pose_stale"
+    asyncio.run(check())
+
+
+def test_road_speed_owner_changed_after_arrived_is_rescued():
+    from fleet.swarm.api.ports import RobotApiError
+    site = SiteMap.model_validate({"schema": "rosy.site_map/1", "map_id": "road",
+        "places": [dict(id=n, name=n, x=x, y=y) for n, x, y in [("A", 0, 0), ("B", 1, 0)]],
+        "edges": [{"id": "AB", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "direction": "one_way",
+                   "width_m": .1, "speed_cap_mps": .15}]})
+    pose = NS(x=.1, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
+    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
+              route_rev=0, trim_m=0., segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=1.)],
+              progress=lambda idx, s: s)
+    state = {"navigation": "ARRIVED", "goal": None, "velocity": {"linear": 0.005, "angular": 0.01},
+             "safety": {"estop": False}, "evidence": {"velocity": {"evidence": "fresh", "sampled_at": "1970-01-01T00:00:09.9Z"}}}
+    async def update(rid, cid, grant):
+        raise RobotApiError(rid, 409, "ROAD_SPEED_OWNER_CHANGED", "owner popped")
+    runner = NS(_clock=lambda: 10., _roster=lambda: ["first"], _live={}, _call=lambda coro: coro,
+                _robot_state=lambda rid: asyncio.sleep(0, state),
+                _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: None)))
+    async def check():
+        road = RoadSpeed(NS(arbitrated_pose=lambda rid: None), update)
+        await road.renew(runner, live, (1, site), 0, .1, pose)
+        assert live.view["detail"]["road_speed"]["state"] == "arrived"
     asyncio.run(check())

@@ -3,7 +3,7 @@
 import { html, useState } from "/common/vendor/htm-preact.esm.min.js";
 import { UiButton } from "/common/preact-ui.js";
 import { INCIDENT_CAUSES, INCIDENT_BASES } from "/console/assets/cell-frames.js";
-import { isHomeRecovery } from "/console/assets/cell-obs-model.js";
+import { OBS_BASE, isHomeRecovery } from "/console/assets/cell-obs-model.js";
 
 // The person-check items the cell wrote into its own hold reason ("a person checks the arm (jaws, contacts, …)").
 const CHECK_WORDS = { jaws: "집게", contacts: "닿은 곳", "wedged objects": "끼인 물체" };
@@ -29,6 +29,60 @@ export function armIncidentClearPlan(incident) {
 }
 
 export const armIncidentKey = (sourceId, incidentId) => `${sourceId}|arm-incident-${incidentId}`;
+
+const CELL_ARMS = { cell_s: ["arm_s"], cell_ab: ["arm_a", "arm_b"] };
+export const cellArms = (target) => CELL_ARMS[target] || [target];
+const PIPELINE_STATUS = "/api/fleet/pipeline/status";
+const ARM_HOLDS_CLEAR = "/api/fleet/pipeline/arm-holds/clear";
+const HOLD_STEPS = {
+  STAGED_HOMING_VISUAL_VERIFY_REQUIRED: "팔 보류는 단계별 홈 복귀의 카메라 접힘 확인이 끝나야 풀립니다. 셀 화면의 미해결 복구에서 카메라 확인을 마치세요.",
+  NAMED_OPERATOR_REQUIRED: "팔 보류는 이름 있는 운영자만 풀 수 있습니다. 이름 있는 계정으로 다시 해제하세요.",
+};
+
+/** The drawer row of the first open incident on a cell's or an arm's arms (held first), or null. */
+export function armIncidentRowFor(target, obs) {
+  const arms = cellArms(target);
+  const rows = armIncidentAlertRows(obs);
+  return [...rows.crit, ...rows.warn].find((row) => arms.includes(row.arm.id)) || null;
+}
+
+/** The Fleet pipeline hold on one arm, cleared with the caller's note only when the server says it is held.
+ * {} when there is none, {holdCleared} when cleared, {nextStep} when the server keeps it (its rules are unchanged). */
+export async function clearPipelineArmHold(call, armId, payload) {
+  let held;
+  try {
+    held = (await call(PIPELINE_STATUS, { timeoutMs: 3000 }))?.arm_holds?.[armId]?.held === true;
+  } catch (err) {
+    if (err?.status === 404) return {};  // no pipeline on this Fleet: no hold to clear
+    return { nextStep: "팔 보류 상태를 읽지 못했습니다. 연결을 확인하고 다시 해제하세요." };
+  }
+  if (!held) return {};
+  try {
+    await call(ARM_HOLDS_CLEAR, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ arm_id: armId, ...payload }), timeoutMs: 3000 });
+    return { holdCleared: true };
+  } catch (err) {
+    return { nextStep: HOLD_STEPS[err?.code] || `팔 보류를 풀지 못했습니다(${err?.code || err?.status || "오류"}). 셀 화면에서 팔 홀드를 확인하세요.` };
+  }
+}
+
+/** One confirm with one note, cause and basis: the arm's Fleet pipeline hold first (the server clears that arm's held
+ * incidents with it), then this incident. A hold the server keeps clears nothing, so the row stays with its next step. */
+export async function clearArmIncident(call, arm, incident, payload) {
+  // The hold clear releases every held incident of this arm, so one that needs a physical step first blocks it all.
+  const blocker = [...(arm.openIncidents || []), ...(arm.homeRecoveries || [])]
+    .map(armIncidentClearPlan).find((plan) => plan.mode === "next_step");
+  if (blocker) return { nextStep: `같은 팔의 다른 사건이 먼저입니다. ${blocker.step}` };
+  const hold = await clearPipelineArmHold(call, arm.id, payload);
+  if (hold.nextStep) return hold;
+  try {
+    await call(`${OBS_BASE}/arms/${encodeURIComponent(arm.sourceId)}/incidents/${encodeURIComponent(incident.incident_id)}/clear`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), timeoutMs: 3000 });
+  } catch (err) {
+    if (!(hold.holdCleared && err?.status === 409)) throw err;  // already cleared by the hold clear
+  }
+  return hold;
+}
 
 /** Pure: the alert drawer's rows, {crit, warn}; one D-540 3 decision row per open arm incident. */
 export function armIncidentAlertRows(obs) {
@@ -70,9 +124,10 @@ export function IncidentClearBody({ arm, incident, clearReason, onClearIncident 
     setBusy(true);
     setFeedback("");
     try {
-      await onClearIncident(arm.sourceId, incident.incident_id, { note: text, cause, basis });
+      const result = await onClearIncident(arm, incident, { note: text, cause, basis });
       setChecked(false);
-      setFeedback("해제했습니다.");
+      setFeedback(result?.nextStep ? `해제하지 않았습니다. 다음 단계 · ${result.nextStep}`
+        : result?.holdCleared ? "해제했습니다. 팔 보류도 풀었습니다." : "해제했습니다.");
     } catch (err) {
       setFeedback(err?.status === 403 ? "이름 있는 운영자만 해제할 수 있습니다."
         : err?.status === 409 ? "이미 해제된 사건입니다."

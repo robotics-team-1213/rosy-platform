@@ -1,24 +1,99 @@
-# Legacy warehouse station names (STG_*, EXP_*). The cell container place map is
-# shared/web/cell-site-map.json; resolve_site_alias() in station_zones.py maps these ids to it.
+# Station zones: 임시칸 (STG_*) and 반출대 (EXP_*). A robot sent to a zone stands at its ``place_id`` in the
+# active site map (rosy.site_map/1). No coordinate is stored here, so a zone cannot disagree with its place.
+# The cell container place map is shared/web/cell-site-map.json; resolve_site_alias() in station_zones.py
+# maps these ids to it.
+#
+# ``vehicle`` and ``areas`` are the zone map the Fleet 구역 도면 draws (2D and 3D), in the active site map
+# frame (metres, +x east, +y north of the map origin). An area that overlaps another area or cuts into a
+# drivable lane is refused on save. The site map owns every lane and place; nothing here repeats one.
 schema: rosy.station-zones.v1
 site_id: world_261026
+
+# Pinky Pro nominal, base_footprint (x forward, y left): footprint.front_x_m, cargo_tray.rear_x_m and
+# footprint.half_width_m of middleware/devices/pinky/profile/config/geometry.yaml. The rear part is the cargo tray.
+vehicle:
+  front_m: 0.04205
+  rear_m: -0.134
+  half_width_m: 0.05655
+
+# Fixed equipment. ``status`` says how far the placement is evidenced:
+#   measured            실측
+#   cad_registered      CAD 형상을 현장 CAD 등록값으로 옮긴 후보(표시 전용)
+#   photo_estimated     보정한 천장 사진의 색 영역으로 잰 값
+#   planned_unverified  계획값
+# ``zone_id`` places a cell-site-map.json zone (yard, temp_a, temp_b, stand).
+areas:
+  - id: CELL_AB_TABLE
+    name: "적층 작업대 A·B"
+    kind: worktop
+    short_name: "작업대 A·B"
+    status: cad_registered
+    height_m: 0.072
+    evidence: "R08 CAD194 작업대. 2026-10-26 현장 CAD 등록(셀 -> 현장: yaw -90도, 원점 0.793, 0.355)의 표시 전용 후보. 2026-11-01 천장 사진에서 서쪽·남쪽 가장자리가 1 cm 안에서 일치."
+    polygon: [[0.467, 0.2], [1.07, 0.2], [1.07, 0.96], [0.467, 0.96]]
+  - id: BELT
+    name: "컨베이어"
+    kind: belt
+    short_name: "벨트"
+    status: cad_registered
+    height_m: 0.017
+    evidence: "R08 CAD194 벨트(길이 300 mm, 폭 85 mm). 같은 등록값. 사진에서 남쪽 끝이 일치."
+    polygon: [[0.748, -0.103], [0.833, -0.103], [0.833, 0.197], [0.748, 0.197]]
+  - id: yard
+    name: "장치 야드 (컨테이너선)"
+    kind: cell_zone
+    short_name: "야드"
+    zone_id: yard
+    status: cad_registered
+    height_m: 0.095
+    evidence: "R08 CAD194 선체(316 x 130 mm). 같은 등록값. 사진에서 선체 옆면이 일치."
+    polygon: [[0.73, 0.208], [0.86, 0.208], [0.86, 0.524], [0.73, 0.524]]
+  - id: temp_a
+    name: "임시 장치 A"
+    kind: cell_zone
+    short_name: "임시 A"
+    zone_id: temp_a
+    status: cad_registered
+    height_m: 0.086
+    evidence: "R08 CAD194 임시 칸 판 v12(A쪽). 설계 배치만 있고 2026-11-01 사진에는 보이지 않는다."
+    polygon: [[0.535, 0.21], [0.708, 0.21], [0.708, 0.547], [0.535, 0.547]]
+  - id: temp_b
+    name: "임시 장치 B"
+    kind: cell_zone
+    short_name: "임시 B"
+    zone_id: temp_b
+    status: cad_registered
+    height_m: 0.086
+    evidence: "R08 CAD194 임시 칸 판 v12(B쪽). 설계 배치만 있고 2026-11-01 사진에는 보이지 않는다."
+    polygon: [[0.894, 0.21], [1.067, 0.21], [1.067, 0.531], [0.894, 0.531]]
+  - id: stand
+    name: "반출대"
+    kind: cell_zone
+    short_name: "반출대"
+    zone_id: stand
+    status: cad_registered
+    height_m: 0.091
+    evidence: "R08 CAD194 반출대(미끄럼틀과 받침). 설계 배치만 있고 2026-11-01 사진에는 보이지 않는다."
+    polygon: [[0.531, -0.052], [0.722, -0.052], [0.722, 0.189], [0.531, 0.189]]
+  - id: CELL_S_TABLE
+    name: "공급 작업대 S"
+    kind: worktop
+    short_name: "작업대 S"
+    status: photo_estimated
+    evidence: "2026-11-01 천장 보정 사진. 동쪽 끝(1.287 m, 사진 경계에서 잘림)과 남쪽 가장자리(-0.116 m)는 노란 색 영역으로 잰 값(오차 약 1 cm)이다. 서쪽 가장자리는 벨트 동쪽 가장자리(0.835 m), 북쪽 가장자리는 작업대 A·B 남쪽 가장자리(0.200 m)에 닿는 것을 사진에서 읽었다(팔 받침과 케이블에 가려 색으로 재지 못했다, 판독 오차 약 2 cm). 남쪽 가장자리가 loop_right 차로의 표준 폭(0.20 m)과 약 9 mm 겹친다."
+    polygon: [[0.835, -0.116], [1.287, -0.116], [1.287, 0.2], [0.835, 0.2]]
+
 staging_bays:
   - id: STG_C2
     place_id: C2
     name: "임시칸 1 (C2 대기 구역)"
     kind: staging
-    x: 0.35
-    y: -0.25
-    yaw_deg: 0.0
     speed_cap_mps: 0.02
     max_step_m: 0.015
   - id: STG_S3_WAIT
     place_id: S3
     name: "임시칸 2 (S3 진입 전 대기칸)"
     kind: staging
-    x: 0.58
-    y: -0.2512
-    yaw_deg: 0.0
     speed_cap_mps: 0.02
     max_step_m: 0.015
 export_stations:
@@ -31,9 +106,6 @@ export_stations:
     src_site: belt
     dst_site: stand
     tier: 1
-    x: -0.6763
-    y: -0.1383
-    yaw_deg: -90.0
   - id: EXP_S5_PALLET
     place_id: S5
     name: "반출대 2 (S5 팔레트 반출대)"
@@ -43,9 +115,6 @@ export_stations:
     src_site: belt
     dst_site: pallet
     tier: 2
-    x: 0.9212
-    y: -0.4776
-    yaw_deg: -90.0
   - id: EXP_S3_BELT
     place_id: S3
     name: "반출대 3 (S3 컨베이어 반출대)"
@@ -55,6 +124,3 @@ export_stations:
     src_site: pinky
     dst_site: belt
     tier: 1
-    x: 0.6987
-    y: -0.2512
-    yaw_deg: -85.0

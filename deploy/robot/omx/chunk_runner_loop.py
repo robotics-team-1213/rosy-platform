@@ -4,7 +4,14 @@ import time
 
 from chunk_policy_playback import _is_holding, absorb_telemetry_error
 from chunk_runner_interrupt import interrupt_tick
+from chunk_runner_lease import policy_playing
 from chunk_runner_settle import tick_or_report, wait_aligned_before_start
+
+
+def overload_shed(runner) -> dict:
+    """Joints the guard is shedding (overload-hold, torque ON), as its own field; never folded into the hold ack."""
+    held = getattr(getattr(getattr(runner, "robot", None), "motion", None), "held", None)
+    return {"overload_shed": sorted(held)} if held else {}
 
 
 def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
@@ -24,7 +31,8 @@ def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
                 "fault": runner.fault,
                 "holding": _is_holding(runner),
                 "human_hold_latched": runner.human_hold_latched,
-                "torque_hold_commanded": runner.torque_hold_commanded,
+                "torque_hold_commanded": runner.torque_hold_commanded, **overload_shed(runner),
+                **({"policy_lease": runner.lease_watch.status()} if getattr(runner, "lease_watch", None) else {}),
                 **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
                 "pid": os.getpid(),
                 **({"interrupt": runner._interrupt["phase"]} if getattr(runner, "_interrupt", None) else {}),
@@ -64,6 +72,9 @@ def run(runner, lines) -> None:
             runner.last_input, runner.idle_parks = started, 0
         runner.pending += arrived
         hold_lines = [line.strip() for line in runner.pending if line.strip().split()[:1] == ["human-hold"]]
+        watch = getattr(runner, "lease_watch", None)  # D-1024 3: a policy runs only on a renewed lease; no renewal is a human-hold
+        if watch is not None and watch.poll(policy_playing(runner.chunk)) and not runner.human_hold_latched:
+            hold_lines.append("human-hold")
         if getattr(runner, "signals", None):  # interrupt first: it folds or holds, while a FIFO human-hold still forces HOLD
             if hold_lines:
                 runner._fifo_hold_seen = hold_lines[-1]

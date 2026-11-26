@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cell_pipeline_io as cio
 import cell_remap_depth as rd
+from cell_remap_order import regions_now  # noqa: F401 - cell_calibrate reads it here
 from cell_remap_order import JOINTS, direct_move, fit_naming_stop, remap_order, scene_ignore, visit_indices, visit_order  # noqa: F401 - cell_calibrate reads them here
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
@@ -74,7 +75,7 @@ def plan_only(config: dict, points: list, obstacle_mm: float | None = None) -> d
             "leverage": cell_map_fit.plan_leverage(points, view.get("sites") or {}), **({"z_view": info} if info else {})}
 
 
-def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_capture=None) -> tuple[dict, dict]:
+def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_capture=None, depth_config: dict | None = None) -> tuple[dict, dict]:
     """The config a remap moves with, and its z_view record: `obstacle_mm` when given, else what the D435 sees above the map sites.
 
     Invalid depth or coverage at a remap site is recorded as `depth_error` and leaves the configured z_view;
@@ -85,7 +86,7 @@ def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_cap
 
         if cell_cal_eval.top_has_depth(config):
             try:
-                meta = site_obstacle_mm(config, depth_capture(), colour)  # raises without a frame or with a loose alignment
+                meta = site_obstacle_mm(depth_config or config, depth_capture(), colour)  # raises without a frame or with a loose alignment
                 obstacle_mm = meta["obstacle_mm"]
                 extra.update(sites_mm=meta["sites_mm"], edge_px=meta["edge_px"], plane_nz=meta.get("plane_nz"))
             except (OSError, RuntimeError, ValueError) as exc:

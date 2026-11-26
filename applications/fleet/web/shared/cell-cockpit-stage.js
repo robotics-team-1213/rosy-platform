@@ -7,11 +7,10 @@ import { UiButton } from "/common/preact-ui.js";
 import { patchHidden } from "/common/control-dom.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
 import { createCellContextPanel } from "/console/assets/cell-context-panel.js";
-import { armIncidentAlertRows, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
+import { armIncidentAlertRows, clearArmIncident, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import {
-  OBS_BASE,
   JOINT_SHORT,
   canonicalArmId,
   isArmAttentionOrLive,
@@ -179,15 +178,11 @@ export function createCellCockpitStage({
     if (!owns("drive") && owns("arms")) onVisionSample?.(sample);
   }
 
-  async function clearIncident(sourceId, incidentId, payload) {
-    await call(`${OBS_BASE}/arms/${encodeURIComponent(sourceId)}/incidents/${encodeURIComponent(incidentId)}/clear`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      timeoutMs: 3000,
-    });
+  async function clearIncident(arm, incident, payload) {
+    const result = await clearArmIncident(call, arm, incident, payload);
     gate.reset();
     await refresh();
+    return result;
   }
 
   const contextPanel = contextHost ? createCellContextPanel({

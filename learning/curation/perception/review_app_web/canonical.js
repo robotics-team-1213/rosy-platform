@@ -320,7 +320,42 @@ function renderRuns() {
   syncCancel();
 }
 
+function syncServe() {
+  const done = selectedRun?.kind === 'train_stage' && selectedRun.status === 'succeeded';
+  $('canon-serve').hidden = !done;
+  if (done) $('canon-serve').textContent = `서빙에 올리기 · ${selectedRun.arm_id}`;
+  const reason = !snap?.act_serve ? 'ACT 서빙 서버가 이 작업대에 설정되지 않았습니다.'
+    : !manager ? '서빙에 올리기는 프로젝트 관리 권한이 필요합니다.' : busy ? '요청 처리 중입니다.' : '';
+  setOff($('canon-serve'), !done || Boolean(reason), reason);
+}
+
+const SERVE_STATE = {copying: 'AI PC로 복사 중', verifying: '복사본 sha256 확인 중', loading: 'ACT 서버에 적재 중'};
+let serveTimer = null;
+
+function serveText(j) {
+  const head = `${j.arm_id} · sha ${j.sha256.slice(0, 12)}`;
+  if (j.state === 'done') return `서빙에 올렸습니다 · ${head} (이전 ${String(j.reply?.previous_revision).slice(0, 12)}) · `
+    + (j.reply?.persisted ? '재시작 뒤에도 유지됩니다.' : `재시작하면 이전 모델로 돌아갑니다: ${j.reply?.reason}`);
+  if (j.state === 'failed') return `서빙에 올리지 못했습니다. 기존 모델을 그대로 씁니다 · ${head} · ${j.reason}`;
+  return `${SERVE_STATE[j.state] || j.state} · ${head}`;
+}
+
+async function showServe(rid) {
+  clearTimeout(serveTimer);
+  let job;
+  try {
+    job = await api(`/runs/${rid}/serve`);
+  } catch {
+    return;  // no serve job yet for this run
+  }
+  if (rid !== selectedRunId) return;
+  $('canon-serve-result').hidden = false;
+  $('canon-serve-result').textContent = serveText(job);
+  if (!['done', 'failed'].includes(job.state)) serveTimer = setTimeout(() => showServe(rid), 2000);
+}
+
 function syncCancel() {
+  syncServe();
   const active = selectedRun && (selectedRun.status === 'running' || selectedRun.status === 'stopping');
   const reason = !snap?.configured ? '실행기가 설정되지 않았습니다.'
     : !manager ? '중지는 프로젝트 관리 권한이 필요합니다.'
@@ -330,8 +365,11 @@ function syncCancel() {
 }
 
 async function openRun(rid) {
+  const changed = rid !== selectedRunId;
+  if (changed) $('canon-serve-result').hidden = true;
   selectedRunId = rid;
   selectedRun = await api('/runs/' + rid);
+  if (changed && selectedRun.kind === 'train_stage' && selectedRun.status === 'succeeded') void showServe(rid);
   $('canon-run-detail').hidden = false;
   $('canon-run-title').textContent = `${selectedRun.kind} · ${selectedRun.arm_id} (${selectedRun.id.slice(0, 12)})`;
   $('canon-job-log').textContent = selectedRun.log_tail || JSON.stringify(selectedRun.result || {status: selectedRun.status}, null, 2);
@@ -439,6 +477,19 @@ $('canon-job-cancel').addEventListener('click', () => work(async () => {
   if (!selectedRunId) return;
   selectedRun = await api(`/jobs/${selectedRunId}/cancel`, {});
   await loadSnapshot();
+}));
+$('canon-serve').addEventListener('click', () => work(async () => {
+  if (!selectedRunId) return;
+  const out = $('canon-serve-result');
+  out.hidden = false;
+  out.textContent = '서빙 작업을 접수하는 중입니다.';
+  try {
+    const rid = selectedRunId;
+    out.textContent = serveText(await api(`/runs/${rid}/serve`, {arm_id: selectedRun.arm_id}));
+    serveTimer = setTimeout(() => showServe(rid), 2000);
+  } catch (err) {
+    out.textContent = `서빙에 올리지 못했습니다: ${err.message}`;
+  }
 }));
 $('canon-job-form').addEventListener('submit', (e) => {
   e.preventDefault();

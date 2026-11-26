@@ -11,7 +11,7 @@ import time
 import numpy as np
 
 from cell_policy_entry import (  # noqa: F401
-    ENTRY_START_TOL, FAULT_KEYS, ack_status, cmd_ack_ok, empty_gripper_ok, entry_ready as _entry_ready,
+    ENTRY_START_TOL, FAULT_KEYS, PRE_SETTLE_TOL, ack_status, cmd_ack_ok, empty_gripper_ok, entry_ready as _entry_ready,
     finite_stamp, hold_ack_ok, max_diff, park_ack_ok, pose6, retreat_ack_ok, run_entry_chunk,
     valid_state, validate_entry_chunk,
 )
@@ -54,6 +54,42 @@ def send_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> di
         if last_reply.get("human_hold_latched") is True:
             last_err = f"{last_err} (human_hold_latched=True, execution unconfirmed)"
     raise OSError(last_err)
+
+
+def library_home(library) -> list[float] | None:
+    frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
+    return pose6(frames[-1]) if isinstance(frames, (list, tuple)) and frames else None
+
+
+def rest_diagnosis(status, home, library=None) -> dict:
+    """Why a refusal before any command does or does not need human-hold: off_home (max body-joint gap to the library home),
+    folded (cell_job_peer_health.live_folded, what torque_off_folded uses) and no_hold, true for a clean status at home
+    (cell_auto_fold.at_rest within PRE_SETTLE_TOL) or folded. A fault, contact, hold latch or ok!=True is never no_hold."""
+    from cell_auto_fold import at_rest
+    from cell_job_peer_health import fold_basis, live_folded
+
+    out = {"off_home": None, "folded": None, "fold_basis": fold_basis(library), "no_hold": False}
+    if not isinstance(status, dict):
+        return out
+    state = status.get("state")
+    try:
+        if home is not None and isinstance(state, (list, tuple)) and len(state) >= 5:
+            out["off_home"] = round(max_diff(list(state), home, 5), 3)
+        out["folded"] = live_folded({"state": state}, library)  # from the state itself, never a reported `folded` flag
+        # folded counts only for an empty, still gripper with no chunk running; a loaded or shaking arm keeps its hold
+        folded_ok = (out["folded"] is True and status.get("holding") is False and status.get("chunk") is None
+                     and not (status.get("jitter") or {}).get("shaking"))
+        clean = status.get("ok") is True and not any(status.get(k) for k in FAULT_KEYS)
+        at_home = out["off_home"] is not None and at_rest(state, home) and out["off_home"] <= PRE_SETTLE_TOL
+        out["no_hold"] = bool(home is not None and clean and (at_home or folded_ok))
+    except (TypeError, ValueError):
+        out["no_hold"] = False
+    return out
+
+
+def idle_at_home(status, home, library=None) -> bool:
+    """With no command sent yet, a refusal of a clean status that is at home or folded needs no human-hold."""
+    return rest_diagnosis(status, home, library)["no_hold"]
 
 
 def best_effort_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict | None:
@@ -172,12 +208,16 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
 
     def stopped(n, reason, row, status=None):
         nonlocal park_safe, hold_needed, safety_done
-        park_safe, hold_needed = False, hold_needed or not dry_run
-        stop = None if dry_run else send_hold(cell, log=log)
+        rest = not dry_run and not moved and rest_diagnosis(status, library_home(library), library)["no_hold"]  # no command sent, at home or folded
+        park_safe, hold_needed = False, hold_needed or not (dry_run or rest)
+        stop = None if dry_run or rest else send_hold(cell, log=log)
         safety_done = safety_done or not dry_run
-        for entry in ({**row, "policy_stop": reason}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
+        # only before any command: after motion the hold goes first and nothing slow (the diagnosis imports modules) may follow it
+        facts = ({k: v for k, v in rest_diagnosis(status, library_home(library), library).items() if k != "no_hold"}
+                 if status is not None and not moved else {})
+        for entry in ({**row, "policy_stop": reason, **facts, "hold_kept": not (dry_run or rest)}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
             log(entry)
-        return {"result": "refused", "at": n, "reason": reason, **({"status": status} if status else {})}
+        return {"result": "refused", "at": n, "reason": reason, **facts, **({"status": status} if status else {})}
 
     def finish_park(result_name: str, *, log_hold: bool = True) -> dict:
         nonlocal park_safe, hold_needed, safety_done
@@ -209,7 +249,7 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             home_pose = pose6(library["chunks"]["home"][-1])
             if (max_diff(init_state["state"], home_pose, 5) > ENTRY_START_TOL
                     or not empty_gripper_ok(init_state, now=time.time())):
-                return stopped(0, "START_POSE_OFF_HOME: arm off home; run home stage first", {"chunk": 0, "dry_run": False})
+                return stopped(0, "START_POSE_OFF_HOME: arm off home; run home stage first", {"chunk": 0, "dry_run": False}, init_state)
             _ran_e, entry_prefix, entry_err = run_entry_chunk(cell, library, work, init_state, authorize, log, jaw_gate=jaw_gate)
             if entry_err is not None:
                 safety_done = True

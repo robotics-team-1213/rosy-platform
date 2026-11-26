@@ -31,6 +31,7 @@ class FakeHost:
         self.smoke_ok = {}
         self.archived, self.envs_built = [], []
         self.restarts, self.healthy = [], True
+        self.restore_ok, self.last_failed = True, False
         self.stopped = set()
 
     def remote_head(self):
@@ -82,7 +83,10 @@ class FakeHost:
 
     def restart(self, units):
         self.restarts.append(list(units))
-        return self.healthy or not units
+        # unhealthy: the new release's units fail; the restart back on the previous release works unless restore_ok is False
+        ok = self.healthy or not units or (self.last_failed and self.restore_ok)
+        self.last_failed = not ok
+        return ok
 
     def follower_torque_off(self, release, python):
         assert self.held, "the idle check runs while the session lock is held"
@@ -993,6 +997,119 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
 
 
+def test_an_unplugged_arm_board_does_not_block_the_other_observers(tmp_path, monkeypatch, capsys):
+    """2026-11-27: arm_s unplugged or cleanly inactive/dead past handoff grace with torque OFF does not block arm_a/arm_b."""
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    unit_states = {"rosy-omx-observer@arm_b.service": ("active", "running"), "rosy-omx-observer@arm_s.service": ("inactive", "dead")}
+
+    def _run(args, **kw):
+        st, sub = unit_states.get(args[3], ("inactive", "dead"))
+        return subprocess.CompletedProcess(args, 0, stdout=f"ActiveState={st}\nSubState={sub}\n", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", _run)
+    live_dev, live_health = tmp_path / "follower_b", tmp_path / "arm_b.json"
+    live_dev.write_text("", encoding="utf-8")
+    live_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    stale_health = tmp_path / "arm_s.json"
+    stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    observers = [{"unit": "rosy-omx-observer@arm_b.service", "device": str(live_dev), "health": str(live_health)},
+                 {"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
+    host = m.Host({"devices": [str(live_dev)], "follower_device": str(live_dev), "observers": observers})
+    # Case A: unplugged & inactive/dead -> skipped and logged without step/result
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    row = json.loads(capsys.readouterr().out.strip())
+    assert row["event"] == "observers_skipped_offline" and row["units"] == ["rosy-omx-observer@arm_s.service"]
+    assert "step" not in row and "result" not in row
+    # Case B: plugged back in with inactive/dead + stale torque-OFF snapshot -> still skipped
+    (tmp_path / "absent_s").write_text("", encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    capsys.readouterr()
+    # Case C: observer running with stale snapshot -> defers
+    unit_states["rosy-omx-observer@arm_s.service"] = ("active", "running")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
+@pytest.mark.parametrize(
+    "state,sub,rc,exc",
+    [
+        ("active", "running", 0, None),
+        ("activating", "auto-restart", 0, None),
+        ("deactivating", "stop-sigterm", 0, None),
+        ("failed", "failed", 0, None),
+        ("inactive", "dead", 1, None),
+        ("", "", 0, OSError("no dbus")),
+    ],
+)
+def test_absent_board_never_skips_unless_unit_is_cleanly_inactive_dead(tmp_path, monkeypatch, state, sub, rc, exc):
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+
+    def _run(args, **kw):
+        if exc is not None:
+            raise exc
+        return subprocess.CompletedProcess(args, rc, stdout=f"ActiveState={state}\nSubState={sub}\n", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", _run)
+    stale_health = tmp_path / "arm_s.json"
+    stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    observers = [{"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
+    assert m.Host({"devices": [], "observers": observers}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
+def test_stopped_plugged_in_and_absent_edge_cases_fail_closed(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(
+        m.subprocess,
+        "run",
+        lambda args, **kw: subprocess.CompletedProcess(args, 0, stdout="ActiveState=inactive\nSubState=dead\n", stderr=""),
+    )
+    live_dev = tmp_path / "follower_s"
+    live_dev.write_text("", encoding="utf-8")
+    health = tmp_path / "arm_s.json"
+    obs_live = {"unit": "rosy-omx-observer@arm_s.service", "device": str(live_dev), "health": str(health)}
+
+    # 1) Hazard 1: fresh terminal_at overrides stale observed_at, plus exact 60.0s boundary -> fail closed
+    for payload in (
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": now - 1.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 60.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": float("-inf"), "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": True, "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(payload), encoding="utf-8")
+        assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # NaN terminal_at with stale observed_at & corrupt/missing health JSON -> fail closed
+    health.write_text(f'{{"expected_motor_count": 6, "observed_at": {now - 3000.0}, "terminal_at": NaN, "motors": {json.dumps([{"torque_enabled": False}] * 6)}}}', encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    health.write_text("{corrupt", encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.unlink()
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+    # 2) Plugged-in stopped board whose last snapshot had torque ON -> fail closed
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": True}] * 6}), encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # 3) Unit in always_restart is never skipped even when unplugged
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    obs_absent = {"unit": obs_live["unit"], "device": str(tmp_path / "absent_s"), "health": str(health)}
+    assert m.Host({"devices": [], "observers": [obs_absent], "always_restart": [obs_live["unit"]]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # 4) All observers offline-stopped -> fail closed with follower_device_missing (never None)
+    assert m.Host({"devices": [], "observers": [obs_absent]}).follower_idle_reason(tmp_path, tmp_path) == "follower_device_missing"
+    # 5) Dangling symlink with missing health is NOT treated as absent -> fails closed (observer_missing)
+    dangling = tmp_path / "dangling_s"
+    os.symlink(tmp_path / "missing_target", dangling)
+    assert m.Host({"devices": [], "observers": [{"unit": obs_live["unit"], "device": str(dangling), "health": str(tmp_path / "missing.json")}]}).follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+
+
 def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
     import json
 
@@ -1135,3 +1252,62 @@ def test_deferred_prepared_release_skips_github_checks_and_handles_rate_limit(tm
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_env_token_456")
     h_env = autohost.Host({"github_token_file": str(tmp_path / "missing.token")})
     assert h_env._github_headers()["Authorization"] == "Bearer ghp_env_token_456"
+
+
+def test_a_restart_that_fails_after_a_rollback_is_reported_not_ignored(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **SERVICE)
+    u.run()
+    host.head, host.healthy, host.restore_ok = "b" * 40, False, False
+    assert u.run() == "rolled_back_restart_failed"
+    assert current(tmp_path) == str(Path("releases") / ("a" * 12))
+    assert '"restart_failed"' in capsys.readouterr().out
+
+
+def test_a_manual_rollback_whose_units_do_not_come_back_says_so(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **SERVICE)
+    u.run()
+    host.head = "b" * 40
+    assert u.run() == "switched"
+    host.healthy = False
+    assert u.rollback() == "rollback_restart_failed"
+    assert u.state()["current"] == "a" * 12
+    assert '"restart_failed"' in capsys.readouterr().out
+
+
+def test_always_restart_units_come_back_even_when_they_died(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    fake = tmp_path / "bin" / "systemctl"
+    fake.write_text("#!/bin/sh\nexit 3\n")  # every unit inactive: the job API died on the new tree
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    api, obs = "rosy-omx-cell-job-api.service", "rosy-omx-observer@arm_b.service"
+    cfg = {"restart_running_only": True, "always_restart": [api]}
+    assert m.Host(cfg).running([obs, api]) == [api]  # the hand-stopped observer stays stopped
+    assert m.Host(cfg).running([obs]) == [api]
+    assert m.Host({"always_restart": [api]}).running([obs]) == [obs, api]
+
+
+def test_a_deferred_switch_logs_how_long_it_has_waited(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host)
+    u.run()
+    host.head, host.in_use = "b" * 40, True
+    assert u.run() == "deferred"
+    state = u.state()
+    assert state["deferred"]["release"] == "b" * 12
+    state["deferred"]["since"] -= 3600
+    u.save(state)
+    assert u.run() == "deferred"
+    rows = [__import__("json").loads(line) for line in capsys.readouterr().out.splitlines()]
+    waits = [r["deferred_s"] for r in rows if r.get("step") == "deferred"]
+    assert waits[0] == 0 and waits[-1] >= 3600 and rows[-1]["reason"] == "device_in_use"
+    host.in_use = False
+    assert u.run() == "switched" and "deferred" not in u.state()
+
+
+def test_the_devices_example_always_restarts_the_job_api():
+    example = Path(__file__).parents[1] / "deploy/robot/omx/omx-devices-autoupdate.json.example"
+    cfg = __import__("json").loads(example.read_text())
+    assert "rosy-omx-cell-job-api.service" in cfg["always_restart"]

@@ -43,8 +43,8 @@ def _code_digest() -> str:
         "guarded_native_lag.py", "guarded_native_link.py",
         "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py",
         "chunk_runner_commands.py", "chunk_runner_guards.py", "chunk_runner_interrupt.py", "chunk_runner_recover.py", "chunk_runner_settle.py",
-        "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_policy_playback.py", "motor_health.py",
-        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_retreat.py", "cell_policy_shape.py",
+        "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_runner_lease.py", "chunk_policy_playback.py", "motor_health.py",
+        "cell_policy_drive.py", "cell_policy_lease.py", "cell_policy_timing.py", "cell_policy_retreat.py", "cell_policy_shape.py",
         "cell_policy_handoff.py", "cell_policy_paced.py", "cell_policy_pre_home.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     cache_key = (

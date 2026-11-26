@@ -381,3 +381,33 @@ def test_the_next_lap_keeps_the_lease():
     view = runner.view("a")
     assert view["lap"] == 2 and view["state"] == "running" and view["lease"]["state"] == "held"
     assert {body["lease_id"] for body in fleet.lease["a"].puts} == {lease_id} and fleet.lease["a"].deletes == []
+
+
+def test_429_on_trip_lease_renew_does_not_drop_lease():
+    runner, store, ports = _setup()
+    _start(runner, store, ports)
+
+    async def limited(_rid, _body):
+        raise RobotApiError("rosy_60", 429, "RATE_LIMITED", "slow down", {"retry_after_s": 2})
+
+    ports.trip_lease = limited
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] in ("started", "running")
+    assert runner.view("p1")["lease"]["state"] == "held"
+
+
+def test_retry_unconfirmed_halt_clears_trip_on_confirm():
+    from types import SimpleNamespace
+    runner, store, ports = _setup()
+    cleared = []
+    runner.halts.clear_trip = cleared.append
+    async def retry_ok(_view):
+        return True
+    runner.halts._retry_trip_entry = retry_ok
+    live = SimpleNamespace(
+        open=False,
+        view={"trip_id": "t-halt", "robot_id": "rosy_60", "detail": {"error": "CANCEL_UNCONFIRMED"}},
+    )
+    runner._live["rosy_60"] = live
+    asyncio.run(runner._retry_unconfirmed_halt(live))
+    assert cleared == ["t-halt"]

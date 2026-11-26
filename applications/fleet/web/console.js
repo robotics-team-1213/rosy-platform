@@ -451,7 +451,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };

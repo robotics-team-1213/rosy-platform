@@ -345,6 +345,8 @@ def main(argv=None):
                         operating_context=context, params=params, plan_check=check, rim_z_m=rim_z_m)
         runner.trusted_grasp, runner.trusted_tcp = trusted_grasp, trusted_tcp
         runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
+        from chunk_runner_lease import LEASE_FILE, PolicyLeaseWatch
+        runner.lease_watch = PolicyLeaseWatch(args.io / LEASE_FILE, runner.clock)  # arms only on a pushed grant (D-1024 3)
         # heavy imports (lerobot, numpy, torch), the robot and the bus are up: only now may the main thread take signals
         # (one sent during start-up was pending and is recorded now, the handlers being installed above)
         runner.signal_routing = __import__("main_thread_signals").unblock_main()

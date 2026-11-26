@@ -67,6 +67,8 @@ JOBS = {
     "incident_status": {
         "script": "omx_incident.py", "argv": ["status", "--arm", "{arm}"], "params": {"arm": _match(ARM)},
     },
+    "torque_off_folded": {"script": "cell_torque_off_folded.py", "argv": ["--arm", "{arm}", "--config", "{config}"],  # torque OFF only when folded, then baseline caps
+                          "params": {"arm": _match(ARM), "config": _safe_path}},
     "calibrate_check": {
         "script": "cell_calibrate.py", "camera": True,
         "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)}, "optional": {"targets": _targets, "route": _route},
@@ -148,8 +150,7 @@ JOBS = {
             "max_obs_age_s": _num(0.001, 5),
             "dry_run": _bool,
             "proposer": _actor,
-            "goal_site": _goal_site,
-            "goal_slot": _int_range(0, 31),
+            "goal_site": _goal_site, "goal_slot": _int_range(0, 31),
             "act_backend": _match(re.compile(r"auto|torch|openvino")),
             "endpoint_url": _http_url,
             "token_file": _safe_path,
@@ -160,6 +161,7 @@ JOBS = {
             "site": _match(NAME),
             "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
             "paced_chunks": _bool,
+            "depart_robot": _match(NAME), "depart_action": _match(re.compile(r"depart_s1")),  # arm_s: Fleet R pinky depart after took_one
         },
     },
     "stack_plan": {"script": "cell_stack_plan.py", "argv": ["--plan-json", "{plan}"], "params": {"plan": _match(TASK_FILE)}},

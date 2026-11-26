@@ -35,13 +35,21 @@ def checked_plan(payload, grid_id):
 
 async def read_peers(console, mover):
     clients = {rid: client for rid, client in console.clients().items() if rid != mover}
-    if set(console.robot_ids) - {mover} != clients.keys():
+    marker_clearance = getattr(console, "_site_marker_clearance", None)
+    missing = set(console.robot_ids) - {mover} - clients.keys()
+    if missing and marker_clearance is None:
         raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
 
     results = await asyncio.gather(*(client.state() for client in clients.values()), return_exceptions=True)
-    if not all(isinstance(value, dict) for value in results):
-        raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
-    return clients, dict(zip(clients, results))
+    observed = {rid: None for rid in missing}
+    for rid, value in zip(clients, results):
+        if isinstance(value, dict):
+            observed[rid] = value
+        elif marker_clearance is not None:
+            observed[rid] = None
+        else:
+            raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
+    return clients, observed
 
 
 def _point(state):
@@ -70,8 +78,9 @@ def _fresh_stopped(state):
     if any((evidence.get(channel) or {}).get("evidence") != "fresh" for channel in ("pose", "velocity")):
         return False
     velocity = state.get("velocity") or {}
-    return all(type(velocity.get(axis)) in (int, float) and velocity[axis] == 0.0
-               for axis in ("linear", "angular"))
+    return (all(type(velocity.get(axis)) in (int, float) and math.isfinite(velocity[axis])
+                for axis in ("linear", "angular"))
+            and abs(velocity["linear"]) < 0.01 and abs(velocity["angular"]) <= 0.02)
 
 
 def _inside_corridor(path, centerline, margin):
@@ -131,9 +140,10 @@ def _check_terminal(maps, site, scope, path, fit_error, *, check_walls=False):
 
 def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None):
     clients, observed = peers
+    marker_clearance = getattr(console, "_site_marker_clearance", None)
     current = {rid: client for rid, client in console.clients().items() if rid != mover}
-    if (set(console.robot_ids) - {mover} != clients.keys() or current.keys() != clients.keys()
-            or any(current[rid] is not client for rid, client in clients.items())):
+    if (set(console.robot_ids) - {mover} != observed.keys() or not clients.keys() <= current.keys()
+            or any(current.get(rid) is not client for rid, client in clients.items())):
         raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROSTER_CHANGED")
     bindings = console._named_stop_site_maps.map_bindings
     site = (stop_binding["site_map_id"], stop_binding["site_map_version"])
@@ -160,6 +170,24 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
     if len(path) * len(observed) > MAX_POINTS:
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_PATH_TOO_COMPLEX")
     for robot, state in observed.items():
+        if state is None:
+            if marker_clearance is None:
+                raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
+            mover_body = _body(console, mover)
+            keep_out = ((mover_body.half_width_m + mover_body.rotation_radius_m + (correction_padding or 0.0))
+                        if mover_body is not None else console._clearance_m + (correction_padding or 0.0) + traffic.SAMPLE_STEP_M / 2)
+            cleared = marker_clearance.clear(console, robot, (site[0], path), keep_out, None)
+            decision = (marker_clearance.evidence(robot) or {}) if hasattr(marker_clearance, "evidence") else {}
+            if cleared is not True:
+                code = ("LINE_HANDOFF_ROUTE_OCCUPIED" if decision.get("reason") == "keep_out_intersection"
+                        else "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
+                raise HubError("COMMAND_REJECTED", code)
+            turn_need = ((2 * max(mover_body.rotation_radius_m, TRAY_TURN_RADIUS_M) + (correction_padding or 0.0))
+                         if mover_body is not None else keep_out)
+            for obs in decision.get("observations") or ():
+                if any(math.dist((obs["x"], obs["y"]), pt) < turn_need + obs.get("uncertainty_m", 0.0) for pt in path[:-1]):
+                    raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")
+            continue
         line = state.get("line_follow") or {}
         if (robot in console.goal_leases.pending or robot in console._goal_busy
                 or state.get("navigation") not in ("IDLE", "ARRIVED", "CANCELED", "FAILED")

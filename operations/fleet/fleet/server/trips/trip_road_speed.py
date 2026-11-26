@@ -31,7 +31,8 @@ async def _goal_finished(runner, rid) -> bool:
     vel = state.get("velocity") or {}
     return (evidence.get("evidence") == "fresh" and stamp is not None and 0 <= runner._clock() - stamp < STALE_POSE_S
             and (state.get("safety") or {}).get("estop") is False
-            and all(type(vel.get(a)) in (int, float) and vel[a] == 0.0 for a in ("linear", "angular")))
+            and all(type(vel.get(a)) in (int, float) and math.isfinite(vel[a]) for a in ("linear", "angular"))
+            and abs(vel["linear"]) <= 0.01 and abs(vel["angular"]) <= 0.02)
 
 
 class RoadSpeed:
@@ -91,6 +92,10 @@ class RoadSpeed:
                         peer = self.poses.arbitrated_pose(robot)
                     if (peer is None or peer.state != "LOCALIZED" or peer.map_id != site.map_id
                             or peer.odom_stamp is None or not 0 <= now - peer.odom_stamp < GRANT_S):
+                        if (peer is not None and peer.state == "LOCALIZED" and peer.map_id == site.map_id
+                                and peer.odom_stamp is not None and 0 <= now - peer.odom_stamp
+                                and loop.project(peer.x, peer.y)[1] - ON_LOOP_M > 0.25 * (now - peer.odom_stamp)):
+                            continue
                         if pending is not None and pending.open:
                             cap, reason, leader, gap_m = 0.0, "peer_pose_stale", robot, None
                         continue
@@ -122,7 +127,8 @@ class RoadSpeed:
             if not isinstance(reply, dict) or reply.get("renewed") is not True or reply.get("correlation_id") != owner:
                 raise TripError(409, "ROAD_SPEED_ACK_UNCONFIRMED")
         except Exception as exc:
-            if (getattr(exc, "status", None) == 409 and getattr(exc, "code", None) == "GOAL_LEASE_NOT_ACTIVE"
+            if (getattr(exc, "status", None) == 409
+                    and getattr(exc, "code", None) in ("GOAL_LEASE_NOT_ACTIVE", "ROAD_SPEED_OWNER_CHANGED")
                     and live.open and live.active_route is route and await _goal_finished(runner, rid)):
                 detail["state"] = "arrived"  # reached the target before the first renewal; the step loop sees ARRIVED
                 return

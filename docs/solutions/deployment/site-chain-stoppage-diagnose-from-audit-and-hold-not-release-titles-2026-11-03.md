@@ -74,5 +74,7 @@ SSH로 업데이터를 즉시 시작해 폴링 대기를 없애고, (b) 서명�
 함께 본 것: 셀의 여러 갱신기가 GitHub 익명 API 한도(시간당 60회)를 나눠 써서 `403 rate limit`으로
 한 시간씩 멈출 수 있다. 수동 재실행을 반복하면 한도를 더 빨리 쓴다.
 
-재발 방지: `cell_a_autoupdate.py`는 아직 저장소에 없다. 다시 설치하면 위 (1)(2) 수정이 사라지므로
-설치 원본을 저장소로 옮기기 전까지 호스트 백업과 이 절을 기준으로 삼는다.
+재발 방지: 설치 원본을 저장소 `deploy/site/cell_a_autoupdate.py`(유닛 `rosy-cell-autoupdate.service`·`.timer`,
+시험 `test/test_site_cell_autoupdate.py`)로 옮겼다. (1)(2) 수정을 시험이 고정한다. API 사용도 줄였다: 릴리스 목록은
+ETag 조건부 요청(304는 한도에 안 셈), 커밋 쌍 비교는 캐시, 실패 기록 커밋은 비교 호출 전에 건너뛴다. 셀에 다시
+설치할 때는 `deploy/site/README.md`의 "Arm cell updater (cell-a)" 절을 따른다.

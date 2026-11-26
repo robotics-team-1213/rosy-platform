@@ -32,6 +32,7 @@ CANVAS_FILES = [
     FLEET / "map" / "trail-view.js",
     FLEET / "map" / "camera-backdrop.js",
     FLEET / "map" / "traffic-view.js",
+    FLEET / "map" / "zone-blueprint-3d.js",  # billboard names of the zone map are drawn on a canvas
     FLEET / "calibration" / "field-view.js",
     FLEET / "calibration" / "map-fit-view.js",
     FLEET / "calibration" / "manual-fit-math.js",

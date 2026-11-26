@@ -4263,7 +4263,15 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "consumer": "applications/fleet/web/cell/arm-incident-clear.js",
+          "expression": "/api/fleet/pipeline/status",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/status"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/arm-incident-clear.js",
           "expression": "/api/fleet/pipeline/arm-holds/clear",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -5338,14 +5346,6 @@
         },
         {
           "consumer": "applications/fleet/web/charge-bays-view.js",
-          "expression": "/api/fleet/pipeline/arm-holds/clear",
-          "resolution": "literal-or-template",
-          "request_ids": [
-            "POST:/api/fleet/pipeline/arm-holds/clear"
-          ]
-        },
-        {
-          "consumer": "applications/fleet/web/charge-bays-view.js",
           "expression": "/api/fleet/pipeline/human-safety-gate",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -5424,6 +5424,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/site-map/active",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/active"
           ]
         }
       ],

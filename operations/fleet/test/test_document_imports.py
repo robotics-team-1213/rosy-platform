@@ -41,6 +41,7 @@ SHARED = {
     "vision-view.js",
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
     "cell-obs-model.js",  # Pure workcell observation & camera normalization shared by Console and Cell.
+    "arm-incident-clear.js",  # the one arm-incident and Fleet arm-hold clear step: Console drawer and Cell hold button
     "omx-inspector.js",  # Shared OMX right-inspector DOM builder used by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
@@ -91,7 +92,6 @@ OWN = {
         "calm-power.js",
         "cell-cockpit-stage.js",
         "cell-context-panel.js",
-        "arm-incident-clear.js",  # an open arm incident's clear step, in the alert drawer and the context panel
         "cell-job-panel.js",  # ARM-CELL run/recover of arms A/B through the Fleet cell job proxy
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
@@ -134,6 +134,7 @@ OWN = {
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",
         "zone-blueprint-model.js",
+        "zone-blueprint-geometry.js",
         "zone-blueprint-2d.js",
         "zone-blueprint-3d.js",
     },
