@@ -1,6 +1,7 @@
 """D-430 §5: commits that touch safety-tagged paths carry a ``Safety-Review:`` trailer.
 
 Usage: python tools/harness/safety_review.py BASE HEAD [--warn-only]
+       python tools/harness/safety_review.py --commit-msg MSGFILE   (the commit-msg hook: the staged change vs the message)
 
 Checks the commits in BASE..HEAD, minus ancestors of BASELINE (history from
 before this check landed) and the reviewed ``EXEMPT`` list. CI passes exactly the
@@ -231,7 +232,48 @@ def _batch_untrailered(base: str, head: str, checked: dict[str, list[str]],
     return missing
 
 
+def _index_manifest() -> dict:
+    blob = subprocess.run(["git", "show", f":{MANIFEST}"], capture_output=True, text=True, encoding="utf-8")
+    return (yaml.safe_load(blob.stdout) or {}) if blob.returncode == 0 else {}
+
+
+def staged_reasons() -> list[str]:
+    """Why the commit being made (index vs HEAD) needs a trailer. A merge in progress counts only the
+    paths that differ from both parents, as `needs_review` does for the finished merge."""
+    if subprocess.run(["git", "rev-parse", "-q", "--verify", "HEAD"], capture_output=True).returncode:
+        return []  # the first commit of a repository
+    def names(parent: str) -> set[str]:
+        return set(_git("-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--no-renames", parent).splitlines())
+    merging = subprocess.run(["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"], capture_output=True).returncode == 0
+    changed = names("HEAD") & names("MERGE_HEAD") if merging else names("HEAD")
+    parents = [_manifest("HEAD")] + ([_manifest("MERGE_HEAD")] if merging else [])
+    own = _index_manifest()
+    reasons = [f"touches {path}" for path in sorted(changed) if any(_is_safety_in(path, m) for m in (*parents, own))]
+    kept = set.intersection(*(tagged(m) for m in parents))
+    return reasons + [f"untags {entry}" for entry in sorted(kept - tagged(own))]
+
+
+def commit_msg(msg_file: str) -> int:
+    """commit-msg hook (tools/hooks/commit-msg): refuse the commit that needs a trailer and has none, so the
+    trailer is written once at commit time and never by amend or reset --soft afterwards (2026-11-27)."""
+    text = "\n".join(ln for ln in Path(msg_file).read_text(encoding="utf-8", errors="replace").splitlines()
+                     if not ln.startswith("#"))
+    if TRAILER.search(text):
+        return 0
+    reasons = staged_reasons()
+    if not reasons:
+        return 0
+    print("[safety-review] this commit changes safety-tagged paths (D-430 section 5):\n    " + "\n    ".join(reasons)
+          + "\n[safety-review] after an independent review, add a message line that starts with"
+          + "\n    Safety-Review: <reviewer/lane> <evidence>"
+          + "\n[safety-review] e.g. git commit -m \"<subject>\" -m \"Safety-Review: <reviewer/lane> <evidence>\""
+          + "\n[safety-review] do not amend or reset to add it later; fix the message and commit again.", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[0] == "--commit-msg":
+        return commit_msg(argv[1])
     warn_only = "--warn-only" in argv
     args = [arg for arg in argv if arg != "--warn-only"]
     if len(args) != 2:
