@@ -263,7 +263,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
-                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2, **bounds)
+                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
+                              nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0, **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
