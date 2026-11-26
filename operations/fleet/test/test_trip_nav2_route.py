@@ -173,7 +173,7 @@ def test_console_route_goal_lease_and_trip_guard():
     assert robot._state["navigation"] == "CANCELED"
 
 
-def test_console_route_untrusted_peer_cancels_without_single_point_queue():
+def test_console_route_waits_for_untrusted_peer_before_motor_dispatch():
     r42 = RouteFakeRobot("rosy_42")
     r45 = RouteFakeRobot("rosy_45")
     r45._state["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
@@ -187,8 +187,9 @@ def test_console_route_untrusted_peer_cancels_without_single_point_queue():
     assert reply["accepted"] is False
     assert reply["queued"] is False
     assert reply["reason"] == "LOCALIZATION_UNTRUSTED"
-    assert reply["cancel_confirmed"] is True
-    assert r42._state["navigation"] == "CANCELED"
+    assert reply["command_robot_id"] == "rosy_42" and reply["waiting_on"] == ["rosy_45"]
+    assert reply["cancel_confirmed"] is False and reply["dispatch_attempted"] is False
+    assert r42.routes == []
     assert console._queued == {}
 
 
