@@ -1,3 +1,4 @@
+import { drawFixtureOutlines } from "./fixture-frame.js";
 // Calibration "모눈종이" (Top-Camera Overlay + Arm-Base Metric XY Grid) Canvas Renderer.
 // Reads all colours and fonts exclusively from window.RosyPalette (tokens.css) so dark/light themes
 // and shared/web token contracts remain intact without inline styles or raw hex values.
@@ -166,6 +167,7 @@ export function renderTopView(canvas, state) {
   }
 
   if (!hasImage || state.frameVerified !== true) return { hitTargets };
+  if (state.layers.sites && state.frameSource === "live") drawFixtureOutlines(ctx, state.fixtures, tone);
 
   // 2. Projected arm-space metric 모눈종이 (50mm major, 10mm minor over workspace)
   if (layers.metricGrid && invH) {

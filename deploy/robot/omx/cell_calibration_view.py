@@ -349,8 +349,25 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
 
 def build_bundle(entries: list[dict[str, Any]], *, now_ts: float | None = None) -> dict[str, Any]:
     """Build the full profiles snapshot payload for calibration_web."""
+    profiles = [build_profile_snapshot(e, now_ts=now_ts) for e in entries]
+    by_arm = {}
+    for entry, profile in zip(entries, profiles):
+        by_arm.setdefault(profile.get("arm_id"), []).append(entry["config_path"])
+    for entry, profile in zip(entries, profiles):
+        peer = by_arm.get(profile.get("zone_peer"))
+        if peer and len(peer) == 1:
+            cfg, _ = _read_json(Path(entry["config_path"]))
+            if cfg:
+                from cell_shared_pallet import shared_pallet
+                report = shared_pallet(cfg, None, peer_path=peer[0])
+                profile["shared_pallet_surface"] = report
+                if report["status"] in ("mismatch", "near_tolerance"):
+                    offsets = ", ".join(f"{error:.1f}" for error in report["corner_error_px"])
+                    band = "정합 오차 범위에서 허용값과 겹침" if report["status"] == "near_tolerance" else "허용값 초과"
+                    profile["hygiene"].append({"level": "warning", "code": "shared_pallet_surface",
+                        "message": f"공유 선박 작업면 꼭짓점 차이 {offsets}px · {band} (허용 {report['tolerance_px']}px, 정합 P95 {report['registration_p95_residual_px']}px)"})
     return {
         "schema": "rosy.calibration-profiles-bundle.v1",
         "configured": bool(entries),
-        "profiles": [build_profile_snapshot(e, now_ts=now_ts) for e in entries],
+        "profiles": profiles,
     }

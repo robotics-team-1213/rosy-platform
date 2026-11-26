@@ -60,7 +60,7 @@ def _generation(calibration):
                                  ("reference_top_sha256", "reference_map_sha", "reference_geometry_sha")])
 
 
-def bind_frame(entry, source, frame_bytes):
+def bind_frame(entry, source, frame_bytes, *, include_fixtures=False):
     """Register these exact image bytes; unmatched frames retain their original pixels."""
     import cv2
     import numpy as np
@@ -104,6 +104,14 @@ def bind_frame(entry, source, frame_bytes):
                                          flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
         ok, jpeg = cv2.imencode(".jpg", registered)
         if ok:
+            if include_fixtures and config.get("arm_id") in ("arm_a", "arm_b"):
+                try:
+                    from cell_fixture_outline import inspect_fixtures
+                    # Use the pixels the browser receives in this calibration generation.
+                    rendered = cv2.imdecode(jpeg, cv2.IMREAD_COLOR)
+                    report["fixture_observation"] = inspect_fixtures(rendered, config, calibration)
+                except (ImportError, OSError, ValueError, KeyError, TypeError, RuntimeError, cv2.error) as exc:
+                    report["fixture_observation"] = {"status": "unverified", "reason": str(exc)}
             return jpeg.tobytes(), {**report, "status": "aligned"}
     except (KeyError, OSError, ValueError, TypeError, AttributeError, cv2.error, np.linalg.LinAlgError):
         pass

@@ -268,7 +268,25 @@ def main(argv=None):
     work = Path(config["work_dir"]).expanduser() / "calibrate"
     if args.step != "check":
         work.mkdir(parents=True, exist_ok=True)
-    found = check(config, calibration, targets, cell.frame("top"), config["params"])
+    receipt, receipt_error = None, None
+    if args.step == "check" and config.get("arm_id") in ("arm_a", "arm_b") and hasattr(cell, "frame_receipt"):
+        try:
+            receipt = cell.frame_receipt("top", max_age_s=2.0)
+        except (OSError, TimeoutError, ValueError) as exc:
+            receipt_error = str(exc)
+    frame = receipt["image"] if receipt else cell.frame("top")
+    found = check(config, calibration, targets, frame, config["params"])
+    if config.get("arm_id") in ("arm_a", "arm_b"):
+        from cell_shared_pallet import shared_pallet
+        found["shared_pallet_surface"] = shared_pallet(config, calibration)
+        if args.step == "check":
+            from cell_calibration_view_frame import bind_frame
+            if receipt:
+                _, binding = bind_frame({"config_path": str(args.config)}, "live", receipt["jpeg_bytes"], include_fixtures=True)
+                found["fixture_observation"] = binding.get("fixture_observation", {"status": "unverified"})
+                found["fixture_observation"].update(source_stamp=receipt["source_stamp"], source_seq=receipt["source_seq"])
+            else:
+                found["fixture_observation"] = {"status": "unverified", "reason": receipt_error or "source_stamp_missing"}
     if args.route:
         from cell_route_calibration import route_calibration_report
         found["route"] = route_calibration_report(config, calibration, found, *args.route)
@@ -323,6 +341,13 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
                 config_dirty = True
+            if config.get("arm_id") in ("arm_a", "arm_b") and "map_binding_error" in found and found["map_binding_error"] is None:
+                comparison = shared_pallet(config, calibration, candidate_frame=current)
+                if comparison["status"] == "mismatch":
+                    done.append({"remap": record["loo_error_mm"], "refused": "shared pallet work surfaces disagree",
+                                 "shared_pallet_surface": comparison})
+                    print(json.dumps({"done": done}), flush=True)
+                    return 2  # the geometry, map, reference and bias on disk still belong to the previous generation
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
