@@ -973,7 +973,9 @@ def test_fifo_human_hold_ignores_pre_dispatch_status_row_and_reads_post_dispatch
     assert r3.command("human-hold req2") is True
     r3.tick()
     ack2 = [row for row in status3 if row.get("command") == "human-hold"][-1]
-    assert ack2["ok"] is False and ack2["hold_req"] == "req2" and ack2["person_needed"] is True and r3.torque_hold_commanded is False
+    # 2026-11-26: the hold pose streams with torque ON under the shed, so the ack stands and the shed is its own field
+    assert ack2["ok"] is True and ack2["hold_req"] == "req2" and ack2["person_needed"] is True and r3.torque_hold_commanded is True
+    assert ack2["overload_shed"] == ["wrist_flex"]
 
 
 def test_pr2_guard_stopped_clears_port_and_retries_per_motor():

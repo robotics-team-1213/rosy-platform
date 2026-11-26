@@ -7,6 +7,12 @@ from chunk_runner_interrupt import interrupt_tick
 from chunk_runner_settle import tick_or_report, wait_aligned_before_start
 
 
+def overload_shed(runner) -> dict:
+    """Joints the guard is shedding (overload-hold, torque ON), as its own field; never folded into the hold ack."""
+    held = getattr(getattr(getattr(runner, "robot", None), "motion", None), "held", None)
+    return {"overload_shed": sorted(held)} if held else {}
+
+
 def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
     """Atomically emit the latest runner snapshot for `cell_job_api` and observer handoff."""
     if not getattr(runner, "live", None) or getattr(runner, "target", None) is None:
@@ -24,7 +30,7 @@ def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
                 "fault": runner.fault,
                 "holding": _is_holding(runner),
                 "human_hold_latched": runner.human_hold_latched,
-                "torque_hold_commanded": runner.torque_hold_commanded,
+                "torque_hold_commanded": runner.torque_hold_commanded, **overload_shed(runner),
                 **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
                 "pid": os.getpid(),
                 **({"interrupt": runner._interrupt["phase"]} if getattr(runner, "_interrupt", None) else {}),

@@ -31,7 +31,7 @@ from chunk_runner_guards import (  # noqa: E402, F401
 )
 from chunk_runner_trace import trace_receipt  # noqa: E402
 from chunk_policy_playback import _hold_and_report, _is_holding, absorb_telemetry_error, active_jaw_gate, check_runner_jaw_gate, finish_tick, halt_policy_gate, read_present_or_hold, report_policy_halt, send_with_jaw_gate, tick_ready  # noqa: E402
-from chunk_runner_loop import run  # noqa: E402
+from chunk_runner_loop import overload_shed, run  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
     IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S,
     check_chunk_settled, check_runner_idle, confirm_grip_release, confirm_post_write_present, tick_or_report, wait_aligned_before_start,
@@ -123,7 +123,7 @@ class Runner:
         row = dict(
             fields, state=[round(v, 2) for v in state], target=[round(v, 2) for v in self.target],
             health=self.health, fault=self.fault, human_hold_latched=self.human_hold_latched,
-            torque_hold_commanded=self.torque_hold_commanded, operating_context=self.operating_context,
+            torque_hold_commanded=self.torque_hold_commanded, operating_context=self.operating_context, **overload_shed(self),
             library_sha256=self._library_digest(), t=reported_at,
             **({"trace_receipt": receipt} if receipt is not None else {}),
         )
@@ -286,6 +286,7 @@ class Runner:
                          or not (self.fault or "").startswith("contact (overload-hold"))):
                 self.hold(present, f"contact (overload-hold on {', '.join(held)} by the guard): lift and elbow shed its load")
             self.retreat_frames = []
+            human_hold_ack(self, present, hold_sent=hold_sent)  # the hold pose streamed with torque ON: ack it before the shed
             shed_interrupt_hold(self, sent, present, fresh=bool(committed and self._fresh_present))
             return
         if isinstance(sent, dict) and not self.fault and self.chunk is not None and self.chunk.startswith(CONTACT_CHUNKS):
