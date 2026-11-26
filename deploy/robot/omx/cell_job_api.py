@@ -225,7 +225,7 @@ class Runner:
             proof, proof_err = prove_job(self, jid, name, job, arms, eff_params, moving, ignored, principal, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)
             if proof_err is not None: return proof_err
             log = self.out / f"{jid}.log"
-            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, {**eff_params, "person_at_switch": proof is not None})  # supervised remap = a passing proof, "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
+            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, {**eff_params, "person_at_switch": proof is not None}), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:

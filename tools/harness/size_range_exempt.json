@@ -146,5 +146,9 @@
   {
     "commit": "8b65ceaa0f6e009011407f7b58503a7c7c6ff314",
     "reason": "11-19 publish backlog (origin/main 11-15..main): over 600 lines at this commit, split by a later commit; tip passes D-766"
+  },
+  {
+    "commit": "3612f5eb95c471edbf76b2adc764e36601871356",
+    "reason": "presence-proof PR4: test_omx_policy_drive.py was 1502 lines at this commit only; the next commits delete the obsolete person_at_switch test (tip is under 1500)"
   }
 ]
