@@ -43,6 +43,14 @@ def last_json(text: str):
     return None
 
 
+def failure_line(text: str):
+    """The engine's exit message on a failed job: the last log line that is not JSON."""
+    for line in reversed(text.strip().splitlines()):
+        if line.strip() and last_json(line) is None:
+            return line.strip()[:500]
+    return None
+
+
 def site_point(name, site):
     point = site.get("place")
     if (SITE.fullmatch(name) and isinstance(point, list) and len(point) == 2
@@ -399,6 +407,8 @@ class Jobs:
             text = ""
         record.update(exit_code=code, ended=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       result=last_json(text), status="done" if code == 0 else "failed")
+        if code != 0:
+            record["error"] = failure_line(text)
         self.write(record)
         try:
             self.lease().release(record["arm"], owner, expected_pid=proc.pid)

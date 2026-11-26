@@ -66,6 +66,30 @@ def scoped(config: dict) -> dict:
     return scoped_config
 
 
+def visit_order(points: list) -> list:
+    """The point nearest the base first, then always the nearest point not yet visited.
+
+    2026-11-26 arm_a: ordered by distance from the base alone, 6 of 18 moves crossed the grid (80-105 s each at
+    remap_transit_speed 0.2) and took half of the 19 min remap."""
+    left = sorted(points, key=lambda q: math.hypot(*q))
+    order = left[:1]
+    del left[:1]
+    while left:  # by position, so a repeated point is visited as often as it is listed
+        here = order[-1]
+        order.append(left.pop(min(range(len(left)), key=lambda i: math.hypot(left[i][0] - here[0], left[i][1] - here[1]))))
+    return order
+
+
+def scene_ignore(config: dict) -> list:
+    """Rects the remap's folded before/after comparison skips: moving sites, `scene_ignore_px`, and
+    `calibrate.scene_ignore_px`, the folded arm's own links and cables, which park a few px apart
+    (2026-11-24..26 arm_s: 4 of 9 remaps lost to 160-400 px blobs on its own body)."""
+    import cell_scene_guard
+
+    return [*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ()),
+            *((config.get("calibrate") or {}).get("scene_ignore_px") or ())]
+
+
 def view(config: dict, x: float, y: float) -> dict:
     sites = config.get("calibrate", {}).get("map_sites") or ["floor", "pinky", "belt"]
     site = next(s for s in sites if s in config["sites"])
@@ -79,10 +103,10 @@ def reach_note(config: dict) -> str:
 
 
 def plan(config: dict, points: list) -> list:
-    """One row per point, nearest first: the above_pick joints, and the error that would refuse it."""
+    """One row per point in visit order: the above_pick joints, and the error that would refuse it."""
     rows, cfg = [], scoped(config)
     limit = config.get("calibrate", {}).get("max_reach_m")
-    for x, y in sorted(points, key=lambda q: math.hypot(*q)):
+    for x, y in visit_order(points):
         target, row = view(config, x, y), {"point": [x, y]}
         try:
             library = cio.plan_library(cfg, target, target, check=False)
@@ -249,6 +273,17 @@ def fit_remap_marks(
     })
 
 
+def fit_naming_stop(stop: str | None, config: dict, z_view: float, **kw) -> dict:
+    """fit_remap_marks; a refusal after a stopped move also names the stop (2026-11-26 arm_a: four contact stops at
+    the first point read only "remap: only 0 marks agree of 0")."""
+    try:
+        return fit_remap_marks(config, z_view, **kw)
+    except SystemExit as exc:
+        if stop is None:
+            raise
+        raise SystemExit(f"{stop}; {exc}") from exc
+
+
 def replay_observations(frames_dir: Path, config: dict, *, log=print) -> dict:
     """Offline, read-only, fail-closed replay of a saved remap-frames directory under current config guards."""
     import cv2
@@ -277,9 +312,7 @@ def replay_observations(frames_dir: Path, config: dict, *, log=print) -> dict:
     before, after = cv2.imread(str(before_path)), cv2.imread(str(after_path))
     if before is None or after is None:
         raise SystemExit(f"replay: unreadable before/after images in {frames}")
-    moved = cell_scene_guard.scene_moved(
-        before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())],
-    )
+    moved = cell_scene_guard.scene_moved(before, after, ignore=scene_ignore(config))
     if moved:
         raise SystemExit(f"replay: the scene changed during it, no map saved: {moved}; views in {frames}")
     marks = []
