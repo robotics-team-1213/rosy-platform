@@ -310,3 +310,11 @@
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-26 · Pinky 표정 변화 — 깜빡임·눈썹·볼터치·턴 신호 시선
+
+- 변경: `character.py`가 부드러운 눈꺼풀 깜빡임(phase 15 중심), 눈썹·보조 반짝임·볼터치(BLUSH, 32×24 임계값 아래)·scan/lost/worry/thinking 미세 움직임을 그린다. native tick은 표정 의도가 없을 때 좌/우 방향 신호 쪽으로 시선을 돌린다(기존 resting 조건은 유지). 16개 GIF는 `make_faces.py` 결과와 바이트 단위로 같고 20프레임·100 ms·320×240이다. LCD 문구는 없으며 영어 유지 결정과 무관하다.
+- 출처: 11-25 세션 세 후보 중 pinky-face-variety 작업본을 채택하고 opencode-clever-star의 결정성·쌍별 구별·눈꺼풀·볼터치 시험을 합쳤다. proud-engine 변형은 같은 파일을 다르게 바꾼 중복이라 버렸다.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 평범한 표현 변경.
+
