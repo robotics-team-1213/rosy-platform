@@ -21,9 +21,9 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
 
     def _refuse(cur: dict, reason: str, *, base: dict = row, result: str = "refused", keep_hold: bool = False, **extra):
         nonlocal hold_sent
-        diag = _rest_diagnosis(cur, home)
+        diag = _rest_diagnosis(cur, home, library)
         hold = keep_hold or home is None or not diag["no_hold"]  # no command sent: a clean arm at home or folded ends the session without a hold
-        facts = {"reason_code": reason.split(":")[0], "off_home": diag["off_home"], "folded": diag["folded"], "hold_kept": hold,
+        facts = {"reason_code": reason.split(":")[0], "off_home": diag["off_home"], "folded": diag["folded"], "fold_basis": diag["fold_basis"], "hold_kept": hold,
                  **({"next": "recover_hold"} if hold else {})}  # a kept hold is cleared by the recover_hold job (attach_live_hold)
         rows = [{**base, "refused": reason, **facts, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
         if hold:

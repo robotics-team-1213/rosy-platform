@@ -20,14 +20,52 @@ def finite_float(val: Any) -> float | None:
     return num if math.isfinite(num) else None
 
 
-def live_folded(row: dict[str, Any]) -> bool | None:
+# Per-joint slack around the arm's own park/home/standby poses: pan, lift, elbow, wrist flex, wrist roll (the jaw does not count).
+FOLD_TOL = (20.0, 10.0, 15.0, 12.0, 20.0)  # elbow is wider: a limp arm sags there first (11-26 pose, test_omx_policy_drive)
+FOLD_POSES = ("park", "home", "standby")
+
+
+def _poses(source: Any) -> list[list[float]]:
+    """Fold poses from a chunk library (chunks.park/home/standby: last frame) or a cell config (plan.home/park: one pose or frames)."""
+    if not isinstance(source, dict):
+        return []
+    if isinstance(source.get("chunks"), dict):
+        entries = [source["chunks"].get(n) for n in FOLD_POSES]
+    else:
+        plan = source.get("plan") if isinstance(source.get("plan"), dict) else source
+        entries = [plan.get(n) for n in FOLD_POSES]
+    out = []
+    for ent in entries:
+        pose = ent[-1] if isinstance(ent, list) and ent and isinstance(ent[-1], list) else ent
+        if isinstance(pose, list) and len(pose) >= 5 and all(finite_float(v) is not None for v in pose[:5]):
+            out.append([float(v) for v in pose[:5]])
+    return out
+
+
+def fold_ranges(*sources: Any) -> list[tuple[float, float]] | None:
+    """Per-joint (lo, hi) allowed while folded, from the arm's own library/config; None means no usable pose (coarse rule)."""
+    poses = [p for src in sources for p in _poses(src)]
+    if not poses:
+        return None
+    return [(min(p[i] for p in poses) - FOLD_TOL[i], max(p[i] for p in poses) + FOLD_TOL[i]) for i in range(5)]
+
+
+def fold_basis(*sources: Any) -> str:
+    return "calibrated" if fold_ranges(*sources) else "coarse"
+
+
+def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
+    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range."""
     if isinstance(row.get("folded"), bool):
         return row["folded"]
     st = row.get("state")
     if isinstance(st, list) and len(st) >= 6 and all(
         isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) for v in st[:6]
     ):
-        return float(st[1]) <= -50.0 and float(st[2]) >= 45.0
+        if not (float(st[1]) <= -50.0 and float(st[2]) >= 45.0):
+            return False
+        ranges = fold_ranges(*sources)
+        return ranges is None or all(lo <= float(st[i]) <= hi for i, (lo, hi) in enumerate(ranges))
     return None
 
 
@@ -54,6 +92,7 @@ def passive_motor_health_folded(
     read_json_fn: Callable[[Path], dict[str, Any] | None],
     calibration_dir: Path | None = None,
     gripper_max: float | None = None,
+    library: Any = None,
 ) -> bool:
     """True only when a fresh passive motor-health snapshot proves peer is torque-off, fault-free, and folded
     (and, with `gripper_max`, the jaws shut at or below it)."""
@@ -84,13 +123,13 @@ def passive_motor_health_folded(
            or type(m.get("hardware_error")) is not int or m["hardware_error"] != 0 for m in motors):
         return False
     pose = calibrated_pose([m.get("present_raw") for m in motors], cal)
-    return (pose is not None and live_folded({"state": pose}) is True
+    return (pose is not None and live_folded({"state": pose}, library) is True
             and (gripper_max is None or pose[5] <= gripper_max))
 
 
-def calibrated_positions_folded(positions, cal) -> bool:
+def calibrated_positions_folded(positions, cal, library: Any = None) -> bool:
     pose = calibrated_pose(positions, cal)
-    return pose is not None and live_folded({"state": pose}) is True
+    return pose is not None and live_folded({"state": pose}, library) is True
 
 
 def calibrated_pose(positions, cal) -> list[float] | None:
