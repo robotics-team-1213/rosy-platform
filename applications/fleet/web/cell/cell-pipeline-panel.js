@@ -245,6 +245,44 @@ export function createPipelinePanel(ctx) {
     steps.append(step1, step2, step3, step4);
     nodes.push(steps);
 
+    const cellTasks = tasksBody?.tasks || [];
+    const taskById = new Map(cellTasks.map(task => [task.task_id, task]));
+    const predecessors = new Set(cellTasks.map(task => task.depends_on).filter(Boolean));
+    if (predecessors.size) {
+      const wrap = document.createElement('div');
+      wrap.className = 'cell-pipeline-ledger';
+      const table = document.createElement('table');
+      table.className = 'cell-pipeline-table';
+      const caption = document.createElement('caption');
+      caption.textContent = '연결된 셀 작업';
+      const header = document.createElement('tr');
+      for (const name of ['작업 ID', '팔', '출발 → 도착', '작업 상태', '선행 작업 ID', '선행 작업 상태']) {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = name;
+        header.append(th);
+      }
+      const head = document.createElement('thead');
+      head.append(header);
+      const body = document.createElement('tbody');
+      for (const task of cellTasks) {
+        if (!task.depends_on && !predecessors.has(task.task_id)) continue;
+        const parent = taskById.get(task.depends_on);
+        const parentState = task.depends_on ? parent?.status || '상태 미확인' : '—';
+        const row = document.createElement('tr');
+        for (const value of [task.task_id, task.arm_id, `${task.src_site || '—'} → ${task.dst_site || '—'}`,
+          task.status, task.depends_on, parentState]) {
+          const td = document.createElement('td');
+          td.textContent = value || '—';
+          row.append(td);
+        }
+        body.append(row);
+      }
+      table.append(caption, head, body);
+      wrap.append(table);
+      nodes.push(wrap);
+    }
+
     const recentPinkys = [...(tasksBody?.pinky_tasks || [])].reverse().slice(0, 12);
     if (recentPinkys.length) {
       const wrap = document.createElement('div');
@@ -260,7 +298,6 @@ export function createPipelinePanel(ctx) {
       }
       thead.append(hr);
       const tbody = document.createElement('tbody');
-      const taskById = new Map((tasksBody?.tasks || []).map(t => [t.task_id, t]));
       for (const pt of recentPinkys) {
         const tr = document.createElement('tr');
         for (const val of formatPinkyTaskRow(pt)) {
