@@ -93,7 +93,6 @@
 - 결정: D-190
 - 교훈: 없음
 
-
 ## 2026-09-24 · uncommitted · fix(emotion): 경보 문장은 채움이다 — 얼굴 번역 (D-202)
 
 - 변경: info_screen.py에 _draw_alarm 추가 — 웨이크 카드의 E-STOP 문장·위험 배터리 숫자, 부팅 카드의 FAILED·실패 유닛·코드 소각 문장을 crit 글자(어두운 바탕 위 2.2:1)에서 위험 채움+종이 잉크 칩으로. 배터리 게이지 봉은 이미 채움이라 그대로. 칩 하단 여백은 2px — 다음 줄 영역(부팅 카드 y=100 경계 계약)을 침범하지 않는다.
@@ -101,7 +100,6 @@
 - gate 변화: 얼굴 G1에 경보 침 픽셀 게이트·정상 무색 게이트 추가.
 - 결정: D-202(얼굴 번역 문단)
 - 교훈: 팔레트가 옳아도 칠하는 방식이 틀리면 경보는 여전히 안 읽힌다 — 값의 게이트와 용법의 게이트는 다르다.
-
 
 ## 2026-09-25 · uncommitted · test(emotion): 웨이크 카드 어휘 고정 (D-221, F-07 처분)
 
@@ -172,6 +170,7 @@
 - 변경: info_screen.py 에 DisplayProfile(PINKY_ST7789, animation 게이트 — 전자잉크는 프레임 무시)·render_drive(큰 모드 단어·속도·NAV·배터리 게이지)·render_card(kind 디스패치 단일 입구). emotion_server 는 render_card 로 갈아탔다(호환: kind 없으면 웨이크 카드).
 - 증거: test_info_screen.py TestDisplayProfile·TestDriveCard (픽셀 비교; 변이: 디스패치 절단 시 빨강).
 - gate 변화: 없음.
+
 ## 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
 - 변경: `display/info` 의 `activity == "CALIBRATING"` 이면 MODE 값을 주의 칩 `CALIBRATING` 으로. LCD 글꼴은 ASCII 뿐(D-221)이라 "보정 중" 대신 기계어. E-STOP HEALTH 행은 그대로 우선.
 - 증거: face 시험·test_bridge_display 177 passed; 렌더 X:\DevTemp\calibration-mode\face-info-calibrating.png.
@@ -200,7 +199,6 @@
 - 변경: render_drive 도킹 중 모드 단어 대신 DockState(CHARGING·DOCKED 등)를 큰 글자로.
 - 증거: test_info_screen.py 통과.
 - gate 변화: 없음.
-
 
 ## 2026-10-01 · uncommitted · D-398 부팅 카드 장미색 사본 정합
 
@@ -310,3 +308,11 @@
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-26 · uncommitted · Pinky 표정 변화: 눈썹·볼터치·턴 신호 시선
+
+- 변경: character.py가 눈썹, 보조 반짝임, 볼터치(BLUSH, 32x24 임계값 아래), scan/lost/worry/thinking 미세 움직임을 그린다. native tick은 표정 의도가 없을 때 좌/우 방향 신호 쪽으로 시선을 돌린다(resting 조건 유지). D-504 등의 깜빡임 없음을 지킨다. GIF 16개는 make_faces.py 결과와 같고 20프레임, 100ms, 320x240이다. LCD 문구 없음(영어 유지).
+- 증거: 원격 집중 시험(face test 디렉터리, test_face_expression, test_rosy_face*, native systemd 계약) exit 0; 독립 검토에서 깜빡임을 지적받아 제거. 호스트 렌더는 실물 LCD 수용이 아니다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 해당 없음 - 평범한 표현 변경
