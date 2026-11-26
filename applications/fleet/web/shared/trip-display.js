@@ -1,5 +1,5 @@
-import {tripWaitText} from "/console/assets/trip-wait.js";
-export {tripWaitText};
+import {tripExecutionText, tripWaitText} from "/console/assets/trip-wait.js";
+export {tripExecutionText, tripWaitText};
 
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 /** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
@@ -182,7 +182,7 @@ export function tripStatusText(trip, map) {
   if (!trip) return '진행 중인 운행 없음';
   const names = new Map((map?.places || []).map(place => [place.id, place.name]));
   const wait = ['started', 'running', 'link_wait'].includes(trip.state) && tripWaitText(trip);
-  const parts = [wait || TRIP_STATE_LABEL[trip.state] || trip.state, trip.robot_id];
+  const parts = [tripExecutionText(trip) || wait || TRIP_STATE_LABEL[trip.state] || trip.state, trip.robot_id];
   if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
