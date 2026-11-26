@@ -51,6 +51,7 @@ SHARED = {
     "trip-wait.js",
     "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
+    "trip-preview-summary.js",  # Read-only preview distance from the plan pose to the parking staging place.
     "drawing-errors.js",
 }
 

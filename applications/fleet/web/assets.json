@@ -782,6 +782,10 @@
       "path": "localization-panel.js",
       "media_type": "application/javascript"
     },
+    "trip-preview-summary.js": {
+      "path": "sitemap/trip-preview-summary.js",
+      "media_type": "application/javascript"
+    },
     "localization-panel-logic.js": {
       "path": "localization-panel-logic.js",
       "media_type": "application/javascript"
