@@ -21,6 +21,7 @@ if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
 import canonical_bundle_store  # noqa: E402
+import canonical_serve  # noqa: E402
 from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
 from canonical_recording_todo import build_service_todo  # noqa: E402
@@ -109,11 +110,13 @@ class CanonicalService:
         self.jobs_dir = Path.home() / "rosy-jobs"
         self.peer_token_file: Path | None = None
         self.collections_dir: Path | None = None
+        self.act_serve: dict | None = None
+        self.serve_jobs = canonical_serve.ServeJobs(self)
         self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return
         allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers",
-                   "jobs_dir", "peer_token_file", "collections_dir", "recording_manifest_path"}
+                   "jobs_dir", "peer_token_file", "collections_dir", "recording_manifest_path", "act_serve"}
         if not isinstance(config, dict) or config.get("schema") != CONFIG_SCHEMA or set(config) - allowed:
             raise ValueError(f"invalid canonical config (requires {CONFIG_SCHEMA})")
         if root is None:
@@ -162,6 +165,7 @@ class CanonicalService:
             self.peer_token_file = _abs_path(config["peer_token_file"], "peer_token_file")
         if config.get("collections_dir") is not None:
             self.collections_dir = _abs_path(config["collections_dir"], "collections_dir")
+        self.act_serve = canonical_serve.parse_config(config.get("act_serve"))
         if config.get("recording_manifest_path") is not None:
             self.recording_manifest_path = _abs_path(config["recording_manifest_path"], "recording_manifest_path")
 
@@ -296,7 +300,7 @@ class CanonicalService:
             "spec_sha256": self.spec_sha256, "spec": self.spec, "spec_source": self.spec_source,
             "named_sources": {k: {"id": v["id"], "kind": v["kind"], "arm_id": v["arm_id"], "label": v["label"]}
                               for k, v in merged_sources.items()},
-            "gpu_lock": {"busy": bool(holders), "holders": holders}, "runs": rows,
+            "gpu_lock": {"busy": bool(holders), "holders": holders}, "runs": rows, "act_serve": self.act_serve is not None,
             "watched": {wid: scan_watch_dir(m["path"], m) for wid, m in self.watch_roots.items()},
             "peers": self.peers.snapshot() if include_peers else {},
             "host_telemetry": self.telemetry.snapshot(), **AUTHORITY_STAMP,
