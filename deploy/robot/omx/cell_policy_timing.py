@@ -61,18 +61,35 @@ def library_home(library) -> list[float] | None:
     return pose6(frames[-1]) if isinstance(frames, (list, tuple)) and frames else None
 
 
-def idle_at_home(status, home) -> bool:
-    """Fault-free status held at home (cell_auto_fold.at_rest): with no command sent yet, a refusal needs no human-hold."""
+def rest_diagnosis(status, home) -> dict:
+    """Why a refusal before any command does or does not need human-hold: off_home (max body-joint gap to the library home),
+    folded (cell_job_peer_health.live_folded, what torque_off_folded uses) and no_hold, true for a clean status at home
+    (cell_auto_fold.at_rest within PRE_SETTLE_TOL) or folded. A fault, contact, hold latch or ok!=True is never no_hold."""
     from cell_auto_fold import at_rest
+    from cell_job_peer_health import live_folded
 
-    if not isinstance(status, dict) or home is None or status.get("ok") is not True or any(status.get(k) for k in FAULT_KEYS):
-        return False
+    out = {"off_home": None, "folded": None, "no_hold": False}
+    if not isinstance(status, dict):
+        return out
     state = status.get("state")
     try:
-        return (isinstance(state, (list, tuple)) and len(state) >= 5 and at_rest(state, home)
-                and max_diff(list(state), home, 5) <= PRE_SETTLE_TOL)  # a sag past the pre-settle tolerance is off home
-    except TypeError:
-        return False
+        if home is not None and isinstance(state, (list, tuple)) and len(state) >= 5:
+            out["off_home"] = round(max_diff(list(state), home, 5), 3)
+        out["folded"] = live_folded({"state": state})  # from the state itself, never a reported `folded` flag
+        # folded counts only for an empty, still gripper with no chunk running; a loaded or shaking arm keeps its hold
+        folded_ok = (out["folded"] is True and status.get("holding") is False and status.get("chunk") is None
+                     and not (status.get("jitter") or {}).get("shaking"))
+        clean = status.get("ok") is True and not any(status.get(k) for k in FAULT_KEYS)
+        at_home = out["off_home"] is not None and at_rest(state, home) and out["off_home"] <= PRE_SETTLE_TOL
+        out["no_hold"] = bool(home is not None and clean and (at_home or folded_ok))
+    except (TypeError, ValueError):
+        out["no_hold"] = False
+    return out
+
+
+def idle_at_home(status, home) -> bool:
+    """With no command sent yet, a refusal of a clean status that is at home or folded needs no human-hold."""
+    return rest_diagnosis(status, home)["no_hold"]
 
 
 def best_effort_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict | None:
@@ -191,13 +208,15 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
 
     def stopped(n, reason, row, status=None):
         nonlocal park_safe, hold_needed, safety_done
-        rest = not dry_run and not moved and idle_at_home(status, library_home(library))  # no command sent, parked at home
+        rest = not dry_run and not moved and rest_diagnosis(status, library_home(library))["no_hold"]  # no command sent, at home or folded
+        facts = ({k: v for k, v in rest_diagnosis(status, library_home(library)).items() if k != "no_hold"}
+                 if status is not None else {})
         park_safe, hold_needed = False, hold_needed or not (dry_run or rest)
         stop = None if dry_run or rest else send_hold(cell, log=log)
         safety_done = safety_done or not dry_run
-        for entry in ({**row, "policy_stop": reason}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
+        for entry in ({**row, "policy_stop": reason, **facts, "hold_kept": not (dry_run or rest)}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
             log(entry)
-        return {"result": "refused", "at": n, "reason": reason, **({"status": status} if status else {})}
+        return {"result": "refused", "at": n, "reason": reason, **facts, **({"status": status} if status else {})}
 
     def finish_park(result_name: str, *, log_hold: bool = True) -> dict:
         nonlocal park_safe, hold_needed, safety_done

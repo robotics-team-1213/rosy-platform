@@ -6,7 +6,7 @@ import time
 from cell_policy_entry import PRE_SETTLE_TOL, stationary_idle as _stationary_idle
 from cell_policy_timing import (
     ack_status as _ack_status, best_effort_hold as _best_effort_hold, empty_gripper_ok as _empty_gripper_ok,
-    idle_at_home as _idle_at_home, library_home as _library_home, max_diff as _max_diff, send_hold as _send_hold,
+    library_home as _library_home, max_diff as _max_diff, rest_diagnosis as _rest_diagnosis, send_hold as _send_hold,
 )
 
 HOLD_CURRENT_LIMIT_MA = 140.0
@@ -21,13 +21,17 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
 
     def _refuse(cur: dict, reason: str, *, base: dict = row, result: str = "refused", keep_hold: bool = False, **extra):
         nonlocal hold_sent
-        rows = [{**base, "refused": reason, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
-        if keep_hold or not _idle_at_home(cur, home):  # no command sent: a fault-free arm parked at home ends the session without a hold
+        diag = _rest_diagnosis(cur, home)
+        hold = keep_hold or home is None or not diag["no_hold"]  # no command sent: a clean arm at home or folded ends the session without a hold
+        facts = {"reason_code": reason.split(":")[0], "off_home": diag["off_home"], "folded": diag["folded"], "hold_kept": hold,
+                 **({"next": "recover_hold"} if hold else {})}  # a kept hold is cleared by the recover_hold job (attach_live_hold)
+        rows = [{**base, "refused": reason, **facts, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
+        if hold:
             rows.append({"command": "human-hold", **_ack_status(_send_hold(cell, log=log))})
             hold_sent = True
         for r in rows:
             log(r)
-        return None, {"result": result, "at": 0, "reason": reason, "parked": False}
+        return None, {"result": result, "at": 0, "reason": reason, "parked": False, **facts}
 
     try:
         home = _library_home(library)
@@ -35,7 +39,7 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
             return _refuse(status, "START_POSE_OFF_HOME: unconfirmed empty gripper",
                            result="fault" if status.get("fault") else "refused")
         if home is None:
-            return _refuse({}, "START_POSE_OFF_HOME: library missing home")
+            return _refuse(status, "START_POSE_OFF_HOME: library missing home")
         if (off_home := _max_diff([float(v) for v in status["state"]], home, 5)) > PRE_SETTLE_TOL:
             return _refuse(status, "START_POSE_OFF_HOME: arm off home; run home stage first", off_home=round(off_home, 3))
         s2, p2 = _stationary_idle(cell, status, home, check_home_target=True, max_off_home=PRE_SETTLE_TOL, sleep=sleep)

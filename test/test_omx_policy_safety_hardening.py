@@ -237,8 +237,8 @@ def test_off_home_refusal_latches_hold_and_blocks_owner_idle_park_and_retry(tmp_
     monkeypatch.setattr(timing.time, "sleep", lambda _s: None)
     monkeypatch.setattr(paced.time, "sleep", lambda _s: None)
     home = [0.0, -58.0, 50.0, 50.0, -5.0, 49.0]
-    sag = [0.0, -58.0, 55.0, 50.0, -5.0, 49.0]
-    sag_pre = [list(sag), [0.0, -58.0, 52.5, 50.0, -5.0, 49.0], list(home)]
+    sag = [0.0, -30.0, 50.0, 50.0, -5.0, 49.0]  # not folded (a folded rest ends without a hold, 11-26)
+    sag_pre = [list(sag), [0.0, -44.0, 50.0, 50.0, -5.0, 49.0], list(home)]
     base_lib = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 46.6,
                 "chunks": {"home": [home], "reach": [home, [20, -20, 30, 40, -5, 60]]}}
     pre_lib = {**base_lib, "chunks": {**base_lib["chunks"], "presettle": sag_pre}}
