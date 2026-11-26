@@ -70,7 +70,7 @@ function renderCamHealthHeader(st,labels,curArm){
       hdrCam.title='수신: '+(liveReq.join(', ')||'없음')+' / 미수신: '+missingReq.join(', ');
     }else{
       hdrCam.textContent='카메라 '+liveReq.length+'/'+req.length+'대';
-      hdrCam.dataset.tone='good';
+      hdrCam.dataset.tone='';
       hdrCam.title=req.join(', ');
     }
   }
@@ -307,7 +307,7 @@ function syncHeaderAndSlimBar(){
 
   const ok=Boolean(statusLoaded);
   $('ftr-server').textContent=ok?'서버 정상':'연결 끊김';
-  $('ftr-server').dataset.tone=ok?'good':'crit';
+  $('ftr-server').dataset.tone=ok?'':'warn';
   const locks=st?.active_locks;
   $('ftr-lock').textContent=locks?.length?'락 '+locks.length+'건':'락 없음';
   $('ftr-lock').dataset.tone=locks?.length?'warn':'';
@@ -461,7 +461,7 @@ function syncReplayUI(){
 setInterval(syncReplayUI,1000);
 setTimeout(syncReplayUI,600);
 
-const HF_STATE_MAP={idle:['대기','warn'],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
+const HF_STATE_MAP={idle:['대기',''],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
 let hfUploadInFlight=false;
 
 async function triggerHfUpload(datasetName){

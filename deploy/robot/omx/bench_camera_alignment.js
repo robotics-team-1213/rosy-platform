@@ -10,7 +10,7 @@
     top: '상단', side: '측면', arm_a_wrist: 'A 손목', arm_b_wrist: 'B 손목',
     matched: '등록 일치', unregistered: '장치 미등록', device_missing: '등록 장치 없음',
     binding_mismatch: '장치·영상 연결 불일치', registry_unavailable: '등록 확인 불가',
-    ok: '조명 정상', missing: '조명 확인 불가', stale: '조명 확인 불가',
+    ok: '조명 정상', missing: '조명 정보 없음', stale: '조명 판정 지연',
     lighting_mismatch: '조명 변화', no_baseline: '조명 기준 없음', unusable_lighting: '조명 이상',
   };
   const guidance = {
