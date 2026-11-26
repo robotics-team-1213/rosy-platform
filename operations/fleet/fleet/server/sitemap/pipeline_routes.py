@@ -526,24 +526,28 @@ def install_pipeline_routes(
     install_evidence_routes(app, ctx)
     install_recovery_tool_routes(app, ctx)
 
-    def _human_hold_active() -> bool:
+    def _hold_state():  # a real hazard is HUMAN_HOLD; the closed dispatch latch alone needs a named rearm (D-540)
         if (
             _is_human_detected()
             or getattr(app.state, "_fleet_estop_latch_unresolved", False)
             or getattr(app.state, "_pipeline_ledger_fault", False)
             or any((s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values())
         ):
-            return True
+            return "HUMAN_HOLD", {}
         tsvc = getattr(app.state, "task_service", None)
         if tsvc is not None:
             try:
                 ctrl = tsvc.store.dispatch_control()
             except Exception:
-                return True
+                return "HUMAN_HOLD", {}
             if not isinstance(ctrl, dict) or ctrl.get("dispatch_enabled") is not True:
-                return True
-        return False
+                keys = ("reason", "rearm_available", "queued_tasks", "unresolved_actions")
+                known = isinstance(ctrl, dict) and ctrl.get("dispatch_enabled") is False  # unknown state stays a hazard
+                return ("DISPATCH_REARM_REQUIRED", {k: ctrl.get(k) for k in keys}) if known else ("HUMAN_HOLD", {})
+        return None
 
-    app.state.pipeline_human_hold_fn = _human_hold_active
+
+    app.state.pipeline_human_hold_fn = _human_hold_active = lambda: _hold_state() is not None  # noqa: E731
     if (tr := getattr(app.state, "trip_runner", None)) is not None:
         tr.human_hold_fn = _human_hold_active
+        tr.hold_state_fn = _hold_state
