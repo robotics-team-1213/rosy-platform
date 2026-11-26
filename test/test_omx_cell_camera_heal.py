@@ -350,6 +350,23 @@ def test_root_helper_validates_its_arguments_and_cycles_through_usbfs(tmp_path):
     assert sent == [(0xA3, 0, 0, 2), (0x23, 1, 8, 2), (0x23, 3, 8, 2), (0xA3, 0, 0, 2)]  # status, power off, power on, status
     assert helper.main(["only-one"]) == 2
 
+    sent.clear()
+
+    def dies_on_power_on(fd, req, ctrl):
+        sent.append((ctrl.bRequestType, ctrl.bRequest))
+        if (ctrl.bRequestType, ctrl.bRequest) == (0x23, 3):
+            raise OSError("usbfs went away")
+    with pytest.raises(OSError):
+        helper.cycle(hub, 2, ioctl=dies_on_power_on, sleep=lambda _s: None, usbfs=usbfs)
+    assert (0x23, 3) in sent  # power-on was attempted after the power-off
+    sent.clear()
+
+    def dies_while_off(fd, req, ctrl):
+        sent.append((ctrl.bRequestType, ctrl.bRequest))
+    with pytest.raises(KeyboardInterrupt):
+        helper.cycle(hub, 2, ioctl=dies_while_off, sleep=lambda _s: (_ for _ in ()).throw(KeyboardInterrupt()), usbfs=usbfs)
+    assert sent[-1] == (0x23, 3)  # interrupted during the off window: the port is still switched back on
+
 
 def test_installer_writes_one_sudoers_line_naming_only_the_helper():
     import shutil

@@ -185,8 +185,11 @@ def camera_hub_port(device: str, role: str | None = None, *, leaf_finder=None, b
 
 
 def _cycle_hub_port(upstream: Path, port: int) -> None:
-    subprocess.run(["sudo", "-n", HUB_CYCLE_HELPER, upstream.name, str(port)],
-                   check=True, capture_output=True, text=True, timeout=30)
+    try:
+        subprocess.run(["sudo", "-n", HUB_CYCLE_HELPER, upstream.name, str(port)],
+                       check=True, capture_output=True, text=True, timeout=30)
+    except subprocess.CalledProcessError as exc:  # keep the helper's own reason (no sudoers line, refused argument)
+        raise OSError(f"{HUB_CYCLE_HELPER} exited {exc.returncode}: {(exc.stderr or '').strip()[:200]}") from None
 
 
 def arm_at_rest(role: str, configs: dict | None = None, *, reassess=None) -> str | None:

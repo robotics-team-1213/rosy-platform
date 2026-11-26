@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Power-cycle one USB hub port for the OMX camera heal (PR #917 review item 4). Installed root-owned as
 /usr/local/sbin/rosy-omx-hub-cycle by install-hub-cycle.sh; the cell user reaches it only through a sudoers drop-in
 that names this file, so it takes exactly two arguments and trusts nothing else:
@@ -13,6 +13,7 @@ import ctypes
 import fcntl
 import json
 import re
+import signal
 import struct
 import sys
 import time
@@ -65,9 +66,17 @@ def cycle(path: Path, port: int, *, ioctl=fcntl.ioctl, sleep=time.sleep, usbfs: 
 
     with open(node, "rb+") as fh:
         before = status(fh.fileno())
-        request(fh.fileno(), 0x23, 0x01, PORT_POWER)  # ClearPortFeature(PORT_POWER)
-        sleep(OFF_S)
-        request(fh.fileno(), 0x23, 0x03, PORT_POWER)  # SetPortFeature(PORT_POWER)
+        # A stop signal (the job API signals the whole process group) must not leave the port unpowered.
+        old = {s: signal.signal(s, signal.SIG_IGN) for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)}
+        try:
+            request(fh.fileno(), 0x23, 0x01, PORT_POWER)  # ClearPortFeature(PORT_POWER)
+            sleep(OFF_S)
+        finally:
+            try:
+                request(fh.fileno(), 0x23, 0x03, PORT_POWER)  # SetPortFeature(PORT_POWER)
+            finally:
+                for s, handler in old.items():
+                    signal.signal(s, handler)
         sleep(0.15)
         after = status(fh.fileno())
     return {"hub": path.name, "port": port, "before": before, "after": after}
