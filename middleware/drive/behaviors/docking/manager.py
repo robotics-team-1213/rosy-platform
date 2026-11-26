@@ -152,6 +152,12 @@ class DockingManager(DockingPhasesMixin):
     # --- 조회 -----------------------------------------------------------------
 
     @property
+    def tray_extents_m(self) -> tuple[float, float, float]:
+        """Applied bay footprint, measured from base_link (front, rear, half width)."""
+        return (self._cfg.bay_body_front_m, self._cfg.bay_turn_rear_overhang_m,
+                self._cfg.bay_body_half_width_m)
+
+    @property
     def database(self) -> DockDatabase:
         return self._db
 
