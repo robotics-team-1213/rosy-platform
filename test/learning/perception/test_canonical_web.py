@@ -278,4 +278,5 @@ def test_serve_route_needs_manage_and_reports_missing_act_server(tmp_path, monke
         assert collab_req(base, route, "reader", {}, token)[0] == 403
         code, err = collab_req(base, route, "reviewer", {}, token)
         assert code == 400 and "ACT 서빙 서버가 설정되지 않았습니다" in err["error"]
-        assert collab_req(base, route, "reviewer", {"x": 1}, token)[0] == 400
+        assert collab_req(base, route, "reviewer", {"arm_id": "arm_b"}, token)[0] == 400
+        assert collab_req(base, route, "reader")[0] == 404  # no serve job recorded for this run

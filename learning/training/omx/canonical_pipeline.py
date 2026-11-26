@@ -111,6 +111,7 @@ class CanonicalService:
         self.peer_token_file: Path | None = None
         self.collections_dir: Path | None = None
         self.act_serve: dict | None = None
+        self.serve_jobs = canonical_serve.ServeJobs(self)
         self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return

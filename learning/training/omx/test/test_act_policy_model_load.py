@@ -5,6 +5,8 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import shlex
+import shutil
 import sys
 import threading
 from types import SimpleNamespace
@@ -140,31 +142,106 @@ def test_load_disabled_without_roots_and_env_left_alone_without_token(tmp_path):
     assert env.read_text(encoding="utf-8") == "ROSY_ACT_HTTP_ARGS=--config /x.json\n"
 
 
-def test_learning_forwarder_sends_run_checkpoint_and_reports_inline(act, tmp_path):
+def _canon_run(tmp_path, payload=b"run-weights"):
     canon_root = tmp_path / "canon"
     rid = "3f1b2c4d-0000-4000-8000-000000000001"
-    ckpt_parent = canon_root / "runs" / rid / "output" / "train" / "checkpoints" / "last"
-    ckpt_parent.mkdir(parents=True)
-    _ckpt(ckpt_parent, "pretrained_model", b"run-weights")
+    _ckpt(canon_root / "runs" / rid / "output" / "train" / "checkpoints" / "last", "pretrained_model", payload)
     token_file = tmp_path / "act.token"
     token_file.write_text(TOKEN, encoding="utf-8")
     os.chmod(token_file, 0o600)
     run = {"id": rid, "kind": "train_stage", "status": "succeeded", "arm_id": "arm_a",
-           "result": {"policy_sha256": sha256(b"run-weights").hexdigest()}}
-    svc = SimpleNamespace(root=canon_root, get_run=lambda _rid: run,
-                          act_serve=canonical_serve.parse_config({"url": act.base, "token_file": str(token_file)}))
-    out = canonical_serve.serve_run(svc, rid)
-    assert out["http_status"] == 403 and out["ok"] is False  # canon root is outside the ACT server's load root
-    act_root_run = act.root / "runs"
-    svc.root = act_root_run
-    (act_root_run / "runs" / rid / "output" / "train" / "checkpoints" / "last").mkdir(parents=True)
-    _ckpt(act_root_run / "runs" / rid / "output" / "train" / "checkpoints" / "last", "pretrained_model", b"run-weights")
-    out = canonical_serve.serve_run(svc, rid)
-    assert out["ok"] is True and out["reply"]["revision"] == run["result"]["policy_sha256"]
-    assert _health(act.base)["arm_a"]["revision"] == run["result"]["policy_sha256"]
+           "result": {"policy_sha256": sha256(payload).hexdigest()}}
+    return canon_root, rid, run, token_file
+
+
+class FakeRunner:
+    """Stands in for ssh/rsync: the 'remote' host is a local folder; records every argv."""
+
+    def __init__(self, fail_on=None, corrupt=False):
+        self.calls, self.fail_on, self.corrupt = [], fail_on, corrupt
+
+    def __call__(self, argv):
+        self.calls.append(argv)
+        if self.fail_on and self.fail_on in argv[0]:
+            return 23, "rsync: connection unexpectedly closed"
+        if argv[0] == "rsync":
+            src, dest = Path(argv[-2]), Path(argv[-1].split(":", 1)[1])
+            shutil.copytree(src, dest, dirs_exist_ok=True)
+            if self.corrupt:
+                (dest / "model.safetensors").write_bytes(b"torn")
+            return 0, ""
+        cmd = argv[-1]
+        if cmd.startswith("mkdir"):
+            return 0, ""
+        target = Path(shlex.split(cmd)[-1])
+        return 0, f"{sha256(target.read_bytes()).hexdigest()}  {target}\n"
+
+
+def _jobs(act, tmp_path, runner, *, copy=True):
+    canon_root, rid, run, token_file = _canon_run(tmp_path)
+    cfg = {"url": act.base, "token_file": str(token_file)}
+    if copy:
+        cfg["copy"] = {"ssh_target": "ai@ai-pc", "dest_root": str(act.root / "incoming")}
+    svc = SimpleNamespace(root=canon_root, get_run=lambda _rid: run, act_serve=canonical_serve.parse_config(cfg))
+    return canonical_serve.ServeJobs(svc, runner, background=False), rid, run
+
+
+def test_serve_job_copies_verifies_then_loads_the_ai_pc_path(act, tmp_path):
+    runner = FakeRunner()
+    jobs, rid, run = _jobs(act, tmp_path, runner)
+    sha = run["result"]["policy_sha256"]
+    first = jobs.start(rid, {"arm_id": "arm_a"})
+    assert first["state"] == "copying" and first["job_id"]
+    job = jobs.latest(rid)
+    assert job["state"] == "done" and job["reason"] is None and "load_dir" not in job, job
+    dest = act.root / "incoming" / f"{rid}-{sha[:12]}"
+    arm = _health(act.base)["arm_a"]
+    assert arm["dir"] == str(dest.resolve()) and arm["revision"] == sha
+    assert [c[0] for c in runner.calls] == ["ssh", "rsync", "ssh"] and runner.calls[0][-2] == "ai@ai-pc"
+    assert str(act.root) not in json.dumps(job)  # AI PC paths stay out of the browser payload
+
+
+def test_serve_job_failures_keep_old_model_and_report_reason(act, tmp_path):
+    jobs, rid, _run = _jobs(act, tmp_path, FakeRunner(fail_on="rsync"))
+    jobs.start(rid, {"arm_id": "arm_a"})
+    job = jobs.latest(rid)
+    assert job["state"] == "failed" and "복사 실패 (exit 23)" in job["reason"]
+    jobs.runner = FakeRunner(corrupt=True)
+    jobs.start(rid, {"arm_id": "arm_a"})
+    assert jobs.latest(rid)["state"] == "failed" and "sha256이 다릅니다" in jobs.latest(rid)["reason"]
+    assert _health(act.base)["arm_a"]["revision"] == act.old_rev
+    # no copy configured: the Learning-host path is outside the ACT root, so the server refuses with its reason
+    jobs2, rid2, _ = _jobs(act, tmp_path / "nocopy", FakeRunner(), copy=False)
+    jobs2.start(rid2, {"arm_id": "arm_a"})
+    assert jobs2.latest(rid2)["state"] == "failed" and "outside the allowed load roots" in jobs2.latest(rid2)["reason"]
+
+
+def test_serve_job_refuses_guessing_arm_unfinished_run_and_parallel_start(act, tmp_path):
+    jobs, rid, run = _jobs(act, tmp_path, FakeRunner())
+    for body in ({}, {"arm_id": "arm_c"}, {"arm_id": "arm_a", "x": 1}):
+        with pytest.raises(ValueError, match="arm_id"):
+            jobs.start(rid, body)
+    with pytest.raises(ValueError, match="arm_a 학습"):
+        jobs.start(rid, {"arm_id": "arm_b"})
+    with pytest.raises(KeyError):
+        jobs.latest(rid)
+    jobs.by_run[rid] = {"state": "copying"}
+    with pytest.raises(ValueError, match="이미"):
+        jobs.start(rid, {"arm_id": "arm_a"})
+    jobs.by_run.clear()
     run["status"] = "running"
     with pytest.raises(ValueError, match="train_stage"):
-        canonical_serve.serve_run(svc, rid)
-    svc.act_serve = None
+        jobs.start(rid, {"arm_id": "arm_a"})
+    jobs.service.act_serve = None
     with pytest.raises(ValueError, match="설정"):
-        canonical_serve.serve_run(svc, rid)
+        jobs.start(rid, {"arm_id": "arm_a"})
+
+
+def test_act_serve_config_rejects_unsafe_copy_targets():
+    base = {"url": "http://127.0.0.1:8790", "token_file": "/t"}
+    for copy in ({"ssh_target": "-oProxyCommand=x", "dest_root": "/m"}, {"ssh_target": "ai@h", "dest_root": "rel"},
+                 {"ssh_target": "ai@h", "dest_root": "/m/../etc"}, {"ssh_target": "ai@h", "dest_root": "/m x"},
+                 {"ssh_target": "ai@h"}):
+        with pytest.raises(ValueError):
+            canonical_serve.parse_config({**base, "copy": copy})
+    assert canonical_serve.parse_config({**base, "copy": {"ssh_target": "ai@h", "dest_root": "/m/"}})["copy"]["dest_root"] == "/m"

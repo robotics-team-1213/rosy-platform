@@ -131,6 +131,12 @@ def get(handler, path: str, center, accounts=None) -> bool:
         except (KeyError, FileNotFoundError):
             handler.send({'error': '번들 파일을 찾을 수 없습니다.'}, 404)
         return True
+    if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r')/serve', path):
+        try:
+            handler.send(service.serve_jobs.latest(match[1]))
+        except KeyError:
+            handler.send({'error': '이 작업을 서빙에 올린 기록이 없습니다.'}, 404)
+        return True
     if match := re.fullmatch(PREFIX + r'/watched/(' + _ID_RE + r')', path):
         try:
             handler.send(service.get_watched(match[1]))
@@ -174,11 +180,8 @@ def post(handler, path: str, body: dict, center, accounts=None) -> bool:
                 handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
             return True
         if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r')/serve', path):
-            if body:
-                raise ValueError('서빙 요청 본문은 비어 있어야 합니다.')
-            from canonical_serve import serve_run
             try:
-                handler.send(serve_run(service, match[1]))
+                handler.send(service.serve_jobs.start(match[1], body))
             except KeyError:
                 handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
             return True
