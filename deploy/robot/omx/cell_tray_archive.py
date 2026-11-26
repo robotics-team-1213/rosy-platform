@@ -84,7 +84,31 @@ def _reference(folder, json_version, image_version):
             raise ValueError("blank_mount")
         marks.append(patch)
     keypoints, descriptors = _background(gray)
-    return record["frame_sha256"], revision, errors, centers, mounts, marks, keypoints, descriptors
+    return record["frame_sha256"], revision, errors, centers, mounts, marks, keypoints, descriptors, gray
+
+
+def _pad_pattern(reference, registered, valid, center):
+    """Compare the printed label and dots at the named pad; a match does not measure occupancy."""
+    x, y = np.rint(center).astype(int)
+    result = {"status": "unknown", "occupancy": "unknown", "score": None}
+    if not (20 <= x < reference.shape[1] - 20 and 20 <= y < reference.shape[0] - 20):
+        return result
+    sample = np.s_[y - 20:y + 21, x - 20:x + 21]
+    if not valid[sample].all():
+        return result
+    template = reference[y - 15:y + 16, x - 15:x + 16]
+    if template.std() < 10:
+        return result
+    scores = cv2.matchTemplate(registered[sample], template, cv2.TM_CCOEFF_NORMED)
+    score = float(scores.max())
+    if not math.isfinite(score):
+        return result
+    result["score"] = round(score, 3)
+    if score >= .85:
+        result["status"] = "visible"
+    elif score <= .35:
+        result["status"] = "not_visible"
+    return result
 
 
 def _reject(reason):
@@ -100,7 +124,7 @@ def registered_slots(frame_bgr, reference_dir):
         def version(filename):
             stat=(folder/filename).stat()
             return stat.st_size,stat.st_mtime_ns
-        digest, revision, errors, centers, mounts, patches, keypoints, descriptors = _reference(
+        digest, revision, errors, centers, mounts, patches, keypoints, descriptors, reference_gray = _reference(
             folder,version("baseline.json"),version("baseline.jpg"))
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         current, current_descriptors = _background(gray)
@@ -151,12 +175,16 @@ def registered_slots(frame_bgr, reference_dir):
         if np.any(estimate<0) or np.any(estimate>=[gray.shape[1],gray.shape[0]]):
             return _reject("candidate_outside_frame")
         allowance=round(1+background_error+max(k["residual_px"] for k in checks)+differential,2)
+        size = (gray.shape[1], gray.shape[0])
+        registered = cv2.warpAffine(gray, affine, size, flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
+        valid = cv2.warpAffine(np.ones_like(gray), affine, size, flags=cv2.INTER_NEAREST | cv2.WARP_INVERSE_MAP)
         return {"status":"candidate","revision":revision,"revision_held_out_max_px":errors,
                 "archive_sha256":digest,"physical_acceptance":False,
                 "registration":{"background_inliers":int(mask.sum()),"background_p95_px":round(background_error,3),
                                 "mounts":checks,"mount_spacing_residual_px":round(differential,3)},
                 "slots":{lane:{"center_px":point.round(2).tolist(),"uncertainty_px":allowance,
-                               "source":"registered_empty_fixture","physical_acceptance":False}
-                         for lane,point in zip(LANES,estimate)}}
+                               "source":"registered_empty_fixture","physical_acceptance":False,
+                               "empty_pattern":_pad_pattern(reference_gray, registered, valid, center)}
+                         for lane,point,center in zip(LANES,estimate,centers)}}
     except (OSError, ValueError, TypeError, KeyError, cv2.error, OverflowError):
         return _reject("missing_or_invalid_archive")

@@ -54,6 +54,18 @@ def test_missing_or_moved_fixture_invalidates_registration_with_stationary_camer
     assert not archive.registered_slots(im,tmp_path)["slots"]
 
 
+def test_pale_cargo_obscures_registered_pad_without_classifying_occupancy(tmp_path):
+    frame, record = make_reference(tmp_path)
+    x, y = np.rint(np.mean(record["slots"]["R3"], axis=0)).astype(int)
+    baseline = archive.registered_slots(frame, tmp_path)["slots"]
+    assert baseline["R3"]["empty_pattern"]["status"] == "visible"
+    frame[y - 24:y + 25, x - 24:x + 25] = (195, 191, 179)
+    pads = archive.registered_slots(frame, tmp_path)["slots"]
+    assert pads["R1"]["empty_pattern"]["status"] == "visible"
+    assert pads["R3"]["empty_pattern"]["status"] == "not_visible"
+    assert pads["R3"]["empty_pattern"]["occupancy"] == "unknown"
+
+
 def test_reject_digest_mismatch_missing_and_ambiguous_dots(tmp_path):
     im,_=make_reference(tmp_path)
     (tmp_path/"baseline.jpg").write_bytes(b"other")

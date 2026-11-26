@@ -21,6 +21,11 @@ export function fixtureSummary(fixtures) {
       if (pads.status === "unverified" && pads.reason) lines.push(String(pads.reason));
       for (const [label, slot] of Object.entries(pads.slots || {})) {
         lines.push(`${label} · ${slot.slot_id || ""}  중심 후보 [${slot.center_px.join(", ")}] px · ±${slot.uncertainty_px ?? "?"} px`);
+        const pattern = slot.empty_pattern;
+        if (pattern) {
+          const state = {visible: "보임", not_visible: "보이지 않음", unknown: "판별 어려움"};
+          lines.push(`  빈 패드의 글자·점 무늬  ${state[pattern.status] || "미확인"} · 유사도 ${pattern.score ?? "미측정"} · 점유 미확인`);
+        }
         const p = slot.plane_estimate;
         if (p) lines.push(`  ${value.arm_id} 평면 XY  [${p.xy_m.join(", ")}] m · 지도 σ ${p.map_sigma_mm ?? "?"} mm / 허용 ${slot.map_sigma_limit_mm} mm`);
       }
