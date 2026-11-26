@@ -51,3 +51,11 @@ applies_when: "diagnosing OMX finger-room edge refusals, post-remap low_zones IK
 - **추가 증상:** `arm_b_wrist`가 `uvcvideo` UVC 제어 오류 `-71` 뒤 `can't set config #1, error -71` 상태로 멈추면 `/sys/bus/usb/devices/3-4.2.1` 리프(`0c45:6367`, `authorized=1`, `bConfigurationValue=""`)는 남아 있으나 `video4linux`와 `/dev/v4l/by-id/rosy-arm_b_wrist` 심볼릭 링크가 모두 사라져, `cell_upkeep.usb_port(device)`가 `FileNotFoundError`로 실패하며 `leaf_recover()`에 진입하지 못했다.
 - **수정 (`cell_upkeep_usb_leaf.py`; 2026-11-25 `deploy/robot/omx` 400줄 기준 때문에 `cell_upkeep.py`에서 분리, `cell_upkeep.usb_recover()`가 호출):** `unconfigured_usb_leaf(role)`를 추가해 `omx-cameras.json`의 `usb_id`와 `/etc/rosy/omx-arm-boards.json`으로 같은 부모 허브에 대상 팔의 `OpenRB`만 단독으로 공존하는 비허브(`bDeviceClass != "09"`)·미구성/미바인딩(`bConfigurationValue` 공백/`0` 또는 `video4linux` 없음)·무시리얼 단일 리프를 fail-closed(후보 1개일 때만 허용)로 역추적하고, `usb_recover()`에서 `usb_port`가 `FileNotFoundError`일 때만 `leaf_recover()`로 넘기도록 연결했다.
 - **검증:** `test/test_omx_cell_upkeep.py`, `test/test_omx_upkeep_identity.py` 원격 pytest 통과 및 실셀 `arm_b_wrist` 자동 복구 확인.
+
+## Addendum (2026-11-26): 리프 재인가로 안 풀리면 허브 포트 전원 재투입
+
+- **증상:** `arm_b_wrist`(3-1.4.2.1)가 16:30부터 JPEG 손상, 17:19 감시 재시작 뒤 UVC probe `-71`. 리프 재인가 1회는 잠시 회복했고 2회째는 `can't set config #1, error -71`. 같은 허브(3-1.4.2)의 arm_b OpenRB도 세션 시작 `read pwm_limit: comm -3001`.
+- **해결:** 세 팔 세션이 없고 arm_b가 접힘·토크 OFF일 때 `cell_usb_recovery.hub_port_power_and_reset`로 허브 3-1.4의 포트 2를 3초 끊었다. 카메라와 OpenRB가 재열거됐고 프레임 6/6, 이후 60초 `-71` 0건.
+- **복구 뒤 확인:** 세션 래퍼는 세션 시작에 실패하면 `rosy-omx-observer@<arm>`을 되살리지 않는다. 손으로 `systemctl --user start` 했다.
+- **재발 방지:** `cell_camera_heal.py`(PR #917)가 카메라 작업 시작 전에 upkeep 복구를 돌리고, 실패하면 같은 허브 포트 재투입으로 올린다. record_session이 하나라도 있거나 팔 잠금이 하나라도 잡혀 있으면 하지 않는다. 루트 허브 포트는 건드리지 않는다.
+- **원인:** 미확인. 손목 케이블 접촉 불량이면 손목 회전 뒤 재발할 수 있으니 home 직후 손목 프레임을 확인한다.
