@@ -150,6 +150,10 @@
       "path": "cell/arm-incident-clear.js",
       "media_type": "application/javascript"
     },
+    "cell-job-panel.js": {
+      "path": "cell/cell-job-panel.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
