@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · 천장 분할에서 눈금자를 사이트 가장자리에, 이름표를 좌표 칩 띠 아래로
 - 2026-11-26 · uncommitted · 관제 지도 눈금자 이름표 겹침 수정
 - 2026-11-26 · uncommitted · Fleet console part2 browser tests follow in-place roster cards and the viewer E-stop
 - 2026-11-26 · uncommitted · 지도 근거 줄: 지도 vN · 활성 시각 · 출처 · 측량
 - 2026-11-26 · uncommitted · 관제·현장 지도·보정 맞춤을 fitBox 하나로
-- 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
