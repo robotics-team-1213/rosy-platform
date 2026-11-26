@@ -33,7 +33,7 @@ import cell_job_api as api  # noqa: E402
 @pytest.fixture(autouse=True)
 def _stop_proof_passes(monkeypatch):
     """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
-    monkeypatch.setattr(api, "prove_job", lambda *a, **k: (None, None))
+    monkeypatch.setattr(api, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
 import cell_job_client as client_mod  # noqa: E402
 import cell_media_jobs as media_jobs  # noqa: E402
 import cell_policy_drive as policy_drive  # noqa: E402
@@ -435,6 +435,8 @@ def test_auto_pick_and_policy_drive_emit_valid_bundles_and_incident_fleet(tmp_pa
     })())
     import cell_pipeline as cp
     monkeypatch.setattr(cp, "FifoCell", lambda *_a, **_kw: MinimalCell())
+    import cell_stop_proof
+    monkeypatch.setattr(cell_stop_proof, "session_proof", lambda *a, **kw: {"ok": True, "code": None, "reason": None})
     exit_code = policy_drive.main([
         "--config", str(pcfg), "--library", str(lib_p), "--mode", "act",
         "--policy-root", str(model_dir), "--policy-revision", hashlib.sha256(w).hexdigest(),

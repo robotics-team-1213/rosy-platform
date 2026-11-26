@@ -34,7 +34,7 @@ import cell_job_api as cja  # noqa: E402
 @pytest.fixture(autouse=True)
 def _stop_proof_passes(monkeypatch):
     """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
-    monkeypatch.setattr(cja, "prove_job", lambda *a, **k: (None, None))
+    monkeypatch.setattr(cja, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
 import cell_job_client as cjc  # noqa: E402
 import cell_job_spec as cjs  # noqa: E402
 import cell_pinch  # noqa: E402
@@ -549,11 +549,11 @@ def test_job_spec_client_and_job_api_unattended_extensions(tmp_path):
     assert "--commissioning" not in argv and "--person-at-switch" not in argv
     assert "--object" in argv and "orange-1" in argv and "--layers-below" in argv and "1" in argv
 
-    with pytest.raises(ValueError, match="D-911"):
-        cjs.build_argv(cjs.JOBS["auto_pick"], {
-            "arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
-            "roi": [0, 0, 10, 10], "source": "belt", "dest": "pallet", "reviewed_auto": True, "person_at_switch": True,
-        }, tmp_path)
+    ignored = cjs.build_argv(cjs.JOBS["auto_pick"], {  # D-1077: a request's person_at_switch no longer changes a reviewed job
+        "arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
+        "roi": [0, 0, 10, 10], "source": "belt", "dest": "pallet", "reviewed_auto": True, "person_at_switch": True,
+    }, tmp_path)
+    assert "--commissioning" not in ignored and "--person-at-switch" not in ignored
 
     # 2. New jobs & task-JSON AMR bed refusal (including via alternates)
     assert "cell_stack_plan.py" in cjs.build_argv(cjs.JOBS["stack_plan"], {"plan": "plan-stack.json"}, tmp_path)
@@ -568,10 +568,10 @@ def test_job_spec_client_and_job_api_unattended_extensions(tmp_path):
     assert "cell_auto_carry.py" in cjs.build_argv(cjs.JOBS["auto_carry"], {
         "arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
         "roi": [0, 0, 10, 10], "source": "belt", "dest": "pallet", "max": 4}, tmp_path)
-    with pytest.raises(ValueError, match="D-911"):
-        cjs.build_argv(cjs.JOBS["auto_carry"], {
-            "arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
-            "roi": [0, 0, 10, 10], "source": "belt", "dest": "pallet", "max": 2, "person_at_switch": True}, tmp_path)
+    carry = cjs.build_argv(cjs.JOBS["auto_carry"], {
+        "arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
+        "roi": [0, 0, 10, 10], "source": "belt", "dest": "pallet", "max": 2, "person_at_switch": True}, tmp_path)
+    assert "--person-at-switch" not in carry
     for bad_job, bad_params in [
         ("auto_pick", {"arm": "arm_b", "config": "cell-b.json", "catalog": "object-catalog-orange.json",
                        "roi": [0, 0, 10, 10], "source": "belt", "dest": "tray-l0", "reviewed_auto": True}),
