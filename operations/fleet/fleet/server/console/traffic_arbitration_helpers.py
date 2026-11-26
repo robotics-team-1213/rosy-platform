@@ -232,7 +232,7 @@ def peer_proof(self, peers):
     return {"peer_evidence": {rid: sample for rid in peers if (sample := provider.evidence(rid))}}
 
 
-async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from):
+async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from, check_wait_prefix):
     from fleet.swarm.dispatch_guard import dispatch_guard
 
     await self._observe()
@@ -246,6 +246,9 @@ async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, s
         wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid)
         if wait is not None:
             raise PeerWait(wait)
+        if not check_wait_prefix(self, robot_id, points, site_route_of):
+            raise PeerWait({"accepted": False, "queued": False, "dispatch_attempted": False,
+                            "stage": "pre_dispatch_peer_check", "reason": "WAIT_PREFIX_UNVERIFIED"})
 
     try:
         check()
