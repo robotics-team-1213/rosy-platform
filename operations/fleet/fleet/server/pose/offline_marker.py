@@ -102,7 +102,14 @@ class OfflineMarkerClearance:
             age = now - row["captured_at"]
             revision = row.get("calibration_revision")
             point = pose3(row)
-            if (not 0 <= age <= min(MAX_FRAME_AGE_S, self.config.sighting_lease_s) or point is None
+            run = self.still.get((rid, source.source_id)) or {}
+            still_s = (row["captured_at"] - run["since"]
+                       if run.get("last") == row["captured_at"] and run["count"] >= STATIC_MIN_FRAMES else 0.0)
+            parked = still_s >= STATIC_HOLD_S
+            # Camera latency (~0.25 s) plus frame period (~0.35 s) exceeds MAX_FRAME_AGE_S; a parked
+            # marker adds no travel with age, so it stays usable for the whole sighting lease.
+            max_age = self.config.sighting_lease_s if parked else min(MAX_FRAME_AGE_S, self.config.sighting_lease_s)
+            if (not 0 <= age <= max_age or point is None
                     or not revision or row.get("calibration_source") != "approved_record"
                     or row.get("quality") is not None and row["quality"] < self.config.min_quality
                     or self.sightings.approved_sighting_revision(source.source_id, site_route[0]) != revision):
@@ -122,12 +129,9 @@ class OfflineMarkerClearance:
                         or prior.get("processor_revision") != row.get("processor_revision")
                         or row["seq"] == prior["seq"] or math.dist(previous[:2], point[:2]) > STILL_PATH_M):
                     return self._decision(rid, "peer_marker_moved_or_changed", False)
-            run = self.still.get((rid, source.source_id)) or {}
-            still_s = (row["captured_at"] - run["since"]
-                       if run.get("last") == row["captured_at"] and run["count"] >= STATIC_MIN_FRAMES else 0.0)
             # Fleet cannot command a disconnected peer, so a marker held still is a parked obstacle and
             # frame age adds no travel; a moving marker keeps the speed allowance and the moved check above.
-            margin = MARKER_ERROR_M + (0.0 if still_s >= STATIC_HOLD_S else self.config.max_speed_mps * age)
+            margin = MARKER_ERROR_M + (0.0 if parked else self.config.max_speed_mps * age)
             samples.append((point[:2], margin, {"source_id": source.source_id, "enrolled_marker_id": marker_id,
                                                  "calibration_revision": revision, "seq": row["seq"],
                                                  "captured_at": row["captured_at"], "age_s": age,

@@ -104,6 +104,25 @@ def test_parked_disconnected_peer_is_a_static_obstacle_after_the_hold(rig):
     assert obs["uncertainty_m"] == pytest.approx(.1) and obs["still_s"] >= 2.0
 
 
+def test_parked_peer_stays_usable_past_the_moving_frame_age_limit(rig):
+    # Live camera: ~0.25 s latency + ~0.35 s period, so a check can see a 0.55 s old frame.
+    _hold_still(rig, .3, 2.5, .05)
+    rig.now[0] += .5
+    assert "queued" not in run(rig.console.goal("rosy_01", 2, 0))
+    assert rig.clear.evidence(RID)["observations"][0]["age_s"] == pytest.approx(.55)
+    rig.now[0] += .5                      # past the 1.0 s sighting lease: no usable marker
+    result = run(rig.console.goal("rosy_01", 2, 0))
+    assert result["queued"] is True and rig.clear.evidence(RID)["reason"] == "approved_marker_unavailable"
+
+
+def test_young_peer_marker_older_than_the_frame_age_limit_is_unavailable(rig):
+    rig.see(y=.9, age=.35, seq=1)
+    rig.see(y=.9, age=.05, seq=2)
+    rig.now[0] += .5
+    result = run(rig.console.goal("rosy_01", 2, 0))
+    assert result["queued"] is True and rig.clear.evidence(RID)["reason"] == "approved_marker_unavailable"
+
+
 @pytest.mark.parametrize("problem", ["young", "moved", "gap", "new_map", "processor"])
 def test_disconnected_peer_keeps_the_speed_allowance_until_it_has_stayed_still(rig, problem):
     # Same spot as the parked case: only the stillness run decides between the two outcomes.
