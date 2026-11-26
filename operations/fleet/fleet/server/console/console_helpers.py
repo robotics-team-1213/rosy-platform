@@ -308,6 +308,25 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
         return await _planned_stop_goal(self, robot_id, client, caps, (x, y, yaw), attempt_id, stop,
                                         stop_binding, line_handoff, lease_source, task_id)
     route_fit = None
+    def site_route_of(route):
+        if route_fit is not None:
+            return (route_binding["site_map_id"], [route_fit.apply(point) for point in route]) if route else None
+        return self._site_route(robot_id, route)
+
+    async def road_peer_wait():
+        await self._observe()
+        self.goal_leases.check_stop(robot_id, stop)
+        here = self._pose_of(robot_id)
+        route = ([here] if here is not None else []) + [(p["x"], p["y"]) for p in route_points]
+        site_route = site_route_of(route)
+        peers = [rid for rid in self._order if rid != robot_id
+                 and self._untrusted_blocks(rid, route, site_route=site_route)]
+        if peers:
+            return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
+                    "command_robot_id": robot_id, "blocked_by": peers[0], "waiting_on": peers,
+                    "stage": "pre_dispatch_peer_check", "site_route_map": site_route[0] if site_route else None,
+                    "dispatch_attempted": False, "cancel_confirmed": False}
+
     if route_points is not None and route_binding is not None:
         from fleet.server.named_stop_map_pose import fresh_native_slam
 
@@ -329,13 +348,17 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             route_fit = check_route_binding()
             self._remember([{"robot_id": robot_id, "state": state}])
 
-        check_route_binding()
+        route_fit = check_route_binding()
+        if wait := await road_peer_wait():
+            return wait
         with dispatch_guard(check_route_binding, paths={"/api/v1/navigation/bound-route"}):
             result = await self.goal_leases.send_route(
                 robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
                 expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding,
             )
     elif route_points is not None:
+        if wait := await road_peer_wait():
+            return wait
         result = await self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id)
     else:
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
@@ -346,11 +369,6 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
     self.__dict__.setdefault("_goal_sent_at", {})[robot_id] = self._clock()
     self._queued.pop(robot_id, None)
-
-    def site_route_of(route):
-        if route_fit is not None:
-            return (route_binding["site_map_id"], [route_fit.apply(point) for point in route]) if route else None
-        return self._site_route(robot_id, route)
 
     async with self._traffic_lock:
         try:
@@ -386,9 +404,9 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             self.goal_leases.check_stop(robot_id, stop)
             intended = self._intended_route(robot_id, nav_route, x, y)
             site_route = site_route_of(intended)
-            untrusted = next((rid for rid in self._order
-                              if rid != robot_id and self._untrusted_blocks(rid, intended, site_route=site_route)), None)
-            if untrusted is not None:
+            blocking_peers = [rid for rid in self._order if rid != robot_id
+                              and self._untrusted_blocks(rid, intended, site_route=site_route)]
+            if blocking_peers:
                 # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
                 stop = (stop[0], stop[1] + 1)
                 cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
@@ -399,9 +417,12 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 getattr(self, "_goal_sent_at", {}).pop(robot_id, None)
                 self._claims.pop(robot_id, None)
                 getattr(self, "_site_claims", {}).pop(robot_id, None)
-                decision = admission.untrusted_blocker_hold(untrusted, intended)
+                decision = admission.untrusted_blocker_hold(blocking_peers[0], intended)
                 if route_points is not None:
-                    return {**admission.response_of(decision), "queued": False}
+                    return {**admission.response_of(decision), "queued": False,
+                            "command_robot_id": robot_id, "waiting_on": blocking_peers,
+                            "stage": "post_dispatch_peer_check",
+                            "site_route_map": site_route[0] if site_route else None}
                 self._queued[robot_id] = admission.mission_of(
                     decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
                     attempt_seq=attempt_seq)

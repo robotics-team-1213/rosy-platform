@@ -18,6 +18,7 @@ class GoalRefused(RuntimeError):
         if reply is not None:
             evidence = {key: reply[key] for key in (
                 "blocked_by", "waiting_on", "dispatch_attempted", "cancel_confirmed",
+                "command_robot_id", "stage", "site_route_map",
             ) if key in reply}
             if evidence:
                 self.detail["goal_admission"] = evidence
