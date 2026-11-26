@@ -20,6 +20,9 @@ PARAMS = {
 }
 
 
+OK = {"result": "released", "parked": True, "park": {"command": "park", "ok": True, "settled": True}, "took_one": True}
+
+
 class _Proc:
     def __init__(self, code):
         self.code = code
@@ -47,7 +50,7 @@ def _run(tmp_path, monkeypatch, result, *, exit_code=0, post=None, **extra):
 
 
 def test_took_one_posts_once_with_body(tmp_path, monkeypatch):
-    info, calls, runner, jid = _run(tmp_path, monkeypatch, {"result": "ok", "took_one": True})
+    info, calls, runner, jid = _run(tmp_path, monkeypatch, OK)
     runner.get(jid)  # a second poll must not send again
     assert len(calls) == 1
     assert calls[0][0][:3] == ("rosy_46", "depart_s1", f"depart-{jid}")
@@ -57,9 +60,16 @@ def test_took_one_posts_once_with_body(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(("result", "exit_code", "extra", "why"), [
-    ({"took_one": False, "reason": "gripper empty"}, 0, {}, "gripper empty"),
-    ({"took_one": True}, 3, {}, "job exit 3"),
-    ({"took_one": True}, 0, {"dry_run": True}, "dry_run"),
+    ({**OK, "took_one": False, "reason": "gripper empty"}, 0, {}, "gripper empty"),
+    ({**OK, "took_one": True}, 3, {}, "job exit 3"),
+    ({**OK}, 0, {"dry_run": True}, "dry_run"),
+    ({**OK, "result": "refused"}, 0, {}, "not a success"),
+    ({**OK, "result": "fault"}, 0, {}, "not a success"),
+    ({**OK, "human_hold_latched": True}, 0, {}, "human_hold_latched"),
+    ({**OK, "torque_hold_commanded": True}, 0, {}, "torque_hold_commanded"),
+    ({**OK, "parked": False}, 0, {}, "not confirmed"),
+    ({k: v for k, v in OK.items() if k != "park"}, 0, {}, "not confirmed"),
+    ({**OK, "park": {"command": "park", "ok": True, "settled": True, "hold": True}}, 0, {}, "not confirmed"),
 ])
 def test_no_post_and_reason_recorded(tmp_path, monkeypatch, result, exit_code, extra, why):
     info, calls, *_ = _run(tmp_path, monkeypatch, result, exit_code=exit_code, **extra)
@@ -72,7 +82,7 @@ def test_fleet_exception_keeps_arm_result(tmp_path, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("fleet down")
 
-    info, _, runner, jid = _run(tmp_path, monkeypatch, {"took_one": True})
+    info, _, runner, jid = _run(tmp_path, monkeypatch, OK)
     run = runner.runs[jid]
     run["depart"] = None
     monkeypatch.setattr(depart, "post_depart", boom)
@@ -81,11 +91,12 @@ def test_fleet_exception_keeps_arm_result(tmp_path, monkeypatch):
 
 
 def test_skip_reason_unit():
-    base = {"job": "cell_policy_drive", "params": PARAMS, "exit_code": 0, "result": {"took_one": True}}
+    base = {"job": "cell_policy_drive", "params": PARAMS, "exit_code": 0, "result": OK}
     assert depart.depart_skip_reason(**base) is None
     assert "only for arm_s" in depart.depart_skip_reason(**{**base, "params": {**PARAMS, "arm": "arm_b"}})
     assert depart.depart_skip_reason(**{**base, "params": {"arm": "arm_s"}}) == "depart not requested"
     assert depart.depart_skip_reason(**{**base, "result": None}) == "no structured result"
+    assert "not a success" in depart.depart_skip_reason(**{**base, "result": {"took_one": True}})
 
 
 def test_post_depart_body_and_fleet_errors(tmp_path):

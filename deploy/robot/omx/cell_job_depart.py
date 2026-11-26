@@ -14,9 +14,11 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from cell_job_readiness import parse_structured_result
+from cell_policy_entry import FAULT_KEYS, park_ack_ok
 
 DEPART_PATH = "/api/fleet/pipeline/pinky-tasks"
 DEPART_ACTIONS = ("depart_s1",)
+SUCCESS_RESULTS = ("released", "chunks_done")  # same as task_verified in cell_task_act_run.py
 
 
 def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: dict | None) -> str | None:
@@ -33,6 +35,12 @@ def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: di
         return "no structured result"
     if result.get("took_one") is not True:
         return str(result.get("reason") or "took_one not true")
+    if result.get("result") not in SUCCESS_RESULTS:
+        return f"arm result {result.get('result')!r} is not a success"
+    if bad := [k for k in (*FAULT_KEYS, "torque_hold_commanded") if result.get(k)]:
+        return f"arm hold/fault/torque hold: {', '.join(bad)}"
+    if result.get("parked") is not True or not park_ack_ok(result.get("park"), require_command=True):
+        return "arm fold (parked) not confirmed"  # the same fold proof as task_verified; Fleet's 409 is not relied on
     return None
 
 
