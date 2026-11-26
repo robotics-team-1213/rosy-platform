@@ -32,7 +32,16 @@ def plan_report(config, points):
 
 
 def scoped(config: dict) -> dict:
-    return dict(config, played_chunks=list(PLAYED))
+    scoped_config = dict(config, played_chunks=list(PLAYED))
+    calibration = config.get("calibrate") or {}
+    if "remap_transit_speed" in calibration:
+        from chunk_runner_guards import library_transit_speed
+
+        speed = library_transit_speed({"transit_speed": calibration["remap_transit_speed"]})
+        if speed > library_transit_speed(config["plan"]):
+            raise ValueError("remap_transit_speed exceeds the arm's transit_speed")
+        scoped_config["plan"] = dict(config["plan"], transit_speed=speed)
+    return scoped_config
 
 
 def view(config: dict, x: float, y: float) -> dict:

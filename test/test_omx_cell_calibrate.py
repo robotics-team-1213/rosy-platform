@@ -297,6 +297,19 @@ def test_marks_on_one_line_predict_nothing():
     assert cc.predicted(line, (0.13, 0.10)) is None
 
 
+def test_remap_speed_only_slows_calibration_without_mutating_the_arm_plan():
+    import cell_remap_plan
+    import pytest
+
+    config = {"plan": {"transit_speed": 0.4}, "calibrate": {"remap_transit_speed": 0.2}}
+    assert cell_remap_plan.scoped(config)["plan"]["transit_speed"] == 0.2
+    assert config["plan"]["transit_speed"] == 0.4
+    for bad in (0.5, 0.0, True, float("nan")):
+        config["calibrate"]["remap_transit_speed"] = bad
+        with pytest.raises(ValueError):
+            cell_remap_plan.scoped(config)
+
+
 def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     """arm_b 2026-11-05: 8 marks in, the next goto stalled on wrist roll -13; the remap threw them all away."""
     import types
@@ -318,7 +331,8 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
                 self.next = next(p for p in points if f"remap-{sorted(points, key=lambda q: math.hypot(*q)).index(p)}." in command)
             if command == "goto above_pick":
                 if self.next == [0.30, 0.30]:
-                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag"}
+                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag",
+                            "health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
                 self.at = self.next
             return {"ok": command != "park" or self.park_ok}
 
@@ -331,6 +345,8 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
     assert len(seen) == 1 and "park" not in seen[0][0][1:] and "wrist_roll lag" in seen[0][1]["error"]
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
+    stop = next(row for row in rows if "stopped" in row)
+    assert stop["runner"] == {"health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
     import time
