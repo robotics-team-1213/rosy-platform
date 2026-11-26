@@ -110,6 +110,8 @@ test("the card names the robot pose frame and shows Fleet's site map pose apart"
   assert.equal(sitePoseText({ pose: { x: 1, y: 2, state: "LOCALIZED", source: "sighting",
     last_sighting_age_s: 30 } }),
     "지도 1.00, 2.00 · 확정·카메라");
+  assert.equal(sitePoseText({ robot_id: "a", pose: { x: -0.401, y: 0.438, state: "LOCALIZED", source: "approved_slam" } }),
+    "지도 -0.40, 0.44 · 확정·SLAM");
 });
 
 test("the map draws the robot's own pose only when it is a LOCALIZED map pose, never odom", () => {
@@ -129,6 +131,8 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
   // Fleet's site map pose first, even when CORE reports nothing (lane following without Nav2).
   assert.deepEqual(positionTag(legacy, guide({ x: 0.69, y: -0.44, state: "LOCALIZED", source: "sighting" })),
     { text: "지도 위치 확정 · 카메라", cls: "", title: "Fleet 지도 위치: 확정 · 카메라" });
+  assert.deepEqual(positionTag(legacy, guide({ x: -0.401, y: 0.438, state: "LOCALIZED", source: "approved_slam" })),
+    { text: "지도 위치 확정 · SLAM", cls: "", title: "Fleet 지도 위치: 확정 · SLAM" });
   assert.equal(positionTag(row(), guide({ x: 1, y: 2, state: "DEGRADED", source: "bridged" })).text, "지도 위치 추정 · odom 이음");
   // No Fleet pose: CORE's own state when CORE reports one.
   assert.deepEqual(positionTag(row(), guide(null)), localizationTag(row()));

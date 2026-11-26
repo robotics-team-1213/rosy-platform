@@ -974,3 +974,62 @@ def test_opportunistic_binding_holds_transient_candidates_across_ticks_even_near
     done = runner.view("p1")
     assert done["state"] == "stopped" and done["reason"] == "map_frame"
     assert done["detail"]["binding"] == "ROBOT_NOT_LOCALIZED"
+
+
+def test_nav2_trip_prefers_approved_slam_when_bound_and_falls_back_when_unbound(tmp_path):
+    from datetime import datetime, timezone
+    from hashlib import sha256
+    from fastapi.testclient import TestClient
+    from fakes import FakeRobot
+    from fleet.localization.map_binding import Fit
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from fleet.swarm.robots import RobotEndpoint
+    from test_trip_nav2_route import RouteFakeRobot
+
+    store = SiteMapStore(tmp_path / "maps.sqlite3")
+    site_map = _free_map()
+    version = store.import_if_empty(site_map, source="test")
+    site = (store.active()[1].map_id, version)
+    fit = Fit(yaw=0.2, tx=0.1, ty=-0.05, residuals=(0.0,))
+    stamp = 1_700_000_100.0
+    nx, ny = fit.inverse((0.1, 0.0))
+    robot = RouteFakeRobot("rosy_45")
+    robot.bound_route_supported = True
+    robot._state = {
+        **robot._state,
+        "online": True, "mode": "IDLE", "navigation": "IDLE",
+        "map_id": "native-slam", "map_grid_id": "occupancy:0123456789ab", "pose_frame": "map",
+        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+        "pose": {"x": nx, "y": ny, "yaw": -fit.yaw},
+        "odom_pose": {"x": nx, "y": ny, "yaw": -fit.yaw, "stamp": stamp},
+        "battery": {"percent": 90.0}, "safety": {"estop": False},
+        "evidence": {"pose": {"evidence": "fresh",
+                              "received_at": datetime.fromtimestamp(stamp, timezone.utc).isoformat()}},
+    }
+    pairs = [{"site": list(p), "robot": list(fit.inverse(p))} for p in [(-1., -.5), (1., -.5), (.9, .45)]]
+    holdout = [{"site": [0., 0.], "robot": list(fit.inverse((0., 0.)))}]
+    binding = store.map_bindings.approve("rosy_45", robot._state, site, pairs, holdout, "bob")
+    console = FleetConsole([RobotEndpoint("rosy_45", "http://127.0.0.1:8081", "t")], [robot])
+    users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    tasks = FleetTaskStore(tmp_path / "tasks.sqlite")
+    app = create_app(console, site_maps=store, site_users=users,
+                     task_service=FleetTaskService(tasks, robot_ids=["rosy_45"]))
+    app.state.trip_runner._clock = lambda: stamp + 0.05
+
+    async def parallax_camera_pose(_rid):
+        return MapPose(5.0, 5.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.0, anchor_age_s=0.0, map_id=site[0])
+
+    app.state.trip_runner.map_pose = parallax_camera_pose
+    with TestClient(app) as client:
+        headers = {"Authorization": "Bearer op-tok"}
+        plan = client.post("/api/fleet/robots/rosy_45/trip",
+                           json={"to": "C", "drive_mode": "nav2"}, headers=headers)
+        assert plan.status_code == 200, plan.text
+        assert plan.json()["nav2_binding_id"] == binding["binding_id"]
+        store.map_bindings.revoke("rosy_45", "bob")
+        fallback = client.post("/api/fleet/robots/rosy_45/trip",
+                               json={"to": "C", "drive_mode": "nav2"}, headers=headers)
+        assert fallback.status_code == 422 and fallback.json()["detail"]["code"] == "TRIP_START_OFF_MAP"

@@ -13,6 +13,7 @@ from typing import Callable, Mapping, Optional
 
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3)
 from fleet.guide.situation import GuideConfig, add_near, situation, worst
+from fleet.server.named_stop_map_pose import approved_slam_site_pose
 from rosy.world.state.projections.map_pose import MapPose
 
 #: below these the robot is standing (odom twist, m/s and rad/s)
@@ -24,10 +25,11 @@ OFFLINE_DISPLAY_MAX_AGE_S = 600.0
 class GuideService:
     def __init__(self, *, gather, poses, site_maps, tracking=None, sightings=None,
                  zones: Callable[[], Mapping[str, tuple]] = dict, body=PINKY_PRO,
-                 config: GuideConfig = GuideConfig(), clock: Callable[[], float] = time.monotonic) -> None:
+                 config: GuideConfig = GuideConfig(), clock: Callable[[], float] = time.monotonic,
+                 wall: Callable[[], float] = time.time) -> None:
         self._gather, self._poses, self._site_maps = gather, poses, site_maps
         self._tracking, self._sightings = tracking, sightings
-        self._zones, self._body, self.config, self._clock = zones, body, config, clock
+        self._zones, self._body, self.config, self._clock, self._wall = zones, body, config, clock, wall
         self._still_since: dict[str, float] = {}
 
     def _stopped_s(self, robot_id: str, state: Optional[Mapping], now: float) -> float:
@@ -91,13 +93,15 @@ class GuideService:
         active_map_id = active[1].map_id if active is not None and active[1] is not None else None
         zone_of = {edge: zone for zone, (edges, _cap) in (self._zones() or {}).items() for edge in edges}
         now = self._clock()
+        now_wall = self._wall()
         records = []
         for row in snapshot.get("robots") or []:
             robot_id = row["robot_id"]
             online = bool(row.get("online"))
+            bound = approved_slam_site_pose(self._site_maps, robot_id, row.get("state"), now_wall) if online else None
+            pose = bound[0] if bound is not None else self._display_pose(robot_id, online=online, active_map_id=active_map_id)
             records.append(situation(
-                robot_id, online=online,
-                pose=self._display_pose(robot_id, online=online, active_map_id=active_map_id),
+                robot_id, online=online, pose=pose,
                 tracking_row=tracked.get(robot_id), camera_ok=camera_ok, graph=graph, zone_of=zone_of,
                 body_radius_m=self._body.rotation_radius_m, body_half_width_m=self._body.half_width_m,
                 stopped_s=self._stopped_s(robot_id, row.get("state"), now), anonymous_seen=anonymous,

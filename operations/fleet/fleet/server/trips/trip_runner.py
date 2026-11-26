@@ -27,6 +27,7 @@ from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
+from fleet.server.named_stop_map_pose import approved_slam_site_pose
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery, start_check  # noqa: F401
 from fleet.server.trip_geometry import pose_view  # noqa: F401
 from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed, pause_proof_args
@@ -505,6 +506,11 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         """D-989 allowlist: the trip loop is the consumer that may drive on an auto-locate anchor."""
         return getattr(self._poses, "driving_pose", self._poses.arbitrated_pose)(robot_id)
 
+    async def _traffic_pose(self, robot_id: str):
+        latest = self._poses.latest_state(robot_id) if callable(getattr(self._poses, "latest_state", None)) else None
+        bound = approved_slam_site_pose(self._store, robot_id, latest, self._clock())
+        return bound[0] if bound is not None else await self._call(self._driving_pose(robot_id))
+
     async def tick(self) -> None:
         """One period (D-517 7): every open trip steps at once, each under its own lock and its own
         bounded robot calls. A robot still in its last step is left to finish and skips this
@@ -519,7 +525,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                     live._halt_retry_at = self._clock() + 2.0
                     self._inflight[robot_id] = asyncio.ensure_future(self._retry_unconfirmed_halt(live))
         self.halts.watch_handoff_stops(self._inflight)
-        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)))
+        self.traffic.watch(self._inflight, self.robot_busy, self._traffic_pose)
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)

@@ -226,3 +226,46 @@ def test_led_track_must_be_fresh_on_the_active_map_and_never_beats_a_localized_p
         assert monitor.view(robot_id)["level"] == UNKNOWN
         assert monitor.view(robot_id)["pose_source"] == "map_pose"
     assert monitor.view("both")["pose_source"] == "map_pose" and monitor.view("both")["offset_m"] == 0.0
+
+
+def test_monitor_prefers_approved_slam_over_parallax_camera_sighting(tmp_path):
+    from datetime import datetime, timezone
+    from fleet.localization.map_binding import Fit
+    from fleet.server.site_map_store import SiteMapStore
+
+    store = SiteMapStore(tmp_path / "maps.sqlite3")
+    site_map = SiteMap.model_validate({
+        "map_id": "site_v1",
+        "places": [{"id": "A", "name": "A", "x": 0, "y": 0, "kind": "junction"},
+                   {"id": "B", "name": "B", "x": 2, "y": 0, "kind": "junction"}],
+        "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": [[0, 0], [2, 0]], "width_m": 0.3,
+                   "speed_cap_mps": 0.2}]})
+    version = store.import_if_empty(site_map, source="test")
+    site = (store.active()[1].map_id, version)
+    fit = Fit(yaw=0.2, tx=0.3, ty=-0.2, residuals=(0.0,))
+    pairs = [{"site": list(p), "robot": list(fit.inverse(p))} for p in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]]
+    holdout = [{"site": [0.5, 0.5], "robot": list(fit.inverse((0.5, 0.5)))}]
+    now_wall = 1_700_000_100.0
+    rx, ry = fit.inverse((1.0, 0.0))
+    ryaw = -fit.yaw
+    slam_state = {
+        "map_id": "native", "map_grid_id": "occupancy:abc", "pose_frame": "map",
+        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+        "pose": {"x": rx, "y": ry, "yaw": ryaw},
+        "odom_pose": {"x": rx, "y": ry, "yaw": ryaw, "stamp": now_wall - 0.1},
+        "evidence": {"pose": {"evidence": "fresh",
+                              "received_at": datetime.fromtimestamp(now_wall - 0.1, timezone.utc).isoformat()}},
+    }
+    store.map_bindings.approve("r1", slam_state, site, pairs, holdout, "bob")
+
+    class SlamPoses(Poses):
+        def latest_state(self, robot_id):
+            return slam_state if robot_id == "r1" else None
+
+    poses = SlamPoses({"r1": at(0.25)})  # camera parallax off-lane, SLAM centered at y=0
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=store,
+                                    config=LaneComplianceConfig(persist_n=1), wall=lambda: now_wall)
+    asyncio.run(monitor.tick())
+    view = monitor.view("r1")
+    assert view["pose_source"] == "map_pose" and view["pose_state"] == "LOCALIZED"
+    assert view["level"] == OK and abs(view["offset_m"]) < 1e-6

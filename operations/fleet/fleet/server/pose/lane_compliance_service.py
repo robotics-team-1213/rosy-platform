@@ -133,7 +133,9 @@ class LaneComplianceMonitor:
             back = self._return(robot_id, pose, robot_id in movers, graph, crosswalks, bounds, now)
             if back is not None:
                 cues.append((robot_id, back))
-            self._latest[robot_id] = {**asdict(result), "pose_state": getattr(arbitrated, "state", UNKNOWN),
+            pose_state = (getattr(pose, "state", UNKNOWN) if getattr(pose, "source", None) == "approved_slam"
+                          else getattr(arbitrated, "state", UNKNOWN))
+            self._latest[robot_id] = {**asdict(result), "pose_state": pose_state,
                                       "return": back,
                                       "pose_source": source, "heading_source": heading,
                                       "moving": robot_id in movers,
@@ -241,7 +243,14 @@ class LaneComplianceMonitor:
         self._cue_sent[robot_id] = state
 
     def _input_pose(self, robot_id: str, arbitrated, moving: bool) -> tuple:
-        """(pose to judge, pose_source, heading_source): the map pose, else a fresh LED track."""
+        """(pose to judge, pose_source, heading_source): approved SLAM, else camera map pose, else LED track."""
+        latest_fn = getattr(self._poses, "latest_state", None)
+        if callable(latest_fn):
+            from fleet.server.named_stop_map_pose import approved_slam_site_pose
+            bound = approved_slam_site_pose(self._site_maps, robot_id, latest_fn(robot_id), self._wall())
+            if bound is not None:
+                self._track_heading.pop(robot_id, None)
+                return bound[0], "map_pose", "pose"
         track = None
         if self._identity is not None and getattr(arbitrated, "state", None) != LOCALIZED:
             track = self._identity.confirmed_track_pose(robot_id)

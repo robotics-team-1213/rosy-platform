@@ -15,6 +15,27 @@ def commissioned_stop(graph, target):
     return stop if stop is not None and stop.precision_stop is not None else None
 
 
+def approved_slam_site_pose(site_maps, robot_id, state, now, *, binding_id=None) -> Optional[tuple[MapPose, str]]:
+    """Transform fresh native SLAM into the active site map frame using the robot's approved binding."""
+    active = site_maps.active() if site_maps is not None else None
+    bindings = getattr(site_maps, "map_bindings", None) if site_maps is not None else None
+    if active is None or bindings is None or not isinstance(state, dict):
+        return None
+    chosen = bindings.active(robot_id)
+    if chosen is None or (binding_id is not None and chosen["binding_id"] != binding_id):
+        return None
+    sample = fresh_native_slam(state, now)
+    if sample is None:
+        return None
+    fit, _ = bindings.matching_fit(robot_id, state, (active[1].map_id, active[0]))
+    if fit is None or bindings.active(robot_id) != chosen:
+        return None
+    native_pose, age_s, odom_stamp = sample
+    x, y, yaw = bound_pose(fit, native_pose)
+    return (MapPose(x, y, yaw, LOCALIZED, "approved_slam", 0., age_s,
+                    anchor_age_s=age_s, map_id=active[1].map_id, odom_stamp=odom_stamp), chosen["binding_id"])
+
+
 async def read_precision_pose_status(runner, robot_id, site_version, binding_id=None) -> tuple[Optional[tuple], dict]:
     active = runner._store.active()
     reader = runner.named_stop_state or runner._robot_state
