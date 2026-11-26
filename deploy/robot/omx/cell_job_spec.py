@@ -83,7 +83,7 @@ JOBS = {
     "remap": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
-        "params": {"arm": _match(ARM), "config": _match(FILE)},
+        "params": {"arm": _match(ARM), "config": _match(FILE)}, "optional": {"remeasure": _bool},
     },
     "surface": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
@@ -346,7 +346,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--remeasure-map", "remeasure")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
