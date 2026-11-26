@@ -11,6 +11,7 @@ from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
+from fleet.server.held_lidar_observation import inspect_held_route
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
@@ -381,8 +382,13 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         }
         return
     live.view["detail"].pop("traffic_hold", None)
-    if runner._clock() < live.nav2_retry_at:
-        return
+    now = runner._clock()
+    if now < live.nav2_retry_at:
+        demand = getattr(runner, "road_vision_demand", None)
+        observed = demand.new_peer_observations(live, active[1].map_id, now) if demand and live.active_route is None else None
+        if not observed:
+            return
+        live.view["detail"]["peer_wait"]["observation_retry"] = observed
     if (target_end == index and target_end < len(live.segments) - 1
             and live.segments[index]["s_to"] - s <= runner.config.arrive_free_m and live.view["hold"] is None):
         live.view["detail"]["traffic_hold"] = {
@@ -473,6 +479,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 prior = detail.get("peer_wait") or {}
                 detail["peer_wait"] = {**proof, "since": prior.get("since", runner._clock()),
                                        "checked_at": runner._clock(), "reason": reason}
+                if prior.get("observation_retry"):
+                    detail["last_peer_observation_retry"] = prior["observation_retry"]
                 if prefix is None and downstream_refusal(reply, robot_id):
                     detail["peer_wait"]["try_wait_place"] = True
                 elif prefix is not None:
@@ -481,6 +489,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
+            if peer_wait and reply.get("stage") == "pre_dispatch_peer_check" and reply.get("dispatch_attempted") is False:
+                await inspect_held_route(runner, live, state, payload)
             return
         raise _GoalRefused(reason, reply)
     if wait := detail.pop("peer_wait", None):

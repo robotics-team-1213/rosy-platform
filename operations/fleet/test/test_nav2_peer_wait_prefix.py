@@ -44,7 +44,7 @@ def snapshot():
 
 def refusal():
     return {"reason": "LOCALIZATION_UNTRUSTED", "accepted": False, "queued": False, "blocked_by": "p",
-            "command_robot_id": "m", "dispatch_attempted": False, "waiting_on": ["p"], "stage": "pre_dispatch_peer_check",
+            "command_robot_id": "m", "site_route_map": "site", "dispatch_attempted": False, "waiting_on": ["p"], "stage": "pre_dispatch_peer_check",
             "peer_evidence": {"p": {"reason": "keep_out_intersection"}}}
 
 
@@ -154,7 +154,19 @@ def test_full_refusal_then_prefix_uses_both_normal_wire_gates(monkeypatch, chang
         monkeypatch.setattr(nav2, "_convert_points", lambda runner, live, active, pts, pose, state: (pts, None))
     run(nav2.step_nav2_route(runner, live, 0, 0., pose))
     assert live.view["detail"]["peer_wait"]["waiting_on"] == ["p"] and actual == []
-    runner._clock.advance(nav2.NAV2_TRANSIENT_RETRY_S)
+    if change in ("none", "peer_disappears"):
+        from fleet.server.road_vision_demand import RoadVisionDemand
+        rows = []
+        cam = NS(source_id="cam", map_id="site", robot_markers=[("p",45)])
+        runner.road_vision_demand = RoadVisionDemand(None, NS(sources=[cam], snapshot=lambda:{"sightings":rows},
+                                                               approved_sighting_revision=lambda *_:"rev"))
+        runner._clock.advance(.5)
+        run(nav2.step_nav2_route(runner, live, 0, 0., pose))
+        assert attempts == [1.6] and not actual
+        rows.append({"robot_id":"p", "source_id":"cam", "seq":12, "captured_at":runner._clock()-.05,
+                     "map_id":"site", "calibration_revision":"rev", "calibration_source":"approved_record"})
+    else:
+        runner._clock.advance(nav2.NAV2_TRANSIENT_RETRY_S)
     live.traffic["pose_stamp"] = runner._clock()
     run(nav2.step_nav2_route(runner, live, 0, 0., pose))
     assert attempts == [1.6, .6] and prefix_guard.get() is None

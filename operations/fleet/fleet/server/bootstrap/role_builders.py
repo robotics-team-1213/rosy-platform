@@ -331,6 +331,13 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     async def read_trip_navigation(robot_id, run_id):
         return await console.clients()[robot_id]._get(f"/api/v1/navigation/state?run_id={run_id}")
 
+    async def read_held_lidar(robot_id, request):
+        client = console.clients()[robot_id]
+        return await client._get(f"/api/v1/sensors/lidar/corridor?direction={request['direction']}"
+                                 f"&distance_m={request['distance_m']:.4f}")
+
+    trip_runner.read_held_lidar = read_held_lidar
+
     from fleet.server.trip_road_speed import RoadSpeed
     trip_runner.road_speed = RoadSpeed(map_pose, console.goal_leases.update_road_speed)
     trip_runner.navigation_readback = read_trip_navigation
