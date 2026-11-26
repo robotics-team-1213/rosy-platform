@@ -13,6 +13,14 @@ import cell_policy_drive as drive  # noqa: E402
 NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 
 
+@pytest.fixture(autouse=True)
+def _checkpoint_state_range(monkeypatch):
+    """These CLI tests use fake checkpoint folders; the state gate itself is tested in test_omx_policy_start_gate."""
+    import cell_policy_start_gate as gate
+
+    monkeypatch.setattr(gate, "read_state_range", lambda _root: {"min": np.full(6, -1e3), "max": np.full(6, 1e3)})
+
+
 def cal(wrist_roll_homing=0):
     return {n: {"id": i, "drive_mode": 0, "homing_offset": wrist_roll_homing if n == "wrist_roll" else 0,
                 "range_min": 0, "range_max": 4095} for i, n in enumerate(NAMES)}

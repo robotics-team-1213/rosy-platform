@@ -33,7 +33,7 @@ def test_real_inputs_folded_not_gated_entry_end_passes_and_roll_minus_47_refused
     assert gate.verdict(n["b_roll_minus_47"], after_entry=False).startswith(sg.RANGE_CODE)
     a_gate = real_gate("a", monkeypatch, REAL["model_gripper"]["entry_end"])  # the folded park is outside arm_a's trained range
     assert a_gate.verdict(n["park"], after_entry=False).startswith(sg.RANGE_CODE)
-    assert a_gate.verdict(n["entry_end"], after_entry=True) is None
+    assert a_gate.verdict([4.0, *n["entry_end"][1:]], after_entry=True) is None  # arm_a's canonical pan is 4.0, arm_b's 6.0
 
 
 def test_start_pose_must_match_the_canonical_start(monkeypatch):
@@ -83,8 +83,8 @@ def test_conversion_is_the_sim_formula():
 
 class GateCell(Cell):
     def __init__(self, start):
-        super().__init__(expected_chunks={"home", "entry", "reach", "policy"})
-        self.state, self.frames, self.start = list(start), 0, list(start)
+        super().__init__()
+        self.state, self.frames = list(start), 0
 
     def frame(self, view):
         self.frames += 1
@@ -98,8 +98,10 @@ class GateCell(Cell):
             self.state = [8.0, -40.0, 35.0, 45.0, 15.0, 55.8]
         elif base == "park":
             self.state = list(HOME)
-        reply = super().act(command)
-        return {**reply, "state": list(self.state), "health": {"current_ma": [0] * 6}}
+        self.commands.append(command)
+        extra = {"human_hold_latched": True, "torque_hold_commanded": True} if base == "human-hold" else {}
+        return {"state": list(self.state), "command": base, "ok": True, "settled": True, "holding": False,
+                "health": {"current_ma": [0] * 6}, **extra}
 
 
 def run(tmp_path, gate, start=HOME, paced=True):
@@ -127,7 +129,7 @@ def test_paced_folded_start_is_not_gated_and_trained_states_pass(tmp_path):
 
 def test_paced_state_outside_the_range_after_entry_sends_no_policy_and_no_camera(tmp_path):
     low, high = [-60.0] * 6, [60.0] * 6
-    high[4] = 30.0  # the canonical roll 40 is past the trained maximum
+    high[0] = 3.0  # the canonical pan 6 is past the trained maximum
     cell, res = run(tmp_path, unit_gate(low, high))
     assert res["result"] == "refused" and res["reason"].startswith(sg.RANGE_CODE)
     assert "run entry" in cell.commands  # the folded pose is not gated: the entry chunk ran
@@ -136,7 +138,7 @@ def test_paced_state_outside_the_range_after_entry_sends_no_policy_and_no_camera
 
 def test_timed_path_gates_the_same_way(tmp_path):
     low, high = [-60.0] * 6, [60.0] * 6
-    high[4] = 30.0
+    high[0] = 3.0
     cell, res = run(tmp_path, unit_gate(low, high), paced=False)
     assert res["result"] == "refused" and res["reason"].startswith(sg.RANGE_CODE)
     assert cell.frames == 0 and not any(c.endswith("run policy") for c in cell.commands)
