@@ -19,7 +19,7 @@ import time
 
 ENV = "ROSY_LINK_DIR"
 COMMANDS = ("record", "next", "rerecord", "finish")
-IDLE_LIMIT_S = 600.0
+IDLE_LIMIT_S = 180.0
 
 
 class LinkChannel:

@@ -112,7 +112,7 @@ def _linked_run(guard, monkeypatch, tmp_path, script, in_episode=None):
             clock[0] += 0.05
             robot.send_action(action(leader.bus))
             return
-        if control_time_s == 600:
+        if control_time_s == 180:
             appended = False
             for _ in range(100):
                 if events['exit_early']:
@@ -155,7 +155,7 @@ def test_linked_mode_waits_ready_between_episodes_skips_the_reset_period_and_fin
         seen['flags'] = (events['stop_recording'], events['rerecord_episode'])
     module.main = main
     guard.run_native(module, Follower, Leader)
-    assert calls == [(None, 120), (None, 600), (dataset, 30), (None, 600)]  # the second episode call recorded nothing, the reset call never ran
+    assert calls == [(None, 120), (None, 180), (dataset, 30), (None, 180)]  # the second episode call recorded nothing, the reset call never ran
     assert states == ['waiting', 'recording', 'waiting'] and seen['after_episode'] == 'saving'
     assert seen['flags'] == (True, True)  # stop + re-record: lerobot clears the empty buffer, leaves its loop and finalizes the dataset (exit 0)
 
@@ -171,7 +171,7 @@ def test_linked_mode_idle_limit_ends_the_session_the_same_clean_way(guard, monke
         module.record_loop(robot=robot, events=events, policy=None, teleop=teleop, dataset=dataset, control_time_s=30)
     module.main = main
     guard.run_native(module, Follower, Leader)
-    assert (events['stop_recording'], events['rerecord_episode']) == (True, True) and calls == [(None, 120), (None, 600)]
+    assert (events['stop_recording'], events['rerecord_episode']) == (True, True) and calls == [(None, 120), (None, 180)]
 
 
 def test_linked_mode_an_episode_takes_next_and_rerecord_requests_from_the_same_channel(guard, monkeypatch, tmp_path):
@@ -267,7 +267,7 @@ def test_wait_linked_holds_aligning_after_save_pause_until_realigned(guard, monk
                 follower.bus.raw.update(follower.bus.goals)
             events['exit_early'] = False
             return
-        if control_time_s == 600:
+        if control_time_s == 180:
             write('record')  # premature record while >0.5s pause is still re-aligning
             for tick in range(30):
                 clock[0] += 0.05
@@ -328,7 +328,7 @@ def test_late_next_at_poll_final_does_not_end_next_linked_wait(guard, monkeypatc
     guard.run_native(module, Follower, Leader)
     assert seen['ep0_exit_early'] is False
     assert seen['ep0_state']['episode'] == 1 and seen['ep0_state']['last_command']['cmd'] == 'next' and seen['ep0_state']['last_command']['applied'] is True
-    assert calls == [(None, 120), (None, 600), (dataset, 30), (None, 600), (dataset, 30), (None, 600)]
+    assert calls == [(None, 120), (None, 180), (dataset, 30), (None, 180), (dataset, 30), (None, 180)]
     assert states == ['waiting', 'recording', 'waiting', 'recording', 'waiting']
     assert seen['flags'] == (True, True)
 
@@ -367,7 +367,7 @@ def test_linked_episode_start_keeps_boundary_false_so_first_tick_gap_does_not_re
                 follower.bus.raw.update(follower.bus.goals)
             events['exit_early'] = False
             return
-        if control_time_s == 600:
+        if control_time_s == 180:
             write('record')
             for _ in range(10):
                 clock[0] += 0.05
