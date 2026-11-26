@@ -67,7 +67,7 @@ export function draw(canvas, live, ref, report, opacity) {
   ctx.lineWidth = 3;
   for (const [x0, y0, x1, y1] of report.arrows || []) {
     const over = Math.hypot(x1 - x0, y1 - y0) > report.limit_px;
-    ctx.strokeStyle = ctx.fillStyle = over ? "#ff4d4f" : "#3ddc84";
+    ctx.strokeStyle = ctx.fillStyle = window.RosyPalette.cssColor(over ? "--status-crit" : "--status-good");
     ctx.beginPath(); ctx.arc(x0, y0, 4, 0, 2 * Math.PI); ctx.fill();
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     const a = Math.atan2(y1 - y0, x1 - x0);
