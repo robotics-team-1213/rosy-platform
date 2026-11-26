@@ -20,3 +20,16 @@ export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fl
   }
   return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
 }
+
+export function tripExecutionText(trip) {
+  const execution = trip?.execution;
+  if (!execution || execution.phase === 'terminal') return '';
+  const wait = tripWaitText(trip);
+  const label = wait || {received: '운행 요청 접수', dispatched: '주행 명령 전달 · 이동 확인 대기',
+    moving: '실제 이동 중', stationary: '주행 명령 전달 · 현재 정지',
+    pre_dispatch_wait: '통행 대기 · 주행 명령 전송 전', goal_wait: '주행 명령 대기', paused: '일시정지'}[execution.phase];
+  if (!label) return '';
+  if (execution.motion === 'moving' && execution.phase !== 'moving') return label + ' · 실제 이동 중';
+  if (execution.motion === 'stationary' && execution.phase !== 'stationary') return label + ' · 현재 정지';
+  return label;
+}

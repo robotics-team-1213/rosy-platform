@@ -1,7 +1,7 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText } from "/common/control-dom.js";
-import {tripWaitText} from "/console/assets/trip-display.js";
+import {tripExecutionText, tripWaitText} from "/console/assets/trip-display.js";
 import {owns, relays, unitScope} from "/console/assets/unit-scope.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
@@ -25,7 +25,7 @@ const approvable = row => (row.source === "mission" || row.source === "cell_job"
 export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 const idTail = v => String(v ?? "").split("-").pop().slice(0, 8);
 const shortStamp = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : ""; };
-const tripWait = row => ["started", "running", "link_wait"].includes(row.status) ? tripWaitText(row) : "";
+const tripWait = row => ["started", "running", "link_wait"].includes(row.status) ? tripExecutionText(row) || tripWaitText(row) : "";
 export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWait(row) || visible[row.visible_state] || workStatus(row.status),
   ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
 export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";

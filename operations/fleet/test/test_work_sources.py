@@ -26,6 +26,12 @@ def _rows(body, source):
     return {row["source_id"]: row for row in body["rows"] if row["source"] == source}
 
 
+def _work_trip_view(client, trip_id):
+    response = client.get(f"/api/fleet/trips/{trip_id}", headers={"Authorization": "Bearer viewer-secret"})
+    assert response.status_code == 200
+    return response.json()
+
+
 def test_open_trip_work_wait_uses_operator_hold_and_pre_dispatch_receipt(tmp_path):
     client, _ = _app(tmp_path)
     peer = {"stage": "pre_dispatch_peer_check", "dispatch_attempted": False}
@@ -36,6 +42,9 @@ def test_open_trip_work_wait_uses_operator_hold_and_pre_dispatch_receipt(tmp_pat
         row = _rows(_work(client, "viewer-secret"), "trip")["trip42"]
         assert (row["status"], row["visible_state"]) == (view["state"], state)
         assert (row["wait"]["reason"] if row["wait"] else None) == reason
+        receipt = row["execution"]
+        assert (receipt["command_robot_id"], receipt["motion"]) == ("rosy_42", "unknown")
+        assert _work_trip_view(client, "trip42")["execution"] == receipt
 
     check("waiting", "peer_pre_dispatch")
     peer["dispatch_attempted"] = True

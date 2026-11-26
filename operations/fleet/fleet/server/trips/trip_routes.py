@@ -363,7 +363,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             receipt("start_refused", exc.code, exc.detail)
             raise trip_error(exc) from exc
         receipt("start_accepted")
-        return trip
+        return runner.execution_view(trip)
 
     @app.get("/api/fleet/trip-requests", dependencies=read_guard, tags=["fleet"])
     def trip_request_history() -> dict:
@@ -413,7 +413,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
 
     @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
     def fleet_trips() -> dict:
-        return {"running": runner.running(), "open": runner.open_trips(), "trips": runner.recent()}
+        active = [runner.execution_view(row) for row in runner.open_trips()]
+        return {"running": max(active, key=lambda t: t["created_at"], default=None), "open": active,
+                "trips": [runner.execution_view(row) for row in runner.recent()]}
 
     @app.get("/api/fleet/traffic", dependencies=read_guard, tags=["fleet"])
     def fleet_traffic() -> dict:
@@ -481,4 +483,4 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         view = runner.view(trip_id)
         if view is None:
             raise _refuse("TRIP_UNKNOWN", status=404)
-        return view
+        return runner.execution_view(view)

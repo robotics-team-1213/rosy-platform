@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import math
 from uuid import uuid4
 
@@ -529,6 +530,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
+    live.command_ack_mono = time.monotonic()
     live.active_route = {"end_index": end_index, "points": len(payload)}
     if "attempt_id" in options:
         live.active_route["attempt_id"] = options["attempt_id"]

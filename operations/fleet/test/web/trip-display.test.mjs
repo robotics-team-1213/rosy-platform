@@ -41,3 +41,12 @@ test('pre-dispatch peer wait and operator pause take precedence over the open tr
   assert.doesNotMatch(tripStatusText(paused), /자동 재확인/);
   assert.doesNotMatch(tripStatusText({...trip, state:'arrived'}), /통행 대기/);
 });
+
+test("receipt and measured motion remain distinct when waiting and stopped", () => {
+  const trip = {state: "running", robot_id: "rosy_42", detail: {peer_wait: {
+    stage: "pre_dispatch_peer_check", dispatch_attempted: false, waiting_on: ["rosy_45"]}}};
+  const show = (phase, motion) => tripStatusText({...trip, execution: {phase, motion}});
+  assert.match(show("pre_dispatch_wait", "moving"), /전송 전.*실제 이동 중/);
+  assert.match(show("pre_dispatch_wait", "stationary"), /전송 전.*현재 정지/);
+  assert.doesNotMatch(show("pre_dispatch_wait", "unknown"), /현재 정지|실제 이동 중/);
+});
