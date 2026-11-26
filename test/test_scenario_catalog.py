@@ -32,3 +32,9 @@ def test_dry_run_tools_are_in_bridge_tool_specs():
     assert tools, "rosy_agent_bridge.py TOOL_SPECS 파싱 실패"
     for s in scenario_catalog.SCENARIOS:
         assert set(s["dry_run"]) <= tools
+
+
+def test_mujoco_rows_name_the_cell_snapshot():
+    for s in scenario_catalog.SCENARIOS:
+        if s["sim_host"] == "ai":
+            assert "cell_snapshot=deploy/robot/omx/sim/cell_snapshots/20261110-1231.json" in s["sim"], s["id"]
