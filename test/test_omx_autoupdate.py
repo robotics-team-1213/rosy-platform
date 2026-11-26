@@ -647,12 +647,12 @@ def test_uv_build_env_uses_unsafe_best_match_for_extra_index_lock(tmp_path, monk
                         "--index-strategy", "unsafe-best-match", "-r", str(lock)]
 
 
-def fake_systemctl(tmp_path, monkeypatch, failing=""):
+def fake_systemctl(tmp_path, monkeypatch, failing="", failing_start=""):
     (tmp_path / "bin").mkdir()
     calls = tmp_path / "calls"
     fake = tmp_path / "bin" / "systemctl"
-    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; esac\nexit 0\n'
-                    % (calls, failing))
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; "--user start %s") exit 1;; esac\nexit 0\n'
+                    % (calls, failing, failing_start))
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
     return calls
@@ -670,6 +670,16 @@ def test_a_sequential_restart_stops_in_reverse_then_starts_in_order(tmp_path, mo
     calls = fake_systemctl(tmp_path, monkeypatch)
     units = ["rosy-omx-camera@top.service", "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service"]
     assert m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
+    verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
+    assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]
+
+
+def test_one_unit_that_will_not_start_does_not_leave_the_later_ones_down(tmp_path, monkeypatch):
+    """2026-11-26: a rollback stopped at arm_b's observer and never started arm_s's observer or the bridges."""
+    calls = fake_systemctl(tmp_path, monkeypatch, failing_start="rosy-omx-observer@arm_b.service")
+    units = ["rosy-omx-observer@arm_a.service", "rosy-omx-observer@arm_b.service", "rosy-omx-observation-bridge.service",
+             "rosy-omx-observer@arm_s.service"]
+    assert not m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
     verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
     assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]
 
