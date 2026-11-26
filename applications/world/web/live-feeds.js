@@ -1,6 +1,7 @@
 import { showMap } from "./scene.js";
 import { initPlay } from "./play.js";
-const ISAAC_FRESH_MS = 3000;
+import { simFreshness } from "./map-rules.js";
+import { EVIDENCE_LABEL, evidenceAgeText } from "./common/core_ui_logic.js";
 const ISAAC_STATES = {
   waiting: "SIM 관측 대기 중",
   running: "SIM 실행 중",
@@ -8,7 +9,6 @@ const ISAAC_STATES = {
   stopped: "SIM 중지됨",
 };
 const PINKY_SIM_FRAME = "world_261026_cad";
-const PINKY_SIM_FRESH_MS = 3000;
 const CAMERA_FRESH_MS = 3000;
 const CAMERA_SOURCES = {
   field: { file: "field-live.jpg", label: "Rosy Cam 현장 상단", freshMs: 5000, fleet: true },
@@ -18,10 +18,11 @@ const CAMERA_SOURCES = {
 };
 
 export const isLayoutSha = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+const delayed = (sample, why) => `${EVIDENCE_LABEL.delayed}${evidenceAgeText(sample && simFreshness(sample)?.ageS)} · ${why}`;
 const vector = (values, length) => Array.isArray(values) && values.length === length && values.every(Number.isFinite);
 
 export function initLiveFeeds({
-  byId, status, readout, date, text, readJson, mapData, recordingData,
+  byId, status, readout, stamp, text, readJson, mapData, recordingData,
   manifestRead, mapPromise, autoplayRecording, recordingReturn, recordingEntry, getMode, getCadView, getArchiveLayout, getFactoryTab,
 }) {
   let isaacSession;
@@ -32,7 +33,7 @@ export function initLiveFeeds({
     return sample?.schema === "rosy.world.isaac-state.v1" && text(sample.run_id) &&
       (sample.scene === "ab" ? isLayoutSha(sample.layout_sha256)
         : sample.scene === "conformance" && sample.layout_sha256 === null) &&
-      Number.isSafeInteger(sample.observed_at_ms) && sample.observed_at_ms > 0 &&
+      Number.isSafeInteger(sample.observed_at_ms) && sample.observed_at_ms > 0 && !!simFreshness(sample) &&
       Number.isFinite(sample.sim_time_s) && sample.sim_time_s >= 0 &&
       Number.isSafeInteger(sample.reset_count) && sample.reset_count >= 0 &&
       typeof sample.state === "string" && Object.hasOwn(ISAAC_STATES, sample.state) &&
@@ -60,12 +61,12 @@ export function initLiveFeeds({
     list.replaceChildren();
   }
 
-  function showIsaac(session, sample) {
+  function showIsaac(session, sample, sentAt) {
     clearTimeout(session.expiry);
-    const age = Date.now() - sample.observed_at_ms;
-    if (Math.abs(age) > ISAAC_FRESH_MS) {
+    const remaining = sentAt + sample.fresh_for_ms - performance.now();
+    if (remaining <= 0) {
       clearIsaacReadout();
-      return isaacStatus("unavailable", "연결 안 됨 · SIM 관측 시각이 3초 범위를 벗어났습니다.", "관측 만료");
+      return isaacStatus("unavailable", delayed(sample, "최근 SIM 관측이 없습니다."), EVIDENCE_LABEL.delayed);
     }
     if (sample.state === "waiting" || sample.state === "stopped" ||
         !sample.joints.length || !sample.objects.length) {
@@ -74,7 +75,7 @@ export function initLiveFeeds({
         ? "표시할 관절과 물체 관측을 기다리는 중입니다." : ISAAC_STATES[sample.state], "관측 대기");
     }
     isaacStatus("ready", ISAAC_STATES[sample.state],
-      sample.state === "running" ? "SIM 관측 수신 중" : "SIM 일시정지 또는 시계 정체");
+      sample.state === "running" ? EVIDENCE_LABEL.fresh : "SIM 일시정지 또는 시계 정체");
     const ab = sample.scene === "ab";
     const archiveLayout = getArchiveLayout();
     readout("isaac-readout", [
@@ -95,14 +96,14 @@ export function initLiveFeeds({
     ]);
     session.expiry = setTimeout(() => {
       clearIsaacReadout();
-      isaacStatus("unavailable", "연결 안 됨 · 최근 SIM 관측이 없습니다.", "관측 만료");
-    }, ISAAC_FRESH_MS - age);
+      isaacStatus("unavailable", delayed(null, "최근 SIM 관측이 없습니다."), EVIDENCE_LABEL.delayed);
+    }, remaining);
   }
 
   async function pollIsaac(session) {
     const request = new AbortController();
     session.request = request;
-    const deadline = setTimeout(() => request.abort(), 2500);
+    const deadline = setTimeout(() => request.abort(), 2500), sentAt = performance.now();
     try {
       const response = await fetch("./data/isaac-live.json", {
         cache: "no-store", redirect: "error", signal: request.signal,
@@ -111,12 +112,12 @@ export function initLiveFeeds({
       const sample = await response.json();
       if (isaacSession !== session) return;
       if (!validIsaac(sample)) throw new Error("Invalid SIM snapshot");
-      showIsaac(session, sample);
+      showIsaac(session, sample, sentAt);
     } catch {
       if (isaacSession !== session) return;
       clearTimeout(session.expiry);
       clearIsaacReadout();
-      isaacStatus("unavailable", "연결 안 됨 · SIM 관측을 읽을 수 없습니다.", "연결 안 됨");
+      isaacStatus("unavailable", `${EVIDENCE_LABEL.unavailable} · SIM 관측을 읽을 수 없습니다.`, EVIDENCE_LABEL.unavailable);
     } finally {
       clearTimeout(deadline);
       if (isaacSession === session) {
@@ -159,7 +160,7 @@ export function initLiveFeeds({
       typeof sample.robot_id === "string" && /^[a-z][a-z0-9_]{0,31}$/.test(sample.robot_id) &&
       sample.frame_id === PINKY_SIM_FRAME && !!manifest?.site_cad?.source_sha256 &&
       sample.site_cad_sha256 === manifest?.site_cad?.source_sha256 &&
-      Number.isSafeInteger(sample.observed_at_ms) && sample.observed_at_ms > 0 &&
+      Number.isSafeInteger(sample.observed_at_ms) && sample.observed_at_ms > 0 && !!simFreshness(sample) &&
       Number.isFinite(sample.sim_time_s) && sample.sim_time_s >= 0 &&
       vector(sample.pose_m, 3) && Number.isFinite(sample.yaw_rad);
   }
@@ -178,26 +179,25 @@ export function initLiveFeeds({
     hidePinkySim();
   }
 
-  function showPinkySim(session, sample) {
+  function showPinkySim(session, sample, sentAt) {
     clearTimeout(session.expiry);
-    const age = Date.now() - sample.observed_at_ms;
-    if (Math.abs(age) > PINKY_SIM_FRESH_MS) {
+    const remaining = sentAt + sample.fresh_for_ms - performance.now();
+    if (remaining <= 0) {
       hidePinkySim();
-      return status("pinky-sim-status", "unavailable",
-        "Pinky SIM 사용 불가 · 관측 시각이 3초 범위를 벗어났습니다.");
+      return status("pinky-sim-status", "unavailable", `Pinky SIM ${delayed(sample, "최근 관측이 없습니다.")}`);
     }
     getCadView()?.setSim(sample);
-    status("pinky-sim-status", "ready", `Pinky SIM 라이브 · 실행 ${sample.run_id}`);
+    status("pinky-sim-status", "ready", `Pinky SIM ${EVIDENCE_LABEL.fresh} · 실행 ${sample.run_id}`);
     session.expiry = setTimeout(() => {
       hidePinkySim();
-      status("pinky-sim-status", "unavailable", "Pinky SIM 사용 불가 · 최근 관측이 없습니다.");
-    }, PINKY_SIM_FRESH_MS - age);
+      status("pinky-sim-status", "unavailable", `Pinky SIM ${delayed(null, "최근 관측이 없습니다.")}`);
+    }, remaining);
   }
 
   async function pollPinkySim(session) {
     const request = new AbortController();
     session.request = request;
-    const deadline = setTimeout(() => request.abort(), 2500);
+    const deadline = setTimeout(() => request.abort(), 2500), sentAt = performance.now();
     try {
       const response = await fetch("./data/pinky-sim.json", {
         cache: "no-store", redirect: "error", signal: request.signal,
@@ -207,12 +207,12 @@ export function initLiveFeeds({
       const manifest = await manifestRead;
       if (simSession !== session) return;
       if (!validPinkySim(sample, manifest)) throw new Error("Invalid Pinky SIM snapshot");
-      showPinkySim(session, sample);
+      showPinkySim(session, sample, sentAt);
     } catch {
       if (simSession !== session) return;
       clearTimeout(session.expiry);
       hidePinkySim();
-      status("pinky-sim-status", "unavailable", "Pinky SIM 사용 불가 · 관측 파일을 읽을 수 없습니다.");
+      status("pinky-sim-status", "unavailable", `Pinky SIM ${EVIDENCE_LABEL.unavailable} · 관측 파일을 읽을 수 없습니다.`);
     } finally {
       clearTimeout(deadline);
       if (simSession === session) {
@@ -497,9 +497,8 @@ export function initLiveFeeds({
       return recordFallback("재생할 보관 기록이 없습니다.");
     }
     const { samples, source, captured_at, map_version } = recording;
-    readout("rec-readout", [
-      ["출처", source], ["기록 시각 (UTC)", date(captured_at)], ["기록 지도 버전", map_version],
-    ]);
+    const recorded = stamp(captured_at);
+    readout("rec-readout", [["출처", source], ["기록 시각", recorded.text, recorded.title], ["기록 지도 버전", map_version]]);
     let map;
     try {
       const manifest = await manifestRead;

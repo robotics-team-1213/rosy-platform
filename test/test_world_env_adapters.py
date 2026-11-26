@@ -450,7 +450,9 @@ def test_active_site_map_is_available_without_robot_frames(tmp_path: Path, monke
         "version": 394, "sha256": "ab" * 32, "activated_at": 1_710_000_000,
         "activated_by": "operator",
         "map": {
-            "map_id": "track", "places": [{"id": "S4", "x": 0.9, "y": -0.2, "kind": "stop"}],
+            "map_id": "track", "view_turn_deg": 90,
+            "places": [{"id": "S4", "name": "적재 4", "x": 0.9, "y": -0.2, "kind": "stop"},
+                       {"id": "S5", "name": 5, "x": 1.0, "y": -0.2}],
             "edges": [{"polyline": [[0.745, -0.207], [0.9, -0.2]], "speed_cap_mps": 0.1}],
             "survey": {"private": True},
         },
@@ -483,7 +485,10 @@ def test_active_site_map_is_available_without_robot_frames(tmp_path: Path, monke
             assert 0 < reply["fresh_for_ms"] <= serve.ACTIVE_SITE_MAP_FRESH_MS
             assert active["version"] == 394 and active["sha256"] == "ab" * 32
             assert "activated_by" not in active and "survey" not in active["map"]
-            assert active["map"]["places"][0]["id"] == "S4"
+            # Display extras pass through additively; malformed names and other metadata do not.
+            assert active["map"]["places"] == [{"id": "S4", "name": "적재 4", "x": 0.9, "y": -0.2},
+                                               {"id": "S5", "x": 1.0, "y": -0.2}]
+            assert active["map"]["view_turn_deg"] == 90
             assert active["map"]["edges"] == [{"polyline": [[0.745, -0.207], [0.9, -0.2]]}]
             assert not (bundle / "data/worlds/real-site.json").exists()
 
@@ -504,6 +509,41 @@ def test_active_site_map_is_available_without_robot_frames(tmp_path: Path, monke
             server.trusted_map_proxy = True
             with urllib.request.urlopen(endpoint, timeout=2) as response:
                 assert json.load(response) == {"site_map": None}
+        finally:
+            server.shutdown()
+            worker.join()
+
+
+def test_sim_observation_files_carry_server_judged_age(tmp_path: Path) -> None:
+    bundle = _make_bundle(tmp_path)
+    data = bundle / "data"
+    now_ms = time.time_ns() // 1_000_000
+    sample = {"schema": "rosy.world.isaac-state.v1", "run_id": "run-1", "observed_at_ms": now_ms - 500}
+    (data / "isaac-live.json").write_text(json.dumps(sample), encoding="utf-8")
+    (data / "pinky-sim.json").write_text(json.dumps({**sample, "observed_at_ms": now_ms - 12_000}), encoding="utf-8")
+    with serve.make_server(bundle, "127.0.0.1", 0) as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        origin = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urllib.request.urlopen(f"{origin}/data/isaac-live.json", timeout=2) as response:
+                assert response.headers["Cache-Control"] == "no-store"
+                fresh = json.load(response)
+            # Added fields only: the observer's own fields stay as written.
+            assert {key: fresh[key] for key in sample} == sample
+            assert 500 <= fresh["age_ms"] < 2_500
+            assert fresh["fresh_for_ms"] == LIVE_FRESH_MS - fresh["age_ms"]
+            with urllib.request.urlopen(f"{origin}/data/pinky-sim.json", timeout=2) as response:
+                stale = json.load(response)
+            assert stale["age_ms"] >= 12_000 and stale["fresh_for_ms"] == 0
+
+            (data / "pinky-sim.json").write_text(json.dumps({"run_id": "run-1"}), encoding="utf-8")
+            with urllib.request.urlopen(f"{origin}/data/pinky-sim.json", timeout=2) as response:
+                assert json.load(response) == {"run_id": "run-1"}
+            (data / "isaac-live.json").unlink()
+            with pytest.raises(urllib.error.HTTPError) as missing:
+                urllib.request.urlopen(f"{origin}/data/isaac-live.json", timeout=2)
+            assert missing.value.code == 404
         finally:
             server.shutdown()
             worker.join()
@@ -536,7 +576,8 @@ def test_world_factory_actors_node_unit_tests(tmp_path: Path) -> None:
     if node is None:
         pytest.skip("Node.js is unavailable")
     result = subprocess.run(
-        [node, "--test", "--test-reporter=spec", str(ROOT / "applications/world/test/factory-actors.test.mjs")],
+        [node, "--test", "--test-reporter=spec", str(ROOT / "applications/world/test/factory-actors.test.mjs"),
+         str(ROOT / "applications/world/test/map-rules.test.mjs")],
         cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
