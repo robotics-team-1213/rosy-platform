@@ -520,7 +520,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             return
         raise _GoalRefused(reason, reply)
     if wait := live.view["detail"].pop("peer_wait", None):
-        live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": runner._clock()}
+        live.progress_at = runner._clock()
+        live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     live.active_route = {"end_index": end_index, "points": len(payload)}
     live.nav2_retry_at = -math.inf
     live.view["detail"].pop("goal_wait", None)

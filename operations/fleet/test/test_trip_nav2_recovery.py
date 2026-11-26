@@ -345,7 +345,8 @@ def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untr
     assert len(attempts) == 1
 
     # Once the cooldown expires, the cleared route can be dispatched.
-    clock.advance(NAV2_TRANSIENT_RETRY_S - 0.5)
+    clock.advance(runner.config.stall_s + NAV2_TRANSIENT_RETRY_S)
+    live.progress_at = clock() - runner.config.stall_s - 1
     runner._route = orig_route
     run(runner.tick())
     view = runner.view("p-cf")
