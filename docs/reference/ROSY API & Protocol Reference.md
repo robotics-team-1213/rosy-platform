@@ -5,9 +5,45 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.472
+**Version:** v1.479
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.479 Idle navigation ownership proof (CORE)
+
+An idle CORE may return `idle_owner` in `POST /api/v1/navigation/cancel` and `GET /api/v1/navigation/state`. The idle cancellation also returns the CORE clock value in `idle_observed_at`. The object identifies the boot, empty native owner, navigation and docking owner generations, transport generation and mode epoch. CORE supplies it only with stable, vacant Nav2 transport. For a pre-dispatch peer hold Fleet confirms a pause using the matching owner before and after a subsequent measured standstill. A successful idle observation leaves the trip waiting for ordinary traffic admission.
+
+### v1.478 Assigned station release and timeout hold (Fleet)
+
+Submit the `station_stop` action with the configured `place_id` and `role` for an external load or wait stop. The task exposes `station_operation` with the assigned place, role, retained trip ID, state and deadline. A named operator can post `robot_id`, `trip_id`, `place_id` and `role` to `/api/fleet/pipeline/pinky-tasks/{task_id}/station-release`. Repeating the same release returns its stored receipt. Timeouts retain the hold. Cell S unload release checks the matching batch, final cell task, empty bed and parked arm.
+
+### v1.477 Correlated native docking cancellation (CORE)
+
+The docking status advertises `operation_cancel_supported`. Operators can cancel the current dock or undock with `POST /api/v1/docking/cancel-operation` using `run_id`, `expected_boot_id` and `expected_owner_generation`. The native owner compares all three before stopping and returns its readback. Fleet named charging-bay trips keep the requested dock and expose the staging place and operation phase in `parking_handoff`.
+
+### v1.476 Leased speed ceilings for Nav2 road routes (CORE)
+
+CORE advertises navigation.route_speed_authority. Authenticated route and bound-route requests may opt into road_speed_controlled with an owned goal lease. The route starts with zero wheel authority. The sending token renews its precise correlation ID with speed_grant containing issued_at and expires_at in Unix seconds and a nonnegative limit_mps. CORE rejects stale, future, unordered and over-two-second grants. Ordinary lease renewals do not extend the speed grant. The device caps forward and reverse translation while preserving curvature, and expired or zero grants hold rotation as well.
+
+Fleet requests this authority for Nav2 trips with an approved binding, a required binding, or active site rules. It includes every mapped stripe in the reachable distance, respects the active maximum speed and minimum following distance, and records the limit, reason, owner and expiry in trip detail. The speed grant expires within 1.5 seconds of the oldest relevant pose. A moving trip with a stale peer pose holds on the ring. The Nav2 local controller and the existing traffic blocks, obstacle checks and safety limits remain in force.
+
+### v1.475 Stationary rear dock registration (CORE)
+
+Administrators can use `POST /api/v1/docking/commission` to create a dock and its detector type together. Supply `robot_id`, `map_id`, `map_grid_id`, `map_generation`, `dock` and `dock_type`. CORE checks localization, standstill and native ownership under the grid gate. An identical registration returns the existing dock. A different existing dock, a frame change or an active owner returns 409. Registration leaves the base stationary.
+
+### v1.474 RFID intake receipt and observed inbound placement (Fleet)
+
+Cell accepts RFID input at the existing workcell-token `intake-readings` route. Configure either `ROSY_INTAKE_RFID_ENCODED_WORKCELL` for ASCII C-1 through C-21 with optional NUL padding, or `ROSY_INTAKE_RFID_MANIFEST` for an immutable, absolute-path, operator-provisioned mapping. A manifest contains `schema=rosy.intake-rfid-manifest.v1`, `workcell_id`, `revision`, and uppercase hexadecimal `container_epcs` keys mapped to cargo references. Acceptance acknowledges durable capture. Identical observation replay returns the same acknowledgement. Conflicting references or out-of-sequence input return 409. Only the configured direct parent can read mapped candidates at `GET /api/fleet/control-unit/intake-candidates`. Raw EPCs stay on the Cell. Distinct EPCs encoding one cargo label quarantine that label across restarts. Operators must reconcile the physical tags and preserve the journal before recommissioning the mapping. Repeated scans cannot clear a conflict.
+
+Fleet R sets `ROSY_INTAKE_RFID_WORKCELL` to a workcell whose dedicated `observation-workcell:<id>` resource belongs to exactly one direct child. Creating a normal inbound supply task for that workcell assigns its immutable `intake_occurrence_id`. Harbor polling `GET /api/fleet/port-events` imports the private journal, retains unmatched observations, and publishes one `container.received_at_intake` once physical supply completion and cargo identity agree. For declared cargo, the matching period runs from claim to completion plus `ROSY_INTAKE_RFID_WINDOW_SECONDS` (default 300, maximum 3600). For undeclared cargo, Cell and R pin the same `ROSY_INTAKE_RFID_READER_EPOCH`. The reader sends `reader_epoch` and increasing `reader_seq`; its `closed_through` watermark supplies UTC `coverage_start` and `observed_at`. One continuous capture interval must cover claim through completion and contain one unambiguous cargo label. Missing coverage, overlapping transfers and conflicting labels keep receipt pending. A supply occurrence can produce one receipt across repeated polling and restart.
+
+An inward `harbor_plan` carries `intake_occurrence_id` and `placement_attempt_id` equal to the submitted `request_key`. Fleet verifies the persisted receipt belongs to the step's cargo. Fleet R pins `ROSY_PLACEMENT_CAMERA_SOURCE` and `ROSY_PLACEMENT_CALIBRATION_REVISION` for observed storage. The existing site recognition snapshot ingest optionally accepts `task_id`. A fresh snapshot identifying the cargo at a single physical slot after verified placement can publish `container.stored` with that slot and both references.
+
+Without a visual cargo label, Fleet can carry the RFID identity across one exclusive belt-to-slot transfer. It requires one observed pick, a clear belt source, the owner’s time-bound tier and slot measurements, a verified physical release, and the retained supply and placement history. A second unresolved belt receipt or a competing transfer keeps placement pending. This path reports identity as `attested`. Direct camera decoding reports `observed`.
+
+### v1.473 Task-specific cell plan refusal codes (Fleet)
+
+A physically aborted step reports its own persisted and sanitized error as tasks[].last_refusal.code with op=complete, and the plan exposes the code in hold_reason. The proposal retains the requested slot. A service proposal and a dry run do not establish calibration. SITE_NOT_CALIBRATED and STAND_NOT_CALIBRATED are emitted only from the cell's actual local calibration check. The service also preserves typed structural, configuration, interlock and hardware refusals. Unrecognized hardware diagnostic text yields MEASURED_PLACEMENT_MISSING.
 
 ### v1.472 Operator trip request history (Fleet)
 
@@ -5100,6 +5136,13 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.479 | 2026-11-26 | [CORE] Idle navigation ownership proof |
+| v1.478 | 2026-11-26 | [Fleet] Assigned station release and timeout hold |
+| v1.477 | 2026-11-26 | [CORE] Correlated native docking cancellation |
+| v1.476 | 2026-11-26 | [CORE] Leased speed ceilings for Nav2 road routes |
+| v1.475 | 2026-11-26 | [CORE] Stationary rear dock registration |
+| v1.474 | 2026-11-26 | [Fleet] RFID intake receipt and observed inbound placement |
+| v1.473 | 2026-11-26 | [Fleet] Task-specific cell plan refusal codes |
 | v1.472 | 2026-11-25 | [Fleet] Operator trip request history |
 | v1.471 | 2026-11-25 | [Fleet] Retain a pending pose request during localization verification |
 | v1.470 | 2026-11-25 | [CORE] Bounded localization candidate search window |

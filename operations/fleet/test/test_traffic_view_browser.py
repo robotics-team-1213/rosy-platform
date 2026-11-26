@@ -461,7 +461,7 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
             expect(page.locator('#site-map-svg [data-robot="rosy_02"]')).to_have_class("robot c2 degraded")
             expect(page.locator("#site-map-svg .trip-line")).to_have_count(4)  # two open trips, two lanes each
             expect(page.locator("#site-map-svg .robot-label").first).to_have_text("rosy_01 · ±0.03 m")
-            expect(page.locator("#trip-run")).to_contain_text("이 지도로 운행 중 · 운행 중 · rosy_01")
+            expect(page.locator("#trip-run")).to_contain_text("운행 접수 · rosy_01")
             link = page.locator("#trip-console-link")
             expect(link).to_have_text("운행은 관제의 로봇 카드에서")
             assert link.get_attribute("href") == "/console"

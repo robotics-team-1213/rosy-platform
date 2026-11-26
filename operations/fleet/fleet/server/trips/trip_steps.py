@@ -6,15 +6,14 @@ mixes it in.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import math
 from typing import Optional
 from uuid import uuid4
 
 import httpx
-from pydantic import ValidationError
 
-from core_common.protocol.native_operation import NativeOperation
 
 from fleet.hub.hub import HubError
 from fleet.routing.cost import LEFT, RIGHT, STOP
@@ -29,7 +28,8 @@ from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
 from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
-from fleet.server.named_stop_confirm import GoalRefused, confirm_free_stop, confirm_lane_stop
+from fleet.server.named_stop_confirm import (GoalRefused, confirm_free_stop, confirm_lane_stop,
+                                            record_stop_dispatch, record_stop_operation)
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic.route_guide import route_guided
 
@@ -60,9 +60,26 @@ class TripSteps:
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
         arrival_confirmed = False
+        parking = live.view["detail"].get("parking_handoff")
+        if parking and parking["phase"] != "approaching":
+            try:
+                await self._call(self.rear_bay_port.step(self, live))
+            except (TripError, RobotApiError, HubError, OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+                if parking["phase"] == "waiting_for_clearance" and live.open:
+                    self._save(live)
+                    return
+                await self._stop(live, "stopped", _code(exc))
+                return
+            self._save(live)
+            return
         if self._precision_terminal_mismatch(live):
             return await self._stop(live, "failed", "TRIP_GOAL_REFUSED",
                                     {"goal_reason": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
+        stop = (live.view.get("hold") or {}).get("stop")
+        if stop is not None:
+            await self._check_pause(live)
+            self._save(live)
+            return
         if self._renew_lease is not None and live.view["state"] != "link_wait":  # D-760 4: a free robot then stops
             # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
             # renewal that fails lets CORE cancel the goal when its lease runs out.
@@ -158,8 +175,9 @@ class TripSteps:
             if index != live.view["segment_index"]:
                 live.view["segment_index"] = index
                 live.last_goal = None
-                live.view["detail"].pop("named_stop_operation", None)
-                live.view["detail"].pop("named_stop_dispatch", None)
+                if not live.nav2:  # one native route can cover multiple segments
+                    live.view["detail"].pop("named_stop_operation", None)
+                    live.view["detail"].pop("named_stop_dispatch", None)
             self.authority.record_guidance(live, pose, self._store.active(), index, s, self._clock())
             self._describe(live)
             last = index == len(live.segments) - 1
@@ -203,14 +221,24 @@ class TripSteps:
                     await self._step_free(live, index + 1, pose, staging=index)
             elif live.nav2:
                 await step_nav2_route(self, live, index, s, pose)
+                if live.view["detail"].get("peer_wait"):
+                    self._save(live)
+                    return
                 if live.view["detail"].get("camera_lane_fallback"):
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:
                 await self._step_free(live, index, pose)
-            if last and live.open and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
+            if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)
                     arrival_confirmed = live.open
+                elif parking and live.nav2_binding_scope is None:
+                    # An ordinary approach may use the site's normal pose. Keep its owner until native standstill.
+                    from fleet.server.handoff_traffic import _fresh_stopped
+                    state = await self._call(self.named_stop_state(robot_id))
+                    arrival_confirmed = bool(live.active_route and live.active_route.get("end_index") == index
+                                             and state.get("navigation") == "ARRIVED" and _fresh_stopped(state))
                 elif self._strict_named_stop(live, index) is None:
                     arrival_confirmed = True
                 elif lane:
@@ -248,6 +276,10 @@ class TripSteps:
                     self._save(live)
                 return  # waiting for a fresh sighting, or ended STATION_ALIGN_*
             live.view["detail"].pop("named_stop_handoff_pending", None)
+            if parking:
+                parking["phase"] = "staging_confirmed"
+                self._save(live)
+                return
             live.view["state"] = "arrived"
             if lane and not camera and (live.sent or {}).get("action") == STOP:
                 self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
@@ -413,6 +445,7 @@ class TripSteps:
             raise _JunctionAborted(reply.get("junction_seq"))
         seq, arc_before = reply.get("junction_seq"), (live.junction.get("arc") or {}).get("arc_seq")
         live.replaceable = None
+        live.command_ack_mono = time.monotonic()
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
                      "done": bool(reply.get("already_done")), "arc_before": arc_before}
         if live.first_seq is None:
@@ -508,17 +541,8 @@ class TripSteps:
         options = {"attempt_id": attempt_id} if attempt_id is not None else {}
         if stop is not None:
             frame = live.view["detail"].get("goal_frame") or {}
-            map_view = self._store.active_view()
-            if (map_view is None or map_view["version"] != active[0]
-                    or not frame.get("map_grid_id") or not self._matches_precision_binding(live, frame)):
-                raise _GoalRefused("NAMED_STOP_BINDING_UNVERIFIED")
-            live.view["detail"]["named_stop_dispatch"] = {
-                "attempt_id": attempt_id, "robot_id": live.view["robot_id"], "place": live.request["to"],
-                "map_id": active[1].map_id, "map_version": active[0], "map_sha256": map_view["sha256"],
-                "binding_id": frame["binding_id"], "map_grid_id": frame["map_grid_id"],
-                "site_target": dict(zip(("x", "y", "yaw"), (stop.x, stop.y, stop.yaw) if exact else (x, y, stop.yaw))),
-                "robot_target": dict(zip(("x", "y", "yaw"), goal)),
-            }
+            site_target = (stop.x, stop.y, stop.yaw) if exact else (x, y, stop.yaw)
+            record_stop_dispatch(self, live, active, attempt_id, site_target, goal)
             options["stop_binding"] = {"site_map_id": frame["map_id"], "site_map_version": frame["map_version"],
                                        "binding_id": frame["binding_id"], "map_grid_id": frame["map_grid_id"]}
         if stop is not None and stop.precision_stop is not None:
@@ -563,15 +587,9 @@ class TripSteps:
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
             raise _GoalRefused(reply.get("reason") or "", reply)
+        live.command_ack_mono = time.monotonic()
         if attempt_id is not None:
-            try:
-                operation = NativeOperation.model_validate(reply.get("operation"))
-            except ValidationError as error:
-                raise _GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED") from error
-            if (reply.get("accepted") is not True or operation.kind != "navigate"
-                    or operation.correlation_id != attempt_id):
-                raise _GoalRefused("NAMED_STOP_RECEIPT_UNVERIFIED")
-            live.view["detail"]["named_stop_operation"] = operation.model_dump(mode="json")
+            record_stop_operation(live, attempt_id, reply)
 
     def _confirm_lane_stop(self, live: LiveTrip, index: int) -> bool:
         return confirm_lane_stop(self, live, index)

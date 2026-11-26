@@ -88,6 +88,61 @@ def test_feature_is_off_without_cells(tmp_path):
         server.server_close()
 
 
+def test_route_check_binds_the_executor_config_and_arm_scoped_slots(screen):
+    url, _, calls, jobs, cell = screen
+    route = ["tmp-b-2-l1", "ship-h1r2-l0"]
+    body = {"arm": "arm_b", "step": "check", "route": route, "task_id": "fleet:route-12"}
+    endpoint = "/api/calibration/jobs"
+    assert post(url, endpoint, body)[0] == 409  # never fall back to the calibration stack config
+    cfg = cell.parent / "route.json"
+    jobs.arms["arm_b"]["route_config"] = str(cfg)
+    cfg.write_text(json.dumps({"arm_id": "arm_a"}))
+    assert post(url, endpoint, body)[0] == 422
+    cfg.write_text(json.dumps({"arm_id": "arm_b"}))
+    assert post(url, endpoint, {**body, "route": ["tmp-a-1-l1", route[1]]})[0] == 422
+    assert post(url, endpoint, {**body, "step": "remap", "person_at_switch": True})[0] == 422
+    assert post(url, endpoint, {**body, "task_id": "../wrong"})[0] == 422
+    assert not calls["spawn"]
+    status, job = post(url, endpoint, body)
+    assert status == 202 and job["route"] == route and job["route_config"] == cfg.name
+    assert job["task_id"] == body["task_id"]
+    argv, cwd, _ = calls["spawn"][0]
+    assert argv == ["py", jobs.engine("cell_calibrate.py"), "--config", str(cfg), "check", "--route", *route]
+    assert cwd == str(cfg.parent)
+    for thread in jobs.threads:
+        thread.join()
+
+
+def test_supply_check_binds_its_own_profile_targets_and_provenance(screen):
+    url, _, calls, jobs, cell = screen
+    path = cell.parent / "supply.json"
+    config = {"arm_id": "arm_s", "sites": {"pinky": {"place": [0.2, 0.1]}, "belt": {}}}
+    path.write_text(json.dumps(config))
+    jobs.arms["arm_s"] = {"config": str(path)}
+    body = {"arm": "arm_s", "step": "check", "supply_route": True}
+    endpoint = "/api/calibration/jobs"
+    assert post(url, endpoint, {**body, "arm": "arm_b"})[0] == 422
+    assert post(url, endpoint, {**body, "targets": ["pinky:1,2"]})[0] == 422
+    status, missing = post(url, endpoint, body)
+    assert status == 422 and "belt" in missing["error"] and not calls["spawn"]
+    config["sites"]["belt"]["place"] = [0.1, -0.1]
+    path.write_text(json.dumps(config))
+    status, job = post(url, endpoint, body)
+    assert status == 202 and job["supply_route"] and job["route_config"] == path.name
+    assert job["targets"] == ["pinky:0.2,0.1", "belt:0.1,-0.1"] and "route" not in job
+    assert calls["spawn"][0][0][-4:] == ["check", "--targets", *job["targets"]]
+    for thread in jobs.threads:
+        thread.join()
+
+
+def test_fleet_link_uses_only_operator_configured_https(cell):
+    conf = json.loads(cell.read_text())
+    for url, expected in [("https://fleet.example/cell", True), ("http://fleet.example/cell", False),
+                          ("javascript:alert(1)", False), ("https://user:pw@fleet.example/", False)]:
+        cell.write_text(json.dumps({**conf, "fleet_cell_console_url": url}))
+        assert jobs_mod.Jobs(cell).fleet_console_url == (url if expected else None)
+
+
 def test_status_reads_files_only(screen):
     url, _, _, _, cell = screen
     status, raw = call(url, "/api/calibration/status", cookie="valid")

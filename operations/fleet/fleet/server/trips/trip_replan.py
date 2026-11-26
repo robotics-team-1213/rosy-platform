@@ -11,7 +11,7 @@ from typing import Optional
 from fleet.routing.cost import STOP
 from fleet.routing.execute import plan_again, replan_hold
 from fleet.server.trip_admission import LOCALIZED
-from fleet.server.trip_halts import error_code as _code
+from fleet.server.trip_halts import _cancel_ack, error_code as _code, idle_cancel_owner, pre_dispatch_wait
 from fleet.server.trip_laps import carry_on, hold_back_m, next_lap
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import TripError
@@ -45,24 +45,69 @@ class TripReplan:
         """Stop/hold an open trip at Fleet's instruction without releasing its trip lease."""
         async with self._lock_for(self._open(trip_id).view["robot_id"]):
             live = self._open(trip_id)
-            robot_id = live.view["robot_id"]
-            hold = {"reason": "fleet_hold", "plan": None, "by": principal_id, "at": self._clock()}
-            if reason:
-                hold["note"] = reason
-            live.view["hold"] = hold
-            if not live.segment_is_lane(live.view["segment_index"]):
-                if self._cancel_goal is not None:
-                    try:
-                        await self._call(self._cancel_goal(robot_id))
-                        live.view["detail"].pop("pause_cancel_error", None)
-                    except _ROBOT_ERRORS as exc:
-                        live.view["detail"]["pause_cancel_error"] = _code(exc)
-                live.active_route = None
-                live.last_goal = None
-                self._fence(robot_id)
+            hold = live.view.get("hold")
+            if not hold or hold.get("reason") != "fleet_hold":
+                hold = {"reason": "fleet_hold", "plan": None, "by": principal_id, "at": self._clock()}
+                if reason:
+                    hold["note"] = reason
+                live.view["hold"] = hold
+            if live.nav2 or not live.segment_is_lane(live.view["segment_index"]):
+                hold.setdefault("stop", {"confirmed": False})
+                self._save(live)  # Retain the intent even if Fleet exits during the CORE request.
+                await self._check_pause(live)
             self._describe(live)
             self._save(live)
             return live.view
+
+    async def _check_pause(self, live: LiveTrip) -> bool:
+        hold = live.view["hold"]
+        stop = hold.setdefault("stop", {"confirmed": False})
+        robot_id = live.view["robot_id"]
+        stop["confirmed"] = False
+        stop.pop("proof", None)
+        try:
+            pred = live.active_route is None and live.last_goal is None and pre_dispatch_wait(live.view)
+            if not pred:
+                stop.pop("idle_owner", None)
+            if not stop.get("cancel_ack") and not stop.get("idle_owner"):
+                last = stop.get("attempted_at")
+                if last is not None and self._clock() - last < self.config.restart_retry_s:
+                    return False
+                stop["attempted_at"] = self._clock()
+                wire = self.halts.idle_wire(robot_id) if pred else None
+                try:
+                    receipt = await self._call(self._cancel_goal(robot_id)) if self._cancel_goal else None
+                finally:
+                    if live.view["detail"].get("camera_lane_fallback"):
+                        # A lost handoff reply leaves either controller holding the wheels.
+                        await self._call(self._junction.hold(robot_id))
+                stop["cancel_ack"] = _cancel_ack(receipt)
+                observed = idle_cancel_owner(receipt, self._clock()) if wire is not None and not stop["cancel_ack"] else None
+                if observed is not None:
+                    owner, after = observed
+                    stop.update(idle_owner=owner, wire_epoch=wire, idle_ack_at=after)
+                elif not stop["cancel_ack"]:
+                    stop["error"] = "CANCEL_UNCONFIRMED"
+                    return False
+            if stop.get("idle_owner"):
+                proof = await self.halts.measured_idle_stop(robot_id, stop["idle_ack_at"], stop["idle_owner"], stop["wire_epoch"])
+            else:
+                proof = await self.halts.measured_stop(robot_id, stop["attempted_at"])
+            if proof is None:
+                stop["error"] = "TRIP_PAUSE_STOP_UNCONFIRMED"
+                if self._clock() - stop["attempted_at"] >= self.config.restart_retry_s:
+                    stop["cancel_ack"] = False
+                    stop.pop("idle_owner", None)
+                return False
+            stop.update(confirmed=True, proof=proof)
+            stop.pop("error", None)
+            live.active_route = None
+            live.last_goal = None
+            self._fence(robot_id)
+            return True
+        except _ROBOT_ERRORS as exc:
+            stop["error"] = _code(exc)
+            return False
 
     async def resume(self, trip_id: str, principal_id: str, blocked_edges: tuple[str, ...] = ()) -> dict:
         """Resume a held trip (optionally guiding it around ``blocked_edges``)."""
@@ -72,6 +117,10 @@ class TripReplan:
             hold = live.view["hold"]
             if hold is None:
                 raise TripError(409, "TRIP_NOT_HELD")
+            if (hold.get("reason") == "fleet_hold" and (live.nav2 or not live.segment_is_lane(live.view["segment_index"]))
+                    and (not await self._check_pause(live) or not live.open)):
+                self._save(live)
+                raise TripError(409, "TRIP_PAUSE_STOP_UNCONFIRMED", {"stop": hold.get("stop")})
             active = self._store.active()
             if active is None:
                 raise TripError(409, "TRIP_MAP_CHANGED", {"map_version": None})
@@ -87,7 +136,7 @@ class TripReplan:
                 body, failed = plan_again(
                     active, (pose.x, pose.y, pose.yaw), live.request, live.view.get("caps") or {},
                     frozenset(self._blocked()) | frozenset(blocked_edges), passed,
-                    self._routing, self.config.max_turn_deg,
+                    self._routing, self.config.max_turn_deg, nav2_off_lane_margin_m=self.config.nav2_off_lane_margin_m,
                 )
                 if failed is not None:
                     raise TripError(409, "TRIP_REPLAN_FAILED", {
@@ -127,6 +176,8 @@ class TripReplan:
                 live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
                 live.sent = None
                 live.reset_nav2_recovery()
+            if hold.get("stop") and live.view["detail"].pop("camera_lane_fallback", None):
+                live.view["detail"]["line_follow_started"] = False
             live.view["detail"]["resumed_by"] = principal_id
             live.view["detail"].pop("goal_wait", None)
             self._describe(live)
@@ -242,4 +293,4 @@ class TripReplan:
             self._store.active(), origin,
             live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()) | closed,
             {live.place(i) for i in range(index)}, live.view["map_version"], self._routing,
-            self.config.max_turn_deg)
+            self.config.max_turn_deg, nav2_off_lane_margin_m=self.config.nav2_off_lane_margin_m)

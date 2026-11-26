@@ -122,9 +122,10 @@
             </div>
             <footer class="cal-legend">
               <span class="cal-leg-item"><i class="cal-sw cal-sw-grid"></i>mm 모눈(20/50mm)</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>Inlier · LOO(map−arm, z_view 기준)</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>Dropped/외삽</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-miss"></i>표적 미검출</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>LOO 오차 5 mm 이하</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-warn"></i>LOO 주의 · 5 mm 초과~15 mm 이하</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>LOO 15 mm 초과 · × 제외된 관측점</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-plan"></i>계획점 · 관측 연결 미확인</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-bias"></i>Bias = map−FK (적용 시 −bias)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-site"></i>Start/Place (Z 시차 반영)</span>
             </footer>
@@ -149,6 +150,8 @@
           </article>
         </section>
 
+        <section id="routePanels" class="cal-route-panels" aria-label="팔별 이송 경로 사전 점검" hidden></section>
+        <a id="fleetCellConsole" hidden>연결된 셀 작업</a>
         <section class="cal-lower">
           <article class="cal-card" aria-label="선택 항목 검사기">
             <header class="cal-card-head">

@@ -7,7 +7,7 @@ const VERDICT = { pass: "통과", fail: "실패", neither: "어느 쪽도 아님
 
 export function requestHash() {
   const id = location.hash.slice(1);
-  if (id === "main-content") return "";
+  if (id === "main-content" || /^route-arm_[abs]$/.test(id)) return "";
   return id === "request=main-content" ? "main-content" : id;
 }
 
@@ -258,8 +258,13 @@ export function initRequests({ onSessionChanged } = {}) {
     if (!loggingOut) session.restore();
   }, 10000);
   window.addEventListener("hashchange", () => {
-    const id = requestHash();
-    if (id) { selected = id; show(id); }
+    if (location.hash === "#main-content") return;
+    selected = requestHash();
+    if (selected) show(selected);
+    else {
+      detailGeneration++;
+      $("detail").hidden = true;
+    }
   });
 
   return { session, refresh };

@@ -100,6 +100,10 @@ async def _wake():
             assert denied.status_code == 401
             clock[0] = STREAM_HOLD_S
             assert await _next(phone, "demand") == protocol.make_demand(False)
+            reply = await server._preview_response(
+                f"/api/vision/sources/{SOURCE}/measured-status", f"Bearer {lease}")
+            assert reply.status_code == 200 and json.loads(reply.body)["geometry"]["image_size"] is None
+            assert await _next(phone, "demand") == protocol.make_demand(True)
     finally:
         ws.close()
         await ws.wait_closed()

@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 OPERATE = "calibration.operate"
 STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "pivot-near": ["--only", "pivot-near"],
@@ -25,6 +26,7 @@ TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
 SITE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?")
 JOB_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{6}")
+TASK_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}")
 CLEAR_FRESH_S = 600
 REASONS_MAX = 2000
 EVIDENCE_KINDS = {"frame", "joints", "torque"}
@@ -115,6 +117,15 @@ class Jobs:
         self.python = cells["python"]
         self.work = Path(cells["work"]).expanduser()
         self.arms = cells["arms"]
+        self.fleet_console_url = None
+        url = cells.get("fleet_cell_console_url")
+        if isinstance(url, str):
+            try:
+                parts = urlsplit(url)
+                if parts.scheme == "https" and parts.hostname and not parts.username and not parts.password:
+                    self.fleet_console_url = url
+            except ValueError:
+                pass
         self.spawn, self.probe, self.incident_tool = spawn, probe, incident_tool
         self.threads: list[threading.Thread] = []
         self._lease = None
@@ -145,6 +156,13 @@ class Jobs:
         return {**os.environ, **self.arms[arm].get("env", {}), "ROSY_ARM_LEASE_OWNER": owner}
 
     # --- status -------------------------------------------------------------------------------------------------
+    def route_sites(self, arm):
+        if arm not in ("arm_a", "arm_b") or not self.arms[arm].get("route_config"):
+            return []
+        layout = json.loads((self.tools / "shared/web/cell-site-map.json").read_text(encoding="utf-8"))
+        return [tier["item"] for zone in layout["zones"] for slot in zone["slots"]
+                if arm in slot["arms"] for tier in slot["tiers"]]
+
     def site_status(self, config):
         path = config.get("calibration_path")
         if not path:
@@ -191,7 +209,12 @@ class Jobs:
                 sites = {"error": str(exc)}
             arms[arm] = {"lease": leases.get(arm), "incident": incident if incident is not None else {"error": err},
                          "sites": sites}
-        return {"revision": self.revision(), "leases_error": leases.get("error"), "arms": arms}
+            try:
+                arms[arm]["route_sites"] = self.route_sites(arm)
+            except (OSError, ValueError, KeyError, TypeError):
+                arms[arm]["route_sites"] = []
+        return {"revision": self.revision(), "leases_error": leases.get("error"), "arms": arms,
+                "fleet_cell_console_url": self.fleet_console_url}
 
     # --- jobs ---------------------------------------------------------------------------------------------------
     def job_file(self, job_id, ext="json"):
@@ -216,11 +239,43 @@ class Jobs:
             return 422, {"error": "targets는 'site:x,y' 문자열 목록이어야 합니다."}
         if step in MOVING and body.get("person_at_switch") is not True:
             return 422, {"error": "팔이 움직이는 단계는 전원 스위치 앞의 사람이 필요합니다(person_at_switch)."}
-        config_path, config = self.arm_config(arm)
+        route = body.get("route")
+        if "task_id" in body and (step != "check" or not (route or body.get("supply_route") is True)
+                or not isinstance(body["task_id"], str) or not TASK_REF.fullmatch(body["task_id"])):
+            return 422, {"error": "경로 점검에 연결할 Fleet 작업 ID를 확인하세요."}
+        if "route" in body:
+            if (step != "check" or targets or "site" in body or arm not in ("arm_a", "arm_b")
+                    or not isinstance(route, list) or len(route) != 2 or route[0] == route[1]
+                    or not all(isinstance(name, str) for name in route)):
+                return 422, {"error": "A·B 경로 점검에는 서로 다른 출발칸과 도착칸이 필요합니다."}
+            try:
+                config_path = Path(self.arms[arm]["route_config"]).expanduser()
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                allowed = self.route_sites(arm)
+            except (OSError, ValueError, KeyError, TypeError):
+                return 409, {"error": "이 팔의 이송 실행기 설정 또는 칸 목록을 읽을 수 없습니다."}
+            if not isinstance(config, dict) or config.get("arm_id") != arm or not all(site in allowed for site in route):
+                return 422, {"error": "이송 설정과 두 칸이 선택한 팔에 속하는지 확인하세요."}
+        else:
+            config_path, config = self.arm_config(arm)
+        if "supply_route" in body:
+            from core_common.profile import LEGACY_VEHICLE_SITE
+
+            if (body["supply_route"] is not True or arm != "arm_s" or step != "check" or targets
+                    or route or "site" in body or config.get("arm_id") != arm):
+                return 422, {"error": "공급 경로 점검에는 S팔 실행기 설정이 필요합니다."}
+            for name in (LEGACY_VEHICLE_SITE, "belt"):
+                site = (config.get("sites") or {}).get(name)
+                xy = site_point(name, site) if isinstance(site, dict) else None
+                if xy is None:
+                    return 422, {"error": f"S팔 공급 경로의 {name} 중심 XY를 검증해 등록하세요."}
+                targets.append(f"{name}:{xy[0]},{xy[1]}")
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
         if targets:
             argv += ["--targets", *targets]
+        if route:
+            argv += ["--route", *route]
         if "site" in body or step == "surface":
             name = body.get("site")
             site = (config.get("sites") or {}).get(name) if isinstance(name, str) else None
@@ -253,6 +308,12 @@ class Jobs:
             record = {"id": job_id, "arm": arm, "step": step, "targets": targets, "by": by, "revision": self.revision(),
                       "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None, "status": "running"}
             proc = None
+            if route:
+                record.update(route=route, route_config=config_path.name)
+            if body.get("supply_route") is True:
+                record.update(supply_route=True, route_config=config_path.name)
+            if "task_id" in body:
+                record["task_id"] = body["task_id"]  # Advisory link provenance, never a Fleet command.
             if "site" in body:
                 record["site"] = body["site"]
                 record["surface_clear"] = True

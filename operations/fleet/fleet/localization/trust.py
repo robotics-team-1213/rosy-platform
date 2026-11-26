@@ -79,6 +79,13 @@ def _segment_distance(p: Point, a: Point, b: Point) -> float:
     return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
 
 
+def route_distance(route: Sequence[Point], point: Point) -> float:
+    """Minimum Euclidean distance to the polyline, infinity for an empty route."""
+    if len(route) < 2:
+        return math.dist(point, route[0]) if route else math.inf
+    return min(_segment_distance(point, a, b) for a, b in zip(route, route[1:]))
+
+
 def blocks(route: Sequence[Point], last_trusted: Optional[Point],
            keep_out_m: float = UNTRUSTED_KEEP_OUT_M) -> bool:
     """Whether an untrusted robot blocks `route`.
@@ -87,12 +94,7 @@ def blocks(route: Sequence[Point], last_trusted: Optional[Point],
     route is not blocked by a located obstacle (traffic's "unknown never blocks")."""
     if last_trusted is None:
         return True
-    if not route:
-        return False
-    if len(route) == 1:
-        return math.dist(route[0], last_trusted) < keep_out_m
-    return any(_segment_distance(last_trusted, route[i], route[i + 1]) < keep_out_m
-               for i in range(len(route) - 1))
+    return route_distance(route, last_trusted) < keep_out_m
 
 
 def native_pose_freshness(state: Mapping, state_age_s: float = 0.0) -> Optional[bool]:

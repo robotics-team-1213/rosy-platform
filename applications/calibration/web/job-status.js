@@ -46,8 +46,15 @@ export async function loadJobStatus({ onStatus } = {}) {
   const note = $("jobStatusNote");
   const tag = $("jobStatusTag");
   let status;
+  const fleet = $("fleetCellConsole");
+  fleet.hidden = true;
+  fleet.removeAttribute("href");
   try {
     status = await fetchJson("/api/calibration/status");
+    if (status.fleet_cell_console_url) {
+      fleet.href = status.fleet_cell_console_url;
+      fleet.hidden = false;
+    }
     onStatus?.(status);
   } catch (err) {
     onStatus?.(null);

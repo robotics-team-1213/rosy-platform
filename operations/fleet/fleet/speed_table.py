@@ -4,7 +4,7 @@ Pure: built from the site map and a trip plan's segments ``(edge_id, forward, s_
 Each point's limit is the smallest of the lane's ``speed_cap_mps``, a measured curve cap for the
 local turn radius, and the stripe cap near a ``stop`` or ``slow`` place; then the braking limit is applied
 backwards so the robot is already slow when a curve or stripe starts, and the route ends at 0.
-Not sent to a robot yet (D-941 opens: one robot's table is checked first).
+A leased Nav2 road trip uses the local and immediately reachable caps as upper bounds.
 """
 
 from __future__ import annotations
@@ -29,7 +29,8 @@ class CurveCap:
 
 
 def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
-                curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0, closed: bool = False) -> dict:
+                curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0, closed: bool = False,
+                stop_at_end: bool = True) -> dict:
     """``closed``: the segments form a loop, so nothing stops at the end and braking wraps around."""
     edges = {e.id: e for e in site_map.edges}
     stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind in ("stop", "slow")]   # slow: stripe, no stop
@@ -48,16 +49,28 @@ def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
     limit = [_cap(lane, radius, caps) for _, _, lane, radius in points]
     stripes = []
     for stop_id, sx, sy in stops:
-        near = min(range(len(points)), key=lambda i: math.dist(points[i][:2], (sx, sy)))
-        if math.dist(points[near][:2], (sx, sy)) > STEP_M * 3:
-            continue   # the route does not cross this stripe
-        stripes.append({"place": stop_id, "s_m": round(s[near], 3)})
-        for i in range(len(points)):
-            d = abs(s[i] - s[near])
-            if (min(d, s[-1] - d) if closed else d) <= STRIPE_HALF_M + 1e-9:
-                limit[i] = min(limit[i], STRIPE_MPS)
+        distances = [math.dist(point[:2], (sx, sy)) for point in points]
+        crossings = []
+        near = None
+        for i, d in enumerate(distances):
+            if d <= STEP_M * 3:
+                if near is None or d < distances[near]:
+                    near = i
+            elif near is not None:
+                crossings.append(s[near])
+                near = None
+        if near is not None:
+            crossings.append(s[near])
+        if closed and len(crossings) > 1 and crossings[-1] - crossings[0] >= s[-1] - STEP_M:
+            crossings.pop()  # the loop seam is a single crossing
+        for crossing in crossings:
+            stripes.append({"place": stop_id, "s_m": round(crossing, 3)})
+            for i, distance in enumerate(s):
+                d = abs(distance - crossing)
+                if (min(d, s[-1] - d) if closed else d) <= STRIPE_HALF_M + 1e-9:
+                    limit[i] = min(limit[i], STRIPE_MPS)
     n = len(limit)
-    if not closed:
+    if not closed and stop_at_end:
         limit[-1] = 0.0
     for k in range(2 * n - 2 if closed else n - 1, 0, -1):    # brake before what comes next; twice round a loop
         i, j = (k - 1) % n, k % n

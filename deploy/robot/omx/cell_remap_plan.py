@@ -23,6 +23,28 @@ MAP_POINTS = [
 ]  # the 2026-10-28 remap grid
 
 
+def record_stop(status, command, point, *, speed, log, at_stop, timeout):
+    """Record the triggering command before folding; a stuck camera must not delay the fold."""
+    import threading
+
+    keys = ("t", "target", "health", "contact", "strain_sample", "fault", "trace_receipt", "library_sha256")
+    log({"point": point, "stopped": command, "error": status.get("error"), "state": status.get("state"),
+         "transit_speed": speed, "runner_session": (status.get("operating_context") or {}).get("session_id"),
+         "runner": {key: status[key] for key in keys if key in status}})
+    if at_stop is None:
+        return
+
+    def grab():
+        try:
+            at_stop(status.get("state"), status)
+        except BaseException:
+            pass
+
+    grabber = threading.Thread(target=grab, daemon=True)
+    grabber.start()
+    grabber.join(timeout=timeout)
+
+
 def plan_report(config, points):
     import cell_map_fit
 
@@ -32,7 +54,16 @@ def plan_report(config, points):
 
 
 def scoped(config: dict) -> dict:
-    return dict(config, played_chunks=list(PLAYED))
+    scoped_config = dict(config, played_chunks=list(PLAYED))
+    calibration = config.get("calibrate") or {}
+    if "remap_transit_speed" in calibration:
+        from chunk_runner_guards import library_transit_speed
+
+        speed = library_transit_speed({"transit_speed": calibration["remap_transit_speed"]})
+        if speed > library_transit_speed(config["plan"]):
+            raise ValueError("remap_transit_speed exceeds the arm's transit_speed")
+        scoped_config["plan"] = dict(config["plan"], transit_speed=speed)
+    return scoped_config
 
 
 def view(config: dict, x: float, y: float) -> dict:

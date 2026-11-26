@@ -1,3 +1,6 @@
+import {tripExecutionText, tripWaitText} from "/console/assets/trip-wait.js";
+export {tripExecutionText, tripWaitText};
+
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 /** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
 export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
@@ -11,6 +14,8 @@ export const AI_FACT_LABEL = {
 };
 
 export const TRIP_ERROR_LABEL = {
+  TRIP_QUEUED: '출발 명령이 대기열에 있습니다',
+  TRIP_DISPATCH_DISABLED: '자동 출발이 꺼져 있어 정차 중입니다',
   TRIP_PROPOSAL_NOT_FOUND: '해당 이송 제안을 찾을 수 없습니다 · 제안 식별자를 확인하세요',
   TRIP_PROPOSAL_FORBIDDEN: '이 이송 제안을 읽거나 승인할 권한이 없습니다 · 제안자와 다른 기명 운영자가 승인해야 합니다',
   TRIP_PROPOSAL_CONFLICT: '이송 제안이나 실행 세대가 바뀌었습니다 · 원본을 다시 조회하세요',
@@ -54,7 +59,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
   TRIP_ALIGN_REFUSED: '로봇이 제자리 회전을 거절했습니다 · 주변을 비우거나 직접 돌려 세우세요',
   TRIP_ALIGN_ABORTED: '제자리 회전이 중간에 멈췄습니다 · 로봇 주변을 확인하세요',
-  TRIP_BUSY: '이 로봇은 이미 운행 중입니다', TRIP_OWNER_KIND_INVALID: '운행을 요청한 작업을 확인할 수 없습니다',
+  TRIP_BUSY: '이 로봇에 접수된 운행이 있습니다', TRIP_OWNER_KIND_INVALID: '운행을 요청한 작업을 확인할 수 없습니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
   TRIP_CONVOY_SELF: '자기 자신을 리더로 고를 수 없습니다',
@@ -80,6 +85,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
   TRIP_NO_REPLAN: '확인할 바뀐 경로가 없습니다',
+  TRIP_PAUSE_STOP_UNCONFIRMED: '기체 정지 확인 중 · 목표 해제와 속도 0 확인 후 재개할 수 있습니다',
   TRIP_NOT_HELD: '정지 대기 중인 운행이 아닙니다',
   TRIP_REPLAN_FAILED: '다시 계산한 경로가 없습니다 · 운행을 취소하세요',
   TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
@@ -101,7 +107,7 @@ const LEASE_END_LABEL = {
   mode_left: '로봇이 운행 모드를 떠남(멈춤·수동·도킹·막힘 중단)', estop: '비상 정지', released: '점유를 놓음',
   core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
-const TRIP_STATE_LABEL = {started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기'};
+const TRIP_STATE_LABEL = {started: '출발 대기', running: '운행 접수', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기'};
 const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
 const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
@@ -122,8 +128,6 @@ const TRIP_REASON_LABEL = {
   lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
 };
-
-const WAIT_LABEL = {signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
 
 /** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
 export function startCheckText(check) {
@@ -165,23 +169,24 @@ export function tripEndText(trip) {
   if (trip?.state !== 'stopped' && trip?.state !== 'failed') return '';
   const {reason} = trip;
   const why = reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[reason] || TRIP_ERROR_LABEL[reason] || reason;
-  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
-}
-
-export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
-  return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
+  const admission = trip.detail?.goal_admission;
+  const peers = admission?.waiting_on?.length ? admission.waiting_on : [admission?.blocked_by].filter(Boolean);
+  const peerHold = trip.detail?.goal_reason === 'LOCALIZATION_UNTRUSTED' && peers.length;
+  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why,
+    peerHold ? `명령 대상 ${trip.robot_id} · 경로 안전거리 확인 불가 (${peers.join(', ')})` : trip.detail?.goal_reason,
+    admission?.cancel_confirmed && '기체 목표 취소 확인'].filter(Boolean).join(' · ');
 }
 
 /** One line for the trip panel: state, current lane, next place and action, pose source. */
 export function tripStatusText(trip, map) {
   if (!trip) return '진행 중인 운행 없음';
   const names = new Map((map?.places || []).map(place => [place.id, place.name]));
-  const parts = [`${TRIP_STATE_LABEL[trip.state] || trip.state} · ${trip.robot_id}`];
+  const wait = ['started', 'running', 'link_wait'].includes(trip.state) && tripWaitText(trip);
+  const parts = [tripExecutionText(trip) || wait || TRIP_STATE_LABEL[trip.state] || trip.state, trip.robot_id];
   if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
-  if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
-  if (['started', 'running', 'link_wait'].includes(trip.state) && tripWaitText(trip)) parts.push(tripWaitText(trip));  // open only
+  if (trip.hold && trip.hold.reason !== 'fleet_hold') parts.push('바뀐 경로 확인 대기');
   if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
     const {from, to} = trip.stop_moved;
     parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);

@@ -110,7 +110,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       const trip = await work();
       life.check();
       view.trafficTrips = [...(view.trafficTrips || []).filter((row) => row.robot_id !== robotId), trip];
-      log(`${robotId} ${done}`, "good");
+      log(`${robotId} ${done} · Fleet 접수 · 기체 실행 확인 중 (${trip.trip_id})`, "warn");
       if (holder === form) form = null;
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -183,7 +183,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     });
     mine.to = placeOptions(to.select, places(), mine.to);
     const preview = quietButton("경로 보기");
-    setOffBy(preview, lock || (running ? "이 로봇은 이미 운행 중입니다" : mine.to ? "" : "목적지를 고르세요"));
+    setOffBy(preview, lock || (running ? "이 로봇에는 진행 중인 배차가 있습니다" : mine.to ? "" : "목적지를 고르세요"));
     preview.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       mine.busy = true;
@@ -208,7 +208,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setOffBy(go, lock || tripStartReason({ role: "operator", plan: mine.plan, active, running }));
     go.addEventListener("click", scope.guard(() => {
       const plan = mine.plan;
-      if (plan) send(id, mine, () => checkedStart(id, plan), "운행을 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "운행 요청");
     }));
     const once = document.createElement("div");
     once.className = "robot-actions";
@@ -225,7 +225,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     repeat.addEventListener("click", scope.guard(() => send(id, mine, async () => {
       const plan = await planTrip(call, id, repeatTripBody(active?.map, mine.start, "", mine.driveMode));
       return checkedStart(id, plan);
-    }, `반복 운행을 시작했습니다 · ${mine.start}`)));
+    }, `반복 운행 요청 · ${mine.start}`)));
     const laps = document.createElement("div");
     laps.className = "robot-actions";
     laps.append(repeat);
@@ -262,7 +262,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setOffBy(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
     lapGo.addEventListener("click", scope.guard(() => {
       const plan = mine.lapPlan;
-      if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴를 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴 요청");
     }));
     const lapActions = document.createElement("div");
     lapActions.className = "robot-actions";
@@ -346,7 +346,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       send(id, convoy, async () => {
         const plan = await planTrip(call, id, repeatTripBody(view.activeSiteMap?.map, start, leader));
         return checkedStart(id, plan);
-      }, `대열 반복 운행을 시작했습니다 · ${leader} 뒤 · ${start}`);
+      }, `대열 반복 운행 요청 · ${leader} 뒤 · ${start}`);
     });
   }
 

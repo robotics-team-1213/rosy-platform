@@ -315,6 +315,18 @@ class MapPoseService:
             await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S,
                              after if force_rest else 0)
 
+    def cached_motion_sample(self, robot_id):
+        """The current transport's last REST sample. Reading the trip UI never polls a robot."""
+        key = (robot_id, True)
+        kept = self._kept.get(key)
+        if kept is None or kept[2][1] is None:
+            return None
+        try:
+            state = self._read_result(key, kept[2], False)
+        except ValueError:
+            return None
+        return state, kept[0], self._clock()
+
     def _read_result(self, key, pair, with_source):
         state, receipt = pair
         if receipt is not None and (receipt.client is not self._client_identity(key[0])

@@ -31,3 +31,32 @@ test('trip status names places while keeping source and unknown state fallback',
   assert.match(line, /다음 하역 지점 future_action/);
   assert.match(line, /위치 확정 · odom 다리/);
 });
+test('pre-dispatch peer wait and operator pause take precedence over the open trip state', () => {
+  const trip = {robot_id:'rosy_42',state:'running',detail:{peer_wait:{
+    stage:'pre_dispatch_peer_check',dispatch_attempted:false,waiting_on:['rosy_45']}}};
+  assert.match(tripStatusText(trip), /^통행 대기 · 주행 명령 전송 전/);
+  assert.doesNotMatch(tripStatusText(trip), /운행 중/);
+  const paused = {...trip, hold:{reason:'fleet_hold',stop:{confirmed:false}}};
+  assert.match(tripStatusText(paused), /^일시정지 · 기체 정지 응답 확인 중/);
+  assert.doesNotMatch(tripStatusText(paused), /자동 재확인/);
+  assert.doesNotMatch(tripStatusText({...trip, state:'arrived'}), /통행 대기/);
+});
+
+test("receipt and measured motion remain distinct when waiting and stopped", () => {
+  const trip = {state: "running", robot_id: "rosy_42", detail: {peer_wait: {
+    stage: "pre_dispatch_peer_check", dispatch_attempted: false, waiting_on: ["rosy_45"]}}};
+  const show = (phase, motion) => tripStatusText({...trip, execution: {phase, motion}});
+  assert.match(show("pre_dispatch_wait", "moving"), /전송 전.*실제 이동 중/);
+  assert.match(show("pre_dispatch_wait", "stationary"), /전송 전.*현재 정지/);
+  assert.doesNotMatch(show("pre_dispatch_wait", "unknown"), /현재 정지|실제 이동 중/);
+});
+
+test('parking reports request and device receipt separately from observed motion', () => {
+  const parking = {phase: 'submitting', bay_id: 'C2'};
+  const trip = {state: 'running', robot_id: 'rosy_42', detail: {parking_handoff: parking},
+    execution: {phase: 'received', motion: 'unknown'}};
+  assert.match(tripStatusText(trip), /C2 후진 주차 명령 전송 중/);
+  parking.phase = 'docking';
+  trip.execution = {phase: 'stationary', motion: 'stationary'};
+  assert.match(tripStatusText(trip), /C2 후진 주차 명령 접수 · 현재 정지/);
+});

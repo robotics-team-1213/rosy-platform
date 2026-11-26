@@ -107,6 +107,7 @@ function sync() {
 
 export function setJobOperator(value) {
   operator = value === true;
+  setRoutePanels(arms, jobs, operator, api);
   if (!operator) notices.clear();
   sync();
 }
@@ -120,6 +121,7 @@ export function setJobArm(value) {
 export function setJobData(status, rows, onJobs) {
   arms = status?.arms || {};
   jobs = rows;
+  setRoutePanels(arms, jobs, operator, api);
   if (onJobs) displayJobs = onJobs;
   sync();
 }
@@ -180,3 +182,4 @@ async function submit(event) {
     fields();
   }
 }
+import { setRoutePanels } from "./route-panels.js";

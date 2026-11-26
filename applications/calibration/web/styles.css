@@ -233,7 +233,8 @@ body {
 .cal-sw-grid { background: var(--series-primary); }
 .cal-sw-inlier { background: var(--status-good); }
 .cal-sw-drop { background: var(--status-crit); }
-.cal-sw-miss { background: var(--status-warn); }
+.cal-sw-warn { background: var(--status-warn); }
+.cal-sw-plan { background: transparent; border: 1px dashed var(--ink-quiet); border-radius: 50%; }
 .cal-sw-bias { background: var(--series-secondary); }
 .cal-sw-site { background: var(--ink); }
 .cal-sw-reach { background: var(--series-secondary); }
