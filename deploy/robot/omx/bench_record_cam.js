@@ -364,15 +364,15 @@ if($('hdr-estop-btn')){
     stopRequestVersion++;
     stopInFlight=true;setReqError('');
     if(typeof benchBeep==='function')benchBeep('warn');
-    if(typeof setActivity==='function')setActivity('비상정지(E-Stop) 요청 중...','crit','');
+    if(typeof setActivity==='function')setActivity('녹화 중지 요청 중...','crit','');
     try{
       const st=await api('/stop',{});
       renderStatus(st);
-      if(typeof setActivity==='function')setActivity('비상정지 요청 전달 완료','warn',st?.stop_result?.message||(STATUS_MAP[st?.status]?.[0]||st?.status||''));
+      if(typeof setActivity==='function')setActivity('녹화 중지 요청 전달 완료','warn',st?.stop_result?.message||(STATUS_MAP[st?.status]?.[0]||st?.status||''));
     }
     catch(err){
-      setReqError('비상정지 요청: '+err.message);
-      if(typeof setActivity==='function')setActivity('비상정지 요청 실패','crit',err.message);
+      setReqError('녹화 중지 요청: '+err.message);
+      if(typeof setActivity==='function')setActivity('녹화 중지 요청 실패','crit',err.message);
     }
     finally{stopInFlight=false;syncHeaderAndSlimBar();}
   });

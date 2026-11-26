@@ -201,7 +201,7 @@ function renderManualHoldCard(st){
       }
     }
     if(rec?.can_ack_error){
-      const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-primary btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
+      const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-tool btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
       aBtn.addEventListener('click',async()=>{aBtn.disabled=true;setReqError('');try{renderStatus(await api('/api/recover/ack_error',{}));}catch(e){setReqError(e.message);}finally{aBtn.disabled=false;}});
       qa.append(aBtn);
     }
