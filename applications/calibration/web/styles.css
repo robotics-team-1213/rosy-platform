@@ -383,3 +383,6 @@ body {
     margin-inline-start: 0;
   }
 }
+
+.cal-align-controls { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; margin-block: var(--space-2); }
+.cal-align-controls label { display: grid; gap: var(--space-1); }

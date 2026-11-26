@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/job-controls.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/app.js"></script>
+  <script type="module" src="/camera-align.js"></script>
 </head>
 <body>
   <ui-shell grammar="procedure" class="ui-app-shell" data-hangul>
@@ -153,6 +154,22 @@
           </article>
         </section>
 
+        <section class="cal-card" id="alignCard" aria-labelledby="alignHeading">
+          <header class="cal-card-head">
+            <div>
+              <h2 id="alignHeading" class="ui-section-heading">카메라 위치 맞춤</h2>
+              <p class="cal-card-sub">보정할 때 저장한 기준 영상을 실시간 영상 위에 겹칩니다. 화살표는 기준 영상의 점이 지금 어디에 보이는지입니다.</p>
+            </div>
+            <div class="cal-card-actions"><ui-tag id="alignTag" status="neutral">-</ui-tag></div>
+          </header>
+          <div class="cal-align-controls">
+            <label>기준 영상 <select id="alignRef" class="ui-field"></select></label>
+            <label>겹침 농도 <input id="alignOpacity" class="ui-field" type="range" min="0" max="100" value="50"></label>
+            <ui-button id="alignStart" kind="primary" type="button" disabled>맞춤 보기 시작</ui-button>
+          </div>
+          <div class="cal-canvas-wrap"><canvas id="alignCanvas" width="640" height="480" aria-label="기준 영상과 실시간 영상 겹침"></canvas></div>
+          <p id="alignReadout" class="cal-card-sub" role="status" aria-live="polite"></p>
+        </section>
         <section id="routePanels" class="cal-route-panels" aria-label="팔별 이송 경로 사전 점검" hidden></section>
         <a id="fleetCellConsole" hidden>연결된 셀 작업</a>
         <section class="cal-lower">

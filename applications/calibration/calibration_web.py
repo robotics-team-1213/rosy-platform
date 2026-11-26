@@ -310,12 +310,54 @@ class Handler(BaseHTTPRequestHandler):
         if not rest:
             return self.json(200, cell_calibration_view.build_bundle(entries))
         parts = rest.split("/")
+        if len(parts) in (2, 3) and ID.fullmatch(parts[0]) and parts[1] == "align" and parts[2:] in ([], ["reference"]):
+            entry = next((e for e in entries if e.get("id") == parts[0]), None)
+            if entry is None:
+                return self.json(404, {"error": "없는 프로파일입니다."})
+            return self._camera_align(entry, reference_image=parts[2:] == ["reference"])
         if len(parts) == 3 and ID.fullmatch(parts[0]) and parts[1] == "frame" and parts[2] in ("reference", "live"):
             entry = next((e for e in entries if e.get("id") == parts[0]), None)
             if entry is None:
                 return self.json(404, {"error": "없는 프로파일입니다."})
             return self._serve_profile_frame(entry, parts[2])
         return self.json(404, {"error": "없는 경로입니다."})
+
+    def _camera_align(self, entry: dict, reference_image: bool):
+        """GET .../align: the references to align with; ?ref=<id>: the live frame against it; .../align/reference?ref=<id>: its image."""
+        import cell_camera_align
+        import cell_params
+
+        current = cell_calibration_view.resolve_frame_target(entry, "reference").get("path")
+        refs = cell_camera_align.references(current)
+        ref_id = (parse_qs(urlsplit(self.path).query, max_num_fields=4).get("ref") or [""])[0]
+        if not ref_id:
+            return self.json(200, {"references": [{k: r[k] for k in ("id", "label")} for r in refs]})
+        ref = cell_camera_align.reference_path(current, ref_id)
+        if ref is None or not ref.is_file() or ref.suffix.lower() not in IMAGE_TYPES:  # a cached listing may outlive a file
+            return self.json(404, {"error": "목록에 없는 기준 영상입니다."})
+        if reference_image:
+            return self.send(200, IMAGE_TYPES[ref.suffix.lower()], ref.read_bytes(), [("Cache-Control", "no-store")])
+        live = self._live_frame_bytes(entry)
+        if isinstance(live, tuple):
+            return self.json(*live)
+        report = cell_camera_align.align(ref.read_bytes(), live, cell_params.default("calibrate.max_shift_px"))
+        return self.json(200, {**report, "reference": ref_id, "live_image": base64.b64encode(live).decode("ascii")})
+
+    def _live_frame_bytes(self, entry: dict):
+        """The live top frame bytes, or (status, body) for the error."""
+        target = cell_calibration_view.resolve_frame_target(entry, "live")
+        if target.get("kind") == "file":
+            f = target.get("path")
+            return f.read_bytes() if f and f.is_file() else (404, {"error": "실시간 프레임이 없습니다."})
+        url = target.get("url")
+        if not url or not cell_calibration_view.is_allowed_frame_url(url):
+            return 403, {"error": "허용되지 않은 카메라 주소입니다."}
+        try:
+            with urlopen(url, timeout=FRAME_TIMEOUT_S) as resp:  # noqa: S310 - loopback URL validated above
+                body = resp.read(FRAME_MAX_BYTES + 1)
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            return 503, {"error": "카메라 프레임에 닿지 않습니다."}
+        return body if len(body) <= FRAME_MAX_BYTES else (502, {"error": "카메라 프레임 크기 상한을 넘었습니다."})
 
     def _send_frame(self, entry, source, body, media, source_stamp=None):
         # The commissioning viewer accepts source age -0.25..2 seconds. Recheck after registration.

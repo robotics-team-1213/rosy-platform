@@ -17,8 +17,8 @@ FOLDED_ROLL_LIFT = (10.0, -10.0)  # wrist camera clearance lift before rotating 
 FOLDED_UNFOLD_ELBOW = 43.0  # open elbow_flex first from folded home so jaws lift outward/upward clear of base tab
 # Rise lag logs (10/26-27): 2 units/s (3.6 deg/s) keeps lag under the 5-unit strain limit across arm loads.
 RISE_SPEED = 2.0
-# Above closed + this threshold jaws are open (empty; box holds 51.6-54.1 vs open_max 56): rise before closing.
-OPEN_JAW_MARGIN = 8.0
+# Above closed + this threshold jaws are open (closed 46.6-49.0, box <= closed+5.7, open 55.6-56.0): rise before closing.
+OPEN_JAW_MARGIN = 6.0
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 
@@ -27,7 +27,8 @@ def too_fast(frames: list, fps: int) -> bool:
     return any(abs(a - b) > limit for p, q in zip(frames, frames[1:]) for a, b in zip(p, q))
 
 
-def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None, speed: float = 0.85) -> list:
+def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None, speed: float = 0.85,
+                 rise_first: bool | None = None) -> list:
     """Move anywhere -> `goal` without sweeping low: open jaws rise before closing at transit; held boxes close first."""
     if (start[1] >= -35.0 and goal[1] >= -35.0 and abs(start[0] - goal[0]) <= 15.0
             and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0 and abs(start[4] - goal[4]) <= 45.0):
@@ -35,7 +36,7 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     if transit is None:
         transit = {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]} if (
             start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0) else TRANSIT
-    rise_first = start[5] > grip_transit + OPEN_JAW_MARGIN
+    rise_first = (start[5] > grip_transit + OPEN_JAW_MARGIN) if rise_first is None else bool(rise_first)
     waypoints = [list(start)] + ([] if rise_first else [list(start[:5]) + [grip_transit]])
     unfold = start[1] <= -50.0 and start[2] > FOLDED_UNFOLD_ELBOW + 0.5 and transit.get(2, start[2]) < FOLDED_UNFOLD_ELBOW
     if unfold:
@@ -84,7 +85,7 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
         if start[1] > lift_mid + 0.5: waypoints.append([start[0], lift_mid, el_clear, start[3], start[4], closed])
         waypoints.extend(([start[0], goal[1], goal[2], start[3], start[4], closed], goal))
         return flow(waypoints, fps, speed * PARK_SPEED, blend=[False] * len(waypoints), blend_s=0.2, rise_speed=RISE_SPEED)
-    return transit_path(start, goal, closed, fps, transit, speed)
+    return transit_path(start, goal, closed, fps, transit, speed, rise_first=(start[5] > closed + 1e-6))
 
 
 def _finite_in(val, lo: float, hi: float) -> bool:

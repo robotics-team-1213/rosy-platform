@@ -141,8 +141,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 )
                 if not at_home:
                     if home and runner.target is not None and present is not None and not held and not hard_fault and getattr(runner, "_release_until", None) is None:
-                        transit = parse_transit(runner.library)
-                        grip_park = runner.target[5] if not runner.holding else library_gripper_closed(runner.library)
+                        transit, closed_g = parse_transit(runner.library), library_gripper_closed(runner.library)
+                        grip_park = runner.target[5] if (not runner.holding or (not runner.library.get("holding") and runner.target[5] > closed_g)) else closed_g
                         frames = park_path(list(present[:5]) + [runner.target[5]], home[-1], grip_park, runner.fps, transit,
                                            library_transit_speed(runner.library))
                         halt_policy_gate(runner)

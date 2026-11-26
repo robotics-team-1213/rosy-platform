@@ -128,6 +128,10 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     is_holding = bool(
         holding(state, target, closed)
         or ((latched["started"] or at_home or stage in ("park_only", "release_and_lift")) and status.get("holding"))
+        or (isinstance(h := status.get("health"), dict) and (
+            abs((h.get("current_ma") or [0] * 6)[5]) >= 140
+            or ((h.get("pwm") or [0] * 6)[5] <= -60 and state[5] > target[5] + 0.5)
+        ))
         or ((require_empty_gripper or at_home or stage in ("park_only", "release_and_lift"))
             and target[5] <= closed + 1.0 and state[5] > target[5] + 2.0)
     )
