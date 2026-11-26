@@ -224,6 +224,15 @@ class VisionMapProposalReader:
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(timeout=timeout_s, follow_redirects=False)
 
+    async def hold_stream(self, source_id: str) -> None:
+        """Refresh the deployed D-691 source hold with the small D-775 JSON status view."""
+        from urllib.parse import quote
+        lease = self._signer.issue(principal_id=self._principal_id, source_id=source_id, ttl_s=30)
+        reply = await self._client.get(
+            f"{self.base_url}/api/vision/sources/{quote(source_id, safe='')}/measured-status",
+            headers={"Authorization": f"Bearer {lease}", "Accept": "application/json"})
+        reply.raise_for_status()
+
     async def __call__(self, source_id: str) -> Optional[dict]:
         """One proposal body, or None when this cycle has nothing comparable.
 
