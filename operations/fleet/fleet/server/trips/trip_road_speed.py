@@ -67,7 +67,7 @@ class RoadSpeed:
                             and 0.0 <= now - native.odom_stamp < GRANT_S):
                         peer = native
                     else:
-                        peer = self.poses.driving_pose(robot)
+                        peer = self.poses.arbitrated_pose(robot)
                     if (peer is None or peer.state != "LOCALIZED" or peer.map_id != site.map_id
                             or peer.odom_stamp is None or not 0 <= now - peer.odom_stamp < GRANT_S):
                         if pending is not None and pending.open:

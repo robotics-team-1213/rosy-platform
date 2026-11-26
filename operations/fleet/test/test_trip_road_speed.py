@@ -28,7 +28,7 @@ def test_ring_leader_gap_common_frame_and_expiry_bound_the_grant():
     runner = NS(_clock=lambda:10., _roster=lambda:["first","second"], _live={"second":NS(open=True)},
                 _call=lambda coro:coro, _store=NS(active=lambda:(1,site),rules=NS(active_rules=lambda:rules)))
     async def check():
-        road = RoadSpeed(NS(driving_pose=lambda rid:peer),update)
+        road = RoadSpeed(NS(arbitrated_pose=lambda rid:peer),update)
         async def tick():
             await road.renew(runner,live,(1,site),0,.1,pose)
             assert calls[-1][:2] == ("first","run")
