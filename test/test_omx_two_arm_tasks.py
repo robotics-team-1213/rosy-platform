@@ -553,3 +553,42 @@ def test_outbound_stand_task_validates_and_judge_pose_evaluates_chute_seating(la
     assert not judge(dy=0.006)["ok"]      # lateral offset outside xy_mm
     assert not judge(tilt=0.0)["ok"]      # flat on floor instead of 24-deg ramp
     assert not judge(dz=-0.015)["ok"]     # fell off chute
+
+
+def test_black_fixture_parts_have_collision_without_false_contacts():
+    """Black fixture parts expose convex collision proxies while concave STLs stay visual-only."""
+    mujoco = pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+
+    world = tw.World(sites.Layout(preset="v24-20261114"))
+    model = world.model
+    col_names = (
+        "a_plate_col", "b_plate_col", "a_clamp", "b_clamp", "a_bridge_col", "b_bridge_col",
+        "berth_v24_dock_p", "berth_v24_dock_s", "berth_v24_cradle_p", "berth_v24_cradle_s", "berth_v24_stopper_col",
+    )
+    for name in col_names:
+        gid = model.geom(name).id
+        assert model.geom_contype[gid] != 0 and model.geom_conaffinity[gid] != 0, name
+    for name in ("a_plate", "b_plate", "a_bridge", "b_bridge", "ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"):
+        gid = model.geom(name).id
+        assert model.geom_contype[gid] == 0 and model.geom_conaffinity[gid] == 0, name
+
+    data = world.reset()
+    placed = [s for _, s, _ in world.layout.plan_order()]
+    for (cid, _), site in zip(world.layout.containers(), placed):
+        world.put(data, cid, site)
+    world.advance(data, {}, 30)
+    assert not world.contact_report(data)["arm_other"]
+    for (cid, _), _ in zip(world.layout.containers(), placed):
+        _, _, tilt = world.pose(data, cid)
+        assert tilt < 5.0, (cid, tilt)
+
+    box_q, box_v = world.box_q["bar-1"], world.box_v["bar-1"]
+    for name in ("b_bridge_col", "b_plate_col", "berth_v24_dock_s"):
+        data = world.reset()
+        gid = model.geom(name).id
+        data.qpos[box_q:box_q + 7] = [*data.geom_xpos[gid], 1, 0, 0, 0]
+        data.qvel[box_v:box_v + 6] = 0
+        mujoco.mj_forward(model, data)
+        pairs = {tuple(world.geom_name[g] for g in (c.geom1, c.geom2)) for c in data.contact[:data.ncon]}
+        assert any("bar-1" in pair and name in pair for pair in pairs), (name, pairs)
