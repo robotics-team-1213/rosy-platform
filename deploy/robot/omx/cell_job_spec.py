@@ -161,8 +161,7 @@ JOBS = {
             "site": _match(NAME),
             "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
             "paced_chunks": _bool,
-            "dest_site": _match(NAME), "dest_tier": _int_range(0, 9), "depart_robot": _match(NAME),  # dest_*: zone_acceptance target (D-1057)
-            "depart_action": _match(re.compile(r"depart_s1")),  # arm_s: Fleet R pinky depart after took_one
+            "dest_site": _match(NAME), "dest_tier": _int_range(0, 9), "depart_robot": _match(NAME), "depart_action": _match(re.compile(r"depart_s1")),  # depart: arm_s Pinky after took_one; dest_*: zone_acceptance target (D-1057)
         },
     },
     "stack_plan": {"script": "cell_stack_plan.py", "argv": ["--plan-json", "{plan}"], "params": {"plan": _match(TASK_FILE)}},
