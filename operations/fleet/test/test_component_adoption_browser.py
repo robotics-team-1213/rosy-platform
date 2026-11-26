@@ -242,6 +242,8 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
     api["/api/fleet/peers"] = {"peers": []}
     api["/api/fleet/dispatch-control"] = {"paused": False}
     api["/api/fleet/work"] = {"rows": []}
+    api["/api/fleet/cells/cell_ab/jobs/options"] = {"cell": "cell_ab", "arms": ["arm_a", "arm_b"], "models": []}
+    api["/api/fleet/cells/cell_ab/jobs/readiness"] = {"arms": {}}
     api["/api/fleet/workcell-observations"] = {
         "schema_version": "rosy.workcell-observations.v1",
         "workcells": [{
@@ -324,6 +326,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         context_panel = page.locator("#cell-context-panel")
         expect(context_panel).to_be_visible()
         expect(context_panel).to_contain_text("셀 작업 · 열린 사건")
+        expect(context_panel).to_contain_text("팔 A/B 실행 · 복구")
         expect(context_panel.locator('a[href="/console/cell#observation-heading"]')).to_be_visible()
 
         dock = page.locator("#" + "robot-dock")

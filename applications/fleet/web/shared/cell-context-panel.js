@@ -6,6 +6,7 @@ import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { isHomeRecovery } from "/console/assets/cell-obs-model.js";
 import { armIncidentClearPlan, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
+import { createCellJobPanel } from "/console/assets/cell-job-panel.js";
 
 const WORK_REFRESH_MS = 5000;
 const ENDED_WORK_STATES = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]);
@@ -79,6 +80,7 @@ export function createCellContextPanel({
   let admittingId = "";
   let admitFeedback = "";
   let lastContextSig = "";
+  const jobPanel = createCellJobPanel({ call, onChange: () => render() });
 
   scope.onDispose?.(() => {
     lastContextSig = "";
@@ -87,6 +89,7 @@ export function createCellContextPanel({
 
   async function refresh(signal, { force = false } = {}) {
     if (auth.locked || !isStageActive() || workInFlight) return;
+    jobPanel.refresh(signal);
     if (!force && !workGate.due()) return;
     const now = Date.now();
     if (!force && now - workCheckedAt < WORK_REFRESH_MS) return;
@@ -167,7 +170,7 @@ export function createCellContextPanel({
     const contextSig = JSON.stringify([
       openIncidents.map(({ arm, incident }) => [arm.sourceId, incident.incident_id, incident.state, incident.event_kind, incident.decision?.hold]),
       activeWork.map((r) => [r.source, r.source_id, r.device_id, r.status, r.visible_state, r.updated_at]),
-      workLoaded, workError, admittingId, admitFeedback, lockReason, Boolean(auth.locked),
+      workLoaded, workError, admittingId, admitFeedback, lockReason, Boolean(auth.locked), jobPanel.sig(),
     ]);
     if (contextSig === lastContextSig) return;
     lastContextSig = contextSig;
@@ -236,6 +239,10 @@ export function createCellContextPanel({
                 : html`<ul class="cell-context-list">${runningWork.map(renderWorkRow)}</ul>`}
           </div>` : null}
         `}
+      <div class="cell-context-section">
+        <h3>팔 A/B 실행 · 복구</h3>
+        ${jobPanel.view({ lockReason })}
+      </div>
       <div class="cell-context-section">
         <h3>목적별 화면 이동</h3>
         <div class="cell-context-links">
