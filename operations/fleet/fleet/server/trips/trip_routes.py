@@ -142,6 +142,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         runner.human_hold_fn = lambda: bool(
             callable(getattr(app.state, "pipeline_human_hold_fn", None)) and app.state.pipeline_human_hold_fn()
         )
+        # the reason must follow the hold: without it a closed dispatch latch reads as HUMAN_HOLD
+        runner.hold_state_fn = lambda: (getattr(app.state, "pipeline_hold_state_fn", None) or (lambda: None))()
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
