@@ -33,21 +33,10 @@ def site_obstacle_mm(config: dict, depth, colour) -> dict:
     return rd.site_obstacle_mm(config.get("sites") or {}, sites, depth, colour)
 
 
-def resolve_z_view(
-    config: dict,
-    *,
-    obstacle_mm: float | None = None,
-    clear_mm: float = REMAP_CLEAR_MM,
-) -> tuple[dict, dict]:
+def resolve_z_view(config: dict, *, obstacle_mm: float | None = None, clear_mm: float = REMAP_CLEAR_MM) -> tuple[dict, dict]:
     """Raise coarse.z_view (never lower) to clear `obstacle_mm` by `clear_mm` above the table plane."""
     base_z = float(config["coarse"]["z_view"])
-    info = {
-        "base_z_view": base_z,
-        "z_view": base_z,
-        "obstacle_mm": obstacle_mm,
-        "clear_mm": float(clear_mm),
-        "raised": False,
-    }
+    info = {"base_z_view": base_z, "z_view": base_z, "obstacle_mm": obstacle_mm, "clear_mm": float(clear_mm), "raised": False}
     if obstacle_mm is None or isinstance(obstacle_mm, bool) or not math.isfinite(float(obstacle_mm)) or float(obstacle_mm) <= 0.0:
         return config, info
     obs = float(obstacle_mm)
@@ -67,13 +56,7 @@ def resolve_z_view(
     req_z = round(table_z + (obs + float(clear_mm)) / 1000.0, 4)
     eff_z = max(base_z, req_z)
     raised = eff_z > base_z + 1e-6
-    info.update({
-        "z_view": eff_z,
-        "obstacle_mm": round(obs, 1),
-        "required_z_view": req_z,
-        "table_z_m": round(table_z, 4),
-        "raised": raised,
-    })
+    info.update({"z_view": eff_z, "obstacle_mm": round(obs, 1), "required_z_view": req_z, "table_z_m": round(table_z, 4), "raised": raised})
     if not raised:
         return config, info
     eff_cfg = {**config, "coarse": {**config["coarse"], "z_view": eff_z}}
