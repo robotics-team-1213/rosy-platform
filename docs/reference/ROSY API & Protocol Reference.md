@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.479
+**Version:** v1.480
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.480 Repeat cancellation returns the named trip receipt (Fleet)
+
+Repeating `POST /api/fleet/trips/{trip_id}/cancel` for a canceled trip returns its current receipt, including after restart. The first cancellation keeps its operator and stop evidence. Repeating the request sends no command to a later trip on the same robot.
 
 ### v1.479 Idle navigation ownership proof (CORE)
 
@@ -5136,6 +5140,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.480 | 2026-11-26 | [Fleet] Repeat cancellation returns the named trip receipt |
 | v1.479 | 2026-11-26 | [CORE] Idle navigation ownership proof |
 | v1.478 | 2026-11-26 | [Fleet] Assigned station release and timeout hold |
 | v1.477 | 2026-11-26 | [CORE] Correlated native docking cancellation |
