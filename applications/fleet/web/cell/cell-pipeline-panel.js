@@ -42,6 +42,22 @@ export function formatPinkyTaskRow(task) {
   ];
 }
 
+function calibrationTaskUrl(origin, task) {
+  if (!origin || typeof task.task_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/.test(task.task_id)) return null;
+  const validSite = site => typeof site === 'string' && /^[A-Za-z0-9][A-Za-z0-9_:-]{0,95}$/.test(site);
+  if (!validSite(task.src_site) || !validSite(task.dst_site)) return null;
+  const supply = task.cell_id === 'cell_s' && task.arm_id === 'arm_s'
+    && task.src_site === 'pinky' && task.dst_site === 'belt' && !task.displaced_to;
+  const named = task.cell_id === 'cell_ab' && ['arm_a', 'arm_b'].includes(task.arm_id)
+    && task.src_site_id && task.dst_site_id;
+  if (!supply && !named) return null;
+  const url = new URL('/', origin);
+  url.search = new URLSearchParams({arm: task.arm_id, src_site: task.src_site,
+    dst_site: task.dst_site, task_id: task.task_id});
+  url.hash = `route-${task.arm_id}`;
+  return url.href;
+}
+
 export function createPipelinePanel(ctx) {
   const {$, state, namedReason, runPinkyQuickAction, runQuickPreset, cancelPinkyTask, closeRepark, cancelOrRetryTask, invokeRecoveryTool, admitCellPlan, cancelCellPlan, onRobotChange} = ctx;
 
@@ -248,15 +264,20 @@ export function createPipelinePanel(ctx) {
     const cellTasks = tasksBody?.tasks || [];
     const taskById = new Map(cellTasks.map(task => [task.task_id, task]));
     const predecessors = new Set(cellTasks.map(task => task.depends_on).filter(Boolean));
-    if (predecessors.size) {
+    const routeLinks = new Map();
+    for (const task of cellTasks) {
+      const url = calibrationTaskUrl(tasksBody.calibration_origin, task);
+      if (url) routeLinks.set(task.task_id, url);
+    }
+    if (predecessors.size || routeLinks.size) {
       const wrap = document.createElement('div');
       wrap.className = 'cell-pipeline-ledger';
       const table = document.createElement('table');
       table.className = 'cell-pipeline-table';
       const caption = document.createElement('caption');
-      caption.textContent = '연결된 셀 작업';
+      caption.textContent = '셀 작업과 경로 점검';
       const header = document.createElement('tr');
-      for (const name of ['작업 ID', '팔', '출발 → 도착', '작업 상태', '선행 작업 ID', '선행 작업 상태']) {
+      for (const name of ['작업 ID', '팔', '출발 → 도착', '작업 상태', '선행 작업 ID', '선행 작업 상태', '경로 점검']) {
         const th = document.createElement('th');
         th.scope = 'col';
         th.textContent = name;
@@ -266,7 +287,8 @@ export function createPipelinePanel(ctx) {
       head.append(header);
       const body = document.createElement('tbody');
       for (const task of cellTasks) {
-        if (!task.depends_on && !predecessors.has(task.task_id)) continue;
+        const url = routeLinks.get(task.task_id);
+        if (!task.depends_on && !predecessors.has(task.task_id) && !url) continue;
         const parent = taskById.get(task.depends_on);
         const parentState = task.depends_on ? parent?.status || '상태 미확인' : '—';
         const row = document.createElement('tr');
@@ -276,6 +298,15 @@ export function createPipelinePanel(ctx) {
           td.textContent = value || '—';
           row.append(td);
         }
+        const action = document.createElement('td');
+        if (url) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.textContent = '사전 점검 열기';
+          link.setAttribute('aria-label', `${task.task_id} 경로 사전 점검 열기`);
+          action.append(link);
+        }
+        row.append(action);
         body.append(row);
       }
       table.append(caption, head, body);
