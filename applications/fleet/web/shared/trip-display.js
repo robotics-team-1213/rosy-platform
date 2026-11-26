@@ -14,6 +14,8 @@ export const AI_FACT_LABEL = {
 };
 
 export const TRIP_ERROR_LABEL = {
+  DISPATCH_REARM_REQUIRED: '출발 잠금 상태입니다 · 상단 "대기 작업 재허가"를 누른 뒤 다시 시도하세요',
+  HUMAN_HOLD: '안전 정지(HUMAN_HOLD) 상태입니다 · 사람 감지·비상정지·셀/원장 이상을 확인하세요',
   TRIP_QUEUED: '출발 명령이 대기열에 있습니다',
   TRIP_DISPATCH_DISABLED: '자동 출발이 꺼져 있어 정차 중입니다',
   TRIP_PROPOSAL_NOT_FOUND: '해당 이송 제안을 찾을 수 없습니다 · 제안 식별자를 확인하세요',

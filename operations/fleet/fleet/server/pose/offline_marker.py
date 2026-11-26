@@ -17,7 +17,7 @@ MAX_OFFLINE_PEER_SPEED_MPS = 0.20
 #: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle,
 #: seen at least STATIC_MIN_FRAMES times with no gap above STATIC_MAX_GAP_S.
 STATIC_HOLD_S = 2.0
-STATIC_MAX_GAP_S = 0.6
+STATIC_MAX_GAP_S = 1.2
 STATIC_MIN_FRAMES = 5
 #: A disconnected peer unseen this long by every covering camera that still reports other markers is off the track.
 ABSENT_S = 5.0

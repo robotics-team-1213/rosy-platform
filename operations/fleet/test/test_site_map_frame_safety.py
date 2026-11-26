@@ -769,3 +769,208 @@ def test_a_robot_that_loads_another_grid_under_a_running_goal_is_stopped():
     _ticks(runner, ports)
     row = runner.view("p1")
     assert row["detail"]["binding"] == "MAP_BINDING_GRID_CHANGED" and ports.canceled == ["rosy_60"]
+
+
+def test_matching_binding_is_preferred_when_required_is_false_and_grid_change_fails_closed():
+    states = []
+    runner, ports = _bound_setup(state_out=states, binding_required=False)
+    assert len(ports.goals) == 1
+    assert ports.goals[0] == pytest.approx(_TRUTH.inverse((1.0, 0.0)), abs=1e-3)
+    assert runner.view("p1")["detail"]["goal_frame"]["map_grid_id"] == _GRID
+    states[0]["map_grid_id"] = "occupancy:ffffffffffff"
+    _ticks(runner, ports)
+    row = runner.view("p1")
+    assert row["reason"] == "map_frame" and row["detail"]["binding"] == "MAP_BINDING_GRID_CHANGED"
+    assert ports.canceled == ["rosy_60"]
+
+
+def test_free_nav2_arrival_requires_2d_distance_not_1d_projection_and_non_navigating():
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    graph = store.active()[2]
+    arc = _arc(store, "ab:fwd")
+    ports.at(arc, 0.1)
+    x, y, yaw = arc.point_at(0.1)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw),
+                                        goal="C", drive_modes=frozenset({"free"}),
+                                        ignore_start_heading=True, ignore_arrive_heading=True,
+                                        stop_offset=False), store.routing_config)
+    store.record_plan(plan_id="p1", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "C", "via": [], "drive_mode": "nav2"}, result={"plan": plan_body(plan)})
+    run(runner.start("p1", "bob"))
+    live = runner._live["rosy_60"]
+    arc_bc = _arc(store, "bc:fwd")
+    s_to = live.segments[-1]["s_to"]
+    ex, ey, _ = arc_bc.point_at(s_to)
+    # 1D remaining <= 0.15 m, but laterally 0.16 m > arrive_free_m (0.15 m) -> NOT arrived!
+    off_pose = MapPose(ex + 0.16, ey, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site")
+    assert runner._arrived(live, len(live.segments) - 1, 0.0, False, off_pose) is False
+    ok_pose = MapPose(ex, ey, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site")
+    assert runner._arrived(live, len(live.segments) - 1, 0.0, False, ok_pose) is True
+    # _route_finished must agree with 2D Euclidean distance when nav == "IDLE"
+    from fleet.server.trip_nav2_route import _route_finished
+    live.active_route = {"end_index": len(live.segments) - 1, "points": 2}
+    assert _route_finished(runner, live, len(live.segments) - 1, s_to, "IDLE", pose=off_pose) == "ready"
+    assert _route_finished(runner, live, len(live.segments) - 1, s_to, "IDLE", pose=ok_pose) == "busy"
+
+
+def test_transient_candidates_holds_bound_nav2_trip_until_recovery_or_timeout():
+    import asyncio
+    from dataclasses import replace
+    from datetime import datetime, timezone
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+
+    site = _free_map()
+    runner, store, ports = _setup(site, caps=replace(BOTH, bound_route=True), map_binding_required=True)
+    ports.map_id = "site"
+    loc_state = {"state": "LOCALIZED", "reason": None}
+    nav_state = {"nav": "NAVIGATING"}
+
+    async def robot_state(_rid):
+        pose = ports.pose
+        rx, ry = _TRUTH.inverse((pose.x, pose.y))
+        obs = datetime.fromtimestamp(ports.now - 0.01, timezone.utc).isoformat()
+        return {
+            "pose": {"x": rx, "y": ry, "yaw": pose.yaw - _TRUTH.yaw},
+            "pose_frame": "map",
+            "map_id": "slam",
+            "map_grid_id": _GRID,
+            "localization": {"state": loc_state["state"], "pose_frame": "map", "reason": loc_state["reason"]},
+            "odom_pose": {"x": rx, "y": ry, "yaw": pose.yaw, "stamp": ports.now - 0.01},
+            "velocity": {"linear": 0.0, "angular": 0.0},
+            "navigation": nav_state["nav"],
+            "mode": "NAVIGATION",
+            "safety": {"estop": False},
+            "evidence": {"pose": {"evidence": "fresh", "received_at": obs}},
+        }
+
+    runner._robot_state = robot_state
+    runner._route = lambda _rid, pts, **_kw: asyncio.sleep(0, result={"accepted": True})
+    pairs = [{"site": list(p), "robot": list(_TRUTH.inverse(p))} for p in _SPAN]
+    approval = store.map_bindings.approve(
+        "rosy_60", {"map_id": "slam", "map_grid_id": _GRID, "localization": {"state": "LOCALIZED", "pose_frame": "map"}},
+        (store.active()[1].map_id, store.active()[0]), pairs,
+        [{"site": [0.0, 0.0], "robot": list(_TRUTH.inverse((0.0, 0.0)))}], "bob",
+    )
+    graph = store.active()[2]
+    arc = _arc(store, "ab:fwd")
+    ports.at(arc, 0.1)
+    x, y, yaw = arc.point_at(0.1)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw),
+                                        goal="C", drive_modes=frozenset({"free"}),
+                                        ignore_start_heading=True, ignore_arrive_heading=True,
+                                        stop_offset=False), store.routing_config)
+    store.record_plan(
+        plan_id="p1", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+        request={"to": "C", "via": [], "drive_mode": "nav2", "approved_slam_required": True},
+        result={"plan": {**plan_body(plan), "nav2_binding_id": approval["binding_id"]}},
+    )
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports, n=1)
+    assert runner.view("p1")["state"] == "running"
+
+    # Transient CANDIDATES flicker holds without killing trip, cancels active Nav2 goal once, and recovers!
+    loc_state.update(state="CANDIDATES", reason="fit_drop")
+    nav_state["nav"] = "CANCELED"
+    _ticks(runner, ports, n=2)
+    mid = runner.view("p1")
+    assert mid["state"] == "running" and mid["detail"]["localization_wait"]["loc_state"] == "CANDIDATES"
+    loc_state.update(state="LOCALIZED", reason=None)
+    nav_state["nav"] = "IDLE"
+    _ticks(runner, ports, n=1)
+    assert runner.view("p1")["detail"].get("localization_wait") is None
+
+    # Sustained CANDIDATES past timeout cleanly stops with structured diagnostic detail
+    loc_state.update(state="CANDIDATES", reason="fit_drop")
+    for _ in range(32):
+        ports.now += 0.5
+        run(runner.tick())
+        if runner.view("p1")["state"] not in ("started", "running"):
+            break
+    done = runner.view("p1")
+    assert done["state"] == "stopped" and done["reason"] == "pose"
+    assert done["detail"]["pose_reason"] == "ROBOT_NOT_LOCALIZED"
+    assert done["detail"]["loc_state"] == "CANDIDATES"
+
+
+def test_opportunistic_binding_holds_transient_candidates_across_ticks_even_near_goal():
+    import asyncio
+    from dataclasses import replace
+    from datetime import datetime, timezone
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+
+    site = _free_map()
+    runner, store, ports = _setup(site, caps=replace(BOTH, bound_route=True), map_binding_required=False)
+    ports.map_id = "site"
+    loc_state = {"state": "LOCALIZED", "reason": None}
+    nav_state = {"nav": "NAVIGATING"}
+
+    async def robot_state(_rid):
+        pose = ports.pose
+        rx, ry = _TRUTH.inverse((pose.x, pose.y))
+        obs = datetime.fromtimestamp(ports.now - 0.01, timezone.utc).isoformat()
+        return {
+            "pose": {"x": rx, "y": ry, "yaw": pose.yaw - _TRUTH.yaw},
+            "pose_frame": "map",
+            "map_id": "slam",
+            "map_grid_id": _GRID,
+            "localization": {"state": loc_state["state"], "pose_frame": "map", "reason": loc_state["reason"]},
+            "odom_pose": {"x": rx, "y": ry, "yaw": pose.yaw, "stamp": ports.now - 0.01},
+            "velocity": {"linear": 0.0, "angular": 0.0},
+            "navigation": nav_state["nav"],
+            "mode": "NAVIGATION",
+            "safety": {"estop": False},
+            "evidence": {"pose": {"evidence": "fresh", "received_at": obs}},
+        }
+
+    runner._robot_state = robot_state
+    runner._route = lambda _rid, pts, **_kw: asyncio.sleep(0, result={"accepted": True})
+    pairs = [{"site": list(p), "robot": list(_TRUTH.inverse(p))} for p in _SPAN]
+    store.map_bindings.approve(
+        "rosy_60", {"map_id": "slam", "map_grid_id": _GRID, "localization": {"state": "LOCALIZED", "pose_frame": "map"}},
+        (store.active()[1].map_id, store.active()[0]), pairs,
+        [{"site": [0.0, 0.0], "robot": list(_TRUTH.inverse((0.0, 0.0)))}], "bob",
+    )
+    graph = store.active()[2]
+    arc = _arc(store, "bc:fwd")
+    ports.at(arc, arc.length_m - 0.05)  # inside arrive_free_m, while nav is NAVIGATING
+    x, y, yaw = arc.point_at(arc.length_m - 0.05)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw),
+                                        goal="C", drive_modes=frozenset({"free"}),
+                                        ignore_start_heading=True, ignore_arrive_heading=True,
+                                        stop_offset=False), store.routing_config)
+    store.record_plan(
+        plan_id="p1", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+        request={"to": "C", "via": [], "drive_mode": "nav2"},
+        result={"plan": plan_body(plan)},  # no nav2_binding_id -> opportunistic binding via goal_frame
+    )
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports, n=1)
+    live = runner._live["rosy_60"]
+    assert runner.view("p1")["state"] == "running" and live.nav2_binding_scope is None
+
+    # Pose stays LOCALIZED (e.g. overhead sighting), but onboard drops to CANDIDATES across multiple ticks
+    loc_state.update(state="CANDIDATES", reason="fit_drop")
+    nav_state["nav"] = "CANCELED"
+    _ticks(runner, ports, n=1)
+    first_wait = dict(runner.view("p1")["detail"]["localization_wait"])
+    first_since = first_wait["since"]
+    _ticks(runner, ports, n=2)
+    later = runner.view("p1")
+    assert later["state"] == "running"
+    assert later["detail"]["localization_wait"]["since"] == first_since
+    assert live.progress_at == pytest.approx(ports.now)
+
+    # Sustained CANDIDATES past 15s cap cleanly stops even with opportunistic binding
+    for _ in range(32):
+        ports.now += 0.5
+        run(runner.tick())
+        if runner.view("p1")["state"] not in ("started", "running"):
+            break
+    done = runner.view("p1")
+    assert done["state"] == "stopped" and done["reason"] == "map_frame"
+    assert done["detail"]["binding"] == "ROBOT_NOT_LOCALIZED"

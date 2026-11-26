@@ -41,6 +41,7 @@ class RobotView:
     pose: Optional[tuple[float, float]]   # map x, y; None when not localized
     on_trip: bool = False
     yaw: Optional[float] = None           # body heading (rad) when localized, else None
+    sighted_pose: Optional[tuple[float, float]] = None  # fresh overhead sighting when unlocalized/offline
 
 
 def thresholds_of(site_maps) -> tuple[float, float]:
@@ -128,16 +129,17 @@ class ChargeBays:
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
         go_percent, leave_percent = self.thresholds()
         held = {v.bay: rid for rid, v in self._visits.items()}
-        # Only an unlocated robot without a visit makes free bays unknown; a located offline robot marks its own bay.
+        # Only an unlocated robot without a visit makes free bays unknown; a located or freshly sighted offline robot marks its own bay.
         blind = False
         for r in robots:
             if r.robot_id in self._visits or (r.online and r.pose is not None):
                 continue
-            bay_hit = (next((b.id for b in bays if math.dist(r.pose, (b.x, b.y)) <= AT_BAY_M), None)
-                       if r.pose is not None else None)
+            loc = r.pose if r.pose is not None else r.sighted_pose
+            bay_hit = (next((b.id for b in bays if math.dist(loc, (b.x, b.y)) <= AT_BAY_M), None)
+                       if loc is not None else None)
             if bay_hit is not None and bay_hit not in held:
                 held[bay_hit] = r.robot_id
-            elif bay_hit is None:
+            elif loc is None:
                 blind = True
         dock_evals: dict[str, dict] = {}
         if graph is not None:
