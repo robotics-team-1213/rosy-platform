@@ -798,6 +798,8 @@ def test_cell_safe_home_guards_hw_error_incident_cap_and_clears_multi(tmp_path, 
     monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "missing-boards.json"))
     rc_unavail, res_unavail = csh.run_safe_home(args_missing, live_fn=lambda _c: False)
     assert rc_unavail == 2 and res_unavail["result"] == "refused_hw_probe_unavailable"
+    (tmp_path / "boards.json").write_text(json.dumps({"00FB51A150323952582E3120FF070726": "arm_s"}), encoding="utf-8")
+    monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "boards.json"))  # /dev/null is unmapped: passes the board check
 
     rc_alert, res_alert = csh.run_safe_home(
         args, live_fn=lambda _c: False,
