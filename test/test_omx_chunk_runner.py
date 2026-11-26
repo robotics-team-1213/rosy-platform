@@ -129,7 +129,7 @@ def test_human_hold_preempts_pending_stop_and_motion_while_chunk_runs():
     assert all([row[name] for name in m.NAMES[:5]] == held for row in robot.sent[-3:])
 
 
-def test_human_hold_reports_failed_ack_and_allows_guard_overload_relief(monkeypatch):
+def test_human_hold_under_guard_overload_acks_torque_hold_and_allows_relief(monkeypatch):
     from types import SimpleNamespace
 
     robot, status = Robot(), []
@@ -144,9 +144,9 @@ def test_human_hold_reports_failed_ack_and_allows_guard_overload_relief(monkeypa
     r.command("human-hold")
     r.tick()
     assert relief and r.human_hold_latched
-    assert by_command(status, "human-hold")[-1]["ok"] is False
-    assert not any(row["ok"] for row in by_command(status, "human-hold"))
-    assert "overload" in status[-1]["error"] and status[-1]["person_needed"]
+    # 2026-11-26: the hold pose streams with torque ON while the guard sheds, so the ack stands; the shed is its own field
+    assert r.torque_hold_commanded is True and all(row["ok"] for row in by_command(status, "human-hold"))
+    assert by_command(status, "human-hold")[-1]["overload_shed"] == ["shoulder_lift"] and status[-1]["person_needed"]
 
 
 def test_checked_commands_bind_the_session_and_library_at_the_motion_boundary():

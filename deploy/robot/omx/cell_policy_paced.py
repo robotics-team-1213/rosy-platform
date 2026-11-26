@@ -137,7 +137,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
 
     try:
         for n in range(max_chunks):
-            row, aborted = {"chunk": n, "dry_run": dry_run}, False
+            ph = {"obs": round(time.time(), 3)}  # per-chunk phase starts (logging only): obs, infer, auth, load, run, snapshot
+            row, aborted = {"chunk": n, "dry_run": dry_run, "phase_t": ph}, False
             if n == 0 and not dry_run and (pre_home or entry_frames is not None):
                 status, live_poses, err = _checked_state(row, n, catch_io=True, hold_on_fail=True)
                 if err is not None:
@@ -203,6 +204,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                         oldest_stamp = float(stamp) if oldest_stamp is None else min(oldest_stamp, float(stamp))
                 else:
                     frames = {view: cell.frame(view) for view in shadow.image_views}
+                ph["infer"] = round(time.time(), 3)
                 obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
                 raw_chunk = infer_chunk(shadow, obs, state, sim_units)
                 converted = raw_chunk if sim_units else raw_chunk - off
@@ -240,7 +242,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell},
                        **({"jaw_gate": {**jaw_spec, "tcp_x_m": resolved_tcp}} if jaw_spec is not None else {})}
                 (path := work / f"policy-lib-{time.time_ns()}-{n}.json").write_text(json.dumps(lib), encoding="utf-8")
-                prefix = ""
+                prefix, ph["auth"] = "", round(time.time(), 3)
                 if authorize is not None or (n == 0 and (pre_home or entry_ran)):
                     auth_status, auth_poses, auth_fail = _checked_state(row, n, catch_io=True, hold_on_fail=True)
                     if auth_fail is not None:
@@ -290,7 +292,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                     raise
                 msg = str(error)[:200] or type(error).__name__
                 return _fail("refused", n, msg, pre_logs=({**row, "refused": msg},))
-            park_safe, hold_needed = False, True
+            park_safe, hold_needed, ph["load"] = False, True, round(time.time(), 3)
             loaded = cell.act(f"{prefix}load {path}")
             load_lost = isinstance(loaded, dict) and str(loaded.get("error") or "").startswith("no status within")
             load_fault = not isinstance(loaded, dict) or load_lost or any(loaded.get(k) for k in FAULT_KEYS)
@@ -304,7 +306,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
             log(load_row)
             if oldest_stamp is not None and time.time() - oldest_stamp > max_obs_age_s:
                 return _fail("refused", n, "stale policy observation", prefix, pre_logs=({**row, "refused": "stale policy observation"},))
-            moved, park_safe = True, False
+            moved, park_safe, ph["run"] = True, False, round(time.time(), 3)
             ran = cell.act(prefix + "run policy")
             if not isinstance(ran, dict):
                 return _fail("fault", n, "unexpected policy reply command", prefix, fault=True, extra={"error": "unexpected policy reply command"})
@@ -333,8 +335,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 reason = ran.get("error") or ("policy chunk did not settle" if unsettled else "policy playback refused")
                 res_kind = "unsettled" if (ran.get("ok") and unsettled) else "refused"
                 return _fail(res_kind, n, reason, prefix, fault=True, extra={"error": reason}, pre_logs=({"command": "run policy", **_ack_status(ran)},))
-            park_safe, hold_needed = True, False
-            log({"command": "run policy", **_ack_status(ran), **_moved_snapshot(state, ran, frames.get("top"), cell, work, n)})
+            park_safe, hold_needed, ph["snapshot"] = True, False, round(time.time(), 3)
+            log({"command": "run policy", **_ack_status(ran), "phase_t": ph, **_moved_snapshot(state, ran, frames.get("top"), cell, work, n)})
             held = held or bool(ran.get("holding"))
             if handoff is not None and ran.get("holding") is True:  # carry only a hold the Handoff spec measured
                 park_safe, hold_needed = False, True
