@@ -33,6 +33,8 @@ from omx_autoupdate_host import (  # noqa: E402,F401  (re-exported)
     LOCK,
     SMOKE,
     Host,
+    _incomplete_release,
+    _release_paths,
     log,
 )
 
@@ -206,8 +208,7 @@ class Updater:
         env = self.env_for(release)
         session = self.host.hold_session()
         if session is None:
-            log(step="deferred", release=name, reason="session_running")
-            return "deferred"
+            return self.defer(state, name, "session_running", dry_run)
         try:
             return self.switch(state, sha, name, release, env, dry_run, session)
         finally:
@@ -226,8 +227,7 @@ class Updater:
     def switch(self, state, sha, name, release, env, dry_run, session) -> str:
         busy = self.idle(release, env)
         if busy:
-            log(step="deferred", release=name, reason=busy)
-            return "deferred"
+            return self.defer(state, name, busy, dry_run)
         if dry_run:
             log(step="would_switch", release=name)
             return "would_switch"
@@ -248,8 +248,10 @@ class Updater:
         if not (smoked and self.host.restart(units)):
             if smoked:
                 self.relink(previous, previous_env, before)
-            self.host.restart(units)
+            restored = self.host.restart(units)
             log(step="rolled_back", release=name, to=previous)
+            if not restored:
+                log(step="restart_failed", release=previous, units=units)
             retaken = self.host.hold_session() if released and smoked else True
             if retaken is None:
                 log(step="deferred", release=name, reason="session_started_during_restart")
@@ -259,19 +261,30 @@ class Updater:
             state["failed"] = name
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
-            return "rolled_back"
+            return "rolled_back" if restored else "rolled_back_restart_failed"
         paths = _release_paths(self.cfg["paths"])
         if previous and _incomplete_release(self.releases / previous, paths):
             old_prev, old_env = state.get("previous"), state.get("previous_env")
             saved_prev, saved_env = (old_prev, old_env) if self._usable_release(old_prev, old_env, paths) else (None, None)
         else:
             saved_prev, saved_env = previous, previous_env
+        state.pop("deferred", None)
         state.update(current=name, previous=saved_prev, current_sha=sha, env=env, previous_env=saved_env)
         state["history"] = (state["history"] + [{"release": name, "result": "active", "at": time.time()}])[-50:]
         self.save(state)
         self.cleanup(state)
         log(step="switched", release=name, previous=saved_prev)
         return "switched"
+
+    def defer(self, state: dict, name: str, reason: str, dry_run: bool) -> str:
+        # the job API shares `current` with the observers, so it waits behind their gate; say for how long
+        since = state.get("deferred", {}).get("since") if state.get("deferred", {}).get("release") == name else None
+        if since is None and not dry_run:
+            state["deferred"] = {"release": name, "since": (since := time.time())}
+            self.save(state)
+        log(step="deferred", release=name, reason=reason, deferred_s=round(time.time() - (since or time.time())),
+            waiting=self.cfg.get("always_restart", []))
+        return "deferred"
 
     def relink(self, previous, previous_env, before) -> None:
         if previous:
@@ -306,18 +319,20 @@ class Updater:
                 return "deferred"
             units = self.host.running(self.cfg.get("units", []))
             self.link(prev, prev_env)
-            if self.cfg.get("idle_gate") != "cell":
-                self.host.restart(units)
+            restarted = self.host.restart(units) if self.cfg.get("idle_gate") != "cell" else True
         finally:
             session.close()
         if self.cfg.get("idle_gate") == "cell":
-            self.host.restart(units)
+            restarted = self.host.restart(units)
         cur_cur = state.get("current")
         cur_env = state.get("env")
         keep_cur = self._usable_release(cur_cur, cur_env, paths)
         state.update(current=prev, previous=cur_cur if keep_cur else None, env=prev_env, previous_env=cur_env if keep_cur else None, current_sha=None)
         self.save(state)
         log(step="rolled_back_manually", release=state["current"])
+        if not restarted:
+            log(step="restart_failed", release=prev, units=units)
+            return "rollback_restart_failed"
         return "rolled_back"
 
     def cleanup(self, state: dict) -> None:
@@ -330,18 +345,6 @@ class Updater:
         for path in self.envs.iterdir() if self.envs.exists() else ():
             if path.is_dir() and not path.name.endswith(".tmp") and path.name not in used:
                 shutil.rmtree(path, ignore_errors=True)
-
-
-def _release_paths(paths: list[str]) -> list[str]:
-    out = list(paths)
-    if "deploy/robot/omx" in out and "contracts/learning/src" not in out:
-        out.append("contracts/learning/src")
-    return out
-
-
-def _incomplete_release(release: Path, paths: list[str]) -> bool:
-    """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
-    return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
 
 
 def load_config(path: Path) -> dict:
@@ -389,7 +392,7 @@ def main(argv=None):
             print(json.dumps(updater.state(), indent=2))
             return
         result = updater.run(dry_run=args.dry_run) if args.command == "run" else updater.rollback()
-        sys.exit(0 if result not in {"ci_failed", "smoke_failed", "rolled_back", "incomplete_previous"} else 1)
+        sys.exit(0 if result not in {"ci_failed", "smoke_failed", "rolled_back", "incomplete_previous", "rolled_back_restart_failed", "rollback_restart_failed"} else 1)
 
 
 if __name__ == "__main__":
