@@ -31,13 +31,32 @@ def _shown(row: dict) -> dict:
     return {**row, "visible_state": state, "approval": approval}
 
 
+def _trip_wait(view: dict) -> dict | None:
+    # Closed receipts can retain both the last tick's wait and its peer evidence.
+    if view["state"] not in ("started", "running", "link_wait"):
+        return None
+    hold = view.get("hold") or {}
+    peer = (view.get("detail") or {}).get("peer_wait") or {}
+    reason = None
+    if hold.get("reason") == "fleet_hold":
+        confirmed = (hold.get("stop") or {}).get("confirmed")
+        reason = "fleet_hold" if confirmed is True else "fleet_hold_unconfirmed"
+    elif view["state"] == "link_wait":
+        reason = "link_wait"
+    elif peer:
+        before_send = peer.get("stage") == "pre_dispatch_peer_check" and peer.get("dispatch_attempted") is False
+        reason = "peer_pre_dispatch" if before_send else "peer_clearance"
+    if reason:
+        return {"waiting": True, "reason": reason}
+    wait = view.get("wait")
+    return {key: wait.get(key) for key in ("reason", "waiting", "bound_s", "over_bound")} if wait else None
+
+
 def _trip_row(view: dict) -> dict:
-    # A closed trip keeps its last wait answer in storage; only an open trip has a wait to show (as f79947c25)
-    wait = view.get("wait") if view["state"] in ("started", "running", "link_wait") else None
     return {"source": "trip", "source_id": view["trip_id"], "action_kind": "trip", "status": view["state"],
             "device_id": view["robot_id"], "workcell_id": None, "reason": view.get("reason"),
             "updated_at": datetime.fromtimestamp(view["updated_at"], timezone.utc).isoformat(timespec="milliseconds"),
-            "wait": {key: wait.get(key) for key in ("reason", "waiting", "bound_s", "over_bound")} if wait else None}
+            "wait": _trip_wait(view)}
 
 
 def install_work_routes(app, *, task_service, mission_service, require_viewer, require_named, read_guard):
