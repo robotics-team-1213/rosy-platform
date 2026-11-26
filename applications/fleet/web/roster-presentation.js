@@ -168,7 +168,7 @@ function summarizeRobot(robot, view, attentionItems) {
   const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
     ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state, robot.robot_id, now).text;
   const trip = view.stateUnavailable ? "운행 확인 불가"
-    : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
+    : cardTripLine(view, robot.robot_id) || (robot.yielding ? "양보 요청" : robot.queued ? "출발 대기" : mode);
 
   const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
   const evidence = [];

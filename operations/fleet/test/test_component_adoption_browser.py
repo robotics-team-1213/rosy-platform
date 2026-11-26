@@ -72,7 +72,7 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
             assert all(b["height"] >= 44 and b["width"] >= 44 for b in boxes)
 
         hud_text = page.locator("#cockpit-hud").inner_text()
-        assert "0 STBY" in hud_text and "IDLE" not in hud_text and "0/1 OK" not in hud_text
+        assert "미확인 4대" in hud_text and "IDLE" not in hud_text and "0/1 OK" not in hud_text
 
         # Open a mobile robot from C23 dock -> C24 panel shows workspace card with collapsed manual controls.
         mobile_btn = dock.locator('.robot-dock-btn[data-kind="mobile"]').first

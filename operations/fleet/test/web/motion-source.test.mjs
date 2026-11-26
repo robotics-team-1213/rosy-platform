@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { motionSource, movingNow } from "../../../../applications/fleet/web/motion-source.js";
+import { measuredMotion, movingNow } from "/console/assets/measured-motion.js";
+import { motionSource } from "../../../../applications/fleet/web/motion-source.js";
 
 const T0 = 1_000_000;
 const FRESH = { velocity: { evidence: "fresh" } };
@@ -18,7 +19,7 @@ test("fresh zero velocity with nothing issued is idle, not unknown", () => {
 });
 
 test("each proving fact names its own source", () => {
-  assert.equal(src(robot({ trip_lease: { lease_id: "l", trip_id: "t", operator_name: "kim" } })).text, "배차 운행 · kim");
+  assert.equal(src(robot({ trip_lease: { lease_id: "l", trip_id: "t", operator_name: "kim" } })).text, "배차 · kim · 정지");
   assert.equal(src(robot(), view({ trafficTrips: [{ robot_id: "a" }] })).key, "trip");
   assert.equal(src(robot(), view({ manualDriveRobot: "a" })).key, "console_manual");
   assert.equal(src(robot({ docking: { state: "DOCKING" } })).key, "dock");
@@ -78,6 +79,17 @@ test("offline, missing state and Fleet state loss are 확인 불가", () => {
 });
 
 test("a proving source wins over a missing velocity, and stale still beats every source", () => {
-  assert.equal(src(robot({ evidence: {}, trip_lease: { operator_name: "" } })).key, "trip");
+  assert.equal(src(robot({ evidence: {}, trip_lease: { operator_name: "" } })).text, "배차 · 이동 미확인");
   assert.equal(src(robot({ trip_lease: { operator_name: "" } }, { state_age_s: 30 })).key, "unknown");
+});
+
+test("rotation counts as movement; incomplete, expired and disconnected readings stay unknown", () => {
+  const r = robot({ velocity: { linear: 0, angular: -0.1 }, ts: 20,
+    evidence: { velocity: { evidence: "fresh", received_at: new Date(19900).toISOString(), stale_after_s: 0.5 } } });
+  assert.equal(measuredMotion(r, view(), T0), true);
+  assert.equal(measuredMotion(r, view(), T0 + 150), null);
+  assert.equal(measuredMotion(r, view({ stateUnavailable: true }), T0), null);
+  r.state.evidence.velocity.sampled_at = null;
+  assert.equal(measuredMotion(r, view(), T0), null);
+  assert.equal(measuredMotion(robot({ velocity: { linear: null, angular: 0 } }), view(), T0), null);
 });
