@@ -11,7 +11,7 @@ import time
 import numpy as np
 
 from cell_policy_entry import (  # noqa: F401
-    ENTRY_START_TOL, FAULT_KEYS, ack_status, cmd_ack_ok, empty_gripper_ok, entry_ready as _entry_ready,
+    ENTRY_START_TOL, FAULT_KEYS, PRE_SETTLE_TOL, ack_status, cmd_ack_ok, empty_gripper_ok, entry_ready as _entry_ready,
     finite_stamp, hold_ack_ok, max_diff, park_ack_ok, pose6, retreat_ack_ok, run_entry_chunk,
     valid_state, validate_entry_chunk,
 )
@@ -54,6 +54,25 @@ def send_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> di
         if last_reply.get("human_hold_latched") is True:
             last_err = f"{last_err} (human_hold_latched=True, execution unconfirmed)"
     raise OSError(last_err)
+
+
+def library_home(library) -> list[float] | None:
+    frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
+    return pose6(frames[-1]) if isinstance(frames, (list, tuple)) and frames else None
+
+
+def idle_at_home(status, home) -> bool:
+    """Fault-free status held at home (cell_auto_fold.at_rest): with no command sent yet, a refusal needs no human-hold."""
+    from cell_auto_fold import at_rest
+
+    if not isinstance(status, dict) or home is None or status.get("ok") is not True or any(status.get(k) for k in FAULT_KEYS):
+        return False
+    state = status.get("state")
+    try:
+        return (isinstance(state, (list, tuple)) and len(state) >= 5 and at_rest(state, home)
+                and max_diff(list(state), home, 5) <= PRE_SETTLE_TOL)  # a sag past the pre-settle tolerance is off home
+    except TypeError:
+        return False
 
 
 def best_effort_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict | None:
@@ -172,8 +191,9 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
 
     def stopped(n, reason, row, status=None):
         nonlocal park_safe, hold_needed, safety_done
-        park_safe, hold_needed = False, hold_needed or not dry_run
-        stop = None if dry_run else send_hold(cell, log=log)
+        rest = not dry_run and not moved and idle_at_home(status, library_home(library))  # no command sent, parked at home
+        park_safe, hold_needed = False, hold_needed or not (dry_run or rest)
+        stop = None if dry_run or rest else send_hold(cell, log=log)
         safety_done = safety_done or not dry_run
         for entry in ({**row, "policy_stop": reason}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
             log(entry)
@@ -209,7 +229,7 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             home_pose = pose6(library["chunks"]["home"][-1])
             if (max_diff(init_state["state"], home_pose, 5) > ENTRY_START_TOL
                     or not empty_gripper_ok(init_state, now=time.time())):
-                return stopped(0, "START_POSE_OFF_HOME: arm off home; run home stage first", {"chunk": 0, "dry_run": False})
+                return stopped(0, "START_POSE_OFF_HOME: arm off home; run home stage first", {"chunk": 0, "dry_run": False}, init_state)
             _ran_e, entry_prefix, entry_err = run_entry_chunk(cell, library, work, init_state, authorize, log, jaw_gate=jaw_gate)
             if entry_err is not None:
                 safety_done = True
