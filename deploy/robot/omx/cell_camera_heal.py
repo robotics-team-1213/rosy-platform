@@ -86,11 +86,25 @@ def _is_hub(path: Path) -> bool:
     return (path / "bDeviceClass").exists() and (path / "bDeviceClass").read_text().strip() == "09"
 
 
-def camera_hub_port(device: str) -> tuple[Path, int, Path]:
+def _camera_leaf(device: str, role: str | None, leaf_finder) -> Path:
+    """USB device of the camera: through its by-id link while it is configured, else (UVC -71 'can't set config',
+    by-id and video4linux gone) the unconfigured leaf that shares its hub only with this arm's OpenRB."""
+    try:
+        node = Path(device).resolve(strict=True).name
+        return _usb(Path(f"/sys/class/video4linux/{node}/device").resolve(strict=True))
+    except OSError:
+        found = leaf_finder(role) if role else None
+        if not found or not found.get("leaf"):
+            raise OSError(f"{device}: camera is gone and no unique unconfigured leaf matches {role}") from None
+        return Path(found["leaf"])
+
+
+def camera_hub_port(device: str, role: str | None = None, *, leaf_finder=None) -> tuple[Path, int, Path]:
     """(upstream hub, its port number, camera's own hub) for the camera behind a /dev/v4l/by-id name.
     Root-hub ports are refused: cycling one drops every device on that controller port."""
-    node = Path(device).resolve(strict=True).name
-    leaf = _usb(Path(f"/sys/class/video4linux/{node}/device").resolve(strict=True))
+    if leaf_finder is None:
+        from cell_upkeep_usb_leaf import unconfigured_usb_leaf as leaf_finder
+    leaf = _camera_leaf(device, role, leaf_finder)
     hub = leaf.parent
     if not (_is_hub(hub) and _is_hub(hub.parent) and "." in hub.name):
         raise OSError(f"{leaf.name}: no external hub port above the camera to cycle")
@@ -103,7 +117,7 @@ def _cycle_hub_port(upstream: Path, port: int) -> None:
                    check=True, capture_output=True, text=True, timeout=30)
 
 
-def hub_cycle(role: str, io, *, find=camera_hub_port, cycle=_cycle_hub_port, sleep=None) -> str:
+def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None) -> str:
     """Escalation after the leaf re-authorisation failed (2026-11-26: arm_b wrist UVC -71 came back only after its
     hub port was power-cycled). The hub also feeds an OpenRB, so it runs only while no arm session exists and every
     arm lock is free: without a session the observer keeps torque OFF, so a board reset moves nothing."""
@@ -116,7 +130,7 @@ def hub_cycle(role: str, io, *, find=camera_hub_port, cycle=_cycle_hub_port, sle
     if owners:  # shortcut: any session blocks, even on another hub; map board serials to arms when this bites
         return f"hub cycle for {role} skipped: an arm session is live ({owners[0][:80]})"
     try:
-        upstream, port, hub = find(device)
+        upstream, port, hub = find(device) if find else camera_hub_port(device, role)
         cycle(upstream, port)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         return f"hub cycle for {role} failed: {exc}"

@@ -158,3 +158,34 @@ def test_client_retries_only_the_session_lock_409():
     with pytest.raises(CellJobError):
         start_when_lock_free(Client([lock] * 99), "home", {}, wait_s=10, clock=lambda: t[0],
                              sleep=lambda s: t.__setitem__(0, t[0] + s))
+
+
+def _usb_tree(root, *chain, hubs=()):
+    """Fake sysfs: nested USB devices; names in hubs get bDeviceClass 09."""
+    path = root
+    for name in chain:
+        path = path / name
+        path.mkdir()
+        (path / "idVendor").write_text("0c45\n")
+        (path / "bDeviceClass").write_text("09\n" if name in hubs else "ef\n")
+    return path
+
+
+def test_hub_port_found_through_the_unconfigured_leaf_when_by_id_is_gone(tmp_path):
+    """UVC -71 'can't set config' removes the by-id link and video4linux; the hub is found from the leaf instead."""
+    leaf = _usb_tree(tmp_path, "3-1", "3-1.4", "3-1.4.2", "3-1.4.2.1", hubs={"3-1", "3-1.4", "3-1.4.2"})
+    gone = str(tmp_path / "dev/v4l/by-id/rosy-arm_b_wrist")
+    asked = []
+    finder = lambda role: asked.append(role) or {"leaf": str(leaf)}
+    upstream, port, hub = heal.camera_hub_port(gone, "arm_b_wrist", leaf_finder=finder)
+    assert (upstream.name, port, hub.name) == ("3-1.4", 2, "3-1.4.2") and asked == ["arm_b_wrist"]
+    with pytest.raises(OSError, match="no unique unconfigured leaf"):
+        heal.camera_hub_port(gone, "arm_b_wrist", leaf_finder=lambda _r: None)  # ambiguous or shared with another arm
+    with pytest.raises(OSError, match="no unique unconfigured leaf"):
+        heal.camera_hub_port(gone, None, leaf_finder=finder)
+
+
+def test_hub_port_still_refuses_a_camera_on_a_root_port(tmp_path):
+    leaf = _usb_tree(tmp_path, "3-1", "3-1.1", hubs={"3-1"})
+    with pytest.raises(OSError, match="no external hub port"):
+        heal.camera_hub_port(str(tmp_path / "gone"), "arm_b_wrist", leaf_finder=lambda _r: {"leaf": str(leaf)})
