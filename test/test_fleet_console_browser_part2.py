@@ -1237,3 +1237,81 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
     for width, result in results.items():
         assert result["topbar"] <= 100, results
         assert result["stop"]["top"] <= 30 and width - result["stop"]["right"] <= 32, results
+
+
+# Numeric ruler labels as CSS-px boxes from the latest canvas that drew some (the ruler sits on the cached
+# static layer, so map-canvas clears do not repaint it); a resize or clear restarts that canvas.
+MAP_RULER_NUMBERS = r"""(() => {
+  const byCanvas = new Map(); let seq = 0;
+  const clear = CanvasRenderingContext2D.prototype.clearRect;
+  CanvasRenderingContext2D.prototype.clearRect = function (...args) { byCanvas.delete(this.canvas); return clear.apply(this, args); };
+  const fill = CanvasRenderingContext2D.prototype.fillText;
+  CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...rest) {
+    if (/^-?\d+$/.test(String(text))) {
+      const m = this.getTransform(), t = this.measureText(String(text)), r = window.devicePixelRatio || 1;
+      const a = m.transformPoint({x: x - t.actualBoundingBoxLeft, y: y - t.actualBoundingBoxAscent});
+      const b = m.transformPoint({x: x + t.actualBoundingBoxRight, y: y + t.actualBoundingBoxDescent});
+      if (!byCanvas.has(this.canvas)) byCanvas.set(this.canvas, []);
+      byCanvas.get(this.canvas).seq = ++seq;
+      byCanvas.get(this.canvas).push({text: String(text), left: a.x / r, top: a.y / r, right: b.x / r, bottom: b.y / r});
+    }
+    return fill.call(this, text, x, y, ...rest);
+  };
+  window.rulerNumbers = () => [...byCanvas.values()].sort((a, b) => b.seq - a.seq)[0] || [];
+})();"""
+
+
+@pytest.mark.parametrize("width,height", [(1366, 900), (390, 844)])
+def test_ceiling_split_keeps_ruler_on_the_site_edge_and_names_below_the_axis_chip(console_url, width, height):
+    """2026-11-26 field capture: with the ceiling split on, the X ruler hung a 0.25 m margin below the floor
+    picture, and at 390 px the axis chip covered the top robot's name ("rosy_46" read "y_46")."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                          "polygon_m": [[0, 0], [3, 0], [3, 2], [0, 2]],
+                                          "bounds_m": {"min_x": 0, "min_y": 0, "max_x": 3, "max_y": 2}}]},
+        "/api/fleet/guide": {"robots": [{"robot_id": "rosy_46", "online": True,
+                                         "pose": {"x": 0.15, "y": 1.95, "yaw": 0.0, "state": "LOCALIZED"}}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                    "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(
+            p, api, init_script="sessionStorage.setItem('rosy-console-token', 'test-token');" + MAP_RULER_NUMBERS)
+        page.route("**/api/vision/sources/ceiling_north/frame", lambda route: route.fulfill(
+            status=200, content_type="image/svg+xml",
+            body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720"/></svg>',
+            headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42", "X-Frame-Age-Ms": "20"}))
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="domcontentloaded")
+        page.locator("#watch-ceiling").click()
+        page.wait_for_function("() => document.querySelector('#map-stage').dataset.watch === 'pip'"
+                               " && !document.querySelector('#map-birdseye').hidden"
+                               " && (window.__mapChips || []).some((c) => c.text.startsWith('rosy_46'))", timeout=20000)
+        page.wait_for_timeout(600)  # one more draw at the split canvas size
+        seen = page.evaluate("""async () => {
+          const { fitBox } = await import('/console/assets/site-map-model.js');
+          const c = document.querySelector('#map-canvas').getBoundingClientRect();
+          const a = document.querySelector('#map-axis-badge').getBoundingClientRect();
+          // No active map: the view fits siteBounds (polygon + 0.25 m) with pad 32 and no turn.
+          const [x0, y0] = fitBox({min_x: -0.25, min_y: -0.25, max_x: 3.25, max_y: 2.25}, c.width, c.height, 32).toPx(0, 0);
+          const dpr = window.devicePixelRatio || 1;
+          return {canvas: [c.width, c.height], stage: document.querySelector('#map-stage').getBoundingClientRect().width,
+                  x0, y0, numbers: rulerNumbers(),
+                  chips: window.__mapChips.map((r) => ({text: r.text, left: r.x / dpr, top: r.y / dpr,
+                                                         right: (r.x + r.w) / dpr, bottom: (r.y + r.h) / dpr})),
+                  badge: {left: a.left - c.left, top: a.top - c.top, right: a.right - c.left, bottom: a.bottom - c.top}};
+        }""")
+        browser.close()
+
+    assert errors == []
+    assert seen["canvas"][0] < seen["stage"] or seen["canvas"][1] < 0.7 * height, seen  # the split is on
+    x_row = [n for n in seen["numbers"] if n["right"] > seen["x0"] and n["top"] > seen["y0"] - 4]
+    assert x_row, seen
+    assert min(n["top"] for n in x_row) - seen["y0"] <= 12, (x_row, seen["y0"])
+    hit = lambda a, b: a["left"] < b["right"] and b["left"] < a["right"] and a["top"] < b["bottom"] and b["top"] < a["bottom"]
+    assert [c["text"] for c in seen["chips"] if hit(c, seen["badge"])] == [], seen
