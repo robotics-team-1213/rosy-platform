@@ -16,6 +16,7 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
+MIN_FREE_BYTES = 40 * 1024**3  # one run uses ~32-35 GB of guest disk and workspace
 sys.path.insert(0, str(ROOT))
 for relative in ('deploy/robot/pinky_pro/release', 'deploy/robot/pinky_pro/native'):
     sys.path.insert(0, str(ROOT / relative))
@@ -233,6 +234,10 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
     cache = prepare_tools()
     if any(key.is_relative_to(parent) for key in (private_key, cms_private_key) for parent in (dist, output, cache)):
         raise ValueError('product private keys must remain outside image and tools workspaces')
+    if shutil.disk_usage(cache).free < MIN_FREE_BYTES:
+        # A failed run keeps its ~35 GB workspace; repeated CD retries filled the laptop's C: (2026-11-27).
+        raise OSError(f'OS preparation needs {MIN_FREE_BYTES // 1024**3} GiB free in {cache}; '
+                      'inspect and remove old release-prep-* workspaces')
     work = cache / ('release-prep-' + uuid.uuid4().hex)
     staged = output.with_name('.' + output.name + '-' + uuid.uuid4().hex + '.staging')
     complete = False
