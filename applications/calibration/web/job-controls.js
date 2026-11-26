@@ -52,6 +52,7 @@ function fields() {
   const step = $("jobStep").value;
   $("jobTargetsLabel").hidden = step !== "pivot-near";
   $("jobRemapNote").hidden = step !== "remap";
+  $("jobRemeasureLabel").hidden = step !== "remap";
   $("jobSurfaceLabel").hidden = step !== "surface";
   $("jobVisitLabel").hidden = step !== "post-eval";
   $("jobVisitSite").required = step === "post-eval";
@@ -151,6 +152,7 @@ function wire() {
 
 function resetApproval() {
   $("jobSwitch").checked = false;
+  $("jobRemeasure").checked = false;
   notices.delete(arm);
   fields();
 }
@@ -167,6 +169,7 @@ async function submit(event) {
     if (!$("jobSwitch").checked) return;
     payload.person_at_switch = true;
   }
+  if (step === "remap" && $("jobRemeasure").checked) payload.remeasure = true;
   if (step === "surface") {
     const site = $("jobSurface").value;
     if (arms[arm].sites?.[site]?.can_remeasure_surface !== true) return;

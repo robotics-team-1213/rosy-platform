@@ -191,6 +191,18 @@ def test_a_failed_record_write_stops_the_engine_and_frees_the_lease(screen, monk
     assert status == 500 and stopped == ["terminate"] and jobs.lease().status().get("arm_b") is None
 
 
+def test_a_remap_can_be_asked_to_remeasure_a_current_map(screen):
+    url, _, calls, jobs, _ = screen
+    status, job = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "remap", "remeasure": True, "person_at_switch": True})
+    assert status == 202
+    for t in jobs.threads:
+        t.join(5)
+    argv = calls["spawn"][0][0]
+    assert "--remeasure-map" in argv and argv[argv.index("--only") + 1] == "remap" and "--person-at-switch" in argv
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "check", "remeasure": True})[0] == 422
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "remap", "remeasure": 1, "person_at_switch": True})[0] == 422
+
+
 def test_job_runs_engine_and_records_result(screen):
     url, _, calls, jobs, _ = screen
     status, job = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "pivot-near", "targets": ["belt:0.1,0.2"],

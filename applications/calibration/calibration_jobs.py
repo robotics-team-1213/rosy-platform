@@ -282,6 +282,8 @@ class Jobs:
             return 422, {"error": "targets는 'site:x,y' 문자열 목록이어야 합니다."}
         if step in MOVING and body.get("person_at_switch") is not True:
             return 422, {"error": "팔이 움직이는 단계는 전원 스위치 앞의 사람이 필요합니다(person_at_switch)."}
+        if "remeasure" in body and (step != "remap" or body["remeasure"] is not True):
+            return 422, {"error": "지도 강제 재측정(remeasure: true)은 재매핑 작업에서만 선택할 수 있습니다."}
         route = body.get("route")
         if "task_id" in body and (step != "check" or not (route or body.get("supply_route") is True)
                 or not isinstance(body["task_id"], str) or not TASK_REF.fullmatch(body["task_id"])):
@@ -341,6 +343,8 @@ class Jobs:
             if body.get("surface_clear") is not True:
                 return 422, {"error": "선택한 고정 지점과 팔 이동 경로가 비어 있는지 확인하세요."}
             argv += ["--remeasure-surface", name, "--surface-clear"]
+        if body.get("remeasure") is True:
+            argv += ["--remeasure-map"]
         if step in MOVING:
             argv += ["--commissioning", "--person-at-switch"]
         if step in MOVING and self.arms[arm].get("session"):

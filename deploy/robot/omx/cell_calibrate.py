@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
-import cell_diagnose
+import cell_calibrate_args, cell_diagnose
 import cell_calibration as cal, cell_config_io, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402  (cell_config_io: one locked writer for every config rewrite)
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
@@ -222,16 +222,10 @@ def main(argv=None):
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     ap.add_argument("--obstacle-mm", type=float, default=None, help="override obstacle height (mm above table) for remap z_view clearance")
+    ap.add_argument("--remeasure-map", action="store_true", help="auto --only remap: remap even when check finds the map current")
     args = ap.parse_args(argv)
-    if args.obstacle_mm is not None and not 0 < args.obstacle_mm < float("inf"):
-        ap.error("--obstacle-mm must be a positive finite number of mm")
-    if args.cad_image_evidence is not None and not args.route:
-        ap.error("--cad-image-evidence requires check --route")
-    if args.remeasure_surface is not None and (args.step != "auto" or args.only != ["surface"]
-            or not args.surface_clear or args.plan_only or args.replay_frames or args.targets or args.verify):
-        ap.error("--remeasure-surface requires auto --only surface --surface-clear")
-    if args.route and (args.step != "check" or args.plan_only or args.replay_frames):
-        ap.error("--route requires a live read-only check")
+    if refused := cell_calibrate_args.argument_error(args):
+        ap.error(refused)
     import cv2
     import cell_pipeline as cp
 
@@ -275,6 +269,7 @@ def main(argv=None):
     if todo == ["review-camera-reference"]:
         print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)
         return 0 if args.step == "check" else 2
+    todo = cell_calibrate_args.with_remeasure(todo, args.remeasure_map)
     if args.verify:
         for vstep in ("post-eval", "depth-verify"):
             if vstep not in todo:
