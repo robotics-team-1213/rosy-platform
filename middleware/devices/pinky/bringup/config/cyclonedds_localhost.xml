@@ -8,7 +8,14 @@
       <Interfaces>
         <NetworkInterface name="lo"/>
       </Interfaces>
-      <AllowMulticast>default</AllowMulticast>
+      <AllowMulticast>false</AllowMulticast>
     </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>32</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer address="127.0.0.1"/>
+      </Peers>
+    </Discovery>
   </Domain>
 </CycloneDDS>

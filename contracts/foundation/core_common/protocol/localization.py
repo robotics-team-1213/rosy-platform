@@ -12,6 +12,7 @@ snapshot without `localization` is a robot that predates D-395.
 from __future__ import annotations
 
 import enum
+import math
 import re
 from typing import Annotated, Any, Optional
 
@@ -93,6 +94,22 @@ class MapPose(BaseModel):
     x: Finite
     y: Finite
     yaw: Finite
+
+
+class LocalizationSearchWindow(BaseModel):
+    """One optional bounded search around a base pose in the current native grid."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expected_map_grid_id: str = Field(strict=True, pattern=r"^occupancy:[0-9a-f]{12}$")
+    center: MapPose
+
+    @field_validator("center")
+    @classmethod
+    def wrapped_heading(cls, center: MapPose) -> MapPose:
+        if not -math.pi <= center.yaw <= math.pi:
+            raise ValueError("window heading must be in radians wrapped to [-pi, pi]")
+        return center
 
 
 class LocCandidate(MapPose):

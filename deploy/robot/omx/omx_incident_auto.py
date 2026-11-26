@@ -23,9 +23,12 @@ def note_event(row: dict) -> None:
 
 
 def note_auto_clear(arm: str, verdict: dict) -> None:
-    """The auto_clear verdict (auto_clear's return) as an event; the incident id is Fleet's, not known here."""
-    note_event({"kind": "auto_clear", "arm": arm, "incident_id": None, "result": bool(verdict.get("cleared")),
-                "why": verdict.get("why")})
+    """The auto_clear verdict (auto_clear's return) as a Fleet-valid auto-events.jsonl row."""
+    why = verdict.get("why")
+    if "safety_score" in verdict:
+        why = f"score={verdict['safety_score']}/{verdict.get('threshold', 95)} ({verdict.get('decision', '?')}): {why or ''}"[:200]
+    note_event({"kind": "auto_clear", "arm": arm, "incident_id": verdict.get("incident_id"),
+                "result": bool(verdict.get("cleared")), "why": why})
 
 
 def _fault_kind(path) -> dict:
@@ -37,23 +40,68 @@ def _fault_kind(path) -> dict:
         return {"fault": None, "stop_reasons": None}
 
 
-def launch_auto_fold(arm: str, popen=None) -> dict:
+def _auto_fold_config() -> Path:
+    import os
+    return Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
+
+
+def configured_fold_arms() -> list[str]:
+    """Advertise only active commissioning configurations with the command inputs present."""
+    import os
+    conf = _auto_fold_config()
+    if conf.name.endswith(".pending"):
+        return []
+    try:
+        settings = json.loads(conf.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    ready = []
+    for arm in ("arm_a", "arm_b", "arm_s"):
+        cfg = settings.get(arm) if isinstance(settings, dict) else None
+        if not isinstance(cfg, dict) or not all(isinstance(cfg.get(k), str) and cfg[k].strip()
+                for k in ("cwd", "wrapper", "config", "library", "site")):
+            continue
+        roi = cfg.get("roi")
+        if not isinstance(roi, list) or len(roi) != 4 or not all(type(n) is int for n in roi):
+            continue
+        cwd = Path(cfg["cwd"]).expanduser()
+        wrapper = cwd / cfg["wrapper"]
+        if (cwd.is_dir() and wrapper.is_file() and os.access(wrapper, os.X_OK)
+                and all((cwd / cfg[k]).is_file() for k in ("config", "library"))):
+            ready.append(arm)
+    return ready
+
+
+def launch_auto_fold(arm: str, popen=None, *, stage: str = "full", request_id: str | None = None,
+                     expires_at: float | None = None, stop_generation: int | None = None,
+                     safety_fence: str | None = None, expected_incident_id: str | None = None) -> dict:
     """D-1048: start cell_auto_fold for this arm in its own process once this session has let go of the arm. Off unless
     ~/.config/rosy/auto-fold.json names the arm (its wrapper, config, library, site and roi)."""
-    import os
     import subprocess
 
-    conf = Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
+    if stage not in ("full", "release_and_lift", "park_only"):
+        return {"started": False, "why": f"invalid stage: {stage}"}
+    conf = _auto_fold_config()
     try:
         if arm not in json.loads(conf.read_text(encoding="utf-8")):
             return {"started": False, "why": f"{arm} not in {conf.name}"}
     except (OSError, ValueError):
         return {"started": False, "why": f"no {conf.name}"}
-    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch", "--arm", arm,
-               "--config-file", str(conf)]
+    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch",
+               "--arm", arm, "--config-file", str(conf), "--stage", stage]
+    if expected_incident_id is not None:
+        command += ["--expected-incident-id", expected_incident_id]
+    if request_id:
+        command += ["--request-id", str(request_id)]
+    if expires_at is not None:
+        command += ["--expires-at", f"{float(expires_at):.3f}"]
+    if stop_generation is not None:
+        command += ["--stop-generation", str(int(stop_generation))]
+    if safety_fence:
+        command += ["--safety-fence", str(safety_fence)]
     try:
         (popen or subprocess.Popen)(command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"started": True}
+        return {"started": True, "stage": stage}
     except OSError as exc:
         return {"started": False, "why": f"{type(exc).__name__}: {exc}"[:160]}
 
@@ -66,24 +114,70 @@ def assessor_token_file() -> Path | None:
     return next((p for p in found if p.is_file()), None)
 
 
-def auto_clear(arm: str, f: dict, link, clear_fn=None) -> dict:
-    """D-1047 (user 2026-11-19, "보류 해제를 완전히 자동화"): the same rule Fleet applies (machine_clearable) is checked here
-    first; when it allows, the cell's AI assessor clears at once, so a link failure on a rested, torque-OFF arm no longer
-    waits for a person. Fleet still re-judges the stored facts and its repeat limit; any refusal leaves the hold."""
-    try:
-        from core_common.protocol.arm_incident.arm_incidents import machine_clearable
+def _ensure_core_common() -> None:
+    here = Path(__file__).resolve()
+    if len(here.parents) > 3:
+        extra = here.parents[3] / "contracts" / "foundation"
+        if extra.is_dir() and str(extra) not in sys.path:
+            sys.path.append(str(extra))
 
-        ok, why = machine_clearable(f)
-    except Exception as exc:  # the rule cannot judge: the hold stays
-        return {"cleared": False, "why": f"rule unavailable: {type(exc).__name__}"}
-    token = assessor_token_file()
-    if not ok or token is None or link is None:
-        return {"cleared": False, "why": why if not ok else "no assessor token or Fleet link"}
+
+def auto_clear(arm: str, f: dict, link, clear_fn=None, *, remeasured=None, recovery=None, camera_check=None,
+               motor_health=None, recent_clears_24h: int = 0, since=None, now=None, incident_id=None,
+               binding=None, min_score: int = 95, only=None) -> dict:
+    """D-1047 + 95+ risk pipeline: enforce Fleet's hard rules and deterministic safety_score >= 95 before calling the
+    AI assessor to clear. Refuses and escalates to a human when any hard veto hits or safety_score < 95."""
     try:
-        (clear_fn or _clear())(arm, f"automatic (D-1047): {why}", token, link, cause="software_or_config", basis="measured")
-        return {"cleared": True, "why": why}
+        _ensure_core_common()
+        from core_common.protocol.arm_incident.arm_incidents import evaluate_clear_safety
+
+        risk = evaluate_clear_safety(
+            f, remeasured=remeasured, recovery=recovery, camera_check=camera_check,
+            motor_health=motor_health, recent_clears_24h=recent_clears_24h,
+            since=since, now=now, incident_id=incident_id, binding=binding, min_score=min_score,
+        )
+    except Exception as exc:  # invalid threshold or rule unavailable: fail closed, hold stays
+        return {
+            "cleared": False, "why": f"rule unavailable: {type(exc).__name__}: {str(exc)[:120]}",
+            "safety_score": 0, "risk_score": 100, "threshold": 95, "decision": "escalate_human",
+            "hard_vetoes": [{"code": "RULE_UNAVAILABLE", "detail": str(exc)[:120]}], "deductions": [],
+        }
+
+    base = {
+        "safety_score": risk["safety_score"], "risk_score": risk["risk_score"],
+        "threshold": risk["threshold"], "decision": risk["decision"],
+        "hard_vetoes": risk["hard_vetoes"], "deductions": risk["deductions"],
+    }
+    if not risk["allowed"]:
+        if risk["hard_vetoes"]:
+            first = risk["hard_vetoes"][0]
+            why = (risk["policy_reason"] if first["code"] == "POLICY_NOT_CLEARABLE"
+                   else f"vetoed (score {risk['safety_score']}/100): "
+                        + ", ".join(v["code"] for v in risk["hard_vetoes"]))
+        else:
+            why = (f"safety score {risk['safety_score']}/{risk['threshold']} below threshold: "
+                   + ", ".join(d["code"] for d in risk["deductions"]))
+        return {"cleared": False, "why": why, **base}
+
+    token = assessor_token_file()
+    if token is None or link is None:
+        return {"cleared": False, "why": "no assessor token or Fleet link", **base}
+
+    extra = {}
+    if remeasured is not None:
+        extra["remeasured"] = remeasured
+    if recovery is not None:
+        extra["recovery"] = recovery
+    if only is not None:
+        extra["only"] = only
+    try:
+        (clear_fn or _clear())(
+            arm, f"automatic (D-1047, score={risk['safety_score']}/100): {risk['policy_reason']}",
+            token, link, cause="software_or_config", basis="measured", **extra,
+        )
+        return {"cleared": True, "why": risk["policy_reason"], **base}
     except (SystemExit, Exception) as exc:  # Fleet refused (kind or repeat limit) or unreachable: the hold stays
-        return {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        return {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:160]}", **base}
 
 
 def _clear():

@@ -353,8 +353,8 @@ def ssh_call(ssh: list[str], host: str, script: str, *args: str) -> subprocess.C
     The command goes on stdin (argv_command's limit): a FULL landing's gate word dropped every pytest path after it."""
     command_text = command(script, args)
     try:
-        result = subprocess.run([*ssh, host, "bash -s"], input=command_text.encode(), capture_output=True,
-                                timeout=CALL_TIMEOUT)
+        result = subprocess.run([*ssh, host, f"timeout -k 5 {CALL_TIMEOUT} bash -s"], input=command_text.encode(),
+                                capture_output=True, timeout=CALL_TIMEOUT)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return None if result.returncode == 255 else result

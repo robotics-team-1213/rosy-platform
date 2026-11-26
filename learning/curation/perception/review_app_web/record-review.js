@@ -1,6 +1,6 @@
 // Saved raw evidence only. Opening or playing never writes an episode decision.
+import {domEl as node} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/recording';
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function value(number){return Number.isFinite(number)?String(number):'미확인';}
 function localImage(path){if(typeof path!=='string'||!path.startsWith('/')||path.startsWith('//'))throw new Error('저장 영상 주소를 확인하지 못했습니다.');const url=new URL(path,location.origin);if(url.origin!==location.origin)throw new Error('동일한 저장소의 영상만 재생할 수 있습니다.');return url.pathname+url.search;}
 export function createRecordingReview({request,onChange=()=>{}}){

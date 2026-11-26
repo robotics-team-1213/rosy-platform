@@ -88,12 +88,13 @@ def test_site_goal_previews_server_plan_before_confirm_and_cancels_without_start
         goal_btn = page.locator('ui-button[data-goal-robot-id="rosy_01"]')
         expect(goal_btn).to_be_enabled(timeout=10000)
 
-        pos = page.evaluate("""async () => {
-          const { siteBounds, fitTransform, project } = await import('/console/assets/site-layer.js');
+        pos = page.evaluate("""async (active) => {
+          // The control map fits the active map's places and roads, the same range as the site map (2026-11-26).
+          const { fitBox, mapBounds } = await import('/console/assets/site-map-model.js');
           const r = document.querySelector('#map-canvas').getBoundingClientRect();
-          const b = siteBounds({ maps: [{ map_id: 'site_a', polygon_m: [[0,0],[2,0],[2,1],[0,1]] }] });
-          return project(fitTransform(b, r.width, r.height, 32), 1.5, 0.5);
-        }""")
+          const [px, py] = fitBox(mapBounds(active), r.width, r.height, 32).toPx(1.5, 0.5);
+          return { px, py };
+        }""", ACTIVE_MAP["map"])
 
         goal_btn.click()
         page.locator("#map-canvas").click(position={"x": pos["px"], "y": pos["py"]})
@@ -135,6 +136,6 @@ def test_site_goal_previews_server_plan_before_confirm_and_cancels_without_start
             "/api/fleet/robots/rosy_01/trip",
             "/api/fleet/trips/plan-b2/start",
         ]
-        expect(page.locator("#log")).to_contain_text("차로 주행 시작")
+        expect(page.locator("#log")).to_contain_text("차로 운행 접수")
         assert not errors
         browser.close()

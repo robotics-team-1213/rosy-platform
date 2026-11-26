@@ -15,6 +15,16 @@ const stopped = motor => motor.fault === true && !hardwareFault(motor);
 const stoppedText = motor => `${GROUP[motor.group] || motor.group || "팔로워"} ${JOINT[motor.joint] || motor.joint || "모터"}(ID ${motor.id ?? "—"}) 정지`;
 const number = (value, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : "—";
 const ageText = age => validAge(age) ? evidenceAgeText(Math.round(age * 10) / 10).slice(3) : "관측 시각 없음";
+const calmAge = (age, evidence) => evidence === "fresh" ? ""
+  : validAge(age) ? evidenceAgeText(Math.floor(age)).slice(3) : "관측 시각 없음";
+const putText = (element, text) => {
+  const next = String(text ?? "");
+  if (element.textContent !== next) element.textContent = next;
+};
+const putAttr = (element, name, value) => {
+  const next = String(value);
+  if (element.getAttribute(name) !== next) element.setAttribute(name, next);
+};
 
 export function createMotorHealthState() {
   let snapshot = null, receivedAtMs = null, cacheAgeS = 0, disconnected = false, lastFault = "";
@@ -72,9 +82,9 @@ function node(tag, text, className = "") {
 }
 
 export function renderMotorHealthSummary(root, health) {
-  root.classList.add("motor-health-summary");
-  root.dataset.evidence = health.evidence;
-  root.dataset.severity = health.severity;
+  if (!root.classList.contains?.("motor-health-summary")) root.classList.add("motor-health-summary");
+  if (root.dataset.evidence !== health.evidence) root.dataset.evidence = health.evidence;
+  if (root.dataset.severity !== health.severity) root.dataset.severity = health.severity;
   const warned = health.motors.filter(motor => motor.warnings.length);
   const failed = health.motors.filter(hardwareFault);
   const first = warned[0];
@@ -87,8 +97,36 @@ export function renderMotorHealthSummary(root, health) {
   const cause = health.status === "fault"
     ? [...health.motors.filter(stopped).map(stoppedText), health.stopReasons[0]].filter(Boolean).join(" · ") || health.lastFault
     : warning || (health.lastFault ? `마지막 중단: ${health.lastFault}` : "");
-  root.textContent = [health.label, health.evidenceLabel, faults, count, cause].filter(Boolean).join(" · ");
-  root.title = `${health.ageText}${health.lastFault ? ` · 마지막 중단: ${health.lastFault}` : ""}`;
+  const evidenceLabel = health.label && health.evidenceLabel && health.label.endsWith(health.evidenceLabel)
+    ? ""
+    : health.evidenceLabel;
+  const nextText = [health.label, evidenceLabel, faults, count, cause].filter(Boolean).join(" · ");
+  if (root.textContent !== nextText) root.textContent = nextText;
+  const shownAge = health.evidence === "fresh" ? "실시간" : calmAge(health.age, health.evidence);
+  const nextTitle = `${shownAge}${health.lastFault ? ` · 마지막 중단: ${health.lastFault}` : ""}`;
+  if (root.title !== nextTitle) root.title = nextTitle;
+}
+
+function makeMotorRow() {
+  const row = node("tr");
+  const identity = node("th"); identity.scope = "row";
+  const idEl = node("b"), jointEl = node("span", undefined, "motor-health-sub");
+  identity.append(idEl, jointEl);
+  const error = node("td"), errVal = node("b", undefined, "motor-health-reading"), errSub = node("span", undefined, "motor-health-sub");
+  error.append(errVal, errSub);
+  const pwm = node("td"), pwmVal = node("b", undefined, "motor-health-reading"), pwmSub = node("span", undefined, "motor-health-sub");
+  pwm.append(pwmVal, pwmSub);
+  const tempTd = node("td", undefined, "motor-health-reading");
+  const voltage = node("td"), voltVal = node("b", undefined, "motor-health-reading"), voltSub = node("span", undefined, "motor-health-sub");
+  voltage.append(voltVal, voltSub);
+  const obs = node("td"), obsMain = node("span"), obsWarn = node("span", undefined, "motor-health-sub motor-health-warning");
+  obs.append(obsMain, obsWarn);
+  const stopTag = node("ui-tag", "이 관절에서 정지");
+  stopTag.setAttribute("status", "crit");
+  const faultTag = node("ui-tag");
+  faultTag.setAttribute("status", "crit");
+  row.append(identity, error, pwm, tempTd, voltage, obs);
+  return {row, idEl, jointEl, errVal, errSub, pwmVal, pwmSub, tempTd, voltVal, voltSub, obs, obsMain, obsWarn, stopTag, faultTag};
 }
 
 export function renderMotorHealth(root, health) {
@@ -121,52 +159,69 @@ export function renderMotorHealth(root, health) {
     table.append(caption, head, body); scroll.append(table);
     const note = node("p", "보기 전용 · 이 화면은 모터를 켜거나 오류를 해제하지 않습니다.", "motor-health-note");
     root.replaceChildren(heading, line, fault, warnings, empty, scroll, note);
-    parts = {status, evidence, age, fault, warnings, empty, scroll, body}; views.set(root, parts);
+    parts = {status, evidence, age, fault, warnings, empty, scroll, body, rows: new Map()};
+    views.set(root, parts);
   }
-  root.dataset.evidence = health.evidence;
-  parts.status.textContent = health.label;
-  parts.status.dataset.severity = health.severity;
-  parts.evidence.setAttribute("state", health.evidence);
-  parts.evidence.textContent = health.evidenceLabel;
-  parts.age.textContent = health.ageText;
-  parts.fault.hidden = !health.lastFault;
-  parts.fault.textContent = health.lastFault ? `마지막 중단: ${health.lastFault}` : "";
+  if (root.dataset.evidence !== health.evidence) root.dataset.evidence = health.evidence;
+  putText(parts.status, health.label);
+  if (parts.status.dataset.severity !== health.severity) parts.status.dataset.severity = health.severity;
+  putAttr(parts.evidence, "state", health.evidence);
+  putText(parts.evidence, health.evidenceLabel);
+  const ageHidden = health.evidence === "fresh";
+  if (parts.age.hidden !== ageHidden) parts.age.hidden = ageHidden;
+  putText(parts.age, calmAge(health.age, health.evidence));
+  const faultHidden = !health.lastFault;
+  if (parts.fault.hidden !== faultHidden) parts.fault.hidden = faultHidden;
+  putText(parts.fault, health.lastFault ? `마지막 중단: ${health.lastFault}` : "");
   const warnings = health.motors.filter(motor => motor.warnings.length).map(motor =>
     `${GROUP[motor.group] || motor.group || "팔로워"} ID ${motor.id ?? "—"}: ${motor.warnings.join(" · ")}`);
-  parts.warnings.hidden = !warnings.length;
-  parts.warnings.textContent = warnings.length ? `${health.evidence === "fresh" ? "주의" : "마지막 관측 주의"} · ${warnings.join(" / ")}` : "";
-  parts.empty.hidden = health.motors.length > 0;
-  parts.empty.textContent = health.supportReason;
-  parts.scroll.hidden = health.motors.length === 0;
-  const rows = health.motors.map(motor => {
-    const row = node("tr"); row.dataset.evidence = motor.evidence;
-    row.dataset.severity = stopped(motor) ? "crit" : motor.warnings.length ? "warn" : "neutral";
-    const identity = node("th"); identity.scope = "row";
-    identity.append(node("b", `${GROUP[motor.group] || motor.group || "팔로워"} · ID ${motor.id ?? "—"}`),
-      node("span", JOINT[motor.joint] || motor.joint || "모터", "motor-health-sub"));
-    const error = node("td");
-    error.append(node("b", `${number(motor.error_deg, 2)}°`, "motor-health-reading"),
-      node("span", `목표 ${number(motor.command_raw, 0)} / 현재 ${number(motor.present_raw, 0)} tick`, "motor-health-sub"));
-    const pwm = node("td");
-    pwm.append(node("b", `${number(motor.pwm, 0)} / ${number(motor.pwm_limit, 0)}`, "motor-health-reading"),
-      node("span", `${number(Number.isFinite(motor.pwm_utilization) ? motor.pwm_utilization * 100 : null, 0)}% 사용`, "motor-health-sub"));
-    const temperature = node("td", `${number(motor.temperature_c, 0)} / ${number(motor.temperature_limit_c, 0)} °C`, "motor-health-reading");
-    const voltage = node("td");
-    voltage.append(node("b", `${number(motor.voltage_v)} V`, "motor-health-reading"),
-      node("span", `${number(motor.min_voltage_v)}–${number(motor.max_voltage_v)} V`, "motor-health-sub"));
-    const observation = node("td");
-    observation.append(node("span", `${EVIDENCE[motor.evidence]} · ${ageText(motor.age)}`),
-      node("span", motor.warnings.join(" · "), "motor-health-sub motor-health-warning"));
-    if (stopped(motor)) {
-      const tag = node("ui-tag", "이 관절에서 정지");
-      tag.setAttribute("status", "crit"); observation.append(tag);
-    }
+  const warnHidden = !warnings.length;
+  if (parts.warnings.hidden !== warnHidden) parts.warnings.hidden = warnHidden;
+  putText(parts.warnings, warnings.length ? `${health.evidence === "fresh" ? "주의" : "마지막 관측 주의"} · ${warnings.join(" / ")}` : "");
+  const emptyHidden = health.motors.length > 0;
+  if (parts.empty.hidden !== emptyHidden) parts.empty.hidden = emptyHidden;
+  putText(parts.empty, health.supportReason);
+  const scrollHidden = health.motors.length === 0;
+  if (parts.scroll.hidden !== scrollHidden) parts.scroll.hidden = scrollHidden;
+  const used = new Map();
+  const desired = [];
+  const nextKeys = new Set();
+  health.motors.forEach((motor, idx) => {
+    const base = `${motor.group || "follower"}:${motor.id ?? idx}`;
+    const nth = (used.get(base) || 0) + 1;
+    used.set(base, nth);
+    const key = nth === 1 ? base : `${base}#${nth}`;
+    nextKeys.add(key);
+    let rec = parts.rows.get(key);
+    if (!rec) { rec = makeMotorRow(); parts.rows.set(key, rec); }
+    const sev = stopped(motor) ? "crit" : motor.warnings.length ? "warn" : "neutral";
+    if (rec.row.dataset.evidence !== motor.evidence) rec.row.dataset.evidence = motor.evidence;
+    if (rec.row.dataset.severity !== sev) rec.row.dataset.severity = sev;
+    putText(rec.idEl, `${GROUP[motor.group] || motor.group || "팔로워"} · ID ${motor.id ?? "—"}`);
+    putText(rec.jointEl, JOINT[motor.joint] || motor.joint || "모터");
+    putText(rec.errVal, `${number(motor.error_deg, 2)}°`);
+    putText(rec.errSub, `목표 ${number(motor.command_raw, 0)} / 현재 ${number(motor.present_raw, 0)} tick`);
+    putText(rec.pwmVal, `${number(motor.pwm, 0)} / ${number(motor.pwm_limit, 0)}`);
+    putText(rec.pwmSub, `${number(Number.isFinite(motor.pwm_utilization) ? motor.pwm_utilization * 100 : null, 0)}% 사용`);
+    putText(rec.tempTd, `${number(motor.temperature_c, 0)} / ${number(motor.temperature_limit_c, 0)} °C`);
+    putText(rec.voltVal, `${number(motor.voltage_v)} V`);
+    putText(rec.voltSub, `${number(motor.min_voltage_v)}–${number(motor.max_voltage_v)} V`);
+    putText(rec.obsMain, motor.evidence === "fresh"
+      ? EVIDENCE[motor.evidence]
+      : `${EVIDENCE[motor.evidence]} · ${calmAge(motor.age, motor.evidence)}`);
+    putText(rec.obsWarn, motor.warnings.join(" · "));
+    if (stopped(motor)) { if (rec.stopTag.parentNode !== rec.obs) rec.obs.append(rec.stopTag); }
+    else if (rec.stopTag.parentNode) rec.stopTag.remove();
     if (hardwareFault(motor)) {
-      const fault = node("ui-tag", `하드웨어 오류 ${motor.hardware_error}`);
-      fault.setAttribute("status", "crit"); observation.append(fault);
+      putText(rec.faultTag, `하드웨어 오류 ${motor.hardware_error}`);
+      if (rec.faultTag.parentNode !== rec.obs) rec.obs.append(rec.faultTag);
+    } else if (rec.faultTag.parentNode) {
+      rec.faultTag.remove();
     }
-    row.append(identity, error, pwm, temperature, voltage, observation);
-    return row;
+    desired.push(rec.row);
   });
-  parts.body.replaceChildren(...rows);
+  for (const key of parts.rows.keys()) if (!nextKeys.has(key)) parts.rows.delete(key);
+  if (desired.length !== parts.body.children.length || desired.some((row, i) => parts.body.children[i] !== row)) {
+    parts.body.replaceChildren(...desired);
+  }
 }

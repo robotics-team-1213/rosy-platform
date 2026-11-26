@@ -122,12 +122,14 @@ def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), dro
     def fake_mark_to_arm(rec, cfg, site, px, fz):
         fk_x = 0.10 + droop_mm[0] / 1000.0
         fk_y = 0.18 + droop_mm[1] / 1000.0
-        r_m = 0.0344 if (flip_second_finger and state["idx"] == 1) else 0.022
+        # Keep the bad mark outside the jaw radius even after relabelling.
+        r_m = 0.180 if (flip_second_finger and state["idx"] == 1) else 0.022
         ph = 53.0 + (229.5 if (flip_second_finger and state["idx"] == 1) else 0.0)
         a = math.radians(state["yaw"] + ph)
         x, y = fk_x + true_bias_mm[0] / 1000.0 + r_m * math.cos(a), fk_y + true_bias_mm[1] / 1000.0 + r_m * math.sin(a)
-        if jaw_at and jaw_at[state["idx"]] == "other":  # the other jaw: jaw_side.other_mm at FK yaw + other_deg
-            b = math.radians(state["yaw"] + 79.0)
+        if jaw_at and jaw_at[state["idx"]] == "other":
+            # From the saved reference at 53 degrees, the 79-degree jaw axis points outward.
+            b = math.radians(state["yaw"] + 259.0)
             x, y = x + 0.054 * math.cos(b), y + 0.054 * math.sin(b)
         return x, y
 
@@ -195,8 +197,8 @@ def test_post_eval_common_shift_escalates_and_cal_eval_reflects_lateral_xy(tmp_p
         "site_a": {"place": [0.10, 0.18], "yaw_deg": 0.0, "surface_z": 0.01},
         "site_b": {"place": [0.12, 0.16], "yaw_deg": 0.0, "surface_z": 0.01},
     }
-    cfg, _, cal_data, _, map_sha, _ = _make_setup(tmp_path, sites=sites, saved_bias_mm=(0.0, 0.0))
-    cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(10.0, 2.0))
+    cfg, _, cal_data, _, map_sha, _ = _make_setup(tmp_path, sites=sites, saved_bias_mm=(1.0, -0.5))
+    cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(11.0, 1.5))
     res = cell_post_eval.run_post_eval(cell, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer)
     assert res["verdict"] == "escalate" and "remap" in res["escalated"] and res["applied"] == []
 
@@ -240,7 +242,7 @@ def test_post_eval_twin_yaw_plan_is_no_opposing_pair(tmp_path, monkeypatch):
 
 
 def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monkeypatch):
-    # the other jaw at both yaws: labelled together, its midpoint is the centre (unlabelled: half 74 mm, finger_identity)
+    # Both views see the other jaw. The label correction recovers the reference radius.
     cfg, _, cal_data, _, _, _ = _make_setup(tmp_path, true_bias_mm=(9.0, -4.0), saved_bias_mm=(0.0, 0.0))
     cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), jaw_at=("other", "other"))
     row = cell_post_eval.run_post_eval(cell, cfg, cal_data, commissioning=True, person_at_switch=True, write_library_fn=writer)["results"][0]
@@ -252,6 +254,29 @@ def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monke
     res_sw = cell_post_eval.run_post_eval(cell_sw, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer_sw)
     assert res_sw["results"][0]["reason"] == "jaw_sides_ambiguous" and res_sw["results"][0]["accepted"] is False
     assert res_sw["applied"] == [] and res_sw["lateral_xy"]["verdict"] == "fail"
+
+
+def test_replayed_pivot_refuses_a_fit_beyond_the_live_bias_limit(tmp_path, monkeypatch):
+    import cell_jaw_side
+    from cell_jaw_side_replay import replay_pivot
+
+    cfg, _, calibration, _, _, _ = _make_setup(tmp_path)
+    yaws = (0.0, 45.0, 90.0, 135.0, 180.0)
+    marks = _synth_marks((0.13, 0.18), yaws, radius_m=0.022)
+    for index, yaw in enumerate(yaws):
+        frame = tmp_path / str(index)
+        frame.mkdir()
+        (frame / "jaws.json").write_text(json.dumps({"fk": (0.10, 0.18, 0.08, yaw)}))
+    monkeypatch.setattr(cell_jaw_side, "jaw_places", lambda *args: None)
+    monkeypatch.setattr(cell_jaw_side, "near_tcp", lambda *args: None)
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda _record, _config, _site, pixel, _z: pixel)
+    monkeypatch.setattr("cell_jaw_side_replay._replay_yaw_tries",
+                        lambda frame, *args: (marks[int(frame.name)], None, None, None))
+
+    result = replay_pivot(tmp_path, cfg, calibration, "beltend")
+
+    assert result["result"] == "bias refused: magnitude is past pivot.max_bias_mm"
+    assert result["bias"]["bias_mm"] == [30.0, 0.0]
 
 
 def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):
@@ -355,3 +380,107 @@ def test_cell_calibrate_chains_post_eval_and_depth_verify_and_msac_consensus():
            for x, y in ((0.0, 0.10), (0.04, 0.1002), (0.08, 0.10), (0.0, 0.18), (0.08, 0.18), (0.04, 0.14))]
     kept = cmf.consensus(pts, 5.0)
     assert len(kept) == 6
+
+
+def test_post_eval_droop_z_empty_bias_no_common_shift_and_tcp_marks_candidates(tmp_path, monkeypatch):
+    import joint_jitter
+
+    sites = {
+        "site_a": {"place": [0.10, 0.18], "yaw_deg": 0.0, "surface_z": 0.01},
+        "site_b": {"place": [0.12, 0.16], "yaw_deg": 0.0, "surface_z": 0.01},
+    }
+    cfg, _, cal_data, cal_path, map_sha, _ = _make_setup(tmp_path, sites=sites, saved_bias_mm=(0.0, 0.0))
+    cell, writer, state = _patch_cell(monkeypatch, true_bias_mm=(9.0, -2.0))
+    monkeypatch.setattr(joint_jitter, "settled_state", lambda c, p: {
+        "state": [0.10, 0.18, 0.0755, state["yaw"], 0.0],
+        "target": [0.10, 0.18, 0.0800, state["yaw"], 0.0],
+    })
+    res = cell_post_eval.run_post_eval(cell, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer)
+    # Empty existing bias ([0, 0]) must NOT escalate remap as common_shift; applies visit bias + droop_z_mm and passes!
+    assert res["verdict"] == "pass" and res["lateral_xy"]["lateral_xy_verified"] is True
+    assert len(res["applied"]) == 2
+    assert res["results"][0]["droop_z_mm"] == pytest.approx(-4.5, abs=0.05)
+    assert res["applied"][0]["droop_z_mm"] == pytest.approx(-4.5, abs=0.05)
+    assert res["results"][0]["post_residual_mag_mm"] == 0.0
+
+    # blend_bias_at without pivot derives target_sha from latest region and blends droop_z_mm
+    bdata = {
+        "schema": cpb.SCHEMA,
+        "regions": [
+            {"site": "s", "kind": "visit", "point_m": [0.10, 0.10], "bias_mm": [-20.0, 0.0], "droop_z_mm": 1.0, "map_sha": "old", "measured": "2026-11-18T00:00:00+00:00"},
+            {"site": "s", "kind": "visit", "point_m": [0.10, 0.10], "bias_mm": [4.0, 0.0], "droop_z_mm": -4.0, "map_sha": "cur", "measured": "2026-11-20T00:00:00+00:00"},
+            {"site": "s", "kind": "visit", "point_m": [0.12, 0.10], "bias_mm": [8.0, 0.0], "droop_z_mm": -6.0, "map_sha": "cur", "measured": "2026-11-20T01:00:00+00:00"},
+        ],
+    }
+    blended = cpb.blend_bias_at(bdata, "s", [0.11, 0.10], reach_mm=50.0)
+    assert blended["blended_n"] == 2 and blended["bias_mm"][0] == pytest.approx(6.0, abs=0.1)
+    assert blended["droop_z_mm"] == pytest.approx(-5.0, abs=0.1)
+    with pytest.raises(ValueError, match="droop_z_mm"):
+        cpb.validate_bias({"site": "s", "point_m": [0.1, 0.1], "bias_mm": [0.0, 0.0], "droop_z_mm": 16.0})
+
+    # _finger_candidates with tcp_marks uses jaw_side.other_* and _expected_finger_pixels adds used_bias
+    tcp_cfg = {"calibrate": {"tcp_marks": True}, "cameras": {"top": {}}, "params": {"jaw_side.other_mm": 54.0, "jaw_side.other_deg": 79.0}}
+    cands = cell_post_eval._finger_candidates(None, tcp_cfg)
+    assert len(cands) == 2 and cands[0]["radius_mm"] == 27.0 and cands[1]["phase_deg"] == 79.0
+    seen_arm = []
+    monkeypatch.setattr(cell_pivot, "mark_pixel", lambda rec, c, s, xy, z: seen_arm.append(xy) or (100.0, 100.0))
+    cell_post_eval._expected_finger_pixels(tcp_cfg, {"homography": np.eye(3).tolist()}, "s", (0.10, 0.20), 0.05, 0.0, None, used_bias=(10.0, -5.0))
+    assert seen_arm[0][0] > 0.10 and seen_arm[0][1] < 0.20  # includes +10 mm / -5 mm used_bias before radius offset
+
+
+def test_plan_pick_and_choose_apply_droop_z_and_dest_bias_safely(tmp_path, monkeypatch):
+    import cell_auto_pick_plan as cap
+    import cell_choices
+
+    omx = ROOT / "deploy/robot/omx"
+    cfg = json.loads((omx / "cell-pipeline.example.json").read_text())
+    cfg["plan"] = json.loads((omx / "grasp-plan.example.json").read_text())
+    cfg["sites"]["pinky"] = {"surface_z": 0.010, "yaw_deg": 0.0, "start": [0.072, 0.120], "place": [0.060, 0.090]}
+    cfg["sites"]["belt"] = {"surface_z": 0.020, "yaw_deg": 0.0, "start": [0.060, 0.090], "place": [0.060, 0.090],
+                           "surface_px": [[80, 80], [120, 80], [120, 120], [80, 120]]}
+    monkeypatch.setattr(cap.cp, "write_library", lambda c, pick, place, path: path)
+    entry = {"id": "container-2", "length_mm": 60.0, "width_mm": 30.0, "top_height_mm": 32.4, "grasp": {"jaw_axis_deg_from_long": 90}}
+    obj = {"raw_m": [0.072, 0.120], "long_axis_deg": 0.0, "matched": True, "object": "container-2", "centre_mm": [72, 120]}
+
+    _, pick0, place0, *_ = cap.plan_pick(cfg, "pinky", "belt", (0.060, 0.090), obj, entry, 0, [0.0, 0.0], tmp_path)
+    _, pick1, place1, *_ = cap.plan_pick(
+        cfg, "pinky", "belt", (0.060, 0.090), obj, entry, 0, [0.0, 0.0], tmp_path,
+        droop_z_mm=-5.0, dest_droop_z_mm=-3.0,
+    )
+    assert pick1["z"] == pytest.approx(pick0["z"] + 0.005, abs=1e-4)
+    assert place1["z"] == pytest.approx(place0["z"] + 0.003, abs=1e-4)
+
+    cal_data = {"sites": {"pinky": {"homography": np.eye(3).tolist()}, "belt": {"homography": np.eye(3).tolist()}}}
+    bias_data = {"regions": [
+        {"site": "pinky", "kind": "visit", "point_m": [0.072, 0.120], "bias_mm": [0.0, 0.0], "droop_z_mm": -5.0},
+        {"site": "belt", "kind": "visit", "point_m": [0.060, 0.090], "bias_mm": [10.0, -5.0], "droop_z_mm": -3.0},
+    ]}
+    seen_dest_px = []
+    monkeypatch.setattr(cap, "predicted_pixel", lambda c, cald, s, q: (seen_dest_px.append((s, q)) or (100.0, 100.0)))
+    monkeypatch.setattr(cap, "finger_room", lambda *a, **k: {"margin_mm": 8.0, "free_mm": [12.0, 12.0], "mark_half_mm": 22.0})
+    monkeypatch.setattr(cap.cell_place_fit, "options", lambda c, ds, pxy, ha, ent, pfn, *dv: (pfn(pxy), None) and ([(pxy, 0.0)], None))
+    usable, _ = cap.choose(None, cfg, cal_data, "pinky", "belt", (0.060, 0.090), (0, 0, 640, 480),
+                           [obj], np.zeros((480, 640), np.uint8), [entry], bias_data, cell_choices.Choices(tmp_path / "ch.json"), tmp_path)
+    assert len(usable) == 1
+    assert any(s == "belt" and q == pytest.approx((0.070, 0.085), abs=1e-6) for s, q in seen_dest_px)
+    assert usable[0]["pick"]["z"] == pytest.approx(pick1["z"], abs=1e-4)
+    assert usable[0]["place"]["z"] == pytest.approx(place1["z"], abs=1e-4)
+
+    with pytest.raises(ValueError, match="droop_z_mm"):
+        cap.plan_pick(cfg, "pinky", "belt", (0.060, 0.090), obj, entry, 0, [0.0, 0.0], tmp_path, droop_z_mm=20.0)
+    with pytest.raises(ValueError, match="droop_z_mm"):
+        cap.plan_pick(cfg, "pinky", "belt", (0.060, 0.090), obj, entry, 0, [0.0, 0.0], tmp_path, dest_droop_z_mm=-20.0)
+
+    monkeypatch.setattr(cap, "plan_pick", lambda c, s, ds, xy, o, e, off, b, w, y, py: ("lib.json", {"x": 0}, {"x": 0}, 0.04, 0.0, {}))
+    usable2, _ = cap.choose(None, cfg, cal_data, "pinky", "belt", (0.060, 0.090), (0, 0, 640, 480),
+                            [obj], np.zeros((480, 640), np.uint8), [entry], bias_data, cell_choices.Choices(tmp_path / "ch2.json"), tmp_path)
+    assert len(usable2) == 1
+
+    # Un-mocked cell_place_fit.options returns np.float64 coordinates when surface_px is set; plan_pick must accept them
+    monkeypatch.undo()
+    monkeypatch.setattr(cap.cp, "write_library", lambda c, pick, place, path: path)
+    monkeypatch.setattr(cap, "predicted_pixel", lambda c, cald, s, q: (100.0 + q[0] * 100.0, 100.0 + q[1] * 100.0))
+    monkeypatch.setattr(cap, "finger_room", lambda *a, **k: {"margin_mm": 8.0, "free_mm": [12.0, 12.0], "mark_half_mm": 22.0})
+    usable3, _ = cap.choose(None, cfg, cal_data, "pinky", "belt", (0.060, 0.090), (0, 0, 640, 480),
+                            [obj], np.zeros((480, 640), np.uint8), [entry], bias_data, cell_choices.Choices(tmp_path / "ch3.json"), tmp_path)
+    assert len(usable3) == 1 and type(usable3[0]["place"]["x"]) is float and type(usable3[0]["place"]["y"]) is float

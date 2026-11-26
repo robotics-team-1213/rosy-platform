@@ -679,4 +679,41 @@ def test_report_for_filters_non_contract_wrist_still_and_duplicate_roles(tmp_pat
     assert len(report.frames) == 1 and report.frames[0].role == "top"
 
 
+def test_rows_reads_tail_chunks_backward_stopping_before_since(tmp_path, monkeypatch):
+    import omx_incident_reading as reading
+
+    p = tmp_path / "chunk-status.jsonl"
+    pad = "x" * 1000
+    old_rows = [json.dumps({"t": 10.0, "pad": pad}) for _ in range(90)]
+    old_rows.insert(10, "{corrupt-early")
+    stop_row = json.dumps({"t": 50.0, "msg": "before-since"})
+    boundary_row = json.dumps({"t": 100.0, "pad": pad})
+    tail = "\n".join(old_rows + [stop_row, boundary_row, "{corrupt-tail", json.dumps({"t": 101.0}), json.dumps({"t": 105.0})]) + "\n"
+    p.write_text(tail, encoding="utf-8")
+
+    bytes_read = [0]
+    orig_open = Path.open
+
+    def tracked_open(self, mode="r", *args, **kwargs):
+        f = orig_open(self, mode, *args, **kwargs)
+        if self == p and "b" in mode:
+            orig_read = f.read
+            def counting_read(n=-1):
+                data = orig_read(n)
+                bytes_read[0] += len(data)
+                return data
+            f.read = counting_read
+        return f
+
+    monkeypatch.setattr(Path, "open", tracked_open)
+    got = reading.rows(p, since=100.0)
+    assert [r["t"] for r in got] == [100.0, 101.0, 105.0]
+    assert 0 < bytes_read[0] < p.stat().st_size
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    assert reading.rows(empty, since=10.0) == []
+    assert reading.rows(tmp_path / "missing.jsonl", since=10.0) == []
+
+
 

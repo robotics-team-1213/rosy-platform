@@ -1,10 +1,10 @@
 // D-721 Amendment: 사람 부탁. The system asks a person to do something physical; the person answers here.
 // An answer is a statement only: it starts no motion, releases no stop and passes no check. The row says so.
 // No import from queues.js: queues.js imports the text helpers below.
-import { setOffBy } from "/common/cause-line.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
+import { buildDecisionBox, createDecisionSlotFiller } from "./decision-slot.js";
 
 export const KIND_LABEL = Object.freeze({
   unplug_charger: "충전기 분리", plug_charger: "충전기 연결", move_robot: "로봇 옮기기",
@@ -49,7 +49,8 @@ export function requestsFor(view, robotId) {
 }
 
 export function createPersonRequests({ scope, view, call, log, isOperator, namedReason = () => "" }) {
-  const busy = new Set(), results = new Map(), signatures = new Map();
+  const busy = new Set(), results = new Map();
+  const fill = createDecisionSlotFiller({ focusAttr: "personAnswer" });
   let inFlight = false, unavailable = false;
 
   async function refresh() {
@@ -93,54 +94,22 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
     }
   }
 
-  function button(label, primary, reason, click) {
-    const node = document.createElement("ui-button");
-    node.setAttribute("kind", "quiet");
-    if (primary) node.setAttribute("kind", "primary");
-    node.type = "button";
-    node.textContent = label;
-    setOffBy(node, reason);
-    node.addEventListener("click", scope.guard(click));
-    return node;
-  }
-
   function render() {
     const operator = isOperator(), named = namedReason();
     for (const request of view.stateUnavailable ? [] : (view.personRequests || []).filter((r) => r.state === "open")) {
       const key = `${request.robot_id}|person-${request.id}`;
-      const slot = document.querySelector(`[data-decision-slot="${CSS.escape(key)}"]`);
       const spec = personView(request, { operator, named, busy: busy.has(request.id) });
-      const signature = JSON.stringify([request, spec, results.get(request.id) || null]);
-      if (!slot || (slot.firstElementChild && signatures.get(key) === signature)) continue;
-      const box = document.createElement("div");
-      box.className = "stuck-item";
-      for (const text of spec.lines) {
-        const line = document.createElement("p");
-        line.className = "stuck-resolver";
-        line.textContent = text;
-        box.append(line);
-      }
-      const actions = document.createElement("div");
-      actions.className = "stuck-actions ui-action-bar";
-      actions.setAttribute("role", "group");
-      actions.setAttribute("aria-label", `${request.robot_id} 사람 부탁 답`);
-      const done = button("했어요", true, spec.lock, () => answer(request, "done"));
-      done.dataset.personAnswer = "done";
-      const cannot = button("못 해요", false, spec.lock, () => answer(request, "cannot"));
-      cannot.dataset.personAnswer = "cannot";
-      actions.append(done, cannot);
-      box.append(actions);
-      const last = results.get(request.id);
-      if (last) {
-        const line = document.createElement("p");
-        line.className = "stuck-result";
-        line.dataset.kind = last.kind;
-        line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
-        line.textContent = last.text;
-        box.append(line);
-      }
-      slot.replaceChildren(box);
-      signatures.set(key, signature);
+      const result = results.get(request.id) || null;
+      fill(key, JSON.stringify([request, spec, result]), () => buildDecisionBox({
+        scope,
+        lines: spec.lines,
+        groupLabel: `${request.robot_id} 사람 부탁 답`,
+        buttons: [
+          { label: "했어요", primary: true, reason: spec.lock, dataset: { personAnswer: "done" }, onClick: () => answer(request, "done") },
+          { label: "못 해요", reason: spec.lock, dataset: { personAnswer: "cannot" }, onClick: () => answer(request, "cannot") },
+        ],
+        result,
+      }));
     }
   }
 

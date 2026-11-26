@@ -111,7 +111,7 @@ if package == 'core':
         'status_inputs_path': 'status-inputs.json', 'face_inputs_path': 'face-inputs.json',
     }.items()}
     svc = SimpleNamespace(config={'hardware_probe': paths},
-                          state=SimpleNamespace(snapshot=lambda: SimpleNamespace(robot_id='fixture')))
+                          state=SimpleNamespace(snapshot=lambda: SimpleNamespace(robot_id='fixture', trip_lease=None)))
     now = datetime.now(timezone.utc)
     Path(paths['boot_status_path']).write_text(json.dumps({
         'stage': 'CORE_READY', 'failed_unit': None, 'release_id': 'fixture-release'}))

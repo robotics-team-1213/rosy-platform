@@ -140,8 +140,7 @@ def locked(folder):
 class Coordinator:
     def __init__(self, config, *, gh=None):
         self.config = config
-        self.repo = config["repo"]
-        self.folder = Path(config["state_dir"])
+        self.repo, self.folder = config["repo"], Path(config["state_dir"])
         self.folder.mkdir(parents=True, exist_ok=True)
         self.state_path = self.folder / "state.json"
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
@@ -354,22 +353,19 @@ class Coordinator:
             names += self.online_robots().values()
             release_id = next_release_id(datetime.now(timezone.utc).strftime("%Y.%m.%d"), names)
             # GitHub's atomic ref creation reserves the ID across signing PCs.
-            self.gh("api", "--method", "POST", f"repos/{self.repo}/git/refs",
-                    "-f", f"ref=refs/tags/payload-reserved-{release_id}", "-f", f"sha={sha}")
+            self.gh("api", "--method", "POST", f"repos/{self.repo}/git/refs", "-f", f"ref=refs/tags/payload-reserved-{release_id}", "-f", f"sha={sha}")
             if self.state:
                 self.audit("previous_transaction")
             previous = self.state.get("payload_tarball")
             if (previous is None and self.state.get("phase") == "done"
                     and self.state.get("work_dir") and self.state.get("release_id")):
                 previous = str(Path(self.state["work_dir"]) / f"{self.state['release_id']}.tar.gz")
-            baseline = {key: self.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball",
-                                                         "os_published_sha") if key in self.state}
+            baseline = {k: self.state[k] for k in ("deployed_sha", "delivery_base_sha", "payload_tarball", "os_published_sha") if k in self.state}
             self.state = {}  # attempt budget, canary and PID belong to one release only
             self.save(sha=sha, release_id=release_id, phase="dispatching",
                       dispatched_at=datetime.now(timezone.utc).isoformat(),
                       delivery_policy=policy, reason=reason, base_tarball=previous, **baseline)
-            self.gh("workflow", "run", "build-native-payload.yml", "--repo", self.repo,
-                    "--ref", "main", "-f", f"release_id={release_id}")
+            self.gh("workflow", "run", "build-native-payload.yml", "--repo", self.repo, "--ref", "main", "-f", f"release_id={release_id}")
             self.save(phase="building")
             return self.audit("build_dispatched")
         release_id = self.state["release_id"]
@@ -380,8 +376,7 @@ class Coordinator:
         if self.state["phase"] in ("dispatching", "building"):
             workflow = self.api("actions/workflows/build-native-payload.yml")
             runs = self.api("actions/workflows/build-native-payload.yml/runs?branch=main&event=workflow_dispatch&per_page=100")
-            candidates = [r for r in runs["workflow_runs"]
-                          if r.get("display_title") == f"Pinky payload {release_id}"]
+            candidates = [r for r in runs["workflow_runs"] if r.get("display_title") == f"Pinky payload {release_id}"]
             if not candidates:
                 if dispatch_expired(self.state["dispatched_at"]):
                     self.save(phase="failed", reason="dispatch never registered; review before retry")
@@ -412,16 +407,14 @@ class Coordinator:
                     _, unsigned = prepare.download_unsigned(self.state["build_run"], release_id, work, self.repo, 8)
                     verify_source(unsigned, sha)
                     args = ["--artifact-dir", str(work), "--out-dir", str(work), "--release-id", release_id,
-                            "--repo", self.repo, "--key-name", self.config["key_name"]]
-                    for robot in self.online_robots():
-                        args += ["--robot", robot]
+                            "--repo", self.repo, "--key-name", self.config["key_name"],
+                            *[x for r in self.online_robots() for x in ("--robot", r)]]
                     if prepare.main(args, ssh_runner=self.ssh):
                         raise RuntimeError("payload preparation refused; preserve work folder for review")
                 verify_source(signed, sha)
                 if "delta_prepared" not in self.state:
-                    base = self.state.get("base_tarball")
                     delta = None
-                    if base and Path(base).is_file():
+                    if (base := self.state.get("base_tarball")) and Path(base).is_file():
                         import make_delta_release as delta_builder
                         public_key = ROOT / "deploy/robot/pinky_pro/release/public-keys" / f'{self.config["key_name"]}.pem'
                         delta = delta_builder.transport_delta(Path(base), signed, public_key, work / "transport",
@@ -483,26 +476,32 @@ class Coordinator:
                 if remote["withdrawn"]:
                     self.save(phase="failed", reason="signed rollout withdrawn")
                     return self.audit("withdrawn")
-                if self.state.get("canary_not_started") and (other := self.pick_canary(excluding=host)):
-                    # Only a robot that never started is replaced; one that may have is withdrawn by the publisher.
-                    host = other
-                    self.save(canary_host=other, canary_name=publisher.hostname(other), canary_moved_from=remote["canary"])
+                if self.state.get("canary_not_started"):
+                    try:
+                        online = self.online_robots()
+                    except RuntimeError:
+                        online = {}
+                    if online and all(re.fullmatch(r"\d{4}\.\d{2}\.\d{2}-\d{3}", c) and c > release_id for c in online.values()):
+                        reason = "all online robots already run a newer release"
+                        publisher.upload({**remote, "withdrawn": True, "reason": reason})
+                        self.save(phase="failed", reason=reason)
+                        return self.audit("superseded_on_robots")
+                    if (other := self.pick_canary(excluding=host)):
+                        # Only a robot that never started is replaced; one that may have is withdrawn by the publisher.
+                        host = other
+                        self.save(canary_host=other, canary_name=publisher.hostname(other), canary_moved_from=remote["canary"])
                 if remote["canary"] != [self.state["canary_name"]]:
                     publisher.upload({**remote, "canary": [self.state["canary_name"]]})
                 self.save(canary_not_started=False)  # judged again by this watch
             args = ["--tarball", str(signed), "--canary", host, "--repo", self.repo,
                     "--key-name", self.config["key_name"], "--canary-timeout-min", "30",
-                    "--evidence-dir", str(self.folder / "rollouts")]
-            for robot in self.config["robots"]:
-                if robot != host:
-                    args += ["--robot", robot]
+                    "--evidence-dir", str(self.folder / "rollouts"),
+                    *[x for robot in self.config["robots"] if robot != host for x in ("--robot", robot)]]
             if existing:
                 args += ["--resume"]
             self.save(publisher_pid=os.getpid())
-            delta = ((Path(self.state["delta_path"]), self.state["delta_binding"])
-                     if self.state.get("delta_binding") else None)
-            result = (publish.main(args, ssh_runner=self.ssh, transport_delta=delta) if delta is not None
-                      else publish.main(args, ssh_runner=self.ssh))
+            delta = (Path(self.state["delta_path"]), self.state["delta_binding"]) if self.state.get("delta_binding") else None
+            result = publish.main(args, ssh_runner=self.ssh, **({"transport_delta": delta} if delta is not None else {}))
             if result == 0:
                 self.baseline_initialized = False
                 self.save(phase="done", reason="rollout approved", payload_tarball=str(signed),
@@ -569,8 +568,7 @@ def load_config(path):
     return config
 
 def configure_environment(folder):
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
+    (folder := Path(folder)).mkdir(parents=True, exist_ok=True)
     os.environ.update(TEMP=str(folder), TMP=str(folder), PYTHONDONTWRITEBYTECODE="1")
     tempfile.tempdir = str(folder)
 

@@ -15,14 +15,19 @@ from rosy_account.principal import SitePrincipal
 # Pure compute/preview endpoint without server state mutation.
 VIEWER_MAY_POST = {
     ("POST", "/api/fleet/pipeline/evaluate"),
+    ("POST", "/api/fleet/pipeline/cell-plans/dry-run"),
 }
 SERVICE_MAY_POST = VIEWER_MAY_POST | {
+    ("POST", "/api/fleet/pipeline/cell-tasks"),  # service creates PROPOSED only; /admit stays operator-only
+    ("POST", "/api/fleet/pipeline/cell-plans"),
+    ("POST", "/api/fleet/pipeline/cell-plans/{plan_id}/cancel"),
     ("POST", "/api/fleet/pipeline/cell-quality"),
     ("POST", "/api/fleet/pipeline/cell-handoff"),
     ("POST", "/api/fleet/pipeline/cell-tasks/claim"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/complete"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/bed-observation"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence"),  # bed-confirm stays operator only
+    ("POST", "/api/fleet/pipeline/recovery-tools/invoke"),  # guarded tool dispatch admits authenticated proposers/agents
 }
 
 
@@ -77,6 +82,30 @@ def test_install_pipeline_routes_fails_closed_when_operator_guard_is_missing():
     client = TestClient(app, raise_server_exceptions=False)
     res = client.post("/api/fleet/pipeline/cell-quality", json={}, headers={"Authorization": "Bearer viewer"})
     assert res.status_code == 403
+
+
+def test_cell_owner_relays_only_verified_home_recovery_reason(monkeypatch):
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=service;cell_ab=other")
+    client = TestClient(_app())
+    headers = {"Authorization": "Bearer service"}
+    report = {"fleet_held": True, "local_held": True, "fleet_reason": HOME_RECOVERY_REASON,
+              "local_reason": "previous hold", "incident_ids": ["a" * 32], "unsent_outbox": 0}
+
+    def ingest(**changes):
+        h = {**report, **changes}
+        res = client.post("/api/fleet/pipeline/cell-quality", headers=headers,
+                          json={"arm_holds": {"arm_s": h, "arm_a": h}})
+        assert res.status_code == 200
+        holds = res.json()["arm_holds"]
+        assert not holds["arm_a"]["held"]
+        return holds["arm_s"]["reason"]
+
+    assert ingest() == HOME_RECOVERY_REASON
+    assert ingest(unsent_outbox=1) == "previous hold"
+    assert ingest(fleet_reason="hardware error", local_reason=HOME_RECOVERY_REASON) == "hardware error"
+    assert ingest(fleet_held=None, local_reason=HOME_RECOVERY_REASON) != HOME_RECOVERY_REASON
 
 
 def test_cell_quality_arm_holds_are_raise_only_and_pending_clear_waits_for_ack():

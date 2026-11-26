@@ -15,6 +15,7 @@ except ImportError:
     fcntl = None  # type: ignore[assignment]
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -61,6 +62,68 @@ def log(**row):
     print(json.dumps(row, default=str), flush=True)
 
 
+def _walk_fail(err: OSError) -> None:
+    raise err
+
+
+def _clear_ephemeral_mirror(mirror: Path) -> None:
+    """Remove an autoupdate bare mirror only when it owns zero named refs or working state.
+
+    Host.archive() initializes mirror.git solely as scratch storage for `git fetch --depth 1`
+    and `git archive`. Keeping it between releases accumulates another ~100 MB shallow pack per
+    poll without adding refs or cache hits for distinct commit fetches.
+    """
+    sp = _sp()
+    try:
+        if (
+            mirror.is_symlink()
+            or not mirror.is_dir()
+            or not (mirror / "HEAD").is_file()
+            or not (mirror / "config").is_file()
+            or not (mirror / "objects").is_dir()
+            or (mirror / "index").exists()
+            or (mirror / "worktrees").exists()
+        ):
+            return
+        head = (mirror / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
+        if not head.startswith("ref: "):
+            return
+        refs_dir = mirror / "refs"
+        if refs_dir.is_dir():
+            for root_dir, dirs, files in os.walk(refs_dir, onerror=_walk_fail, followlinks=False):
+                if files or any(os.path.islink(os.path.join(root_dir, d)) for d in dirs):
+                    return
+        packed = mirror / "packed-refs"
+        if packed.is_file():
+            for line in packed.read_text(encoding="utf-8", errors="replace").splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    return
+        clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        clean_env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
+        bare = sp.run(
+            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--bool", "--get", "core.bare"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if bare.returncode != 0 or bare.stdout.strip() != "true":
+            return
+        wt = sp.run(
+            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--get", "core.worktree"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if wt.returncode != 1:
+            return
+        refs = sp.run(
+            ["git", "--no-optional-locks", "--git-dir", str(mirror), "for-each-ref"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if refs.returncode != 0 or refs.stdout.strip() != "":
+            return
+    except (OSError, subprocess.SubprocessError):
+        return
+    shutil.rmtree(mirror, ignore_errors=True)
+
+
 class Host:
     """Everything that touches git, GitHub, processes and devices; replaced by fakes in tests."""
 
@@ -77,9 +140,23 @@ class Host:
         ).stdout.split()
         return out[0]
 
+    def _github_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = ""
+        if tok_path := self.cfg.get("github_token_file"):
+            try:
+                tok = Path(os.path.expanduser(str(tok_path))).read_text(encoding="utf-8").strip()
+            except OSError:
+                tok = ""
+        if not tok:
+            tok = os.environ.get("GITHUB_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        return headers
+
     def checks(self, sha: str) -> dict:
         url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
-        request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        request = urllib.request.Request(url, headers=self._github_headers())
         runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
         return {
             run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug")) for run in runs
@@ -88,7 +165,7 @@ class Host:
     def _api(self, path: str) -> dict:
         request = urllib.request.Request(
             f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
-            headers={"Accept": "application/vnd.github+json"},
+            headers=self._github_headers(),
         )
         return json.load(urllib.request.urlopen(request, timeout=30))
 
@@ -100,50 +177,19 @@ class Host:
 
     def build_env(self, lock: Path | None, target: Path) -> None:
         sp = _sp()
+        uv = os.path.expanduser(self.cfg["uv"]) if self.cfg.get("uv") else ""
         if lock is None:  # a service on the host's own packages
-            make = (
-                [os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
-                if self.cfg.get("uv")
-                else [self.cfg["base_python"], "-m", "venv"]
-            )
+            make = [uv, "venv", "-q", "--python", self.cfg["base_python"]] if uv else [self.cfg["base_python"], "-m", "venv"]
             sp.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
-        if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "venv",
-                    "-q",
-                    "--python",
-                    self.cfg["base_python"],
-                    *system,
-                    str(target),
-                ],
-                check=True,
-                timeout=300,
-            )
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "pip",
-                    "install",
-                    "-q",
-                    "--python",
-                    str(target / "bin" / "python"),
-                    "-r",
-                    str(lock),
-                ],
-                check=True,
-                timeout=3000,
-            )
+        if uv:  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
+            sp.run([uv, "venv", "-q", "--python", self.cfg["base_python"], *system, str(target)], check=True, timeout=300)
+            strategy = ["--index-strategy", "unsafe-best-match"] if "--extra-index-url" in lock.read_text(encoding="utf-8") else []
+            sp.run([uv, "pip", "install", "-q", "--python", str(target / "bin" / "python"), *strategy, "-r", str(lock)], check=True, timeout=3000)
             return
         sp.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
-        sp.run(
-            [str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
-            check=True,
-            timeout=3000,
-        )
+        sp.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)], check=True, timeout=3000)
 
     def running(self, units) -> list:
         """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by
@@ -177,10 +223,13 @@ class Host:
             if not units:
                 return complete
             if self.cfg.get("sequential"):
-                for verb, ordered in (("stop", reversed(units)), ("start", units)):
-                    for unit in ordered:
-                        if sp.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0:
-                            return False
+                # every unit is tried: 2026-11-26 a rollback stopped at arm_b's observer (its session held the bus)
+                # and left arm_s's observer, the observation bridge and the Arm S status bridge down for 15 min
+                failed = [f"{verb} {unit}" for verb, ordered in (("stop", list(reversed(units))), ("start", units)) for unit in ordered
+                          if sp.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0]
+                if failed:
+                    log(step="units_failed", units=failed)
+                    return False
             elif sp.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             _tm().sleep(self.cfg.get("settle", 10))
@@ -195,23 +244,27 @@ class Host:
     def archive(self, sha: str, paths, target: Path) -> None:
         sp = _sp()
         mirror = Path(self.cfg["root"]) / "mirror.git"
+        _clear_ephemeral_mirror(mirror)
         if not mirror.exists():
             sp.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
-        for stale in mirror.glob("*.lock"):
-            stale.unlink()
-        sp.run(
-            ["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
-            check=True,
-            timeout=600,
-        )
-        data = sp.run(
-            ["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
-            capture_output=True,
-            check=True,
-            timeout=600,
-        ).stdout
-        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-            tar.extractall(target, filter="data")
+        try:
+            for stale in mirror.glob("*.lock"):
+                stale.unlink()
+            sp.run(
+                ["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
+                check=True,
+                timeout=600,
+            )
+            data = sp.run(
+                ["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
+                capture_output=True,
+                check=True,
+                timeout=600,
+            ).stdout
+            with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+                tar.extractall(target, filter="data")
+        finally:
+            _clear_ephemeral_mirror(mirror)
 
     def smoke(self, release: Path, python: Path) -> bool:
         try:
@@ -273,9 +326,11 @@ class Host:
         return False
 
     def follower_torque_off(self, release: Path, python: Path) -> bool:
-        observers = self.cfg.get("observers")
-        if observers:
-            return all(self._observed_torque_off(o) for o in observers)
+        return self.follower_idle_reason(release, python) is None
+
+    def follower_idle_reason(self, release: Path, python: Path) -> str | None:
+        if observers := self.cfg.get("observers"):
+            return next((r for o in observers if (r := self._observer_defer_reason(o)) is not None), None)
         code = (
             "import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
             f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
@@ -283,22 +338,42 @@ class Host:
             "finally:\n    bus.close()\nprint('torque', sum(on))"
         )
         done = _sp().run([str(python), "-c", code], cwd=release, capture_output=True, text=True, timeout=60)
-        return done.returncode == 0 and done.stdout.strip() == "torque 0"
+        return None if done.returncode == 0 and done.stdout.strip() == "torque 0" else "follower_torque_not_off"
+
+    def _observer_defer_reason(self, observer: dict) -> str | None:
+        """Classify an observer snapshot: missing, stale, invalid, hardware_error, or torque_not_off."""
+        try:
+            raw_bytes = Path(observer["health"]).read_bytes()
+        except (OSError, KeyError, TypeError):
+            return "observer_missing"
+        try:
+            health = json.loads(raw_bytes.decode("utf-8"))
+            if not isinstance(health, dict):
+                return "observer_invalid"
+            motors, expected, obs_at = health["motors"], health["expected_motor_count"], health["observed_at"]
+            obs_f = float("nan") if isinstance(obs_at, bool) or not isinstance(obs_at, (int, float)) else float(obs_at)
+            if (not isinstance(motors, list) or type(expected) is not int or expected <= 0
+                    or len(motors) != expected or not math.isfinite(obs_f)):
+                return "observer_invalid"
+        except (UnicodeDecodeError, ValueError, KeyError, TypeError, OverflowError):
+            return "observer_invalid"
+        now = _tm().time()
+        if now - obs_f > float(self.cfg.get("observer_max_age_s", 10)) or obs_f - now > 2.0:
+            return "observer_stale"
+        if any(not isinstance(m, dict) for m in motors):
+            return "observer_invalid"
+        status = health.get("status")
+        if status == "fault" or any(
+            m.get("fault") is True or ("hardware_error" in m and (type(m["hardware_error"]) is not int or m["hardware_error"] != 0))
+            for m in motors
+        ):
+            return "follower_hardware_error"
+        if "status" in health and status != "active":
+            return "observer_stale"
+        return None if all(m.get("torque_enabled") is False for m in motors) else "follower_torque_not_off"
 
     def _observed_torque_off(self, observer: dict) -> bool:
-        """The observer's own fresh motor-health snapshot: every expected motor reports torque OFF."""
-        try:
-            health = json.loads(Path(observer["health"]).read_text(encoding="utf-8"))
-            motors = health["motors"]
-            fresh = _tm().time() - float(health["observed_at"]) <= float(self.cfg.get("observer_max_age_s", 10))
-            return (
-                fresh
-                and isinstance(motors, list)
-                and len(motors) == health["expected_motor_count"] > 0
-                and all(m.get("torque_enabled") is False for m in motors)
-            )
-        except (OSError, ValueError, KeyError, TypeError):
-            return False
+        return self._observer_defer_reason(observer) is None
 
     def follower_missing(self) -> bool:
         return not self.cfg.get("observers") and not os.path.exists(self.cfg["follower_device"])

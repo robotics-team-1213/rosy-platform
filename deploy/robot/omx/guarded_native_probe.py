@@ -32,12 +32,62 @@ class TelemetryReadError(ValueError):
     recoverable_telemetry = True
 
 
+HW_ERROR_VALID_MASK = 0x3D  # XL430/XL330 Hardware_Error_Status bits 0,2,3,4,5 (bits 1,6,7 are always 0 in firmware)
+
+
+def drain_rx(bus) -> None:
+    """Best-effort serial RX clear after a Protocol 2.0 framing/transaction desync."""
+    clear = getattr(getattr(bus, "port_handler", None), "clearPort", None)
+    if callable(clear):
+        try:
+            clear()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def sync_read_torque_enable(bus) -> dict:
+    """Read Torque_Enable across motors, draining RX and retrying once if Write-Ack CRC bytes leak into readback."""
+    res = dict(bus.sync_read("Torque_Enable", normalize=False, num_retry=2))
+    if any(not (type(v) is int and v in (0, 1)) for v in res.values()):
+        drain_rx(bus)
+        res = dict(bus.sync_read("Torque_Enable", normalize=False, num_retry=2))
+    return res
+
+
+def check_sync_hw_status(follower, errors, read_retry: int) -> None:
+    """Validate sync_read Hardware_Error_Status dict, draining RX and confirming real fault bits via unicast."""
+    if not isinstance(errors, dict):
+        raise TelemetryReadError("missing or non-finite joint sample")
+    if any(name in errors and not is_valid_hw_status(errors.get(name)) for name in NAMES):
+        drain_rx(follower)
+        raise TelemetryReadError(f"desynced hardware status {errors}")
+    for name in NAMES:
+        if name not in errors:
+            continue
+        val = errors[name]
+        if not is_hardware_fault(val):
+            continue
+        if getattr(follower, "port_handler", None) is not None and callable(getattr(follower, "read", None)):
+            drain_rx(follower)
+            confirm = follower.read("Hardware_Error_Status", name, num_retry=read_retry)
+            if confirm == 0:
+                raise TelemetryReadError(f"{name}: transient desynced hardware status {errors}")
+            if not is_valid_hw_status(confirm):
+                drain_rx(follower)
+                raise TelemetryReadError(f"{name}: invalid hardware status {confirm}")
+            val = confirm
+        raise ValueError(f"{name}: hardware error ({val}; all={errors})")
+    if any(name not in errors for name in NAMES):
+        drain_rx(follower)
+        raise TelemetryReadError(f"desynced hardware status {errors}")
+
+
 def is_valid_hw_status(val) -> bool:
-    return type(val) is int and 0 <= val <= 255
+    return type(val) is int and 0 <= val <= 255 and (val & ~HW_ERROR_VALID_MASK) == 0
 
 
 def is_hardware_fault(val) -> bool:
-    return type(val) is int and 0 < val <= 255
+    return type(val) is int and 0 < val <= 255 and (val & ~HW_ERROR_VALID_MASK) == 0
 
 
 def is_recoverable_telemetry(exc: BaseException) -> bool:
@@ -68,7 +118,7 @@ def probe_hardware_errors(motion) -> None:
         except (OSError, TimeoutError, ConnectionError):
             continue
         if is_hardware_fault(val):
-            raise ValueError(f"{name}: hardware error")
+            raise ValueError(f"{name}: hardware error ({val})")
 
 
 def _last_hold_telemetry(motion, hold: dict, now: float) -> float:

@@ -16,6 +16,8 @@ export function guideAttention(guide, robotId) {
     .map((f) => ({ severity: f.severity, text: `: ${f.text}`, code: f.code, target: f.target || null }));
 }
 
+const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
+
 function compactPoseLabel(row) {
   if (!row.pose) return `${row.robot_id} · 위치 모름`;
   if (row.online === false) return `${row.robot_id} · 연결 끊김`;
@@ -78,6 +80,19 @@ function projectToPoly(poly, px, py) {
     acc += segLen;
   }
   best.totalLen = acc;
+  return best;
+}
+
+export function nearestLaneHeading(siteMap, point) {
+  if (!Array.isArray(siteMap?.edges) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  let best = null;
+  for (const e of siteMap.edges) {
+    if (!Array.isArray(e.polyline) || e.polyline.length < 2) continue;
+    const sp = projectToPoly(e.polyline, point.x, point.y);
+    if (sp.dist > Math.max(Number(e.width_m) || 0.2, 0.25) || (best && sp.dist >= best.dist)) continue;
+    const [x0, y0] = e.polyline[sp.segIdx], [x1, y1] = e.polyline[sp.segIdx + 1];
+    if (Math.hypot(x1 - x0, y1 - y0) >= 1e-6) best = { yaw: Math.atan2(y1 - y0, x1 - x0), dist: sp.dist };
+  }
   return best;
 }
 
@@ -286,11 +301,14 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     ctx.restore();
     if (!live) {
-      drawChip(ctx, null, baseP.x, baseP.y - 12, `${anc.target_id} · 위치 모름`, "");
-    } else if (labelsOn || isHoveredOmx) {
+      const chipText = isSelectedOmx
+        ? `${anc.target_id.toUpperCase()} (${fmtCoord(anc.base_x)}, ${fmtCoord(anc.base_y)} m) · 위치 모름`
+        : `${anc.target_id} · 위치 모름`;
+      drawChip(ctx, null, baseP.x, baseP.y - 12, chipText, isSelectedOmx ? "warn" : "");
+    } else if (labelsOn || isSelectedOmx) {
       const deg = typeof anc.head_yaw === "number" ? ` ${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "";
-      const shortText = isHoveredOmx
-        ? `${anc.target_id.toUpperCase()} · (${(anc.head_x ?? anc.base_x).toFixed(2)}, ${(anc.head_y ?? anc.base_y).toFixed(2)}m)${deg}`
+      const shortText = isSelectedOmx
+        ? `${anc.target_id.toUpperCase()} · (${fmtCoord(anc.head_x ?? anc.base_x)}, ${fmtCoord(anc.head_y ?? anc.base_y)} m)${deg}`
         : `${anc.target_id.toUpperCase()}${deg}`;
       drawChip(ctx, null, headP.x, headP.y - 12, shortText, isSelectedOmx ? "warn" : "");
     }
@@ -316,10 +334,9 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     const goalX = typeof selectedGoal?.x === "number" ? selectedGoal.x : (densePts.length ? densePts[densePts.length - 1][0] : null);
     const goalY = typeof selectedGoal?.y === "number" ? selectedGoal.y : (densePts.length ? densePts[densePts.length - 1][1] : null);
-    if (planRobot?.pose && goalX !== null && Date.now() - (activeRouteSource.at || 0) > 3500 && Math.hypot(planRobot.pose.x - goalX, planRobot.pose.y - goalY) < 0.055) {
-      if (selectedGoal) selectedGoal.statusText = "도착 완료";
-    }
-    const routeColor = selectedGoal?.status === "PREVIEW" ? warnCol : goalCol;
+    const dispatched = selectedGoal?.status === "ARRIVED" || selectedGoal?.status === "DISPATCHED" || selectedGoal?.status === "BERTHING";
+    const blocked = selectedGoal?.status === "BLOCKED";
+    const routeColor = blocked ? css("--status-crit") : dispatched ? goalCol : warnCol;
     ctx.save();
     if (densePts.length >= 2) {
       // High-contrast dark halo underneath selected road polyline
@@ -433,7 +450,8 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
         const lenStr = typeof lenVal === "number" ? ` · ${lenVal.toFixed(2)}m` : "";
         const statusStr = selectedGoal?.statusText ? ` · ${selectedGoal.statusText}` : "";
         const goalTitle = selectedGoal?.label || `(${goalX.toFixed(2)}, ${goalY.toFixed(2)})`;
-        drawChip(ctx, null, gp.x, gp.y - 18, `TARGET · ${goalTitle}${lenStr}${viaStr}${statusStr}`, "good");
+        const phase = selectedGoal?.status === "ACCEPTED" ? "실행 상태" : selectedGoal?.status === "ARRIVED" ? "도착" : blocked ? "출발 보류" : dispatched ? "접수된 목표" : selectedGoal?.status === "UNCONFIRMED" ? "접수 확인 불가" : "출발 전";
+        drawChip(ctx, null, gp.x, gp.y - 18, `${phase} · ${goalTitle}${statusStr}${lenStr}${viaStr}`, blocked ? "bad" : dispatched ? "good" : "warn");
       }
     }
     ctx.restore();
@@ -532,13 +550,12 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     ctx.restore();
 
-    if (labelsOn || isHoveredRobot) {
-      const fmtHover = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
-      const labelText = isHoveredRobot && row.pose
-        ? `${row.robot_id} (${fmtHover(row.pose.x)}, ${fmtHover(row.pose.y)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
+    if (labelsOn || isFocused) {
+      const labelText = (isHoveredRobot || isFocused) && row.pose
+        ? `${row.robot_id} (${fmtCoord(row.pose.x)}, ${fmtCoord(row.pose.y)} m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
         : isFocused ? poseLabel(row) : compactPoseLabel(row);
       drawChip(ctx, null, p.x, p.y - ring - 16, labelText, worst);
     }
   }
-  window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };
+  if (typeof window !== "undefined") window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };
 }

@@ -1,5 +1,4 @@
 """Heights in the cell from the top depth camera, in the colour view's pixels: no ruler, no touch.
-
 2026-11-01: a person's ruler, closed-jaw touches and hand-picked depth boxes all failed to give the belt's height.
 The touches stopped at the planning floor, and a 16 g container slid away from the jaws without a contact. So the
 heights come from the depth image instead:
@@ -8,7 +7,6 @@ heights come from the depth image instead:
   colour image's edges lie closest to the height steps (`align_edges`). The object mask alone (`align`) slides
   along a row of objects standing in one line, as the cell's did on 2026-11-01;
 - an arm's FK zero is the top of the plate it stands on, read in a ring around its base.
-
 The D435 runs without its SDK here (USB 3.0, v4l2 Z16); its intrinsics are nominal (`FOCAL_PX`).
 
     python cell_depth.py --depth d.raw --colour c.jpg --px 345,80 --px 330,320   # read only
@@ -16,6 +14,7 @@ The D435 runs without its SDK here (USB 3.0, v4l2 Z16); its intrinsics are nomin
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -27,7 +26,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-
 
 MIN_CAPTURE_S = 13 / 6 + 1.5  # skip 12 + 1 frame at 6 fps: 2.4-2.6 s on the cell; its 11-13 copy's 1.8 s always gave None
 
@@ -47,26 +45,28 @@ def _run_v4l2_z16(cmd: list[str], timeout_s: float, **kwargs):
 
 def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None,
                           *, timeout_s: float = 12.0) -> np.ndarray | None:
-    """Capture a fresh warmed 640x480 Z16 frame; never reuse old raw on capture failure."""
-    raw_path = Path(out_raw) if out_raw is not None else Path(tempfile.gettempdir()) / "rosy-top-depth-z16.raw"
+    """Capture a fresh warmed 640x480 Z16 frame under depth lock; never reuse old raw on failure."""
+    import cell_depth_lock
+
     if not Path(dev_path).exists():
         return None
     try:
-        raw_path.unlink(missing_ok=True)
-    except OSError:
+        with cell_depth_lock.hold_depth_lock(timeout_s=float(timeout_s)):
+            ctx = tempfile.TemporaryDirectory(prefix="rosy-top-depth-") if out_raw is None else contextlib.nullcontext()
+            with ctx as tmpdir:
+                raw_path = Path(out_raw) if out_raw is not None else Path(tmpdir) / "depth.raw"
+                raw_path.unlink(missing_ok=True)
+                captured = _run_v4l2_z16(
+                    ["v4l2-ctl", "-d", dev_path, "--set-fmt-video=width=640,height=480,pixelformat=Z16",
+                     "--set-parm=6", "--stream-mmap=3", "--stream-skip=12", "--stream-count=1", f"--stream-to={raw_path}"],
+                    float(timeout_s), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
+                    return None
+                arr = np.fromfile(raw_path, dtype=np.uint16)
+                return arr.reshape(480, 640) if float((arr > 0).mean()) >= 0.40 else None
+    except (TimeoutError, OSError, subprocess.SubprocessError):
         return None
-    try:
-        captured = _run_v4l2_z16(["v4l2-ctl", "-d", dev_path,
-                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
-                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
-                                  f"--stream-to={raw_path}"], float(timeout_s),
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
-        return None
-    arr = np.fromfile(raw_path, dtype=np.uint16)
-    return arr.reshape(480, 640) if float((arr > 0).mean()) >= 0.40 else None
 
 
 def capture_top_depth_z16_receipt(dev_path: str, out_raw: Path, *, timeout_s: float = 12.0) -> tuple[np.ndarray, dict] | None:
@@ -91,7 +91,6 @@ def _sync_parent(path: Path) -> None:
             os.fsync(fd)
         finally:
             os.close(fd)
-
 
 def _capture_top_depth_z16_receipt_locked(dev_path: str, out_raw: Path, timeout_s: float) -> tuple[np.ndarray, dict] | None:
     raw_path = Path(out_raw)
@@ -211,22 +210,24 @@ def _ransac(pts, tol_mm: float, tries: int, rng):
 
 
 def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0, share: float = 0.25):
-    """(unit normal toward the camera, offset): the cell's table, refitted on its points. The view also holds a lower
-    surface about 60 mm under the table, sometimes larger than it: of the two largest parallel planes the higher one is
-    the table when it holds `share` of the larger's points (2026-11-01: the pallet read 75 mm in one frame, 10 in the
-    next, as the plane flipped between them)."""
+    """Fit the table plane, preferring a higher parallel surface with `share` of the larger plane's points."""
     h, w = depth.shape
     ys, xs = np.nonzero(depth > 0)
     ys, xs = ys[::7], xs[::7]
     z = depth[ys, xs].astype(float)
     pts = np.column_stack(((xs - w / 2) * (z / FOCAL_PX), (ys - h / 2) * (z / FOCAL_PX), z))
     rng = np.random.default_rng(seed)
-    (n, a), k = _ransac(pts, tol_mm, tries, rng)
+    primary, k = _ransac(pts, tol_mm, tries, rng) if len(pts) >= 3 else (None, -1)
+    if primary is None:
+        raise ValueError("the D435 frame has no usable table plane")
+    n, a = primary
     rest = pts[np.abs(pts @ n - float(a @ n)) >= tol_mm]
     if len(rest) >= 3:
-        (n2, a2), k2 = _ransac(rest, tol_mm, tries, rng)
-        if k2 >= share * k and (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
-            n, a = n2, a2
+        secondary, k2 = _ransac(rest, tol_mm, tries, rng)
+        if secondary is not None and k2 >= share * k:
+            n2, a2 = secondary
+            if (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
+                n, a = n2, a2
     near = pts[np.abs(pts @ n - float(a @ n)) < tol_mm]
     _, _, vt = np.linalg.svd(np.c_[near, np.ones(len(near))], full_matrices=False)
     normal, offset = vt[-1][:3], vt[-1][3]
@@ -328,7 +329,7 @@ def align_edges(colour, heights, scales=np.arange(0.55, 0.86, 0.01), reach: int 
 
 def height_at(heights, to_depth, px, r: int = 4) -> float:
     """Median height (mm) within `r` depth pixels of where colour pixel `px` lands."""
-    x, y = np.round(to_depth @ [px[0], px[1], 1.0]).astype(int)
+    x, y = np.round((to_depth @ [px[0], px[1], 1.0])[:2]).astype(int)
     patch = heights[max(0, y - r):y + r + 1, max(0, x - r):x + r + 1]
     return float(np.nanmedian(patch)) if np.isfinite(patch).any() else float("nan")
 
@@ -393,7 +394,6 @@ def main(argv=None) -> int:
            "plates_mm": {b: plate_top(heights, m, [float(v) for v in b.split(",")]) for b in args.base}}
     print(json.dumps(out))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

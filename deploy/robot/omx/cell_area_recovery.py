@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from cell_control_core import apply_wrist_xy_step
+from cell_control_core import apply_wrist_xy_step, arm_workspace_xy_bounds
 
 
 def recover_hover(run_cmd, grip_open_val: float, steps_log: list[dict], *, park_after: bool = False) -> bool:
@@ -77,9 +77,9 @@ def diagnose_and_recover_pick(
     area_name = str(cur_directive["pick"].get("area_id") or cur_directive["pick"].get("area") or "pallet")
     is_live = bool((cur_directive.get("execution") or {}).get("live_perceived"))
     min_grasp_z = (
-        -0.0585
-        if area_name in ("belt", "beltend")
-        else (-0.0300 if area_name in ("ship", "pinky") else ({1: 0.0062 if is_live else 0.0051, 2: 0.0275, 3: 0.0560}.get(tier, 0.0051)))
+        -0.0585 if area_name in ("belt", "beltend")
+        else (-0.0300 if area_name in ("ship", "pinky") else (0.005 if area_name == "floor"
+              else {1: 0.0062 if is_live else 0.0051, 2: 0.0275, 3: 0.0560}.get(tier, 0.0051)))
     )
     new_x, new_y, new_z = cur_x, cur_y, cur_z
     pick_yaw = float(cur_directive["pick"].get("yaw_deg", -90.0))
@@ -95,6 +95,7 @@ def diagnose_and_recover_pick(
             or ((debate_decision.get("kinesthetic") or {}).get("verdict") == "reinsert")
         )
     )
+    x_lo = arm_workspace_xy_bounds(str(cur_directive.get("arm_id") or "arm_b"))[0]
     if has_debate_shift and not desc_contact:
         from cell_control_core import clamp_workspace_xy
 
@@ -114,7 +115,7 @@ def diagnose_and_recover_pick(
         reason = f"belt_centered_recovery: x {cur_x} -> {new_x}, z {cur_z} -> {new_z}"
     elif desc_contact:
         col = int(cur_directive["pick"].get("col") or 1)
-        new_x = round(max(0.055, min(0.234, cur_x + (-0.0012 if col == 1 else -0.0018))), 5)
+        new_x = round(max(x_lo, min(0.234, cur_x + (-0.0012 if col == 1 else -0.0018))), 5)
         contact_z = r_desc.get("contact_z") if r_desc else None
         new_z_val = float(contact_z) + 0.0040 if contact_z is not None else cur_z + 0.0018
         new_y, new_z = round(cur_y, 5), round(max(min_grasp_z, new_z_val), 5)
@@ -133,14 +134,15 @@ def diagnose_and_recover_pick(
         new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
         reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
     elif is_live:
-        step_x = 0.0050 if cur_x < 0.120 else (0.0180 if cur_x < 0.205 else -0.0040)
-        new_x = round(cur_x + (step_x if attempt % 2 == 0 else -step_x), 5)
+        step_x = 0.0050 if cur_x < 0.205 else -0.0040
+        ws_x_lo, ws_x_hi, _ = arm_workspace_xy_bounds(str(cur_directive.get("arm_id") or "arm_b"))
+        new_x = round(max(ws_x_lo, min(ws_x_hi, cur_x + (step_x if attempt % 2 == 0 else -step_x))), 5)
         reason = f"live_local_recovery: x {cur_x} -> {new_x}"
     else:
         col = int(cur_directive["pick"].get("col") or 3)
         canonical_x = {1: 0.1335, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
         if cur_x < 0.115:
-            new_x = round(max(0.055, cur_x + 0.0025), 5)
+            new_x = round(max(x_lo, cur_x + 0.0025), 5)
         elif 0.002 <= abs(cur_x - canonical_x) <= 0.012:
             new_x = round(canonical_x, 5)
         elif cur_x > 0.210:

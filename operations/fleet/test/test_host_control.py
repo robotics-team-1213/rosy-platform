@@ -46,11 +46,16 @@ def _code(call):
 
 def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
-    assert set(hosts) == {"site", "ai", "model"}
+    assert set(hosts) == {"site", "ai", "model", "cell"}
     assert "rosy-review-v13.service" in hosts["model"]["units"]
-    assert hosts["model"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "restart-unit"]
-    assert hosts["ai"]["actions"][:4] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
-    assert hosts["site"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit"]
+    assert hosts["model"]["actions"] == [
+        "reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "root-maintenance", "restart-unit"]
+    assert hosts["ai"]["actions"][:5] == [
+        "reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "root-maintenance"]
+    assert hosts["site"]["actions"] == [
+        "reboot", "reboot-over-jobs", "cancel-reboot", "root-maintenance", "restart-unit"]
+    assert hosts["cell"]["actions"] == [
+        "reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "root-maintenance"]
     assert "docker.service" in hosts["site"]["units"]
     assert "rosy-situation.service" in hosts["ai"]["units"]
     assert not any(unit.startswith("pinky-") for row in hosts.values() for unit in row["units"])
@@ -102,10 +107,13 @@ def test_a_person_restarts_exactly_the_user_units_services_yaml_flags():
 
 
 def test_only_the_lab_pcs_clean_storage_and_never_with_a_unit():
-    for host in ("ai", "model"):
+    for host in ("ai", "model", "cell"):
         assert decide(host, "clean-storage", None, confirmed=True)["argv"] == ("clean-storage",)
         assert _code(lambda: decide(host, "clean-storage", "docker.service", confirmed=True)) == "UNIT_NOT_ALLOWED"
     assert _code(lambda: decide("site", "clean-storage", None, confirmed=True)) == "ACTION_NOT_ALLOWED"
+    for host in ("site", "ai", "model", "cell"):
+        assert decide(host, "root-maintenance", None, confirmed=True)["argv"] == ("root-maintenance",)
+        assert _code(lambda: decide(host, "root-maintenance", "docker.service", confirmed=True)) == "UNIT_NOT_ALLOWED"
 
 
 def test_reboot_rejects_a_unit_and_an_unconfirmed_call():
@@ -357,8 +365,27 @@ def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path, monkeypatc
     assert missing.json()["detail"]["code"] == "HOST_HELPER_UNAVAILABLE"
     listed = client.get("/api/fleet/hosts")
     assert listed.status_code == 200
-    assert {row["host"] for row in listed.json()["hosts"]} == {"site", "ai", "model"}
+    assert {row["host"] for row in listed.json()["hosts"]} == {"site", "ai", "model", "cell"}
     assert listed.json()["guard"] is None and listed.json()["drift"] is None
+
+
+def test_route_accepts_root_maintenance_on_site_and_cell():
+    class Recording:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, host, argv):
+            self.calls.append((host, argv))
+            return {"ok": True, "code": "ACCEPTED", "output": "accepted"}
+
+    helper = Recording()
+    client = _client(helper)
+    for host in ("site", "cell"):
+        res = client.post(f"/api/fleet/hosts/{host}/control", json={
+            "action": "root-maintenance", "unit": None, "operator_confirmed": True})
+        assert res.status_code == 200
+        assert res.json()["code"] == "ACCEPTED"
+    assert helper.calls == [("site", ("root-maintenance",)), ("cell", ("root-maintenance",))]
 
 
 def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_path, monkeypatch):
@@ -745,6 +772,19 @@ def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_pat
     (tmp_path / "conf" / "role").write_text("site\n")
     assert helper("clean-storage") == 2
     assert (tmp_path / "calls").read_text().count(" start rosy-test-storage.service") == 1
+
+
+@posix
+@pytest.mark.parametrize("role", ["site", "ai", "model", "cell"])
+def test_helper_starts_root_maintenance_across_all_roles_and_rejects_extra_unit(tmp_path, role):
+    helper = _helper_copy(tmp_path, role)
+    _systemd_like(tmp_path, "loaded")
+    assert helper("root-maintenance") == 0
+    calls = (tmp_path / "calls").read_text()
+    assert "systemctl --no-block start rosy-root-maintenance.service" in calls
+    assert helper("root-maintenance", "docker.service") == 2
+    _systemd_like(tmp_path, "not-found")
+    assert helper("root-maintenance") == 5
 
 
 @posix

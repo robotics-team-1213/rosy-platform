@@ -23,7 +23,7 @@ from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
 from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist as CoreTwist
-from core_features.docking.bay_guards import rear_band_gap
+from core_features.docking.bay_guards import front_band_gap, rear_band_gap
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
@@ -214,7 +214,7 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
                               self_mask=config.lidar_self_mask)
         kind, _ = body.rotation_check(view)
         # No return at all is not a clear way: report a zero front gap so a straight forward drive stops too.
-        front = body.translation_gap(view.points) if view.points else 0.0
+        front = front_band_gap(view.points, body.front_x_m, body.half_width_m + body.sweep_pad_m) if view.points else 0.0
         # The reverse into the bay is judged on a narrow strip straight behind the tray tip: a neighbour's body beside
         # the strip must not read as 0 (None = nothing in the strip = this check does not block).
         rear_gap = rear_band_gap(view.points, rear)
@@ -318,7 +318,16 @@ def front_clearance(services, sample, *, received_at: float) -> None:
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear
         # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
         # Sector mode builds them only while a stuck can be near (review L6).
-        if path or line.wants_body_points:
+        try:
+            line_active = bool(line.active)
+        except AttributeError:
+            line_active = True
+        try:
+            swarm_active = bool(services.swarm.active)
+        except AttributeError:
+            swarm_active = False
+        scan_needed = line_active or swarm_active
+        if (path and scan_needed) or line.wants_body_points:
             points = _scan_points(
                 sample, forward_deg=config.lidar_forward_deg,
                 max_range=max(BODY_POINTS_RANGE_M,
@@ -349,7 +358,8 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 source_stamp_ns=None if evidence is None else evidence[2],
                 received_at=received_at)
         if path:
-            line.observe_scan_points(points, received_at=received_at, lag_s=lag)
+            if scan_needed:
+                line.observe_scan_points(points, received_at=received_at, lag_s=lag)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,

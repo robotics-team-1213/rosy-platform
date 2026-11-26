@@ -198,3 +198,29 @@ def test_a_diagonal_pink_line_is_not_the_bay_line():
                 frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = PINK
     payload = observer().observe(frame, stamp=10.0)
     assert payload["visible"] is False or payload.get("lateral_measured") is False
+
+
+def test_horizon_above_frame_short_circuits_invisible():
+    frame = render(0.0, math.pi, 0.30)
+    # Tilting upward places the horizon below the bottom of the frame (cut >= H).
+    upward = CameraMount(height_m=MOUNT.height_m, pitch_rad=-0.8, x_offset_m=MOUNT.x_offset_m)
+    assert observer(mount=upward).observe(frame, stamp=10.0)["visible"] is False
+
+
+def test_vectorized_projection_matches_scalar_pixel_to_ground():
+    from control.sensing.bay_line_observer import pixel_to_ground
+
+    frame = render(0.015, math.pi + math.radians(2.0), 0.32)
+    obs = observer()
+    payload = obs.observe(frame, stamp=10.0)
+    assert payload["visible"] is True
+
+    # Independently project one lit pixel via scalar pixel_to_ground and verify finite agreement.
+    px = ground_to_pixel(0.32, 0.015, width=W, height=H, hfov_rad=HFOV,
+                         pitch_rad=MOUNT.pitch_rad, height_m=MOUNT.height_m)
+    assert px is not None
+    scalar_g = pixel_to_ground(px[0], px[1], width=W, height=H, hfov_rad=HFOV,
+                               pitch_rad=MOUNT.pitch_rad, height_m=MOUNT.height_m)
+    assert scalar_g == pytest.approx((0.32, 0.015), abs=1e-6)
+    _, lateral = errors(payload)
+    assert lateral == pytest.approx(0.015, abs=0.006)

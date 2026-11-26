@@ -21,7 +21,7 @@ test('Account authorization returns preserve only bounded protocol fields on thi
   assert.equal(loginReturn('https://evil.test' + target, origin), '/console');
 });
 test('return restores Fleet documents and existing work/inbox readers', () => {
-  for (const path of ['/console', '/console/install', '/console/site-map', '/console/cell']) {
+  for (const path of ['/console', '/console/install', '/console/site-map', '/console/cell', '/console/world']) {
     assert.equal(loginReturn(path, origin), path);
   }
   assert.equal(loginReturn('/console?view=work&inbox=1', origin), '/console?view=work&inbox=1');
@@ -40,6 +40,14 @@ test('return rejects external destinations credentials login loops and unknown p
 test('return strips unrecognized query and fragment data', () => {
   assert.equal(loginReturn('/console?token=secret&view=inbox#password', origin), '/console');
   assert.equal(loginReturn('/console/cell?return=https://other.test&inbox=1', origin), '/console/cell');
+  const channel = '/console/cell?channel_request=' + 'a'.repeat(24);
+  assert.equal(loginReturn(channel + '&token=secret', origin), channel);
+  assert.equal(loginReturn(channel + '&channel_request=duplicate', origin), '/console/cell');
+  const incident = '/console?view=records&show=open&channel_request=' + 'a'.repeat(24);
+  assert.equal(loginReturn(incident + '&token=secret', origin), incident);
+  assert.equal(loginReturn(incident + '#incident-judgment', origin), incident + '#incident-judgment');
+  assert.equal(loginReturn(incident.replace('show=open', 'show=closed'), origin), '/console?view=records&show=closed');
+  assert.equal(loginReturn('/console/site-map#camera-draft-heading', origin), '/console/site-map#camera-draft-heading');
   assert.equal(loginHref({origin, href: origin + '/console?view=work'}),
     '/console/login?return=%2Fconsole%3Fview%3Dwork');
 });

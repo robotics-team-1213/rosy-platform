@@ -354,6 +354,8 @@ FENCED = [
     ("post", "/api/v1/navigation/bound-plan", {"x": 1.0, "y": 0.0, "expected_map_grid_id": "occupancy:lease",
                                                "correlation_id": "s3-plan"}),
     ("post", "/api/v1/navigation/route", {"points": [{"x": 1.0, "y": 0.0}]}),  # D-1009
+    ("post", "/api/v1/navigation/bound-route",
+     {"points": [{"x": 1.0, "y": 0.0}], "expected_map_grid_id": "occupancy:lease"}),
     ('post', '/api/v1/navigation/handover', dict(expected_boot_id='00000000-0000-0000-0000-000000000001',
         run_id='00000000-0000-0000-0000-000000000001', expected_owner_generation=0, correlation_id='work-attempt')),
     ("post", "/api/v1/navigation/home", None),
@@ -425,7 +427,8 @@ def test_the_fenced_table_covers_every_gated_route(core_client):
     # /do runs the routes above (each of them fenced); /mode IDLE stays open (apply_mode).
     # The D-395 localization writes have their own tests below (423 / lowercase-code conventions).
     localization = {("post", "/api/v1/localization/decision"), ("post", "/api/v1/localization/suspect"),
-                    ("post", "/api/v1/localization/mission")}
+                    ("post", "/api/v1/localization/mission"),
+                    ("post", "/api/v1/localization/search-window")}
     assert localization <= gated, gated
     assert gated - tabled - localization in ({("post", "/api/v1/do")}, set()), gated - tabled
 
@@ -825,6 +828,8 @@ def test_halt_reaches_idle_even_when_the_nav_cancel_fails(robot):
     ("/api/v1/localization/decision", {"request_id": "req-1", "candidate_index": 0, "source": "candidate",
                                        "cues": ["paint"]}),
     ("/api/v1/localization/suspect", {"reason": "fleet_monitor"}),
+    ("/api/v1/localization/search-window", {"expected_map_grid_id": "occupancy:0123456789ab",
+                                             "center": {"x": 0., "y": 0., "yaw": 0.}}),
 ])
 def test_localization_writes_are_trip_leased_with_423(robot, path, body):
     client, services, _ = robot

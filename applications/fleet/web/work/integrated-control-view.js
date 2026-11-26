@@ -1,6 +1,7 @@
-import {node} from "/common/control-dom.js";
+import {node, patchHidden, patchText} from "/common/control-dom.js";
 import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
+import {childUnitLinks, renderUnitLinks} from "/console/assets/unit-links.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
 import {EVIDENCE_LABEL, MODE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
@@ -34,13 +35,13 @@ export function stopControls(overview, target, elapsed = 0) {
 
 // D-977: only verified https origins from the server summary become links — never a token.
 export function childLinks(summary, target) {
-  const origin = summary?.child_origins?.[target];
-  if (typeof origin !== "string" || !/^https:\/\/[\w.:\[\]-]+$/.test(origin)) return [];
-  const arms = Array.isArray(summary.child_arm_units) && summary.child_arm_units.includes(target);
-  return [
-    {href: `${origin}/console`, label: "관제 화면 열기"},
-    ...(arms ? [{href: `${origin}/console/cell`, label: "셀 화면 열기"}] : []),
-  ];
+  return childUnitLinks(summary, {
+    target,
+    includeConsole: true,
+    includeCell: true,
+    consoleLabel: "관제 화면 열기",
+    cellLabel: () => "셀 화면 열기",
+  });
 }
 
 function drawMap(holder, snapshot) {
@@ -114,7 +115,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
     selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null,
-    unitSummary = null;
+    unitSummary = null, lastUnitsSig = "", lastUnitLinksSig = "", lastDetailSig = "";
   const elapsed = () => Math.max(0, (performance.now() - sampled) / 1000);
   const valid = (life, version) => life.current() && version === epoch;
   const localFence = () => {
@@ -131,36 +132,36 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     const reason = busy ? "요청 결과를 확인하고 있습니다" : approveReason();
     const fences = overview && target ? stopControls(overview, target, elapsed()) : {};
     const targetRow = overview?.units.find(row => row.unit_id === target);
-    stop.textContent = target ? target + " 하위 관제에 정지 요청" : "선택한 하위 관제에 정지 요청";
+    patchText(stop, target ? target + " 하위 관제에 정지 요청" : "선택한 하위 관제에 정지 요청");
     setOffBy(stop, reason || (pending ? "같은 정지 기록을 먼저 확인하세요" :
       !targetRow || !fresh(targetRow, elapsed()) || !Object.hasOwn(fences, target) ? "선택 관제의 최신 정지 세대를 확인하세요" : ""));
     setOffBy(newStop, reason || (pending && !snapshot ? "미확인 요청의 원장을 먼저 확인하세요" : ""));
     setOffBy(readStop, busy ? "요청 결과를 확인하고 있습니다" : !pending ? "정지 요청 기록을 선택하세요" : "");
     setOffBy(mapRead, !mapRef ? "선택 관제의 활성 지도 정보를 확인하세요" : "");
     const localResult = snapshot?.results.find(row => row.unit_id === overview?.unit_id);
-    reconcileFold.hidden = !(reference?.local_reconciliation_required
-      && ["UNKNOWN", "PARTIAL"].includes(localResult?.state));
+    patchHidden(reconcileFold, !(reference?.local_reconciliation_required
+      && ["UNKNOWN", "PARTIAL"].includes(localResult?.state)));
     setOffBy(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
   }
   function reset() {
     epoch++; selection++; overview = null; target = null; mapRef = null; pending = null; snapshot = null; reference = null;
-    unitSummary = null; unitLinks.replaceChildren(); unitLinks.hidden = true;
+    unitSummary = null; lastUnitsSig = ""; lastUnitLinksSig = ""; lastDetailSig = "";
+    unitLinks.replaceChildren(); patchHidden(unitLinks, true);
     list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); results.replaceChildren(); history.replaceChildren();
-    notice.textContent = ""; stopIdentity.textContent = ""; mapInfo.textContent = ""; panel.hidden = true;
-    status.textContent = ""; selectedName.textContent = ""; historyState.textContent = "";
+    patchText(notice, ""); patchText(stopIdentity, ""); patchText(mapInfo, ""); patchHidden(panel, true);
+    patchText(status, ""); patchText(selectedName, ""); patchText(historyState, "");
     form.reset(); reconcileFold.open = false; historyFold.open = false; controls();
   }
   scope.onDispose(reset);
   function paintUnitLinks() {
     const links = unitSummary ? childLinks(unitSummary, target) : [];
-    unitLinks.replaceChildren(...links.map(link => {
-      const anchor = node("a", link.label, "ui-action-link");
-      anchor.dataset.kind = "quiet";
-      anchor.rel = "noreferrer";
-      anchor.href = link.href;
-      return anchor;
-    }));
-    unitLinks.hidden = !links.length;
+    const sig = JSON.stringify(links);
+    if (sig !== lastUnitLinksSig) {
+      lastUnitLinksSig = sig;
+      renderUnitLinks(unitLinks, links, {hideWhenEmpty: true});
+    } else {
+      patchHidden(unitLinks, !links.length);
+    }
   }
   async function readUnitLinks(version) {
     if (unitSummary !== null) return;
@@ -176,18 +177,28 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     }
   }
   function paintUnits() {
+    const units = overview.units.map((row) => ({
+      row,
+      selected: target === row.unit_id,
+      evidence: fresh(row, elapsed()) ? "fresh" : row.availability === "UNAVAILABLE" ? "unavailable" : "delayed",
+      infoText: (availability[row.availability] || "정보 없음") + evidenceAgeText(age(row, elapsed()))
+        + " · 로봇 " + row.robots_online + "/" + row.robots_total + " · 미완료 작업 " + row.tasks_active
+        + " · 미확인 정지 " + row.stop_pending
+        + (row.sampled_at ? " · 수집 " + new Date(row.sampled_at).toLocaleTimeString() : " · 수집 시각 미확인"),
+    }));
+    const unitsSig = JSON.stringify(units.map((u) => [u.row.unit_id, u.row.parent, u.selected, u.evidence, u.infoText]));
+    if (unitsSig === lastUnitsSig) return;
+    lastUnitsSig = unitsSig;
     const focused = document.activeElement?.closest("[data-integrated-unit]")?.dataset.integratedUnit;
     list.replaceChildren();
     const items = new Map();
-    for (const row of overview.units) {
+    for (const u of units) {
+      const { row } = u;
       const item = node("li"), choose = button(row.unit_id + " · " + (row.parent ? "직접 상위 " + row.parent : "독립 관제"), true);
-      choose.dataset.integratedUnit = row.unit_id; choose.setAttribute("aria-pressed", String(target === row.unit_id));
+      choose.dataset.integratedUnit = row.unit_id; choose.setAttribute("aria-pressed", String(u.selected));
       choose.setAttribute("kind", "toggle");
-      const info = node("p", (availability[row.availability] || "정보 없음") + evidenceAgeText(age(row, elapsed()))
-        + " · 로봇 " + row.robots_online + "/" + row.robots_total + " · 미완료 작업 " + row.tasks_active
-        + " · 미확인 정지 " + row.stop_pending
-        + (row.sampled_at ? " · 수집 " + new Date(row.sampled_at).toLocaleTimeString() : " · 수집 시각 미확인"), "hint");
-      info.dataset.evidence = fresh(row, elapsed()) ? "fresh" : row.availability === "UNAVAILABLE" ? "unavailable" : "delayed";
+      const info = node("p", u.infoText, "hint");
+      info.dataset.evidence = u.evidence;
       choose.addEventListener("click", () => selectUnit(row.unit_id));
       item.append(choose, info); items.set(row.unit_id, item);
     }
@@ -202,8 +213,9 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     items.get(focused)?.querySelector("ui-button")?.focus({preventScroll: true});
   }
   async function selectUnit(unitId) {
-    target = unitId; selection++; mapRef = null; map.replaceChildren(); mapInfo.textContent = "";
-    selectedName.textContent = unitId + " 관제 직접 자원"; detail.replaceChildren(node("p", "직접 자원 조회 중"));
+    target = unitId; selection++; mapRef = null; map.replaceChildren(); patchText(mapInfo, "");
+    lastDetailSig = "";
+    patchText(selectedName, unitId + " 관제 직접 자원"); detail.replaceChildren(node("p", "직접 자원 조회 중"));
     paintUnitLinks(); controls(); if (overview) paintUnits();
     await readDetail();
   }
@@ -214,29 +226,34 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       const value = await call(prefix + "/units/" + encodeURIComponent(selected)); life.check();
       if (!valid(life, version) || current !== selection || read !== detailRevision) return;
       if (value.unit_id !== selected || value.config_revision !== overview.config_revision) throw new Error("unit identity changed");
-      detail.replaceChildren(node("p", (availability[value.availability] || "정보 없음") + evidenceAgeText(value.age_s)
-        + (value.sampled_at ? " · 수집 " + new Date(value.sampled_at).toLocaleString() : " · 수집 시각 미확인"), "hint"));
-      for (const robot of value.robots) {
-        const row = node("p", robot.robot_id + " · " + (robot.online ? "연결됨" : "연결 끊김") + evidenceAgeText(robot.state_age_s));
-        const observed = channel => ["fresh", "delayed"].includes(robot.evidence[channel]);
-        row.append(node("span", " · " + (Object.hasOwn(MODE_LABEL, robot.mode) ? MODE_LABEL[robot.mode] : "모드 미확인")));
-        for (const [channel, label, text] of [
-          ["battery", "배터리", observed("battery") && Number.isFinite(robot.battery_percent) ? robot.battery_percent + "%" : "미확인"],
-          ["safety", "비상 정지", observed("safety") && typeof robot.estop === "boolean" ? robot.estop ? "켜짐" : "꺼짐" : "미확인"],
-          ["pose", "위치", observed("pose") && robot.pose?.frame === "map" && robot.pose.map_id ? robot.pose.map_id + " · " + robot.pose.x + ", " + robot.pose.y : "미확인"]]) {
-          const evidenceRow = node("span", " · " + label + " " + text + " (" + (EVIDENCE_LABEL[robot.evidence[channel]] || "미확인") + ")");
-          evidenceRow.dataset.evidence = robot.evidence[channel] || "unknown"; row.append(evidenceRow);
+      const detailSig = JSON.stringify([selected, value.availability, value.age_s, value.sampled_at, value.robots, value.tasks, value.tasks_truncated]);
+      if (detailSig !== lastDetailSig) {
+        lastDetailSig = detailSig;
+        detail.replaceChildren(node("p", (availability[value.availability] || "정보 없음") + evidenceAgeText(value.age_s)
+          + (value.sampled_at ? " · 수집 " + new Date(value.sampled_at).toLocaleString() : " · 수집 시각 미확인"), "hint"));
+        for (const robot of value.robots) {
+          const row = node("p", robot.robot_id + " · " + (robot.online ? "연결됨" : "연결 끊김") + evidenceAgeText(robot.state_age_s));
+          const observed = channel => ["fresh", "delayed"].includes(robot.evidence[channel]);
+          row.append(node("span", " · " + (Object.hasOwn(MODE_LABEL, robot.mode) ? MODE_LABEL[robot.mode] : "모드 미확인")));
+          for (const [channel, label, text] of [
+            ["battery", "배터리", observed("battery") && Number.isFinite(robot.battery_percent) ? robot.battery_percent + "%" : "미확인"],
+            ["safety", "비상 정지", observed("safety") && typeof robot.estop === "boolean" ? robot.estop ? "켜짐" : "꺼짐" : "미확인"],
+            ["pose", "위치", observed("pose") && robot.pose?.frame === "map" && robot.pose.map_id ? robot.pose.map_id + " · " + robot.pose.x + ", " + robot.pose.y : "미확인"]]) {
+            const evidenceRow = node("span", " · " + label + " " + text + " (" + (EVIDENCE_LABEL[robot.evidence[channel]] || "미확인") + ")");
+            evidenceRow.dataset.evidence = robot.evidence[channel] || "unknown"; row.append(evidenceRow);
+          }
+          detail.append(row);
         }
-        detail.append(row);
+        detail.append(node("p", value.robots.length ? "직접 로봇 " + value.robots.length + "대" : "직접 소유 로봇이 없습니다.", "hint"));
+        for (const task of value.tasks) detail.append(node("p", task.robot_id + " · " + task.task_id + " · " + taskStatus(task.status)
+          + " · " + new Date(task.updated_at).toLocaleString()));
+        detail.append(node("p", "직접 작업 " + value.tasks.length + "건" + (value.tasks_truncated ? " · 이전 작업 더 있음" : ""), "hint"));
       }
-      detail.append(node("p", value.robots.length ? "직접 로봇 " + value.robots.length + "대" : "직접 소유 로봇이 없습니다.", "hint"));
-      for (const task of value.tasks) detail.append(node("p", task.robot_id + " · " + task.task_id + " · " + taskStatus(task.status)
-        + " · " + new Date(task.updated_at).toLocaleString()));
-      detail.append(node("p", "직접 작업 " + value.tasks.length + "건" + (value.tasks_truncated ? " · 이전 작업 더 있음" : ""), "hint"));
-      if (JSON.stringify(mapRef) !== JSON.stringify(value.map)) { map.replaceChildren(); mapInfo.textContent = ""; }
+      if (JSON.stringify(mapRef) !== JSON.stringify(value.map)) { map.replaceChildren(); patchText(mapInfo, ""); }
       mapRef = value.map; controls();
     } catch {
       if (valid(life, version) && current === selection && read === detailRevision) {
+        lastDetailSig = "";
         mapRef = null; map.replaceChildren(); detail.replaceChildren(node("ui-empty", "직접 자원 조회 실패 · 관제 연결과 권한을 확인하세요.")); controls();
       }
     }

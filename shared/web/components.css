@@ -2,7 +2,7 @@
 a { color: var(--text-primary); text-underline-offset: 0.2em; }
 .ui-page-heading { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body); }
 .ui-section-heading { margin: 0; font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); }
-.ui-disclosure-row { box-sizing: border-box; min-height: var(--target-secondary); padding: var(--inset-button); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--control-line); border-radius: var(--radius-button); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; cursor: pointer; }
+.ui-disclosure-row { box-sizing: border-box; align-content: center; min-height: var(--target-secondary); padding: var(--inset-button); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--control-line); border-radius: var(--radius-button); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; cursor: pointer; }
 .ui-disclosure-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] { color: var(--text-secondary); border-style: dashed; border-color: var(--surface-line); cursor: not-allowed; }
 .ui-disclosure-name { font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body); }
@@ -71,6 +71,9 @@ ui-button[reason]:not([reason=""]) > small[data-reason] { grid-column: 1 / -1; t
 ui-button[disabled][reason]:not([reason=""]) { color: var(--text-secondary); background: transparent; border-color: var(--surface-line); border-style: dashed; }
 ui-button > small[data-reason],
 ui-button[kind] > small[data-reason] { display: block; max-width: 100%; color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body); white-space: normal; }
+/* opt-in: 사유를 바깥 상태 줄이 대신 말하는 표면([data-reason-display="external"])은 버튼 안 사유 small을
+   시각에만 숨긴다(sr-only clip). 노드와 aria-describedby는 남아 화면 낭독기 계약(C1 reason)을 지킨다. */
+[data-reason-display="external"] ui-button[reason] > small[data-reason] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 input.ui-field[type="file"]::file-selector-button { margin-inline-end: var(--gap-section); padding: var(--inset-chip); color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
 ui-button:focus-visible,
 ui-field:focus-visible,
@@ -205,3 +208,9 @@ dialog.ui-confirm p { margin: 0 0 var(--gap-dialog); font: var(--weight-label) v
 dialog.ui-confirm ui-actions { justify-content: flex-end; }
 ui-empty { margin: 0; color: var(--nominal-quiet); font: var(--weight-medium) var(--text-label)/var(--leading-copy) var(--body); }
 [data-account-profile] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.cam-frame-hold { position: relative; min-width: 0; overflow: hidden; }
+.cam-frame-overlay { position: absolute; inset: auto auto var(--space-2) var(--space-2); max-width: calc(100% - var(--space-4)); padding: var(--inset-chip); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.cam-frame-hold, .omx-inspector-cam-frame)[data-cam-phase="disconnected"][data-cam-has-frame="true"] > img { opacity: var(--disabled-opacity); filter: grayscale(0.45); }
+:is(.cam-frame-hold, .omx-inspector-cam-frame)[data-cam-phase="paused"][data-cam-has-frame="true"] > img { filter: saturate(0.75) brightness(0.8); }
+:is(.cam-frame-hold, .omx-inspector-cam-frame)[data-cam-phase="disconnected"][data-cam-has-frame="true"] > :is(.omx-inspector-cam-standby, .cam-frame-overlay) { inset: auto auto var(--space-2) var(--space-2); display: inline-flex; place-items: center; max-width: calc(100% - var(--space-4)); padding: var(--inset-chip); border: 1px solid var(--status-warn-a45); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--status-warn); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.cam-frame-hold, .omx-inspector-cam-frame)[data-cam-phase="paused"][data-cam-has-frame="true"] > :is(.omx-inspector-cam-standby, .cam-frame-overlay) { inset: auto auto var(--space-2) var(--space-2); display: inline-flex; place-items: center; max-width: calc(100% - var(--space-4)); padding: var(--inset-chip); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-primary); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

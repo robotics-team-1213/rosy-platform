@@ -108,13 +108,19 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page, _, _ = browser_site
     real2sim = {"snapshots": [], "active": {"id": "browser-r2s"}, "physics_candidates": [], "sysid_summary": {}, "stages": []}
     cell_tasks = {
-        "tasks": [],
+        "calibration_origin": "https://cal.test",
+        "tasks": [{
+            "task_id": "cell-s-waiting", "arm_id": "arm_s", "cell_id": "cell_s", "status": "QUEUED", "robot_id": "rosy_42",
+            "last_refusal": {"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "missing": ["pose", "bed_ready"]},
+        }],
+        "arm_live_states": {"arm_s": {"observed": True, "fresh": False, "folded": True, "age_s": 28491.8}},
         "cameras": [{"id": "top", "label": "S5 top", "topic": "/top_camera/image_raw", "fresh": True, "sequence": 7}],
-        "cells": {"cell_s": {"gate": {}}, "cell_ab": {"gate": {}}},
-        "summary": {"total": 0, "queued": 0, "running": 0, "completed": 0},
+        "cells": {"cell_s": {"gate": {}, "station": {"station_place": "S3"}}, "cell_ab": {"gate": {}}},
+        "summary": {"total": 1, "queued": 1, "running": 0, "completed": 0},
     }
 
     seen = set()
+    preset_posts = []
     relay_hits = []
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -125,18 +131,35 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
 
     def serve_cell_tasks(route):
         seen.add("cell-tasks")
+        if route.request.method == "POST":
+            preset_posts.append(route.request.post_data_json["preset"])
+            return route.fulfill(json={"task": {"task_id": "fake-task"}})
         route.fulfill(json=cell_tasks)
 
     page.route("**/api/fleet/cell-app/real2sim-pipeline**", serve_real2sim)
     page.route("**/api/fleet/pipeline/cell-tasks**", serve_cell_tasks)
+    page.route("**/api/fleet/workcell-observations", lambda route: route.fulfill(json={"workcells": [{
+        "workcell_id": "test-cell", "label": "Test cell", "cameras": [],
+        "arms": [{"arm_id": "arm_s", "source_id": "omx_arm_s", "label": "Arm S", "fresh": True,
+                  "positions": {"joint1": 0}, "source_age_s": 0.1, "receipt_age_s": 0.1}],
+    }]}))
     page.route("**/api/fleet/vision/sources**", lambda route: route.fulfill(json={"sources": []}))
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
-    show_screen(page, "saved-heading")
+    show_screen(page, "real2sim-heading")
+
+    for arm in ("arm_s", "arm_a", "arm_b"):
+        link = page.get_by_role("link", name=f"{arm} 보정", exact=True)
+        expect(link).to_have_attribute("href", f"https://cal.test/?arm={arm}")
 
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
     expect(page.locator("#cell-visual-cards .cell-visual-card")).to_have_count(3)
+    s_card = page.locator('#cell-visual-cards [data-card-id="cell_s"]')
+    expect(s_card).to_contain_text("마지막 화면 갱신 시 관절 관측 · 작업 상태 갱신 필요")
+    expect(s_card).to_contain_text("승인 대기 0건 · 실행 대기 1건")
+    expect(s_card.locator(".cell-pipeline-banner")).to_contain_text("측정되지 않음: 정차 위치, 적재함 확인")
+    expect(s_card.locator(".cell-pipeline-banner")).to_contain_text("rosy_42 S3 정차")
     expect(page.locator("#cell-camera-matrix .cell-observation-card img[alt='S5 상단(top)']")).to_have_count(1)
     page.locator('#omx-right-inspector [data-inspect-target="arm_b"]').click()
     expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")
@@ -160,6 +183,21 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(0)
     expect(page.locator("#omx-right-inspector").get_by_label("적재 층")).to_have_count(1)
     expect(page.locator("#omx-right-inspector").get_by_label("복구 위치")).to_have_count(1)
+    matrix = page.locator("#cell-camera-matrix")
+    expect(matrix.locator("..").locator("summary")).to_have_text("셀·도킹 카메라")
+    matrix_card = matrix.locator("article").filter(has_text="S5 상단(top)")
+    matrix_zoom = matrix_card.get_by_role("button", name="S5 상단(top) 크게 보기")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "false")
+    expect(matrix_zoom.locator("svg")).to_be_visible()
+    matrix_zoom.press("Enter")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "true")
+    expect(page.locator('#omx-right-inspector [data-inspect-target="cell_ab"]')).to_have_attribute("aria-selected", "true")
+    matrix_card.get_by_role("button", name="S3→S5 연속 실행").press("Enter")
+    expect(page.locator("#cell-tasks-status")).to_contain_text("fake-task")
+    assert preset_posts == ["full_s3_to_s5_pipeline"]
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "true")
+    matrix_zoom.press("Escape")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "false")
     assert not relay_hits, relay_hits
 
 
@@ -205,7 +243,7 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page, _, origin = browser_site
     page.set_viewport_size({"width": 390, "height": 844})
     expect(page.locator(f"#{field}")).to_be_hidden()
-    expect(page.locator('.ui-subnav a[href="#saved-heading"]')).to_have_attribute("aria-current", "step")
+    expect(page.locator('.ui-subnav a[href="#observation-heading"]')).to_have_attribute("aria-current", "step")
     page.goto(origin + "/console/cell#" + heading)
     page.reload()
     expect(page.locator(f"#{field}")).to_be_visible()
@@ -213,10 +251,22 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page.locator('.ui-subnav a[href="#recipe-heading"]').click()
     expect(page.locator(f"#{field}")).to_be_hidden()
     expect(page.locator("#recipe-id")).to_be_visible()
-    page.locator(f'.ui-subnav a[href="#{heading}"]').click()
+    expect(page.locator("#recipe-heading")).to_be_focused()
+    step = page.locator(f'.ui-subnav a[href="#{heading}"]')
+    step.press("Enter")
     expect(page.locator(f"#{field}")).to_be_visible()
-    expect(page.locator(f'.ui-subnav a[href="#{heading}"]')).to_have_attribute("aria-current", "step")
-    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_attribute("aria-current", "page")
+    expect(step).to_have_attribute("aria-current", "step")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+    step.press("Enter")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+
+    page.go_back()
+    expect(page.locator("#recipe-heading")).to_be_visible()
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.go_forward()
+    expect(page.locator(f"#{field}")).to_be_visible()
+    expect(step).to_have_attribute("aria-current", "step")
+    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_count(0)
 
 
 def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):
@@ -266,7 +316,7 @@ def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(b
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page).to_have_url(re.compile(r"#saved-heading$"))
+    expect(page).to_have_url(re.compile(r"#observation-heading$"))
     expect(page.locator("#workcell-observations")).to_be_visible()
     expect(page.locator('[data-arm-source="arm_a"]')).to_be_visible()
     assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
@@ -345,6 +395,7 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    show_screen(page, "saved-heading")
     status = page.locator("#saved-status")
     expect(status).to_contain_text("접속하면 저장된 문서를 확인할 수 있습니다")
     open_token_access(page)
@@ -469,6 +520,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
+    show_screen(page, "saved-heading")
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
@@ -510,6 +562,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
         status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
+    show_screen(page, "saved-heading")
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()

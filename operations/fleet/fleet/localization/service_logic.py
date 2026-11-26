@@ -18,7 +18,7 @@ from typing import Hashable, Mapping, Optional, Sequence
 from core_common.protocol.localization import CandidateReport, LocState
 
 from fleet.localization import cues
-from fleet.localization.arbiter import MARGIN, Context, Weights, score
+from fleet.localization.arbiter import MARGIN, Context, Weights, carried_cues, score
 
 #: D-395 §9 monitor thresholds (initial values, tuned in S1).
 SUSPECT_DIST_M = 0.25
@@ -50,6 +50,11 @@ WORLD_CUES = ("paint", "slot", "square")
 PEER_EVIDENCE_M = 0.25
 #: A candidate report is evidence for this long after Fleet first saw it (Fleet's clock).
 REPORT_FRESH_S = 1.0
+#: Maximum bridged drift / camera residual before a localized peer stops acting as an anchor observer.
+MAX_OBSERVER_BRIDGE_TURN_DEG = 10.0
+MAX_OBSERVER_DEAD_RECKON_M = 0.25
+MAX_OBSERVER_CAMERA_RESIDUAL_M = 0.15
+MAX_OBSERVER_CAMERA_RESIDUAL_DEG = 10.0
 #: Seconds in CANDIDATES before each rung. Contract §3 said 10/25/60 s; P2-7 moved homing
 #: after the rotate's limit (10 + 30 s) and needs_human after the lane mission's (45 + 40 s),
 #: so each mission can finish before the next rung (review of P2-7).
@@ -128,10 +133,13 @@ def mirrored(before: cues.Pose, after: cues.Pose) -> bool:
 
 def clear_leader(report: CandidateReport, context: Context, now: float,
                  weights: Weights = Weights(), margin: float = MARGIN) -> Optional[cues.Pose]:
-    """The candidate that leads every other by `margin`, or None."""
-    totals = [row["total"] for row in score(report, context, now, weights)]
+    """The leader with independent asymmetric evidence to observe other robots."""
+    scores = score(report, context, now, weights)
+    totals = [row["total"] for row in scores]
     order = sorted(range(len(totals)), key=lambda i: -totals[i])
     if len(order) > 1 and totals[order[0]] - totals[order[1]] < margin:
+        return None
+    if not any(cue != "peers" for cue in carried_cues(scores, order[0])):
         return None
     c = report.candidates[order[0]]
     return (c.x, c.y, c.yaw)
@@ -142,14 +150,34 @@ def mirror(pose: cues.Pose) -> cues.Pose:
     return (-pose[0], -pose[1], cues.wrap(pose[2] + math.pi))
 
 
+def observer_pose_trustworthy(mp) -> bool:
+    """True unless a localized peer's bridged pose drifted or disagrees with overhead camera."""
+    if mp is None or getattr(mp, "state", None) == "UNKNOWN":
+        return True
+    if getattr(mp, "source", None) == "bridged":
+        turn = float(getattr(mp, "bridge_turn_deg", 0.0) or 0.0)
+        dr = float(getattr(mp, "dead_reckon_m", 0.0) or 0.0)
+        if not (math.isfinite(turn) and math.isfinite(dr)) or turn > MAX_OBSERVER_BRIDGE_TURN_DEG or dr > MAX_OBSERVER_DEAD_RECKON_M:
+            return False
+    res_m = getattr(mp, "camera_residual_m", None)
+    if res_m is not None and (not math.isfinite(float(res_m)) or float(res_m) > MAX_OBSERVER_CAMERA_RESIDUAL_M):
+        return False
+    res_deg = getattr(mp, "camera_residual_deg", None)
+    if res_deg is not None and (not math.isfinite(float(res_deg)) or abs(float(res_deg)) > MAX_OBSERVER_CAMERA_RESIDUAL_DEG):
+        return False
+    return True
+
+
 def peer_observations(objects: Sequence, observer: cues.Pose,
-                      peers: Mapping[str, cues.Pose]) -> dict[str, Observation]:
+                      peers: Mapping[str, cues.Pose], *,
+                      known_points: Sequence[tuple[float, float]] = ()) -> dict[str, Observation]:
     """Unambiguous evidence `objects` (base_link points with .x/.y: a candidate report's, or a
     LOCALIZED status's) give about each LOCALIZED peer, placed from `observer`'s map pose.
 
     Seen: an object within `PEER_EVIDENCE_M` of the peer's reported pose (observed there).
     Seen elsewhere (the mirror-lock signature): no object near the reported pose and exactly
-    one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object). Anything
+    one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object), excluding
+    points already explained by the observer, another peer, or `known_points`. Anything
     else (no objects, objects elsewhere, a hidden peer) is no evidence (review of lane C)."""
     placed = [cues.to_map(observer, (o.x, o.y)) for o in objects]
     out = {}
@@ -160,7 +188,16 @@ def peer_observations(objects: Sequence, observer: cues.Pose,
             out[robot_id] = (nearest[0], nearest[1], None)
             continue
         twin = mirror(pose)
-        at_mirror = [p for p in placed if math.dist(p, twin[:2]) <= PEER_EVIDENCE_M]
+        explained = [
+            observer[:2],
+            *(q[:2] for other_id, q in peers.items() if other_id != robot_id),
+            *known_points,
+        ]
+        at_mirror = [
+            p for p in placed
+            if math.dist(p, twin[:2]) <= PEER_EVIDENCE_M
+            and not any(math.dist(p, k) <= PEER_EVIDENCE_M for k in explained)
+        ]
         if len(at_mirror) == 1:
             out[robot_id] = (at_mirror[0][0], at_mirror[0][1], None)
     return out

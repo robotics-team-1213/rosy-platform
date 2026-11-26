@@ -35,4 +35,4 @@ def console_root():
 
 
 SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
-                  'evidence', 'sitemap', 'pose', 'recognition', 'rightofway')
+                  'evidence', 'sitemap', 'pipeline', 'pose', 'recognition', 'rightofway')

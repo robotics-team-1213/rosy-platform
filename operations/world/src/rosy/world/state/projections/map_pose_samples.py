@@ -130,3 +130,23 @@ def sighting_from_row(row: Optional[Mapping]) -> Optional[Sighting]:
         return None
     return Sighting(robot_id, *(float(v) for v in values),
                     quality=None if quality is None else float(quality), map_id=map_id)
+
+
+def stationary_pin_pose(
+    tracker, now: float, active_map_id: Optional[str] = None, *,
+    operator_pin: str = "operator_pin", still_path_m: float = 0.02, still_turn_rad: float = math.radians(2.0),
+) -> Optional[tuple[str, float, float, float]]:
+    """Stationary online operator_pin site pose for obstacle clearance only (ignores max_anchor_age_s)."""
+    anchor = tracker._anchor
+    latest = tracker._odom[-1] if tracker._odom else None
+    if anchor is None or anchor.kind != operator_pin or tracker._degraded or anchor.map_id is None:
+        return None
+    if active_map_id is not None and anchor.map_id != active_map_id:
+        return None
+    if latest is None or not (0.0 <= now - latest.stamp <= tracker.config.max_odom_age_s):
+        return None
+    path = latest.path_m - anchor.odom.path_m if latest.stamp > anchor.odom.stamp else 0.0
+    turn = latest.turn_rad - anchor.odom.turn_rad if latest.stamp > anchor.odom.stamp else 0.0
+    if path > still_path_m or turn > still_turn_rad:
+        return None
+    return (anchor.map_id, *anchor.map_pose)

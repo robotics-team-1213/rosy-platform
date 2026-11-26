@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+from core_common.calibration_math import project_pixel_to_plane, undistort_point
 from core_common.homography import Homography, Point, fit
 from core_common.protocol.place_markers import PlaceMarkerPayload, PlaceMarkerPose
 from core_common.protocol.sightings import SiteSightingPayload
@@ -25,6 +26,10 @@ MARKER_SIDE_M = 0.030
 #: D-587 6: corner geometry a robot marker must have to become a sighting.
 MIN_MARKER_SIDE_PX = 6.0
 MARKER_SIDE_BAND = (0.6, 1.4)
+#: Robot ArUco size band in metres, covering legacy 30 mm and enlarged black squares.
+ROBOT_ARUCO_SIDE_BAND_M = (0.018, 0.100)
+#: QR robot sticker black-square size band (18 mm..160 mm, LiDAR puck to top deck).
+QR_SIDE_BAND_M = (0.018, 0.160)
 MAX_MARKER_SIDE_RATIO = 1.33
 
 
@@ -109,6 +114,8 @@ def project_frame(
     captured_at: float,
     markers: Mapping[int, Sequence[Point]],
     homography: Homography | None = None,
+    lens_profile: Mapping | None = None,
+    camera_pose: tuple[float, float, float] | None = None,
 ) -> tuple[SiteSightingPayload, ...]:
     """Return display-only poses for every configured robot marker in this frame.
 
@@ -126,7 +133,8 @@ def project_frame(
 
     sightings = []
     for robot_id, marker_id in camera.robot_markers.items():
-        pose = _pose(camera, measured, markers.get(marker_id))
+        pose = _pose(camera, measured, markers.get(marker_id),
+                     lens_profile=lens_profile, camera_pose=camera_pose, height_m=MARKER_HEIGHT_M)
         if pose is None:
             continue
         x, y, yaw = robot_pose_from_marker(pose, camera.marker_yaw_offset_deg.get(robot_id, 0.0))
@@ -182,7 +190,12 @@ def robot_pose_from_marker(marker: tuple[float, float, float], yaw_offset_deg: f
             y - (mx * math.sin(yaw) + my * math.cos(yaw)), yaw)
 
 
-def marker_geometry_ok(pixels: Sequence[Point], mapped: Sequence[Point]) -> bool:
+def marker_geometry_ok(
+    pixels: Sequence[Point],
+    mapped: Sequence[Point],
+    *,
+    side_band_m: tuple[float, float] | None = None,
+) -> bool:
     """D-587 6: a convex quad, shortest image side >= MIN_MARKER_SIDE_PX, map sides near the
     sticker size and opposite side pairs of similar length. ``mapped`` is the quad on the map
     plane at the marker height."""
@@ -205,8 +218,12 @@ def marker_geometry_ok(pixels: Sequence[Point], mapped: Sequence[Point]) -> bool
         return False
     if min(pixel_sides) < MIN_MARKER_SIDE_PX or min(sides) <= 0.0:
         return False
-    low, high = MARKER_SIDE_BAND
-    if not low * MARKER_SIDE_M <= sum(sides) / 4 <= high * MARKER_SIDE_M:
+    if side_band_m is None:
+        low_m = MARKER_SIDE_BAND[0] * MARKER_SIDE_M
+        high_m = MARKER_SIDE_BAND[1] * MARKER_SIDE_M
+    else:
+        low_m, high_m = side_band_m
+    if not low_m <= sum(sides) / 4 <= high_m:
         return False
     ratio = (sides[0] + sides[2]) / (sides[1] + sides[3])
     return 1 / MAX_MARKER_SIDE_RATIO <= ratio <= MAX_MARKER_SIDE_RATIO
@@ -218,7 +235,15 @@ def _measured(camera: CameraMap, markers, homography):
     return marker_homography(camera, markers)
 
 
-def _pose(camera: CameraMap, measured: Homography, quad) -> tuple[float, float, float] | None:
+def _pose(
+    camera: CameraMap,
+    measured: Homography,
+    quad,
+    *,
+    lens_profile: Mapping | None = None,
+    camera_pose: tuple[float, float, float] | None = None,
+    height_m: float = 0.0,
+) -> tuple[float, float, float] | None:
     """Marker centre and ``heading_edge`` tip through the homography; None when unusable."""
     if quad is None:
         return None
@@ -229,8 +254,17 @@ def _pose(camera: CameraMap, measured: Homography, quad) -> tuple[float, float, 
             (quad[edge_a][0] + quad[edge_b][0]) / 2,
             (quad[edge_a][1] + quad[edge_b][1]) / 2,
         )
-        x, y = measured.apply(*center)
-        yaw = measured.yaw(center, heading_tip)
+        if lens_profile is not None or camera_pose is not None:
+            x, y = project_pixel_to_plane(
+                *center, measured.h, height_m=height_m, lens_profile=lens_profile, camera_pose=camera_pose
+            )
+            hx, hy = project_pixel_to_plane(
+                *heading_tip, measured.h, height_m=height_m, lens_profile=lens_profile, camera_pose=camera_pose
+            )
+            yaw = math.atan2(hy - y, hx - x)
+        else:
+            x, y = measured.apply(*center)
+            yaw = measured.yaw(center, heading_tip)
     except (TypeError, ValueError, ZeroDivisionError):
         return None
     if not all(math.isfinite(value) for value in (x, y, yaw)):

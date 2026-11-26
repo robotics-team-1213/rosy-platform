@@ -36,13 +36,15 @@ class StepRequest(BaseModel):
 
 
 def install_nudge_step_route(app, *, console, trip_busy: Callable[[str], bool],
-                             require_named_operator, record_event) -> None:
+                             require_named_operator, record_event,
+                             cable_inhibited: Callable[[str], bool]) -> None:
     """`POST /api/fleet/robots/{robot_id}/step`: a named operator steps a free robot."""
 
     @app.post("/api/fleet/robots/{robot_id}/step", tags=["fleet"])
     async def robot_step(robot_id: str, body: StepRequest,
                          principal=Depends(require_named_operator)) -> dict:
-        client = console.clients().get(robot_id)
+        clients = console.clients()
+        client = clients.get(robot_id)
         if client is None:
             raise HTTPException(status_code=404, detail={"code": "UNKNOWN_ROBOT"})
         held = engaged(console, robot_id) or ("trip" if trip_busy(robot_id) else None)
@@ -50,6 +52,27 @@ def install_nudge_step_route(app, *, console, trip_busy: Callable[[str], bool],
             raise HTTPException(status_code=409, detail={
                 "code": "STEP_ROBOT_BUSY",
                 "message": f"{robot_id} already moves for the console ({held}); stop that first"})
+        def check_clearance():
+            if cable_inhibited(robot_id):
+                raise HTTPException(status_code=409, detail={"code": "STEP_CABLE_INHIBITED",
+                    "message": "Confirm cables are clear before requesting a step"})
+            if console.formation_status()["active"] or any(
+                trip_busy(other) for other in clients if other != robot_id
+            ):
+                raise HTTPException(status_code=409, detail={"code": "STEP_TRAFFIC_BUSY",
+                    "message": "Stop active Fleet trips or formations before requesting a step"})
+
+        check_clearance()
+        try:
+            traffic_held = await console.hold_for_localization(robot_id)
+        except Exception as exc:
+            logger.warning("step: traffic hold failed for %s (%s)", robot_id, type(exc).__name__)
+            raise HTTPException(status_code=409, detail={"code": "STEP_TRAFFIC_BUSY",
+                "message": "Fleet could not confirm that nearby robots stopped"}) from exc
+        check_clearance()
+        if engaged(console, robot_id) or trip_busy(robot_id):
+            raise HTTPException(status_code=409, detail={"code": "STEP_ROBOT_BUSY",
+                "message": "The robot became busy while Fleet checked traffic"})
         kind = "nudge_forward" if body.direction == "forward" else "nudge_backward"
         try:
             answer = await client.localization_mission(
@@ -63,7 +86,7 @@ def install_nudge_step_route(app, *, console, trip_busy: Callable[[str], bool],
             raise http_error(exc) from exc    # CORE refused (clearance, lease, readiness): its words
         record_event("step", principal.principal_id, {
             "robot_id": robot_id, "direction": body.direction, "distance_m": body.distance_m,
-            "kind": kind, "mission": answer})
+            "kind": kind, "mission": answer, "traffic_held": traffic_held})
         logger.info("step: %s %s %.3f m by %s -> %s", robot_id, body.direction,
                     body.distance_m, principal.principal_id, answer.get("state"))
         return answer

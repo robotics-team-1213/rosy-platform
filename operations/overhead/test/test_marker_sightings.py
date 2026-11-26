@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import yaml
 
+from rosy_vision.detect import DetectedMarkers
 from rosy_vision.project import MARKER_HEIGHT_M, MARKER_MOUNT_XY_M, CameraMap
 from rosy_vision.publish import SightingPublishError
 from rosy_vision.track import geometry
@@ -44,11 +45,12 @@ def _calibration(lens=LENS):
                        frame_size=(1280, 720), lens=lens)
 
 
-def _sticker(x, y, robot_yaw, *, sticker_turn=0.0, side=SIDE_M):
+def _sticker(x, y, robot_yaw, *, sticker_turn=0.0, side=SIDE_M, calibration=None):
     """Image corners (ArUco order, top edge first) of a sticker on a robot at (x, y, yaw)."""
-    calibration = _calibration()
+    calibration = calibration or _calibration()
     matrix = geometry.as_matrix(calibration.image_to_map)
-    cx, cy, height = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
+    cx, cy, height = geometry.camera_from_homography(
+        matrix, calibration.image_size, calibration.hfov_deg, lens_profile=calibration.lens_profile)
     mx, my = MARKER_MOUNT_XY_M
     centre = (x + mx * math.cos(robot_yaw) - my * math.sin(robot_yaw),
               y + mx * math.sin(robot_yaw) + my * math.cos(robot_yaw))
@@ -128,11 +130,37 @@ def test_bad_corner_geometry_is_not_sent(bad):
     assert _sightings({40: bad(_sticker(0.0, 0.0, 0.3))}) == ()
 
 
-def test_a_marker_far_from_the_sticker_size_or_outside_the_track_is_not_sent():
+def test_robot_aruco_accepts_enlarged_stickers_within_the_size_and_track_bounds():
     assert len(_sightings({40: _sticker(0.0, 0.0, 0.0, side=0.036)})) == 1
-    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.06)}) == ()     # 2x the sticker
-    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.012)}) == ()    # also < 6 px
-    assert _sightings({40: _sticker(1.6, 0.0, 0.0)}) == ()                 # beyond track bounds
+    assert len(_sightings({40: _sticker(0.0, 0.0, 0.0, side=0.06)})) == 1
+    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.14)}) == ()
+    assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.012)}) == ()
+    assert _sightings({40: _sticker(1.6, 0.0, 0.0)}) == ()
+
+
+def test_qr_robot_marker_uses_qr_side_band_and_still_requires_yaw_offset():
+    cam = CameraMap(
+        source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="map_v2_fleet",
+        processor_revision="aruco-opencv-4.12", corner_marker_ids=None,
+        corner_world_m=((-1.405, -0.63), (1.405, -0.63), (1.405, 0.63), (-1.405, 0.63)),
+        robot_markers={"rosy_45": 45}, calibration_source="field_boundary",
+        marker_yaw_offset_deg={"rosy_45": 0.0},
+    )
+    markers = DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.10)}, qr_ids={45})
+    [sighting] = _sightings(markers, camera=cam)
+    assert sighting.robot_id == "rosy_45"
+    assert (sighting.x, sighting.y) == pytest.approx((0.2, -0.1), abs=1e-4)
+    assert math.remainder(sighting.yaw - 0.5, math.tau) == pytest.approx(0.0, abs=1e-3)
+
+    # Small LiDAR-puck QR sticker (28 mm) is inside the updated QR_SIDE_BAND_M.
+    [small_sighting] = _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.028)}, qr_ids={45}), camera=cam)
+    assert small_sighting.robot_id == "rosy_45"
+
+    # Out-of-band QR sizes (too big / too small) are rejected, and D-587 yaw offset stays mandatory.
+    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.20)}, qr_ids={45}), camera=cam) == ()
+    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.012)}, qr_ids={45}), camera=cam) == ()
+    unset = CameraMap(**{**cam.__dict__, "marker_yaw_offset_deg": {}})
+    assert _sightings(markers, camera=unset) == ()
 
 
 class _Publisher:
@@ -297,3 +325,23 @@ def test_track_worker_skips_robots_already_sighted_and_only_logs_a_rejection(cap
         payload, _ = _run(failing)
     assert payload is not None and len(failing.sent) == 1
     assert "marker sighting not accepted" in caplog.text and "CALIBRATION_MISMATCH" in caplog.text
+
+
+def test_distorted_marker_sighting_with_lens_profile_and_parallax():
+    from core_common.calibration_math import distort_point
+
+    lp = {
+        "model": "pinhole",
+        "K": [[920.0, 0.0, 640.0], [0.0, 920.0, 360.0], [0.0, 0.0, 1.0]],
+        "D": [-0.28, 0.08, 0.002, -0.001, -0.01],
+        "image_size": [1280, 720],
+        "source": "measured",
+    }
+    rec = {**RECORD, "lens_profile": lp}
+    cal = from_record(rec, source_id="ceiling_north", map_id="map_v2_fleet", frame_size=(1280, 720), lens=LENS)
+    assert cal is not None and cal.lens_profile is not None
+    undist_quad = _sticker(0.8, 0.4, 0.4, calibration=cal)
+    dist_quad = tuple(distort_point(u, v, lp) for u, v in undist_quad)
+    [sighting] = robot_sightings(CAMERA, cal, {40: dist_quad}, captured_at=1_790_000_000.25, seq=8)
+    assert (sighting.x, sighting.y) == pytest.approx((0.8, 0.4), abs=1e-3)
+    assert math.remainder(sighting.yaw - 0.4, math.tau) == pytest.approx(0.0, abs=5e-3)

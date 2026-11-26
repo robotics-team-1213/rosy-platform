@@ -94,3 +94,63 @@ def test_shadow_log_error_does_not_change_ik(tmp_path, monkeypatch):
 def test_shadow_is_off_without_config(tmp_path, monkeypatch):
     assert run_carry(tmp_path, monkeypatch)["result"] == "placed"
     assert not (tmp_path / "act-shadow.jsonl").exists()
+
+
+def test_lerobot_shadow_load_and_capture_pass_cell_config_goal_and_sim_rule(tmp_path, monkeypatch):
+    import hashlib
+    import pytest
+    import cell_lerobot_shadow as lrs
+
+    pytest.importorskip("cv2")
+    root = tmp_path / "ckpt"
+    root.mkdir()
+    ckpt_cfg = {
+        "type": "act",
+        "input_features": {
+            "observation.state": {"type": "STATE", "shape": [6]},
+            "observation.images.top": {"type": "VISUAL", "shape": [3, 8, 12]},
+            "observation.images.wrist": {"type": "VISUAL", "shape": [3, 8, 12]},
+            lrs.GOAL: {"shape": [10]},
+        },
+        "output_features": {"action": {"type": "ACTION", "shape": [6]}},
+    }
+    (root / "config.json").write_text(json.dumps(ckpt_cfg))
+    (root / "model.safetensors").write_bytes(b"weights")
+    sha = hashlib.sha256(b"weights").hexdigest()
+    (root / "UNITS.json").write_text(json.dumps({"state": "sim_rad", "gripper": "sim_jaw", "arm": "arm_b"}))
+    (tmp_path / "arm-cal-arm_b.json").write_text(json.dumps({"arm_id": "arm_b", "held_30mm": 53.38, "gap_mm_per_unit": 5.0}))
+
+    seen = []
+
+    def fake_loader(_root, _device):
+        def predict(obs):
+            seen.append(obs)
+            return np.tile(np.append(obs["observation.state"][:5], 0.5), (2, 1))
+        return predict
+
+    orig_shadow = lrs.LeRobotShadow
+    monkeypatch.setattr(lrs, "LeRobotShadow", lambda r, rev, **kw: orig_shadow(r, rev, loader=fake_loader, **kw))
+    cfg = {
+        "arm_id": "arm_b",
+        "work_dir": str(tmp_path),
+        "cameras": {},
+        "act_shadow": {"kind": "lerobot", "policy_root": str(root), "policy_revision": sha},
+    }
+    shadow = auto.cell_act_shadow.load(cfg, tmp_path)
+    assert shadow._error is None and shadow._binding.sim_rule is not None
+
+    class FakeCell:
+        def frame(self, _view):
+            return np.zeros((8, 12, 3), dtype=np.uint8)
+
+        def act(self, verb):
+            assert verb == "state"
+            return {"state": [0.76, -62.25, 53.06, 51.65, 44.62, 48.86]}
+
+    row = shadow.capture(FakeCell(), cfg, 1, np.zeros((8, 12, 3), dtype=np.uint8), dest="yard:r3-s2-t1")
+    assert "error" not in row, row.get("error")
+    assert row["observation"]["goal_slot"] == 6 and len(row["proposed"]) == 2
+    assert seen and seen[0][lrs.GOAL][6] == 1.0
+
+    bad = shadow.capture(FakeCell(), cfg, 2, np.zeros((8, 12, 3), dtype=np.uint8), dest="unknown-site")
+    assert "error" in bad and "proposed" not in bad

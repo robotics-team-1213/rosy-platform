@@ -603,3 +603,20 @@ def test_navigation_failing_after_payload_activation_rolls_back(native_case):
     with pytest.raises(RuntimeError, match="rolled back"):
         manager.activate(second.name)
     assert links.values["current"] == first.name
+
+
+def test_systemctl_start_nav_stops_io_before_starting_navigation(monkeypatch):
+    from deploy.robot.pinky_pro.native import native_release
+
+    calls = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(cmd)
+        return type("Done", (), {"returncode": 0})()
+
+    monkeypatch.setattr(native_release.subprocess, "run", fake_run)
+    native_release.NativeReleaseManager._systemctl_start_nav()
+    assert calls == [
+        ["systemctl", "stop", "rosy-io.service"],
+        ["systemctl", "start", "rosy-navigation.service"],
+    ]

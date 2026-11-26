@@ -54,11 +54,20 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
         elif change == 'move-outside':
             outside.focus()
         remaining = [] if change == 'empty' else receipts[1:] if change == 'removed' else list(reversed(receipts)) if change == 'reorder' else receipts
+        unchanged = change in ['same', 'move-row', 'move-outside', 'no-focus']
         if change.startswith('request-') or change == 'work-503':
             held[0].fulfill(status=int(change.rsplit('-', 1)[1]), json={'detail': 'fixture read failure'})
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
+        elif unchanged:
+            with page.expect_response(lambda response: response.url.endswith('/api/fleet/channel-requests')) as response_info:
+                held[0].fulfill(json={'rows': remaining})
+            response_info.value.finished()
+            # Drain fetch/json/refreshRequests microtasks without reaching the next 5 s poll.
+            page.clock.run_for(50)
+            assert page.evaluate('() => window.oldRequestButton.isConnected')
         else:
             held[0].fulfill(json={'rows': remaining})
-        page.wait_for_function('() => !window.oldRequestButton.isConnected')
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
         if change in ['move-outside', 'no-focus']:
             expect(outside).to_be_focused()
         elif change in ['removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503']:
@@ -107,8 +116,17 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
         page.goto(site + '/console?view=work')
         _settle(page, '#channel-requests ui-button')
         page.locator('#channel-requests ui-button').click()
+        expect(page.locator('#channel-review #channel-review-incident')).to_have_count(0)
+        page.route('**/api/fleet/channel-requests',
+                   lambda route: route.fulfill(status=503, json={'detail': 'fixture connection lost'}), times=1)
+        page.locator('#channel-review-records').click()
+        expect(page.locator('#channel-incident-state')).to_contain_text('연결을 다시 확인합니다')
+        page.clock.run_for(6000)
+        expect(page.locator('#incident-judgment #channel-incident')).to_be_visible()
+        page.locator('#incident-list summary').first.click()
+        expect(page.locator('#incident-judgment > [data-report-key]')).to_be_visible()
         page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
-        page.locator('#channel-review-reason').fill('current risk review')
+        page.locator('#channel-incident-reason').fill('current risk review')
         claim = page.locator('#channel-review-incident-claim')
         claim.click()
         page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
@@ -118,14 +136,11 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
         api['/api/fleet/session'] = {'principal_id': 'alice', 'role': 'operator'}
         page.evaluate("dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true})); dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
         expect(page.locator('dialog.ui-confirm')).to_have_count(0)
-        expect(page.locator('#channel-review')).to_be_hidden()
         assert not posts
         api['/api/fleet/session'] = {'principal_id': 'bob', 'role': 'operator'}
         page.evaluate("dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true})); dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        _settle(page, '#channel-requests ui-button')
-        page.locator('#channel-requests ui-button').click()
         page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
-        page.locator('#channel-review-reason').fill('current risk review')
+        page.locator('#channel-incident-reason').fill('current risk review')
 
         def accept(route):
             body = route.request.post_data_json
@@ -138,10 +153,10 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
         page.route('**' + path + '/incident', accept)
         claim.click()
         page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-        expect(page.locator('#channel-review-state')).to_contain_text('사건 인수')
+        expect(page.locator('#channel-incident-state')).to_contain_text('사건 인수')
         expect(claim).to_be_disabled()
         expect(claim).to_have_attribute('reason', '이미 작업과 연결된 요청입니다')
-        expect(claim).to_have_attribute('aria-describedby', 'channel-review-state')
+        expect(claim).to_have_attribute('aria-describedby', 'channel-incident-state')
         expect(page.locator('#channel-review-incident-link')).to_have_attribute('href',
             '/console?inbox=1&robot=rosy_03&incident=stuck-abc')
         assert len(posts) == 1 and not errors
@@ -161,6 +176,8 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
             'candidate': None, 'reason': None, 'work_id': None, 'work_kind': None, 'work_status': None,
             'request_key': 'discord-' + request_id}
     api = {**API, path + '/review': view, '/api/fleet/channel-requests': {'rows': [receipt]},
+           '/api/fleet/auth/connection': {'mode': 'paired', 'password_login': True},
+           '/api/fleet/cell-app/documents': {'documents': []},
            '/api/fleet/work': {'rows': [{'source': 'mission', 'source_id': 'owned-source', 'status': 'PROPOSED',
                'action_kind': 'PICK_PLACE', 'device_id': 'omx', 'workcell_id': 'cell', 'reason': None,
                'updated_at': receipt['received_at']}], 'observed_at': receipt['received_at'],
@@ -174,9 +191,17 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
         page.goto(site + '/console?view=work')
         _settle(page, '#channel-requests ui-button')
         page.locator('#channel-requests ui-button').click()
-        expect(page.locator('#channel-review-cell')).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
-        page.locator('#channel-review-mission').select_option('owned-source')
-        page.locator('#channel-review-reason').fill('verified current source candidate')
+        link = page.locator('#channel-review-cell')
+        expect(link).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
+        expect(page.locator('#channel-review-mission')).to_have_count(0)
+        link.click()
+        expect(page.locator('#fleet-login')).to_have_attribute(
+            'href', '/console/login?return=%2Fconsole%2Fcell%3Fchannel_request%3D' + request_id + '&draft=1')
+        page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-token')")
+        page.reload()
+        expect(page.locator('#cell-channel-original')).to_have_text(receipt['content'])
+        page.locator('#cell-channel-mission').select_option('owned-source')
+        page.locator('#cell-channel-reason').fill('verified current source candidate')
 
         def prepare(route):
             body = route.request.post_data_json
@@ -187,13 +212,33 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
             view.update(state='LINKED', work_kind='mission', work_id='mission-new', work_status='PROPOSED', revision=1)
             route.fulfill(json=view)
         page.route('**' + path + '/prepare', prepare)
-        page.locator('#channel-review-mission-prepare').click()
-        expect(page.locator('#channel-review-state')).to_contain_text('승인 전')
+        page.locator('#cell-channel-mission-prepare').click()
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('승인 대기')
         assert len(posts) == 1
-        button = page.locator('#channel-review-mission-admit')
+        page.reload()
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('mission-new')
+        button = page.locator('#cell-channel-mission-admit')
+        api['/api/fleet/dispatch-control']['dispatch_enabled'] = False
+        button.click()
+        expect(page.locator('#notice')).to_contain_text('사이트 정지')
+        assert len(posts) == 1
+        api['/api/fleet/dispatch-control']['dispatch_enabled'] = True
         button.click()
         page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
         assert len(posts) == 1
+
+        def missing_result(route):
+            posts.append(('admit', route.request.post_data_json))
+            route.fulfill(status=503, json={'detail': 'fixture response lost'})
+        page.route('**' + path + '/admit', missing_result)
+        button.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        expect(page.locator('#notice')).to_contain_text('결과 미확인')
+        expect(button).to_be_disabled()
+        assert len(posts) == 2
+        page.unroute('**' + path + '/admit', missing_result)
+        page.reload()
+        expect(button).to_be_enabled()
 
         def admit(route):
             body = route.request.post_data_json
@@ -204,9 +249,9 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
         page.route('**' + path + '/admit', admit)
         button.click()
         page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-        expect(page.locator('#channel-review-state')).to_contain_text('실행 준비')
+        expect(page.locator('#cell-channel-mission-state')).to_contain_text('실행 대기')
         expect(button).not_to_be_visible()
-        assert len(posts) == 2 and not errors
+        assert len(posts) == 3 and not errors
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     finally:
         browser.close()
@@ -316,7 +361,8 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                  {**rows[1], "source_id": "wait-1", "visible_state": "approval_pending", "status": "PROPOSED", "device_id": "omx_wait",
                   "visible_state": "approval_pending"}]
         api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
-        for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
+        checks = (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)) if role == "operator" else (("done", "끝난 작업", "rosy_09"), ("nonsense", "전체 작업", None))
+        for show, label, device in checks:
             page.goto(site + "/console?view=work&show=" + show)
             _settle(page, '#work-list ui-button')
             page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count", arg=1 if device else 4)
@@ -325,8 +371,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                 assert "최근 4건 중 1건" in page.locator("#work-state").inner_text()
             else:
                 assert "건 중" not in page.locator("#work-state").inner_text()
-            assert page.get_by_role("navigation", name="작업 화면", exact=True).locator(
-                'a[aria-current="page"]').all_inner_texts() == [label]
+            assert page.locator('#work-status-filter a[aria-current="true"]').all_inner_texts() == [label]
         api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows, "truncated_sources": []}
         page.goto(site + "/console?view=work")
         _settle(page, '#work-list ui-button')
@@ -336,10 +381,19 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         assert page.locator('.doc-tabs a[href="/console?view=work"]').get_attribute("aria-current") == "page"
         assert page.locator('.doc-tabs a[aria-current="page"]').count() == 1
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        assert screens.locator("a").all_inner_texts() == ["전체 작업", "승인 대기", "끝난 작업", "새 작업", "학습"]
+        expected_links = ["전체 작업", "정책", "학습"] if role == "operator" else ["전체 작업"]
+        assert screens.locator("a:visible").all_inner_texts() == expected_links
         assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
-        assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
-        assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+        if role == "operator":
+            expect(page.locator("#work-create")).to_be_visible()
+            assert page.locator("#work-create").get_attribute("href") == "/console?view=work&show=new"
+            assert screens.get_by_role("link", name="정책", exact=True).get_attribute("href") == "/console/policy"
+            assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+        else:
+            expect(page.locator('#work-status-filter a[href="/console?view=work&show=pending"]')).to_be_hidden()
+            expect(page.locator("#work-create")).to_be_hidden()
+            expect(screens.locator('a[href="/console/policy"]')).to_be_hidden()
+            expect(screens.locator('a[href="/console/learning"]')).to_be_hidden()
         seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
         if size[0] >= 1024:
             assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)
@@ -359,6 +413,24 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         assert page.locator("#work-list ui-button").count() == 1
         page.locator("#work-list ui-button").click()
         assert "CORE" in page.locator("#work-detail").inner_text()
+        page.locator('#work-status-filter a[href$="show=done"]').click()
+        expect(page.locator('#work-status-filter a[aria-current="true"]')).to_have_text("끝난 작업")
+        expect(page.locator("#work-filter")).to_have_value("task")
+        expect(page.locator("#work-detail")).to_be_empty()
+        page.go_back()
+        page.reload()
+        _settle(page, '#work-list ui-button')
+        expect(page.locator("#work-filter")).to_have_value("task")
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(1)
+        expect(page.locator("#work-detail")).to_contain_text("CORE")
+        response = api["/api/fleet/work"]
+        api["/api/fleet/work"] = {**response, "rows": [rows[1]]}
+        page.locator("#work-refresh").click()
+        expect(page.locator("#work-detail")).to_be_empty()
+        api["/api/fleet/work"] = response
+        page.reload()
+        expect(page.locator("#work-list ui-button")).to_have_count(1)
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(0)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         if role == "operator":
             assert page.locator("#channel-requests").inner_text().find("<script>") >= 0
@@ -369,10 +441,18 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             assert "기명 운영자" in page.locator("#channel-requests-state").inner_text()
         page.locator("#work-filter").select_option("all")
         _shot(page, f"mixed-work-{role}-{size[0]}.png", full_page=True)
-        page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
+        page.locator("#work-filter").select_option("task")
+        page.locator("#work-list ui-button").click()
+        fail_work = lambda route: route.fulfill(status=503, json={"detail": "offline"})
+        page.route("**/api/fleet/work", fail_work)
         page.locator("#work-refresh").click()
         page.wait_for_function("() => document.getElementById('work-list').childElementCount === 0")
         assert "조회 실패" in page.locator("#work-state").inner_text()
+        expect(page.locator("#work-detail")).to_be_empty()
+        page.unroute("**/api/fleet/work", fail_work)
+        page.locator("#work-refresh").click()
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(1)
+        expect(page.locator("#work-detail")).to_contain_text("CORE")
         assert not posts and not errors
     finally:
         browser.close()
@@ -400,7 +480,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
     work = {"rows": rows, "observed_at": "2026-10-15T00:00:01+00:00", "tasks_available": True,
             "missions_available": True, "cell_jobs_available": True, "truncated_sources": [], "kinds": ["trip"]}
     api = {**API, "/api/fleet/session": {"principal_id": "operator-1", "role": "operator"}, "/api/fleet/work": work,
-           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived"},
+           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived", "updated_at": 1792022400.0},
            "/api/fleet/cell-jobs/job-1": {"proposal_id": "job-1", "proposal_state": "RESOLVED",
                                           "job": {"status": "PROPOSED", "workcell_id": "packing"}}}
     browser, page, errors = _open(None, site, api, [], size=size, initial_path=None)
@@ -423,7 +503,9 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
         assert page.locator("#work-list ui-button").count() == 3
         page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
         page.wait_for_function("() => document.getElementById('work-evidence').textContent.includes('도착')")
-        assert "CORE" in page.locator("#work-detail").inner_text()
+        detail_text = page.locator("#work-detail").inner_text()
+        assert "CORE" in detail_text
+        assert "2026" in detail_text and "1970" not in detail_text, detail_text
         # The chosen row is drawn as chosen, with the toggle's existing pressed fill.
         fills = page.locator("#work-list ui-button").evaluate_all(
             "nodes => nodes.map(node => [node.getAttribute('aria-pressed'), getComputedStyle(node).backgroundColor])")
@@ -450,7 +532,7 @@ NAMED = "이름 있는 운영자 로그인이 필요합니다"
 
 @pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
 def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
-    """D-865 P3: 승인 대기 행에 범위 소속 배지, work 화면에 범위 readback과 기명 운영자 전환.
+    """D-865 P3: 작업 행에는 범위 배지, 정책 화면에는 범위 조회와 기명 운영자 전환.
     범위 밖 로봇·two_person·전환 뒤에는 배지가 없다(사람 승인). 전환은 스위치만 보낸다."""
     from playwright.sync_api import expect
 
@@ -466,7 +548,10 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
     status_on = {"status": {"scope": scope_on, "admits_issued": 3, "admits_remaining": 2, "reason": None}}
     work = {"rows": rows, "observed_at": rows[0]["updated_at"], "tasks_available": True,
             "missions_available": True, "truncated_sources": []}
-    api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": "operator"},
+    identity = {"principal_id": "bob", "role": "operator"}
+    api = {**API, "/api/fleet/session": identity, "/api/fleet/auth/session": identity,
+           "/api/fleet/auth/connection": {"mode": "paired", "password_login": True},
+           "/api/fleet/policy-governance/workcells": {"workcells": []},
            "/api/fleet/work": work, "/api/fleet/policy-admission": status_on,
            **{f"/api/fleet/missions/{row['source_id']}": {"mission": row, "history": []} for row in rows}}
     posts = []
@@ -476,12 +561,7 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
     try:
         page.goto(site + "/console?view=work")
         page.clock.run_for(2000)
-        page.locator("#work-policy-admission summary").click()
-        status = page.locator("#work-policy-admission-status")
-        expect(status).to_contain_text("켜짐")
-        expect(status).to_contain_text("로봇 rosy_01")
-        expect(status).to_contain_text("잔여 2/5회")
-        expect(status).to_contain_text("rev-7")
+        expect(page.locator("#work-policy-admission-toggle")).to_have_count(0)
         # 범위 소속 배지는 범위 안의 승인 대기 행에만 붙는다(auto_admit 표기).
         item = page.locator("#work-list > li").filter(has=page.locator(".work-auto-admit"))
         expect(item).to_have_count(1)
@@ -494,7 +574,14 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
         terms = page.locator("#work-detail dt").all_inner_texts()
         assert page.locator("#work-detail dd").nth(terms.index("자동 승인")).inner_text() == "범위 밖 · 사람 승인"
 
-        toggle = page.locator("#work-policy-admission-toggle")
+        page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-token')")
+        page.locator("#work-policy-link").click()
+        status = page.locator("#policy-fleet-admission-status")
+        expect(status).to_contain_text("켜짐")
+        expect(status).to_contain_text("로봇 rosy_01")
+        expect(status).to_contain_text("잔여 2/5회")
+        expect(status).to_contain_text("rev-7")
+        toggle = page.locator("#policy-fleet-admission-toggle")
         expect(toggle).to_be_enabled()
         expect(toggle).to_contain_text("자동 승인 끄기")
         toggle.click()
@@ -506,14 +593,16 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
         expect(status).to_contain_text("꺼짐")
         expect(status).to_contain_text("SWITCHED_OFF")
         expect(toggle).to_contain_text("자동 승인 켜기")
-        expect(page.locator("#work-list .work-auto-admit")).to_have_count(0)  # 끄면 배지도 없다
+        scope_on["enabled"] = False
 
         def conflict(route):
+            assert route.request.headers['authorization'] == 'Bearer operator-token'
             posts.append(("/api/fleet/policy-admission", route.request.post_data))
             route.fulfill(status=409, json={"detail": {"code": "POLICY_ADMISSION_SCOPE_NOT_CONFIGURED"}})
         page.route("**/api/fleet/policy-admission",
                    lambda route: conflict(route) if route.request.method == "POST" else route.fallback())
         posts.clear()
+        page.locator("#console-token").evaluate("(field) => { field.value = 'unsaved-token'; field.dispatchEvent(new Event('input')); }")
         toggle.click()
         for _ in range(50):
             page.clock.run_for(100)
@@ -522,7 +611,10 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
         assert len(posts) == 1
         expect(status).to_contain_text("범위가 설정되지 않아 전환하지 못했습니다")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        _shot(page, f"work-policy-{size[0]}.png", full_page=True)
+        _shot(page, f"fleet-policy-{size[0]}.png", full_page=True)
+        page.goto(site + "/console?view=work")
+        _settle(page, "#work-list ui-button")
+        expect(page.locator("#work-list .work-auto-admit")).to_have_count(0)
         assert not errors
     finally:
         browser.close()
@@ -537,24 +629,24 @@ def test_policy_admission_switch_is_named_operator_only(site):
            "reason": None, "approval": "one_person", "wait": None, "updated_at": "2026-10-27T00:00:00+00:00"}
     work = {"rows": [row], "observed_at": row["updated_at"], "tasks_available": True,
             "missions_available": True, "truncated_sources": []}
-    api = {**API, "/api/fleet/session": {"principal_id": "eve", "role": "viewer"}, "/api/fleet/work": work,
+    identity = {"principal_id": "eve", "role": "viewer"}
+    api = {**API, "/api/fleet/session": identity, "/api/fleet/auth/session": identity,
+           "/api/fleet/auth/connection": {"mode": "paired", "password_login": True},
+           "/api/fleet/policy-governance/workcells": {"workcells": []}, "/api/fleet/work": work,
            "/api/fleet/policy-admission": {"status": {"scope": {"enabled": False, "robots": [], 
                "step_approval_kinds": [], "max_admits": 1, "valid_until": None, "scope_revision": "rev-1"},
                "admits_issued": 0, "admits_remaining": 1, "reason": "SWITCHED_OFF"}}}
     posts = []
     browser, page, errors = _open(None, site, api, posts, size=(1366, 768), initial_path=None)
     try:
-        page.goto(site + "/console?view=work")
-        page.clock.run_for(2000)
-        page.locator("#work-policy-admission summary").click()
-        toggle = page.locator("#work-policy-admission-toggle")
+        page.add_init_script("sessionStorage.setItem('rosy-console-token', 'viewer-token')")
+        page.goto(site + "/console/policy")
+        toggle = page.locator("#policy-fleet-admission-toggle")
+        expect(toggle).to_be_visible()
         expect(toggle).to_be_disabled()
-        expect(toggle).to_have_attribute("reason", "운영자 권한이 필요합니다")
-        described = toggle.get_attribute("aria-describedby")
-        assert page.locator(f"#{described}").inner_text() == "운영자 권한이 필요합니다"
+        expect(toggle).to_have_attribute("reason", NAMED)
         toggle.click(force=True)
         assert not posts
-        assert page.locator("#work-list .work-auto-admit").count() == 0
         assert not errors
     finally:
         browser.close()

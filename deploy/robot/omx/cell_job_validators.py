@@ -4,16 +4,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 ARM = re.compile(r"arm_[abs]")
 ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
+TWO_ARM_SITE = re.compile(r"[a-z0-9_:-]{1,48}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
+MANIFEST_FILE = re.compile(r"(?:upkeep|cell-upkeep)-[a-z0-9_.-]{1,60}\.json")
 TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
 FILTER_OBJ = re.compile(r"[a-z0-9_,-]{1,120}")
 FILTER_COL = re.compile(r"[a-z0-9_,-]{1,64}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SAFE_PATH = re.compile(r"[A-Za-z0-9_./~:-]{1,240}")
+WORK_REL_PATH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
+HTTP_URL = re.compile(r"^https?://[A-Za-z0-9._:\[\]-]+(?:/[A-Za-z0-9_./-]*)?$")
+VIEW = re.compile(r"top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist")
+REPO_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+IMAGES_SPEC = re.compile(r"[a-z0-9_]+=[a-z0-9_]+(?:,[a-z0-9_]+=[a-z0-9_]+)*")
 FIELD = re.compile(r"\{(\w+)\}")
 
 
@@ -56,10 +64,90 @@ def _safe_path(v):
     return v
 
 
+def _workdir_rel_path(v):
+    if not isinstance(v, str) or not WORK_REL_PATH.fullmatch(v):
+        raise ValueError("must be a safe relative path inside workdir")
+    if v.startswith(("/", "\\", "~", "-")) or "\\" in v or ":" in v or "\x00" in v:
+        raise ValueError("must be a safe relative path inside workdir")
+    if any(part in ("", ".", "..") for part in Path(v).parts):
+        raise ValueError("must be a safe relative path inside workdir")
+    return v
+
+
+def _repo_id(v):
+    if not isinstance(v, str) or ".." in v or not REPO_ID.fullmatch(v):
+        raise ValueError("must be a safe org/repo identifier without '..'")
+    return v
+
+
+def resolve_under_workdir(workdir: Path, rel: str | Path) -> Path:
+    """Resolve a safe relative path strictly inside `workdir`, rejecting traversal and symlinks."""
+    rel_str = rel.as_posix() if isinstance(rel, Path) else rel
+    _workdir_rel_path(rel_str)
+    base = Path(workdir)
+    if base.is_symlink():
+        raise ValueError("workdir cannot be a symlink")
+    base_res = base.resolve()
+    cur = base
+    for part in Path(rel_str).parts:
+        cur = cur / part
+        if cur.is_symlink():
+            raise ValueError(f"symlink path component forbidden: {rel_str}")
+    if not cur.resolve().is_relative_to(base_res):
+        raise ValueError(f"path escapes workdir: {rel_str}")
+    return cur
+
+
 def _actor(v):
     if not isinstance(v, str) or not ACTOR.fullmatch(v) or ".." in str(v).replace("\\", "/").split("/"):
         raise ValueError(f"must match {ACTOR.pattern}")
     return v
+
+
+def _http_url(v):
+    if not isinstance(v, str) or len(v) > 240 or not HTTP_URL.fullmatch(v):
+        raise ValueError("must be an http(s) URL without query or credentials")
+    parsed = urlsplit(v)
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("must be an http(s) URL without query or credentials")
+    return v
+
+
+def _two_arm_task_sites(v: str) -> tuple[str, str]:
+    if not isinstance(v, str) or v.count("->") != 1:
+        raise ValueError("must be '<src>-><dst>'")
+    src, dst = (p.strip() for p in v.split("->", 1))
+    if not TWO_ARM_SITE.fullmatch(src) or not TWO_ARM_SITE.fullmatch(dst):
+        raise ValueError("task endpoint must be a valid site name")
+    if src == dst:
+        raise ValueError("task source and destination must differ")
+    return src, dst
+
+
+def validate_dual_routes(task_a, task_b, *, moving):
+    from cell_two_arm_verification import transfer_refusal
+
+    a, b = [tuple("belt" if v == "not_places:belt" else v for v in _two_arm_task_sites(raw))
+            for raw in (task_a, task_b)]
+    if a[1] == b[1] or (a[0] == b[0] and a[0] != "belt") or a[0] == b[1] or a[1] == b[0]:
+        raise ValueError("task_a and task_b overlap on non-belt site")
+    if moving and any(_is_amr_bed_site(v) for v in (*a, *b)):
+        raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+    tasks = {arm: {"src": src, "dst": dst} for arm, (src, dst) in zip(("a", "b"), (a, b))}
+    if refusal := transfer_refusal(tasks, dry_run=not moving):
+        raise ValueError(json.dumps(refusal))
+
+
+def _two_arm_task(v):
+    src, dst = _two_arm_task_sites(v)
+    return f"{src}->{dst}"
 
 
 def _roi(v):
@@ -69,6 +157,31 @@ def _roi(v):
 
 
 METRE = _num(-0.5, 0.5)
+
+
+def _route(v):
+    if not isinstance(v, list) or len(v) != 2:
+        raise ValueError("route requires [source, destination]")
+    return [_match(NAME)(site) for site in v]
+
+
+def _targets(v):
+    if not isinstance(v, list) or not (1 <= len(v) <= 12):
+        raise ValueError("1..12 'site:x,y' target entries")
+    out = []
+    for item in v:
+        if not isinstance(item, str) or item.count(":") != 1:
+            raise ValueError("each target must be 'site:x,y'")
+        site, xy = item.split(":", 1)
+        if not NAME.fullmatch(site) or xy.count(",") != 1:
+            raise ValueError("each target must be '<site>:<x>,<y>'")
+        xs, ys = xy.split(",", 1)
+        try:
+            x, y = float(xs), float(ys)
+        except ValueError as exc:
+            raise ValueError("target coordinates must be finite numbers in [-0.5, 0.5]") from exc
+        out.append(f"{site}:{METRE(x)},{METRE(y)}")
+    return out
 
 
 def _is_amr_bed_site(v: str) -> bool:
@@ -145,3 +258,18 @@ def _task_site_names(task_path: Path, config_path: Path | None) -> set[str]:
         except (OSError, ValueError):
             pass
     return names
+
+
+def _surface_amr_bed_sites(config_path: Path) -> set[str]:
+    """AMR-bed sites lacking numeric ``surface_z`` in a calibration config (fail closed on bad JSON)."""
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read surface calibration config: {exc}") from exc
+    sites = cfg.get("sites") if isinstance(cfg, dict) else None
+    if not isinstance(sites, dict):
+        raise ValueError("surface calibration config requires a sites object")
+    return {
+        name for name, entry in sites.items()
+        if _is_amr_bed_site(name) and (not isinstance(entry, dict) or isinstance(entry.get("surface_z"), bool) or not isinstance(entry.get("surface_z"), (int, float)))
+    }

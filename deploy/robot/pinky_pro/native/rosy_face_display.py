@@ -205,9 +205,7 @@ class FaceDisplay:
         self._drive_since: float | None = None
         self._testing: str | None = None
         self._testing_until = 0.0
-        self._awake = True
-        self._backlight = 100
-        self._ticks = 0
+        self._awake, self._backlight, self._ticks, self._last_panel = True, 100, 0, None
         self.shutting_down = False
         self.animating: tuple | None = None
         self._core_face_live = False  # tick may draw CORE's newest face (see step)
@@ -504,7 +502,7 @@ class FaceDisplay:
             self._core_face_live = bar is not None and core is not None and bar[0] == core.get("face")
             self._drawn = None
         else:
-            self.animating = None
+            self.animating = self._last_panel = None
             if kind == "sleep":
                 self._drawn = "sleep"
             else:
@@ -584,14 +582,17 @@ class FaceDisplay:
             intent = core.get("expression") if live else None
             if expires is not None and not live and self._core_face_live:
                 face = "basic"
-            intent = intent or {"gaze_x": 0., "resting": False}
+            intent = intent or {"gaze_x": 0., "resting": core.get("robot_mode") == "IDLE" and not core.get("recovery") and core.get("nav_state") in ("IDLE", "ARRIVED", "CANCELED", "FAILED")}
             frame = self._faces.next(face, expression=intent, now=self._clock())
         else:
             frame = self._faces.next(face)
         if frame is None:
             return False
-        if self._strip is not None:
-            frame = self._strip(frame, *bar)
-        self.lcd.show_panel(frame)
+        bar_key = tuple(bar)
+        if (self._faces.expressive and self._last_panel is not None
+                and self._last_panel[0] is frame and self._last_panel[1] == bar_key):
+            return False
+        self.lcd.show_panel(self._strip(frame, *bar) if self._strip is not None else frame)
+        self._last_panel = (frame, bar_key)
         self.frames += 1
         return True

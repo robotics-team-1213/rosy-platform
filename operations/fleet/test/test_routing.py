@@ -490,3 +490,58 @@ def test_a_part_way_place_whose_yaw_cannot_be_reached_says_so():
     assert err.value.code == "TRIP_ARRIVE_YAW_UNREACHABLE"
     body["places"][-1]["yaw"] = 0.0
     assert _edges(_plan(SiteMap.model_validate(body), (0.2, 0, 0), "P")) == ["ab"]
+
+
+def test_snap_start_picks_heading_compatible_segment_inside_tight_uturn():
+    """Inside a tight U-turn chord, the closest polyline segment may point the previous way while a curve segment within width_m/2 matches."""
+    poly = [
+        [-0.67252, -0.25132], [-0.926, -0.254], [-0.9599, -0.258], [-0.9915, -0.2696],
+        [-1.0186, -0.2881], [-1.0394, -0.3122], [-1.0525, -0.3403], [-1.057, -0.3704],
+        [-1.0525, -0.4005], [-1.0394, -0.4286], [-1.0186, -0.4527], [-0.9915, -0.4712],
+        [-0.9599, -0.4828], [-0.926, -0.4868], [-0.85, -0.4851], [-0.7224, -0.4826],
+        [0.1632, -0.47494],
+    ]
+    site = SiteMap(
+        places=[
+            {"id": "J_out", "name": "J_out", "x": -0.67252, "y": -0.25132, "kind": "junction"},
+            {"id": "S4", "name": "S4", "x": 0.1632, "y": -0.47494, "kind": "stop", "yaw": 0.0},
+        ],
+        edges=[{
+            "id": "loop_left", "from": "J_out", "to": "S4",
+            "polyline": poly, "direction": "one_way", "width_m": W, "speed_cap_mps": 0.1,
+        }],
+    )
+    plan = _plan(site, (-0.9323, -0.3358, -1.618), "S4")
+    assert _edges(plan) == ["loop_left"]
+    with pytest.raises(PlanError) as err:
+        _plan(site, (-0.9323, -0.3358, 0.0), "S4")
+    assert err.value.code == "TRIP_HEADING_CONFLICT"
+    with pytest.raises(PlanError) as err:
+        _plan(site, (-0.9323, -0.10, -1.618), "S4")
+    assert err.value.code == "TRIP_START_OFF_MAP"
+
+
+def test_snap_start_ignore_heading_accepts_reversed_bay_pose_for_nav2():
+    site = _map({"A": (0.0, 0.0, "stop"), "B": (1.0, 0.0, "stop")}, [("ab", "A", "B", False)])
+    with pytest.raises(PlanError) as err:
+        _plan(site, (0.2, 0.0, math.pi), "B", ignore_start_heading=False)
+    assert err.value.code == "TRIP_HEADING_CONFLICT"
+    plan = _plan(site, (0.2, 0.0, math.pi), "B", ignore_start_heading=True)
+    assert _edges(plan) == ["ab"]
+
+
+def test_nav2_margin_respects_nearest_lane_closures_direction_and_mode():
+    site = _map({"A": (0, 0), "B": (1, 0), "C": (0, .25), "D": (1, .25)},
+                [("lower", "A", "B"), ("upper", "C", "D")])
+    options = dict(ignore_start_heading=True, nav2_off_lane_margin_m=.02)
+    assert _edges(_plan(site, (.4, .11, 0.), "B", **options)) == ["lower"]
+    for start, goal, changes in [
+        ((.4, .11, 0.), "B", {"ignore_start_heading": False}),
+        ((.4, .11, 0.), "B", {"drive_modes": frozenset()}),
+        ((.4, .11, 0.), "B", {"blocked_edges": frozenset({"lower"})}),
+        ((.4, .11, 0.), "A", {}),  # a one-way lane still cannot run backwards
+        ((.4, .125, 0.), "D", {"nav2_off_lane_margin_m": .06}),  # equidistant parallel lanes
+        ((.4, .121, 0.), "B", {}),  # beyond the selected 20 mm margin
+    ]:
+        with pytest.raises(PlanError):
+            _plan(site, start, goal, **{**options, **changes})

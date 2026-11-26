@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import math
 
 import cv2
+import numpy as np
 import yaml
 from sensor_msgs.msg import CompressedImage, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
@@ -135,6 +137,18 @@ class LineObserverHelpersMixin:
             dst = self._odom_history.pose_at(dst_stamp)
             if src is None or dst is None:
                 return 'no_odom'
+            # Skip perspective warp + CCL when odom reports no planar pose change.
+            if (
+                abs(dst[0] - src[0]) < 1e-6
+                and abs(dst[1] - src[1]) < 1e-6
+                and abs(math.remainder(dst[2] - src[2], math.tau)) < 1e-6
+            ):
+                if cut > 0 and np.any(mask[:cut]):
+                    out_mask = mask.copy()
+                    out_mask[:cut] = 0
+                else:
+                    out_mask = mask
+                return out_mask, 0.0, 0.0
             moved = mask_homography(
                 ground,
                 self._lane_keeper._x_offset,
@@ -178,6 +192,65 @@ class LineObserverHelpersMixin:
         self._camera_controls_stable = summary.startswith(
             'exposure='
         ) or summary.startswith('v4l2 exposure=')
+
+    def _idle_keep_ttl(self) -> float:
+        if bool(self.get_parameter('learned_paint_motion_compensation').value):
+            return min(0.75, float(self.get_parameter('learned_paint_max_age_s').value) * 0.8)
+        return min(0.45, float(self.get_parameter('learned_paint_stale_s').value) * 0.75)
+
+    def _idle_keep_still(self, image_stamp: float, cmd) -> bool:
+        odom_fresh = self._odom_stamp is not None and abs(image_stamp - self._odom_stamp) <= 0.5
+        return bool(
+            odom_fresh
+            and self._odom_twist is not None
+            and abs(self._odom_twist[0]) < 0.005
+            and abs(self._odom_twist[1]) < 0.025
+            and (cmd is None or (abs(cmd[0]) < 1e-3 and abs(cmd[1]) < 1e-3))
+        )
+
+    def _wall_ahead_key(self, image_stamp: float):
+        wa = self._wall_ahead
+        if wa is None or wa[1] is None or abs(image_stamp - wa[1]) > 0.5:
+            return None
+        ahead, _, side, front = wa
+        side_key = None if not isinstance(side, dict) else tuple(
+            (k, None if v is None else round(float(v), 2)) for k, v in sorted(side.items()))
+        return (None if ahead is None else round(float(ahead), 2), side_key,
+                None if front is None else round(float(front), 2))
+
+    def _idle_keep_key(self, frame, image_stamp: float, route_context_seq):
+        lg = self._lane_guide
+        guide = lg.for_frame(image_stamp) if hasattr(lg, 'for_frame') else None
+        return (frame.shape, route_context_seq, self._wall_ahead_key(image_stamp), lg.generation,
+                getattr(lg, '_epoch', None), getattr(lg, '_seq', None),
+                guide is not None, self._drivable_steer, self._ground_label())
+
+    def _try_reuse_idle_keep(self, msg, frame, image_stamp: float, route_context_seq, cmd) -> bool:
+        cache = self._idle_keep_cache
+        if cache is None or not self._idle_keep_still(image_stamp, cmd):
+            return False
+        key = self._idle_keep_key(frame, image_stamp, route_context_seq)
+        c_stamp, c_key, c_thumb, c_obs, c_qual, c_cont, c_bundle = cache
+        if (c_key != key or not 0.0 <= image_stamp - c_stamp < self._idle_keep_ttl()
+                or float(np.abs(frame[::8, ::8].astype(np.int16) - c_thumb).mean()) >= 2.5):
+            return False
+        self._keep_last_stamp = image_stamp
+        self._idle_keep_skipped = True
+        self._keep_debug_pub.publish(String(data=json.dumps({**c_bundle, 'stamp': image_stamp}, default=float)))
+        self._publish('CAMERA_LINE', c_obs, stamp=image_stamp, quality=c_qual,
+                      containment=(None if c_cont is None else {**c_cont, 'stamp': image_stamp}),
+                      route_context_seq=route_context_seq)
+        self._publish_debug(msg, frame, c_obs)
+        return True
+
+    def _save_idle_keep(self, frame, image_stamp: float, route_context_seq, cmd,
+                        obs, quality, containment, bundle) -> None:
+        if not self._idle_keep_still(image_stamp, cmd):
+            self._idle_keep_cache = None
+            return
+        self._idle_keep_cache = (
+            image_stamp, self._idle_keep_key(frame, image_stamp, route_context_seq),
+            frame[::8, ::8].copy(), obs, quality, containment, bundle)
 
 
 __all__ = [

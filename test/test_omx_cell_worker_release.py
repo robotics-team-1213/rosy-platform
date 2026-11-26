@@ -52,13 +52,24 @@ def test_services_manifest_declares_the_worker_managed():
 def test_wrappers_take_tools_from_the_release_and_keep_every_guard(arm, name):
     text = (WRAPPERS / name).read_text(encoding="utf-8")
     assert "\r" not in text and text.startswith("#!/bin/bash\n")
-    for gone in ("omx-tools-current", "tools-env-current", "OMX_ENV"):
+    for gone in ("omx-tools-current", "tools-env-current", "OMX_ENV", "ps -eo", "$ARM"):
         assert gone not in text, gone
     assert '. "$here/tools-env.sh"' in text
-    for guard in (f"systemctl --user stop rosy-omx-observer@{arm}.service", f"flock -n ~/rosy-omx/session-{arm}.lock true",
+    for guard in (f"systemctl --user stop rosy-omx-observer@{arm}.service",
+                  f"systemctl --user is-active --quiet rosy-omx-observer@{arm}.service",
+                  f"flock -n ~/rosy-omx/session-{arm}.lock true",
                   "REFUSED: the arm session lock is held", "REFUSED: the arm session did not start", 'exec "$@"',
-                  "omx-observation-bridge.env", f"--arm {arm}"):
+                  "omx-observation-bridge.env", f"--arm {arm}", "O_NONBLOCK",
+                  'observer_handoff.py"', f"release {arm}", "kill -0 $bg_pid"):
         assert guard in text, guard
+
+
+@pytest.mark.skipif(not shutil.which("bash"), reason="needs bash")
+@pytest.mark.parametrize("arm,name", ARMS.items())
+def test_wrappers_pass_bash_syntax_check(arm, name):
+    res = subprocess.run([shutil.which("bash"), "-n", WRAPPERS.joinpath(name).as_posix()],
+                         capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
 
 
 def test_tools_env_ignores_the_hand_switched_link():

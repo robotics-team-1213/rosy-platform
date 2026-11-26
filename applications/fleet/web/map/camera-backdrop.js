@@ -4,7 +4,8 @@
 import { setOffBy } from "/common/cause-line.js";
 import { evidenceAgeText } from "/common/core_ui_logic.js";
 
-import { siteBounds, fitTransform, project } from "./site-layer.js";
+import { siteBounds } from "./site-layer.js";
+import { fitBox } from "/console/assets/site-map-model.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 import { createPlaneFeed, planeCalibration, planeToMap } from "/console/assets/vision-view.js";
@@ -52,23 +53,31 @@ export function planeAffine(plane, width, height, toPx) {
 // 이웃 삼각형 사이 머리카락 틈이 보이지 않게 잘라 내는 경로를 화면에서 0.5 px 넓힌다.
 // 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
 // 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
-const topDownCache = new Map();
-function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height, dpr, rot = 0, alpha = 1) {
+function drawCameraTopDown(topDownCache, ctx, frame, calibration, bounds, toPx, width, height, dpr, rot = 0, alpha = 1) {
   const image = frame.image;
+  const lp = calibration.lens_profile ?? null;
   const key = [calibration.source_id, calibration.map_id, calibration.calibration_revision,
-    frame.seq || "", ...calibration.map_to_image, width, height, dpr, rot,
+    ...calibration.map_to_image, lp ? JSON.stringify(lp.D) : "", width, height, dpr, rot,
     bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
   let cached = topDownCache.get(key);
-  if (!cached || cached.image !== image) {
+  const targetW = Math.round(width * dpr), targetH = Math.round(height * dpr);
+  if (!cached) {
     const off = document.createElement("canvas");
-    off.width = Math.round(width * dpr);
-    off.height = Math.round(height * dpr);
-    const octx = off.getContext("2d");
-    octx.scale(dpr, dpr);
-    warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
-    cached = { frame, image, canvas: off };
+    cached = { seq: null, image: null, canvas: off };
     topDownCache.set(key, cached);
     if (topDownCache.size > 2) topDownCache.delete(topDownCache.keys().next().value);
+  }
+  if (cached.image !== image || cached.seq !== frame.seq || cached.canvas.width !== targetW || cached.canvas.height !== targetH) {
+    const off = cached.canvas;
+    if (off.width !== targetW) off.width = targetW;
+    if (off.height !== targetH) off.height = targetH;
+    const octx = off.getContext("2d");
+    if (octx.setTransform) octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    else if (octx.scale) octx.scale(dpr, dpr);
+    if (octx.clearRect) octx.clearRect(0, 0, width, height);
+    warpOnto(octx, image, calibration.map_to_image, bounds, toPx, lp);
+    cached.image = image;
+    cached.seq = frame.seq;
   }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -76,8 +85,16 @@ function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height,
   ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();
 }
-function warpOnto(ctx, image, mapToImage, bounds, toPx) {
-  for (const tri of warpMesh(mapToImage, bounds)) {
+let lastWarp = null;
+function warpOnto(ctx, image, mapToImage, bounds, toPx, lensProfile = null) {
+  const lpSig = lensProfile ? JSON.stringify([lensProfile.model, lensProfile.K, lensProfile.D]) : "";
+  const key = Array.isArray(mapToImage) && mapToImage.length === 9 && bounds
+    ? [...mapToImage, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y, lpSig] : null;
+  if (!key || !lastWarp || key.length !== lastWarp.key.length || !lastWarp.key.every((v, i) => v === key[i])) {
+    lastWarp = key ? { key, mesh: warpMesh(mapToImage, bounds, 24, 12, lensProfile) } : null;
+  }
+  const mesh = lastWarp ? lastWarp.mesh : warpMesh(mapToImage, bounds, 24, 12, lensProfile);
+  for (const tri of mesh) {
     const dst = tri.map.map(([x, y]) => { const p = toPx(x, y); return [p.x, p.y]; });
     const affine = affineFromTriangles(tri.image, dst);
     if (!affine) continue;
@@ -108,6 +125,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
   let planeKey = null;
   let staleAt = 0; // 영상이 끊긴 시각(0 = 살아 있음). 그림을 지우는 대신 반투명+시각 글자로만 알린다.
   let lastCorrectedKey = null, lastCorrectedImage = null, lastCorrectedCleared = false;
+  const topDownCache = new Map();
   const calibration = () => {
     const activeId = view.activeSiteMap?.map?.map_id;
     return cameraMapCalibration(cameraFrame,
@@ -163,12 +181,12 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
   function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot, pic = displayedPicture(record)) {
     const alpha = pic.stale ? 0.5 : 1;
     if (pic.kind === "raw") {
-      drawCameraTopDown(ctx, pic.frame, record, bounds, toPx, width, height, dpr, rot, alpha);
+      drawCameraTopDown(topDownCache, ctx, pic.frame, record, bounds, toPx, width, height, dpr, rot, alpha);
       return;
     }
     if (pic.kind !== "plane") return;
     const { image, plane } = pic.frame;
-    const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
+    const affine = planeAffine(plane, image.naturalWidth ?? image.width, image.naturalHeight ?? image.height, toPx);
     if (!affine) return;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -209,8 +227,8 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     lastCorrectedImage = image;
     canvas.width = 480; canvas.height = 270;
     const ctx = canvas.getContext("2d");
-    const transform = fitTransform(bounds, canvas.width, canvas.height, 8);
-    const toPx = (x, y) => { const p = project(transform, x, y); return {x: p.px, y: p.py}; };
+    const fit = fitBox(bounds, canvas.width, canvas.height, 8);
+    const toPx = (x, y) => { const [px, py] = fit.toPx(x, y); return {x: px, y: py}; };
     drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0, pic);
   }
   function redraw() {
@@ -239,7 +257,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
     const mode = el("map-display-mode");
-    view.displayMode = mode.value || "coordinates";
+    view.displayMode = mode.value || "overlay";
     const setLive = (url) => {
       birdseye.hidden = !url;
       if (url) birdseye.src = url;
@@ -279,7 +297,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     };
     scope.interval(updateStamp, 1000);
     scope.listen(toggle, "click", () => {
-      setMode(view.displayMode === "camera" ? "coordinates" : "camera");
+      setMode(view.displayMode === "camera" ? "overlay" : "camera");
       showFrame();
     });
     let cancelMapCameraExpiry = () => {};

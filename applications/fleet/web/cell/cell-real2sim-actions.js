@@ -1,6 +1,14 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
 import {
+  pinkyCancelPath,
+  reparkClosePath,
+  RECOVERY_TOOLS_INVOKE_PATH,
+  cellPlanAdmitPath,
+  cellPlanCancelPath,
+  cellReadinessPath,
+} from './cell-pipeline-panel.js';
+import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
   DECISION_GATE_PATH,
@@ -30,6 +38,7 @@ const PRESENCE_CONFIRM_ERROR = {
 export function createCellActions(ctx) {
   const {request, $} = ctx;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
+  const activeRobotId = explicit => explicit || ctx.state?.selectedRobotId || 'rosy_46';
 
   function bindActionButton(btn, b, fallbackRobotId = 'rosy_46') {
     const targetRobotId = b.robot_id || fallbackRobotId;
@@ -53,8 +62,9 @@ export function createCellActions(ctx) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runStationZoneDispatch(b.zoneId, targetRobotId); });
     } else if (b.preset) {
       btn.dataset.cellQuickPreset = b.preset;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset); });
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset, b.robot_id); });
     } else if (b.pinkyAction) {
+      setOffBy(btn, ctx.namedReason());
       btn.dataset.pinkyQuickAction = b.pinkyAction;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
     } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
@@ -71,7 +81,7 @@ export function createCellActions(ctx) {
   }
 
   async function runHumanSafetyGate(cellId, humanDetected, robotId) {
-    const current = ctx.bump();
+    const myStopGen = ctx.state ? ++ctx.state.stopGen : 0;
     const actionTxt = humanDetected ? '사람 감지 비상정지(HUMAN_HOLD)' : '사람 이탈 · 작업 자동 재개';
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} (${cellId}) 처리 중입니다.`;
     try {
@@ -80,17 +90,24 @@ export function createCellActions(ctx) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({cell_id: cellId, human_detected: humanDetected, robot_id: robotId}),
       });
-      if (current !== ctx.gen()) return;
-      await refreshCellTasks(current);
-      if ($('cell-tasks-status')) {
-        const detail = humanDetected
-          ? `일시정지 태스크 ${(res.paused_tasks || []).length}건`
-          : `자동 재개 태스크 ${(res.resumed_tasks || []).length}건`;
-        $('cell-tasks-status').textContent = `${actionTxt} 완료 (${detail})`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const unconfirmed = Array.isArray(res?.unconfirmed_pinky_stops) ? res.unconfirmed_pinky_stops : [];
+      const stopConfirmed = res?.stop_confirmed === true && res?.ok !== false && unconfirmed.length === 0;
+      const warnMsg = !stopConfirmed
+        ? `${actionTxt} 경고: 셀 정지 적용됨 · Pinky 정지 미확인(${unconfirmed.join(', ') || '확인 필요'}) — 수동 확인 필요`
+        : '';
+      if (ctx.state) ctx.state.unconfirmedStopWarning = warnMsg;
+      const okMsg = !stopConfirmed ? warnMsg : `${actionTxt} 완료 (일시정지 태스크 ${(res.paused_tasks || []).length}건)`;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = okMsg;
+      await refreshCellTasks(ctx.gen());
+      if ($('cell-tasks-status') && (!ctx.state || myStopGen === ctx.state.stopGen)) {
+        $('cell-tasks-status').textContent = okMsg;
       }
     } catch (error) {
-      if (current !== ctx.gen()) return;
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} 실패: ${error.message}`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const errMsg = `${actionTxt} 실패 (정지 미확인 — 수동 확인 필요): ${error.message}`;
+      if (ctx.state && humanDetected) ctx.state.unconfirmedStopWarning = errMsg;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = errMsg;
     }
   }
 
@@ -107,7 +124,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
-        $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 실행 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+        $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 요청 등록됨 (QUEUED) -> ${res.pinky_task?.target_place || '—'}${spawned}`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -115,35 +132,53 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runVisionAutoCheck(cellId = 'cell_s') {
-    const current = ctx.bump();
-    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 자동 안전·이탈 점검 중입니다.`;
+  async function runVisionAutoCheck(cellId = 'cell_s', robotId = null) {
+    const myStopGen = ctx.state ? ++ctx.state.stopGen : 0;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 안전 비상정지 점검 중입니다.`;
     try {
       const res = await request(VISION_CHECK_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, robot_id: 'rosy_46'}),
+        body: JSON.stringify({
+          cell_id: cellId,
+          robot_id: activeRobotId(robotId),
+          human_detected: true,
+          intrusion_score: 1.0,
+          evidence_source: 'operator_camera_inspection',
+        }),
       });
-      if (current !== ctx.gen()) return;
-      await refreshCellTasks(current);
-      if ($('cell-tasks-status')) {
-        const v = res.vision || {};
-        $('cell-tasks-status').textContent = `비전 자동 점검(${cellId}) 완료: 사람 감지=${v.human_detected ? 'YES(E-Stop)' : 'NO(정상)'} · 이탈=${v.displaced_to || '없음'} · 프레임 ${v.snapshot_bytes ?? 0}B`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const v = res?.vision || {};
+      const unconfirmed = Array.isArray(res?.unconfirmed_pinky_stops) ? res.unconfirmed_pinky_stops : [];
+      const stopConfirmed = res?.stop_confirmed === true && res?.ok !== false && unconfirmed.length === 0;
+      const stopWarn = !stopConfirmed
+        ? ` · 경고: Pinky 정지 미확인(${unconfirmed.join(', ') || '확인 필요'})`
+        : '';
+      const msg = `비전 자동 점검(${cellId}) 완료: 사람 감지=${v.human_detected ? 'YES(E-Stop)' : 'NO(정상)'} · 이탈=${v.displaced_to || '없음'} · 프레임 ${v.snapshot_bytes ?? 0}B${stopWarn}`;
+      if (ctx.state) {
+        ctx.state.unconfirmedStopWarning = stopConfirmed ? '' : msg;
+      }
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = msg;
+      await refreshCellTasks(ctx.gen());
+      if ($('cell-tasks-status') && (!ctx.state || myStopGen === ctx.state.stopGen)) {
+        $('cell-tasks-status').textContent = msg;
       }
     } catch (error) {
-      if (current !== ctx.gen()) return;
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 자동 점검 실패: ${error.message}`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const errMsg = `비전 자동 점검 실패 (정지 미확인 — 수동 확인 필요): ${error.message}`;
+      if (ctx.state) ctx.state.unconfirmedStopWarning = errMsg;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = errMsg;
     }
   }
 
-  async function toggleCableGuard() {
+  async function toggleCableGuard(robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '선 꼬임 보호 모드를 전환하는 중입니다.';
     try {
       const res = await request(CABLE_GUARD_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({toggle: true, robot_id: 'rosy_46'}),
+        body: JSON.stringify({toggle: true, robot_id: activeRobotId(robotId)}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -227,7 +262,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const d = res.decision || {};
-        $('cell-tasks-status').textContent = `Decision(${subjectId}): ${d.choice || '—'} (${d.reason || ''}) -> 자동 실행 완료`;
+        $('cell-tasks-status').textContent = `Decision(${subjectId}): ${d.choice || '—'} (${d.reason || ''}) -> 판정·요청 등록됨`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -283,14 +318,74 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runQuickPreset(preset) {
+  async function cancelPinkyTask(taskId) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키 배차(${taskId}) 취소를 요청하는 중입니다.`;
+    try {
+      const res = await request(pinkyCancelPath(taskId), {method: 'POST'});
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = res?.confirmed === false
+          ? `정지 요청 전송됨 (${taskId}) · 트립 종료 미확인(자동 재시도 중)`
+          : `핑키 배차 취소 완료: ${taskId}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키 배차 취소 실패: ${error.message}`;
+    }
+  }
+
+  async function closeRepark(requestId, stateVal) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `재주차(${requestId}) ${stateVal} 보고 중입니다.`;
+    try {
+      const res = await request(reparkClosePath(requestId), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({state: stateVal}),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const retry = res?.request?.retry_task_id ? ` -> 재시도(${res.request.retry_task_id})` : '';
+        $('cell-tasks-status').textContent = `재주차(${requestId}) ${stateVal} 처리 완료${retry}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `재주차 처리 실패: ${error.message}`;
+    }
+  }
+
+  async function invokeRecoveryTool(payload) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 실행 중입니다.`;
+    try {
+      const res = await request(RECOVERY_TOOLS_INVOKE_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const act = res?.result?.action || res?.status || 'EXECUTED';
+        $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 완료: ${act}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 거부: ${error.message}`;
+    }
+  }
+
+  async function runQuickPreset(preset, robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 원클릭 프리셋(${preset})을 실행하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset}),
+        body: JSON.stringify({preset, robot_id: activeRobotId(robotId)}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -317,7 +412,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
-        $('cell-tasks-status').textContent = `핑키(${robotId}) ${action} 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+        $('cell-tasks-status').textContent = `핑키(${robotId}) ${action} 배차 요청 등록됨 (QUEUED) -> ${res.pinky_task?.target_place || '—'}${spawned}`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -333,7 +428,7 @@ export function createCellActions(ctx) {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset}),
+        body: JSON.stringify({preset, robot_id: activeRobotId()}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -359,7 +454,7 @@ export function createCellActions(ctx) {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, arm_id: armId, tier, displaced_to: displacedTo, dst_site: dstSite}),
+        body: JSON.stringify({cell_id: cellId, arm_id: armId, robot_id: activeRobotId(), tier, displaced_to: displacedTo, dst_site: dstSite}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -372,5 +467,51 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  async function admitCellPlan(plan) {
+    const current = ctx.bump();
+    const cellId = plan?.cell_id || 'cell_ab';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획(${plan?.plan_id}) 일괄 승인 준비 중입니다.`;
+    try {
+      const rdy = await request(cellReadinessPath(cellId));
+      if (current !== ctx.gen()) return;
+      const body = {
+        expected_dispatch_generation: rdy.dispatch_generation,
+        expected_stop_generation: rdy.stop_generation,
+        expected_readiness_digest: rdy.readiness_digest,
+      };
+      if (plan?.request_digest) body.expected_request_digest = plan.request_digest;
+      if (plan?.context_sha256) body.expected_context_sha256 = plan.context_sha256;
+      await request(cellPlanAdmitPath(plan.plan_id), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 일괄 승인 완료: ${plan.plan_id}`;
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 일괄 승인 실패: ${error.message}`;
+    }
+  }
+
+  async function cancelCellPlan(plan) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획(${plan?.plan_id}) 취소를 요청하는 중입니다.`;
+    try {
+      await request(cellPlanCancelPath(plan.plan_id), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: '운전자 계획 취소'}),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 취소 완료: ${plan.plan_id}`;
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 취소 실패: ${error.message}`;
+    }
+  }
+
+  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, admitCellPlan, cancelCellPlan, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }

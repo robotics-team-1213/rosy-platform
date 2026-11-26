@@ -21,6 +21,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
+from fleet.localization import trust
 from fleet.routing.brief import route_context
 from fleet.routing.execute import arc_id, plan_body
 from fleet.routing.snap import PlanError
@@ -97,11 +98,17 @@ class TripRequest(BaseModel):
     start_at: Optional[PlaceRef] = None
     #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
     convoy: Optional[TripConvoy] = None
+    camera_lane_fallback: bool = Field(default=False, strict=True)
     #: Optional Nav2 road-following execution mode over site-map edges.
     drive_mode: Optional[Literal["nav2"]] = None
+    approved_slam_required: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def _cycle(self) -> "TripRequest":
+        if self.approved_slam_required and (self.drive_mode != "nav2" or not isinstance(self.to, str)):
+            raise ValueError("approved_slam_required needs Nav2 and a named destination")
+        if self.camera_lane_fallback and (not self.approved_slam_required or self.repeat):
+            raise ValueError("camera_lane_fallback needs a finite approved SLAM Nav2 trip")
         if self.repeat and (not isinstance(self.to, str) or not self.via):
             raise ValueError("repeat needs a place id in to and at least one via place")
         if self.convoy is not None and not self.repeat:
@@ -131,6 +138,10 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
 def install_trip_routes(app, *, console, site_maps, routing_config, require_operator, require_named_operator,
                         caps_for, runner, read_guard) -> None:
     app.state.trip_runner = runner
+    if getattr(runner, "human_hold_fn", None) is None:
+        runner.human_hold_fn = lambda: bool(
+            callable(getattr(app.state, "pipeline_human_hold_fn", None)) and app.state.pipeline_human_hold_fn()
+        )
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
@@ -159,6 +170,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
+        from fleet.server.rear_bay_return import rear_bay
+        try:
+            parking = rear_bay(active[2], body.to) if not body.repeat else None
+        except TripError as exc:
+            record({"error": exc.code, "detail": exc.detail})
+            raise _refuse(exc.code, exc.detail, exc.status) from exc
+        if parking and (body.via or body.blocked_edges or body.extra_cost or body.speed_cap is not None
+                        or body.arrive_yaw is not None or body.convoy):
+            record({"error": "CHARGE_RETURN_CUSTOM_ROUTE_UNSUPPORTED"})
+            raise _refuse("CHARGE_RETURN_CUSTOM_ROUTE_UNSUPPORTED")
         known_edges = {arc.edge_id for arc in active[2].arcs.values()}
         for edge in (*body.blocked_edges, *body.extra_cost):
             if edge not in known_edges:
@@ -172,13 +193,17 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # The trip loop's own map pose first (D-494 3, D-593 1): a motor-mode robot reports no
         # localization, so its Rosy Cam MapPose is its only map pose. A robot-reported LOCALIZED
         # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
-        nav2 = body.drive_mode == "nav2"
+        nav2 = body.drive_mode == "nav2" or parking is not None
+        if parking:
+            summary.update(drive_mode="nav2")
         precision = commissioned_stop(active[2], body.to)
         if nav2 and precision is not None:
             record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
             raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
         binding_id = None
-        if precision is not None:
+        bound_nav2 = nav2 and isinstance(body.to, str) and (body.approved_slam_required
+                                                            or runner.config.map_binding_required)
+        if precision is not None or bound_nav2:
             bound = await read_precision_pose(runner, robot_id, active[0])
             if bound is None:
                 detail = {"reason": "APPROVED_SLAM_POSE_REQUIRED"}
@@ -186,10 +211,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
             map_pose, binding_id = bound
         else:
-            map_pose = await runner.map_pose(robot_id)
+            try:
+                map_pose = await runner.map_pose(robot_id)
+            except (HubError, RobotApiError, OSError) as exc:
+                record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
+                raise http_error(exc) from exc
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
+        elif bound_nav2:
+            pose = None
         else:
             try:
                 pose = await console.trusted_map_pose(robot_id)
@@ -209,10 +240,17 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 record({"error": "TRIP_START_PLACE_MISMATCH", "detail": detail})
                 raise _refuse("TRIP_START_PLACE_MISMATCH", detail)
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
+        if parking:
+            goal = parking["staging_place_id"]
+
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
+        if bound_nav2 and (caps is None or not caps.bound_route):
+            detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
+            record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
+            raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
         if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
             detail = {"drive_mode": "free"}
             record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
@@ -225,7 +263,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
-                              stop_offset=not (nav2 and body.repeat), **bounds)
+                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
+                              nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0, **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
@@ -238,8 +277,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         plan_data = plan_body(plan)
-        if binding_id is not None:
-            if nav2 or not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
+        if parking:
+            plan_data["parking_handoff"] = parking
+            staging_distance = math.dist(pose[:2], active[2].place_xy(goal))
+            plan_data["staging_distance_m"] = round(staging_distance, 4)
+            if staging_distance <= runner.config.arrive_free_m:
+                parking["plan_prerequisites"] = await runner.rear_bay_port.prerequisites(robot_id, parking)
+        if bound_nav2:
+            plan_data["nav2_binding_id"] = binding_id
+        elif binding_id is not None:
+            if not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
                 record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
                 raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
             plan_data["precision_binding_id"] = binding_id
@@ -251,7 +298,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         plan_data["start_check"] = start_check(
-            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2)
+            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2,
+            off_lane_margin_m=runner.config.nav2_off_lane_margin_m)
         if (precision is None and runner.config.auto_align
                 and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
                 and plan_data["start_check"]["heading_err_deg"] is not None):
@@ -271,19 +319,86 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         })
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
                 "plan": plan_data, "context": context})
-        return {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+        response = {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+        if bound_nav2:
+            response["nav2_preflight"] = {"code": None, "binding_required": True, "binding_status": "MATCHED"}
+        elif nav2:
+            state = None
+            if runner._robot_state is not None:
+                try:
+                    state = await runner._call(runner._robot_state(robot_id), "ROBOT_POSE_UNTRUSTED")
+                except TripError:
+                    pass
+            fit, binding_status = site_maps.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+            required = runner.config.map_binding_required
+            code = None
+            if trust.classify(state) != trust.TRUSTED:
+                code = "ROBOT_POSE_UNTRUSTED"
+            elif caps is None:
+                code = "TRIP_ROBOT_CAPS_UNKNOWN"
+            elif required and fit is None:
+                code = binding_status
+            response["nav2_preflight"] = {"code": code, "binding_required": required,
+                                          "binding_status": "MATCHED" if fit is not None else binding_status}
+        return response
 
+    from fleet.server.rear_bay_return import RearBayPort
+    runner.rear_bay_port = RearBayPort(console, (*runner.halts.restarted, *runner.halts.gave_up))
+    runner.halts.dock_stop = runner.rear_bay_port.halt
     app.state.trip_plan = plan
+
+    @app.get("/api/fleet/robots/{robot_id}/bays/{bay_id}/dock-prerequisites", dependencies=read_guard, tags=["fleet"])
+    async def dock_prerequisites(robot_id: str, bay_id: str) -> dict:
+        from fleet.server.rear_bay_return import rear_bay
+        if robot_id not in console.robot_ids:
+            raise _refuse("UNKNOWN_ROBOT", status=404)
+        active = site_maps.active()
+        if active is None:
+            raise _refuse("TRIP_NO_ACTIVE_MAP")
+        try:
+            info = rear_bay(active[2], bay_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+        if info is None:
+            raise _refuse("CHARGE_BAY_APPROACH_UNAVAILABLE", status=404)
+        return await runner.rear_bay_port.prerequisites(robot_id, info)
 
     def trip_error(exc: TripError) -> HTTPException:
         return _refuse(exc.code, exc.detail, exc.status)
 
     @app.post("/api/fleet/trips/{plan_id}/start", tags=["fleet"])
     async def fleet_trip_start(plan_id: str, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        def receipt(stage, code=None, detail=None):
+            try:
+                row = site_maps.plan(plan_id)
+                if row is not None:
+                    site_maps.record_event("trip_start_receipt", principal.principal_id, {
+                        "plan_id": plan_id, "robot_id": row["robot_id"], "to": row["request"].get("to"),
+                        "stage": stage, "code": code, "detail": detail or {}})
+            except sqlite3.Error:
+                _LOG.exception("trip receipt write failed plan_id=%s stage=%s code=%s", plan_id, stage, code)
         try:
-            return await runner.start(plan_id, principal.principal_id)
+            trip = await runner.start(plan_id, principal.principal_id)
         except TripError as exc:
+            receipt("start_refused", exc.code, exc.detail)
             raise trip_error(exc) from exc
+        receipt("start_accepted")
+        return runner.execution_view(trip)
+
+    @app.get("/api/fleet/trip-requests", dependencies=read_guard, tags=["fleet"])
+    def trip_request_history() -> dict:
+        rows = site_maps.trip_request_history()
+        for row in rows:
+            if row["stage"] == "start_accepted":
+                trip = runner.view(row["plan_id"])
+                if trip and trip["robot_id"] == row["robot_id"]:
+                    detail = trip.get("detail") or {}
+                    row["outcome"] = {"robot_id": trip["robot_id"], "state": trip["state"],
+                                      "reason": trip.get("reason"), "detail": {k: detail[k] for k in
+                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait",
+                                       "wait_prefix", "last_peer_observation_retry", "held_lidar_observation",
+                                       "stop_sent") if k in detail}}
+        return {"requests": rows}
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
     async def fleet_trip_cancel(trip_id: str,  # D-540 9: a stop stays open
@@ -320,7 +435,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
 
     @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
     def fleet_trips() -> dict:
-        return {"running": runner.running(), "open": runner.open_trips(), "trips": runner.recent()}
+        active = [runner.execution_view(row) for row in runner.open_trips()]
+        return {"running": max(active, key=lambda t: t["created_at"], default=None), "open": active,
+                "trips": [runner.execution_view(row) for row in runner.recent()]}
 
     @app.get("/api/fleet/traffic", dependencies=read_guard, tags=["fleet"])
     def fleet_traffic() -> dict:
@@ -388,4 +505,4 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         view = runner.view(trip_id)
         if view is None:
             raise _refuse("TRIP_UNKNOWN", status=404)
-        return view
+        return runner.execution_view(view)

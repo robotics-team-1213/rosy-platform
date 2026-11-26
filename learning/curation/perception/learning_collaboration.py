@@ -13,6 +13,7 @@ from learning_repos import create_private, delete_private, list_repos
 
 COOKIE = 'rosy_learning_session'
 BINDING = 'rosy_learning_oauth'
+ACCOUNT_DESTINATIONS = ('/accounts', '/', '/learning/world')
 
 
 def cookie(handler, name):
@@ -146,7 +147,7 @@ class Collaboration:
             handler.extra_headers.append(('Location', target))
             handler.send(b'',303)
             return True
-        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/learning-ui.js', '/learning-poll.js', '/app.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
@@ -171,7 +172,10 @@ class Collaboration:
             principal = self.identity(handler)
         except PermissionError:
             if not path.startswith('/api/'):
-                handler.extra_headers.append(('Location', '/accounts'))
+                location = '/accounts'
+                if self.receiver and path == '/learning/world' and not handler.learning_signed_in:
+                    location = '/api/account/login?return=/learning/world'
+                handler.extra_headers.append(('Location', location))
                 handler.send(b'', 303)
             elif self.signed_in(handler):
                 # 401 would send a signed-in Account user back to login in a loop.
@@ -369,7 +373,7 @@ def load(config_path, store):
         raise ValueError('collaboration requires account_client_file (Rosy Account sign-in)')
     from core_common.protocol.account_client import load_account_client
     from learning_rosy_accounts import RosyAccounts
-    receiver = load_account_client(private_path('account_client_file'), destinations=('/accounts','/'))
+    receiver = load_account_client(private_path('account_client_file'), destinations=ACCOUNT_DESTINATIONS)
     if receiver.callback != config.get('public_origin', '') + '/api/account/callback':
         raise ValueError('Account callback must match public_origin')
     accounts = RosyAccounts(private_path('accounts_db'), private_path('key_file'), path, receiver=receiver)

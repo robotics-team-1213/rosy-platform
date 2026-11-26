@@ -97,3 +97,34 @@ def test_missing_joint_limits_are_refused_only_with_the_flag():
 
 def test_an_unknown_frame_size_is_a_problem_not_a_pass():
     assert "top frame size unknown" in pp.pivot_precheck(config(), CAL, "belt", (0.0, 0.2), [-80, 0, 80, 120])[0]
+
+
+def test_tcp_map_checks_shifted_ref_jaw_margin_without_geometry():
+    tcp_cal = {"sites": {"belt": {"homography": H, "z_view": 0.08, "marks": "tcp"}}}
+    cfg = config(edge_margin_px=40)
+    cfg["params"] = {"jaw_side.other_mm": 54.0, "jaw_side.other_deg": 90.0}
+    # At yaw 0, tcp_geometry shifts ref jaw -27 px in y: (0.0, 0.05) puts TCP at y=50 px (ok) but ref at y=23 px (< 40).
+    probs = pp.pivot_precheck(cfg, tcp_cal, "belt", (0.0, 0.05), [-60, -20, 20, 60], (640, 480))
+    assert any("within 40 px of the 640x480 top frame edge" in p for p in probs)
+
+
+def test_geometry_radius_bounds_and_bias_history_cross_check(tmp_path):
+    import cell_attempts
+    cal_path = tmp_path / "cal.json"
+    bad_lo = pp.pivot_precheck(config(geometry={"radius_mm": 5.0, "phase_deg": 0.0}), CAL, "belt", (0.0, 0.2), [0, 40], (640, 480))
+    bad_hi = pp.pivot_precheck(config(geometry={"radius_mm": 85.0, "phase_deg": 0.0}), CAL, "belt", (0.0, 0.2), [0, 40], (640, 480))
+    assert any("outside [12.0, 40.0] mm" in p for p in bad_lo) and any("outside [12.0, 40.0] mm" in p for p in bad_hi)
+
+    bias_file = cell_pivot.bias_path(cal_path)
+    cell_pivot.save_bias(bias_file, {
+        "site": "floor", "kind": "pivot", "point_m": [0.0, 0.2], "bias_mm": [0.0, 0.0],
+        "radius_mm": 31.8, "phase_deg": 75.6, "z_view": 0.08,
+        "map_sha": cell_attempts.digest(CAL["sites"]["belt"]), "measured": "2026-11-24T22:54:28+00:00",
+    })
+    stale_cfg = dict(config(geometry={"radius_mm": 26.3, "phase_deg": 80.1}), calibration_path=str(cal_path))
+    probs = pp.pivot_precheck(stale_cfg, CAL, "belt", (0.0, 0.2), [0, 40], (640, 480))
+    assert any("disagrees by" in p and "31.8 mm @ 75.6 deg" in p for p in probs)
+    good_cfg = dict(config(geometry={"radius_mm": 31.8, "phase_deg": 75.6}), calibration_path=str(cal_path))
+    assert pp.pivot_precheck(good_cfg, CAL, "belt", (0.0, 0.2), [0, 40], (640, 480)) == []
+    diff_z_cfg = dict(config(geometry={"radius_mm": 26.3, "phase_deg": 80.1}, z_view=0.12), calibration_path=str(cal_path))
+    assert pp.pivot_precheck(diff_z_cfg, CAL, "belt", (0.0, 0.2), [0, 40], (640, 480)) == []

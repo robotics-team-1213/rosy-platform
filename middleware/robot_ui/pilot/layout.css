@@ -232,7 +232,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .sim-jog ui-button { flex: 1 1 0; }
 [data-sim-readback] { overflow: auto; max-height: 20rem; margin: 0; padding: var(--space-3);
   font-family: var(--mono); font-size: var(--text-label); background: var(--surface-recessed);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
+  border: 1px solid var(--line-10); border-radius: var(--radius-panel); }
 .arm-hint { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
 
 /* D-411 B·C 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
@@ -245,7 +245,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-controls { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
 .arm-controls > section {
   display: grid; gap: var(--space-3); align-content: start; min-width: 0;
-  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-subtle);
+  padding: var(--space-4); background: var(--surface-chrome); border: 1px solid var(--line-06);
   border-radius: var(--radius-panel);
 }
 .arm-controls > section[data-control="joint_jog"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -258,7 +258,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-controls > section[data-control-unsupported] { border-style: dashed; }
 .arm-actions {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4);
-  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-subtle);
+  padding: var(--space-4); background: var(--surface-chrome); border: 1px solid var(--line-06);
   border-radius: var(--radius-panel);
 }
 
@@ -267,12 +267,12 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .arm-status-row > p { margin: 0; }
 .arm-sensors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.arm-chip { font-size: var(--text-label); padding: 0 var(--space-2); border-radius: var(--radius-flag); border: 1px solid var(--border-subtle); }
+.arm-chip { font-size: var(--text-label); padding: 0 var(--space-2); border-radius: var(--radius-flag); border: 1px solid var(--line-10); }
 .arm-chip[data-state="fresh"] { border-color: var(--status-good); color: var(--status-good); }
 .arm-chip[data-state="stale"] { border-color: var(--status-warn); }
 .arm-sensors .ui-table-scroll { max-width: 100%; overflow-x: auto; }   /* Pilot does not load component-controls.css */
 .arm-sensor-table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
-.arm-sensor-table :is(th, td) { padding: var(--space-1) var(--space-2); text-align: start; border-bottom: 1px solid var(--border-subtle); }
+.arm-sensor-table :is(th, td) { padding: var(--space-1) var(--space-2); text-align: start; border-bottom: 1px solid var(--line-06); }
 .arm-sensor-table td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .arm-sensor-table meter { width: 100%; min-width: 5rem; }
 
@@ -280,7 +280,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-steps { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   margin: var(--space-3) 0 0; padding: 0; list-style: none; counter-reset: arm-step; }
 .arm-steps > li { counter-increment: arm-step; display: grid; gap: var(--space-2); align-content: start; min-width: 0;
-  padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
+  padding: var(--space-3); background: var(--surface-chrome); border: 1px solid var(--line-06); border-radius: var(--radius-panel); }
 .arm-steps > li[data-state="current"] { border-color: var(--focus-ring); }
 [data-screen="arm"][data-recording] { padding-bottom: calc(var(--space-6) * 6); }
 [data-screen="arm"][data-recording] [data-sim-step="stop"] { position: fixed; z-index: 4;

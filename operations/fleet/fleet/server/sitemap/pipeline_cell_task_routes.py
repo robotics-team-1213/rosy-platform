@@ -1,29 +1,35 @@
 from __future__ import annotations
 
+from contextlib import nullcontext, suppress
 import time
 import uuid
 from types import SimpleNamespace
 from fastapi import HTTPException, Request
+from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
-from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
+from fleet.pipeline.cell_site_targets import act_route_refusal, expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
-from fleet.server.pipeline_pinky_dispatch import dispatch_fields, install_pinky_dispatch
+from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled, install_pinky_dispatch
 from fleet.server.pipeline_port_events import (
-    IDENTITY_INPUT_FIELDS,
-    TASK_IDENTITY_FIELDS,
-    has_identity_input,
-    task_view_for_request,
-    validate_task_identity,
+    IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity,
+)
+from core_common.profile import LEGACY_VEHICLE_SITE
+from .pipeline_cell_task_presets import cell_task_presets
+from .pipeline_governance_store import (
+    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id,
+    prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
-from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
+from fleet.server.sitemap.pipeline_unload_release import (
+    install_unload_release_routes, manifest_count,
+)
+from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
+from fleet.server.rfid_receipts import is_inbound_supply
 
-
-_LEGACY_VEHICLE_SITE = "pinky"
 #: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
 PLACE_OF_ACTION = {"dock_s3": "S3", "dock_and_unload_s3": "S3", "dock_s5": "S5", "charge_c1": "C1",
                    "charge_c2": "C2", "depart_s1": "S1"}
@@ -35,8 +41,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
     proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
     STATION_CAMERA_LINKS = ctx.STATION_CAMERA_LINKS
     _arm_live_catalog = ctx._arm_live_catalog
+    gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     zones_override_path = ctx.zones_override_path
     _save_ledger = ctx._save_ledger
+    _commit_ledger = getattr(ctx, "_commit_ledger", None)
     _is_human_detected = ctx._is_human_detected
     _evaluate_decision = ctx._evaluate_decision
     inputs = ctx.inputs
@@ -46,6 +54,17 @@ def install_cell_tasks_routes(app, ctx) -> None:
     def _aborted(cell_id: str) -> bool:
         state = app.state.omx_cell_states.get(cell_id) or {}
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
+
+    def _resolve_cell_robot_id(cell_id: str, spec: dict) -> str:
+        if "robot_id" in spec:
+            raw_robot_id = spec["robot_id"]
+            if not isinstance(raw_robot_id, str) or not raw_robot_id.strip():
+                raise HTTPException(422, detail={"code": "INVALID_ROBOT_ID"})
+            return raw_robot_id.strip()
+        docked = (app.state.omx_cell_states.get(cell_id) or {}).get("docked_robot") or {}
+        if isinstance(docked.get("robot_id"), str) and docked["robot_id"].strip():
+            return docked["robot_id"].strip()
+        return "rosy_01"
     @app.get("/api/fleet/pipeline/status", dependencies=read_guard)
     async def pipeline_status(request: Request):
         active = active_map()
@@ -114,23 +133,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
                     task["paused_from_status"] = task["status"]
                     task["status"] = "PAUSED_HUMAN"
                     _enrich_task_health(task)
-        _save_ledger()
+        _commit_ledger(bump_stop=True) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_stop_generation())
         return res
 
-    CELL_TASK_PRESETS: dict[str, dict] = {
-        "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
-        "s3_act_policy": {"preset": "s3_act_policy", "label": "S3 ACT 정책 구동 (arm_s · 최신 모델)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "execution_mode": "act_policy", "max_chunks": 4},
-        "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
-        "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
-        "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
-        "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
-        "s5_tier2_arm_b": {"preset": "s5_tier2_arm_b", "label": "S5 적재 2층 (arm_b: Belt -> Pallet L1)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None},
-        "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
-        "export_s3_belt": {"preset": "export_s3_belt", "label": "반출대 3 반출 (EXP_S3_BELT · arm_s)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "zone_id": "EXP_S3_BELT"},
-        "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
-        "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
-        "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
-    }
+    CELL_TASK_PRESETS = cell_task_presets()
 
     @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
     async def report_displaced_detection(request: Request):
@@ -146,7 +152,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
     async def list_cell_sites():
         return list_canonical_sites(getattr(app.state, "web_common", None))
 
-    def _build_cell_task(active, spec: dict, seen_ids: set[str] | None = None, *, principal_id: str | None = None) -> dict:
+    def _build_cell_task(active, spec: dict, seen_ids: set[str] | None = None, *,
+                         principal_id: str | None = None, principal_role: str | None = None) -> dict:
         cell_id = str(spec.get("cell_id") or "cell_s")
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
@@ -157,8 +164,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         web_common = getattr(app.state, "web_common", None)
         try:
             targets = resolve_cell_task_targets(
-                cell_id, spec, web_common=web_common, default_cell_s_src=_LEGACY_VEHICLE_SITE,
-                legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
+                legacy_sites=("belt", LEGACY_VEHICLE_SITE),
             )
             identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
@@ -171,8 +178,6 @@ def install_cell_tasks_routes(app, ctx) -> None:
         execution_mode = spec.get("execution_mode")
         if execution_mode is not None and execution_mode not in ("guarded_pick", "act_policy"):
             raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
-        if execution_mode == "act_policy" and (cell_id != "cell_s" or arm_id != "arm_s"):
-            raise HTTPException(422, detail={"code": "ACT_POLICY_UNSUPPORTED_ARM"})
         max_chunks = spec.get("max_chunks")
         if max_chunks is not None and (execution_mode != "act_policy" or type(max_chunks) is not int or not 1 <= max_chunks <= 6):
             raise HTTPException(422, detail={"code": "INVALID_MAX_CHUNKS"})
@@ -183,27 +188,35 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                       or directive.get("arm_id") != arm_id):
             raise HTTPException(422, detail={"code": "INVALID_CELL_DIRECTIVE"})
         raw_disp = spec.get("displaced_to")
-        if execution_mode == "act_policy" and raw_disp is not None:
-            raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
+        if execution_mode == "act_policy" and (refusal := act_route_refusal(cell_id, arm_id, targets["src_site"], targets["dst_site"], tier, raw_disp)):
+            raise HTTPException(422, detail={"code": refusal})
+        resolved_robot_id = _resolve_cell_robot_id(cell_id, spec)
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)
-        if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
-            resolved_disp = app.state.detected_displaced_site or "belt_far"
-            app.state.detected_displaced_site = None
-        else:
-            resolved_disp = raw_disp or None
         site_meta = (
             {"src_site_id": targets["src_site_id"], "dst_site_id": targets["dst_site_id"],
              "dst_wire_ref": targets["dst_wire_ref"],
              "dst_area": targets["dst_area"], "dst_slot": targets["dst_slot"]}
             if cell_id == "cell_ab" else {}
         )
-        return _enrich_task_health({
+        target_status, gov_meta = prepare_task_governance(
+            app, spec, principal_id=principal_id, principal_role=principal_role,
+            cell_id=cell_id, src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
+            active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
+            is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
+            vehicle_sites=(LEGACY_VEHICLE_SITE,),
+        )
+        if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
+            resolved_disp = app.state.detected_displaced_site or "belt_far"
+            app.state.detected_displaced_site = None
+        else:
+            resolved_disp = raw_disp or None
+        task = _enrich_task_health({
             "task_id": task_id,
             "cell_id": cell_id,
             "arm_id": arm_id,
             "directive": directive,
-            "robot_id": str(spec.get("robot_id") or "rosy_01"),
+            "robot_id": resolved_robot_id,
             "robot_kind": str(spec.get("robot_kind") or "pinky"),
             "src_site": targets["src_site"],
             "dst_site": targets["dst_site"],
@@ -216,71 +229,143 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
-            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint")
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint", "requires_presence_confirm")
                if k in spec},
             **{k: spec[k] for k in ("execution_mode", "max_chunks") if spec.get(k) is not None},
+            **gov_meta,
             "pose": pose,
-            "status": "QUEUED",
+            "status": target_status,
             "created_at": round(time.time(), 3),
         })
+        rfid = getattr(app.state, "rfid_receipts", None)
+        if rfid is not None and rfid.workcell and is_inbound_supply(task):
+            task.update(intake_occurrence_id=f"intake-{uuid.uuid4().hex}", intake_workcell=rfid.workcell)
+        return task
 
-    def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None) -> list[dict]:
+    def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None,
+                      principal_role: str | None = None, save: bool = True,
+                      idempotency: tuple[str, str] | None = None, retry_of=None) -> list[dict]:
         seen_ids: set[str] = set()
         built = []
-        for s in specs:
-            task = _build_cell_task(active, s, seen_ids=seen_ids, principal_id=principal_id)
+        for idx, s in enumerate(specs):
+            if idempotency is not None and len(specs) == 1 and not s.get("task_id"):
+                s = {**s, "task_id": deterministic_idempotency_id("cell", idempotency[0])}
+            task = _build_cell_task(active, s, seen_ids=seen_ids, principal_id=principal_id, principal_role=principal_role)
+            if retry_of is not None and "intake_occurrence_id" in task:
+                for key in ("intake_occurrence_id", "intake_workcell"):
+                    if key in retry_of:
+                        task[key] = retry_of[key]
+                    else:
+                        task.pop(key, None)
+            if idempotency is not None:
+                task["idempotency_key"], task["idempotency_body_sha256"] = idempotency[0], idempotency[1]
             seen_ids.add(task["task_id"])
             built.append(task)
         for task in built:
             app.state.omx_cell_tasks[task["task_id"]] = task
-        _save_ledger()
+        written = False
+        try:
+            if save:
+                bump = any(t["status"] == "QUEUED" for t in built)
+                idemp_row = (idempotency[0], idempotency[1], 200, {"ok": True, "task": built[0], "tasks": built}) if idempotency else None
+                if callable(_commit_ledger):
+                    written = True
+                    _commit_ledger(bump_dispatch=bump, idempotency=idemp_row)
+                else:
+                    _save_ledger()
+                    written = True
+                    if gov is not None and (bump or idemp_row is not None):
+                        if hasattr(gov, "commit_enqueue"):
+                            gov.commit_enqueue(bump_dispatch=bump, idempotency=idemp_row)
+                        else:
+                            if idemp_row is not None and hasattr(gov, "record_idempotency"):
+                                gov.record_idempotency(*idemp_row)
+                            if bump:
+                                gov.bump_dispatch_generation()
+        except Exception:
+            for t in built:
+                app.state.omx_cell_tasks.pop(t["task_id"], None)
+            if written and not getattr(app.state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    if callable(_commit_ledger):
+                        _commit_ledger(commit=False)
+                    else:
+                        _save_ledger()
+            raise
         return built
 
-    def _enqueue_one_task(active, spec: dict, *, principal_id: str | None = None) -> dict:
-        return _enqueue_many(active, [spec], principal_id=principal_id)[0]
+    def _enqueue_one_task(active, spec: dict, *, principal_id: str | None = None,
+                          principal_role: str | None = None, save: bool = True,
+                          idempotency: tuple[str, str] | None = None) -> dict:
+        return _enqueue_many(active, [spec], principal_id=principal_id, principal_role=principal_role, save=save, idempotency=idempotency)[0]
 
-    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=operator_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=proposer_guard)
     async def create_cell_task(request: Request):
         active = active_map()
         body = await request.json()
         if not isinstance(body, dict):
             raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
-        principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
-        if body.get("tiers") is not None:
-            base_id = str(body.get("task_id") or f"stack-{uuid.uuid4().hex[:6]}")
-            try:
-                specs = expand_multi_tier_specs(
-                    body, base_id=base_id, web_common=getattr(app.state, "web_common", None),
-                    legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
-                )
-            except ValueError as exc:
-                raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
-            created = _enqueue_many(active, specs, principal_id=principal_id)
-            return {"ok": True, "task": created[0], "tasks": created}
-        preset_key = body.get("preset")
-        if preset_key:
-            preset = CELL_TASK_PRESETS.get(str(preset_key))
-            if preset is None:
-                raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
-            if "steps" in preset:
-                if has_identity_input(body):
-                    raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
-                base_id = str(body.get("task_id") or f"pipe-{uuid.uuid4().hex[:6]}")
-                step_specs = []
-                for idx, step in enumerate(preset["steps"]):
-                    sid = f"{base_id}-{idx+1}-{step}"
-                    step_specs.append({
-                        **CELL_TASK_PRESETS[step], "robot_id": body.get("robot_id", "rosy_01"),
-                        "task_id": sid, "depends_on": step_specs[-1]["task_id"] if step_specs else None,
-                    })
-                created_tasks = _enqueue_many(active, step_specs, principal_id=principal_id)
-                return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
-            merged = {**preset, **{k: v for k, v in body.items()
-                                   if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit") or v is not None}}
-            task = _enqueue_one_task(active, merged, principal_id=principal_id)
+        principal = getattr(request.state, "site_principal", None)
+        principal_id = getattr(principal, "principal_id", None)
+        principal_role = getattr(principal, "role", None)
+        raw_key = body["request_key"] if "request_key" in body else request.headers.get("Idempotency-Key")
+        req_key = validate_request_key(raw_key)
+        scoped_key = scoped_idempotency_key(req_key, principal_id, principal_role) if req_key else None
+        body_hash = safe_canonical_digest({"principal_id": principal_id, "principal_role": principal_role, "body": body}) if scoped_key else None
+        idempotency = (scoped_key, body_hash) if scoped_key else None
+        with (gov._lock if gov is not None else nullcontext()):
+            if scoped_key and gov is not None and (cached := gov.check_idempotency(scoped_key, body_hash)):
+                return cached[1]
+            if body.get("tiers") is not None:
+                base_id = str(body.get("task_id") or (deterministic_idempotency_id("stack", scoped_key) if scoped_key else f"stack-{uuid.uuid4().hex[:6]}"))
+                try:
+                    specs = expand_multi_tier_specs(
+                        body, base_id=base_id, web_common=getattr(app.state, "web_common", None),
+                        legacy_sites=("belt", LEGACY_VEHICLE_SITE),
+                    )
+                except ValueError as exc:
+                    raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
+                created = _enqueue_many(active, specs, principal_id=principal_id, principal_role=principal_role, idempotency=idempotency)
+                return {"ok": True, "task": created[0], "tasks": created}
+            if preset_key := body.get("preset"):
+                preset = CELL_TASK_PRESETS.get(str(preset_key))
+                if preset is None:
+                    raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
+                if "steps" in preset:
+                    if has_identity_input(body):
+                        raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
+                    base_id = str(body.get("task_id") or (deterministic_idempotency_id("pipe", scoped_key) if scoped_key else f"pipe-{uuid.uuid4().hex[:6]}"))
+                    step_specs = []
+                    for idx, step in enumerate(preset["steps"]):
+                        sid = f"{base_id}-{idx+1}-{step}"
+                        step_spec = {**CELL_TASK_PRESETS[step], "robot_id": body.get("robot_id", "rosy_01"),
+                                     "task_id": sid, "depends_on": step_specs[-1]["task_id"] if step_specs else None}
+                        if "propose" in body:
+                            step_spec["propose"] = body["propose"]
+                        step_specs.append(step_spec)
+                    created_tasks = _enqueue_many(active, step_specs, principal_id=principal_id, principal_role=principal_role, idempotency=idempotency)
+                    return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
+                merged = {**preset, **{k: v for k, v in body.items()
+                                       if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit", "robot_id", "propose", "request_key") or v is not None}}
+                task = _enqueue_one_task(active, merged, principal_id=principal_id, principal_role=principal_role, idempotency=idempotency)
+                return {"ok": True, "task": task, "tasks": [task]}
+            task = _enqueue_one_task(active, body, principal_id=principal_id, principal_role=principal_role, idempotency=idempotency)
             return {"ok": True, "task": task, "tasks": [task]}
-        task = _enqueue_one_task(active, body, principal_id=principal_id)
-        return {"ok": True, "task": task, "tasks": [task]}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/admit", dependencies=operator_guard)
+    async def admit_cell_task(task_id: str, request: Request):
+        return admit_cell_task_guarded(
+            app, task_id, await request.body(), getattr(request.state, "site_principal", None),
+            active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells, is_human_detected_fn=_is_human_detected,
+            arm_live_catalog_fn=_arm_live_catalog, enrich_fn=_enrich_task_health, save_ledger_fn=_save_ledger, gov=gov,
+            ledger_payload_fn=getattr(ctx, "_ledger_payload", None),
+            write_ledger_fn=getattr(ctx, "_write_ledger_only", None),
+        )
+
+    @app.get("/api/fleet/pipeline/cells/{cell_id}/readiness", dependencies=read_guard)
+    async def cell_readiness(cell_id: str):
+        return build_cell_readiness(app, cell_id, active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
+                                    is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog, gov=gov)
 
     @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
     async def list_cell_tasks(request: Request, cell_id: str | None = None, status: str | None = None):
@@ -311,7 +396,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             running_t = next((t["task_id"] for t in all_tasks if t["cell_id"] == cid and t["status"] == "RUNNING"), None)
             cells_info[cid] = {**ev, "active_task_id": running_t}
         summary = {
-            "total": len(all_tasks),
+            "total": len(all_tasks), "proposed": sum(1 for t in all_tasks if t["status"] == "PROPOSED"),
             "queued": sum(1 for t in all_tasks if t["status"] == "QUEUED"),
             "running": sum(1 for t in all_tasks if t["status"] == "RUNNING"),
             "paused_human": sum(1 for t in all_tasks if t["status"] == "PAUSED_HUMAN"),
@@ -322,6 +407,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {
             "tasks": tasks,
             "summary": summary,
+            **calibration_origin_fields(),
+            **({"authority": gov.snapshot()} if gov is not None else {}),
             "cells": cells_info,
             "presets": list(CELL_TASK_PRESETS.values()),
             "detected_displaced_site": app.state.detected_displaced_site,
@@ -338,8 +425,17 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "station_camera_links": STATION_CAMERA_LINKS,
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
+            "pinky_dispatch_enabled": pinky_dispatch_enabled(),
             "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
             "repark_requests": dict(getattr(app.state, "repark_requests", None) or {}),
+            "recovery_handoff": {
+                "active_failures": collect_unresolved_failures(
+                    app.state, time.time(), human_detected=bool(_is_human_detected()),
+                    active=active, dispatch_enabled=pinky_dispatch_enabled(),
+                ),
+                "homing_sessions": dict(getattr(app.state, "pipeline_homing_sessions", None) or {}),
+                "recent_invocations": list((getattr(app.state, "pipeline_recovery_ledger", None) or [])[-10:]),
+            },
         }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)
@@ -348,17 +444,30 @@ def install_cell_tasks_routes(app, ctx) -> None:
         task = app.state.omx_cell_tasks.get(task_id)
         if task is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
-        if task.get("status") != "QUEUED":
+        if task.get("status") not in ("PROPOSED", "QUEUED"):
             raise HTTPException(409, detail={"code": "CELL_TASK_ALREADY_CLAIMED"})
         cell_id = task["cell_id"]
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         state = app.state.omx_cell_states.get(cell_id) or {}
         res = evaluate_omx_cell_station(station, docked_robot=state.get("docked_robot"), cell_state=state,
                                         map_version=getattr(active[2], "version", None))
-        task["status"] = "CANCELLED"
-        task["completed_at"] = round(time.time(), 3)
-        _enrich_task_health(task)
-        _save_ledger()
+        prev = {k: task.get(k) for k in ("status", "completed_at", "health_summary")}
+        task["status"], task["completed_at"] = "CANCELLED", round(time.time(), 3)
+        try:
+            _enrich_task_health(task)
+            if callable(_commit_ledger):
+                _commit_ledger(bump_dispatch=True)
+            else:
+                _save_ledger()
+                if gov is not None:
+                    gov.bump_dispatch_generation()
+        except Exception:
+            for k, v in prev.items():
+                task.pop(k, None) if v is None else task.__setitem__(k, v)
+            if callable(_commit_ledger) and not getattr(app.state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    _commit_ledger(commit=False)
+            raise
         return {"ok": True, "task": task, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/retry", dependencies=operator_guard)
@@ -369,25 +478,12 @@ def install_cell_tasks_routes(app, ctx) -> None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
-        retried = _enqueue_one_task(
-            active,
-            {
-                "task_id": new_id,
-                "cell_id": orig["cell_id"],
-                "arm_id": orig["arm_id"],
-                "robot_id": orig["robot_id"],
-                "robot_kind": orig["robot_kind"],
-                "src_site": orig["src_site"],
-                "dst_site": orig["dst_site"],
-                "tier": orig["tier"],
-                "depends_on": orig.get("depends_on"),
-                "displaced_to": orig.get("displaced_to"),
-                "preset": orig.get("preset"),
-                **{k: orig[k] for k in TASK_IDENTITY_FIELDS if k in orig},
-                **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None},
-            },
-            principal_id=principal_id,
-        )
+        spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier", *TASK_IDENTITY_FIELDS) if k in orig}
+        if orig.get("placement_attempt_id"):
+            raise HTTPException(409, detail={"code": "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"})
+        spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset", "zone_id") if k in orig})
+        spec.update({"task_id": new_id, **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None}})
+        retried, = _enqueue_many(active, [spec], principal_id=principal_id, retry_of=orig)
         return {"ok": True, "task": retried, "retried_from": task_id}
 
     @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=operator_guard)
@@ -402,36 +498,38 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                             for state in app.state.omx_cell_states.values())):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
         task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
+        if task_id in app.state.pinky_tasks:
+            raise HTTPException(409, detail={"code": "PINKY_TASK_ID_IN_USE"})
         cable_guard = bool(body.get("cable_guard_micro", True))
         max_step_m = checked_finite_float(body.get("max_step_m", 0.015 if cable_guard else 0.10))
         max_speed_mps = checked_finite_float(body.get("max_speed_mps", 0.02 if cable_guard else 0.08))
         if cable_guard:
             max_step_m, max_speed_mps = min(0.02, max_step_m), min(0.02, max_speed_mps)
-        spawned_cell_task = None
-        v_cmd = 0.0
-        duration_s = 0.0
+        spawned_cell_task = unload_batch_id = None
+        v_cmd, duration_s = 0.0, 0.0
         place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
-        if action in ("dock_s3", "dock_and_unload_s3"):
+        from fleet.server.pipeline_station_stop import assigned_rule, operator_departure, plan_station
+        station = None
+        if action == "station_stop":
+            station = plan_station(body, active[2], rules())
+            target_place = place_id = station["place_id"]
+        elif action in ("dock_s3", "dock_and_unload_s3"):
             if _aborted("cell_s"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S3"
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
+                if any(s.place == "S3" for s in getattr(rules(), "stops", ())):
+                    station = assigned_rule(rules(), "S3", "unload")
                 batch_id = f"unload-{uuid.uuid4().hex[:8]}"  # the camera adds the next carry (continue_unload)
                 spawned_cell_task = _enqueue_one_task(active, {
                     **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id, "task_id": f"{batch_id}-1",
                     "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
                 })
         elif action == "depart_s3":
-            release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
-            if not release["ready"]:
-                raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
-            principal = getattr(request.state, "site_principal", None)
-            app.state.unload_releases[release["batch_id"]] = {
-                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
-                "operator": getattr(principal, "principal_id", None), "release": release}
-            target_place = "S3_DEPART"
+            place_id, unload_batch_id = operator_departure(app.state, request, robot_id, task_id, rules(), active[1], _is_human_detected(), app.state.pinky_tasks)
+            target_place = place_id
             v_cmd = max_speed_mps
             duration_s = 0.35
         elif action == "dock_s5":
@@ -467,13 +565,9 @@ def install_cell_tasks_routes(app, ctx) -> None:
             duration_s = 0.35
             if action == "move_export_s1" and z.get("cell_id"):
                 spawned_cell_task = _enqueue_one_task(active, {
-                    "cell_id": z["cell_id"],
-                    "arm_id": z.get("arm_id", "arm_a"),
-                    "robot_id": robot_id,
-                    "src_site": z.get("src_site", "belt"),
-                    "dst_site": z.get("dst_site", "pallet"),
-                    "tier": int(z.get("tier", 1)),
-                    "preset": "export_s1",
+                    "cell_id": z["cell_id"], "arm_id": z.get("arm_id", "arm_a"), "robot_id": robot_id,
+                    "src_site": z.get("src_site", "belt"), "dst_site": z.get("dst_site", "pallet"),
+                    "tier": int(z.get("tier", 1)), "preset": "export_s1",
                 })
         else:
             if any(cstate.get("robot_id") == robot_id and _aborted(cid)
@@ -484,30 +578,18 @@ def install_cell_tasks_routes(app, ctx) -> None:
             duration_s = 0.35
         dec_row = _evaluate_decision(robot_id, "line_follow", {"tangled": cable_guard})
         ptask = {
-            "task_id": task_id,
-            "robot_id": robot_id,
-            "action": action,
-            "target_place": target_place,
-            "cable_guard_micro": cable_guard,
-            "max_step_m": max_step_m,
-            "v_cmd_mps": v_cmd,
-            "duration_s": duration_s,
-            "decision": dec_row,
-            "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
-            "status": "QUEUED",
-            "created_at": round(time.time(), 3),
-            **dispatch_fields(active, request, place_id),
+            "task_id": task_id, "robot_id": robot_id, "action": action, "target_place": target_place,
+            "cable_guard_micro": cable_guard, "max_step_m": max_step_m, "v_cmd_mps": v_cmd, "duration_s": duration_s,
+            "decision": dec_row, "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
+            **({"unload_batch_id": unload_batch_id} if unload_batch_id else {}),
+            **({"station_operation": station} if station else {}),
+            "status": "QUEUED", "created_at": round(time.time(), 3), **dispatch_fields(active, request, place_id),
         }
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
-    def record_depart_task(robot_id, batch, place, now):
-        app.state.pinky_tasks[f"depart-{batch}"] = {
-            "task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3", "target_place": place,
-            "status": "SENT", "auto": True, "created_at": round(now, 3)}
-
-    ctx.record_depart_task = record_depart_task
+    from fleet.server.pipeline_station_stop import record_depart_task
+    ctx.record_depart_task = lambda *args: record_depart_task(app.state.pinky_tasks, *args)
     install_pinky_dispatch(app, ctx)
     install_unload_release_routes(app, ctx)
-    ctx.CELL_TASK_PRESETS = CELL_TASK_PRESETS
-    ctx._enqueue_one_task = _enqueue_one_task
+    ctx.CELL_TASK_PRESETS, ctx._enqueue_one_task = CELL_TASK_PRESETS, _enqueue_one_task

@@ -65,6 +65,7 @@ from fleet.traffic.config import (  # noqa: F401
     _traffic_authority,
     _traffic_signal_advice,
     _traffic_signals,
+    _traffic_site_keep_out_m,
     _traffic_zones,
     _trip_lease,
 )
@@ -183,7 +184,8 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--token or --token-env is required to protect the CORE registry endpoint")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
                            signal_console=signal_console, event_store=event_store,
-                           goal_lease_ttl_s=_goal_lease_ttl_s(args))
+                           goal_lease_ttl_s=_goal_lease_ttl_s(args),
+                           site_keep_out_m=_traffic_site_keep_out_m(args))
     sightings_db = getattr(args, "sightings_db", None)
     sightings_config = getattr(args, "sightings_config", None)
     if sightings_db is not None and sightings_config is None:
@@ -197,7 +199,7 @@ def run_console(args: argparse.Namespace) -> None:
                              if vision_preview_secret_env else None)
     if vision_preview_secret_env and not vision_preview_secret:
         sys.exit("vision preview secret environment variable is required")
-    calibration_drift_watch = None
+    calibration_drift_watch = road_vision_demand = None
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_identity_config, load_sighting_sources
@@ -220,13 +222,23 @@ def run_console(args: argparse.Namespace) -> None:
             sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
-        from fleet.server.tracking_drift import CalibrationDriftWatch, VisionMapProposalReader
+        from fleet.server.tracking_drift import (
+            CalibrationDriftWatch,
+            DEFAULT_INTERVAL_S,
+            VisionMapProposalReader,
+        )
 
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         calibration_store = TrackingCalibrationStore(sightings_db)
         drift_provider = None
         vision_url = getattr(args, "vision_url", None)
-        drift_interval_s = getattr(args, "calibration_drift_interval_s", 60.0)
+        drift_interval_s = getattr(args, "calibration_drift_interval_s", DEFAULT_INTERVAL_S)
+        if vision_url and vision_preview_secret:
+            from core_common.protocol.vision_preview import VisionLeaseSigner
+            from fleet.server.road_vision_demand import RoadVisionDemand
+            reader = VisionMapProposalReader(base_url=vision_url, signer=VisionLeaseSigner(vision_preview_secret),
+                                             principal_id="fleet-road-tracking", timeout_s=3.)
+            road_vision_demand = RoadVisionDemand(reader, sighting_service)
         if vision_url and drift_interval_s:
             # The watch reads Vision's existing D-375 map-proposal endpoint with a preview
             # lease signed here; without the secret it could not talk to Vision at all.
@@ -246,6 +258,8 @@ def run_console(args: argparse.Namespace) -> None:
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=calibration_store, drift_provider=drift_provider,
             health=getattr(calibration_drift_watch, 'health', None))
+        if calibration_drift_watch is not None:
+            calibration_drift_watch.on_health = tracking_service.observe_recalibration_health
         sighting_service.approved_revision = tracking_service.approved_revision
     if getattr(args, "vision_url", None) and tracking_service is None:
         print("warning: --vision-url set but no --sightings-config; the calibration drift "
@@ -363,7 +377,7 @@ def run_console(args: argparse.Namespace) -> None:
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
-                     vision_sources=vision_sources,
+                     vision_sources=vision_sources, road_vision_demand=road_vision_demand,
                      lan_camera_proxy=getattr(args, "lan_camera_proxy", False),
                      enrollment=enrollment, robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,

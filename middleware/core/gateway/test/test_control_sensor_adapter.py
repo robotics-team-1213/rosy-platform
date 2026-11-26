@@ -191,7 +191,7 @@ def test_core_node_owns_adapter_before_bridge_and_closes_it_with_executor():
     assert "adapter_parameters=" not in path.read_text(encoding="utf-8")
     assert "'use_sim_time': use_sim_time" in init_source or '"use_sim_time": use_sim_time' in init_source
     # Restart preserves /run/rosy; publish the new process law before exposing its API.
-    assert init_source.index('self._write_status_inputs()') < init_source.index('self._start_api()')
+    assert init_source.index('self._write_status_inputs_sync()') < init_source.index('self._start_api()')
     assert "self.control_adapter.attach(executor)" in run_source
     assert "self.control_adapter.detach(executor)" in run_source
     assert "self.control_adapter.close()" in shutdown_source
@@ -663,3 +663,68 @@ def test_policy_required_matching_the_mode_builds_and_binds(mode, required):
 
     assert adapter.bind_safety(safety) is True
     assert safety.calls == [(mode, adapter.policy)]
+
+
+def test_build_control_adapter_forwards_tf_buffer_only_when_provided():
+    seen_calls = []
+
+    def factory(**kwargs):
+        seen_calls.append(kwargs)
+        return FakeSensorNode(**kwargs)
+
+    build_control_adapter({"mode": "shadow"}, parameters={},
+                          sensor_node_factory=factory, **_policy_only())
+    assert "tf_buffer" not in seen_calls[-1]
+    assert "in_process_topics" not in seen_calls[-1]
+
+    shared = object()
+    adapter, _ = build_control_adapter(
+        {"mode": "shadow"}, parameters={}, sensor_node_factory=factory,
+        tf_buffer=shared, in_process_topics=("scan", "imu", "us"), **_policy_only())
+    assert seen_calls[-1]["tf_buffer"] is shared
+    assert seen_calls[-1]["in_process_topics"] == ("scan", "imu", "us")
+
+    events = []
+    adapter.node.on_scan = lambda m: events.append(("scan", m))
+    adapter.node.on_imu = lambda m: events.append(("imu", m))
+    adapter.node.on_us = lambda m: events.append(("us", m))
+    assert adapter.forward_scan("s1") is True
+    assert adapter.forward_imu("i1") is True
+    assert adapter.forward_us("u1") is True
+    assert events == [("scan", "s1"), ("imu", "i1"), ("us", "u1")]
+    adapter.close()
+    assert adapter.forward_scan("s2") is False
+
+
+def test_ros_bridge_helpers_forwards_scan_imu_us_to_sensor_sink():
+    import time as _time
+    helpers_path = Path(__file__).resolve().parents[1] / "core/bridge/ros_bridge_helpers.py"
+    tree = ast.parse(helpers_path.read_text(encoding="utf-8"))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "RosBridgeHelpersMixin")
+    picked = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_on_scan", "_on_imu", "_on_us_range")]
+    scope = {
+        "time": _time,
+        "translate": SimpleNamespace(lidar_sample=lambda msg, _t: {"msg": msg}),
+        "device_power": SimpleNamespace(LIDAR="lidar"),
+        "observation": SimpleNamespace(front_clearance=lambda *a, **k: None, us_range=lambda *a, **k: None),
+    }
+    exec(compile(ast.Module(body=picked, type_ignores=[]), str(helpers_path), "exec"), scope)
+
+    forwarded = []
+    sink = SimpleNamespace(
+        forward_scan=lambda m: forwarded.append(("scan", m)),
+        forward_imu=lambda m: forwarded.append(("imu", m)),
+        forward_us=lambda m: forwarded.append(("us", m)),
+    )
+    holder = SimpleNamespace(
+        _sensor_sink=sink,
+        _node=SimpleNamespace(get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=100))),
+        _svc=SimpleNamespace(state=SimpleNamespace(set_sensor=lambda *_a: None),
+                             power=SimpleNamespace(report_device_ready=lambda *_a: None)),
+        _line_clock=lambda: 1.0,
+        _mirror=SimpleNamespace(imu=lambda _m: None),
+    )
+    scope["_on_scan"](holder, "scan_msg")
+    scope["_on_imu"](holder, "imu_msg")
+    scope["_on_us_range"](holder, "us_msg")
+    assert forwarded == [("scan", "scan_msg"), ("imu", "imu_msg"), ("us", "us_msg")]

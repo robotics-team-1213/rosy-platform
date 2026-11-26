@@ -25,13 +25,21 @@ def _text(value, field):
 
 
 class PolicyApprovals:
-    def __init__(self, *, monotonic=time.monotonic, wall=time.time, hold=None, deliver=None,
+    def __init__(self, *, monotonic=time.monotonic, wall=time.time, hold=None, deliver=None, challenge=None, target_status=None,
                  lease_s=LEASE_DEFAULT_S):
         if type(lease_s) not in (int, float) or not 0 < lease_s <= LEASE_MAX_S:
             raise ValueError(f'lease must be in (0, {LEASE_MAX_S}] s')
         self._now, self._wall, self._hold, self._deliver, self._lease_s = monotonic, wall, hold, deliver, float(lease_s)
+        self._challenge = challenge
+        self._target_status = target_status
         self._items, self._lock = {}, threading.RLock()
         self._last, self._clock_fault = float('-inf'), False
+
+    def target_status(self, workcell_id):
+        if self._target_status is not None:
+            return self._target_status(workcell_id)
+        return dict(workcell_id=workcell_id, configured=False, transport_verified=False,
+                    owner_verified=False, ready=False, reason='native_target_not_configured')
 
     @property
     def delivery_connected(self):
@@ -170,13 +178,32 @@ class PolicyApprovals:
             ttl = min(self._lease_s, item['_ends'] - now)
             if ttl < MIN_LEASE_S:  # the window ends within the next tick: no lease, the sweep ends it and HOLDs
                 return None
+            item['_delivering'] = True
+        # Acquire the owner challenge before minting a physical grant. The device clock starts at
+        # the challenge, so even a delayed HTTP grant cannot extend the issuer's lease lifetime.
+        try:
+            nonce = self._challenge(item['workcell_id'], item['scope']) if self._challenge else None
+        except Exception:
+            with self._lock:
+                item['_delivering'] = False
+                if item['state'] == 'active':
+                    self._close(item, 'held', 'lease_delivery_failed')
+            return None
+        with self._lock:
+            now = self._tick_time()
+            self._sweep(item, now)
+            ttl = min(self._lease_s, item['_ends'] - now)
+            if item['state'] != 'active' or ttl < MIN_LEASE_S:
+                item['_delivering'] = False
+                return None
             item['_seq'] += 1
             # seq lets the device refuse a replayed grant; window_remaining_s lets it cap every lease at the window end.
             grant = dict(lease_id=item['lease_id'], episode_id=item['episode_id'], workcell_id=item['workcell_id'],
                          policy_digest=item['policy_digest'], rig_revision=item['rig_revision'],
                          calibration_revision=item['calibration_revision'], ttl_s=ttl, seq=item['_seq'],
                          window_remaining_s=item['_ends'] - now)
-            item['_delivering'] = True
+            if nonce is not None:
+                grant.update(challenge=nonce, scope=item['scope'])
             deliver = self._deliver
         try:
             delivered = deliver is not None and deliver(grant) is True

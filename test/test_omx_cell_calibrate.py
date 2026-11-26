@@ -125,7 +125,8 @@ def test_reference_bytes_must_match_the_bound_calibration_before_camera_check(tm
     found = cc.check(config, calibration, [], np.full((32, 32, 3), 80, np.uint8))
     assert found["camera_moved"] is True
     assert found["map_binding_error"] == "top camera map reference changed"
-    assert cc.stale(found)[:2] == ["remap", "regions"]
+    assert found["camera_issue"] == "camera_map_binding"
+    assert cc.stale(found) == ["review-camera-reference"]
     config["preflight"]["reference_sha256"] = expected
     assert cc.check(config, {"sites": {}}, [], np.full((32, 32, 3), 80, np.uint8))["map_binding_error"]
     config["preflight"].pop("reference_sha256")
@@ -296,6 +297,19 @@ def test_marks_on_one_line_predict_nothing():
     assert cc.predicted(line, (0.13, 0.10)) is None
 
 
+def test_remap_speed_only_slows_calibration_without_mutating_the_arm_plan():
+    import cell_remap_plan
+    import pytest
+
+    config = {"plan": {"transit_speed": 0.4}, "calibrate": {"remap_transit_speed": 0.2}}
+    assert cell_remap_plan.scoped(config)["plan"]["transit_speed"] == 0.2
+    assert config["plan"]["transit_speed"] == 0.4
+    for bad in (0.5, 0.0, True, float("nan")):
+        config["calibrate"]["remap_transit_speed"] = bad
+        with pytest.raises(ValueError):
+            cell_remap_plan.scoped(config)
+
+
 def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     """arm_b 2026-11-05: 8 marks in, the next goto stalled on wrist roll -13; the remap threw them all away."""
     import types
@@ -314,10 +328,11 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
         def act(self, command):
             self.cmds.append(command)
             if command.startswith("load"):
-                self.next = next(p for p in points if f"remap-{sorted(points, key=lambda q: math.hypot(*q)).index(p)}." in command)
+                self.next = next(p for p in points if f"remap-{cc.rp.visit_order(points).index(p)}." in command)
             if command == "goto above_pick":
                 if self.next == [0.30, 0.30]:
-                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag"}
+                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag",
+                            "health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
                 self.at = self.next
             return {"ok": command != "park" or self.park_ok}
 
@@ -330,6 +345,16 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
     assert len(seen) == 1 and "park" not in seen[0][0][1:] and "wrist_roll lag" in seen[0][1]["error"]
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
+    stop = next(row for row in rows if "stopped" in row)
+    assert stop["runner"] == {"health": {"pwm": [0, 304]}, "trace_receipt": {"status": "aborted"}}
+    def full_log(row):
+        if "stopped" in row:
+            raise OSError("log storage full")
+
+    interrupted = Cell()
+    with pytest.raises(OSError, match="log storage full"):
+        cc.remap(interrupted, config, points, tmp_path, log=full_log)
+    assert interrupted.cmds[-1] == "park"
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
     import time
@@ -357,7 +382,7 @@ def test_a_remap_recovers_when_its_first_marks_flip_and_reports_what_it_dropped(
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     flipped, gates = {points[1]}, []
 
     class Cell:
@@ -391,7 +416,7 @@ def test_too_few_marks_that_agree_stop_the_remap_with_no_map(tmp_path, monkeypat
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -416,7 +441,7 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -446,7 +471,7 @@ def test_remap_parks_before_reference_and_ignores_moving_belt(tmp_path, monkeypa
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -488,7 +513,7 @@ def _tcp_remap(tmp_path, monkeypatch, shows, pairs):
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
     monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
     jaw = {"ref": -0.5, "other": 0.5}
 
@@ -532,6 +557,53 @@ def test_a_tcp_remap_that_cannot_tell_the_jaws_apart_saves_no_map(tmp_path, monk
     # one yaw, one jaw everywhere, no pair: "all ref" and "all other" fit alike and put the map 54 mm apart
     with pytest.raises(SystemExit, match="jaw sides ambiguous"):
         _tcp_remap(tmp_path, monkeypatch, ["ref"] * 8, pairs=set())
+
+
+def test_a_tcp_remap_does_not_gate_mark_jaws_on_unlabelled_jaw_predictions(tmp_path, monkeypatch):
+    """Under tcp_marks, unlabelled marks mix both jaws (~54 mm apart), so near=predicted(...) must be skipped."""
+    import types
+
+    def write(c, pose, _place, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], pose["yaw_deg"], 0.0]]}}))
+        return path
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
+    monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
+    points = cc.rp.visit_order(GRID)
+    o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
+    jaw = {"ref": -0.5, "other": 0.5}
+    shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
+    pairs, gates = {1, 2, 5}, []
+
+    class Cell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    def mark(cell, config, near=None, report=None, **kw):
+        gates.append(near)
+        p, i = points[cell.i], cell.i
+        seen = [to_px((p[0] + s * o[0], p[1] + s * o[1])) for s in ((jaw[shows[i]], -jaw[shows[i]]) if i in pairs else (jaw[shows[i]],))]
+        kept = [b for b in seen if near is None or math.dist(b, near[0][0]) <= near[1]]
+        if not kept:
+            report.update(reason="blobs outside near", blobs=[[x, y, 400.0] for x, y in seen])
+            return None
+        report.update(reason=None, side=None, blobs=[[x, y, 400.0] for x, y in seen])
+        return kept[0]
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert all(g is None for g in gates)
+    assert record["marks"] == "tcp" and len(record["points"]) == 8 and record["loo_error_mm"]["max"] < 0.5
 
 
 def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
@@ -727,7 +799,8 @@ def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
               "calibrate": {"map_sites": ["floor"]}}
     found = cc.check(config, json.loads(cal_path.read_text()), [("floor", (0.0, 0.17))], np.zeros((32, 32, 3), np.uint8))
     assert "max_bias_mm" in found["bias_error"] and found["missing_bias"] == ["floor:0.0,0.17"]
-    assert "pivot-near floor:0.0,0.17" in cc.stale(found)
+    assert found["camera_issue"] == "camera_reference_missing"
+    assert cc.stale(found) == ["review-camera-reference"]
 
 
 PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]], "clear_first": True},
@@ -793,8 +866,7 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         path = tmp_path / "config.json"
         path.write_text(json.dumps(config))
         seen.clear()
-        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
-                        "--commissioning", "--person-at-switch"]) == 0
+        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify"]) == 0
         assert seen["depth"] is expect
 
 
@@ -809,3 +881,591 @@ def test_moving_rects_includes_belt_and_moves_sites():
         }
     }
     assert sg.moving_rects(cfg) == [[300, 20, 400, 120], [100, 0, 310, 200]]
+
+
+@pytest.mark.parametrize(
+    ("site_extra", "low_zones", "expected_z_to", "error_fragment"),
+    [
+        ({}, (), 0.010, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], -0.020, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.30, 0.40], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.040}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.015}, {"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.040}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": False}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": -0.020}, [{"x": [float("-inf"), float("inf")], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": True}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": "-0.02"}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": float("nan")}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": 0.10}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": -0.121}, (), None, "invalid probe_z_to_m"),
+        ({"place": [0.15]}, (), None, "invalid place"),
+        ({"place": {"a": 1, "b": 2}}, (), None, "invalid place"),
+        ({"place": [True, 0.0]}, (), None, "invalid place"),
+        ({"yaw_deg": True}, (), None, "invalid yaw_deg"),
+    ],
+)
+def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch, capsys, site_extra, low_zones, expected_z_to, error_fragment):
+    pytest.importorskip("cv2")
+    import cell_pipeline as cp
+    import cell_surface
+
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps({"schema": cc.cal.SCHEMA, "sites": {}}), encoding="utf-8")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps({"limits": {"low_zones": low_zones}}), encoding="utf-8")
+    config = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "work_dir": str(tmp_path),
+        "io": str(tmp_path),
+        "cameras": {"top": "http://unused"},
+        "sites": {"pallet": {"place": [0.15, 0.0], "yaw_deg": 0.0, **site_extra}},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(config), encoding="utf-8")
+    calls = {"probe": [], "touch": 0}
+    monkeypatch.setattr(cp, "FifoCell", lambda *a: type("Cell", (), {"frame": lambda self, _: np.zeros((32, 32, 3), np.uint8)})())
+    monkeypatch.setattr(cc, "check", lambda *a: {})
+    monkeypatch.setattr(cc, "stale", lambda *a: ["surface pallet"])
+    monkeypatch.setattr(cell_surface, "probe_library", lambda plan, x, y, yaw, z_from, z_to, tcp_x_m=None: calls["probe"].append(z_to) or {"chunks": {}})
+    monkeypatch.setattr(cell_surface, "touch", lambda *a, **kw: calls.__setitem__("touch", calls["touch"] + 1) or {"result": "touched", "surface_z": -0.01})
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]) == 0
+    out = capsys.readouterr().out
+    if error_fragment is None:
+        assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
+    else:
+        assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
+
+
+@pytest.mark.parametrize("mode", ["success", "moved", "missing_map", "held", "no_contact", "missing_samples"])
+def test_explicit_surface_remeasures_only_selected_existing_height(tmp_path, monkeypatch, mode):
+    import cell_pipeline
+    import cell_robot_profile
+    import cell_surface
+    import time
+
+    site = {"surface_z": .04, "place": [.1, -.2], "yaw_deg": 0}
+    mapping = {"reference_top_sha256": "a" * 64, "reference_map_sha": "b" * 12,
+               "reference_geometry_sha": "c" * 12, "sites": {"floor": {"homography": [[1]]}}}
+    cal_file, plan_file, cfg_file = (tmp_path / k for k in ("cal.json", "plan.json", "cfg.json"))
+    cal_file.write_text(json.dumps(mapping))
+    plan_file.write_text(json.dumps({"grip_closed": 35}))
+    config = {"sites": {"floor": site, "board": {**site, "surface_z": .05}}, "arm_id": "arm_s",
+              "operating_profile_path": "profile", "tcp_x_m": .074, "calibration_path": str(cal_file),
+              "plan_path": str(plan_file), "io": str(tmp_path), "work_dir": str(tmp_path), "cameras": {}}
+    cfg_file.write_text(json.dumps(config))
+    profile = {"device_id": "selected"}
+    state = {"ok": True, "t": time.time(), "holding": mode == "held", "human_hold_latched": False,
+             "state": [0] * 6, "target": [0] * 6, "operating_context": {"scope": "hardware", "session_id": "s",
+             "sha256": "d" * 64, "operating_profile": profile}}
+    cell = type("Cell", (), {"frame": lambda *_: None, "act": lambda self, cmd: dict(state, t=time.time())})()
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: cell)
+    monkeypatch.setattr(cell_robot_profile, "load", lambda *_: {"binding": profile})
+    monkeypatch.setattr(cc, "check", lambda *_: {"camera_shift": {"ok": True}, "camera_moved": mode == "moved",
+                        "missing_map": ["floor"] if mode == "missing_map" else []})
+    monkeypatch.setattr(cell_surface, "probe_library", lambda *a, **kw: {})
+    calls = []
+
+    def touch(_, path, **kwargs):
+        calls.append((path.name, kwargs["repeat"]))
+        if mode == "no_contact":
+            return {"result": "no contact"}
+        if mode == "missing_samples":
+            return {"result": "touched", "surface_z": .022}
+        return {"result": "touched", "surface_z": .022, "touches_m": [.022, .022], "spread_mm": 0}
+
+    monkeypatch.setattr(cell_surface, "touch", touch)
+    argv = ["--config", str(cfg_file), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]
+    assert cc.main(argv) == 0 and not calls
+    assert cc.main([*argv, "--remeasure-surface", "floor", "--surface-clear"]) == (0 if mode == "success" else 2)
+    assert calls == ([] if mode in ("moved", "missing_map", "held") else [("surface-floor.library.json", 2)])
+    saved = json.loads(cfg_file.read_text())["sites"]
+    assert saved["floor"]["surface_z"] == (.022 if mode == "success" else .04)
+    assert saved["board"] == config["sites"]["board"]
+
+
+def test_check_reports_low_zone_gaps_for_mapped_low_site(tmp_path):
+    pytest.importorskip("cv2")
+    cal_path, ref_path = tmp_path / "cal.json", tmp_path / "ref.jpg"
+    # x_m = px / 1000, y_m = (200 - py) / 1000
+    h = [[0.001, 0.0, 0.0], [0.0, -0.001, 0.200], [0.0, 0.0, 1.0]]
+    cal_data = {"schema": cc.cal.SCHEMA, "sites": {"beltend": {"homography": h, "z_view": -0.0571}}}
+    plan_path = tmp_path / "plan.json"
+    plan = {
+        "limits": {
+            "workspace_min_m": [-0.28, -0.28, 0.005],
+            "low_zones": [{"x": [0.05, 0.25], "y": [0.05, 0.17], "z_min_m": -0.0601}],
+        }
+    }
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    frame = np.random.default_rng(0).integers(0, 255, (128, 128, 3), dtype=np.uint8)
+    config = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "preflight": {"reference_top": str(ref_path)},
+        "cameras": {"top": {"height_m": 0.596, "center_px": [303, 367]}},
+        "calibrate": {"map_sites": ["beltend"]},
+        "sites": {
+            "beltend": {
+                "surface_z": -0.0721,
+                "z": -0.0571,
+                "start": [0.135, 0.105],
+                "place": [0.135, 0.105],
+                "surface_px": [[100, 150], [180, 150], [180, 0], [100, 0]],
+            }
+        },
+    }
+    cc.save_bound_map_reference(cal_path, ref_path, cal_data, config, frame)
+    cal_data = json.loads(cal_path.read_text(encoding="utf-8"))
+    found = cc.check(config, cal_data, [], frame)
+    assert "low_zone_gaps" in found and len(found["low_zone_gaps"]) == 1
+    gap = found["low_zone_gaps"][0]
+    assert gap["site"] == "beltend" and gap["uncovered_y_m"][1] == pytest.approx(0.20, abs=0.002)
+    assert cc.stale(found) == []
+    plan["limits"]["low_zones"][0]["y"] = [0.05, 0.21]
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    found_ok = cc.check(config, cal_data, [], frame)
+    assert "low_zone_gaps" not in found_ok
+
+
+def test_low_zone_gaps_respects_first_match_z_min():
+    h = [[0.001, 0.0, 0.0], [0.0, -0.001, 0.200], [0.0, 0.0, 1.0]]
+    cal_data = {"sites": {"beltend": {"homography": h, "z_view": -0.0571}}}
+    config = {
+        "plan": {
+            "limits": {
+                "workspace_min_m": [-0.28, -0.28, 0.005],
+                "low_zones": [
+                    {"x": [0.05, 0.25], "y": [0.05, 0.25], "z_min_m": -0.030},
+                    {"x": [0.05, 0.25], "y": [0.05, 0.25], "z_min_m": -0.065},
+                ],
+            }
+        },
+        "cameras": {"top": {"height_m": 0.596, "center_px": [303, 367]}},
+        "sites": {"beltend": {"surface_z": -0.0721, "z": -0.0571, "start": [0.15, 0.15]}},
+    }
+    gaps = cc.low_zone_gaps(config, cal_data)
+    assert len(gaps) == 1 and gaps[0]["site"] == "beltend"
+
+
+def test_remap_persists_observations_for_offline_replay_on_scene_moved_and_tcp_marks(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = cc.rp.visit_order(GRID)
+
+    class MovedCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if self.i >= 0:
+                view[100:200, 100:160] = (20, 90, 220)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    cfg = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+           "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"]}}
+    work_a = tmp_path / "run_a"
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.remap(MovedCell(), cfg, [list(p) for p in points], work_a, log=lambda row: None)
+
+    frames_dir = next((work_a / "remap-frames").iterdir())
+    obs = json.loads((frames_dir / "observations.json").read_text(encoding="utf-8"))
+    assert obs["schema"] == cc.rp.OBSERVATIONS_SCHEMA and len(obs["marks"]) == len(points) and obs["scene_moved"]
+
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.rp.replay_observations(frames_dir, cfg, log=lambda row: None)
+
+    cfg_ignored = {**cfg, "scene_ignore_px": [[90, 90, 170, 210]]}
+    obs_before = (frames_dir / "observations.json").read_bytes()
+    rec = cc.rp.replay_observations(frames_dir, cfg_ignored, log=lambda row: None)
+    assert (frames_dir / "observations.json").read_bytes() == obs_before
+    assert len(rec["points"]) == len(points) and cc.map_agrees(rec, None)
+
+    # tcp_marks=True saves seen_jaws and replays offline without touching labels.json.
+    shows = ["ref", "ref", "other", "ref", "ref", "other", "ref", "ref"]
+    work_tcp = tmp_path / "run_tcp"
+    live_tcp, tcp_pts = _tcp_remap(work_tcp, monkeypatch, shows, pairs={4, 6})
+    frames_tcp = next((work_tcp / "remap-frames").iterdir())
+    labels_path = frames_tcp / "labels.json"
+    labels_bytes = labels_path.read_bytes()
+    labels_path.unlink()
+    cfg_tcp = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+               "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    replay_tcp = cc.rp.replay_observations(frames_tcp, cfg_tcp, log=lambda row: None)
+    assert not labels_path.exists() and replay_tcp["marks"] == "tcp"
+    assert np.allclose(replay_tcp["homography"], live_tcp["homography"])
+    assert len(replay_tcp["points"]) == len(tcp_pts) and len(labels_bytes) > 0
+
+
+def test_replay_observations_fail_closed_and_cli_check_offline_only(tmp_path, monkeypatch, capsys):
+    import cell_pipeline as cp
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = cc.rp.visit_order(GRID)
+
+    class BoxCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if self.i >= 0:
+                view[100:200, 100:160] = (20, 90, 220)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    cfg_orig = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+                "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"]}}
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.remap(BoxCell(), cfg_orig, [list(p) for p in points], tmp_path, log=lambda row: None)
+    frames_dir = next((tmp_path / "remap-frames").iterdir())
+
+    # Mismatched tcp_marks config fails closed.
+    with pytest.raises(SystemExit, match="tcp_marks mismatch"):
+        cc.rp.replay_observations(frames_dir, {**cfg_orig, "scene_ignore_px": [[90, 90, 170, 210]], "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}})
+
+    # CLI check --replay-frames works completely offline without FifoCell or touching cal.json.
+    plan_path, cal_path, cfg_path = tmp_path / "plan.json", tmp_path / "cal.json", tmp_path / "config.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    cal_raw = json.dumps({"schema": cc.cal.SCHEMA, "sites": {}})
+    cal_path.write_text(cal_raw, encoding="utf-8")
+    cfg_cli = {**cfg_orig, "scene_ignore_px": [[90, 90, 170, 210]], "plan_path": str(plan_path), "calibration_path": str(cal_path)}
+    cfg_path.write_text(json.dumps(cfg_cli), encoding="utf-8")
+
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not open FifoCell")))
+    capsys.readouterr()
+    assert cc.main(["--config", str(cfg_path), "check", "--replay-frames", str(frames_dir)]) == 0
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["agrees"] is True and len(out["record"]["points"]) == len(points)
+    assert cal_path.read_text(encoding="utf-8") == cal_raw
+
+    with pytest.raises(SystemExit, match="offline read-only"):
+        cc.main(["--config", str(cfg_path), "auto", "--replay-frames", str(frames_dir)])
+
+    # Missing artifact & wrong schema fail closed.
+    (frames_dir / "after.jpg").unlink()
+    with pytest.raises(SystemExit, match="missing required artifact"):
+        cc.rp.replay_observations(frames_dir, cfg_cli)
+    obs = json.loads((frames_dir / "observations.json").read_text(encoding="utf-8"))
+    (frames_dir / "observations.json").write_text(json.dumps({**obs, "schema": "wrong.v0"}), encoding="utf-8")
+    (frames_dir / "after.jpg").write_bytes(b"")
+    with pytest.raises(SystemExit, match="schema"):
+        cc.rp.replay_observations(frames_dir, cfg_cli)
+
+
+def test_map_from_site_is_synced_on_remap_and_stale_copy_flagged_in_check(tmp_path, monkeypatch):
+    cv2 = pytest.importorskip("cv2")
+    import cell_pipeline as cp
+    import cell_preflight
+    import types
+
+    ref_path = tmp_path / "ref.jpg"
+    assert cv2.imwrite(str(ref_path), np.full((32, 32, 3), 80, np.uint8))
+    ref_sha = hashlib.sha256(ref_path.read_bytes()).hexdigest()
+    h_new = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    h_old = [[1.0, 0.0, 42.0], [0.0, 1.0, 50.0], [0.0, 0.0, 1.0]]
+    config = {
+        "preflight": {"reference_top": str(ref_path)},
+        "calibration_path": str(tmp_path / "cal.json"),
+        "plan_path": str(tmp_path / "plan.json"),
+        "work_dir": str(tmp_path),
+        "io": str(tmp_path),
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}},
+        "coarse": {"z_view": 0.118},
+        "plan": {"approach_m": 0.04},
+        "calibrate": {"map_sites": ["floor"], "map_points": [[-0.06, 0.15]]},
+        "sites": {
+            "floor": {"yaw_deg": -67.8, "surface_z": 0.006, "auto_roi": [0, 0, 20, 20], "surface_px": None},
+            "belt": {"yaw_deg": -14.4, "surface_z": 0.028, "map_from": "floor", "auto_roi": [10, 0, 30, 20], "surface_px": None},
+        },
+    }
+    monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda *_: {"ok": True, "max_px": 0.0})
+
+    def _bound(sites):
+        return {
+            "schema": cc.cal.SCHEMA,
+            "sites": sites,
+            "reference_top_sha256": ref_sha,
+            "reference_map_sha": cell_attempts.digest(sites),
+            "reference_geometry_sha": cell_attempts.digest({
+                n: {k: s.get(k) for k in ("auto_roi", "surface_px", "map_from")}
+                for n, s in config["sites"].items()
+            }),
+        }
+
+    frame = np.full((32, 32, 3), 80, np.uint8)
+    assert "belt" not in cc.check(config, _bound({"floor": {"homography": h_new}}), [], frame)["missing_map"]
+    assert "belt" in cc.check(config, _bound({"floor": {"homography": h_new}, "belt": {"homography": h_old}}), [], frame)["missing_map"]
+    assert "belt" not in cc.check(config, _bound({"floor": {"homography": h_new}, "belt": {"homography": h_new}}), [], frame)["missing_map"]
+    assert cc._map_write_sites(config) == ["floor", "belt"]
+
+    # End-to-end remap writes both floor and its map_from follower belt.
+    cal_path, cfg_path = tmp_path / "cal.json", tmp_path / "config.json"
+    (tmp_path / "plan.json").write_text("{}", encoding="utf-8")
+    cal_path.write_text(json.dumps(_bound({"floor": {"homography": h_old}, "belt": {"homography": h_old}})), encoding="utf-8")
+    cfg_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **kw: types.SimpleNamespace(frame=lambda *_: frame))
+    monkeypatch.setattr(cc, "check", lambda *a, **kw: {"camera_moved": True, "targets": [], "missing_bias": [], "missing_surface": [], "missing_map": []})
+    monkeypatch.setattr(cc, "remap", lambda *a, **kw: {"homography": h_new, "loo_error_mm": {"max": 1.5, "mean": 1.0}, "points": []})
+    monkeypatch.setattr(cc, "move_regions", lambda cfg, *a: cfg)
+    monkeypatch.setattr(cc.rp, "plan", lambda *a, **kw: [])
+    monkeypatch.setattr(cc.rp, "refusal", lambda *a, **kw: None)
+    monkeypatch.setitem(sys.modules, "cell_hooks", types.SimpleNamespace(stills=lambda *a, **kw: types.SimpleNamespace(close=lambda: None)))
+
+    # the remap measures the obstacle with the D435 first and refuses without a frame: give it a clean, empty one
+    monkeypatch.setattr(cc, "depth_capture", lambda: np.zeros((4, 4), np.uint16))
+    monkeypatch.setattr(cc.rp, "site_obstacle_mm", lambda c, d, f: {"obstacle_mm": 0.0, "sites_mm": {}, "edge_px": 1.0, "plane_nz": 0.98})
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "regions", "--commissioning", "--person-at-switch"]) == 0
+    saved = json.loads(cal_path.read_text(encoding="utf-8"))
+    assert saved["sites"]["floor"]["homography"] == h_new
+    assert saved["sites"]["belt"]["homography"] == h_new
+
+    # consensus-repair copies the repaired parent record to map_from followers (even if follower has old/no points).
+    pts_5 = [{"pixel": [i * 10, i * 10 + 1], "arm_m": [i / 100, i / 100 + 0.01]} for i in range(5)]
+    repaired_cal = _bound({"floor": {"homography": h_old, "points": pts_5}, "belt": {"homography": h_old}})
+    cal_path.write_text(json.dumps(repaired_cal), encoding="utf-8")
+    monkeypatch.setattr(cc, "check", lambda *a, **kw: {"camera_moved": False, "consensus_repairable": True, "targets": [], "missing_bias": [], "missing_surface": [], "missing_map": []})
+    monkeypatch.setattr(cc, "consensus", lambda points, _: points)
+    monkeypatch.setattr(cc, "enough_agree", lambda *_: True)
+    monkeypatch.setattr(cc, "repair_record", lambda _cfg, _rec, _kept: {"homography": h_new, "loo_error_mm": {"max": 1.0}, "points": pts_5})
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "consensus-repair", "--commissioning", "--person-at-switch"]) == 0
+    repaired_saved = json.loads(cal_path.read_text(encoding="utf-8"))
+    assert repaired_saved["sites"]["floor"]["homography"] == h_new
+    assert repaired_saved["sites"]["belt"]["homography"] == h_new
+
+
+def test_pivot_near_does_not_overwrite_concurrent_config_edits(tmp_path, monkeypatch):
+    import cell_pipeline as cp
+    import types
+
+    cal_path, plan_path, cfg_path = tmp_path / "cal.json", tmp_path / "plan.json", tmp_path / "config.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    cal_path.write_text(json.dumps({"schema": cc.cal.SCHEMA, "sites": {"floor": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}), encoding="utf-8")
+    initial = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "work_dir": str(tmp_path),
+        "io": str(tmp_path),
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}},
+        "coarse": {"z_view": 0.118},
+        "plan": {"approach_m": 0.04},
+        "sites": {"floor": {"yaw_deg": -67.8, "surface_z": 0.006}},
+        "pivot": {"geometry": {"radius_mm": 26.3, "phase_deg": 80.1}},
+    }
+    cfg_path.write_text(json.dumps(initial), encoding="utf-8")
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **kw: types.SimpleNamespace(frame=lambda *_: np.zeros((32, 32, 3), np.uint8)))
+    monkeypatch.setattr(cc, "check", lambda *a, **kw: {"camera_moved": False, "targets": ["floor:-0.06,0.15"], "missing_bias": ["floor:-0.06,0.15"], "missing_surface": [], "missing_map": []})
+
+    def _mock_pivot_near(*a, **kw):
+        # Simulate another session updating pivot.geometry while pivot_near is running.
+        external = json.loads(cfg_path.read_text(encoding="utf-8"))
+        external["pivot"]["geometry"] = {"radius_mm": 31.8, "phase_deg": 75.6}
+        cfg_path.write_text(json.dumps(external), encoding="utf-8")
+        return {"pivot-near floor:-0.06,0.15": "calibrated"}
+
+    monkeypatch.setattr(cc, "pivot_near", _mock_pivot_near)
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "pivot-near", "--targets", "floor:-0.06,0.15", "--commissioning", "--person-at-switch"]) == 0
+    after = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert after["pivot"]["geometry"] == {"radius_mm": 31.8, "phase_deg": 75.6}
+
+
+def test_pivot_near_logs_json_and_returns_refusal_diagnostics(tmp_path, monkeypatch, capsys):
+    import cell_pivot, cell_pivot_precheck
+
+    cfg = {
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240], "frame_wh": [640, 480]}},
+        "coarse": {"z_view": 0.118}, "plan": {"approach_m": 0.04},
+        "sites": {"belt": {"yaw_deg": -14.4, "surface_z": 0.028}},
+    }
+    monkeypatch.setattr(cc, "pivot_point", lambda *a: ([0.115, -0.05], False))
+    monkeypatch.setattr(cell_pivot_precheck, "pivot_precheck", lambda *a: [])
+
+    def fake_piv(cell, config, point, yaws, cal, site, work, sleep, log):
+        log({"pivot": yaws[0], "mark_px": None})
+        return {
+            "result": "marks disagree: 11.3 mm from their centre",
+            "bias": {"bias_mm": [-10.0, -20.0], "rms_mm": 11.3, "radius_mm": 26.3, "phase_deg": 80.1,
+                     "yaws_fk_deg": [45.0, 65.0], "jaw_sides": ["ref", "other"], "dropped": 1},
+        }
+
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", fake_piv)
+    out = cc.pivot_near(object(), cfg, {}, tmp_path / "cal.json", "pivot-near belt:0.115,-0.05", tmp_path)
+    logged = json.loads(capsys.readouterr().out.strip())
+    assert logged["pivot"] == -94.4 and logged["mark_px"] is None
+    assert out["pivot-near belt:0.115,-0.05"].startswith("marks disagree")
+    assert out["bias"] == [-10.0, -20.0] and out["rms_mm"] == 11.3 and out["radius_mm"] == 26.3
+    assert out["phase_deg"] == 80.1 and out["yaws_fk_deg"] == [45.0, 65.0] and out["jaw_sides"] == ["ref", "other"] and out["dropped"] == 1
+
+
+def test_self_calibrate_uses_site_pivot_yaws_only_when_over_target(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen_yaws = []
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda c, cfg, pt, yaws, *a: seen_yaws.append(list(yaws)) or {"result": "stopped"})
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: None)
+    cfg = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.08}, "coarse": {"z_view": 0.118},
+           "sites": {"belt": {"yaw_deg": -14.4, "surface_z": 0.028, "pivot_yaws": [35, 45, 55, 65, 75]}}}
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[35, 45, 55, 65, 75]]
+    seen_yaws.clear()
+    cfg["pivot"]["yaws"] = [20, 40]
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[20, 40]]
+    seen_yaws.clear()
+    del cfg["pivot"]["yaws"]
+    cfg["params"]["pivot.over_target"] = 0
+    cfg["pivot"]["points"] = [(0.115, -0.05)]
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[-94.4, -54.4, -14.4, 25.6, 65.6, 105.6]]
+
+
+def test_check_emits_advisory_bias_coverage_and_leverage_without_changing_stale(tmp_path, monkeypatch):
+    cv2 = pytest.importorskip("cv2")
+    import cell_map_fit, cell_preflight, cell_pivot
+
+    ref_path, cal_path = tmp_path / "ref.jpg", tmp_path / "cal.json"
+    assert cv2.imwrite(str(ref_path), np.full((32, 32, 3), 80, np.uint8))
+    ref_sha = hashlib.sha256(ref_path.read_bytes()).hexdigest()
+    pts = [{"pixel": [100 + 200 * x, 100 + 200 * y], "arm_m": [x, y]} for x, y in ((0.0, 0.1), (0.04, 0.1), (0.0, 0.14), (0.04, 0.14))]
+    rec = {"homography": [[0.005, 0.0, -0.5], [0.0, 0.005, -0.5], [0.0, 0.0, 1.0]], "z_view": 0.1,
+           "loo_error_mm": {"mean": 2.0, "max": 3.0}, "points": pts}
+    sites_cal = {"floor": rec, "belt": dict(rec)}
+    cfg = {
+        "preflight": {"reference_top": str(ref_path)}, "calibration_path": str(cal_path), "work_dir": str(tmp_path),
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}}, "coarse": {"z_view": 0.1},
+        "calibrate": {"map_sites": ["floor", "belt"]}, "params": {"verify.map_sigma_max_mm": 5.0},
+        "sites": {
+            "floor": {"yaw_deg": 0.0, "surface_z": 0.006, "start": [0.02, 0.12]},
+            "belt": {"yaw_deg": 0.0, "surface_z": 0.028, "start": [0.40, 0.40]},
+        },
+    }
+    cal = {"schema": cc.cal.SCHEMA, "sites": sites_cal, "reference_top_sha256": ref_sha,
+           "reference_map_sha": cell_attempts.digest(sites_cal),
+           "reference_geometry_sha": cell_attempts.digest({n: {k: s.get(k) for k in ("auto_roi", "surface_px", "map_from")} for n, s in cfg["sites"].items()})}
+    bias_file = cell_pivot.bias_path(cal_path)
+    cell_pivot.save_bias(bias_file, {"site": "floor", "point_m": [0.02, 0.12], "bias_mm": [1.0, 1.0],
+                                     "map_sha": cell_attempts.digest(rec), "carried_from": "old"})
+    monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda *_: {"ok": True, "max_px": 0.0})
+    found = cc.check(cfg, cal, [], np.full((32, 32, 3), 80, np.uint8), params=cfg["params"])
+    assert {g["site"] for g in found["bias_coverage_gaps"]} == {"floor", "belt"}
+    assert [w["site"] for w in found["map_leverage_warn"]] == ["belt"]
+    assert cc.stale(found) == []
+    lev = cell_map_fit.plan_leverage([[0.0, 0.1], [0.04, 0.1], [0.0, 0.14], [0.04, 0.14]], cfg["sites"], limit_mm=5.0)
+    assert [w["site"] for w in lev["warnings"]] == ["belt"]
+
+
+def test_wide_pose_fit_keeps_pose_loo_and_pose_loo_errors_and_site_sigma(tmp_path):
+    import cv2
+    import cell_frame as cf
+    import cell_map_fit
+
+    K = np.array([[618.53, 0.0, 322.32], [0.0, 618.67, 236.60], [0.0, 0.0, 1.0]])
+    R_cb = cv2.Rodrigues(np.array([np.pi, 0.0, 0.0]))[0] @ cv2.Rodrigues(np.array([0.14, -0.10, 0.3]))[0]
+    t_cb = np.array([0.12, 0.08, 0.61])
+    cam_pose = (R_cb, t_cb)
+    up = (R_cb.T @ np.array([0.0, 0.0, 1.0])).tolist()
+    z_view = 0.12
+    # Wide XY span (>= 0.10 m x >= 0.05 m), with blobs physically 20 mm above z_view
+    blob_z = z_view + 0.020
+    grid_xy = [(-0.04, 0.10), (0.04, 0.10), (0.12, 0.10), (-0.04, 0.18), (0.04, 0.18), (0.12, 0.18), (0.00, 0.14), (0.08, 0.14)]
+    marks = [(cf.project((x, y, blob_z), K, np.zeros(5), cam_pose), (x, y)) for x, y in grid_xy]
+    lens = tmp_path / "lens.json"
+    lens.write_text(json.dumps({"K": K.tolist(), "dist": [0.0] * 5}), encoding="utf-8")
+    cfg = {"cameras": {"top": {"height_m": 0.61, "center_px": [322.32, 236.60]}},
+           "calibrate": {"intrinsics": str(lens), "up": up}}
+
+    rec = cc.rp.fit_remap_marks(cfg, z_view, tcp_marks=False, marks=marks, seen_jaws=[], write_labels=False, log=lambda _: None)
+    assert rec["upright"] is True
+    assert rec["fitted_cz_m"] == pytest.approx(0.61 - 0.020, abs=0.004)
+    assert rec["implied_blob_dz_mm"] == pytest.approx(20.0, abs=4.0)
+    # Must keep pose loo_error_mm rather than overwriting with affine cal.loo_error_mm
+    assert rec["loo_error_mm"] != rec["affine_fit"]["loo_error_mm"] or rec["loo_error_mm"]["max"] < 1.0
+    assert rec["loo_error_mm"]["max"] < rec["affine_fit"]["loo_error_mm"]["max"]
+
+    # _pose_loo_errors must not double-invert camera_in_base
+    rows = cell_map_fit.loo_residuals(rec, cfg)
+    assert len(rows) == len(grid_xy)
+    assert max(r["loo_dist_mm"] for r in rows) < 1.5
+
+    # site_sigma_summary evaluates leverage at the z_view pixel directly (no target_z parallax shift)
+    pt = [0.04, 0.14]
+    px_zview = cc.cal.to_pixel(rec["homography"], pt)
+    expected_sig = cell_map_fit.predict_sigma_mm(rec, px_zview)
+    summary = cell_map_fit.site_sigma_summary(rec, [pt], cfg["cameras"]["top"], target_z=-0.05)
+    assert summary["max_mm"] == expected_sig and summary["mean_mm"] == expected_sig
+
+    # If free height diverges > 60 mm from cam_h - z_view, fitted_map falls back to fixed height
+    cfg_far = {"cameras": {"top": {"height_m": 0.72}}, "calibrate": {"intrinsics": str(lens), "up": up}}
+    rec_fb = cc.fitted_map(cfg_far, marks, z_view)
+    pose_fb = rec_fb.get("pose_fit", rec_fb)
+    assert pose_fb["fitted_cz_m"] == pytest.approx(0.72, abs=1e-4)
+    assert pose_fb["implied_blob_dz_mm"] == 0.0
+
+
+def test_remap_uses_measured_fk_and_reruns_jaw_labelling_after_outlier_drop(tmp_path, monkeypatch):
+    import types
+
+    def write(c, pose, _place, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], pose["yaw_deg"], 0.0]]}}))
+        return path
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
+    # Live state has true FK position shifted (+3 mm, -2 mm) and yaw=15 deg (different from planned 0 deg)
+    true_yaw = 15.0
+    monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: (s[0] + 0.003, s[1] - 0.002, s[2], true_yaw) if len(s) == 6 else tuple(s[:4]))
+    points = cc.rp.visit_order(GRID)
+    o = (0.054 * math.cos(math.radians(true_yaw + 79.0)), 0.054 * math.sin(math.radians(true_yaw + 79.0)))
+    shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
+    pairs = {0, 3, 6}
+
+    class LiveFkCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            if command == "state" and self.i >= 0:
+                p = points[self.i]
+                return {"ok": True, "state": [p[0], p[1], 0.14, true_yaw, 0.0, 56.0]}
+            return {"ok": True}
+
+    def mark(cell, config, near=None, report=None, **kw):
+        p = points[cell.i]
+        fk_tcp = (p[0] + 0.003, p[1] - 0.002)
+        if cell.i == 1:  # corrupt mark at index 1 (80 px outlier)
+            px = (to_px(fk_tcp)[0] + 80.0, to_px(fk_tcp)[1] - 60.0)
+            report.update(reason=None, side=None, blobs=[[px[0], px[1], 400.0]])
+            return px
+        s = -0.5 if shows[cell.i] == "ref" else 0.5
+        seen = [to_px((fk_tcp[0] + k * o[0], fk_tcp[1] + k * o[1])) for k in ((s, -s) if cell.i in pairs else (s,))]
+        report.update(reason=None, side=None, blobs=[[x, y, 400.0] for x, y in seen])
+        return seen[0]
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    record = cc.remap(LiveFkCell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert len(record["points"]) == 7 and len(record["dropped_marks"]) == 1
+    assert record["loo_error_mm"]["max"] < 0.5
+    # Verify marks recorded measured FK coordinates (+0.003, -0.002), not planned GRID
+    for pt in record["points"]:
+        assert 1000 * math.dist(cc.cal.to_arm(record["homography"], pt["pixel"]), pt["arm_m"]) < 0.5
+    obs = json.loads(next((tmp_path / "remap-frames").iterdir()).joinpath("observations.json").read_text())
+    assert obs["seen_jaws"][0]["yaw"] == true_yaw
+    assert obs["seen_jaws"][0]["tcp"] == pytest.approx([points[0][0] + 0.003, points[0][1] - 0.002], abs=1e-6)

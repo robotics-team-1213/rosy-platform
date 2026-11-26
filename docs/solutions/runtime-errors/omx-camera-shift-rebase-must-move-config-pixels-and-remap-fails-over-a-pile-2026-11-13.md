@@ -76,6 +76,29 @@ This rebase is not a touch-verified map: the loo error stays what it was (floor 
 - The camera moved a second time (55 px) around the control PC's 19:10-20:26 outage; the new gate refused before any
   motion until the rebase.
 
+## 2026-11-26 A/B field check
+
+The same top frame gave a maximum displacement of 18 px on A and 2.5 px on B. Both checks reported
+`camera_moved=true`. B also reported `top camera map site geometry changed`: eight policy regions had
+different `auto_roi` and `surface_px` values from the calibration generation. The B stack configuration
+matched the saved reference-image, map and site-geometry digests. Under the B lock, the operator workflow
+backed up the policy configuration and restored those two fields. The next B check returned
+`camera_moved=false` and `lateral_xy=fail`, with `post-eval` still due. For this failure, compare the saved
+generation with the deployed site fields before scheduling a remap. The field receipts are `check-b.json`
+and `check-b-restored.json` from the November 26 A/B transfer check.
+
+The November 26 empty/full reference also classified a black box in the lower-left ship slot of a November 20
+frame as empty. Fixed crosses had shifted about 40 px between setups. Aligning the four crosses produced four
+matching labels and two unknowns on that older frame. Evaluate mixed occupancy using the current, pinned
+camera setup before using a slot result for admission. This replay used a static arrangement; the November 20
+depth exposure followed its RGB frame by 2.411 s. See `historical-mixed-occupancy.json` and
+`mixed-scene-evidence.md` from the same day's replay.
+
+For a temporary stand's tier 2 to a ship's tier 1, run `calibrate_check` with
+`route: [source, destination]`. The exact source site's `zone_rois.floor` and
+`zone_rois.floor_depth_mm` describe the stand support. The top-level floor patches
+describe the destination support. Each footprint needs its own named top ROI.
+
 ## Next time
 
 - Any USB or cable work on a cell can move its top camera: rebase before the next run (the recovery gate now refuses).

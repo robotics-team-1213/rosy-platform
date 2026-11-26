@@ -66,8 +66,19 @@ def _cyclone_problems(xml):
         address = re.search(r'address="([^"]*)"', attrs)
         if not ((name and name.group(1) == "lo") or (address and address.group(1).startswith("127."))):
             problems.append("non-loopback interface " + attrs.strip())
-    if re.search(r"<Peers?\b", xml):
-        problems.append("static peers")
+    if re.search(r"<Peers\b", xml):
+        peers = re.findall(r"<Peer\b([^>]*)>", xml)
+        if not peers:
+            problems.append("empty Peers block")
+        for attrs in peers:
+            addr = re.search(r'\baddress="([^"]*)"', attrs, flags=re.IGNORECASE)
+            if not (addr and addr.group(1).startswith("127.")):
+                problems.append("non-loopback peer " + attrs.strip())
+    elif re.search(r"<Peer\b", xml):
+        for attrs in re.findall(r"<Peer\b([^>]*)>", xml):
+            addr = re.search(r'\baddress="([^"]*)"', attrs, flags=re.IGNORECASE)
+            if not (addr and addr.group(1).startswith("127.")):
+                problems.append("non-loopback peer " + attrs.strip())
     return problems
 
 
@@ -107,7 +118,10 @@ def test_guard_rejects_a_nic_bound_cyclone_profile():
     assert _cyclone_problems('<NetworkInterface name="wlan0"/>')
     assert _cyclone_problems('<NetworkInterface autodetermine="true"/>')
     assert _cyclone_problems('<NetworkInterface name="lo"/><Peers><Peer address="10.0.0.2"/></Peers>')
+    assert _cyclone_problems('<NetworkInterface name="lo"/><Peers/>')
+    assert _cyclone_problems('<NetworkInterface name="lo"/><Peers><Peer/></Peers>')
     assert not _cyclone_problems('<NetworkInterface name="lo"/>')
+    assert not _cyclone_problems('<NetworkInterface name="lo"/><Discovery><Peers><Peer address="127.0.0.1"/></Peers></Discovery>')
 
 
 @pytest.mark.parametrize("relative", [

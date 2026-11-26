@@ -54,7 +54,9 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/installation/camera-peer.js": 2,
     "applications/fleet/web/installation/usb-camera.js": 1,  # D-963 USB camera role approval
     "applications/fleet/web/cell/cell.js": 1,
-    "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
+    "applications/fleet/web/cell/cell-channel-mission.js": 1,  # D-687 Mission admission
+    "applications/fleet/web/cell/cell-observation.js": 1,  # Focused arm incident clearance.
+    "applications/fleet/web/work/channel-request-view.js": 2,  # D-680/D-693 Task and incident claim
     "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
     "applications/fleet/web/work/trip-proposal-view.js": 1,  # D-908 explicit independent trip admission.
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 incident lock release
@@ -77,6 +79,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/sitemap/site-map-reality.js": 1,  # apply the rigid reality correction to the draft (v1.384)
     "applications/fleet/web/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "applications/fleet/web/installation/tracking-relearn.js": 1,
+    "applications/fleet/web/localization-panel.js": 1,  # Pinky confirm, relocalize, map-binding approve/revoke share confirmedAction via onAction
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

@@ -36,6 +36,17 @@ def refresh_drivable_law(node):
             node._lane_keeper.reset()
 
 
+_DEFAULT_OWNER_UID = None
+
+
+def _core_owner_uid():
+    global _DEFAULT_OWNER_UID
+    if _DEFAULT_OWNER_UID is None:
+        import pwd
+        _DEFAULT_OWNER_UID = pwd.getpwnam('rosy-core').pw_uid
+    return _DEFAULT_OWNER_UID
+
+
 class CoreLawInput:
     def __init__(self):
         self.steer = self._key = self._written = None
@@ -48,8 +59,7 @@ class CoreLawInput:
     def read(self, path, robot_id, *, now=None, owner_uid=None):
         try:
             if owner_uid is None:
-                import pwd
-                owner_uid = pwd.getpwnam('rosy-core').pw_uid
+                owner_uid = _core_owner_uid()
             fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
             with os.fdopen(fd, 'rb') as stream:
                 info = os.fstat(stream.fileno())

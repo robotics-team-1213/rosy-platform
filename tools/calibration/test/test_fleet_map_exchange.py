@@ -24,15 +24,12 @@ class _StubState:
         self.master: dict | None = None
         self.state_payload: dict = {"robots": {}}
         self.activation_phase: str = "ACTIVE"
-        pgm = b"P5\n# stub\n4 4\n255\n" + bytes([0] * 4 + [0, 254, 254, 0] * 2 + [0] * 4)
+        pgm = b"P5\n4 4\n255\n" + bytes([0] * 4 + [0, 254, 254, 0] * 2 + [0] * 4)
         self.bundle_payload = {
             "robot_id": "rosy_46",
             "map_id": "slam-1",
-            "grid_id": "occupancy:112233445566",
             "width": 4,
             "height": 4,
-            "resolution": 0.05,
-            "origin": [-0.1, -0.1, 0.0],
             "sha256": hashlib.sha256(pgm).hexdigest(),
             "pgm_base64": base64.b64encode(pgm).decode("ascii"),
             "yaml": {

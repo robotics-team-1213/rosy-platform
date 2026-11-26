@@ -83,30 +83,33 @@ def _park_strain(row) -> bool:
     return _runner_row(row, PARK_STRAIN, ("run park", "state"))
 
 
-#: D-1040: the two kinds a machine clears only with a fresh read of the arm (ArmIncidentRemeasure), each the whole text
-#: its producer writes. 2026-11-17 17:10 arm_b: a USB hub re-enumeration took the port mid-teardown, so the guard could
-#: not write torque OFF (deploy/robot/omx/guarded_device.py: "torque OFF not confirmed: {errors}", record_session's
-#: "session ended: {type}: {error}"). 18:37 arm_a: an orphaned session held the folded home for 20 min and joint_push saw
-#: the PWM wind up (joint_push.py; never the jaws' "something is in them"). In both the arm itself said nothing.
+#: D-1040: three kinds cleared only with a fresh motionless read (ArmIncidentRemeasure), each exact whole text from its
+#: producer (guarded_device.py, joint_push.py, guarded_native_effort.py). Never the jaws' "something is in them".
 _BUSY = (r"ConnectionError\(\"Failed to write 'Torque_Enable' on id_=1[1-6] with '0' after [0-9] tries\."
          r" \[TxRxResult\] Port is in use!\"\)")
 TORQUE_UNCONFIRMED = re.compile(
     rf"(?:runner: )?session ended: RuntimeError: torque OFF not confirmed: \[{_BUSY}(?:, {_BUSY}){{0,5}}\]", re.ASCII)
 WINDUP = re.compile(r"(?:shoulder_pan|shoulder_lift|elbow_flex|wrist_flex) still [0-9]{1,4}\.[0-9] units short, PWM "
                     r"winding up [0-9]{1,4} -> [0-9]{1,4} of [0-9]{1,4}: pushing against something", re.ASCII)
-REMEASURE_MAX_AGE_S = 900                     # a read older than this at the clear is not fresh
-REMEASURE_SKEW_S = 60                         # cell and Fleet clocks (chrony) may differ this much
-REMEASURE_HOME_TOL = 3.0                      # units: omx_incident.HOME_TOL, the runner's SETTLE_TOL
-
+PARK_WINDUP = re.compile(rf"(?:runner: )?contact in park: {WINDUP.pattern}", re.ASCII)
+_STALE_T = r"(?:-?[0-9]+\.[0-9]|n/a)"
+_STALE_CORE = rf"stale effort sample \(>0\.5 seconds\)(?:: tick_ms={_STALE_T} last_tick_ms={_STALE_T} last_effort_ms={_STALE_T} pwm_ms={_STALE_T} monitor_ms={_STALE_T})?"
+STALE_EFFORT = re.compile(rf"(?:runner: )?session ended: ValueError: {_STALE_CORE}", re.ASCII)
+STALE_EFFORT_FAULT_TEXT = re.compile(_STALE_CORE, re.ASCII)
+STALE_EFFORT_FAULT = ("ValueError", "stale effort sample (>0.5 seconds)")
+REMEASURE_MAX_AGE_S, REMEASURE_SKEW_S, REMEASURE_HOME_TOL = 900, 60, 3.0  # D-1040 freshness/skew/fold tolerances
 
 def _list_complete(facts, total_key: str, items) -> bool:
     total = facts.get(total_key)
     return total is None or (type(total) is int and total == len(items))
 
+def _stale_effort_kinds_ok(records, kinds) -> bool:
+    return (isinstance(kinds, list) and len(kinds) == len(records)
+            and all(isinstance(k, dict) and isinstance(k.get("fault"), str)
+                    and STALE_EFFORT_FAULT_TEXT.fullmatch(k["fault"]) and k.get("stop_reasons") == [] for k in kinds))
 
 def remeasure_kind(facts) -> str | None:
-    """Which D-1040 kind these stored facts are, or None: every flagged row the port-busy torque OFF failure and no
-    wind-up, or every wind-up hit the body joint text and no flagged row. Truncated lists fail closed."""
+    """D-1040 kind requiring ArmIncidentRemeasure (port-busy torque OFF, body wind-up, or stale effort sample), else None."""
     windup, flagged, faults = facts.get("windup_hits"), facts.get("flagged"), facts.get("fault_records")
     if (facts.get("truncated")
             or not _list_complete(facts, "flagged_total", flagged or ())
@@ -114,8 +117,11 @@ def remeasure_kind(facts) -> str | None:
         return None
     if flagged and not windup and all(_runner_row(r, TORQUE_UNCONFIRMED) for r in flagged):
         return "torque OFF not confirmed (port in use)"
-    if windup and not flagged and all(isinstance(h, dict) and isinstance(h.get("reason"), str)
-                                      and WINDUP.fullmatch(h["reason"]) for h in windup):
+    if flagged and not windup and all(_runner_row(r, STALE_EFFORT) for r in flagged):
+        return "stale effort sample"
+    if (windup or flagged) and all(isinstance(h, dict) and isinstance(h.get("reason"), str)
+                                   and WINDUP.fullmatch(h["reason"]) for h in (windup or ())) \
+            and all(_runner_row(r, PARK_WINDUP, ("run park", "state")) for r in (flagged or ())):
         return "wind-up before the end"
     return None
 
@@ -215,10 +221,9 @@ def classify(read, facts=None) -> str:
     return "sag_only" if sag_ok(read) else "needs_person"
 
 
-def remeasure_refused(remeasured, since, now, *, incident_id=None, binding=None, faults=None) -> str | None:
-    """Why `remeasured` does not show a quiet read of this arm (`binding` = (arm_id, board_id) of the incident's source)
-    for this incident after it was reported at `since`, or None. `faults`: the stored fault record names, each of
-    which must be re-read as PORT_LOST_FAULT exactly (None: the kind allows none)."""
+def remeasure_refused(remeasured, since, now, *, incident_id=None, binding=None, faults=None,
+                      expected_fault=PORT_LOST_FAULT) -> str | None:
+    """Why `remeasured` does not show a quiet read of this arm/board/incident after `since`, or None."""
     try:
         read = ArmIncidentRemeasure.model_validate(remeasured)
     except (TypeError, ValueError):
@@ -228,10 +233,12 @@ def remeasure_refused(remeasured, since, now, *, incident_id=None, binding=None,
     if incident_id is None or read.incident_id != incident_id:
         return "remeasure not of this incident"
     seen = {r.name: (r.fault_type, r.fault) for r in read.fault_records}
-    if any(not isinstance(n, str) or seen.get(n) != PORT_LOST_FAULT for n in faults or ()):
-        return "a motor fault record that is not the lost port"
-    if not isinstance(since, (int, float)) or not isinstance(now, (int, float)) \
-            or not since < read.at <= now + REMEASURE_SKEW_S:
+    ok_fault = ((lambda v: isinstance(v, tuple) and v[0] == "ValueError" and isinstance(v[1], str) and bool(STALE_EFFORT_FAULT_TEXT.fullmatch(v[1])))
+                if expected_fault == STALE_EFFORT_FAULT else (lambda v: v == expected_fault))
+    if any(not isinstance(n, str) or not ok_fault(seen.get(n)) for n in faults or ()):
+        return ("a motor fault record that is not the lost port" if expected_fault == PORT_LOST_FAULT
+                else "a motor fault record that is not the expected fault")
+    if not isinstance(since, (int, float)) or not isinstance(now, (int, float)) or not since < read.at <= now + REMEASURE_SKEW_S:
         return "remeasure not newer than the incident"
     if now - read.at > REMEASURE_MAX_AGE_S:
         return "remeasure too old"
@@ -242,8 +249,6 @@ def remeasure_refused(remeasured, since, now, *, incident_id=None, binding=None,
     if not (read.folded and read.max_home_err <= REMEASURE_HOME_TOL) and not sag_ok(read):
         return "not folded at home at the remeasure"
     return None
-
-
 
 
 #: D-1047: the runner's exact text when a session ended on the bus link alone (2026-11-18 arm_s: a USB hiccup, EIO in
@@ -293,18 +298,7 @@ def _link_faults_only(records, kinds) -> bool:
 
 def machine_clearable(facts, remeasured=None, *, since=None, now=None, incident_id=None, binding=None,
                       verdict=None, stills=None) -> tuple[bool, str]:
-    """D-1039: may an AI assessor service clear this incident without a person? Default deny on the stored measured
-    facts, never looser than the cell's own rule (omx_incident.decide: a latch, a wind-up, a flagged runner row or an
-    unsafe end holds): the keys must be there with their types, the arm folded at a safe end with torque confirmed OFF
-    on every motor and caps confirmed restored, and nothing latched, wound up, stopped on contact or recorded as a
-    motor fault. Flagged runner rows only when every one is exactly a PARK_STRAIN stop (_park_strain). A truncated
-    report lacks the lists and stays with a person.
-    D-1040: the two remeasure_kind incidents only with `remeasured` (a dict) read after `since` (the incident's
-    reported_at) and no older than REMEASURE_MAX_AGE_S at `now`: every motor torque 0 and hardware error 0, folded.
-    The read must name this incident and the arm and board of its source (`binding`). The port-busy kind may carry an
-    unconfirmed torque_after and fault records each re-read as PORT_LOST_FAULT; everything else holds as above.
-    held_object (a box stuck in the jaws): jaw rows only (held_facts), a steady catalogue-box jaw gap in the read, and
-    a verdict (ArmHeldVerdict) whose stills are the incident's stored ones (`stills`: their sha256 set)."""
+    """D-1039/D-1040/D-1047: default-deny rule for whether an AI assessor may clear this incident without a person."""
     if not isinstance(facts, dict):
         return False, "facts unreadable"
     torque, latched, windup, flagged, stops, faults = (facts.get(k) for k in (
@@ -312,28 +306,25 @@ def machine_clearable(facts, remeasured=None, *, since=None, now=None, incident_
     if not (isinstance(torque, dict) and isinstance(latched, dict)
             and all(isinstance(v, list) for v in (windup, flagged, stops, faults))):
         return False, "facts incomplete (torque_after, latched, windup_hits, flagged, stops, fault_records)"
-    if (facts.get("truncated")
-            or not _list_complete(facts, "flagged_total", flagged)
+    if (facts.get("truncated") or not _list_complete(facts, "flagged_total", flagged)
             or not _list_complete(facts, "fault_records_total", faults)):
         return False, "facts truncated (flagged_total or fault_records_total mismatch)"
-    # D-1047: a link-failure end alone may stand on a rested arm (recomputed here from last_state, last_target, home);
-    # every other kind still needs folded (HOME_TOL). Truncated lists never qualify for it.
+    # D-1047: a link-failure end alone may stand on a rested arm (recomputed from last_state/last_target/home); others need folded.
     link = (bool(flagged) and all(_comm_end(r) for r in flagged)
             and facts.get("flagged_total") == len(flagged) and facts.get("fault_records_total") == len(faults))
     if facts.get("safe_end") is not True or (facts.get("folded") is not True and not (link and _rested(facts))):
         return False, "arm not at a safe end folded at home"
     off = bool(torque) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0 for v in torque.values())
-    # D-1047 first: a link-failure end with torque off and only EIO fault records needs no fresh read.
-    link_clear = (link and off and not latched and not stops
-                  and (not faults or _link_faults_only(faults, facts.get("fault_record_kinds"))))
+    link_clear = link and off and not latched and not stops and (not faults or _link_faults_only(faults, facts.get("fault_record_kinds")))
     kind = None if link_clear else remeasure_kind(facts)
     if kind:
+        expected_fault = STALE_EFFORT_FAULT if kind == "stale effort sample" else PORT_LOST_FAULT
         held = ("latched hardware error" if latched else "guard contact stop" if stops
                 else "motor fault record" if faults and kind.startswith("wind-up")
-                else "torque not confirmed OFF" if not off and kind.startswith("wind-up")
+                else "motor fault record with stop reason" if kind == "stale effort sample" and (faults or facts.get("fault_record_kinds")) and not _stale_effort_kinds_ok(faults, facts.get("fault_record_kinds"))
+                else "torque not confirmed OFF" if not off and kind != "torque OFF not confirmed (port in use)"
                 else "caps not confirmed restored" if facts.get("caps_restored") is not True
-                else remeasure_refused(remeasured, since, now, incident_id=incident_id, binding=binding,
-                                       faults=faults))
+                else remeasure_refused(remeasured, since, now, incident_id=incident_id, binding=binding, faults=faults, expected_fault=expected_fault))
         if held:
             return False, f"{kind}: {held}"
         return True, f"{kind}, then a fresh read: every motor torque OFF with no hardware error, folded at home"
@@ -381,10 +372,20 @@ def clearable_after_fold(facts, recovery, incident_id=None, reported_at=None) ->
         return False, "latched hardware error"
     if windup:
         return False, "wind-up or snag hit"
-    if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")):
-        return False, "motor fault record"
     if not isinstance(recovery, dict) or recovery.get("kind") != "auto_fold":
+        if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")):
+            return False, "motor fault record"
         return False, "no auto-fold evidence"
+    hw_after = recovery.get("hardware_error_after")
+    if isinstance(hw_after, dict) and any(type(v) is not int or v != 0 for v in hw_after.values()):
+        return False, "hardware error after fold"
+    hw_clean = (
+        isinstance(hw_after, dict) and len(hw_after) >= 6
+        and all(type(v) is int and v == 0 for v in hw_after.values())
+        and recovery.get("caps_restored_after") is True
+    )
+    if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")) and not hw_clean:
+        return False, "motor fault record"
     if incident_id is not None and recovery.get("incident_id") != incident_id:
         return False, "auto-fold evidence is for another incident"
     taken = recovery.get("taken_at")
@@ -403,3 +404,11 @@ def clearable_after_fold(facts, recovery, incident_id=None, reported_at=None) ->
     if recovery.get("corridor_clear") is not True:
         return False, "auto-fold corridor not confirmed clear"
     return True, f"folded home by the cell ({recovery.get('candidate')}), torque OFF; nothing latched or wound up"
+
+
+from .arm_incident_risk import (  # noqa: E402, F401  (public protocol exports)
+    AUTO_CLEAR_MIN_SCORE,
+    MAX_RECENT_CLEARS_24H,
+    RISK_SCHEMA,
+    evaluate_clear_safety,
+)

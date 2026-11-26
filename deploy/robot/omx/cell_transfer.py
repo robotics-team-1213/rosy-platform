@@ -24,11 +24,12 @@ class Gate:
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
         self.sequence, self.source, self.home, self.rehome = sequence, {}, None, None
         self.before_motion, self.finish_attempt = None, None
+        self.on_grasp = None
         self.history, self.transitions, self.finalized, self.blocked = [], 0, False, False
         self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
-
+        if callable(getattr(cell, "frame_receipt", None)): self.frame_receipt = cell.frame_receipt
     def _load_library(self, library) -> tuple[dict, str]:
         if isinstance(library, dict):
             return library, digest(library)
@@ -113,7 +114,7 @@ class Gate:
                 and all(abs(p - h) <= SETTLE_TOL for p, h in zip(present[:5], home[:5])))
 
     def act(self, command: str) -> dict:
-        if command == "state":
+        if command in ("state", "human-hold"):
             return self.cell.act(command)
         if self.blocked:
             return {"ok": False, "error": "held: audit_transition_incomplete"}
@@ -129,6 +130,8 @@ class Gate:
                     return {"ok": False, "error": "held: reviewed_scope_changed"}
                 if self.assessment["mode"] != "commissioning" or self.finish_attempt is None:
                     return {"ok": False, "error": "held: revised_library_requires_supervised_audit"}
+                if self.transitions >= 4:
+                    return {"ok": False, "error": "held: replan_limit_reached"}
                 fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
@@ -142,17 +145,13 @@ class Gate:
                 except Exception:
                     self.blocked = True
                     return {"ok": False, "error": "held: audit_unavailable"}
-                self.finalized = True
-                self.history = []
-                fresh["session_id"] = old["session_id"]
+                self.finalized, self.history, fresh["session_id"] = True, [], old["session_id"]
                 try:
                     self.before_motion(fresh)
                 except Exception:
                     self.blocked = True
                     return {"ok": False, "error": "held: audit_unavailable"}
-                self.assessment = fresh
-                self.finalized = False
-                self.transitions += 1
+                self.assessment, self.finalized, self.transitions = fresh, False, self.transitions + 1
                 state = self.cell.act("state")
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
@@ -169,6 +168,8 @@ class Gate:
                 if not allowed:
                     return {"ok": False, "error": f"held: zone: {why}"}
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
+        if command == "run grasp_pick" and self.on_grasp is not None:
+            self.on_grasp(status)
         status = {**status, "pre_state_trace": {"t": state.get("t"), "trace_receipt": state.get("trace_receipt")}}
         self.history.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if command.startswith("load ") and status.get("ok"):

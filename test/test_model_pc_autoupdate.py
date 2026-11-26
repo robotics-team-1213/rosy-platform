@@ -218,6 +218,19 @@ def test_road_fitness_archive_requires_signed_observation_contract(tmp_path, key
     subprocess.run(m.bootstrap_command(sys.executable, release, probe, []), check=True)
 
 
+def test_model_archive_requires_world_experiment_assets_when_route_is_present(tmp_path, keys):
+    m = module()
+    files = {m.WORLD_EXPERIMENT_ENTRY: b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=files)
+    with pytest.raises(ValueError, match="World experiment dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    files.update({name: b"source\n" for name in m.WORLD_EXPERIMENT_FILES})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=files)
+    release = tmp_path / "complete"
+    m.unpack(folder / "code.tar", release)
+    assert all((release / name).read_bytes() == b"source\n" for name in m.WORLD_EXPERIMENT_FILES)
+
+
 @pytest.mark.parametrize("path", ["middleware/drive/planning/nav2/node.py",
                                   "middleware/drive/unknown/code.py",
                                   "middleware/control/arm/safety/code.py"])
@@ -768,6 +781,28 @@ def test_real_job_records_pinned_source_and_redacts_arguments(tmp_path, keys, mo
     obj = json.loads(text)
     assert obj["source_commit"] == f"{1:040x}"
     assert obj["environment_sha256"] == env and obj["exit_code"] == 0
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux job receipt and flock")
+def test_execute_prunes_completed_job_receipts_beyond_500(tmp_path, keys, monkeypatch):
+    m = module()
+    env = m.Updater(tmp_path, "test", keys[1], sys.executable).probe_environment()
+    candidate(m, tmp_path, keys, env=env)
+    m.Updater(tmp_path, "test", keys[1], sys.executable,
+              environment=lambda: env, busy=lambda: None, health=lambda p: None).run()
+    jobs = tmp_path / "jobs"
+    jobs.mkdir(parents=True, exist_ok=True)
+    for i in range(505):
+        (jobs / f"{i:019d}-0.json").write_text("{}\n")
+    config = {"root": str(tmp_path), "key_id": "test", "public_key": str(keys[1]),
+              "python": sys.executable, "work_dir": str(tmp_path), "legacy_roots": []}
+    monkeypatch.setattr(m, "gpu_busy", lambda: None)
+    monkeypatch.setattr(m, "legacy_busy", lambda roots: None)
+    assert m.execute(config, "rosy_ml.py", []) == 0
+    kept = sorted(p.name for p in jobs.glob("*.json"))
+    assert len(kept) == 500
+    assert f"{0:019d}-0.json" not in kept and f"{5:019d}-0.json" not in kept
+    assert f"{6:019d}-0.json" in kept
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux unmanaged work admission")

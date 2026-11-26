@@ -17,13 +17,168 @@ export function svgElement(name, attrs, parent) {
 
 const finitePose = (pose) => Boolean(pose && Number.isFinite(pose.x) && Number.isFinite(pose.y));
 
+export function placeHitRadius(index, pxPoints) {
+  let minDist = Infinity;
+  const [x, y] = pxPoints[index];
+  for (let j = 0; j < pxPoints.length; j++) {
+    if (j === index) continue;
+    const d = Math.hypot(x - pxPoints[j][0], y - pxPoints[j][1]);
+    if (d < minDist) minDist = d;
+  }
+  if (!Number.isFinite(minDist)) return 18;
+  return Math.round(Math.max(14, Math.min(18, minDist / 2)) * 10) / 10;
+}
+
+function svgViewBox(svg) {
+  const raw = svg?.getAttribute?.('viewBox') ?? svg?.attributes?.viewBox ?? '';
+  const parts = String(raw).trim().split(/[\s,]+/).map(Number);
+  if (parts.length === 4 && parts.every(Number.isFinite)) {
+    return {minX: parts[0], minY: parts[1], width: parts[2], height: parts[3]};
+  }
+  return {minX: 0, minY: 0, width: 800, height: 480};
+}
+
+function estimateTextWidth(text) {
+  let w = 0;
+  for (const ch of String(text || '')) w += ch.charCodeAt(0) > 127 ? 12 : 7.5;
+  return Math.max(16, w);
+}
+
+function labelBox(x, y, text, anchor = 'start') {
+  const width = estimateTextWidth(text);
+  const height = 15;
+  const left = anchor === 'end' ? x - width : anchor === 'middle' ? x - width / 2 : x;
+  return {x: left, y: y - 12, width, height};
+}
+
+function boxesOverlap(a, b, pad = 2) {
+  return a.x - pad < b.x + b.width && b.x - pad < a.x + a.width
+    && a.y - pad < b.y + b.height && b.y - pad < a.y + a.height;
+}
+
+function overlapArea(a, b, pad = 2) {
+  const w = Math.min(a.x + a.width + pad, b.x + b.width + pad) - Math.max(a.x - pad, b.x - pad);
+  const h = Math.min(a.y + a.height + pad, b.y + b.height + pad) - Math.max(a.y - pad, b.y - pad);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+const LABEL_OFFSETS = [
+  {dx: 12, dy: -10, anchor: 'start'},
+  {dx: 12, dy: 14, anchor: 'start'},
+  {dx: -12, dy: -10, anchor: 'end'},
+  {dx: -12, dy: 14, anchor: 'end'},
+  {dx: 0, dy: -16, anchor: 'middle'},
+  {dx: 0, dy: 24, anchor: 'middle'},
+  {dx: 12, dy: -26, anchor: 'start'},
+  {dx: 12, dy: 30, anchor: 'start'},
+  {dx: -12, dy: -26, anchor: 'end'},
+  {dx: -12, dy: 30, anchor: 'end'},
+  {dx: 0, dy: -32, anchor: 'middle'},
+  {dx: 0, dy: 40, anchor: 'middle'},
+  {dx: 12, dy: -42, anchor: 'start'},
+  {dx: 12, dy: 46, anchor: 'start'},
+  {dx: -12, dy: -42, anchor: 'end'},
+  {dx: -12, dy: 46, anchor: 'end'},
+];
+
+export function placeLabel(px, py, text, placed, {preferred = null, bounds = {minX: 0, minY: 0, width: 800, height: 480}} = {}) {
+  const candidates = [];
+  if (preferred) candidates.push(preferred);
+  for (const cand of LABEL_OFFSETS) {
+    if (!preferred || cand.dx !== preferred.dx || cand.dy !== preferred.dy || cand.anchor !== preferred.anchor) {
+      candidates.push(cand);
+    }
+  }
+  for (let row = 3; row <= 6; row++) {
+    const step = 10 + row * 16;
+    candidates.push({dx: 12, dy: -step, anchor: 'start'}, {dx: 12, dy: step + 4, anchor: 'start'});
+    candidates.push({dx: -12, dy: -step, anchor: 'end'}, {dx: -12, dy: step + 4, anchor: 'end'});
+  }
+  let fallbackClear = null;
+  let best = null;
+  let bestOverlap = Infinity;
+  for (const cand of candidates) {
+    const x = Math.round((px + cand.dx) * 10) / 10;
+    const y = Math.round((py + cand.dy) * 10) / 10;
+    const box = labelBox(x, y, text, cand.anchor);
+    const inBounds = box.x >= bounds.minX + 4
+      && box.x + box.width <= bounds.minX + bounds.width - 4
+      && box.y >= bounds.minY + 4
+      && box.y + box.height <= bounds.minY + bounds.height - 4;
+    const hits = placed.some(b => boxesOverlap(box, b));
+    if (!hits && inBounds) {
+      placed.push(box);
+      return {x, y, anchor: cand.anchor, box};
+    }
+    if (!hits && !fallbackClear) fallbackClear = {x, y, anchor: cand.anchor, box};
+    const area = placed.reduce((sum, b) => sum + overlapArea(box, b), 0) + (inBounds ? 0 : 1000);
+    if (area < bestOverlap) {
+      bestOverlap = area;
+      best = {x, y, anchor: cand.anchor, box};
+    }
+  }
+  const chosen = fallbackClear || best;
+  placed.push(chosen.box);
+  return chosen;
+}
+
+function collectExistingLabelBoxes(svg) {
+  const boxes = [];
+  const walk = (node) => {
+    if (!node) return;
+    const cls = node.attributes?.class ?? node.getAttribute?.('class') ?? '';
+    if (node.tagName === 'text' && /\blabel\b/.test(cls)) {
+      const x = Number(node.attributes?.x ?? node.getAttribute?.('x'));
+      const y = Number(node.attributes?.y ?? node.getAttribute?.('y'));
+      const anchor = node.attributes?.['text-anchor'] ?? node.getAttribute?.('text-anchor') ?? 'start';
+      if (Number.isFinite(x) && Number.isFinite(y)) boxes.push(labelBox(x, y, node.textContent, anchor));
+    } else if (node.tagName === 'circle' && /\bplace\b/.test(cls)) {
+      const cx = Number(node.attributes?.cx ?? node.getAttribute?.('cx'));
+      const cy = Number(node.attributes?.cy ?? node.getAttribute?.('cy'));
+      const r = Number(node.attributes?.r ?? node.getAttribute?.('r')) || 9;
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        boxes.push({x: cx - r - 1, y: cy - r - 1, width: (r + 1) * 2, height: (r + 1) * 2});
+      }
+    }
+    for (const child of node.children || []) walk(child);
+  };
+  walk(svg);
+  return boxes;
+}
+
+export function drawPlaces(svg, map, view, {selectedPlace = null, kindLabels = {}} = {}) {
+  const placePx = map.places.map(place => view.toPx(place.x, place.y));
+  const placedLabels = placePx.map(([px, py]) => ({x: px - 10, y: py - 10, width: 20, height: 20}));
+  const bounds = svgViewBox(svg);
+  for (const [index, place] of map.places.entries()) {
+    const [px, py] = placePx[index];
+    const node = svgElement('g', {'data-place': place.id, tabindex: 0, role: 'button', 'aria-label': `장소 ${place.name} 선택`}, svg);
+    svgElement('circle', {cx: px, cy: py, r: placeHitRadius(index, placePx), fill: 'transparent', stroke: 'none', class: 'place-hit'}, node);
+    svgElement('circle', {cx: px, cy: py, r: 9, class: `place ${place.kind}${selectedPlace === place.id ? ' selected' : ''}`}, node);
+    svgElement('title', {}, node).textContent = `${place.name} (${kindLabels[place.kind] || place.kind})`;
+    if (place.kind === 'start') {
+      svgElement('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7', transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
+    }
+    // Name, not just an ordinal: the map is where the operator picks a destination, and touch has no <title>.
+    const labelText = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
+    const pos = placeLabel(px, py, labelText, placedLabels, {bounds});
+    const labelAttrs = {x: pos.x, y: pos.y, class: 'label'};
+    if (pos.anchor !== 'start') labelAttrs['text-anchor'] = pos.anchor;
+    svgElement('text', labelAttrs, svg).textContent = labelText;
+  }
+}
+
 export function drawSitePointsOverlay(svg, sitePoints, view) {
   svg.querySelector('#site-points-layer')?.remove();
   if (!sitePoints || !view) return;
+  const placed = collectExistingLabelBoxes(svg);
+  const bounds = svgViewBox(svg);
   const layer = svgElement('g', {id: 'site-points-layer'}, svg);
   const lineOf = pts => pts.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
   const wp = sitePoints.coordinate_frames?.vehicle_world?.waypoints || {};
   const stopsById = Object.fromEntries((sitePoints.vehicle_stops || []).map(s => [s.id, s]));
+  const pendingLabels = [];
+  const addMarker = (x, y, r = 6) => placed.push({x: x - r, y: y - r, width: r * 2, height: r * 2});
 
   // Planned S3 intake approach chain
   const s3Stop = stopsById.S3;
@@ -33,7 +188,8 @@ export function drawSitePointsOverlay(svg, sitePoints, view) {
     if (!s3Stop?.berth?.nav2_berth_ready) {
       const [ax, ay] = view.toPx(s3App.x, s3App.y);
       svgElement('polygon', {class: 'sp-planned-stop', points: `${ax},${ay - 6} ${ax + 6},${ay} ${ax},${ay + 6} ${ax - 6},${ay}`}, layer);
-      svgElement('text', {class: 'sp-label', x: ax + 8, y: ay - 6}, layer).textContent = 'S3_app(예정)';
+      addMarker(ax, ay, 7);
+      pendingLabels.push({px: ax, py: ay, className: 'sp-label', text: 'S3_app(예정)', preferred: {dx: 8, dy: -6, anchor: 'start'}});
     }
   }
 
@@ -48,12 +204,14 @@ export function drawSitePointsOverlay(svg, sitePoints, view) {
     if (wp.J_stand_branch?.planned) {
       const [jx, jy] = view.toPx(jPose.x, jPose.y);
       svgElement('polygon', {class: 'sp-planned-stop', points: `${jx},${jy - 5} ${jx + 5},${jy} ${jx},${jy + 5} ${jx - 5},${jy}`}, layer);
-      svgElement('text', {class: 'sp-label', x: jx - 40, y: jy + 14}, layer).textContent = 'J_stand';
+      addMarker(jx, jy, 6);
+      pendingLabels.push({px: jx, py: jy, className: 'sp-label', text: 'J_stand', preferred: {dx: -10, dy: 16, anchor: 'end'}});
     }
     if (!wp.S_OUT_outbound?.in_active_map) {
       const [ox, oy] = view.toPx(outPose.x, outPose.y);
       svgElement('circle', {class: 'sp-planned-stop', cx: ox, cy: oy, r: 6}, layer);
-      svgElement('text', {class: 'sp-label', x: ox + 9, y: oy + 4}, layer).textContent = 'S_OUT(예정)';
+      addMarker(ox, oy, 7);
+      pendingLabels.push({px: ox, py: oy, className: 'sp-label', text: 'S_OUT(예정)', preferred: {dx: 9, dy: 4, anchor: 'start'}});
     }
   }
 
@@ -69,17 +227,25 @@ export function drawSitePointsOverlay(svg, sitePoints, view) {
     const tag = roleTag(id, stop);
     if (tag && finitePose(stop?.pose)) {
       const [px, py] = view.toPx(stop.pose.x, stop.pose.y);
-      svgElement('text', {class: 'sp-role-tag', x: px + 12, y: py + 12}, layer).textContent = `[${tag}]`;
+      pendingLabels.push({px, py, className: 'sp-role-tag', text: `[${tag}]`, preferred: {dx: 12, dy: 14, anchor: 'start'}});
     }
   }
 
-  // Workcell reference marker (arm_s_base 180° / cell_ab_fixture -90° separated mm frames)
+  // Only the S-cell frame supplies a world reference point.
   const hint = sitePoints.coordinate_frames?.cell_s_arm_base?.world_origin_hint_m;
   if (Array.isArray(hint) && hint.length === 2 && Number.isFinite(hint[0]) && Number.isFinite(hint[1])) {
     const [cx, cy] = view.toPx(hint[0], hint[1]);
     const refDot = svgElement('polygon', {class: 'sp-cell-ref', points: `${cx},${cy - 6} ${cx + 6},${cy} ${cx},${cy + 6} ${cx - 6},${cy}`}, layer);
-    svgElement('title', {}, refDot).textContent = 'arm_s(180°)·cell_ab(-90°) 독립 mm 원점 · vehicle_tray는 arm_s_top 호모그래피 보정(+12.85 cm 오차) 필요';
-    svgElement('text', {class: 'sp-label', x: cx + 8, y: cy - 6}, layer).textContent = 'arm_s 180°·cell_ab -90°';
+    svgElement('title', {}, refDot).textContent = 'S 셀 팔 원점의 참고 위치';
+    addMarker(cx, cy, 7);
+    pendingLabels.push({px: cx, py: cy, className: 'sp-label', text: 'S 셀 기준점(참고)', preferred: {dx: 8, dy: -6, anchor: 'start'}});
+  }
+
+  for (const entry of pendingLabels) {
+    const pos = placeLabel(entry.px, entry.py, entry.text, placed, {preferred: entry.preferred, bounds});
+    const attrs = {class: entry.className, x: pos.x, y: pos.y};
+    if (pos.anchor !== 'start') attrs['text-anchor'] = pos.anchor;
+    svgElement('text', attrs, layer).textContent = entry.text;
   }
 }
 
@@ -120,11 +286,17 @@ export function renderSitePointsSummary(panelEl, bodyEl, sitePoints) {
   bodyEl.replaceChildren(dl, ul);
 }
 
-export async function loadSitePointsOverlay(request, active, panelEl, bodyEl) {
-  let data = null;
-  try { data = active ? await request('/api/fleet/site-points') : null; } catch { data = null; }
-  renderSitePointsSummary(panelEl, bodyEl, data);
-  return data;
+export function sitePointsForActiveMap(sitePoints, active, mapSource) {
+  const source = sitePoints?.sources?.site_map;
+  if (mapSource !== 'active' || !source?.map_id || !Number.isInteger(source.version) || !source.sha256) return null;
+  return source.map_id === active?.map?.map_id && source.version === active.version && source.sha256 === active.sha256
+    ? sitePoints
+    : null;
+}
+
+export async function loadSitePointsOverlay(request, active) {
+  if (!active) return null;
+  try { return await request('/api/fleet/site-points'); } catch { return null; }
 }
 
 export function drawFacilities(svg, map, view) {
@@ -138,6 +310,60 @@ export function drawFacilities(svg, map, view) {
         : svgElement('circle', {...attrs, cx: points[0][0], cy: points[0][1], r: 6, class: `facility ${facility.kind}`}, svg);
     svgElement('title', {}, mark).textContent = facility.name;
   }
+}
+
+export function syncMapInspectorTargets(map, selection, drawing) {
+  const picker = $('map-inspector-target');
+  const groups = [
+    ['place', '장소', (map?.places || []).map(item => [item.id, `${item.name} · ${item.id}`])],
+    ['edge', '차로', (map?.edges || []).map(item => [item.id, `${item.id} · ${item.from} → ${item.to}`])],
+    ['crosswalk', '횡단보도', (map?.crosswalks || []).map(item => [item.id, item.id])],
+  ].filter(([, , rows]) => rows.length);
+  const signature = JSON.stringify(groups);
+  if (picker.dataset.targets !== signature) {
+    picker.replaceChildren(new Option('요소 선택', ''), ...groups.map(([kind, label, rows]) => {
+      const group = document.createElement('optgroup');
+      group.label = label;
+      group.append(...rows.map(([id, text]) => new Option(text, `${kind}:${id}`)));
+      return group;
+    }));
+    picker.dataset.targets = signature;
+  }
+  const kind = selection && Object.keys(selection)[0], value = kind ? `${kind}:${selection[kind]}` : '';
+  if (picker.value !== value) picker.value = [...picker.options].some(option => option.value === value) ? value : '';
+  setOffBy(picker, drawing ? '구역 그리기를 먼저 마치세요' : groups.length ? '' : '검사할 지도 요소가 없습니다');
+}
+
+export function renderMapInspector(selection, displayed, draft, reason) {
+  const get = (map, key, id) => id && map?.[key]?.find(item => item.id === id);
+  const place = get(draft, 'places', selection?.place), edge = get(draft, 'edges', selection?.edge);
+  const crosswalk = get(draft, 'crosswalks', selection?.crosswalk);
+  const shownPlace = get(displayed, 'places', selection?.place), shownEdge = get(displayed, 'edges', selection?.edge);
+  const shownCrosswalk = get(displayed, 'crosswalks', selection?.crosswalk);
+  $('selection').textContent = shownPlace ? `장소 ${shownPlace.id}`
+    : shownEdge ? `차로 ${shownEdge.id} · ${shownEdge.from} → ${shownEdge.to}`
+    : shownCrosswalk ? `횡단보도 ${shownCrosswalk.id} · 대기 띠 ${(shownCrosswalk.approach || []).length}개` : '선택 없음';
+  $('place-form').hidden = !place || Boolean(reason);
+  $('edge-form').hidden = !edge || Boolean(reason);
+  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
+  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안에서 검사할 장소나 차로를 고르세요'));
+  if (place) {
+    $('place-name').value = place.name;
+    $('place-kind').value = place.kind;
+    $('place-pinned').checked = Boolean(place.pinned);
+    $('place-stop').hidden = place.kind !== 'stop';
+    $('place-approach').value = place.approach_m ?? '';
+  } else if (crosswalk) {
+    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
+    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
+      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
+  } else if (edge) {
+    $('edge-direction').value = edge.direction;
+    $('edge-mode').value = edge.drive_mode;
+    $('edge-speed').value = edge.speed_cap_mps;
+    $('edge-pinned').checked = Boolean(edge.pinned);
+  }
+  return Boolean(crosswalk || place?.kind === 'stop');
 }
 
 export function createMapEditor({svg, map, view, changed, reason}) {

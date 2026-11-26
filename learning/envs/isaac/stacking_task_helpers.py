@@ -15,8 +15,8 @@ def record_evaluation_step(rows, step):
     item["min_tcp_distance_m"] = min(item["min_tcp_distance_m"], step["tcp_distance_m"])
     item["max_rise_m"] = max(item["max_rise_m"], step["rise_m"])
     item["max_opposing_contact_n"] = max(item["max_opposing_contact_n"], min(step["finger_forces_n"]))
-    item["lifted"] |= step["lifted"]
-    item["seated"] |= step["seated"]
+    item["lifted"] |= bool(step["lifted"])
+    item["seated"] |= bool(step["seated"])
     item["last_position_m"] = step["position_m"]
     item["last_goal_distance_m"] = step["goal_distance_m"]
     item["terminal"] = step["terminal"]

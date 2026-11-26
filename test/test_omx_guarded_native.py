@@ -572,3 +572,256 @@ def test_commit_rounds_to_the_nearest_tick_in_both_directions(guard):
     command["elbow_flex"], command["wrist_flex"] = 2048.7, 2047.3
     motion.commit({"started": clock[0], "command": command, "time": clock[0]})
     assert follower.goals["elbow_flex"] == 2049 and follower.goals["wrist_flex"] == 2047
+
+
+def test_teacher_replay_holds_frame_index_until_tracking_latches(guard, monkeypatch):
+    import guarded_native_cli
+
+    class Follower:
+        def __init__(self):
+            self.bus, self.cameras = Bus(), {}
+
+    follower = Follower()
+    monkeypatch.setattr(guarded_native_cli, "start_live_frames", lambda *a, **k: None)
+
+    class ReplayTeleop:
+        def __init__(self):
+            self.names = [n + ".pos" for n in NAMES]
+            self.frames = [[0.0] * 6, [10.0] * 6, [20.0] * 6]
+            self.calls = 0
+
+        def connect(self, calibrate=True):
+            pass
+
+        def disconnect(self):
+            pass
+
+        def get_action(self):
+            f = self.frames[min(self.calls, len(self.frames) - 1)]
+            self.calls += 1
+            return dict(zip(self.names, f))
+
+    teleop = ReplayTeleop()
+    motion_state = [SimpleNamespace(tracking=False, failed=False, monitor=None, boundary=False)]
+    calls_at_send = []
+
+    class FakeMotion:
+        def __init__(self, *a, **k):
+            pass
+
+        def __getattr__(self, name):
+            return getattr(motion_state[0], name)
+
+        def send(self, act):
+            calls_at_send.append((teleop.calls, act["shoulder_pan.pos"]))
+            return act
+
+    monkeypatch.setattr(guard, "NativeJointMotion", FakeMotion)
+    monkeypatch.setitem(sys.modules, "guarded_native", guard)
+    monkeypatch.setitem(sys.modules, "motor_health", SimpleNamespace(MotorHealth=lambda **kw: SimpleNamespace(admit=lambda *a: None, end=lambda: None)))
+    module = SimpleNamespace(
+        record=None,
+        make_robot_from_config=lambda cfg: follower,
+        make_teleoperator_from_config=lambda cfg: teleop,
+        ACTION="action",
+        OBS_STR="observation",
+        build_dataset_frame=lambda features, values, prefix: values,
+        record_loop=lambda *a, **kw: None,
+    )
+
+    def main():
+        rob = module.make_robot_from_config(SimpleNamespace(use_degrees=False))
+        tel = module.make_teleoperator_from_config(None)
+        rob.connect()
+        tel.connect()
+        rob.send_action(tel.get_action())  # motion=None -> holds calls==0
+        rob.send_action(tel.get_action())  # tracking=False -> holds calls==0
+        motion_state[0].tracking = True
+        rob.send_action(tel.get_action())  # tracking=True -> advances calls to 1
+        rob.send_action(tel.get_action())  # tracking=True -> advances calls to 2
+
+    module.main = main
+    guard.run_native(module, Follower, SimpleNamespace, teacher=True)
+    assert calls_at_send == [(0, 0.0), (0, 0.0), (1, 0.0), (2, 10.0)]
+
+
+def test_gripper_squeeze_reuses_monitor_pwm_and_cached_limit(guard, tmp_path):
+    import motor_health
+
+    follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+    follower.raw['gripper'] = 2000
+    leader.raw['gripper'] = 2500
+    orig_read = follower.read
+
+    def read_with_limits(register, motor, **kwargs):
+        if register == 'Temperature_Limit':
+            return 70
+        if register == 'Min_Voltage_Limit':
+            return 60
+        if register == 'Max_Voltage_Limit':
+            return 140
+        if register == 'Present_Input_Voltage':
+            return 120
+        return orig_read(register, motor, **kwargs)
+
+    follower.read = read_with_limits
+    monitor = motor_health.MotorHealth(tmp_path / 'squeeze.jsonl', async_publish=True)
+    motion = guard.NativeJointMotion(follower, leader, monitor=monitor, clock=lambda: clock[0])
+    motion.send(action(leader))
+    follower.events.clear()
+    clock[0] += 0.25
+    motion.send(action(leader))
+    pwm_reads = [e for e in follower.events if e[0] == 'read' and e[2] == 'gripper']
+    assert pwm_reads == [('read', 'Present_PWM', 'gripper')]
+    monitor.end()
+
+
+def test_sync_hardware_error_desync_impossible_bits_drains_rx_and_is_recoverable(guard):
+    import guarded_native_probe as probe
+
+    motion, follower, _leader, _clock = pair(guard)
+    follower.model_ctrl_table = {}
+    cleared = []
+    follower.port_handler = SimpleNamespace(clearPort=lambda: cleared.append("clear"))
+    orig_sync = follower.sync_read
+    follower.sync_read = lambda reg, motors=None, **kw: (
+        dict(zip(NAMES, (145, 250, 129, 9, 114, 89)))
+        if reg == "Hardware_Error_Status" else orig_sync(reg, motors=motors, **kw)
+    )
+    assert probe.is_valid_hw_status(145) is False and probe.is_hardware_fault(145) is False
+    with pytest.raises(probe.TelemetryReadError, match="desynced"):
+        motion._check_hardware_errors()
+    assert cleared == ["clear"]
+
+
+def test_sync_hardware_error_bit_rechecks_unicast_after_rx_drain(guard):
+    import guarded_native_probe as probe
+
+    cleared = []
+    unicast = [0]
+
+    class SyncBus(Bus):
+        model_ctrl_table = {}
+        port_handler = SimpleNamespace(clearPort=lambda: cleared.append("clear"))
+
+        def sync_read(self, reg, motors=None, *, normalize=True, num_retry=0):
+            if reg == "Hardware_Error_Status":
+                return {"shoulder_pan": 32, **{n: 0 for n in NAMES if n != "shoulder_pan"}}
+            return super().sync_read(reg, motors=motors, normalize=normalize, num_retry=num_retry)
+
+        def read(self, reg, motor, **kw):
+            if reg == "Hardware_Error_Status" and motor == "shoulder_pan":
+                return unicast[0]
+            return super().read(reg, motor, **kw)
+
+    motion = guard.NativeJointMotion(SyncBus(), None, teacher=True, clock=lambda: 10.0)
+
+    with pytest.raises(probe.TelemetryReadError, match="transient desynced"):
+        motion._check_hardware_errors()
+    assert cleared == ["clear"]
+
+    unicast[0] = 32
+    with pytest.raises(ValueError, match=r"shoulder_pan: hardware error \(32") as exc_info:
+        motion._check_hardware_errors()
+    assert not isinstance(exc_info.value, probe.TelemetryReadError)
+    assert cleared == ["clear", "clear"]
+
+    # Partial dict with a real fault bit on another joint still raises hard ValueError (never masked as missing-key desync).
+    mixed_bus = Bus()
+    mixed_bus.model_ctrl_table = {}
+    orig_mixed_sync = mixed_bus.sync_read
+    mixed_bus.sync_read = lambda reg, motors=None, **kw: (
+        {"shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0, "gripper": 1}
+        if reg == "Hardware_Error_Status" else orig_mixed_sync(reg, motors=motors, **kw)
+    )
+    mixed_motion = guard.NativeJointMotion(mixed_bus, None, teacher=True, clock=lambda: 10.0)
+    with pytest.raises(ValueError, match=r"gripper: hardware error \(1") as exc_mixed:
+        mixed_motion._check_hardware_errors()
+    assert not isinstance(exc_mixed.value, probe.TelemetryReadError)
+
+def test_lease_bound_motor_gate_checks_seed_enable_and_each_motion_register(tmp_path, guard):
+    from native_policy_fence import NativePolicyFence, PolicyWriteRefused
+    pins = {"workcell_id": "unit", "policy_digest": "a"*64, "rig_revision": "rig",
+            "calibration_revision": "cal", "scope": "cell-task:unit:arm_b"}
+
+    class PolicyBus(Bus):
+        def sync_read(self, register, motors=None, **kwargs):
+            if register == "Torque_Enable":
+                return {n: self.torque[n] for n in motors}
+            return super().sync_read(register, motors, **kwargs)
+
+        def sync_write(self, register, values, *, normalize=True):
+            if register == "Torque_Enable":
+                assert not normalize and values == dict.fromkeys(NAMES, 1)
+                self.events.append(("policy_group_enable",))
+                self.torque.update(values)
+            else:
+                super().sync_write(register, values, normalize=normalize)
+
+    def grant(fence, number):
+        fence.receive(fence.owner_session_id, 1_500_000_000, {
+            **pins, "lease_id": f"lease{number}", "episode_id": f"ep{number}",
+            "ttl_s": 1., "seq": 1, "window_remaining_s": 3.,
+        })
+
+    now = [1_000_000_000]
+    with pytest.raises(ValueError):
+        guard.NativeJointMotion.for_policy(PolicyBus(), fence=None)
+    for expire_at in ("seed", "enable", "motion"):
+        bus = PolicyBus()
+        fence = NativePolicyFence(pins, tmp_path / f"{expire_at}.sqlite3", clock=lambda: now[0])
+        try:
+            motion = guard.NativeJointMotion.for_policy(bus, fence=fence, clock=lambda: 1.)
+            if expire_at == "seed":
+                with pytest.raises(guard.GoalRejected) as error:
+                    motion.send(action(bus))
+                assert not error.value.can_send_hold
+                assert not bus.events
+                continue
+            grant(fence, expire_at)
+            seed = motion.prepare(action(bus))
+            assert [e[0] for e in bus.events].count("goal") == 1
+            if expire_at == "enable":
+                fence.hold("window_closed")
+                with pytest.raises(PolicyWriteRefused):
+                    motion.commit(seed)
+                assert not any(bus.torque.values())
+                continue
+            motion.commit(seed)
+            assert all(bus.torque.values())
+            target = motion.prepare(action(bus))
+            before = list(bus.events)
+            now[0] = 1_500_000_000
+            with pytest.raises(PolicyWriteRefused):
+                motion.commit(target)
+            assert bus.events == before and all(bus.torque.values())
+        finally:
+            fence.close()
+
+
+@pytest.mark.parametrize("failure_point", ["read", "write"])
+def test_policy_bus_failure_concurrent_with_expiry_never_cuts_torque(tmp_path, guard, failure_point):
+    from native_policy_fence import NativePolicyFence
+    pins = {"workcell_id": "unit", "policy_digest": "a"*64, "rig_revision": "rig",
+            "calibration_revision": "cal", "scope": "cell-task:unit:arm_b"}
+    now = [10_000]
+    bus = Bus()
+    fence = NativePolicyFence(pins, tmp_path / "journal", clock=lambda: now[0])
+    try:
+        motion = guard.NativeJointMotion.for_policy(bus, fence=fence)
+        fence.receive(fence.owner_session_id, 1_000_010_000, {
+            **pins, "lease_id": "lease", "episode_id": "episode", "ttl_s": 1., "seq": 1, "window_remaining_s": 2.,
+        })
+        def lost_bus(*_a, **_kw):
+            now[0] = 1_000_010_000
+            raise OSError("lost serial reply")
+        if failure_point == "read":
+            bus.sync_read = lost_bus
+        else:
+            bus.sync_write = lost_bus
+        with pytest.raises(guard.GoalRejected) as error:
+            motion.send(action(bus))
+        assert not error.value.can_send_hold and not any(event[0] == "off" for event in bus.events)
+        assert not fence.status()["lease_current"]
+    finally:
+        fence.close()

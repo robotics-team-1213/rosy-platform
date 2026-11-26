@@ -15,7 +15,7 @@ from .port_event_store import PortEventConflict
 
 _READINGS = """CREATE TABLE IF NOT EXISTS fleet_intake_readings (
     observation_ref TEXT PRIMARY KEY, workcell_id TEXT NOT NULL, reading_json TEXT NOT NULL)"""
-SLOT = re.compile(r"^[A-Za-z0-9_]+-r\d+-c\d+-l\d+$")
+SLOT = re.compile(r"^[A-Za-z0-9_]+-r[1-9]\d*-c[1-9]\d*-l[1-9]\d*$")  # 1-based, same as Harbor's SLOT_REF_RE
 
 
 def _event(source, reading, kind, **fields) -> PortEvent:
@@ -44,9 +44,13 @@ def conveyor_end_event(source, reading, tags, waiting, intake_point) -> PortEven
     if reading.state != "read":
         return _event(source, reading, "container.handling_failed",
                       reason="MISMATCH" if reading.state == "mismatch" else "UNREADABLE")
-    ref = tags.get(str(reading.tag))
+    rfid = reading.point == "rfid_intake"
+    identifier = reading.epc if rfid else str(reading.tag)
+    ref = tags.get(identifier)
     if ref is None or ref not in waiting:  # an unknown tag, or a container nobody delivered here: never a guess
-        return _event(source, reading, "container.handling_failed", reason="MISMATCH", object_ref=ref)
+        # A handheld can read an unrelated cargo nearby without an intake delivery for it.
+        return _event(source, reading, "container.handling_failed", reason="MISMATCH",
+                      object_ref=None if rfid else ref)
     return _event(source, reading, "container.received_at_intake", object_ref=ref, intake_point=intake_point,
                   identity="observed")
 
@@ -63,18 +67,20 @@ def record(arm_store, port_store, intake, source, reading: IntakeReading) -> lis
                                    (reading.observation_ref,)).fetchone()
     if prior[0] != source or IntakeReading.model_validate_json(prior[1]) != reading:
         raise PortEventConflict("observation_ref was already used for another reading")
-    done = port_store.by_observation(source, reading.observation_ref)
-    if done:
-        return done
-    if reading.point == "wrist":
-        if reading.state != "mismatch":
-            return []
-        event = _event(source, reading, "container.handling_failed", reason="MISMATCH")
-    else:
-        # shortcut: pending() and append() are two transactions; one cell PC posts one reading at a time
-        event = conveyor_end_event(source, reading, intake.get("container_tags") or {},
-                                   pending(arm_store, port_store), intake["intake_point"])
-    return [port_store.append(source, event)]
+    # Camera and RFID requests can arrive together in Fleet's worker threads.
+    with port_store.intake_lock:
+        done = port_store.by_observation(source, reading.observation_ref)
+        if done:
+            return done
+        if reading.point == "wrist":
+            if reading.state != "mismatch":
+                return []
+            event = _event(source, reading, "container.handling_failed", reason="MISMATCH")
+        else:
+            mapping = "container_epcs" if reading.point == "rfid_intake" else "container_tags"
+            event = conveyor_end_event(source, reading, intake.get(mapping) or {},
+                                       pending(arm_store, port_store), intake["intake_point"])
+        return [port_store.append(source, event)]
 
 
 def stored_due(arm_store, port_store, intake) -> list[int]:

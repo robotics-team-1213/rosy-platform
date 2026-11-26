@@ -23,11 +23,11 @@ from typing import Callable
 # Import only the reviewed modules installed beside this script, never candidate code.
 SCRIPT_DIR = Path(__file__).resolve().parent
 if __package__:
-    from .verify_candidate import CandidateVerificationError, verify_candidate
+    from .verify_candidate import ALL_IMAGE_SERVICES, CandidateVerificationError, verify_candidate
     from .site_update_io import (
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
-        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
@@ -35,15 +35,17 @@ if __package__:
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
-    from verify_candidate import CandidateVerificationError, verify_candidate
+    from verify_candidate import ALL_IMAGE_SERVICES, CandidateVerificationError, verify_candidate
     from site_update_io import (
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
-        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
     from site_update_runtime import SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
+
+_PRUNE_IMAGE_REF = re.compile(rf"^rosy-site-(?:{'|'.join(ALL_IMAGE_SERVICES)}):([0-9a-f]{{40}})$")
 
 
 class SiteUpdater(SiteRuntimeIO):
@@ -115,35 +117,6 @@ class SiteUpdater(SiteRuntimeIO):
             if len(rows) < 100:
                 break
         return releases
-
-    def select(self, releases: list[dict], current: str, state: dict) -> dict | None:
-        site = [row for row in releases
-                if isinstance(row.get("tag_name"), str) and _TAG.fullmatch(row["tag_name"])
-                and not row.get("draft")]
-        site.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
-        for row in site:
-            if row['tag_name'] == f'site-{current[:12]}':
-                continue
-            names = {asset.get("name") for asset in row.get("assets") or []
-                     if isinstance(asset, dict)}
-            if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
-                continue  # not signed yet
-            if row["tag_name"] in state["failed"]:
-                continue
-            if not self.is_newer(current, row['tag_name']):
-                continue
-            return row
-        return None
-
-    def is_newer(self, current: str, candidate: str, or_same: bool = False) -> bool:
-        # Later pages omit changed files but retain ancestry metadata.
-        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
-        try:
-            comparison = json.loads(self.http.get(url, _LIST_LIMIT))
-            return (comparison['status'] in (('ahead', 'identical') if or_same else ('ahead',))
-                    and comparison['merge_base_commit']['sha'] == current)
-        except (json.JSONDecodeError, KeyError, TypeError):
-            raise Transient('commit comparison is malformed') from None
 
     def _asset_url(self, release: dict, name: str) -> str:
         tag = release["tag_name"]
@@ -331,44 +304,43 @@ class SiteUpdater(SiteRuntimeIO):
         if self.load_state().get('switch'):
             raise Transient('pruning forbidden while a switch needs recovery')
         # Both inventories must succeed before any destructive operation.
-        listed = self._run(['docker', 'image', 'ls', '--format',
-                            '{{.Repository}}:{{.Tag}}']).stdout or ''
-        used = set((self._run(['docker', 'ps', '--all', '--format', '{{.Image}}']).stdout or '').split())
+        listed = self._run(['docker', 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}']).stdout or ''
+        used = set((self._run(['docker', 'ps', '--all', '--no-trunc', '--format', '{{.Image}}']).stdout or '').split())
         folders = sorted(
-            (path for path in self.paths.candidates.iterdir()
-             if path.is_dir() and not path.is_symlink() and not path.name.startswith(".")),
-            key=lambda path: path.stat().st_mtime, reverse=True)
+            (p for p in self.paths.candidates.iterdir()
+             if p.is_dir() and not p.is_symlink() and not p.name.startswith(".")),
+            key=lambda p: p.stat().st_mtime, reverse=True)
         kept = set(keep_dirs) | set(folders[: self.config["keep"]])
+        kept_commits, kept_references = {folder.name for folder in kept}, set()
+        # Validate every retained rollback manifest before deleting any folder or image.
+        for folder in kept:
+            try:
+                manifest = json.loads((folder / 'release.json').read_text(encoding='utf-8'))
+                commit, images = manifest['source_commit'], manifest.get('images', {})
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                return
+            if not isinstance(commit, str) or not _COMMIT.fullmatch(commit) or not isinstance(images, dict):
+                return
+            kept_commits.add(commit)
+            for service, row in images.items():
+                ref = row.get('reference') if isinstance(row, dict) else None
+                if (service not in ALL_IMAGE_SERVICES or not isinstance(ref, str)
+                        or not re.fullmatch(rf'rosy-site-{service}:[0-9a-f]{{40}}', ref)):
+                    return
+                kept_references.add(ref)
         for folder in folders:
             if folder not in kept:
                 shutil.rmtree(folder, ignore_errors=True)
                 log("pruned-candidate", folder=folder.name)
-        kept_commits = {folder.name for folder in kept}
-        kept_references = set()
-        for folder in kept:
-            try:
-                commit = json.loads((folder / 'release.json').read_text(encoding='utf-8'))['source_commit']
-            except (OSError, ValueError, KeyError, TypeError):
-                # An unidentified rollback directory cannot authorize image deletion.
-                return
-            if not isinstance(commit, str) or not _COMMIT.fullmatch(commit):
-                return
-            kept_commits.add(commit)
-            try:
-                images = json.loads((folder / 'release.json').read_text(encoding='utf-8')).get('images', {})
-                for service, row in images.items():
-                    reference = row['reference']
-                    if service not in SERVICES or not re.fullmatch(f'rosy-site-{service}:[0-9a-f]{{40}}', reference):
-                        return
-                    kept_references.add(reference)
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                return
         for reference in listed.split():
-            match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy|postgres):([0-9a-f]{40})", reference)
+            match = _PRUNE_IMAGE_REF.fullmatch(reference)
             if (match and match.group(1) not in kept_commits
                     and reference not in kept_references and reference not in used):
-                self._run(["docker", "image", "rm", reference], check=False)
-                log("pruned-image", image=reference)
+                rm_res = self._run(["docker", "image", "rm", reference], check=False)
+                if rm_res.returncode == 0:
+                    log("pruned-image", image=reference)
+                else:
+                    log("prune-image-failed", image=reference, returncode=rm_res.returncode)
 
     # main flow
     def _until_contains_ready(self, state: dict) -> bool:

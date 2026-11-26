@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROBOT_XACRO = ROOT / "urdf" / "robot.urdf.xacro"
 
 
-def _render_robot(*, is_sim: bool) -> ET.Element:
+def _render_robot(*, is_sim: bool, has_cargo_tray: bool = True) -> ET.Element:
     if shutil.which("xacro") is None:
         pytest.skip("xacro is not installed")
     result = subprocess.run(
@@ -22,6 +22,7 @@ def _render_robot(*, is_sim: bool) -> ET.Element:
             "xacro",
             str(ROBOT_XACRO),
             f"is_sim:={'true' if is_sim else 'false'}",
+            f"has_cargo_tray:={'true' if has_cargo_tray else 'false'}",
         ],
         check=True,
         capture_output=True,
@@ -49,7 +50,40 @@ def test_simulation_collisions_use_dart_supported_primitives():
 def test_physical_description_keeps_detailed_collision_meshes():
     tags = _collision_geometry_tags(_render_robot(is_sim=False))
 
-    assert tags.count("mesh") == 7
+    assert tags.count("mesh") == 8
+    assert _collision_geometry_tags(_render_robot(is_sim=False, has_cargo_tray=False)).count("mesh") == 7
+
+
+def test_cargo_tray_sim_pocket_colliders_clear_container_lidar_and_caster():
+    robot = _render_robot(is_sim=True)
+    tray_link = robot.find("./link[@name='cargo_tray_link']")
+    assert tray_link is not None
+    boxes = tray_link.findall("./collision/geometry/box")
+    assert len(boxes) == 6
+
+    pocket_joint = robot.find("./joint[@name='cargo_tray_pocket_fixed_joint']")
+    assert pocket_joint is not None
+    px, py, pz = map(float, pocket_joint.find("./origin").attrib["xyz"].split())
+    # Canonical 1x3 container (0.030 x 0.090 x 0.0344 m) seated 0.5 mm over deck floor must fit inside pocket cleanly.
+    c_min = (px - 0.015, py - 0.045, pz + 0.0005)
+    c_max = (px + 0.015, py + 0.045, pz + 0.0005 + 0.0344)
+    for col in tray_link.findall("./collision"):
+        ox, oy, oz = map(float, col.find("./origin").attrib["xyz"].split())
+        sx, sy, sz = map(float, col.find("./geometry/box").attrib["size"].split())
+        b_min = (ox - sx / 2.0, oy - sy / 2.0, oz - sz / 2.0)
+        b_max = (ox + sx / 2.0, oy + sy / 2.0, oz + sz / 2.0)
+        overlap = all(min(c_max[i], b_max[i]) > max(c_min[i], b_min[i]) for i in range(3))
+        assert not overlap, f"container intersects tray collider {col}"
+
+    # Loaded cargo top (base_footprint z = 0.028 + c_max[2]) stays well under rplidar_link plane (z = 0.125 m).
+    assert 0.028 + c_max[2] <= 0.125 - 0.035
+
+    # Tray + cargo still keeps combined CoM forward of rear caster (x = -0.0695 m in base_link).
+    mass = float(tray_link.find("./inertial/mass").attrib["value"])
+    assert 0.030 <= mass <= 0.060
+    tx = float(tray_link.find("./inertial/origin").attrib["xyz"].split()[0])
+    combined_com_x = (1.54 * -0.015 + mass * tx + 0.030 * px) / (1.54 + mass + 0.030)
+    assert combined_com_x > -0.050
 
 
 def test_sim_drive_wheels_use_axial_cylinders_not_slipping_spheres():

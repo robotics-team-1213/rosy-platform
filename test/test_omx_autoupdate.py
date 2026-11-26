@@ -412,6 +412,100 @@ def test_a_killed_fetch_lock_in_the_mirror_does_not_block_the_next_archive(tmp_p
     assert (target / "deploy" / "tool.py").read_text() == "print(1)\n"
 
 
+def test_archive_clears_ephemeral_mirror_so_packs_do_not_accumulate(tmp_path):
+    import subprocess as sp
+    source = tmp_path / "source"
+    (source / "deploy").mkdir(parents=True)
+    git = ["git", "-C", str(source), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q", str(source)], check=True)
+    sp.run(git + ["config", "uploadpack.allowReachableSHA1InWant", "true"], check=True)
+    shas = []
+    for n in ("first", "second"):
+        (source / "deploy" / "tool.py").write_text(f"print('{n}')\n")
+        sp.run(git + ["add", "."], check=True)
+        sp.run(git + ["commit", "-qm", n], check=True)
+        shas.append(sp.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip())
+    root = tmp_path / "root"
+    root.mkdir()
+    host = m.Host({"root": str(root), "repo_url": "file://" + str(source)})
+    for idx, (sha, n) in enumerate(zip(shas, ("first", "second"))):
+        target = tmp_path / f"release_{idx}"
+        target.mkdir()
+        host.archive(sha, ["deploy"], target)
+        assert (target / "deploy" / "tool.py").read_text() == f"print('{n}')\n"
+        assert not (root / "mirror.git").exists()
+
+
+def test_archive_preserves_mirror_when_named_ref_exists(tmp_path):
+    import subprocess as sp
+    source = tmp_path / "source"
+    (source / "deploy").mkdir(parents=True)
+    (source / "deploy" / "tool.py").write_text("print(1)\n")
+    git = ["git", "-C", str(source), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q", str(source)], check=True)
+    sp.run(git + ["add", "."], check=True)
+    sp.run(git + ["commit", "-qm", "c"], check=True)
+    sp.run(git + ["config", "uploadpack.allowReachableSHA1InWant", "true"], check=True)
+    sha = sp.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    root = tmp_path / "root"
+    root.mkdir()
+    mirror = root / "mirror.git"
+    sp.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
+    (mirror / "refs" / "heads" / "keep").parent.mkdir(parents=True, exist_ok=True)
+    (mirror / "refs" / "heads" / "keep").write_text(sha + "\n")
+    target = tmp_path / "release"
+    target.mkdir()
+    m.Host({"root": str(root), "repo_url": "file://" + str(source)}).archive(sha, ["deploy"], target)
+    assert (target / "deploy" / "tool.py").read_text() == "print(1)\n"
+    assert mirror.is_dir() and (mirror / "refs" / "heads" / "keep").is_file()
+
+
+def test_clear_ephemeral_mirror_fails_closed_on_detached_head_index_or_unreadable_refs(tmp_path, monkeypatch):
+    import subprocess as sp
+    from omx_autoupdate_host import _clear_ephemeral_mirror
+    mirror = tmp_path / "mirror.git"
+    real_walk = os.walk
+    for case in ("detached_head", "has_index", "unreadable_refs"):
+        repo = mirror.with_name(f"mirror-{case}.git")
+        sp.run(["git", "init", "--bare", "-q", str(repo)], check=True)
+        if case == "detached_head":
+            (repo / "HEAD").write_text("a" * 40 + "\n")
+        elif case == "has_index":
+            (repo / "index").write_bytes(b"DIRC")
+        elif case == "unreadable_refs":
+            def fail_refs_walk(top, *a, onerror=None, **kw):
+                if Path(top) == repo / "refs":
+                    if onerror is not None:
+                        onerror(PermissionError("denied"))
+                    return iter(())
+                return real_walk(top, *a, onerror=onerror, **kw)
+
+            monkeypatch.setattr(os, "walk", fail_refs_walk)
+        try:
+            _clear_ephemeral_mirror(repo)
+            assert repo.exists(), f"{case} should fail closed and preserve mirror"
+        finally:
+            if case == "unreadable_refs":
+                monkeypatch.setattr(os, "walk", real_walk)
+
+
+def test_clear_ephemeral_mirror_preserves_separate_git_dir_worktree(tmp_path, monkeypatch):
+    import subprocess as sp
+    from omx_autoupdate_host import _clear_ephemeral_mirror
+    mirror = tmp_path / "mirror.git"
+    worktree = tmp_path / "worktree"
+    sp.run(["git", "init", "-q", "--separate-git-dir", str(mirror), str(worktree)], check=True)
+    assert (worktree / ".git").is_file()
+    _clear_ephemeral_mirror(mirror)
+    assert mirror.is_dir() and (mirror / "HEAD").is_file() and (worktree / ".git").is_file()
+    # Even if GIT_CONFIG_COUNT overrides core.bare=true in process env, mirror's own config stays authoritative.
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.bare")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    _clear_ephemeral_mirror(mirror)
+    assert mirror.is_dir() and (mirror / "HEAD").is_file() and (worktree / ".git").is_file()
+
+
 def test_failed_preparations_of_older_releases_are_removed(tmp_path):
     host = FakeHost()
     (tmp_path / "releases" / "0123456789ab.tmp").mkdir(parents=True)
@@ -543,12 +637,22 @@ def test_a_host_python_without_ensurepip_builds_the_env_with_uv(tmp_path, monkey
                         "-r", str(lock)]
 
 
-def fake_systemctl(tmp_path, monkeypatch, failing=""):
+def test_uv_build_env_uses_unsafe_best_match_for_extra_index_lock(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    lock = tmp_path / "lock"
+    lock.write_text("--extra-index-url https://download.pytorch.org/whl/cpu\ncertifi==2026.7.22\n")
+    m.Host({"base_python": "/usr/bin/python3", "uv": "/opt/uv"}).build_env(lock, tmp_path / "env")
+    assert calls[1] == ["/opt/uv", "pip", "install", "-q", "--python", str(tmp_path / "env" / "bin" / "python"),
+                        "--index-strategy", "unsafe-best-match", "-r", str(lock)]
+
+
+def fake_systemctl(tmp_path, monkeypatch, failing="", failing_start=""):
     (tmp_path / "bin").mkdir()
     calls = tmp_path / "calls"
     fake = tmp_path / "bin" / "systemctl"
-    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; esac\nexit 0\n'
-                    % (calls, failing))
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; "--user start %s") exit 1;; esac\nexit 0\n'
+                    % (calls, failing, failing_start))
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
     return calls
@@ -566,6 +670,16 @@ def test_a_sequential_restart_stops_in_reverse_then_starts_in_order(tmp_path, mo
     calls = fake_systemctl(tmp_path, monkeypatch)
     units = ["rosy-omx-camera@top.service", "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service"]
     assert m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
+    verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
+    assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]
+
+
+def test_one_unit_that_will_not_start_does_not_leave_the_later_ones_down(tmp_path, monkeypatch):
+    """2026-11-26: a rollback stopped at arm_b's observer and never started arm_s's observer or the bridges."""
+    calls = fake_systemctl(tmp_path, monkeypatch, failing_start="rosy-omx-observer@arm_b.service")
+    units = ["rosy-omx-observer@arm_a.service", "rosy-omx-observer@arm_b.service", "rosy-omx-observation-bridge.service",
+             "rosy-omx-observer@arm_s.service"]
+    assert not m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
     verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
     assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]
 
@@ -877,3 +991,147 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         out = capsys.readouterr().out
         assert '"rollback_refused"' in out and '"smoke_failed"' in out
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
+
+
+def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
+    import json
+
+    health = tmp_path / "arm_b.json"
+    device = tmp_path / "follower_b"
+    device.write_text("", encoding="utf-8")
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: real_run(args, **kw) if args[0] not in ("fuser", "systemctl") else None)
+
+    class _NoBusHost(m.Host):
+        def device_in_use(self):
+            return False
+
+    cfg = {
+        "devices": [str(device)],
+        "follower_device": str(device),
+        "observers": [{"unit": "rosy-omx-observer@arm_b.service", "device": str(device), "health": str(health)}],
+    }
+    host = _NoBusHost(cfg)
+
+    # Missing file -> observer_missing
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+    assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Corrupt JSON / non-UTF-8 bytes / huge int overflow / partial motor count -> observer_invalid
+    health.write_text("{bad json", encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_bytes(b"\xff\xfe\xfd")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": 10**400, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 5}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+
+    # Stale, future-skewed, or ended snapshot -> observer_stale
+    for stale_payload in (
+        {"expected_motor_count": 6, "observed_at": now - 30.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now + 60.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(stale_payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+    # Hardware errors fail closed with follower_hardware_error (including None / fault / top-level status fault)
+    for payload in (
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": None}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "fault": True}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "fault", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_hardware_error"
+        assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Torque ON -> follower_torque_not_off
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": True, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_torque_not_off"
+
+    # Healthy idle -> None + True; also verify Updater.run() surfaces specific reason in deferred log
+    fh = FakeHost()
+    fh.follower_idle_reason = host.follower_idle_reason
+    fh.follower_torque_off = host.follower_torque_off
+    u = updater(tmp_path / "u_reason", fh)
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6}), encoding="utf-8")
+    assert u.run() == "deferred"
+    assert '"reason": "follower_hardware_error"' in capsys.readouterr().out
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    assert host.follower_torque_off(tmp_path, tmp_path) is True
+    assert u.run() == "switched"
+
+
+def test_deferred_prepared_release_skips_github_checks_and_handles_rate_limit(tmp_path, monkeypatch, capsys):
+    import io
+    import urllib.error
+
+    # 1) Prepared + deferred release skips checks() on subsequent runs while still enforcing new floor_sha;
+    #    descends short-circuits without calling host.descends when floor_sha == head.
+    host = FakeHost()
+    host.in_use = True
+    checks_calls = 0
+    orig_checks = host.checks
+
+    def _counting_checks(sha):
+        nonlocal checks_calls
+        checks_calls += 1
+        return orig_checks(sha)
+
+    host.checks = _counting_checks
+    descend_calls: list[tuple[str, str]] = []
+    orig_desc = host.descends
+
+    def _counting_desc(base, head):
+        descend_calls.append((base, head))
+        return orig_desc(base, head)
+
+    host.descends = _counting_desc
+    u = updater(tmp_path / "cache", host)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and u.state().get("prepared_verified_sha") == host.head
+
+    # On deferred retry, checks() is NOT called again even across multiple retries
+    assert u.run() == "deferred"
+    assert checks_calls == 1
+
+    # Raising floor_sha to sha itself short-circuits without hitting GitHub compare API
+    st = u.state()
+    st["floor_sha"] = host.head
+    u.save(st)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and descend_calls == []
+
+    # Raising floor_sha to an incompatible commit still blocks even with prepared_verified_sha
+    st["floor_sha"] = "f" * 40
+    u.save(st)
+    host.descendant = False
+    assert u.run() == "below_hotfix_floor"
+    assert descend_calls == [("f" * 40, host.head)]
+
+    # 2) HTTP 403/429 during trusted() returns "rate_limited" and logs step="rate_limited" without exception
+    for err_code in (403, 429):
+        host_rl = FakeHost()
+        host_rl.checks = lambda _sha, c=err_code: (_ for _ in ()).throw(
+            urllib.error.HTTPError("https://api.github.com/x", c, "rate limit", {}, io.BytesIO(b""))
+        )
+        u_rl = updater(tmp_path / f"rl_{err_code}", host_rl)
+        capsys.readouterr()
+        assert u_rl.run() == "rate_limited"
+        assert '"step": "rate_limited"' in capsys.readouterr().out
+
+    # 3) Host._github_headers attaches Authorization Bearer token from github_token_file or GITHUB_TOKEN
+    import omx_autoupdate_host as autohost
+
+    tok_file = tmp_path / "gh.token"
+    tok_file.write_text("ghp_test_token_123\n", encoding="utf-8")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    h_file = autohost.Host({"github_token_file": str(tok_file)})
+    assert h_file._github_headers()["Authorization"] == "Bearer ghp_test_token_123"
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_env_token_456")
+    h_env = autohost.Host({"github_token_file": str(tmp_path / "missing.token")})
+    assert h_env._github_headers()["Authorization"] == "Bearer ghp_env_token_456"

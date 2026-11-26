@@ -6,7 +6,7 @@ import json, math, os, re, signal, subprocess, threading, time
 from pathlib import Path
 
 from bench_live_preview import camera_labels
-from bench_record_inspect import ARMS, BI_ARM, HERE
+from bench_record_inspect import ARMS, BI_ARM, HERE, arm_connectivity
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, recorder_running, release, resolve_record_config
 from camera_roles import disabled_roles, load_registry, resolve_record_cameras, source_role
 
@@ -157,13 +157,18 @@ class BenchLeaderMixin:
     def _match_leader(self, arm, config, label="리더 정렬", *, exact=False):
         """leader_home --match-follower: the Leader goes to the Follower's present pose. The arm's own lock is held too: the
         child reads (and torque-OFFs) the Follower, so no other owner may hold it."""
-        handles = []
+        handles, stopped = [], []
         try:
             self._check_lease(arm)  # lease and incident hold before the child that torque-OFFs the Follower, whoever called (align, home move)
             handles, busy = hold_other_arm_locks(arm, ARMS, self.procs, self.mounts, own=True)
             if busy:
                 raise ValueError(f"{busy} — 점유 세션 종료 후 {label}을 실행하세요")
             self._check_lease(arm)  # again with the arm lock held: a session that recorded a hold and released its lock meanwhile is seen
+            obs_unit = f"rosy-omx-observer@{arm}.service"
+            if (self.run("is-active", obs_unit).stdout or "").strip() == "active":
+                stopped.append(obs_unit)
+                self._remember(stopped)
+                self.run("stop", obs_unit)
             env = dict(os.environ)
             adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
             env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
@@ -173,6 +178,9 @@ class BenchLeaderMixin:
             self._run_leader_home(cmd, env, f"{arm} {label}")
         finally:
             release(handles)
+            if stopped and not self.manual.exists():
+                errs, _ = self._start_units(reversed(stopped))
+                self._remember(errs)
 
     def _start_parallel_leader(self, arm, config, home_ticks):
         """Start leader_home with known Follower home ticks on its separate Leader USB bus in parallel with Follower homing."""
@@ -227,3 +235,60 @@ class BenchLeaderMixin:
             with self.lock:
                 if not (ok and keep):
                     self._idle()
+
+    def check_leader_home_status(self, arm="all"):
+        """Passively read Leader distance vs MAX_TRAVEL_DEG without enabling torque (--check-home)."""
+        arm = (arm or "all").strip()
+        if arm not in ("all", *ARMS, BI_ARM):
+            raise ValueError("유효한 팔(all, arm_a, arm_b, arm_s, arm_ab)을 선택하세요")
+        targets = list(ARMS) if arm == "all" else (["arm_a", "arm_b"] if arm == BI_ARM else [arm])
+        with self.lock:
+            busy = self.state.get("status") in BUSY
+        if busy or recorder_running(self.procs):
+            return {"ok": True, "skipped": True, "reason": "세션 또는 호밍 진행 중", "arms": {}}
+        locked = {h.get("lock") for h in self.active_lock_holders() if isinstance(h, dict)}
+        env = dict(os.environ)
+        adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
+        env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+        results = {}
+        for a in targets:
+            if f"session-{a}.lock" in locked or (a in ("arm_a", "arm_b") and f"session-{BI_ARM}.lock" in locked):
+                results[a] = {"ok": False, "skipped": True, "reason": "세션 락 점유 중"}
+                continue
+            if arm_connectivity(self.prep, a).get("leader_connected") is False:
+                results[a] = {"ok": False, "skipped": True, "reason": "리더 USB 미연결"}
+                continue
+            try:
+                _, lib_p, rcfg, _, _ = self._home_files(a)
+            except ValueError as exc:
+                results[a] = {"ok": False, "skipped": True, "reason": str(exc)}
+                continue
+            ticks = library_home_ticks(lib_p)
+            pose_p = self.prep / f"leader-home-{a}.json"
+            if ticks:
+                target_args = ["--target-follower-ticks", ",".join(str(int(v)) for v in ticks)]
+            elif pose_p.is_file():
+                target_args = ["--pose", str(pose_p)]
+            else:
+                results[a] = {"ok": False, "skipped": True, "reason": "홈 목표 틱/포즈 없음"}
+                continue
+            cmd = [self.python, str(HERE / "leader_home.py"), "--config", str(rcfg), "--arm", a,
+                   *target_args, "--exact", "--check-home"]
+            try:
+                res = subprocess.run(cmd, cwd=self.prep, env=env, capture_output=True, text=True, timeout=10)
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                results[a] = {"ok": False, "error": str(exc)[:200]}
+                continue
+            lines = [ln for ln in (res.stdout or "").strip().splitlines() if ln.strip()]
+            parsed = None
+            if lines:
+                try:
+                    parsed = json.loads(lines[-1])
+                except ValueError:
+                    parsed = None
+            if isinstance(parsed, dict) and res.returncode in (0, 2):
+                results[a] = parsed
+            else:
+                err = parsed.get("error") if isinstance(parsed, dict) and parsed.get("error") else ((res.stderr or res.stdout or "").strip()[-200:] or f"rc={res.returncode}")
+                results[a] = {"ok": False, "error": err}
+        return {"ok": True, "skipped": False, "checked_at": round(time.time(), 1), "arms": results}

@@ -891,3 +891,68 @@ def test_report_identity_transforms_yaw_px_to_map_frame_or_none(make_worker, mon
     asyncio.run(worker._report_identity(
         {"request_id": "req-no-yaw", "color": "blue", "not_before": 100.0, "not_after": 104.0}, 104.5))
     assert client.identity[-1]["yaw"] is None
+
+
+def test_409_calibration_mismatch_triggers_immediate_config_refresh_with_cooldown(make_worker):
+    now = [100.0]
+    updated_config = {
+        **CONFIG,
+        "calibration": {**CONFIG["calibration"], "calibration_revision": "paint-new-rev"},
+    }
+    worker, client = make_worker(
+        configs=[CONFIG, updated_config, updated_config],
+        error=TrackPublishError(409, "CALIBRATION_MISMATCH", "stale rev"),
+        clock=lambda: now[0],
+    )
+    refreshes = []
+    orig_refresh = worker.refresh_config
+
+    async def tracked_refresh():
+        refreshes.append(now[0])
+        await orig_refresh()
+
+    worker.refresh_config = tracked_refresh
+    asyncio.run(orig_refresh())
+    # First rejected frame with stale revision triggers immediate refresh.
+    asyncio.run(worker.process(_frame(seq=1, captured_at=99.8), {}))
+    assert refreshes == [100.0]
+    assert worker.config["calibration"]["calibration_revision"] == "paint-new-rev"
+    # Within 1s cooldown, a second 409 does not spam fetch_config; after 1s it refreshes again.
+    now[0] = 100.5
+    asyncio.run(worker.process(_frame(seq=2, captured_at=100.3), {}))
+    assert refreshes == [100.0]
+    now[0] = 101.1
+    asyncio.run(worker.process(_frame(seq=3, captured_at=100.9), {}))
+    assert refreshes == [100.0, 101.1]
+
+
+def test_vision_worker_passes_decoded_image_so_tracker_skips_second_imdecode():
+    from rosy_vision.detect import detect_markers, generate_marker_image
+
+    canvas = np.full((360, 640, 3), 255, np.uint8)
+    m = cv2.cvtColor(generate_marker_image(7, 80), cv2.COLOR_GRAY2BGR)
+    canvas[100:180, 100:180] = m
+    ok, encoded = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    assert ok
+    decode_calls = []
+    client = _Client(configs=[CONFIG])
+    detector = _Detector(DetectorResult((), "OK"))
+    tracker = TrackWorker(
+        camera=CAMERA, ingest=_Ingest(), client=client, detector=detector,
+        decode=lambda jpeg: (decode_calls.append(jpeg), cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR))[1],
+        clock=lambda: 100.0, auto_tune=False,
+    )
+    try:
+        asyncio.run(tracker.refresh_config())
+        frame = _frame(seq=1, captured_at=99.9, jpeg=encoded.tobytes())
+        worker = VisionWorker(
+            source_id="ceiling_north", ingest=_Ingest(frame=frame), camera=CAMERA,
+            publisher=SimpleNamespace(publish=lambda _s: asyncio.sleep(0)),
+            detector=detect_markers, clock=lambda: 100.0, tracker=tracker,
+        )
+        asyncio.run(worker.process_latest())
+        assert decode_calls == []
+        assert len(client.published) == 1
+        assert [d.marker_id for d in client.published[0].detections] == [7]
+    finally:
+        tracker.close()

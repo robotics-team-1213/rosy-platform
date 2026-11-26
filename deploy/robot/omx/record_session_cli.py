@@ -23,6 +23,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import cell_arm_lease  # noqa: E402
+import record_session_baseline as resting  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
 from record_session_helpers import (  # noqa: E402
     LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerUnconfirmed,
@@ -113,6 +114,9 @@ def main(argv=None, *, _globals: dict | None = None):
         "--params", type=Path, help="--chunks: cell-params.json for the runner (default: built-in values)"
     )
     parser.add_argument(
+        "--load-model", type=Path, help="--chunks: load-model JSON for startup/chunk gravity checks"
+    )
+    parser.add_argument(
         "--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory"
     )
     parser.add_argument("--teleop-stage", type=int, choices=sorted(STAGES), help="full-arm Leader session only: teleop_speed stage (tracking limit, servo profile)")
@@ -130,8 +134,8 @@ def main(argv=None, *, _globals: dict | None = None):
     args = parser.parse_args(argv)
     if args.skip_leader_finish and not args.chunks:
         parser.error("--skip-leader-finish requires --chunks")
-    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None) and not args.chunks:
-        parser.error("--rim-z-m, --cell-config and --site require --chunks")
+    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None or args.load_model is not None) and not args.chunks:
+        parser.error("--rim-z-m, --cell-config, --site and --load-model require --chunks")
     if args.site is not None and args.cell_config is None:
         parser.error("--site requires --cell-config")
     if args.operating_profile:
@@ -274,7 +278,7 @@ def main(argv=None, *, _globals: dict | None = None):
             "io": str(args.io.resolve()),
             "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
             **({"params": str(args.params.resolve())} if args.params else {}),
-            **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {}),
+            **({"load_model": str(args.load_model.resolve())} if args.load_model else ({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {})),
             **({"rim_z_m": rim_z_m} if rim_z_m is not None else {}),
         }
     import omx_incident
@@ -300,6 +304,10 @@ def main(argv=None, *, _globals: dict | None = None):
         # D-1048: cell_auto_fold's recovery session may open on the one held incident it names, nothing else
         recovery = os.environ.get("ROSY_RECOVERY_INCIDENT")
         omx_incident.refuse_if_held(args.arm, **({"allow_incident": recovery} if recovery else {}))
+        resting.check_pending(args.arm)
+        if (args.arm in ("arm_a", "arm_b") and os.environ.get("ROSY_BASELINE_RECOVERY_ARM") == args.arm
+                and args.chunks and args.operating_profile and not recovery and config["robot"]["type"] == "omx_follower"):
+            session.baseline_recovery_arm = args.arm
         record = session.execute(
             args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card, body_only=args.body_only
         )
@@ -327,6 +335,10 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_owner=monitor_owner,
                     motor_health_session=monitor_session,
                 )
+                from cell_recovery_cargo import interrupted_cargo
+
+                if cargo := interrupted_cargo(record, args.arm):
+                    record["recovery_cargo"] = cargo
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
                 if record.get("runner_held"):
                     raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read

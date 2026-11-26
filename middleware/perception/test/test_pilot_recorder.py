@@ -565,3 +565,23 @@ def test_every_status_is_sequenced_within_one_boot(tmp_path):
     assert first["boot_id"] and first["boot_id"] == second["boot_id"]
     assert 0 < first["seq"] < second["seq"]
     assert Rig(tmp_path / "other").rec.status()["boot_id"] != first["boot_id"]
+
+
+def test_idle_status_caches_root_scan_and_invalidates_after_ttl_or_mutation(tmp_path, monkeypatch):
+    rig = Rig(tmp_path)
+    calls = []
+    real_total = pr._total_bytes
+    monkeypatch.setattr(pr, "_total_bytes", lambda path: calls.append(path) or real_total(path))
+    rig.rec.status()
+    rig.t += 10.0
+    rig.rec.status()
+    assert len(calls) == 1
+    rig.t += 61.0
+    rig.rec.status()
+    assert len(calls) == 2
+    rig.rec.start()
+    rig.rec.stop("requested")
+    rig.finish()
+    count_before = len(calls)
+    rig.rec.status()
+    assert len(calls) == count_before + 1

@@ -42,14 +42,32 @@ def build_plan_from_directive(
     pick = coerce_area_xyz(directive["pick"])
     place = coerce_area_xyz(directive["place"])
     exec_cfg = dict(directive.get("execution") or {})
+    if exec_cfg.get("finger_color") in ("dark", "white", "auto"):
+        cal["finger_color"] = str(exec_cfg["finger_color"])
 
     plan = _clone(base_plan)
+    plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
+    v21_arm_s = int(cal.get("samples", 0)) == 0 and arm_id == "arm_s" and float(plan["tcp_x_m"]) >= 0.073
+    if v21_arm_s:
+        if exec_cfg.get("finger_color") not in ("dark", "white", "auto"):
+            cal["finger_color"] = "white"
+        cal.update(
+            held_30mm=54.3,
+            jaw_margin_mm=9.5,
+            grip_open_30mm=58.1,
+            grip_release_30mm=57.5,
+            hold_current_ma=80,
+        )
     px, py, pz = pick["effective_xyz_m"]
     qx, qy, qz = place["effective_xyz_m"]
     approach_m = float(exec_cfg.get("approach_m", 0.032 if float(pz) < 0.020 else 0.028))
     place_approach_m = min(approach_m, 0.025 if float(qz) >= 0.060 else 0.028)
 
-    safe_pick_yaw = normalize_pick_yaw_deg(float(pick.get("yaw_deg", -90.0)), px, py)
+    if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
+        plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
+    q5_lim = (plan.get("limits") or {}).get("joints_rad", {}).get("joint5")
+    q5_bounds = tuple(q5_lim) if isinstance(q5_lim, (list, tuple)) and len(q5_lim) == 2 else None
+    safe_pick_yaw = normalize_pick_yaw_deg(float(pick.get("yaw_deg", -90.0)), px, py, q5_bounds_rad=q5_bounds)
     default_lift_m = round(max(approach_m, float(qz) + approach_m - float(pz)), 4)
     if float(pz) >= 0.0 and float(px) >= 0.185:
         default_lift_m = min(default_lift_m, 0.036 if float(px) >= 0.215 else 0.058)
@@ -71,16 +89,25 @@ def build_plan_from_directive(
         "lift_m": place_approach_m,
     }
     plan["grip_closed"] = float(cal.get("grip_closed", plan.get("grip_closed", 48.8)))
-    plan["grip_open"] = min(
-        58.15, float(exec_cfg.get("grip_open_override") or cal.get("grip_open_30mm", plan.get("grip_open", 57.9)))
-    )
-    plan["grip_release"] = min(
-        float(plan["grip_open"]), float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
-    )
-    plan["hold_current_ma"] = int(
-        exec_cfg.get("hold_current_ma", max(140, int(cal.get("hold_current_ma", plan.get("hold_current_ma", 140)))))
-    )
-    plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
+    if exec_cfg.get("grip_open_override") is not None:
+        raw_open = float(exec_cfg["grip_open_override"])
+    elif int(cal.get("samples", 0)) > 0:
+        raw_open = float(cal.get("grip_open_30mm", plan.get("grip_open", 57.9)))
+    elif v21_arm_s:
+        raw_open = max(float(cal["grip_open_30mm"]), float(plan["grip_open"]) if plan.get("grip_open") is not None else 0.0)
+    else:
+        raw_open = float(plan["grip_open"]) if plan.get("grip_open") is not None else float(cal.get("grip_open_30mm", 57.9))
+    plan["grip_open"] = min(58.15, raw_open)
+    if int(cal.get("samples", 0)) > 0:
+        raw_rel = float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
+    elif v21_arm_s:
+        raw_rel = max(float(cal["grip_release_30mm"]), float(plan["grip_release"]) if plan.get("grip_release") is not None else 0.0)
+    else:
+        raw_rel = float(plan["grip_release"]) if plan.get("grip_release") is not None else float(cal.get("grip_release_30mm", 57.5))
+    plan["grip_release"] = min(float(plan["grip_open"]), raw_rel)
+    base_hold = plan.get("hold_current_ma")
+    default_hold = int(base_hold if base_hold is not None else cal.get("hold_current_ma", 80))
+    plan["hold_current_ma"] = int(exec_cfg.get("hold_current_ma", default_hold))
     plan["approach_m"] = approach_m
     plan["lift_m"] = actual_lift_m
     default_rel_lift = max(0.042, place_approach_m + 0.014) if arm_id == "arm_s" else place_approach_m
@@ -99,16 +126,8 @@ def build_plan_from_directive(
                 "descend_near_m"):  # opt-in two-stage descent (descend_profile.py)
         if key in exec_cfg:
             plan[key] = float(exec_cfg[key])
-    if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
-        plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
-    if "limits" in plan and float(pz) < float(plan["limits"]["workspace_min_m"][2]):
-        lz = list(plan["limits"].get("low_zones") or [])
-        lz.append({
-            "x": [round(px - 0.04, 4), round(px + 0.04, 4)],
-            "y": [round(py - 0.04, 4), round(py + 0.04, 4)],
-            "z_min_m": round(float(pz) - 0.003, 4),
-        })
-        plan["limits"]["low_zones"] = lz
+    if exec_cfg.get("keep_out"):
+        plan["keep_out"] = _clone(exec_cfg["keep_out"])
     rl_speed_scale = max(0.70, min(1.25, float(exec_cfg.get("rl_speed_scale", 1.0))))
     plan["rl_speed_scale"] = round(rl_speed_scale, 3)
     base_transit = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.85)))
@@ -137,6 +156,7 @@ def plan_library_from_directive(
     """Build and solve the top-down chunk library for a middleware `AreaXYZ` directive, with anti-jitter settle tails
     and Sim-to-Real phase-lead + static deadband trajectory pre-compensation."""
     from omx_adapter.z_profile import SimRealTwin
+    import cell_pipeline_io
     import grasp_planner
 
     plan, cal = build_plan_from_directive(directive, base_plan, work_dir=work_dir)
@@ -180,6 +200,8 @@ def plan_library_from_directive(
             "place_compensated": comp_place.get("after_sim"),
             "place_terminal_offset_units": comp_place.get("terminal_offset_units"),
         }
+    if err := cell_pipeline_io.limit_error({**plan, **exec_cfg}, lib):
+        raise ValueError(f"joint limit check failed: {err}")
     return lib, plan, cal
 
 
@@ -200,7 +222,9 @@ def sim_precheck_and_optimize_directive(
     opt["place"] = coerce_area_xyz(opt["place"])
     px, py, _ = opt["pick"]["effective_xyz_m"]
     raw_yaw = float(opt["pick"].get("yaw_deg", -90.0))
-    safe_yaw = normalize_pick_yaw_deg(raw_yaw, px, py)
+    q5_lim = [0.16, 2.89] if opt.get("arm_id") == "arm_b" else (base_plan.get("limits") or {}).get("joints_rad", {}).get("joint5")
+    q5_bounds = tuple(q5_lim) if isinstance(q5_lim, (list, tuple)) and len(q5_lim) == 2 else None
+    safe_yaw = normalize_pick_yaw_deg(raw_yaw, px, py, q5_bounds_rad=q5_bounds)
     opt["pick"]["yaw_deg"] = safe_yaw
 
     lib, plan, cal = plan_library_from_directive(opt, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)

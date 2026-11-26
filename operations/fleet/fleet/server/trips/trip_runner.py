@@ -29,7 +29,7 @@ from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery, start_check  # noqa: F401
 from fleet.server.trip_geometry import pose_view  # noqa: F401
-from fleet.server.trip_halts import TripHalts, error_code as _code
+from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed, pause_proof_args
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, convoy_refusal, stop_points  # noqa: F401
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
@@ -45,6 +45,7 @@ from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
 from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence
 from fleet.swarm.dispatch_guard import dispatch_guard
+from fleet.swarm.transport import RobotApiError
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
@@ -104,10 +105,15 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self._engaged, self._release_queue, self._roster = engaged, release_queue, roster
         #: D-517 1: robot id -> its trip (open, or the last one it ran).
         self._live: dict[str, LiveTrip] = {}
+        self._aligning: set[str] = set()
+        self._align_submitting: set[str] = set()
+        self._align_outcome_unknown: set[str] = set()
+        self._unconfirmed_align_stops: set[str] = set()
         self._stop_epoch = 0
         self._start_cancels: dict[str, int] = {}
         self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
+        self.road_vision_demand = None
         self.charge_goal_ready = None  # Explicit charge-only native-readiness dependency.
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
@@ -120,9 +126,15 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.held_stops: dict[str, tuple] = {}  # robot id -> (seq, place) of the stop its last lane arrival left held
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
-                               lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
+                               lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster,
+                               lock_for=self._lock_for)
 
     # ---- operator actions -------------------------------------------------------------
+
+    def _check_human_hold(self) -> None:
+        check = getattr(self, "human_hold_fn", None)
+        if callable(check) and check():
+            raise TripError(409, "HUMAN_HOLD")
 
     async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None,
                     start_guard=None, purpose: Optional[str] = None) -> dict:
@@ -137,10 +149,19 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 raise TripError(409, "TRIP_ALREADY_STARTED")
             if self._clock() - row["created_at"] > PLAN_TTL_S:
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
-            repeat = bool((row.get("request") or {}).get("repeat"))
-            nav2 = (row.get("request") or {}).get("drive_mode") == "nav2"
+            request_data = row.get("request") or {}
+            repeat = bool(request_data.get("repeat"))
+            nav2 = request_data.get("drive_mode") == "nav2"
             graph = self._graph_for(plan["map_version"])
-            precision = commissioned_stop(graph, (row.get("request") or {}).get("to"))
+            if self.halts.unconfirmed_dock(robot_id):
+                raise TripError(409, "DOCK_CANCEL_UNCONFIRMED")
+            parking = plan.get("parking_handoff")
+            if parking:
+                request_data = {**request_data, "to": parking["staging_place_id"]}
+                if any((lv.view["detail"].get("parking_handoff") or {}).get("bay_id") == parking["bay_id"]
+                       for lv in self._live.values() if lv.open):
+                    raise TripError(409, "CHARGE_BAY_RESERVED", parking)
+            precision = commissioned_stop(graph, request_data.get("to"))
             if nav2 and precision is not None:
                 raise TripError(422, "PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
             precision_scope = None
@@ -153,19 +174,36 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 if binding_id is None:
                     raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
                 precision_scope = plan["map_version"], binding_id
+            nav2_scope = None
+            binding_id = plan.get("nav2_binding_id")
+            if nav2 and isinstance(request_data.get("to"), str) and (
+                binding_id is not None or request_data.get("approved_slam_required") or self.config.map_binding_required
+            ):
+                if binding_id is None:
+                    raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
+                nav2_scope = plan["map_version"], binding_id
             notes = {"drive_mode": "nav2"} if nav2 else {}
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
                                            plan["actions"][-1]["place_id"], detail=notes, nav2=nav2)
+            if nav2_scope is not None and not caps.bound_route:
+                raise TripError(409, "NAV2_BOUND_ROUTE_UNSUPPORTED")
             body = nominal_body_for(caps.kind)
             pending = self.halts.pending_handoffs.get(robot_id)
             if pending is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY",
                                 {"reason": "handoff_stop_unverified", "trip_id": pending["trip_id"]})
+            prev_live = self._live.get(robot_id)
+            if prev_live is not None and not prev_live.open and halt_unconfirmed(prev_live.view.get("detail")):
+                raise TripError(409, "TRIP_ROBOT_BUSY",
+                                {"reason": "prior_stop_unconfirmed", "trip_id": prev_live.view["trip_id"]})
+            if robot_id in self._unconfirmed_align_stops:
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "prior_align_stop_unconfirmed"})
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
+            self._check_human_hold()
             if purpose != "charge_return":  # D-1029: the way to a charger, like a charge_session job; CORE keeps 10 %/5 %
                 await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)
@@ -173,25 +211,30 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
                 start_token=start_token, start_guard=start_guard, nav2=nav2,
-                precision_scope=precision_scope)
+                precision_scope=precision_scope or nav2_scope)
             await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id,
                                                   "purpose": purpose}, caps)
             try:
-                self._check_start_token(robot_id, start_token)
+                await self._guard_start(robot_id, start_token, start_guard)
                 self._check_engaged(robot_id)
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
+                if nav2_scope and (self._store.map_bindings.active(robot_id) or {}).get("binding_id") != nav2_scope[1]:
+                    raise TripError(409, "TRIP_POSE_UNTRUSTED", {"reason": "APPROVED_SLAM_POSE_REQUIRED"})
                 caps_view = _caps_view(caps)
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
-                    self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
+                    self._store.active(), plan, request_data, caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
                 if start_at is not None and moved is not None:
                     raise TripError(422, "TRIP_START_PLACE_MOVED", moved)
                 if precision is not None and not self._precision_terminal_matches(graph, plan["segments"], precision):
                     raise TripError(422, "PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
+                if parking and any((lv.view["detail"].get("parking_handoff") or {}).get("bay_id") == parking["bay_id"]
+                                   for lv in self._live.values() if lv.open):
+                    raise TripError(409, "CHARGE_BAY_RESERVED", parking)
                 leader = _check_start_traffic(self, robot_id, plan, request, arcs, caps, repeat)
-            except TripError:  # the lease opened for a trip that did not start
+            except BaseException:  # the lease opened for a trip that did not start
                 if lease is not None:
                     await self.lease.release(robot_id, lease["lease_id"])
                 raise
@@ -205,13 +248,17 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 view["purpose"] = purpose
             if precision_scope is not None:
                 view["detail"]["precision_binding_id"] = precision_scope[1]
+            if nav2_scope is not None:
+                view["detail"]["nav2_binding_id"] = nav2_scope[1]
+            if parking:
+                view["detail"]["parking_handoff"] = dict(parking, phase="approaching" if plan["segments"] else "staging_confirmed")
             live = LiveTrip(view, graph, request)
             live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
-            self.halts.restarted = [t for t in self.halts.restarted if t["robot_id"] != robot_id]  # this trip owns it
+            self.halts.clear_robot(robot_id)  # this trip owns it
             if not plan["segments"]:  # D-489 부록 4: already there
-                view["state"] = "arrived"
+                view["state"] = "running" if parking else "arrived"
             else:
                 self._describe(live)
             self._save(live)
@@ -251,18 +298,105 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 live.view["detail"].update(await self._halt(live))
                 self._save(live)
             raise TripError(409, "TRIP_LINE_FOLLOW_START_FAILED", detail) from exc
+        live.command_ack_mono = time.monotonic()
         live.view["detail"]["line_follow_started"] = True
         await self._after_send(live)  # a cancel or E-stop that landed meanwhile stops it again
         self._save(live)
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""
+        previous = self.view(trip_id)
+        if previous is not None and previous["state"] == "canceled":
+            return previous
         live = self._open(trip_id)
         live.view.update(state="canceled", reason=reason)
         live.view["detail"]["canceled_by"] = principal_id
-        live.view["detail"].update(await self._halt(live))
+        live.view["detail"]["stop_sent"] = False
+        halted = await self._halt(live)
+        live.view["detail"].update(halted)
+        if halted.get("stop_sent") and "error" not in halted:
+            live.view["detail"].pop("error", None)
         self._save(live)
         return live.view
+
+    async def retry_halt(self, trip_id: str) -> dict:
+        """Re-send robot stop for a canceled trip whose prior halt did not confirm."""
+        live = next((lv for lv in self._live.values() if lv.view.get("trip_id") == trip_id), None)
+        if live is not None:
+            robot_id = live.view["robot_id"]
+            async with self._lock_for(robot_id):
+                if self._live.get(robot_id) is not live:
+                    return {"error": "TRIP_NOT_RUNNING"}
+                halted = await self._halt(live)
+                live.view["detail"].update(halted)
+                if halted.get("stop_sent") and "error" not in halted:
+                    live.view["detail"].pop("error", None)
+                self._save(live)
+                return live.view
+        trip = self._store.trip(trip_id)
+        if trip is not None and trip.get("state") in ("canceled", "stopped") and halt_unconfirmed(trip.get("detail")):
+            robot_id = trip["robot_id"]
+            async with self._lock_for(robot_id):
+                current = self._live.get(robot_id)
+                if current is not None and current.view.get("trip_id") != trip_id:
+                    return {"error": "TRIP_NOT_RUNNING"}
+                trip = self._store.trip(trip_id)
+                if trip is None or trip.get("state") not in ("canceled", "stopped"):
+                    return {"error": "TRIP_NOT_RUNNING"}
+                detail = dict(trip.get("detail") or {})
+                if not halt_unconfirmed(detail):
+                    self.halts.clear_trip(trip_id)
+                    return trip
+                if self.halts.dock_owned(trip):
+                    halted = await self.halts.halt_dock(trip)
+                else:
+                    halted = await self.halts.halt_robot(
+                        robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
+                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), **pause_proof_args(trip),
+                    )
+                detail.update(halted)
+                if halted.get("stop_sent") and "error" not in halted:
+                    detail.pop("error", None)
+                updated = {**trip, "detail": detail, "updated_at": self._clock()}
+                self._store.put_trip(updated)
+                if not halt_unconfirmed(detail):
+                    self.halts.clear_trip(trip_id)
+                return updated
+        return {"error": "TRIP_NOT_RUNNING"}
+
+    def aligning_robots(self) -> list[str]:
+        return sorted(self._aligning | self._align_submitting | self._align_outcome_unknown | self._unconfirmed_align_stops)
+
+    async def halt_aligning(self, robot_ids: Iterable[str], *, estop_confirmed_robots: Iterable[str] = ()) -> list[str]:
+        """Stop in-flight pre-live alignment rotations without acquiring per-robot start locks."""
+        terminal_states = frozenset({"done", "aborted", "stopped", "idle", "failed", "canceled"})
+        estopped = set(estop_confirmed_robots)
+        unconfirmed: list[str] = []
+        for robot_id in sorted(set(robot_ids)):
+            try:
+                res = await self._call(self._junction.rotate_stop(robot_id))
+            except Exception:
+                self._unconfirmed_align_stops.add(robot_id)
+                unconfirmed.append(robot_id)
+                continue
+            terminal = isinstance(res, dict) and (res.get("state") in terminal_states or res.get("stopped") is True)
+            if robot_id in self._align_submitting:
+                self._unconfirmed_align_stops.add(robot_id)
+                unconfirmed.append(robot_id)
+            elif robot_id in self._align_outcome_unknown:
+                # Unkeyed DELETE cannot distinguish an old turn from a delayed POST; require confirmed E-stop latch.
+                if robot_id in estopped:
+                    self._align_outcome_unknown.discard(robot_id)
+                    self._unconfirmed_align_stops.discard(robot_id)
+                else:
+                    self._unconfirmed_align_stops.add(robot_id)
+                    unconfirmed.append(robot_id)
+            elif terminal or robot_id in estopped:
+                self._unconfirmed_align_stops.discard(robot_id)
+            else:
+                self._unconfirmed_align_stops.add(robot_id)
+                unconfirmed.append(robot_id)
+        return unconfirmed
 
     def close_all(self, reason: str) -> list[LiveTrip]:
         """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
@@ -272,15 +406,23 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         for live in closed:
             live.view.update(state="canceled", reason=reason)
             live.view["detail"]["canceled_by"] = None
+            live.view["detail"]["stop_sent"] = False
         return closed
 
     async def halt_closed(self, lives: list[LiveTrip]) -> None:
         """Stop the robots of ``close_all`` at once (each halt bounded) and record each trip."""
         async def halt(live: LiveTrip) -> None:
+            prev_detail = dict(live.view.get("detail") or {})
+            halted = await self._halt(live)
+            detail = {**prev_detail, **halted}
+            if halted.get("stop_sent") and "error" not in halted:
+                detail.pop("error", None)
+            live.view["detail"] = detail
             try:
-                live.view["detail"].update(await self._halt(live))
-            finally:
                 self._save(live)
+            except Exception as exc:
+                live.view["detail"] = {**prev_detail, "stop_sent": False, "error": f"SAVE_FAILED:{_code(exc)}"}
+                raise
 
         for result in await asyncio.gather(*(halt(live) for live in lives), return_exceptions=True):
             if isinstance(result, BaseException):
@@ -340,6 +482,13 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
             self._unread.discard(robot_id)
+        except RobotApiError as exc:
+            if exc.status != 429:  # D-760 8: non-rate-limit CORE errors still fail the read
+                raise
+            self._unread.add(robot_id)
+            if self._clock() - self._refresh_warned_at >= 30.0:
+                self._refresh_warned_at = self._clock()
+                _LOG.warning("state refresh for %s rate-limited (repeats muted 30 s)", robot_id, exc_info=True)
         except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
@@ -375,6 +524,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
         observe(self._live.values(), self._inflight, self.traffic, self._store, self._routing, self.config, self._clock())
+        if self.road_vision_demand is not None:
+            self.road_vision_demand.period(self)
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -414,13 +565,17 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             live.view.update(state="stopped", reason="lease_lost")
             live.view["detail"].update(detail)
             async with self._lock_for(live.view["robot_id"]):
-                if not live.segment_is_lane(live.view["segment_index"]):
+                if not live.segment_is_lane(live.view["segment_index"]) or live.view["detail"].get("camera_lane_fallback"):
                     live.view["detail"].update(await self._halt(live))
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
+        if self.halts.dock_owned(live.view):
+            return await self.halts.halt_dock(live.view)
         self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
+        camera = live.view["detail"].get("camera_lane_fallback")
         return await self.halts.halt_robot(
-            live.view["robot_id"], live.segment_is_lane(i), live.place(i),
-            handoff_pending=bool(live.view["detail"].get("named_stop_handoff_pending")))
+            live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
+            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")),
+            **pause_proof_args(live.view))

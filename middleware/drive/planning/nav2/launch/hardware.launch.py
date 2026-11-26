@@ -20,7 +20,8 @@ from launch.launch_description_sources import (
     AnyLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
 )
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import AndSubstitution, LaunchConfiguration, NotSubstitution
+from launch_ros.actions import Node
 
 from navigation.footprint_profile import load_footprint_profile
 from navigation.params_rewrite import write_prefixed_nav2_params
@@ -40,6 +41,9 @@ def _include_nav2(context, *args, **kwargs):
     backend = LaunchConfiguration("navigation_backend").perform(context).strip().lower()
     if backend not in {"localization", "slam"}:
         raise ValueError("navigation backend must be localization or slam")
+    amcl_laser_model = LaunchConfiguration("amcl_laser_model").perform(context)
+    if backend != "localization" and amcl_laser_model != "configured":
+        raise ValueError("an AMCL laser model override requires saved-map localization")
     profile_path = LaunchConfiguration("profile_file").perform(context)
     limits = load_motion_limits(profile_path)
     footprint_file = LaunchConfiguration("footprint_profile_file").perform(context).strip()
@@ -82,6 +86,7 @@ def _include_nav2(context, *args, **kwargs):
         namespace,
         footprint_points=footprint_points,
         speed=(float(requested_linear), float(requested_angular)),
+        amcl_laser_model=amcl_laser_model,
     )
     if backend == "localization":
         fallback_map = os.path.join(nav_share, "map", "my_map.yaml")
@@ -99,6 +104,7 @@ def _include_nav2(context, *args, **kwargs):
             "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
             "map": map_yaml,
             "params_file": rewritten_nav,
+            "navigation_autostart": "False",
             # Standalone nodes are the device-verified path: on this Jazzy build
             # load_composable_node entries are silently skipped / lose the
             # namespace (2026-11-03 solution doc), so composed Nav2 never runs.
@@ -128,6 +134,14 @@ def _include_nav2(context, *args, **kwargs):
         control_share = get_package_share_directory("control")
         return [
             nav2_include,
+            Node(
+                package="navigation",
+                executable="start_after_tf",
+                namespace=namespace,
+                output="screen",
+                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+                arguments=[rewritten_nav],
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(control_share, "launch", "loc_assist.launch.py")
@@ -152,12 +166,15 @@ def generate_launch_description():
 
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    enable_line_follow = LaunchConfiguration("enable_line_follow")
+    line_ir_enabled = LaunchConfiguration("line_ir_enabled")
 
     robot_args = {
         "namespace": namespace,
         "use_sim_time": use_sim_time,
         "enable_battery": LaunchConfiguration("enable_battery"),
         "enable_lidar": LaunchConfiguration("enable_lidar"),
+        "enable_ir": AndSubstitution(line_ir_enabled, NotSubstitution(enable_line_follow)),
         "cmd_vel_timeout_s": LaunchConfiguration("cmd_vel_timeout_s"),
         "motor_device": LaunchConfiguration("motor_device"),
         "motor_baudrate": LaunchConfiguration("motor_baudrate"),
@@ -204,6 +221,10 @@ def generate_launch_description():
             default_value=os.environ.get("ROSY_MAP", "/var/lib/rosy/maps/site.yaml"),
         ),
         DeclareLaunchArgument("params_file", default_value=default_params),
+        DeclareLaunchArgument(
+            "amcl_laser_model",
+            default_value=os.environ.get("ROSY_AMCL_LASER_MODEL", "configured"),
+        ),
         DeclareLaunchArgument("mapper_params_file", default_value=default_mapper_params),
         DeclareLaunchArgument("allow_demo_map", default_value="false"),
         DeclareLaunchArgument(
@@ -228,19 +249,18 @@ def generate_launch_description():
             ),
             launch_arguments=robot_args.items(),
         ),
-        # ir_sensor/range single-publisher rule: in this OS hardware graph the
-        # IR source is control's ir_adc_node (via line_follow). The C++
-        # sensor_adc node is a legacy-bench reader of the same bus and must
-        # never run beside it — two readers interleave ir_sensor/range arrays.
+        # ir_sensor/range single-publisher rule: bringup owns IR when native
+        # navigation uses the separate camera service. The combined line-follow
+        # graph owns it instead when that graph is enabled.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(control_share, "launch", "line_follow.launch.py")
             ),
-            condition=IfCondition(LaunchConfiguration("enable_line_follow")),
+            condition=IfCondition(enable_line_follow),
             launch_arguments={
                 "namespace": namespace,
                 "start_camera": LaunchConfiguration("line_camera_enabled"),
-                "start_ir_adc": LaunchConfiguration("line_ir_enabled"),
+                "start_ir_adc": line_ir_enabled,
                 "camera_backend": LaunchConfiguration("camera_backend"),
                 "camera_device": LaunchConfiguration("camera_device"),
                 "ir_interface": LaunchConfiguration("ir_interface"),

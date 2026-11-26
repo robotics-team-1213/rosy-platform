@@ -1,6 +1,24 @@
 // CAP-001 is evidence for presentation. CORE still decides every command.
 import { robotMapPose } from "./localization-badge.js";
 
+const JUNCTION_TURN_REASON = new Map([
+  ["keep_corner_unavailable", "최신 카메라 교차로 판정이 없습니다"],
+  ["enforce_unavailable", "회전 안전 근거를 확인할 수 없습니다"],
+  ["site_floor_unconfigured", "이 지도에서 회전에 필요한 바닥 안전 확인이 없습니다"],
+  ["ir_guard_disabled", "IR 안전 감지가 꺼져 있습니다"],
+  ["ir_stale", "최신 IR 안전 판정이 없습니다"],
+  ["ir_centre", "로봇 앞 IR 배열 중앙에서 경계선이 감지됐습니다"],
+  ["ir_not_admissible", "현재 IR 안전 판정으로 회전할 수 없습니다"],
+  ["body_clearance_unconfigured", "로봇 몸체와 주변의 간격을 확인할 수 없습니다"],
+  ["scan_stale", "회전 확인에 필요한 최신 LiDAR 스캔이 없습니다"],
+]);
+
+export function junctionTurnRefusalText(error) {
+  if (error?.code !== "TRIP_MODE_UNSUPPORTED" || error.detail?.reason !== "JUNCTION_TURN_UNSUPPORTED") return "";
+  const reason = JUNCTION_TURN_REASON.get(error.detail.junction_turn_reason);
+  return reason ? `교차로 회전 불가 · ${reason}` : "교차로 회전을 시작할 수 없습니다";
+}
+
 /** Short cause of a latched e-stop from CORE's state `safety.source` (v1.342); "" when not given. */
 export function estopCause(source) {
   const text = String(source || "");

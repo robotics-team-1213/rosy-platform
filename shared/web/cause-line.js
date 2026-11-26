@@ -14,9 +14,17 @@ export function describeBy(el, id, on) {
 
 /** One disabled control + the visible reason it is off (a <ui-button reason> draws it). describedBy: id of a state line to point at. */
 export function setOff(control, off, reason = "", describedBy = "") {
-  control.disabled = Boolean(off);
-  if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-  if (describedBy) control.setAttribute("aria-describedby", describedBy);
+  const nextOff = Boolean(off);
+  if (Boolean(control.disabled) !== nextOff) control.disabled = nextOff;
+  if (nextOff) {
+    const nextReason = String(reason);
+    if (control.getAttribute?.("reason") !== nextReason) control.setAttribute("reason", nextReason);
+  } else if (control.hasAttribute ? control.hasAttribute("reason") : control.getAttribute?.("reason") !== null) {
+    control.removeAttribute("reason");
+  }
+  if (describedBy && control.getAttribute?.("aria-describedby") !== describedBy) {
+    control.setAttribute("aria-describedby", describedBy);
+  }
 }
 
 /** setOff whose reason is also the switch: "" enables and forgets the reason, any text disables and shows it. */

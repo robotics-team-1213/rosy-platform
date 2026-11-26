@@ -8,10 +8,12 @@ import time
 from uuid import uuid4
 
 from core_common.protocol.arm_incident.arm_incidents import (
-    ARM_INCIDENT_EVIDENCE_FRAMES, ArmIncidentAccepted, ArmIncidentEvidenceFrame, ArmIncidentExplanation,
-    ArmIncidentHold, ArmIncidentReport, clearable_after_fold, machine_clearable, software_stop,
+    ARM_INCIDENT_EVIDENCE_FRAMES, AUTO_CLEAR_MIN_SCORE, ArmIncidentAccepted, ArmIncidentEvidenceFrame,
+    ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport, clearable_after_fold, evaluate_clear_safety,
+    machine_clearable, software_stop,
 )
 from fleet.server.sqlite_policy import configure_connection, enable_wal
+from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON, is_home_recovery
 
 
 LISTED_MAX_AGE_S = 2.0  # backstop only; this store's own writes drop the shared list at once
@@ -61,8 +63,8 @@ class ArmIncidentStore:
                 "sha256 TEXT NOT NULL, jpeg BLOB NOT NULL, PRIMARY KEY (incident_id, role))")
             # the person's cause and its basis (cleared with them), and the frames of the seconds around the stop
             have = {r[1] for r in self._db.execute("PRAGMA table_info(arm_incidents)")}
-            # cleared_kind: D-1039 'machine', else NULL; clear_remeasured: D-1040 the fresh read sent with the clear
-            for column in ("true_cause", "label_basis", "cleared_kind", "clear_remeasured"):
+            # cleared_kind: D-1039 'machine', else NULL; clear_remeasured: D-1040 the fresh read; clear_risk: risk score JSON
+            for column in ("true_cause", "label_basis", "cleared_kind", "clear_remeasured", "clear_risk"):
                 if column not in have:
                     self._db.execute(f"ALTER TABLE arm_incidents ADD COLUMN {column} TEXT")
             self._db.execute(
@@ -100,8 +102,11 @@ class ArmIncidentStore:
         rows = [r for r in rows if _holds(r[1]) and not software_stop(_facts(r[2]))]
         if not rows:
             return ArmIncidentHold(held=False, incident_ids=[])
+        physical_or_unknown = next((row for row in rows if not is_home_recovery(_facts(row[2]))), None)
+        if physical_or_unknown is None:
+            return ArmIncidentHold(held=True, incident_ids=[r[0] for r in rows[:64]], reason=HOME_RECOVERY_REASON)
         try:
-            why = json.loads(rows[0][1]).get("reason")
+            why = json.loads(physical_or_unknown[1]).get("reason")
         except ValueError:
             why = None
         why = CONTROL.sub(" ", why)[:300] if isinstance(why, str) and why.strip() else "arm incident not cleared"
@@ -127,24 +132,39 @@ class ArmIncidentStore:
                 raise KeyError(incident_id)
             if row[0] is not None:
                 raise ValueError("already cleared")
+            now = self._wall()
+            risk_json = None
             if machine:
                 facts = _facts(row[1])
-                ok, why = machine_clearable(facts, remeasured, since=row[2], now=self._wall(),
+                ok, why = machine_clearable(facts, remeasured, since=row[2], now=now,
                                             incident_id=incident_id, binding=binding)
                 if not ok and recovery is not None:  # D-1048: the cell folded the arm home by itself
                     ok, why = clearable_after_fold(facts, recovery, incident_id, row[2])
                 if not ok:
                     raise MachineClearRefused("AI_CLEAR_KIND_REFUSED", why)
                 done = self._db.execute("SELECT count(*) FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
-                                        "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone()[0]
+                                        "AND cleared_at>=?", (source_id, now - REPEAT_WINDOW_S)).fetchone()[0]
                 if done >= MACHINE_CLEARS_PER_WINDOW:
                     raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT",
                                               f"{done} machine clears of this arm in the last 24 h")
+                risk = evaluate_clear_safety(facts, remeasured=remeasured, recovery=recovery,
+                                             recent_clears_24h=done, since=row[2], now=now,
+                                             incident_id=incident_id, binding=binding,
+                                             min_score=AUTO_CLEAR_MIN_SCORE)
+                if not risk["allowed"]:
+                    codes = ", ".join(item["code"] for item in (risk["hard_vetoes"] or risk["deductions"]))
+                    raise MachineClearRefused(
+                        "AI_CLEAR_RISK_SCORE_BELOW_THRESHOLD",
+                        f"safety score {risk['safety_score']}/{risk['threshold']} below threshold "
+                        f"(risk {risk['risk_score']}): {codes}",
+                    )
+                risk_json = json.dumps(risk, separators=(",", ":"))
                 basis = "unknown"
             self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=?, "
-                             "cleared_kind=?, clear_remeasured=? WHERE incident_id=?",
-                             (principal_id, self._wall(), note, cause, basis, "machine" if machine else None,
-                              json.dumps(remeasured) if machine and remeasured is not None else None, incident_id))
+                             "cleared_kind=?, clear_remeasured=?, clear_risk=? WHERE incident_id=?",
+                             (principal_id, now, note, cause, basis, "machine" if machine else None,
+                              json.dumps(remeasured) if machine and remeasured is not None else None,
+                              risk_json, incident_id))
             if machine and recovery is not None:  # kept beside the device's own recovery: what the fold measured
                 kept = {"device": json.loads(row[3]) if row[3] else None, "auto_fold": recovery}
                 self._db.execute("UPDATE arm_incidents SET recovery=? WHERE incident_id=?",
@@ -213,20 +233,21 @@ class ArmIncidentStore:
     def _rows(self, where, args, limit=None):
         query = ("SELECT incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, "
                  "suspected_cause, model, explained_at, cleared_by, cleared_at, clear_note, true_cause, label_basis, cleared_kind, "
-                 "clear_remeasured "
+                 "clear_remeasured, clear_risk "
                  "FROM arm_incidents "
                  f"WHERE {where} ORDER BY reported_at DESC, rowid DESC" + (f" LIMIT {int(limit)}" if limit else ""))
         return self._db.execute(query, args).fetchall()
 
     def _view(self, row, with_bytes):
         (incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, cause, model, explained_at,
-         cleared_by, cleared_at, note, true_cause, basis, kind, remeasured) = row
+         cleared_by, cleared_at, note, true_cause, basis, kind, remeasured, clear_risk) = row
         # the list only needs each frame's size: never read the JPEG blob (up to 200 kB) for it
         frames = self._db.execute(f"SELECT role, sha256, {'jpeg' if with_bytes else 'length(jpeg)'} "
                                   "FROM arm_incident_frames WHERE incident_id=? ORDER BY role DESC",
                                   (incident_id,)).fetchall()
         out = {"incident_id": incident_id, "source_id": source_id, "session_id": session_id,
                "state": "cleared" if cleared_at is not None else "explained" if explained_at is not None else "open",
+               "held": cleared_at is None and _holds(decision) and not software_stop(_facts(facts)),
                "reported_at": reported_at, "facts": json.loads(facts), "decision": json.loads(decision),
                "recovery": json.loads(recovery) if recovery else None,
                "explanation": None if explained_at is None else {
@@ -235,7 +256,11 @@ class ArmIncidentStore:
                "cleared": None if cleared_at is None else {"by": cleared_by, "at": cleared_at, "note": note,
                                                            "cause": true_cause, "basis": basis,
                                                            "kind": kind or "person",
-                                                           "remeasured": json.loads(remeasured) if remeasured else None}}
+                                                           "remeasured": json.loads(remeasured) if remeasured else None,
+                                                           **({"risk": json.loads(clear_risk)} if clear_risk else {})}}
+        if is_home_recovery(out["facts"]):
+            out["event_kind"] = "home_recovery"
+            out["decision"]["reason"] = HOME_RECOVERY_REASON
         out["frames"] = [({"role": r, "sha256": h, "jpeg_b64": base64.b64encode(j).decode()} if with_bytes
                           else {"role": r, "sha256": h, "bytes": j}) for r, h, j in frames]
         out["evidence"] = [{"seq": s, "camera": c, "t_rel_s": t, "kind": k, "sha256": h, "bytes": n} for s, c, t, k, h, n in

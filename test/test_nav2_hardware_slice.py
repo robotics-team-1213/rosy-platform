@@ -1,6 +1,7 @@
 """Nav2 hardware-slice contracts (D-2, D-4, composition, packaging)."""
 
 import sys
+from xml.etree import ElementTree
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,64 @@ def test_hardware_launch_composes_bringup_and_imports_nav_policy():
     assert "sys.path.insert" not in launch
     assert "mapping_bringup_launch.xml" in launch
     assert "nav2_web_server" not in launch
+
+
+def test_localization_hardware_defers_only_navigation_lifecycle():
+    hardware = (NAV_LAUNCH / "hardware.launch.py").read_text(encoding="utf-8")
+    localization, slam = hardware.split('launch_file = "mapping_bringup_launch.xml"', 1)
+    assert '"navigation_autostart": "False"' in localization
+    assert '"navigation_autostart": "False"' not in slam
+    assert 'executable="start_after_tf"' in hardware
+    root = ElementTree.parse(NAV_LAUNCH / "bringup_launch.xml")
+    assert root.find("./arg[@name='navigation_autostart']").get("default") == "$(var autostart)"
+    for launch_file, expected in (("localization_launch.xml", "$(var autostart)"),
+                                  ("navigation_launch.xml", "$(var navigation_autostart)")):
+        include = next(node for node in root.findall(".//include") if node.get("file").endswith(launch_file))
+        assert include.find("arg[@name='autostart']").get("value") == expected
+
+
+def test_navigation_startup_waits_for_both_costmaps_and_manager():
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import request_startup
+
+    buffer = Mock()
+    client = Mock()
+    request, latest = object(), object()
+    frames = [("map", "rosy_09/base_footprint"), ("rosy_09/odom", "rosy_09/base_footprint")]
+    client.service_is_ready.return_value = False
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.service_is_ready.return_value = True
+    buffer.can_transform.side_effect = [True, False]
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.call_async.assert_not_called()
+    buffer.can_transform.side_effect = [True, True]
+    assert request_startup(buffer, client, request, frames, latest) is client.call_async.return_value
+    client.call_async.assert_called_once_with(request)
+
+
+@pytest.mark.parametrize("namespace", ["", "rosy_09"])
+def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    from navigation.start_after_tf import costmap_frames
+
+    params = write_prefixed_nav2_params(NAV_PARAMS, namespace, directory=tmp_path)
+    prefix = f"{namespace}/" if namespace else ""
+    assert costmap_frames(params, f"/{namespace}") == [
+        ("map", prefix + "base_footprint"),
+        (prefix + "odom", prefix + "base_footprint"),
+    ]
+
+
+def test_startup_frames_read_flat_fully_qualified_costmap_parameters(tmp_path):
+    from navigation.start_after_tf import costmap_frames
+
+    params = tmp_path / "nav2.yaml"
+    params.write_text(yaml.safe_dump({
+        f"/pinky/{name}/{name}": {"ros__parameters": {"global_frame": frame, "robot_base_frame": "pinky/base"}}
+        for name, frame in (("global_costmap", "map"), ("local_costmap", "pinky/odom"))
+    }), encoding="utf-8")
+    assert costmap_frames(params, "/pinky") == [("map", "pinky/base"), ("pinky/odom", "pinky/base")]
 
 
 def test_hardware_io_mounts_a_host_site_map_directory():
@@ -321,6 +380,20 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         def __init__(self, predicate):
             self.predicate = predicate
 
+    class _Not:
+        def __init__(self, value):
+            self.value = value
+
+        def perform(self, ctx):
+            return str(self.value.perform(ctx) == "false").lower()
+
+    class _And:
+        def __init__(self, left, right):
+            self.left, self.right = left, right
+
+        def perform(self, ctx):
+            return str(self.left.perform(ctx) == self.right.perform(ctx) == "true").lower()
+
     class _Source:
         def __init__(self, path):
             self.path = path
@@ -366,6 +439,11 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     launch_srcs.PythonLaunchDescriptionSource = _Source
     launch_subs = types.ModuleType("launch.substitutions")
     launch_subs.LaunchConfiguration = _LaunchCfg
+    launch_subs.NotSubstitution = _Not
+    launch_subs.AndSubstitution = _And
+    launch_ros = types.ModuleType("launch_ros")
+    ros_actions = types.ModuleType("launch_ros.actions")
+    ros_actions.Node = types.SimpleNamespace
 
     for name, mod in {
         "ament_index_python": ament,
@@ -375,6 +453,8 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "launch.conditions": launch_conds,
         "launch.launch_description_sources": launch_srcs,
         "launch.substitutions": launch_subs,
+        "launch_ros": launch_ros,
+        "launch_ros.actions": ros_actions,
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
 
@@ -386,6 +466,7 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         encoding="utf-8",
     )
     monkeypatch.setenv("ROSY_PROFILE", str(profile))
+    monkeypatch.delenv("ROSY_AMCL_LASER_MODEL", raising=False)
 
     (tmp_path / "site.pgm").write_bytes(b"P5\n2 2\n255\n" + bytes([254, 254, 254, 254]))
     site_yaml = tmp_path / "site.yaml"
@@ -408,10 +489,29 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         e.name: e.default_value for e in ld.entities if isinstance(e, _DeclareArg)
     }
     assert declared["enable_loc_assist"] == "true"
+    assert declared["amcl_laser_model"] == "configured"
+    monkeypatch.setenv("ROSY_AMCL_LASER_MODEL", "beam")
+    configured = {e.name: e.default_value for e in hw.generate_launch_description().entities
+                  if isinstance(e, _DeclareArg)}
+    assert configured["amcl_laser_model"] == "beam"
+    includes = {Path(e.source.path).name: e for e in ld.entities if isinstance(e, _Include)}
+    bringup_ir = includes["bringup_robot.launch.py"].launch_arguments["enable_ir"]
+    legacy_line = includes["line_follow.launch.py"]
+    assert bringup_ir.perform(declared) == "true"
+    assert legacy_line.condition.predicate.perform(declared) == "false"
+    for line_enabled in ("true", "false"):
+        for ir_enabled in ("true", "false"):
+            ctx = {"enable_line_follow": line_enabled, "line_ir_enabled": ir_enabled}
+            publishers = (bringup_ir.perform(ctx) == "true") + (
+                legacy_line.condition.predicate.perform(ctx) == "true"
+                and legacy_line.launch_arguments["start_ir_adc"].perform(ctx) == "true"
+            )
+            assert publishers == int(ir_enabled == "true"), ctx
 
     base_ctx = {
         "namespace": "pinky1",
         "params_file": str(NAV_PARAMS),
+        "amcl_laser_model": declared["amcl_laser_model"],
         "profile_file": str(profile),
         "footprint_profile_file": "",
         "footprint_state": "unknown",
@@ -424,12 +524,26 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "mapper_params_file": str(pkg_dir / "params" / "mapper_params.yaml"),
     }
     loc_actions = hw._include_nav2({**base_ctx, "navigation_backend": "localization"})
-    assert [Path(a.source.path).name for a in loc_actions] == [
-        "bringup_launch.xml",
-        "loc_assist.launch.py",
-    ]
-    assert isinstance(loc_actions[1].condition, _IfCond)
-    assert loc_actions[1].condition.predicate.name == "enable_loc_assist"
+    bringup, startup, loc_assist = loc_actions
+    assert Path(bringup.source.path).name == "bringup_launch.xml"
+    assert bringup.launch_arguments["navigation_autostart"] == "False"
+    assert (startup.package, startup.executable, startup.namespace) == ("navigation", "start_after_tf", "pinky1")
+    assert startup.arguments == [bringup.launch_arguments["params_file"]]
+    assert Path(loc_assist.source.path).name == "loc_assist.launch.py"
+    assert isinstance(loc_assist.condition, _IfCond)
+    assert loc_assist.condition.predicate.name == "enable_loc_assist"
+
+    default = yaml.safe_load(Path(bringup.launch_arguments["params_file"]).read_text(encoding="utf-8"))
+    beam, *_ = hw._include_nav2({**base_ctx, "navigation_backend": "localization", "amcl_laser_model": "beam"})
+    revised = yaml.safe_load(Path(beam.launch_arguments["params_file"]).read_text(encoding="utf-8"))
+    amcl = default["/pinky1/amcl"]["ros__parameters"]
+    assert amcl["laser_model_type"] == "likelihood_field"
+    amcl["laser_model_type"] = "beam"
+    assert revised == default
+    with pytest.raises(ValueError, match="saved-map localization"):
+        hw._include_nav2({**base_ctx, "navigation_backend": "slam", "amcl_laser_model": "beam"})
+    with pytest.raises(ValueError, match="configured or beam"):
+        hw._include_nav2({**base_ctx, "navigation_backend": "localization", "amcl_laser_model": "invalid"})
 
     slam_actions = hw._include_nav2({**base_ctx, "navigation_backend": "slam"})
     assert [Path(a.source.path).name for a in slam_actions] == [
@@ -487,3 +601,92 @@ def test_map_bundle_occupancy_grid_id_matches_core_features(monkeypatch, tmp_pat
     expected = mb.occupancy_grid_id(site_yaml)
     assert expected == occupancy_map_id(frame.to_dict())
     assert expected == occupancy_map_id(f32_frame.to_dict())
+
+
+def test_start_after_tf_reports_missing_requirements_and_retries_bounded():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import missing_requirements, run_startup_loop
+
+    buf = Mock()
+    cli = Mock()
+    frames = [("map", "pinky1/base_footprint"), ("pinky1/odom", "pinky1/base_footprint")]
+    cli.service_is_ready.return_value = False
+    buf.can_transform.side_effect = [True, False]
+    assert missing_requirements(buf, cli, frames, object()) == ["lifecycle_manager", "pinky1/odom->pinky1/base_footprint"]
+
+    # Attempt 1 fails, attempt 2 succeeds -> returns 0
+    buf2 = Mock()
+    buf2.can_transform.return_value = True
+    cli2 = Mock()
+    cli2.service_is_ready.return_value = True
+    f_fail = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=False))
+    f_ok = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=True))
+    cli2.call_async.side_effect = [f_fail, f_ok]
+    node = SimpleNamespace(get_logger=lambda: Mock())
+    sleeps = []
+    rc = run_startup_loop(
+        node, buf2, cli2, object(), frames, object(),
+        spin_once=lambda *a, **k: None,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: True,
+        sleep=lambda s: sleeps.append(s),
+        monotonic=lambda: 0.0,
+    )
+    assert rc == 0 and cli2.call_async.call_count == 2 and sleeps == [5.0]
+
+    # 3 consecutive failures -> returns 1
+    cli3 = Mock()
+    cli3.service_is_ready.return_value = True
+    cli3.call_async.side_effect = [f_fail, f_fail, f_fail]
+    sleeps3 = []
+    rc3 = run_startup_loop(
+        node, buf2, cli3, object(), frames, object(),
+        spin_once=lambda *a, **k: None,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: True,
+        sleep=lambda s: sleeps3.append(s),
+        monotonic=lambda: 0.0,
+    )
+    assert rc3 == 1 and cli3.call_async.call_count == 3 and sleeps3 == [5.0, 5.0]
+
+
+def test_start_after_tf_throttles_checks_across_fast_tf_wakeups_and_guards_container():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import run_startup_loop
+
+    xml = (NAV_LAUNCH / "bringup_launch.xml").read_text(encoding="utf-8")
+    assert '<group if="$(var use_composition)">' in xml
+
+    buf = Mock()
+    buf.can_transform.return_value = False
+    cli = Mock()
+    cli.service_is_ready.return_value = False
+    clock = [0.0]
+
+    def fake_spin(_node, timeout_sec=0.5):
+        clock[0] += 0.025  # 40 Hz /tf wakeups
+
+    f_ok = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=True))
+
+    def ready_after_600ms(*_a):
+        if clock[0] >= 0.6:
+            buf.can_transform.return_value = True
+            return True
+        return False
+
+    cli.service_is_ready.side_effect = ready_after_600ms
+    cli.call_async.return_value = f_ok
+    rc = run_startup_loop(
+        SimpleNamespace(get_logger=lambda: Mock()), buf, cli, object(),
+        [("map", "pinky1/base_footprint")], object(),
+        spin_once=fake_spin,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: clock[0] < 5.0,
+        monotonic=lambda: clock[0],
+        check_interval_s=0.5,
+    )
+    assert rc == 0 and cli.service_is_ready.call_count <= 4  # throttled vs ~24 wakeups

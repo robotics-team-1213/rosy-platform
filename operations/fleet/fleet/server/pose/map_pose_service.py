@@ -23,8 +23,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.server.offline_pin import OfflinePinStore
-from rosy.world.state.projections.map_pose import (LOCALIZED, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
-                                         odom_from_snapshot, sighting_from_row)
+from rosy.world.state.projections.map_pose import (
+    LOCALIZED, STILL_PATH_M, STILL_TURN_RAD, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
+    _wrap, odom_from_snapshot, sighting_from_row,
+)
+from rosy.world.state.projections.map_pose_samples import stationary_pin_pose as _tracker_stationary_pin
 from fleet.swarm.transport import RobotApiError
 
 #: `refresh` (hub snapshot when fresh, else REST) shares a read that started less than this ago.
@@ -45,7 +48,9 @@ class MapPoseService:
                  source_map_ids: Iterable[str] = (),
                  client_identity=None,
                  wall: Callable[[], float] = time.time,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 offline_pins: Optional[OfflinePinStore] = None,
+                 site_bays: Optional[Callable[[], Iterable]] = None) -> None:
         self.config = config
         self._robot_ids = robot_ids
         self._gather = gather              # hub snapshot when fresh, else REST
@@ -66,7 +71,10 @@ class MapPoseService:
         self._numbers: dict[tuple[str, bool], int] = {}
         from fleet.server.map_pose_scope import MapPoseScopes
         self._source_scopes = MapPoseScopes(self)
-        self._offline_pins = OfflinePinStore()
+        self._offline_pins = offline_pins if offline_pins is not None else OfflinePinStore()
+        self._site_bays = site_bays
+        self._robot_idle: dict[str, bool] = {}
+        self._dock_anchors: dict[str, tuple[str, tuple[float, float, float], Optional[int], float]] = {}
         self._update_listeners: list = []
 
     def add_update_listener(self, listener: Callable[[Optional[str]], None]) -> None:
@@ -203,20 +211,60 @@ class MapPoseService:
             return
         if state:
             self._offline_pins.clear(robot_id)
+            mode, nav = state.get("mode"), state.get("navigation")
+            idle = mode in (None, "IDLE") and nav in (None, "IDLE", "ARRIVED", "CANCELED", "FAILED")
+            self._robot_idle[robot_id] = idle
+        else:
+            idle = self._robot_idle.get(robot_id, False)
         peers = state.get("peers")
         if isinstance(peers, list):
             self._observe_peers(peers)
-        if state.get("odom_pose") is None:
+        raw_odom = state.get("odom_pose")
+        if raw_odom is None:
+            if state:
+                self._dock_anchors.pop(robot_id, None)
             return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
         if tracker is None:
+            self._dock_anchors.pop(robot_id, None)
             return
         sample = odom_from_snapshot(state)
         if sample is None:
             tracker.refuse_odom("malformed")
-        else:
-            now_wall = self._wall()
-            tracker.add_odom(sample, now_wall)
+            self._dock_anchors.pop(robot_id, None)
+            return
+        now_wall = self._wall()
+        tracker.add_odom(sample, now_wall)
+        self._observe_dock_anchor(robot_id, state, raw_odom, sample, idle=idle)
+
+    def _observe_dock_anchor(self, robot_id: str, state: Mapping, raw_odom: Mapping, sample, *, idle: bool) -> None:
+        docking = state.get("docking")
+        anchor = docking.get("anchor") if isinstance(docking, Mapping) else None
+        if not (idle and isinstance(docking, Mapping) and docking.get("state") in ("DOCKED", "CHARGING")
+                and isinstance(anchor, Mapping) and anchor.get("confirmation") == "lidar_reference"):
+            self._dock_anchors.pop(robot_id, None)
+            return
+        dock_id = anchor.get("dock_id")
+        anchor_odom = anchor.get("odom_pose")
+        if not isinstance(dock_id, str) or not dock_id or not isinstance(anchor_odom, Mapping) or not isinstance(raw_odom, Mapping):
+            self._dock_anchors.pop(robot_id, None)
+            return
+        vals = (anchor_odom.get("x"), anchor_odom.get("y"), anchor_odom.get("yaw"))
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) for v in vals):
+            self._dock_anchors.pop(robot_id, None)
+            return
+        ax, ay, ayaw = (float(v) for v in vals)
+        a_epoch, s_epoch = anchor_odom.get("epoch"), raw_odom.get("epoch")
+        if (isinstance(a_epoch, int) and not isinstance(a_epoch, bool)
+                and isinstance(s_epoch, int) and not isinstance(s_epoch, bool) and a_epoch != s_epoch):
+            self._dock_anchors.pop(robot_id, None)
+            return
+        sx, sy, syaw = sample.x, sample.y, sample.yaw
+        if math.hypot(sx - ax, sy - ay) > STILL_PATH_M or abs(_wrap(syaw - ayaw)) > STILL_TURN_RAD:
+            self._dock_anchors.pop(robot_id, None)
+            return
+        epoch = a_epoch if isinstance(a_epoch, int) and not isinstance(a_epoch, bool) else None
+        self._dock_anchors[robot_id] = (dock_id, (ax, ay, ayaw), epoch, sample.stamp)
 
     def _observe_peers(self, rows: Iterable[Mapping]) -> None:
         """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).
@@ -266,6 +314,18 @@ class MapPoseService:
         if gather is not None and self._tracker(robot_id) is not None:
             await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S,
                              after if force_rest else 0)
+
+    def cached_motion_sample(self, robot_id):
+        """The current transport's last REST sample. Reading the trip UI never polls a robot."""
+        key = (robot_id, True)
+        kept = self._kept.get(key)
+        if kept is None or kept[2][1] is None:
+            return None
+        try:
+            state = self._read_result(key, kept[2], False)
+        except ValueError:
+            return None
+        return state, kept[0], self._clock()
 
     def _read_result(self, key, pair, with_source):
         state, receipt = pair
@@ -373,6 +433,36 @@ class MapPoseService:
         active_map = self.active_map_id()
         pose = tracker.pose(now_wall, active_map)
         return pose
+
+    def stationary_pin_pose(self, robot_id: str) -> Optional[tuple[str, float, float, float]]:
+        """Obstacle-only site pose for a stationary pinned robot even after max_anchor_age_s."""
+        active = self.active_map_id()
+        if active is None or not self._robot_idle.get(robot_id, True):
+            return None
+        tracker = self._tracker(robot_id)
+        if tracker is None:
+            return None
+        return _tracker_stationary_pin(
+            tracker, self._wall(), active, still_path_m=STILL_PATH_M, still_turn_rad=STILL_TURN_RAD)
+
+    def dock_anchor_site_pose(self, robot_id: str) -> Optional[tuple[str, float, float, float]]:
+        """Obstacle-only site pose from a lidar-confirmed bay seat anchor while idle in dock."""
+        active = self.active_map_id()
+        if active is None or self._site_bays is None or not self._robot_idle.get(robot_id, False):
+            return None
+        entry = self._dock_anchors.get(robot_id)
+        tracker = self._tracker(robot_id)
+        latest = tracker.latest_odom_stamp if tracker is not None else None
+        now_wall = self._wall()
+        if (entry is None or latest is None or not (0.0 <= now_wall - latest <= self.config.max_odom_age_s)
+                or not (0.0 <= now_wall - entry[3] <= self.config.max_odom_age_s)):
+            return None
+        dock_id_l = entry[0].lower()
+        for bay in self._site_bays():
+            bid = str(getattr(bay, "id", ""))
+            if bid.lower() == dock_id_l or f"bay_{bid.lower()}" == dock_id_l:
+                return (active, float(bay.x), float(bay.y), float(getattr(bay, "yaw", 0.0) or 0.0))
+        return None
 
     def stuck_pose(self, robot_id: str) -> Optional[dict]:
         """D-577 1: R3's pose input. `sourced` = a sighting ever reached this robot's tracker, so an

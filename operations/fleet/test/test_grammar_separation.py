@@ -42,15 +42,17 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # C23/C24 shared robot dock and panel sheet.
         # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
-                       "/console/assets/roster.css",
+                       "/console/assets/roster.css", "/console/assets/omx-inspector.css",
                        "/common/component-controls.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
-                       "/console/assets/device-watch.css", "/console/assets/work.css"],
+                       "/console/assets/device-watch.css", "/console/assets/work.css",
+                       "/console/assets/zone-blueprint.css"],
         "installation/install.html": [*shared_sheets, "/common/component-controls.css", "/common/stage-strip.css", "/common/task-chooser.css", "/common/app-shell.css",
                          "/console/assets/styles.css", "/console/assets/file-picker.css", "/console/assets/doc-tabs.css",
                          "/console/assets/fleet-header.css", "/console/assets/password-login.css",
-                         "/console/assets/measured-calibration.css"],
+                         "/console/assets/measured-calibration.css",
+                         "/console/assets/manual-fit.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',
@@ -88,6 +90,7 @@ FORBID_SUPERVISED_ROUTES = (
 COCKPIT_BYPASS_SUBJECTS = (
     WEB / "shared" / "robot-dock.js",
     WEB / "shared" / "robot-panel.js",
+    WEB / "shared" / "cockpit-hosts.js",
     WEB / "roster-workspace.js",
 )
 
@@ -129,9 +132,16 @@ def test_the_forbid_gate_sees_strings_and_ignores_comments():
 
 def test_cockpit_components_are_adopted_by_fleet_console():
     roster_workspace = (WEB / "roster-workspace.js").read_text(encoding="utf-8")
-    for fn in ("createRobotDock", "createRobotPanel", "createRobotView"):
+    cockpit_hosts = (WEB / "shared" / "cockpit-hosts.js").read_text(encoding="utf-8")
+    for fn in ("createRobotDock", "createRobotPanel"):
         imported, called = _imports_and_calls(roster_workspace, fn)
         assert imported and called, f"roster-workspace.js must import and call {fn}"
+    host_imported, _ = _imports_and_calls(roster_workspace, "Robot3dHost")
+    assert host_imported and re.search(r"<\$\{Robot3dHost\}", _js_without_comments(roster_workspace)), (
+        "roster-workspace.js must import and render Robot3dHost"
+    )
+    view_imported, view_called = _imports_and_calls(cockpit_hosts, "createRobotView")
+    assert view_imported and view_called, "cockpit-hosts.js must import and call createRobotView"
     console = (WEB / "console.js").read_text(encoding="utf-8")
     imported, called = _imports_and_calls(console, "createSelection")
     assert imported and called, "console.js must import and call createSelection"

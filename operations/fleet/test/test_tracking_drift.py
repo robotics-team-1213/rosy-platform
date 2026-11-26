@@ -211,6 +211,15 @@ def test_watch_rejects_a_non_positive_interval():
         _watch(_Fetcher(), interval_s=0.0)
 
 
+def test_default_interval_allows_idle_phone_sleep():
+    from fleet.server.tracking_drift import DEFAULT_INTERVAL_S
+
+    assert DEFAULT_INTERVAL_S == 300.0
+    watch = CalibrationDriftWatch(sources=[_source()], calibrations=TrackingCalibrationStore(),
+                                  fetch_proposal=_Fetcher())
+    assert watch.interval_s == 300.0
+
+
 # -- Vision reader ------------------------------------------------------------
 
 SECRET = "drift-watch-test-secret-0123456789abcdef"
@@ -222,6 +231,26 @@ def _reader(handler, **kwargs):
     reader = VisionMapProposalReader(base_url="https://vision:8095",
                                      signer=VisionLeaseSigner(SECRET), client=client, **kwargs)
     return reader, client
+
+
+def test_road_reader_uses_only_scoped_status_metadata():
+    from core_common.protocol.vision_preview import VisionLeaseSigner
+    seen = []
+    def handler(request):
+        seen.append(request.url.path)
+        token = request.headers["Authorization"].removeprefix("Bearer ")
+        claims = VisionLeaseSigner(SECRET).verify(token, source_id="ceiling_north")
+        assert claims["sub"] == "fleet-road-tracking"
+        assert request.headers["Accept"] == "application/json"
+        return httpx.Response(200, json={})
+    reader, client = _reader(handler, principal_id="fleet-road-tracking")
+    async def check():
+        try:
+            await reader.hold_stream("ceiling_north")
+        finally:
+            await client.aclose()
+    asyncio.run(check())
+    assert seen == ["/api/vision/sources/ceiling_north/measured-status"]
 
 
 def test_reader_fetches_the_proposal_with_a_signed_lease():

@@ -165,3 +165,27 @@ def finish_home_child(bench, rec_proc, rec_log_p, stop_sent=False):
     except Exception:
         clean = False
     return clean
+
+
+def home_session_extras(prep: Path, stack: Path) -> list[str]:
+    """Resolve optional --params and --load-model flags from a stack config for /home."""
+    extras: list[str] = []
+    try:
+        cfg = json.loads(Path(stack).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        cfg = {}
+    if isinstance(cfg, dict) and cfg.get("params_path"):
+        p = Path(str(cfg["params_path"])).expanduser()
+        p = p if p.is_absolute() else (Path(prep) / p)
+        if p.is_file():
+            extras.extend(["--params", str(p)])
+    lm_raw = cfg.get("load_model_path") if isinstance(cfg, dict) else None
+    lm = Path(str(lm_raw)).expanduser() if lm_raw else None
+    if lm is not None and not lm.is_absolute():
+        lm = Path(prep) / lm
+    if lm is None or not lm.is_file():
+        models = sorted(Path(prep).glob("load-model-*.json"))
+        lm = models[-1] if models else None
+    if lm is not None and lm.is_file():
+        extras.extend(["--load-model", str(lm)])
+    return extras

@@ -25,10 +25,12 @@ def test_signed_out_console_defers_protected_vision_and_uses_single_cta(tmp_path
         errors = []
         page.on("pageerror", lambda err: errors.append(str(err)))
         page.on("request", lambda req: vision_requests.append(req.url) if "/api/fleet/vision/" in req.url else None)
-        vision_503 = False
+        vision_mode = "ok"
 
         def handle_sources(route):
-            if vision_503:
+            if vision_mode == "drop":
+                route.abort()
+            elif vision_mode == "503":
                 route.fulfill(status=503, json={"detail": "vision unavailable"})
             else:
                 route.fulfill(status=200, json={"sources": ["ceiling_north"]})
@@ -66,9 +68,14 @@ def test_signed_out_console_defers_protected_vision_and_uses_single_cta(tmp_path
 
             page.locator("#context-tools-tab").click()
             expect(page.locator("#vision-refresh")).to_be_visible(timeout=10000)
-            vision_503 = True
+            vision_mode = "503"
             page.locator("#vision-refresh").click()
             expect(page.locator("#site-path-summary")).to_have_text("Vision 응답 503", timeout=10000)
+            expect(page.locator("#site-path-summary")).to_have_attribute("data-kind", "warn")
+            # 끊김은 warn이다. crit은 실제 운용 위험만(콘셉트 표, 대열 relay 끊김) 쓴다.
+            vision_mode = "drop"
+            page.locator("#vision-refresh").click()
+            expect(page.locator("#site-path-summary")).to_have_text("Vision 끊김", timeout=10000)
             expect(page.locator("#site-path-summary")).to_have_attribute("data-kind", "warn")
 
             open_token_access(page)

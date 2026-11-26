@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,6 +31,9 @@ from core_features.command.manager import Twist as CoreTwist
 
 class RosBridgeHelpersMixin:
     """Sensor/status subscription adapters and display/power reconciliation helpers."""
+
+    _sensor_sink = None
+    _file_writer = None
 
     def _init_bridge_state(self, node, services) -> None:
         self._last_odom_ts = 0.0
@@ -55,6 +59,8 @@ class RosBridgeHelpersMixin:
         self._face_inputs_last: Optional[dict] = None
         self._face_inputs_at: Optional[float] = None
         self._face_inputs_failed = False
+        self._face_inputs_lock = threading.Lock()
+        self._face_inputs_gen = 0
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
         self._api_address: Optional[str] = None
@@ -194,6 +200,8 @@ class RosBridgeHelpersMixin:
         observation.nav_costmap(self._svc, "global", msg, warn=self._node.get_logger().warning)
 
     def _on_scan(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_scan(msg)
         sample = translate.lidar_sample(msg, time.time())
         sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
         self._svc.state.set_sensor("lidar", sample)
@@ -201,12 +209,16 @@ class RosBridgeHelpersMixin:
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
     def _on_imu(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_imu(msg)
         self._mirror.imu(msg)
 
     def _on_joint_states(self, msg) -> None:
         self._mirror.wheels(msg)
 
     def _on_us_range(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_us(msg)
         observation.us_range(self._svc, msg, received_at=time.time())
 
     def _on_batt_state(self, msg) -> None:
@@ -224,23 +236,25 @@ class RosBridgeHelpersMixin:
             self._device_ports, log=self._node.get_logger().info,
             restarted=self._svc.power.device_restarted)
 
+        snapshot = self._svc.state.snapshot()
         now = time.monotonic()
         if display.republish_due(
                 status.info_visible, self._info_was_visible, now, self._info_last_pub):
-            self._publish_display_info(status)
+            self._publish_display_info(status, snapshot=snapshot)
             self._info_last_pub = now
         self._info_was_visible = status.info_visible
 
-        self._reconcile_emotion(now)
-        self._reconcile_led(status.info_visible, now)
-        self._maybe_publish_drive(now)
-        self._maybe_write_face_inputs(status, now)
+        self._reconcile_emotion(now, snapshot=snapshot)
+        self._reconcile_led(status.info_visible, now, snapshot=snapshot)
+        self._maybe_publish_drive(now, snapshot=snapshot)
+        self._maybe_write_face_inputs(status, now, snapshot=snapshot)
 
-    def _maybe_write_face_inputs(self, status, now: float) -> None:
+    def _maybe_write_face_inputs(self, status, now: float, *, snapshot=None) -> None:
         """D-433: hand rosy-face the face, the drive/wake cards and the power mode."""
         from core_common.face_screen import FACE_INPUTS_PERIOD_S
 
-        snapshot = self._svc.state.snapshot()
+        if snapshot is None:
+            snapshot = self._svc.state.snapshot()
         wake = None
         if status.info_visible:
             wake = display.info_payload(
@@ -256,23 +270,58 @@ class RosBridgeHelpersMixin:
             **display.face_person_request(self._svc.person_request.view()))
         expressive = self._expression_intent.handover() is not None
         period = min(FACE_INPUTS_PERIOD_S, .15) if expressive else FACE_INPUTS_PERIOD_S
-        if not display.face_inputs_due(
-                content, self._face_inputs_last, now, self._face_inputs_at, period):
+        writer = self._file_writer
+        if writer is None:
+            if not display.face_inputs_due(
+                    content, self._face_inputs_last, now, self._face_inputs_at, period):
+                return
+            try:
+                self._svc.host_files.write_face_inputs(self._svc, content)
+            except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
+                if not self._face_inputs_failed:
+                    self._node.get_logger().warning(
+                        f"face inputs not written: {type(exc).__name__}: {exc}")
+                self._face_inputs_failed = True
+                return
+            self._face_inputs_failed = False
+            self._face_inputs_last, self._face_inputs_at = content, now
             return
-        try:
-            self._svc.host_files.write_face_inputs(self._svc, content)
-        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
-            if not self._face_inputs_failed:
-                self._node.get_logger().warning(
-                    f"face inputs not written: {type(exc).__name__}: {exc}")
-            self._face_inputs_failed = True
-            return
-        self._face_inputs_failed = False
-        self._face_inputs_last, self._face_inputs_at = content, now
 
-    def _publish_display_info(self, status) -> None:
+        with self._face_inputs_lock:
+            if not display.face_inputs_due(
+                    content, self._face_inputs_last, now, self._face_inputs_at, period):
+                return
+            self._face_inputs_gen += 1
+            gen = self._face_inputs_gen
+            # Update cached snapshot before enqueueing so worker callbacks cannot race backwards.
+            self._face_inputs_last, self._face_inputs_at = content, now
+
+        def _on_ok(expected_gen: int = gen) -> None:
+            with self._face_inputs_lock:
+                if self._face_inputs_gen == expected_gen:
+                    self._face_inputs_failed = False
+
+        def _on_err(exc: Exception, expected_gen: int = gen) -> None:
+            with self._face_inputs_lock:
+                if not self._face_inputs_failed:
+                    self._node.get_logger().warning(
+                        f"face inputs not written: {type(exc).__name__}: {exc}")
+                self._face_inputs_failed = True
+                if self._face_inputs_gen == expected_gen:
+                    self._face_inputs_last = None
+
+        writer.submit(
+            "face_inputs",
+            lambda payload=content: self._svc.host_files.write_face_inputs(self._svc, payload),
+            on_ok=_on_ok,
+            on_error=_on_err,
+        )
+
+    def _publish_display_info(self, status, *, snapshot=None) -> None:
+        if snapshot is None:
+            snapshot = self._svc.state.snapshot()
         payload = display.info_payload(
-            self._svc.state.snapshot(), status,
+            snapshot, status,
             health=self.diagnostics.summary_health().value,
             address=self._api_endpoint(),
             hold_s=self._svc.power.info_hold_s,
@@ -286,20 +335,23 @@ class RosBridgeHelpersMixin:
             self._api_address = display.resolve_api_address(port)
         return self._api_address
 
-    def _reconcile_led(self, info_visible: bool, now: float) -> None:
+    def _reconcile_led(self, info_visible: bool, now: float, *, snapshot=None) -> None:
         """중재 결과에 LED 를 맞춘다 (SAF-005 경보 > 정보창 게이지)."""
+        if snapshot is None:
+            snapshot = self._svc.state.snapshot()
         command = expression.led_command(
             self._expression_intent, alert=self._svc.battery.led_alert,
             info_visible=info_visible,
-            gauge_percent=self._svc.state.snapshot().battery.percent,
+            gauge_percent=snapshot.battery.percent,
             now=now)
         self._led_output.apply(
             command, now=now, ready=self._led_client.service_is_ready(),
             send=lambda value: self._call_led(value.command, value.r, value.g, value.b))
 
-    def _maybe_publish_drive(self, now: float) -> None:
+    def _maybe_publish_drive(self, now: float, *, snapshot=None) -> None:
         """D-394: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
-        snapshot = self._svc.state.snapshot()
+        if snapshot is None:
+            snapshot = self._svc.state.snapshot()
         mode = snapshot.mode.value
         if not display.drive_due(mode, now, self._drive_last_pub):
             return
@@ -309,12 +361,13 @@ class RosBridgeHelpersMixin:
             json.dumps(display.drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y)))
         self._drive_last_pub = now
 
-    def _reconcile_emotion(self, now: Optional[float] = None) -> None:
+    def _reconcile_emotion(self, now: Optional[float] = None, *, snapshot=None) -> None:
         """D-922: one display intent feeds the face service, native hand-over and LED."""
         current = time.monotonic() if now is None else now
         if self._hello_until is None:
             self._hello_until = current + 10.0
-        snapshot = self._svc.state.snapshot()
+        if snapshot is None:
+            snapshot = self._svc.state.snapshot()
         mode = snapshot.mode.value
         status = self._svc.power.status()
         suspended = (

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
+const { cancelScope, cardTripLine, defaultTripDriveMode, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
 const { createRoster, selectRobot } = await import("../../../../applications/fleet/web/roster.js");
 
 const robot = (estop = false, extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop } }, ...extra });
@@ -90,4 +90,32 @@ test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no �
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),
     ["warn: 대기 상한 넘음 · 횡단보도"]);
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false)] }, "a"), "대기 상한 넘음 · 신호");
+});
+
+test("defaultTripDriveMode picks nav2 only when free is supported and junction_turn is false", () => {
+  const mk = (items) => ({ robot_id: "r1", capabilities: { controls: { items } } });
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane", "free"], junction_turn: false }])), "nav2");
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane", "free"], junction_turn: true }])), "");
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane"], junction_turn: false }])), "");
+  assert.equal(defaultTripDriveMode({ robot_id: "r1" }), "");
+});
+
+test("Nav2 preview blocks a required binding and displays optional binding evidence", async () => {
+  const { consolePlanSummaryText, consoleTripStartReason } = await import("/console/assets/localization-panel-logic.js");
+  const plan = { map_version: ACTIVE.version, segments: [], length_m: 0, eta_s: 0,
+    nav2_preflight: { code: "MAP_BINDING_REQUIRED", binding_required: true, binding_status: "MAP_BINDING_REQUIRED" } };
+  const check = { role: "operator", plan, active: ACTIVE };
+  assert.match(consoleTripStartReason(check), /지도 결속/);
+  plan.nav2_preflight = { ...plan.nav2_preflight, code: null, binding_required: false };
+  assert.equal(consoleTripStartReason(check), "");
+  assert.match(consolePlanSummaryText(plan), /Nav2.*지도 결속 미확인/);
+});
+
+test('parking preview shows the source pose offset independently of the road length', async () => {
+  const {consolePlanSummaryText} = await import('/console/assets/localization-panel-logic.js');
+  const parking = {segments: [{}], length_m: 0, eta_s: 0, map_version: 394,
+    parking_handoff: {bay_id: 'C1', staging_place_id: 'P1'}, staging_distance_m: .1009};
+  assert.match(consolePlanSummaryText(parking), /차로 경로 0\.00 m · 계획 시 위치에서 P1까지 직선 0\.10 m/);
+  assert.match(consolePlanSummaryText({...parking, staging_distance_m: 0}), /P1까지 직선 0\.00 m/);
+  assert.doesNotMatch(consolePlanSummaryText({...parking, staging_distance_m: undefined}), /직선/);
 });

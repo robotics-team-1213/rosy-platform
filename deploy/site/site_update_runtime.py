@@ -17,22 +17,26 @@ from urllib.parse import urlsplit
 
 if __package__:
     from .site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
-        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
+        SIGNATURE, Transient, _COMMIT, _LIST_LIMIT, _TAG,
+        active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
-        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
+        SIGNATURE, Transient, _COMMIT, _LIST_LIMIT, _TAG,
+        active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
 
 
-_NAV_IDLE_STATES = frozenset({'IDLE', 'ARRIVED', 'CANCELED', 'FAILED'})
-_DOCKING_IDLE_STATES = frozenset({'UNDOCKED', 'DOCKED', 'CHARGING'})
+_NAV_TERMINAL_STATES = frozenset({'ARRIVED', 'CANCELED', 'FAILED'})
+_NAV_IDLE_STATES = frozenset({'IDLE', *_NAV_TERMINAL_STATES})
+# Site container restarts do not restart robot CORE or move robots; DOCK_FAILED is terminal (D-28/D-31).
+_DOCKING_IDLE_STATES = frozenset({'UNDOCKED', 'DOCKED', 'CHARGING', 'DOCK_FAILED'})
 
 
 def _arm_session_busy(root: Path) -> list[str]:
@@ -58,9 +62,18 @@ def _robot_busy_reasons(row: object) -> list[str]:
     if not isinstance(row, dict):
         return ['malformed robot state row']
     rid = str(row.get('robot_id') or 'robot')
-    reasons = [f'{rid}: {key} active' for key in ('goal', 'queued', 'held', 'yielding', 'named_stop_custody')
-               if row.get(key)]
     state = row.get('state')
+    goal = row.get('goal')
+    retained_terminal_goal = (
+        row.get('goal_in_flight') is False
+        and isinstance(state, dict)
+        and state.get('mode') == 'IDLE'
+        and state.get('navigation') in _NAV_TERMINAL_STATES
+        and not (isinstance(goal, dict) and goal.get('goal_lease') is not None)
+    )
+    reasons = [f'{rid}: goal active'] if goal and not retained_terminal_goal else []
+    reasons.extend(f'{rid}: {key} active' for key in ('queued', 'held', 'yielding', 'named_stop_custody')
+                   if row.get(key))
     if not isinstance(state, dict):
         return [*reasons, f'{rid}: state unavailable'] if row.get('online') is True else reasons
     mode = state.get('mode')
@@ -123,12 +136,16 @@ def site_busy_reasons(config: dict, http, *, root: Path = Path('/')) -> list[str
         for row in state['robots']:
             reasons.extend(_robot_busy_reasons(row))
         trips = http.functional(f'{base}/api/fleet/trips', ca, token_file)
-        if not isinstance(trips, dict) or not isinstance(trips.get('open'), list) or not isinstance(trips.get('running'), list):
+        running = trips.get('running') if isinstance(trips, dict) else None
+        if (not isinstance(trips, dict) or not isinstance(trips.get('open'), list)
+                or 'running' not in trips
+                or (running is not None and not isinstance(running, (dict, list)))):
             raise ValueError('invalid trips payload')
         if trips['open']:
             reasons.append(f"open trips ({len(trips['open'])})")
-        if trips['running']:
-            reasons.append(f"running trips ({len(trips['running'])})")
+        if isinstance(running, dict) or running:
+            count = len(running) if isinstance(running, list) else 1
+            reasons.append(f'running trips ({count})')
         control = http.functional(f'{base}/api/fleet/dispatch-control', ca, token_file)
         if (not isinstance(control, dict) or type(control.get('queued_tasks')) is not int
                 or type(control.get('unresolved_actions')) is not int):
@@ -171,7 +188,7 @@ def runtime_reason(rows, hashes: dict, run) -> str:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, *COMPANIONS):
+        if service not in (*SERVICES, *COMPANIONS, 'world'):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -193,16 +210,17 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
     independent = 'account' in services or 'account' in accepted or 'account' in (image_references or {})
     if independent and (not accepted.get('account') or not (image_references or {}).get('account')):
         return 'account signed image identity proof is incomplete'
-    own_monitoring = 'monitoring' in services or 'monitoring' in accepted or 'monitoring' in (image_references or {})
-    if own_monitoring and (not accepted.get('monitoring') or not (image_references or {}).get('monitoring')):
-        return 'monitoring signed image identity proof is incomplete'
-    if any(isinstance(row, dict) and row.get('Service') in SERVICES
+    for role in ('monitoring', 'world'):
+        own_image = role in services or role in accepted or role in (image_references or {})
+        if own_image and (not accepted.get(role) or not (image_references or {}).get(role)):
+            return f'{role} signed image identity proof is incomplete'
+    if any(isinstance(row, dict) and row.get('Service') in (*SERVICES, 'world')
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
     present = {row.get('Service') for row in rows
                if isinstance(row, dict) and row.get('Service') in COMPANIONS}
     if companions is None:
-        companions = present - {'control-unit-peer'} - ({'account'} if independent else set())
+        companions = present - {'control-unit-peer', 'world-real-bridge'} - ({'account'} if independent else set())
     if present - (set(services) | companions):
         return 'runtime contains an unconfigured companion'
     if ('account' in present and not independent and
@@ -231,6 +249,53 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
 
 
 class SiteRuntimeIO:
+    def _compare(self, current: str, candidate: str) -> tuple[str, str]:
+        # Later pages omit changed files but retain ancestry metadata.
+        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
+        try:
+            comparison = json.loads(self.http.get(url, _LIST_LIMIT))
+            return comparison['status'], comparison['merge_base_commit']['sha']
+        except (json.JSONDecodeError, KeyError, TypeError):
+            raise Transient('commit comparison is malformed') from None
+
+    def is_newer(self, current: str, candidate: str, or_same: bool = False) -> bool:
+        status, merge_base = self._compare(current, candidate)
+        return merge_base == current and (status == 'ahead' or (or_same and status == 'identical'))
+
+    def select(self, releases: list[dict], current: str, state: dict) -> dict | None:
+        repo = self.config['repo']
+        saved = state.get('selection_ancestors')
+        if isinstance(saved, dict) and saved.get('repo') == repo and saved.get('current') == current:
+            values = saved.get('commits')
+        else:
+            values = None
+        ancestors = {sha for sha in values[:256] if isinstance(sha, str) and _COMMIT.fullmatch(sha)} \
+            if isinstance(values, list) else set()
+
+        site = [row for row in releases
+                if isinstance(row.get("tag_name"), str) and _TAG.fullmatch(row["tag_name"])
+                and not row.get("draft")]
+        site.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        for row in site:
+            tag = row["tag_name"]
+            if tag == f"site-{current[:12]}" or tag in state["failed"]:
+                continue
+            names = {asset.get("name") for asset in row.get("assets") or [] if isinstance(asset, dict)}
+            if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
+                continue
+            target = row.get("target_commitish")
+            exact = isinstance(target, str) and _COMMIT.fullmatch(target) and target.startswith(tag[5:])
+            if exact and target in ancestors:
+                continue
+            status, merge_base = self._compare(current, target if exact else tag)
+            if status == 'ahead' and merge_base == current:
+                return row
+            # Only comparisons of two immutable commits can be reused across runs.
+            if exact and status == 'behind' and merge_base == target and len(ancestors) < 256:
+                ancestors.add(target)
+                state['selection_ancestors'] = {'repo': repo, 'current': current, 'commits': sorted(ancestors)}
+        return None
+
     def _site_busy(self) -> list[str]:
         return site_busy_reasons(self.config, self.http, root=self.paths.root)
 
@@ -276,6 +341,8 @@ class SiteRuntimeIO:
             refs = manifest.get('image_references')
             if 'account' in services and refs is None:
                 raise Rejected('independent Account signed image reference proof is missing')
+            if 'world' in services and refs is None:
+                raise Rejected('world signed image reference proof is missing')
             if refs is not None:
                 if (not isinstance(refs, dict) or set(refs) != set(services)
                         or any(not isinstance(refs[s], str)
@@ -287,9 +354,11 @@ class SiteRuntimeIO:
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
             for name, field in (('account', 'account_https'), ('account-lan', 'account_lan'), ('omx', 'omx'), ('workcell', 'workcell'),
                                 ('control-unit', 'control_unit'), ('control-unit-remote', 'control_unit_remote'),
-                                ('monitoring', 'monitoring')):
+                                ('monitoring', 'monitoring'), ('world', 'world')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
                     raise Rejected(f'{name} overlay is not covered by this signed candidate')
+            if WORLD_OVERLAY[1] in overlays and 'world' not in services:
+                raise Rejected('world overlay requires a signed world image')
             if loaded:
                 accepted = manifest.get('accepted_image_ids')
                 if (not isinstance(accepted, dict) or set(accepted) != set(services)
@@ -379,8 +448,8 @@ class SiteRuntimeIO:
         self.check_overrides(env, commit, folder=folder, env_file=self.paths.env_backup,
                              services=outgoing)
         # Account remains an optional overlay across old Fleet-owned and new independent images.
-        outgoing = tuple(s for s in outgoing if s not in ('account', 'monitoring'))  # D-1001: optional overlays
-        incoming = tuple(s for s in incoming if s not in ('account', 'monitoring'))
+        outgoing = tuple(s for s in outgoing if s not in ('account', 'monitoring', 'world'))
+        incoming = tuple(s for s in incoming if s not in ('account', 'monitoring', 'world'))
         if outgoing == incoming:
             return
         if set(outgoing) - set(incoming) != {'postgres'}:

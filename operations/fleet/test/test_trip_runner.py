@@ -25,7 +25,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from rosy.world.state.projections.map_pose import MapPose
-from fleet.server.console_view import TripCaps
+from fleet.server.console_view import TripCaps, trip_caps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
 from fleet.server import trip_runner
 from core_features.line_follow.recovery.junction.gate import MANEUVER as CORE_MANEUVER
@@ -465,6 +465,21 @@ def test_plans_a_lane_robot_cannot_run_are_refused(site_map, arc, s, to, caps, r
     with pytest.raises(TripError) as err:
         run(runner.start("p1", "bob"))
     assert err.value.code == "TRIP_MODE_UNSUPPORTED" and err.value.detail["reason"] == reason
+    assert "junction_turn_reason" not in err.value.detail
+
+
+def test_lane_start_surfaces_core_junction_turn_reason_from_capabilities():
+    caps = trip_caps({"controls": {"items": [{
+        "kind": "base_velocity", "robot_kind": "pinky_pro", "drive_modes": ["lane"],
+        "trip_max_linear": 0.2, "junction_turn": False, "junction_turn_reason": "ir_centre",
+    }]}})
+    runner, store, ports = _setup(_free_map("lane"), caps=caps)
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.code == "TRIP_MODE_UNSUPPORTED"
+    assert err.value.detail == {"edge_id": "ab", "reason": "JUNCTION_TURN_UNSUPPORTED",
+                                "junction_turn_reason": "ir_centre"}
 
 
 def test_a_turn_sharper_than_the_bound_is_refused_for_lane_robots():
@@ -809,6 +824,30 @@ def test_a_restart_marks_open_trips_stopped_and_stops_their_robots_once(tmp_path
     assert ports.sent == [("stop", "SE", 0.0)] and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
 
 
+def test_restarted_pause_keeps_stopped_trip_pending_until_robot_reports_zero(tmp_path):
+    from datetime import datetime, timezone
+
+    path = tmp_path / "fleet.sqlite3"
+    store = SiteMapStore(path)
+    store.put_trip({"trip_id": "t", "robot_id": "rosy_60", "state": "running", "drive_mode": "free",
+                    "next_place": None, "detail": {}, "hold": {"reason": "fleet_hold", "at": 1.0,
+                                                                "stop": {"confirmed": False}}})
+    store.close()
+    runner, store, ports = _setup(path=path)
+    ports.now = 10.0
+    run(runner.halts.halt_restarted())
+    assert store.trip("t")["detail"]["stop_sent"] is False
+    assert run(runner.retry_halt("t"))["detail"]["stop_sent"] is False
+    state = {"robot_id": "rosy_60", "mode": "IDLE", "navigation": "CANCELED", "goal": None,
+             "velocity": {"linear": 0.0, "angular": 0.0}, "line_follow": {"mode": "OFF"},
+             "evidence": {"velocity": {"evidence": "fresh", "sampled_at": datetime.fromtimestamp(
+                 ports.now - 0.01, timezone.utc).isoformat()}}}
+    runner.halts.read_stop_state = lambda _: asyncio.sleep(0, result=state)
+    result = run(runner.retry_halt("t"))
+    assert result["state"] == "stopped" and result["detail"]["stop_sent"] is True
+    assert not runner.halts.restarted and not ports.goals
+
+
 def test_a_restart_halt_without_a_place_only_turns_line_follow_off(tmp_path):
     store = SiteMapStore(tmp_path / "fleet.sqlite3")
     store.put_trip({"trip_id": "t", "robot_id": "rosy_60", "state": "running", "drive_mode": "lane",
@@ -879,7 +918,12 @@ def test_lane_cancel_sends_a_stop_and_turns_line_follow_off():
     view = run(runner.cancel("p1", "bob"))
     assert view["state"] == "canceled" and view["detail"]["canceled_by"] == "bob"
     assert ports.sent[-1] == ("stop", "SE", 0.0) and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
-    assert _code(runner.cancel("p1", "bob")) == "TRIP_NOT_RUNNING"
+    stopped = list(ports.sent)
+    assert run(runner.cancel("p1", "retry"))["detail"]["canceled_by"] == "bob"
+    assert ports.sent == stopped and ports.held == ["rosy_60"]
+    runner._live.clear()
+    assert run(runner.cancel("p1", "retry"))["state"] == "canceled"
+    assert ports.sent == stopped
     assert _code(runner.cancel("zz", "bob")) == "TRIP_UNKNOWN"
 
 
@@ -1087,6 +1131,7 @@ def _app(tmp_path, ports):
     robot = FakeRobot("rosy_60"); robot.power_health_value = fresh_power_health()  # deliberate: start gate needs fresh battery
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="bob")
     store = SiteMapStore(tmp_path / "tasks.sqlite")
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
@@ -1133,7 +1178,10 @@ def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_
     run(client.app.state.trip_runner.tick())
     listing = client.get("/api/fleet/trips", headers=VIEWER).json()
     assert listing["running"]["trip_id"] == plan["plan_id"] and listing["running"]["pose"]["source"] == "sighting"
-    assert client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()["state"] == "running"
+    receipt = client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()
+    assert receipt["state"] == "running"
+    assert receipt["execution"] == listing["running"]["execution"] == listing["open"][0]["execution"]
+    assert receipt["execution"]["motion"] == "unknown"
     assert client.get("/api/fleet/trips/nope", headers=VIEWER).json()["detail"]["code"] == "TRIP_UNKNOWN"
 
     # D-494 5: the activation guard is "a running trip exists"

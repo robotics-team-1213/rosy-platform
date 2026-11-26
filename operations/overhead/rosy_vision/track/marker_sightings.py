@@ -18,8 +18,8 @@ from typing import Collection, Mapping, Sequence
 import numpy as np
 
 from core_common.protocol.sightings import SiteSightingPayload
-from rosy_vision.project import (MARKER_HEIGHT_M, CameraMap, Point, marker_geometry_ok,
-                                 robot_pose_from_marker)
+from rosy_vision.project import (MARKER_HEIGHT_M, QR_SIDE_BAND_M, ROBOT_ARUCO_SIDE_BAND_M,
+                                 CameraMap, Point, marker_geometry_ok, robot_pose_from_marker)
 from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration
 
@@ -27,7 +27,8 @@ APPROVED_RECORD = "approved_record"
 
 
 def marker_pose(calibration: Calibration, quad, heading_edge: tuple[int, int],
-                camera_pose: tuple[float, float, float]) -> tuple[float, float, float] | None:
+                camera_pose: tuple[float, float, float],
+                *, side_band_m: tuple[float, float] | None = None) -> tuple[float, float, float] | None:
     """The sticker's map pose (centre x, y, heading-edge yaw) at MARKER_HEIGHT_M, or None
     when the quad fails the D-587 6 geometry gate or lies outside the track bounds."""
     try:
@@ -36,14 +37,15 @@ def marker_pose(calibration: Calibration, quad, heading_edge: tuple[int, int],
         return None
     if pixels.shape != (4, 2) or not np.all(np.isfinite(pixels)):
         return None
-    mapped = geometry.apply(geometry.as_matrix(calibration.image_to_map), pixels)
+    undistorted = geometry.undistort_points(pixels, calibration.lens_profile)
+    mapped = geometry.apply(geometry.as_matrix(calibration.image_to_map), undistorted)
     if not np.all(np.isfinite(mapped)):
         return None
     try:
         top = [geometry.parallax_correct(point, camera_pose, MARKER_HEIGHT_M) for point in mapped]
     except ValueError:
         return None
-    if not marker_geometry_ok([tuple(p) for p in pixels.tolist()], top):
+    if not marker_geometry_ok([tuple(p) for p in pixels.tolist()], top, side_band_m=side_band_m):
         return None
     centre = (sum(p[0] for p in top) / 4, sum(p[1] for p in top) / 4)
     min_x, min_y, max_x, max_y = calibration.track_bounds_m
@@ -58,7 +60,8 @@ def marker_pose(calibration: Calibration, quad, heading_edge: tuple[int, int],
 def solved_camera(calibration: Calibration) -> tuple[float, float, float] | None:
     """Camera nadir and height from the calibration and lens FOV; None means no parallax step."""
     return geometry.camera_from_homography(geometry.as_matrix(calibration.image_to_map),
-                                           calibration.image_size, calibration.hfov_deg)
+                                           calibration.image_size, calibration.hfov_deg,
+                                           lens_profile=calibration.lens_profile)
 
 
 def robot_sightings(camera: CameraMap, approved: Calibration | None,
@@ -72,12 +75,14 @@ def robot_sightings(camera: CameraMap, approved: Calibration | None,
     if camera_pose is None:
         return ()
     sightings = []
+    qr_ids = getattr(markers, "qr_ids", ())
     for robot_id, marker_id in camera.robot_markers.items():
         quad = markers.get(marker_id)
         offset = camera.marker_yaw_offset_deg.get(robot_id)
         if robot_id in skip or quad is None or offset is None:
             continue
-        pose = marker_pose(approved, quad, camera.heading_edge, camera_pose)
+        side_band_m = QR_SIDE_BAND_M if marker_id in qr_ids else ROBOT_ARUCO_SIDE_BAND_M
+        pose = marker_pose(approved, quad, camera.heading_edge, camera_pose, side_band_m=side_band_m)
         if pose is None:
             continue
         x, y, yaw = robot_pose_from_marker(pose, offset)

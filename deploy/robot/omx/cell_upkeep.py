@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 import cell_preflight  # noqa: E402
+from cell_upkeep_usb_leaf import unconfigured_usb_leaf  # noqa: E402
 from cell_upkeep_checks import (  # noqa: E402
     BAD,
     TCP_STOCK,
@@ -50,6 +51,7 @@ from cell_upkeep_checks import (  # noqa: E402
     check_registers,
     check_tcp,
     grip_units,
+    leaf_recover,
     row,
     serial_tail,
 )
@@ -103,11 +105,11 @@ def camera_roles() -> dict:
 
 def unit_tail(role) -> str:
     return subprocess.run(["journalctl", "--user", "-u", f"rosy-omx-camera@{role}", "-n", "1", "-o", "cat", "--no-pager"],
-                          capture_output=True, text=True).stdout
+                          capture_output=True, text=True, timeout=15).stdout
 
 
 def unit_restart(role) -> None:
-    subprocess.run(["systemctl", "--user", "restart", f"rosy-omx-camera@{role}"], check=True)
+    subprocess.run(["systemctl", "--user", "restart", f"rosy-omx-camera@{role}"], check=True, timeout=15)
     time.sleep(8)  # the preview republishes within a few seconds (2026-11-04)
 
 
@@ -151,12 +153,21 @@ def usb_port(device):
     if any((p / "disable").read_text().strip() != "0" for p in ports):
         raise OSError(f"USB port or peer is already disabled: {ports}")
     boards = []
+    leaf_boards = []
     for name in glob.glob("/dev/serial/by-id/*"):
         tty = Path(name).resolve(strict=True).name
         serial_device = Path(f"/sys/class/tty/{tty}/device").resolve(strict=True)
         if any(serial_device.is_relative_to(affected) for affected in roots):
             boards.append(Path(name).name)
-    return {"ports": [str(p) for p in ports], "speed": int((dev / "speed").read_text()), "boards": boards}
+        if serial_device.is_relative_to(dev):
+            leaf_boards.append(Path(name).name)
+    dev_class = (dev / "bDeviceClass").read_text().strip() if (dev / "bDeviceClass").exists() else ""
+    auth_path = dev / "authorized"
+    leaf_auth = auth_path.read_text().strip() if auth_path.exists() else None
+    result = {"ports": [str(p) for p in ports], "speed": int((dev / "speed").read_text()), "boards": boards}
+    if leaf_auth is not None and dev_class != "09":
+        result.update({"leaf": str(dev), "leaf_authorized": leaf_auth, "leaf_boards": leaf_boards})
+    return result
 
 
 def frames_flow(device) -> bool:
@@ -174,7 +185,7 @@ def port_set(ports, disabled) -> None:
     for port in ports:
         try:
             subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
-                           capture_output=True, check=True)
+                           capture_output=True, check=True, timeout=15)
         except (OSError, subprocess.SubprocessError) as failure:
             if disabled:
                 raise
@@ -183,17 +194,30 @@ def port_set(ports, disabled) -> None:
         raise error
 
 
+def leaf_authorize(leaf, enabled) -> None:
+    """Toggle a non-hub USB leaf's `authorized` knob (never touches sibling hub ports)."""
+    leaf_path = Path(leaf)
+    if (leaf_path / "bDeviceClass").exists() and (leaf_path / "bDeviceClass").read_text().strip() == "09":
+        raise OSError(f"refused to de-authorize USB hub {leaf_path.name}")
+    subprocess.run(["sudo", "-n", "tee", f"{leaf_path}/authorized"], input="1" if enabled else "0", text=True, capture_output=True, check=True, timeout=15)
+
+
+def camera_rebind() -> None:
+    """Run the one-shot camera symlink binder after a USB leaf re-authorization."""
+    subprocess.run(["systemctl", "--user", "start", "rosy-omx-cameras-bind.service"], check=False, timeout=15)
+
+
 def camera_units(role, up) -> None:
     """The bind timer restarts the preview every 20 s, so it goes down first and up last."""
     names = ["rosy-omx-cameras-bind.timer", f"rosy-omx-camera@{role}"]
-    subprocess.run(["systemctl", "--user", "start" if up else "stop", *names], check=True)
+    subprocess.run(["systemctl", "--user", "start" if up else "stop", *names], check=True, timeout=15)
     if up:
         time.sleep(8)
 
 
 def sessions():
     """Command lines of every running record_session.py: a `--io chunk-io` one is the runner that owns the bus."""
-    text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
+    text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True, timeout=15).stdout
     return [line for line in text.splitlines() if "record_session.py" in line]
 
 
@@ -237,6 +261,8 @@ class Io:
         self.labels, self.roles, self.unit_tail, self.unit_restart = viewer_labels, camera_roles, unit_tail, unit_restart
         self.device, self.usb_port, self.frames, self.ports = camera_device, usb_port, frames_flow, port_set
         self.units, self.sleep = camera_units, time.sleep
+        self.leaf_auth, self.rebind = leaf_authorize, camera_rebind
+        self.unconfigured_leaf = unconfigured_usb_leaf
         for name, fn in seams.items():
             if not hasattr(self, name):
                 raise TypeError(f"unknown seam {name}")
@@ -245,16 +271,21 @@ class Io:
 
 def usb_recover(role, io):
     """2026-11-05: a D435 came back on a USB2 root port and gave no frames until that port and its peer were off for
-    30 s. Only a camera whose direct read yields nothing is cycled, and never a port that also carries an arm board."""
+    30 s. Only a camera whose direct read yields nothing is cycled, and never a port that also carries an arm board;
+    when an arm board shares the root port/hub, cycle only the verified non-hub camera leaf `authorized` (0 -> 1)."""
     device = io.device(role)
     if not device:
         return f"no registry device for {role}"
     try:
         port = io.usb_port(device)
     except OSError as e:
-        return f"cannot resolve the USB port of {role}: {e}"
+        port = io.unconfigured_leaf(role) if isinstance(e, FileNotFoundError) else None
+        if port is None:
+            return f"cannot resolve the USB port of {role}: {e}"
     boards = [b for b in port["boards"] if "OpenRB" in b]
     if boards:
+        if port.get("leaf") and not port.get("leaf_boards") and port.get("leaf_authorized") == "1":
+            return leaf_recover(role, device, port, boards, io)
         return f"refused to power-cycle the port of {role}: it also carries {', '.join(boards)}"
     io.units(role, False)
     try:

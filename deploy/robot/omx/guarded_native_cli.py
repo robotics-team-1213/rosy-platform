@@ -114,7 +114,7 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
 
     def start_watch():  # the pause after a record loop: nothing calls the guard until the next one
         motion = shared.get("motion")
-        if motion is not None and not motion.teacher and not motion.failed:
+        if motion is not None and not motion.failed:
             shared["watch"] = BoundaryWatch(motion, on_expire=request_stop)
             shared["watch"].start()
 
@@ -124,8 +124,10 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
 
         def send_action(self, action):
             if "motion" not in shared:
+                import inspect
                 from motor_health import MotorHealth
 
+                mon = MotorHealth(async_publish=True) if "async_publish" in inspect.signature(MotorHealth).parameters else MotorHealth()
                 motion_cls = _gn_attr("NativeJointMotion", NativeJointMotion)
                 shared["motion"] = motion_cls(
                     self.bus,
@@ -133,7 +135,7 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                     body_only=body_only,
                     teacher=teacher,
                     stage=None if teacher or body_only else stage_from_env(),
-                    monitor=MotorHealth(),
+                    monitor=mon,
                     **({} if teacher else (lambda m: {"grip_map": m.pop("gripper", None), "follower_floor": m.pop("follower_floor", None), "mount": m})(
                         leader_mount(shared["leader"]))),
                 )
@@ -166,6 +168,16 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
         if teacher:
             if isinstance(device, leader_type):
                 raise ValueError("teacher mode replays a trajectory, not a leader")
+            if all(hasattr(device, a) for a in ("get_action", "frames", "calls", "names")):
+                orig_get_action = device.get_action
+
+                def replay_get_action():
+                    motion = shared.get("motion")
+                    if motion is None or not motion.tracking:
+                        return dict(zip(device.names, device.frames[min(device.calls, len(device.frames) - 1)]))
+                    return orig_get_action()
+
+                device.get_action = replay_get_action
             return device
         if not isinstance(device, leader_type):
             raise ValueError("guard requires OMX leader")

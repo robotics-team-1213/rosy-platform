@@ -10,11 +10,11 @@ DOCS = {"index.html": "/console", "install.html": "/console/install", "maintenan
 ORDER = ["/console", "/console?view=work", "/console?view=records", "/console/site-map", "/console/install"]
 ICONS = ["fleet", "list", "history", "map", "install"]
 # D-741 2·6: 아이콘 아래에 짧은 이름을 적는다. 긴 이름은 접근 이름에 남고 보이는 글을 품는다(WCAG 2.5.3).
-LABELS = ["관제", "작업", "기록", "지도", "설치"]
-NAMES = [None, None, None, "현장 지도", "설치·보정"]
+LABELS = ["관제", "작업", "기록", "지도", "설치·정비"]
+NAMES = [None, None, None, "현장 지도", "설치·정비"]
 # D-741 6: 화면 안 이동은 공용 하위 탐색 자리에 선다. 가로 앵커 줄은 없다.
-SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile", "camera-draft", "trip", "run", "edit", "reality", "teach"]),
-          "cell.html": ("작업 화면", ["saved", "recipe", "cell", "preview", "proposal", "mission"])}
+SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile", "camera-draft", "edit", "teach", "trip", "run", "reality"]),
+          "cell.html": ("작업 화면", ["observation", "real2sim", "saved", "recipe", "cell", "preview", "proposal", "mission"])}
 
 
 def _page(name):
@@ -64,12 +64,11 @@ def test_in_page_anchors_sit_in_the_shared_subnav_seat():
 def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
     """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다.
     policy·cell 모두 소속 화면 링크에 현재 표시를 둔다(재비평 판정 — 경로 줄 h1이 문서 정체를 말한다)."""
-    screens = [("/console?view=work", "전체 작업"), ("/console?view=work&amp;show=pending", "승인 대기"),
-               ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
-               ("/console/learning", "학습")]
+    screens = [("/console?view=work", "전체 작업"),
+               ("/console/policy", "정책"), ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                    ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
-                                    ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
+                                    ("cell.html", '<div class="ui-subnav">', []),
+                                    ("policy.html", '<div class="ui-subnav">', ["/console/policy"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name
@@ -119,10 +118,10 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
 def test_every_area_document_heads_the_workspace_with_one_pathbar():
     """D-926 2 — 경로 줄이 문서 제목(h1)과 현재 화면(strong)을 본문 머리에 보인다. h1은 문서에 이 하나뿐이다."""
     docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
-            "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
+            "install.html": ("설치", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
-            "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
-            "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
+            "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">팔 관측·사건</strong>'),
+            "policy.html": ("학습 정책 승인", "<strong>정책</strong>")}
     for name, (title, screen) in docs.items():
         page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
         assert page.count("<h1") == 1, f"{name}: one h1 only, and it lives in the path bar"

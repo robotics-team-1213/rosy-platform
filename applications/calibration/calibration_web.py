@@ -13,17 +13,19 @@ in, so the screen is read-only (list and view, no answers).
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import sys
 import threading
+import time
 from functools import partial
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +49,7 @@ COMMON = ROOT / "shared" / "web"
 OPERATE = "calibration.operate"
 SESSION_COOKIE, FLOW_COOKIE = "rosy_calibration_account", "rosy_calibration_flow"
 API = "/api/calibration/v1/requests"
+ARM_RETURNS = {arm: f"/?arm={arm}" for arm in ("arm_s", "arm_a", "arm_b")}
 PROFILES_API = "/api/calibration/v1/profiles"
 JOBS_API = ("/api/calibration/status", "/api/calibration/jobs", "/api/calibration/assessments", "/api/calibration/incidents/")
 ID = re.compile(r"[A-Za-z0-9_-]{1,96}")
@@ -166,7 +169,10 @@ class Handler(BaseHTTPRequestHandler):
     def static(self, path):
         if path.startswith("/common/"):
             name = path.removeprefix("/common/")
-            manifest = json.loads((COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+            try:
+                manifest = json.loads((COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+            except FileNotFoundError:
+                return self.json(503, {"error": "배포본에 공통 화면 자산 목록이 없습니다."})
             if name in manifest and (COMMON / name).is_file():  # the manifest is the allowlist
                 return self.send(200, f"{manifest[name]}; charset=utf-8", (COMMON / name).read_bytes())
             return self.json(404, {"error": "없는 파일입니다."})
@@ -187,7 +193,20 @@ class Handler(BaseHTTPRequestHandler):
                     body, claims = browser_session(self.account, _cookie(self, SESSION_COOKIE))
                 body["can_operate"] = self.can_operate(claims)
             elif method == "GET" and path == "/api/account/login" and self.account:
-                flow, target = self.account.start("/")
+                query = parse_qs(urlsplit(self.path).query, max_num_fields=8)
+                arms = query.get("arm", [])
+                destination = ARM_RETURNS.get(arms[0], "/") if len(arms) == 1 else "/"
+                if destination != "/" and any(k in query for k in ("src_site", "dst_site", "task_id")):
+                    keys = ["src_site", "dst_site"] + (["task_id"] if "task_id" in query else [])
+                    if any(len(query.get(k, [])) != 1 or not (
+                            calibration_jobs.TASK_REF.fullmatch(query[k][0]) if k == "task_id"
+                            else re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_:-]{0,95}", query[k][0])) for k in keys):
+                        return self.json(422, {"error": "Fleet 경로 링크의 칸과 작업 ID를 확인하세요."})
+                    # Build an app-local target; the caller cannot choose a URL, origin or anchor.
+                    destination += "&" + urlencode([(k, query[k][0]) for k in keys]) + "#route-" + arms[0]
+                    flow, target = self.account.start(destination, destination_allowed=lambda url: url == destination)
+                else:
+                    flow, target = self.account.start(destination)
                 headers = [_set_cookie(FLOW_COOKIE, flow, 600), ("Location", target)]
                 status = 303
             elif method == "GET" and path == "/api/account/callback" and self.account:
@@ -297,13 +316,44 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_profile_frame(entry, parts[2])
         return self.json(404, {"error": "없는 경로입니다."})
 
+    def _send_frame(self, entry, source, body, media, source_stamp=None):
+        # The commissioning viewer accepts source age -0.25..2 seconds. Recheck after registration.
+        try:
+            stamp = float(source_stamp)
+        except (TypeError, ValueError):
+            stamp = None
+        fresh = stamp is not None and -0.25 <= time.time() - stamp <= 2.0
+        details = (source == "live" and getattr(self, "headers", {}).get("Accept") == "application/vnd.rosy.fixture-frame+json")
+        if source == "reference" or fresh:
+            if details:
+                body, binding = cell_calibration_view.bind_frame(entry, source, body, include_fixtures=True)
+            else:
+                body, binding = cell_calibration_view.bind_frame(entry, source, body)
+            if binding["status"] == "aligned":
+                media = "image/jpeg"
+        else:
+            binding = {"status": "unverified"}
+        remaining = max(0.0, min(2.0, stamp + 2.0 - time.time())) if fresh else 0.0
+        headers = [("X-Rosy-Frame-Binding", binding["status"]),
+                   ("X-Rosy-Frame-Lifetime-Ms", str(int(remaining * 1000)))]
+        for name, key in (("Generation", "generation"), ("Reference-Sha256", "reference_sha256"),
+                          ("Shift-Px", "max_px"), ("Inliers", "inliers")):
+            if binding.get(key) is not None:
+                headers.append((f"X-Rosy-Frame-{name}", str(binding[key])))
+        if details:
+            return self.json(200, {"media": media, "image": base64.b64encode(body).decode("ascii"),
+                                   "fixture_observation": binding.get("fixture_observation")}, headers)
+        return self.send(200, media, body, headers)
+
     def _serve_profile_frame(self, entry: dict, source: str):
         target = cell_calibration_view.resolve_frame_target(entry, source)
         if target.get("kind") == "file":
             f = target.get("path")
             if not f or not f.is_file() or f.suffix.lower() not in IMAGE_TYPES:
                 return self.json(404, {"error": "기준 프레임이 없습니다."})
-            return self.send(200, IMAGE_TYPES[f.suffix.lower()], f.read_bytes())
+            with f.open("rb") as stream:
+                stamp = os.fstat(stream.fileno()).st_mtime
+                return self._send_frame(entry, source, stream.read(), IMAGE_TYPES[f.suffix.lower()], stamp)
         if target.get("kind") == "url":
             url = target.get("url")
             if not url:
@@ -318,10 +368,21 @@ class Handler(BaseHTTPRequestHandler):
                     body = resp.read(FRAME_MAX_BYTES + 1)
                     if len(body) > FRAME_MAX_BYTES:
                         return self.json(502, {"error": "카메라 프레임 크기 상한을 넘었습니다."})
-                    return self.send(200, "image/jpeg" if ctype == "image/jpg" else ctype, body)
+                    return self._send_frame(entry, source, body, "image/jpeg" if ctype == "image/jpg" else ctype,
+                                            resp.headers.get("X-Source-Stamp"))
             except (HTTPError, URLError, TimeoutError, OSError, ValueError):
                 return self.json(503, {"error": "카메라 프레임에 닿지 않습니다."})
         return self.json(404, {"error": "없는 프레임 종류입니다."})
+
+
+def _load_jobs(cells: Path | None, **hooks):
+    if not cells:
+        return None
+    try:
+        return calibration_jobs.Jobs(cells, **hooks)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"calibration jobs disabled ({cells}): {exc}", file=sys.stderr)
+        return None
 
 
 def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.0.1",
@@ -331,7 +392,7 @@ def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.
     return ThreadingHTTPServer(
         (host, port),
         partial(Handler, store=Path(store), account=account, profiles_path=profiles_path,
-                jobs=calibration_jobs.Jobs(cells, **hooks) if cells else None),
+                jobs=_load_jobs(cells, **hooks)),
     )
 
 
@@ -351,7 +412,7 @@ def main(argv=None) -> int:
     account = None
     if args.account_config:
         from core_common.protocol.account_client import load_account_client
-        account = load_account_client(args.account_config, destinations=("/",))
+        account = load_account_client(args.account_config, destinations=("/", *ARM_RETURNS.values()))
     server = make_server(args.store or cell_requests.store(), args.port, account, profiles_path=profiles, cells=args.cells)
 
     def retry():  # a logout that could not reach Account is retried until it does

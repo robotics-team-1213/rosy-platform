@@ -1,32 +1,81 @@
 .work-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 /* D-865 P3 — 승인 대기 행의 자동 승인 범위 배지와 범위 readback 패널. 색·간격은 토큰만 쓴다. */
-#work-list > li { display: flex; align-items: center; gap: var(--space-2); }
+#work-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-inline-start: var(--space-2); border-inline-start: var(--selection-edge) solid var(--line-14); }
+#work-list > li[data-visible-state="approval_pending"] { border-inline-start-color: var(--status-warn); }
+#work-list > li[data-visible-state="in_progress"] { border-inline-start-color: var(--series-primary); }
+#work-list > li[data-visible-state="waiting"] { border-inline-start-color: var(--status-warn-a45); }
+#work-list > li[data-visible-state="intervention"] { border-inline-start-color: var(--status-crit); }
+#work-list > li[data-visible-state="ended"] { border-inline-start-color: var(--line-06); }
 #work-list > li > ui-button { flex: 1 1 auto; min-width: 0; }
 .work-auto-admit { flex: 0 0 auto; font-size: var(--text-label); color: var(--text-secondary);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-flag); padding: 0 var(--space-2); white-space: nowrap; }
-#work-policy-admission { margin-block: var(--space-3); }
-#work-policy-admission-body { display: grid; gap: var(--space-2); padding-block: var(--space-2); }
-#work-policy-admission-body > p { margin: 0; overflow-wrap: anywhere; }
-#work-integrations { margin-block: var(--space-4); }
-#work-integrations-content { display: grid; gap: var(--space-4); padding-block: var(--space-3); }
+  border: 1px solid var(--line-10); border-radius: var(--radius-flag); padding: 0 var(--space-2); white-space: nowrap; }
+
+/* 작업 화면 IA 3-Tier 위계 (KPI -> 원장·필터 -> 대화 요청 -> 하단 연동·정책) 및 우측 인스펙터 정리. */
+.work-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0; }
+.work-kpi { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); }
+.work-kpi dt { font-size: var(--text-micro); color: var(--text-secondary); }
+.work-kpi dd { margin: 0; font-family: var(--mono); font-size: var(--text-value); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.work-kpi[data-kpi="pending"][data-alert="true"] { border-color: var(--status-warn-a45); border-inline-start: var(--selection-edge) solid var(--status-warn); }
+.work-kpi[data-kpi="intervention"][data-alert="true"] { border-color: var(--status-crit-a45); border-inline-start: var(--selection-edge) solid var(--status-crit); background: var(--status-crit-a07); }
+.work-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-block: var(--space-2) var(--space-3); }
+#work-status-filter { margin: 0; }
+#work-status-filter [aria-current] { font-weight: var(--weight-strong); text-decoration: underline; }
+#work-filter { flex: 0 1 auto; min-width: 0; }
+#work-state { margin: 0; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+
+.work-channel-zone { display: grid; gap: var(--space-3); margin-block-start: var(--space-5); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-10); min-width: 0; }
+.work-channel-zone > h3, .work-channel-zone > p { margin: 0; }
+#channel-requests > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); min-width: 0; }
+#channel-requests > li > p { margin: 0; }
 #channel-requests p { white-space: pre-wrap; overflow-wrap: anywhere; }
+#channel-review { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
+#channel-review > :is(h3, p) { margin: 0; }
+:is(#channel-review-original, #channel-incident-original) { padding: var(--space-3); border-inline-start: var(--selection-edge) solid var(--series-primary); border-radius: var(--radius-control); background: var(--surface-recessed); white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-group { display: grid; gap: var(--space-2); min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); }
+.review-group > legend { padding-inline: var(--space-1); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--text-primary); }
+.review-coords { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.review-field { display: grid; gap: var(--space-1); min-width: 0; }
+:is(#channel-review, #channel-incident) .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.review-disposition { padding-block-start: var(--space-2); border-block-start: 1px solid var(--line-06); }
+
+.work-ops-zone { display: grid; gap: var(--space-3); margin-block-start: var(--space-5); padding: var(--space-4); border: 1px solid var(--line-06); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
+.work-ops-head { display: grid; gap: var(--space-1); }
+.work-ops-head > :is(h3, p) { margin: 0; overflow-wrap: anywhere; }
+#work-integrations-content { display: grid; gap: var(--space-4); padding-block: var(--space-3); }
+#work-policy-link { min-height: var(--target-secondary); }
+
+#fleet-main:has([data-raised]:is(#work-overview, #work-new)) .context-tabs { display: none; }
+#fleet-main:has([data-raised]:is(#work-overview, #work-new, .incident-panel, #log-panel)) #dispatch-control:not([data-state="latched"], [data-state="restarted"], [data-state="error"]) { display: none; }
+#work-context:not([hidden]), #work-move:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
+#work-context > :is(h2, p, dl) { margin: 0; }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side:not([hidden]) { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); }
+#fleet-main:has([data-raised]:is(.incident-panel, #log-panel)) #incident-side > :is(h2, p) { margin: 0; }
+.work-move-guide { display: none; margin: 0; padding: var(--space-4); border: 1px solid var(--line-06); border-radius: var(--radius-panel); background: var(--surface-recessed); }
+#fleet-main:has(#work-new:not([hidden])):has(#work-move[hidden]) .work-move-guide { display: block; }
+
+@media (width < 30rem) {
+  .work-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-coords { grid-template-columns: minmax(0, 1fr); }
+  .work-detail { grid-template-columns: minmax(0, 1fr); }
+  #work-state { margin-inline-start: 0; }
+}
 .work-list :is(ui-button, a) { display: flex; align-items: center; width: 100%; padding-block: 0; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; text-decoration: none; }
 #work-admit { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .work-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
 .work-detail dt { color: var(--text-secondary); font-size: var(--text-label); }
-.work-detail dd { margin: 0; overflow-wrap: anywhere; }
-#control-unit-work { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border-subtle); }
+.work-detail dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#control-unit-work { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-06); }
 #control-unit-work > :is(h2, p) { margin: 0; overflow-wrap: anywhere; }
-#control-unit-work .work-list > li { display: grid; gap: var(--space-2); padding-block: var(--space-3); }
+#control-unit-work .work-list > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-chrome); }
 #control-unit-work .work-list > li > :is(h3, p) { margin: 0; overflow-wrap: anywhere; }
 #fleet-main > .console-primary > .work-overview { flex-shrink: 0; }
-.arm-transfer-work { display: grid; gap: var(--space-3); padding-block: var(--space-4); border-block-start: 1px solid var(--border-subtle); }
+.arm-transfer-work { display: grid; gap: var(--space-3); padding-block: var(--space-4); border-block-start: 1px solid var(--line-06); }
 .arm-transfer-work > :is(h2, p) { margin: 0; overflow-wrap: anywhere; }
 
 
-#integrated-control { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border-subtle); min-width: 0; }
+#integrated-control { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-06); min-width: 0; }
 #integrated-control :is(h2, h3, p) { margin: 0; overflow-wrap: break-word; }
-#integrated-control .work-list > li { display: grid; gap: var(--space-2); }
+#integrated-control .work-list > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-chrome); }
 #integrated-control .integrated-unit-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 #integrated-control-detail { display: grid; gap: var(--space-2); }
 .integrated-map { min-width: 0; }

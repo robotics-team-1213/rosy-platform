@@ -33,6 +33,8 @@ def test_compose_backup_service_is_isolated_with_read_only_rootfs_and_writable_l
     assert service["network_mode"] == "none"
     assert service["read_only"] is True
     assert service["user"] == "10001:10001"
+    assert service["environment"]["SQLITE_TMPDIR"] == "/backup"
+    assert service["environment"]["TMPDIR"] == "/backup"
     assert service["cap_drop"] == ["ALL"]
     assert "no-new-privileges:true" in service["security_opt"]
     assert "--prune-history" in service["command"] and "--prune-audit" in service["command"]
@@ -53,7 +55,7 @@ def test_compose_backup_command_pins_every_retention_group():
         (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
     command = service["command"]
     expected = {"--prune-history": "30", "--prune-audit": "90",
-                "--prune-api-audit": "90", "--prune-sightings": "90"}
+                "--prune-api-audit": "14", "--prune-sightings": "90"}
     for flag, days in expected.items():
         assert command[command.index(flag) + 1] == days
 

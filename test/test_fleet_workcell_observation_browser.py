@@ -41,7 +41,7 @@ def cell_url():
         listener.close()
 
 
-def observation_feed(page):
+def observation_feed(page, *, role="viewer"):
     from PIL import Image
     state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], limited=set(), failed_assets=[], incidents=[], cleared=[],
                             evidence_reads=[])
@@ -93,7 +93,8 @@ def observation_feed(page):
         if path in ("/api/fleet/session", "/api/fleet/auth/session"):
             if route.request.headers.get("authorization") != "Bearer viewer-token":
                 return route.fulfill(status=401, json={"detail": "signed out"})
-            return route.fulfill(json={"role": "viewer", "principal_id": "reader", "via": "bearer"})
+            principal = "op-7" if role == "operator" else "reader"
+            return route.fulfill(json={"role": role, "principal_id": principal, "via": "bearer"})
         if path == "/api/fleet/auth/connection":
             return route.fulfill(json={"mode": "paired", "password_login": False})
         if "/cell-app/" in path:
@@ -134,16 +135,37 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         expect(root.locator("[data-camera-source] img")).to_have_count(3)
         for source in ("top", "wrist_a", "wrist_b"):
             expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_visible()
+        top = root.locator('[data-camera-source="top"]')
+        zoom = top.get_by_role("button", name="공용 상단 크게 보기")
+        expect(zoom).to_have_attribute("aria-pressed", "false")
+        glyph = zoom.locator("svg path")
+        expect(glyph).to_be_visible()
+        expand = glyph.get_attribute("d")
+        zoom.press("Space")
+        expect(zoom).to_have_attribute("aria-pressed", "true")
+        expect(glyph).not_to_have_attribute("d", expand)
+        zoom.press("Escape")
+        expect(zoom).to_have_attribute("aria-pressed", "false")
+        expect(glyph).to_have_attribute("d", expand)
+        top.locator("img").click()
+        expect(zoom).to_have_attribute("aria-pressed", "true")
+        zoom.click()
+        expect(zoom).to_have_attribute("aria-pressed", "false")
+
         state.freeze_b = time.time()
         expect(root.locator('[data-arm-source="feedback_b"] pre')).not_to_contain_text("0.75", timeout=4000)
-        expect(root.locator('[data-camera-source="wrist_b"] img')).to_be_hidden(timeout=4000)
+        expect(root.locator('[data-camera-source="wrist_b"] .cam-frame-hold')).to_have_attribute("data-cam-phase", "disconnected", timeout=4000)
+        expect(root.locator('[data-camera-source="wrist_b"] img')).to_be_visible()
+        expect(root.locator('[data-camera-source="wrist_b"] ui-status')).to_contain_text("끊어짐")
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
         expect(root.locator('[data-camera-source="wrist_a"] img')).to_be_visible()
         expect(root.locator('[data-camera-source="top"] img')).to_be_visible()
         state.stall = True
         expect(root.locator('[data-arm-source="feedback_a"] pre')).not_to_contain_text("0.25", timeout=3000)
         for source in ("top", "wrist_a"):
-            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_hidden(timeout=3000)
+            expect(root.locator(f'[data-camera-source="{source}"] .cam-frame-hold')).to_have_attribute("data-cam-phase", "disconnected", timeout=3000)
+            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_visible()
+            expect(root.locator(f'[data-camera-source="{source}"] ui-status')).to_contain_text("끊어짐")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert page.locator("iframe").count() == 0
         assert urlsplit(page.url).path == "/console/cell"
@@ -164,11 +186,13 @@ def test_rate_limited_frame_keeps_the_fresh_image_until_it_expires(cell_url):
         state.limited.add("wrist_a")
         page.wait_for_timeout(1000)  # two polls get 429 while the last frame is under 2 s old
         expect(card.locator("img")).to_be_visible()
-        expect(card.locator("ui-status")).not_to_contain_text("최신 영상 없음")
-        expect(card.locator("img")).to_be_hidden(timeout=4000)  # expired is still stale
-        expect(card.locator("ui-status")).to_contain_text("최신 영상 없음")
+        expect(card.locator("ui-status")).not_to_contain_text("끊어짐")
+        expect(card.locator(".cam-frame-hold")).to_have_attribute("data-cam-phase", "disconnected", timeout=4000)
+        expect(card.locator("img")).to_be_visible()  # anti-flicker holds last live frame visible
+        expect(card.locator("ui-status")).to_contain_text("끊어짐")
         state.limited.clear()
-        expect(card.locator("img")).to_be_visible(timeout=4000)
+        expect(card.locator(".cam-frame-hold")).to_have_attribute("data-cam-phase", "live", timeout=4000)
+        expect(card.locator("img")).to_be_visible()
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
 
@@ -310,6 +334,56 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         browser.close()
 
 
+@pytest.mark.parametrize("role", ["operator", "viewer"])
+def test_arm_focus_clearance_requires_confirmation_and_named_operator(cell_url, role):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, url=cell_url)
+        state, _ = observation_feed(page, role=role)
+        state.incidents.append({
+            "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "open",
+            "reported_at": time.time(), "facts": {}, "decision": {"hold": True, "reason": "blocked"},
+            "frames": [], "explanation": None, "cleared": None,
+        })
+        page.goto(cell_url + "?focus=arm:feedback_b")
+        card = page.locator('[data-arm-source="feedback_b"]')
+        expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        button = card.locator("ui-button", has_text="사고 해제")
+        if role == "operator":
+            expect(button).to_have_attribute("kind", "quiet")
+            expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
+            assert state.cleared == []
+            check = card.get_by_role("checkbox", name=re.compile("현장에서 정지 원인"))
+            check.check()
+            expect(button).to_be_enabled()
+            check.uncheck()
+            expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
+            check.check()
+            button.click()
+            dialog = page.get_by_role("dialog", name=re.compile("사건 .* 해제할까요"))
+            expect(dialog).to_be_visible()
+            assert state.cleared == []
+            dialog.get_by_text("취소", exact=True).click()
+            expect(dialog).to_be_hidden()
+            assert state.cleared == []
+            button.click()
+            action = dialog.locator("ui-button", has_text="사고 해제")
+            expect(action).to_have_attribute("kind", "irreversible")
+            action.click()
+            expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
+            assert len(state.cleared) == 1
+            assert set(state.cleared[0]) == {"note"} and "이동 경로" in state.cleared[0]["note"]
+        else:
+            expect(button).to_have_count(0)
+            expect(card.get_by_text("해제하려면 Fleet 운영자 계정으로 로그인하세요.")).to_be_visible()
+            assert state.cleared == []
+        assert not errors, errors
+        browser.close()
+
+
 def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(cell_url):
     from playwright.sync_api import sync_playwright
     facts = [
@@ -350,7 +424,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
         try:
             state, _ = observation_feed(page)
             page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
-            page.goto(cell_url)
+            page.goto(cell_url + "#saved-heading")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             table = page.locator("#catalog-table")
             expect(table).to_be_visible()
@@ -380,7 +454,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
             if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
-            page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
+            page.locator('.ui-subnav-nav a[href="#observation-heading"]').click()
             expect(page.locator('ui-section[aria-labelledby="catalog-heading"]')).to_be_hidden()
             page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
             expect(table).to_be_visible()
@@ -406,7 +480,7 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
                     route.fulfill(json=body)
             page.route("**/api/fleet/cell-app/object-catalog", catalog)
             with page.expect_request("**/api/fleet/cell-app/object-catalog"):
-                page.goto(cell_url)
+                page.goto(cell_url + "#saved-heading")
             if not pending:
                 expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
             page.locator("#topbar-more").click()

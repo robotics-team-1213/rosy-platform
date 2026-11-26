@@ -52,7 +52,8 @@ function canvasReader() {
   let canvas = null;
   return (video) => {
     if (!video.videoWidth) return null;
-    canvas ??= Object.assign(document.createElement("canvas"), {width: WATERMARK_WIDTH, height: WATERMARK_HEIGHT});
+    canvas ??= typeof OffscreenCanvas === "function" ? new OffscreenCanvas(WATERMARK_WIDTH, WATERMARK_HEIGHT)
+      : Object.assign(document.createElement("canvas"), {width: WATERMARK_WIDTH, height: WATERMARK_HEIGHT});
     const context = canvas.getContext("2d", {willReadFrequently: true});
     context.drawImage(video, 0, 0, WATERMARK_WIDTH, WATERMARK_HEIGHT, 0, 0, WATERMARK_WIDTH, WATERMARK_HEIGHT);
     return readWatermark(context.getImageData(0, 0, WATERMARK_WIDTH, WATERMARK_HEIGHT).data);
@@ -167,18 +168,23 @@ export async function openCamera({
     } catch (_error) { lose("revoked"); }
   }, RENEW_MS));
 
-  let epoch = null, sequence = null, advancedAt = null, identity = null;
+  let epoch = null, sequence = null, advancedAt = null, identity = null, lastTotal = -1, lastReadable = false;
   const rendered = [];
   cancels.push(repeat(() => {
     const t = now();
-    let seen = null;
-    try { seen = readFrame(video); } catch (_error) { seen = null; }
-    if (seen && (epoch !== seen.epoch || sequence === null || seen.sequence > sequence)) {
-      ({epoch, sequence} = seen);
-      advancedAt = t;
-      identity = seen;
+    const rawTotal = video.getVideoPlaybackQuality?.().totalVideoFrames;
+    const total = typeof rawTotal === "number" ? rawTotal : 0;
+    if (!(total > 0 && rawTotal === lastTotal)) {
+      lastTotal = rawTotal ?? -1;
+      let seen = null;
+      try { seen = readFrame(video); } catch (_error) { seen = null; }
+      lastReadable = seen !== null;
+      if (seen && (epoch !== seen.epoch || sequence === null || seen.sequence > sequence)) {
+        ({epoch, sequence} = seen);
+        advancedAt = t;
+        identity = seen;
+      }
     }
-    const total = video.getVideoPlaybackQuality?.().totalVideoFrames ?? 0;
     rendered.push([t, total]);
     while (rendered.length > 1 && t - rendered[0][0] > 1000) rendered.shift();
     const span = t - rendered[0][0];
@@ -186,7 +192,7 @@ export async function openCamera({
     const ageMs = advancedAt === null ? null : t - advancedAt;
     const state = advancedAt === null ? "waiting"            // first/reconnect IDR not rendered yet
       : ageMs > STALE_HIDE_MS ? "hidden" : ageMs > STALE_WARN_MS ? "stale" : "live";
-    emit({state, fps, ageMs, readable: seen !== null, sequence: identity?.sequence ?? null,
+    emit({state, fps, ageMs, readable: lastReadable, sequence: identity?.sequence ?? null,
           capturedMs: identity?.capturedMs ?? null});
   }, CHECK_MS));
   return {close};

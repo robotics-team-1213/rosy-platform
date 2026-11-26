@@ -31,6 +31,8 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
             "rosy-omx-camera-view.service",
             "rosy-omx-camera@arm_a_wrist.service",
             "rosy-omx-camera@arm_b_wrist.service",
+            "rosy-omx-camera@arm_s_top.service",
+            "rosy-omx-camera@arm_s_wrist.service",
             "rosy-omx-camera@side.service",
             "rosy-omx-camera@top.service",
         )
@@ -48,11 +50,18 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
             "rosy-tensorboard.service",
         )
     },
+    "cell": {},
 }
 
-# Host-wide actions besides reboot; the site keeps product data, so it never cleans storage.
-HOST_ACTIONS: dict[str, frozenset[str]] = {host: frozenset({"clean-storage"}) for host in ("ai", "model")}
-ACTIONS = frozenset({"reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit", "clean-storage"})
+# Host-wide actions besides reboot; the site keeps product data, so clean-storage stays off on site.
+HOST_ACTIONS: dict[str, frozenset[str]] = {
+    "site": frozenset({"root-maintenance"}),
+    "ai": frozenset({"clean-storage", "root-maintenance"}),
+    "model": frozenset({"clean-storage", "root-maintenance"}),
+    "cell": frozenset({"clean-storage", "root-maintenance"}),
+}
+ACTIONS = frozenset({"reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit",
+                     "clean-storage", "root-maintenance"})
 # A person's reboot stops at running jobs; going past them is a second, named request. No action goes
 # past an arm session: the helper refuses both words then.
 REBOOT_WORD = {"reboot": "reboot-if-free", "reboot-over-jobs": "reboot"}
@@ -155,7 +164,7 @@ def decide(host: str, action: str, unit: str | None, *, confirmed: bool) -> dict
             raise HostControlError("UNIT_NOT_ALLOWED")
     elif unit is not None:
         raise HostControlError("UNIT_NOT_ALLOWED")
-    elif action == "clean-storage" and action not in HOST_ACTIONS.get(host, ()):
+    elif action in ("clean-storage", "root-maintenance") and action not in HOST_ACTIONS.get(host, ()):
         raise HostControlError("ACTION_NOT_ALLOWED")
     argv = (REBOOT_WORD.get(action, action),) if unit is None else (action, unit)
     return {"host": host, "action": action, "unit": unit, "argv": argv}

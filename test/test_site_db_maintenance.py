@@ -225,6 +225,50 @@ def test_vacuum_keeps_its_temp_copy_beside_the_target(tmp_path, monkeypatch):
     os.environ.pop("SQLITE_TMPDIR", None)  # vacuum이 건 환경을 다음 시험에 흘리지 않는다
 
 
+def test_vacuum_database_includes_sqlite_error_detail(tmp_path):
+    bad = tmp_path / "corrupt.sqlite3"
+    bad.write_bytes(b"not a sqlite file")
+    with pytest.raises(DatabaseError, match=r"vacuum failed: .+"):
+        site_db.vacuum_database(bad)
+
+
+def test_cli_backup_prunes_backups_and_ledger_before_vacuum_failure(tmp_path, monkeypatch, capsys):
+    from datetime import datetime, timedelta, timezone
+
+    source = tmp_path / "fleet.sqlite3"
+    old_iso = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat(timespec="milliseconds")
+    new_iso = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("""CREATE TABLE fleet_api_audit (
+            request_id TEXT, event_type TEXT, principal_id TEXT, role TEXT,
+            method TEXT, path TEXT, status_code INTEGER, created_at TEXT)""")
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('old','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (old_iso,))
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('new','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (new_iso,))
+
+    dest_dir = tmp_path / "nightly"
+    dest_dir.mkdir(parents=True)
+    stale = dest_dir / "fleet-backup-20260101-000000.sqlite3"
+    newer = dest_dir / "fleet-backup-20260102-000000.sqlite3"
+    stale.write_bytes(b"old")
+    newer.write_bytes(b"recent")
+
+    def _fail_vacuum(_path):
+        raise DatabaseError("vacuum failed: database or disk is full")
+
+    monkeypatch.setattr(site_db, "vacuum_database", _fail_vacuum)
+    with pytest.raises(SystemExit) as exc_info:
+        site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir), "--prune", "2", "--prune-api-audit", "90"])
+
+    assert exc_info.value.code != 0
+    assert "database or disk is full" in capsys.readouterr().err
+    assert not stale.exists()
+    assert newer.exists()
+    kept_backups = sorted(dest_dir.glob("fleet-backup-*.sqlite3"))
+    assert len(kept_backups) == 2 and verify_database(kept_backups[-1]) == "ok"
+    with closing(sqlite3.connect(source)) as connection:
+        assert connection.execute("SELECT count(*) FROM fleet_api_audit").fetchone()[0] == 1
+
+
 def test_cli_check_accepts_a_fresh_intact_backup(tmp_path, capsys):
     source = tmp_path / "fleet.sqlite3"
     _database(source, "check")
@@ -736,3 +780,38 @@ def test_cli_prune_uses_stored_retention_and_archive_watermark(tmp_path):
     assert removed["fleet_api_audit"] == 1
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT rowid FROM fleet_api_audit").fetchall() == [(2,)]
+
+def test_short_api_audit_retention_waits_for_archive_watermark(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("CREATE TABLE fleet_api_audit (created_at TEXT NOT NULL)")
+        db.execute("INSERT INTO fleet_api_audit VALUES (strftime('%Y-%m-%dT%H:%M:%S', 'now', '-30 days'))")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 0
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("CREATE TABLE fleet_audit_flush (kind TEXT PRIMARY KEY, last_rowid INTEGER NOT NULL)")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 0
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("INSERT INTO fleet_audit_flush VALUES ('fleet_api_audit', 1)")
+    assert prune_ledger(database, api_audit_days=14)["fleet_api_audit"] == 1
+
+
+def test_prune_ledger_prunes_fleet_ai_facts_under_audit_days(tmp_path):
+    from fleet.stuck.ai_facts import AiFactLog
+
+    database = tmp_path / "fleet.sqlite3"
+    log = AiFactLog(database)
+    old_ts = time.time() - 120 * 86400.0
+    new_ts = time.time()
+    log.append([
+        {"received_at": old_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 1}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": old_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+        {"received_at": new_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 2}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": new_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+    ])
+    assert prune_ledger(database, history_days=0, audit_days=0)["fleet_ai_facts"] == 0
+    removed = prune_ledger(database, history_days=0, audit_days=90)
+    assert removed["fleet_ai_facts"] == 1
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_ai_facts").fetchone()[0] == 1

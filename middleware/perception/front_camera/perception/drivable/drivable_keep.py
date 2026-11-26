@@ -219,6 +219,61 @@ def scan_summary(ranges, angle_min, angle_increment, range_min, range_max, body=
     is the nearest return in the body strip with 2 more within 0.02 m (a speck is no wall). A side
     wall is returns within 0.20 m laterally and 0.35 m ahead spanning >= 0.10 m along x (the signal
     posts at the ring entries are a few cm wide, 9dfk 20261010T010701Z_rosy_41)."""
+    count = len(ranges) if ranges is not None else 0
+    if count < 2:
+        return None, {'left': None, 'right': None}, None
+    valid_input = not any(isinstance(v, bool) for v in ranges)
+    if valid_input:
+        try:
+            dist = np.asarray(ranges, dtype=np.float64)
+            valid_input = dist.ndim == 1 and dist.size == count
+        except (TypeError, ValueError):
+            valid_input = False
+    if valid_input:
+        high = (float(range_max) if not isinstance(range_max, bool)
+                and isinstance(range_max, (int, float)) and math.isfinite(float(range_max)) else math.inf)
+        step = float(angle_increment)
+        forward = math.radians(body.lidar_forward_deg)
+        ok = np.isfinite(dist) & (dist > 0.0) & (dist <= high)
+        if not ok.any():
+            return None, {'left': None, 'right': None}, None
+        idx = np.flatnonzero(ok)
+        raw = (float(angle_min) - forward) + idx.astype(np.float64) * step
+        ang = np.arctan2(np.sin(raw), np.cos(raw))
+        d = dist[idx]
+        lx, ly = body.lidar_x_m, body.lidar_y_m
+        px = lx + d * np.cos(ang)
+        py = ly + d * np.sin(ang)
+        r2 = body.rotation_radius_m * body.rotation_radius_m
+        inside = (
+            (px >= body.rear_x_m) & (px <= body.front_x_m)
+            & (np.abs(py) <= body.half_width_m)
+            & (px * px + py * py <= r2)
+        )
+        px = px[~inside]
+        py = py[~inside]
+        if not px.size:
+            return None, {'left': None, 'right': None}, None
+        strip = np.sort(px[(px > body.front_x_m) & (np.abs(py) <= body.half_width_m)])
+        ahead = None
+        if strip.size >= 3:
+            hits = np.flatnonzero(strip[2:] - strip[:-2] <= 0.02)
+            if hits.size:
+                ahead = float(strip[int(hits[0])])
+        side = {}
+        side_mask = (px >= 0.0) & (px <= 0.35) & (np.abs(py) >= body.half_width_m) & (np.abs(py) <= 0.20)
+        for key, sign_ok in (('left', py > 0.0), ('right', py < 0.0)):
+            sel = side_mask & sign_ok
+            if sel.any():
+                xs = px[sel]
+                side[key] = float(np.abs(py[sel]).min()) if float(xs.max() - xs.min()) >= 0.10 else None
+            else:
+                side[key] = None
+        dx, dy = px - lx, py - ly
+        fmask = (px > lx) & (np.abs(np.arctan2(dy, dx)) <= math.pi / 4)
+        front = float(np.hypot(dx[fmask], dy[fmask]).min()) if fmask.any() else None
+        return ahead, side, front
+
     view = body.scan_view(dict(ranges=list(ranges), angle_min=angle_min, angle_increment=angle_increment,
                                range_min=range_min, range_max=range_max))
     strip = sorted(x for x, y in view.points if x > body.front_x_m and abs(y) <= body.half_width_m)

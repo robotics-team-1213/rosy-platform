@@ -153,3 +153,93 @@ def test_projection_callback_runs_on_the_loop_thread():
         assert seen and set(seen) == {threading.get_ident()}
 
     asyncio.run(scenario())
+
+
+def test_persisted_projection_cursor_survives_restart_and_never_advances_on_callback_error(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    db_path = tmp_path / "fleet.sqlite3"
+    store = CoreEventStore(db_path)
+    for seq in (1, 2, 3):
+        ev = EventMessage(event_id=f"ev-{seq}", seq=seq, robot_id="rosy_01", type="nav.completed")
+        assert store.append_event(ev.model_dump(mode="json")) is True
+
+    seen_first = []
+
+    def fail_on_third(event):
+        if event["seq"] == 3:
+            raise RuntimeError("transient projection error")
+        seen_first.append(event["seq"])
+
+    async def scenario():
+        hub1 = _hub(event_store=store, event_callback=fail_on_third)
+        s1 = hub1.open_session()
+        await hub1.handle_async(_hello(), session=s1)
+        r1 = await hub1.handle_async(_beat(), session=s1)
+        assert r1.payload["code"] == "TASK_PROJECTION_UNAVAILABLE"
+        if hub1._recovery_task is not None:
+            await hub1._recovery_task
+        # Events 1 and 2 succeeded and persisted cursor=2; event 3 failed so cursor did not advance to 3.
+        assert seen_first == [1, 2]
+        assert store.get_projection_cursor() == 2
+
+        # Restart with a new SiteHub instance: only event 3 is replayed, not 1 or 2.
+        seen_second = []
+        hub2 = _hub(event_store=CoreEventStore(db_path), event_callback=lambda e: seen_second.append(e["seq"]))
+        assert hub2._event_projection_cursor == 2
+        s2 = hub2.open_session()
+        await hub2.handle_async(_hello(), session=s2)
+        await hub2.handle_async(_beat(), session=s2)
+        if hub2._recovery_task is not None:
+            await hub2._recovery_task
+        assert seen_second == [3]
+        assert store.get_projection_cursor() == 3
+        reply_ok = await hub2.handle_async(_beat(), session=s2)
+        assert reply_ok.type is EnvelopeType.HEARTBEAT
+
+    asyncio.run(scenario())
+
+
+def test_projection_cursor_persistence_error_is_contained_without_crashing_hub(tmp_path):
+    import sqlite3
+    from fleet.server.core_event_store import CoreEventStore
+
+    db_path = tmp_path / "fleet-locked.sqlite3"
+    base_store = CoreEventStore(db_path)
+    ev1 = EventMessage(event_id="ev-lock-1", seq=1, robot_id="rosy_01", type="nav.completed")
+    assert base_store.append_event(ev1.model_dump(mode="json")) is True
+
+    calls = {"persist": 0}
+    real_set = base_store.set_projection_cursor
+
+    def flaky_set(audit_id: int, consumer: str = "site_hub") -> None:
+        calls["persist"] += 1
+        if calls["persist"] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        real_set(audit_id, consumer)
+
+    base_store.set_projection_cursor = flaky_set
+
+    async def scenario():
+        hub = _hub(event_store=base_store, event_callback=lambda e: None)
+        s = hub.open_session()
+        await hub.handle_async(_hello(), session=s)
+
+        # Sync recovery fails cursor persistence -> returns False without raising and stays dirty
+        assert hub._recover_event_projections() is False
+        assert calls["persist"] == 1
+        assert hub._projection_dirty is True
+        assert base_store.get_projection_cursor() == 0
+
+        # Async recovery retries persisting the unpersisted cursor once the lock clears
+        r_wait = await hub.handle_async(_beat(), session=s)
+        assert r_wait.payload["code"] == "TASK_PROJECTION_UNAVAILABLE"
+        if hub._recovery_task is not None:
+            await hub._recovery_task
+        assert calls["persist"] == 2
+        assert hub._projection_dirty is False
+        assert base_store.get_projection_cursor() == 1
+        r_ok = await hub.handle_async(_beat(), session=s)
+        assert r_ok.type is EnvelopeType.HEARTBEAT
+
+    asyncio.run(scenario())

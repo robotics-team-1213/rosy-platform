@@ -50,10 +50,33 @@ def bound_reference_image(calibration, config, ref_path):
     return (image, None) if image is not None else (None, "reference unavailable; remap required")
 
 
+def _dry_run_shift_check(cell, config, out):
+    ref_path = (config.get("preflight") or {}).get("reference_top")
+    if not ref_path or not callable(getattr(cell, "frame", None)):
+        return None
+    ref_file = Path(ref_path).expanduser()
+    if not ref_file.is_file():
+        return None
+    import cv2
+    import cell_preflight
+    try:
+        ref = cv2.imread(str(ref_file), cv2.IMREAD_GRAYSCALE)
+        cur = cell.frame("top")
+        if ref is None or cur is None:
+            return None
+        shift = cell_preflight.camera_shift_px(ref, cv2.cvtColor(cur, cv2.COLOR_BGR2GRAY))
+        out["map_pose_check"] = shift
+        if not shift.get("ok") or shift.get("max_px", float("inf")) > prm.get(config.get("params"), "calibrate.max_shift_px"):
+            return "top camera moved since map reference"
+    except (AttributeError, OSError, ValueError, KeyError, TypeError, cv2.error):
+        return "top camera map check unavailable"
+    return None
+
+
 def map_pose_preflight(cell, config, calibration, calibration_path: Path, work: Path, dry_run, out):
     """Hold hardware before planning if the live top JPEG disagrees with the map reference."""
     if dry_run:
-        return None
+        return _dry_run_shift_check(cell, config, out)
     state = cell.act("state")
     if not isinstance(state, dict) or state.get("ok") is not True:
         return "state unavailable before camera map check"
@@ -158,9 +181,17 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
     """Bind pick and free destination to the same advancing, persisted JPEG."""
     frame_receipt = getattr(cell, "frame_receipt", None)
     try:
-        before = frame_receipt("top", previous=source_frame)
+        import cell_route_check
+        import cell_route_depth
+        named = cell_route_check.temp_to_ship(source, dest_site)
+        if named:
+            before, error = cell_route_depth.capture_before(cell, config, source, dest_site, source_frame)
+            if error:
+                return None, None, error
+        else:
+            before = frame_receipt("top", previous=source_frame)
         frame = save_frame_receipt(path, before)
-        if cell_zone_verification.zone_check_enabled(config):  # D-1057: before frame of the zone check
+        if not named and cell_zone_verification.zone_check_enabled(config):
             before["before_side"] = cell_zone_verification.before_side(cell, config)
     except (OSError, ValueError, KeyError, TypeError):
         return None, None, "fresh camera frame unavailable"
@@ -181,4 +212,4 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
                                       seen["raw_m"][1] - by / 1000), place_xy)
                     <= config.get("verify_tol_mm", 10.0) for seen in current_dest):
         return before, frame, "destination unavailable or occupied"
-    return before, frame, None
+    return before, frame, cell_route_depth.before_error(before)

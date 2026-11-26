@@ -72,7 +72,7 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
             assert all(b["height"] >= 44 and b["width"] >= 44 for b in boxes)
 
         hud_text = page.locator("#cockpit-hud").inner_text()
-        assert "0 STBY" in hud_text and "IDLE" not in hud_text and "0/1 OK" not in hud_text
+        assert "미확인 4대" in hud_text and "IDLE" not in hud_text and "0/1 OK" not in hud_text
 
         # Open a mobile robot from C23 dock -> C24 panel shows workspace card with collapsed manual controls.
         mobile_btn = dock.locator('.robot-dock-btn[data-kind="mobile"]').first
@@ -81,6 +81,11 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
         expect(panel).to_be_visible()
         expect(panel).to_have_attribute("data-robot-id", mobile_id)
         expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(1)
+        expect(panel.locator(".telemetry-chart-plot canvas")).to_have_count(1)
+        assert panel.locator(".telemetry-chart-plot").evaluate("node => node.clientWidth >= 180")
+        cam_details = panel.locator('details[data-section="camera"]')
+        expect(cam_details).to_have_count(1)
+        assert cam_details.evaluate("node => node.open") is (height > 800)
         expect(page.locator(f'#robot-workspace article[data-robot-id="{mobile_id}"]')).to_be_visible()
         manual_details = panel.locator('details[data-section="manual"]')
         expect(manual_details).to_have_count(1)
@@ -125,6 +130,22 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
               return !overlapWatch && inTopBand;
             }""")
             assert stamp_ok
+            if width == 1366:
+                dock.locator('.robot-dock-btn[data-robot-id="rosy_04"]').click()
+                expect(panel).to_have_attribute("data-robot-id", "rosy_04")
+                cam_sec = panel.locator('details[data-section="camera"]')
+                if not cam_sec.evaluate("n => n.open"):
+                    cam_sec.locator("summary").click()
+                front_btn = cam_sec.locator("ui-button", has_text="전면 카메라")
+                roi_btn = cam_sec.locator("ui-button", has_text="천장 확대 (ROI)")
+                expect(front_btn).to_have_attribute("disabled", "")
+                expect(roi_btn).not_to_have_attribute("disabled", "")
+                assert "오프라인" in (front_btn.get_attribute("reason") or "")
+                expect(front_btn.locator("small[data-reason]")).to_be_visible()
+                mobile_btn.click()
+                expect(panel).to_have_attribute("data-robot-id", mobile_id)
+                expect(front_btn).not_to_have_attribute("disabled", "")
+                expect(cam_sec.locator("ui-button small[data-reason]")).to_have_count(0)
 
         # Switching to observed OMX arm via dock hides mobile jog, marks unverified joints, and collapses empty telemetry plot.
         arm_btn = dock.locator('.robot-dock-btn[data-robot-id="arm_a"]')
@@ -144,8 +165,12 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
             Path(output).mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(Path(output) / f"fleet-cockpit-{width}.png"))
 
+        if width == 1366:
+            close_box = panel.locator(".robot-panel-close").bounding_box()
+            assert close_box and abs(close_box["height"] - 36) <= 1
         panel.locator(".robot-panel-close").click()
         expect(panel).to_be_hidden()
+        expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(0)
         if width == 1366:
             expect(page.locator(".console-context")).to_be_visible()
             arm_btn.click()
@@ -216,6 +241,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
     api["/api/fleet/auth/session"] = {"authenticated": True, "role": "operator", "account_id": "op", "estop": False}
     api["/api/fleet/peers"] = {"peers": []}
     api["/api/fleet/dispatch-control"] = {"paused": False}
+    api["/api/fleet/work"] = {"rows": []}
     api["/api/fleet/workcell-observations"] = {
         "schema_version": "rosy.workcell-observations.v1",
         "workcells": [{
@@ -283,10 +309,22 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         expect(page.locator('section[aria-labelledby="map-heading"]')).to_be_hidden()
         expect(page.locator("#roster-heading")).to_be_hidden()
         expect(page.locator("#site-path")).to_be_hidden()
+        expect(page.locator('.doc-tabs a[href="/console/site-map"]')).to_be_hidden()
+        expect(page.locator('.doc-tabs a[href="/console/install"]')).to_be_hidden()
+        for href in ("/console", "/console?view=work", "/console?view=records"):
+            expect(page.locator(f'.doc-tabs a[href="{href}"]')).to_be_visible()
         for arm_id in ("arm_a", "arm_b", "arm_s"):
             expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
+        expect(stage.locator('.cell-stage-arm[data-arm-id="arm_a"] .cell-stage-joints-grid .cell-stage-joint')).to_have_count(6)
+        assert "모터 확인 불가 · 확인 불가" not in stage.locator('.cell-stage-arm[data-arm-id="arm_b"]').inner_text()
+        work_link_box = stage.locator('.cell-stage-actions a[href="/console/cell"]').bounding_box()
+        assert work_link_box and abs(work_link_box["height"] - 36) <= 1
         hud_text = page.locator("#" + "cockpit-hud").inner_text()
         assert "ARM-CELL" in hud_text
+        context_panel = page.locator("#cell-context-panel")
+        expect(context_panel).to_be_visible()
+        expect(context_panel).to_contain_text("셀 작업 · 열린 사건")
+        expect(context_panel.locator('a[href="/console/cell#observation-heading"]')).to_be_visible()
 
         dock = page.locator("#" + "robot-dock")
         expect(dock).to_be_visible()
@@ -295,6 +333,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         dock.locator('.robot-dock-btn[data-robot-id="arm_s"]').click()
         panel = page.locator('#robot-panel[data-robot-id="arm_s"]')
         expect(panel).to_be_visible()
+        expect(panel.locator('.robot-panel-jumps button[data-jump-section="health"]')).to_have_count(1)
         arm_fig = panel.locator(".robot-panel-twin .robot-view")
         expect(arm_fig).to_be_visible()
         expect(arm_fig).to_have_attribute("data-pose", "live")
@@ -342,5 +381,120 @@ def test_cockpit_battery_expiry_syncs_hud_and_panel(site):
         )
         expect(panel.locator(".telemetry-chart-value")).to_contain_text("확인 불가")
         assert panel.locator(".telemetry-chart-plot").evaluate("n => n.offsetHeight") == 0
+        assert not posts and not errors
+        browser.close()
+
+
+def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
+    from playwright.sync_api import expect, sync_playwright
+    from test_console_queue_inline_browser import OFFLINE, _robot
+
+    api = copy.deepcopy(API)
+    api["/api/fleet/state"] = {
+        "fleet": {"name": "site", "online": 1, "total": 2},
+        "ts": 0.0,
+        "robots": [_robot("rosy_01"), OFFLINE],
+    }
+    api["/api/fleet/trips"] = {"running": None, "trips": [], "open": []}
+    api["/api/fleet/device-profile-sources/robot/rosy_01"] = {"profile": None}
+    api["/api/fleet/tracking"] = {
+        "lease_s": 10,
+        "sources": [{"source_id": "ceiling_north", "status": "OK", "age_ms": 20}],
+        "robots": [],
+        "unknown": [],
+    }
+    api["/api/fleet/charge-bays"] = {
+        "thresholds": {"go_percent": 15, "leave_percent": 80},
+        "bays": [{"bay": "C1", "state": "free", "robot_id": None}],
+        "actions": [],
+    }
+    api["/api/fleet/platoon"] = {
+        "loop": {"edges": ["e1"], "perimeter_m": 2.0},
+        "target_gap_m": 0.5,
+        "robots": [{"robot_id": "rosy_01", "state": "alone"}],
+    }
+    state_polls = []
+
+    with sync_playwright() as pw:
+        posts = []
+        browser, page, errors = _open(pw, site, api, posts, size=(1366, 768))
+        page.on("response", lambda res: state_polls.append(res.status) if res.url.endswith("/api/fleet/state") else None)
+        page.locator('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]').click()
+        panel = page.locator("#" + "robot-panel")
+        expect(panel).to_be_visible()
+        expect(page.locator('#robot-workspace article[data-robot-id="rosy_01"]')).to_be_visible()
+        page.clock.run_for(5500)
+
+        page.evaluate("""() => {
+          window.__savedRefs = {
+            rosterCard: document.querySelector('#roster article[data-robot-id="rosy_01"]'),
+            workspaceCard: document.querySelector('#robot-workspace article[data-robot-id="rosy_01"]'),
+            dockBtn: document.querySelector('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]'),
+            hudBatt: document.querySelector('#cockpit-hud [data-hud-key="battery"]'),
+          };
+          const counts = {
+            roster: 0, workspace: 0, hud: 0, sitePath: 0, dock: 0, dockAttr: 0, hudAttr: 0,
+            trackingRows: 0, chargeBays: 0, platoonRows: 0, formationDetail: 0,
+          };
+          window.__churnCounts = counts;
+          const watchChild = (sel, key) => {
+            const target = document.querySelector(sel);
+            new MutationObserver((records) => {
+              for (const r of records) if (r.type === "childList") counts[key] += 1;
+            }).observe(target, { childList: true, subtree: true });
+          };
+          const watchAttr = (sel, key) => {
+            const target = document.querySelector(sel);
+            new MutationObserver((records) => {
+              for (const r of records) if (r.type === "attributes") counts[key] += 1;
+            }).observe(target, { attributes: true, subtree: true });
+          };
+          watchChild("#roster", "roster");
+          watchChild("#robot-workspace", "workspace");
+          watchChild("#cockpit-hud", "hud");
+          watchChild("#site-path-list", "sitePath");
+          watchChild("#robot-dock", "dock");
+          watchChild("#tracking-position-rows", "trackingRows");
+          watchChild("#charge-bay-rows", "chargeBays");
+          watchChild("#platoon-rows", "platoonRows");
+          watchChild("#formation-detail", "formationDetail");
+          watchAttr("#robot-dock", "dockAttr");
+          watchAttr("#cockpit-hud", "hudAttr");
+        }""")
+
+        before_polls = len(state_polls)
+        page.clock.run_for(6000)
+        assert len(state_polls) - before_polls >= 5
+
+        result = page.evaluate("""() => ({
+          counts: window.__churnCounts,
+          sameRosterCard: document.querySelector('#roster article[data-robot-id="rosy_01"]') === window.__savedRefs.rosterCard,
+          sameWorkspaceCard: document.querySelector('#robot-workspace article[data-robot-id="rosy_01"]') === window.__savedRefs.workspaceCard,
+          sameDockBtn: document.querySelector('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]') === window.__savedRefs.dockBtn,
+          sameHudBatt: document.querySelector('#cockpit-hud [data-hud-key="battery"]') === window.__savedRefs.hudBatt,
+        })""")
+        assert result["sameRosterCard"], "roster summary <article> was replaced on steady polls"
+        assert result["sameWorkspaceCard"], "workspace <article> was replaced on steady polls"
+        assert result["sameDockBtn"], "dock button was replaced on steady polls"
+        assert result["sameHudBatt"], "cockpit HUD cell was replaced on steady polls"
+        assert result["counts"] == {
+            "roster": 0,
+            "workspace": 0,
+            "hud": 0,
+            "sitePath": 0,
+            "dock": 0,
+            "dockAttr": 0,
+            "hudAttr": 0,
+            "trackingRows": 0,
+            "chargeBays": 0,
+            "platoonRows": 0,
+            "formationDetail": 0,
+        }, f"unexpected DOM churn on steady polls: {result['counts']}"
+
+        api["/api/fleet/state"]["robots"][0]["power_health"]["battery"]["percent"] = 62
+        page.clock.run_for(1500)
+        expect(page.locator('#cockpit-hud [data-hud-key="battery"]')).to_contain_text("62%")
+        expect(panel.locator(".telemetry-chart-value")).to_contain_text("62%")
+        expect(page.locator('#robot-workspace [data-fact="battery"]')).to_contain_text("62%")
         assert not posts and not errors
         browser.close()

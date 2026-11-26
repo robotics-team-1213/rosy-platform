@@ -124,3 +124,13 @@ def test_telemetry_is_secret_free_and_json_ready():
     assert telemetry["image_size"] == [8, 8]
     assert "path" not in str(telemetry)
     assert "token" not in str(telemetry)
+
+
+def test_cv2_rotate_matches_numpy_rot90_for_all_quarter_turns():
+    from control.sensing.perception.camera_worker import _rotate
+
+    src = np.arange(8 * 12 * 3, dtype=np.uint8).reshape((8, 12, 3))
+    for deg in (0, 90, 180, 270):
+        out = _rotate(src, deg)
+        assert out.flags["C_CONTIGUOUS"]
+        assert np.array_equal(out, np.rot90(src, (deg // 90) % 4))

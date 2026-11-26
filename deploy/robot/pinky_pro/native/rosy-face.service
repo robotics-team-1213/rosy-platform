@@ -39,6 +39,7 @@ Environment=PYTHONNOUSERSITE=1
 # pycs that stay valid after pack fixes mtimes; a stray write would fail
 # under ProtectSystem=strict and must not change a signed release anyway.
 Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 # lgpio (under rpi-lgpio) keeps its notification files in LG_WD or the
 # working directory; both are the state directory. RPI_LGPIO_CHIP selects
 # gpiochip4, the RP1 header chip, where rpi-lgpio honours it; the program

@@ -28,6 +28,7 @@ def state(item):
 class MonitoringStore:
     def __init__(self, path: Path, collector_id: str):
         self._lease = None
+        self._last_prune_at = None
         self.path = Path(path)
         try:
             lock = self.path.with_name(self.path.name + '.lock')
@@ -53,7 +54,9 @@ class MonitoringStore:
                             or db.execute('pragma user_version').fetchone()[0] != 1
                             or db.execute('select collector from owner').fetchone() != (collector_id,)):
                         raise StoreUnavailable()
+                    db.execute('pragma journal_mode=WAL')
                 else:
+                    db.execute('pragma journal_mode=WAL')
                     db.execute(f'pragma application_id={APPLICATION_ID}')
                     db.execute('pragma user_version=1')
                     db.execute('create table owner (collector text not null)')
@@ -144,8 +147,10 @@ class MonitoringStore:
                 raise StoreUnavailable()
             if peer_cursor is not None:
                 db.execute('insert or replace into peers values (?,?)', (key[1], json.dumps(peer_cursor)))
-            cutoff = (wall - timedelta(days=7)).isoformat()
-            db.execute('delete from events where time < ?', (cutoff,))
+            if self._last_prune_at is None or (wall - self._last_prune_at).total_seconds() >= 60.0:
+                cutoff = (wall - timedelta(days=7)).isoformat()
+                db.execute('delete from events where time < ?', (cutoff,))
+                self._last_prune_at = wall
 
     @staticmethod
     def _event(db, site, item_id, public, wall):
@@ -171,3 +176,4 @@ class MonitoringStore:
     def prune(self, wall):
         with self._connection() as db:
             db.execute('delete from events where time < ?', ((wall - timedelta(days=7)).isoformat(),))
+            self._last_prune_at = wall

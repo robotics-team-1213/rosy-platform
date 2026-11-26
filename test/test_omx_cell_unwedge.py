@@ -353,3 +353,34 @@ def test_a_failed_backoff_does_not_try_another_motion():
     out = u.unwedge(cell, HOME, sleep=lambda s: None)
     assert out["result"] == "stopped" and out["error"] == "backoff refused"
     assert cell.sent[-1] == "jog shoulder_lift.pos 0.5"
+
+
+def test_home_jogs_uses_checked_prefix_when_session_active():
+    class CheckedCell(HomeCell):
+        def act(self, command):
+            self.commands.append(command)
+            if command.startswith("checked sid-42 deadbeef "):
+                command = command.removeprefix("checked sid-42 deadbeef ")
+            if command.startswith("jog "):
+                _, name, delta = command.split()
+                axis = u.BODY.index(name.removesuffix(".pos"))
+                self.target[axis] += float(delta)
+                self.measured[axis] = self.target[axis]
+            elif command.startswith("grip "):
+                self.measured[5] = self.target[5] = float(command.split()[1])
+            return {
+                "ok": True, "state": list(self.measured), "target": list(self.target), "holding": False,
+                "health": {"current_ma": [0, 0, 0, 0, 0, 10]}, "human_hold_latched": False,
+                "operating_context": {"session_id": "sid-42"}, "library_sha256": "deadbeef",
+            }
+
+    measured = [1.73, -63.76, 53.41, 55.56, -50.48, 50.0]
+    limits = {"joint_min": {"wrist_roll.pos": -55.5}, "joint_max": {"wrist_flex.pos": 55.3}}
+    cell = CheckedCell(measured)
+    result = u.return_home(cell, RETURN_HOME, limits, sleep=lambda _: None, log=None)
+    assert result["result"] == "home"
+    jogs = [c for c in cell.commands if "jog " in c]
+    grips = [c for c in cell.commands if "grip " in c]
+    assert jogs and all(c.startswith("checked sid-42 deadbeef jog ") for c in jogs)
+    assert grips and all(c.startswith("checked sid-42 deadbeef grip ") for c in grips)
+

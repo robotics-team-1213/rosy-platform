@@ -17,6 +17,8 @@
 #                   nightly window reboot and unattended-upgrades are never cancelled here
 #   restart-unit U  systemctl --no-block restart U (allowlisted U). No unit can be stopped (D-991).
 #                   A cell camera unit is refused (exit 6) while an arm session runs.
+#   clean-storage   start the lab user rosy-test-storage.service once (ai, model, cell roles; D-883).
+#   root-maintenance  start the system rosy-root-maintenance.service once (site, ai, model, cell).
 #   install-site-config N  copy ~SUDO_USER/.rosy/site-incoming/N to /etc/rosy/site/N (site role,
 #                   allowlisted N, read as SUDO_USER so a symlink reaches nothing more than that
 #                   account can read, YAML-checked, 64 KiB cap, previous copy kept under
@@ -185,6 +187,8 @@ case "$ROLE:$ACTION:$UNIT" in
   site:restart-unit:rosy-omx-camera-view.service|\
   site:restart-unit:rosy-omx-camera@arm_a_wrist.service|\
   site:restart-unit:rosy-omx-camera@arm_b_wrist.service|\
+  site:restart-unit:rosy-omx-camera@arm_s_top.service|\
+  site:restart-unit:rosy-omx-camera@arm_s_wrist.service|\
   site:restart-unit:rosy-omx-camera@side.service|\
   site:restart-unit:rosy-omx-camera@top.service)
     if arm_session_held; then refuse "an arm session is running" 6; fi
@@ -209,6 +213,12 @@ case "$ROLE:$ACTION:$UNIT" in
     [ "$(timeout 20 systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
       || refuse "no rosy-test-storage.service" 5
     timeout 20 systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
+    ;;
+  site:root-maintenance:|ai:root-maintenance:|model:root-maintenance:|cell:root-maintenance:)
+    # Trigger bounded rosy-ops root maintenance (Docker images, journal, disabled snaps).
+    [ "$(timeout 20 systemctl show -p LoadState --value rosy-root-maintenance.service 2>/dev/null)" = loaded ] \
+      || refuse "no rosy-root-maintenance.service" 5
+    timeout 20 systemctl --no-block start rosy-root-maintenance.service
     ;;
   site:install-site-config:fleet-site.yaml|\
   site:install-site-config:site-cameras.yaml)

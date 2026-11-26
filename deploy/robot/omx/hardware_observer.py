@@ -72,10 +72,12 @@ def main(argv=None):
                 values = dict(zip(JOINTS, positions(rows, time.monotonic() - started)))
                 channel.write('joints', json.dumps(values, allow_nan=False).encode(), captured_at=captured_at)
                 count += 1
-                print(json.dumps({"sample": count, "captured_at": time.time(),
-                                  "device": args.device, "joint_topic": args.joint_topic,
-                                  "motors": rows, "motion_admitted": False}), flush=True)
-                time.sleep(max(0, .1 - (time.monotonic() - started)))
+                if not args.persistent:
+                    print(json.dumps({"sample": count, "captured_at": time.time(),
+                                      "device": args.device, "joint_topic": args.joint_topic,
+                                      "motors": rows, "motion_admitted": False}), flush=True)
+                period = .25 if args.persistent else .1
+                time.sleep(max(0, period - (time.monotonic() - started)))
         result = 0 if count and (deadline is None or time.monotonic() >= deadline) else 2
     except KeyboardInterrupt:
         result = 0 if count else 2

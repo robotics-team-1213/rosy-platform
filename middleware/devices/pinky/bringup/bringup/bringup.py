@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import importlib
+import os
 import rclpy
 import signal
 from rclpy.node import Node
@@ -19,10 +21,12 @@ from rcl_interfaces.msg import ParameterDescriptor
 from .command_deadman import CommandDeadman
 from .dynamixel_driver import (
     DynamixelDriver,
+    bus_watchdog_units,
     validate_motor_ids,
     validate_profile_acceleration,
     wrapped_encoder_delta,
 )
+from .motor_bus_worker import MotorBusWorker
 from .motor_control import (
     CommandStatus,
     DriveGeometry,
@@ -45,8 +49,8 @@ DEFAULT_SERIAL_PORT_NAME = "/dev/ttyAMA4"
 DEFAULT_BAUDRATE = 1000000
 DEFAULT_DYNAMIXEL_IDS = [1, 2]  # [왼쪽 바퀴 ID, 오른쪽 바퀴 ID]
 
-JOINT_NAME_WHEEL_L = "left_wheel_joint"
-JOINT_NAME_WHEEL_R = "right_wheel_joint"
+JOINT_NAME_WHEEL_L = "l_wheel_joint"
+JOINT_NAME_WHEEL_R = "r_wheel_joint"
 
 PULSE_PER_ROT = 4096 
 RPM2RAD = 2 * math.pi / 60
@@ -100,11 +104,18 @@ class Rosy(Node):
             read_only=True,
             description='true = spin wheels briefly at start to detect a stalled motor',
         ))
+        self.declare_parameter('bus_watchdog_ms', 300.0, ParameterDescriptor(
+            read_only=True,
+            description='Dynamixel Addr 98 Bus Watchdog timeout in ms (0 disables)',
+        ))
         self.motor_motion_check = self.get_parameter('motor_motion_check').value is True
         drive_enabled = self.get_parameter('drive_enabled').value
         if not isinstance(drive_enabled, bool):
             raise ValueError('drive_enabled must be a boolean')
         self.drive_enabled = drive_enabled
+        raw_watchdog_ms = self.get_parameter('bus_watchdog_ms').value
+        bus_watchdog_units(raw_watchdog_ms)
+        self.bus_watchdog_ms = float(raw_watchdog_ms)
 
         # Keep the board-specific boundary explicit.  This validates the
         # complete ROS parameter set before any SDK object opens a UART; the
@@ -160,6 +171,7 @@ class Rosy(Node):
         frame_prefix = str(adapter_params['frame_prefix'])
         if frame_prefix and not frame_prefix.endswith('/'):
             frame_prefix += '/'
+        self.frame_prefix = frame_prefix
         self.odom_frame_id = f'{frame_prefix}{DEFAULT_ODOM_FRAME_ID}'
         self.odom_child_frame_id = f'{frame_prefix}{DEFAULT_ODOM_CHILD_FRAME_ID}'
         self.get_logger().info(f'Frames: {self.odom_frame_id} -> {self.odom_child_frame_id}')
@@ -173,6 +185,7 @@ class Rosy(Node):
         )
         
         self.circumference = 2 * math.pi * self.wheel_radius
+        self._io_worker = None
         self.driver = DynamixelDriver(
             self.motor_device,
             self.motor_baudrate,
@@ -189,7 +202,7 @@ class Rosy(Node):
                 max_angular_rps=self.max_angular_rps,
                 max_wheel_rpm=self.max_wheel_rpm,
             ),
-            self.driver.set_double_rpm,
+            self._write_double_rpm,
         )
         self.motor_ready_pub = self.create_publisher(Bool, MOTOR_READY_TOPIC, _MOTOR_READY_QOS)
         # Publish a latched false before opening the transport.  CORE can then
@@ -244,6 +257,10 @@ class Rosy(Node):
                 self.get_logger().error(message + '. Exiting non-zero for systemd restart.')
                 raise RuntimeError(message)
 
+            if self.drive_enabled and not self.driver.arm_bus_watchdog(self.bus_watchdog_ms):
+                self.get_logger().error('Failed to arm Dynamixel Bus Watchdog! Shutting down.')
+                raise RuntimeError('failed to arm Dynamixel Bus Watchdog')
+
             self.get_logger().info('4. Reading initial encoder values...')
             _, _, self.last_encoder_l, self.last_encoder_r = self.driver.get_feedback()
             if self.last_encoder_l is None:
@@ -266,9 +283,15 @@ class Rosy(Node):
                 )
             self.tf_broadcaster = TransformBroadcaster(self)
             self.timer = self.create_timer(1.0 / 30.0, self.update_and_publish)
-            # Same single-threaded executor as the 30 Hz loop, so the two never share the bus at once.
+            # Stagger health reads (one motor per 1 s tick) under the single executor so
+            # synchronous UART polling stays below half its former worst-case blocking time.
             self.motor_health_pub = self.create_publisher(String, MOTOR_HEALTH_TOPIC, 10)
-            self.health_timer = self.create_timer(MOTOR_HEALTH_PERIOD_S, self.publish_motor_health)
+            self._health_rows = {}
+            self._health_idx = 0
+            self.health_timer = self.create_timer(
+                MOTOR_HEALTH_PERIOD_S / max(1, len(self.driver.DXL_IDS)),
+                self.publish_motor_health,
+            )
 
             self.battery_sub = self.create_subscription(
                 Float32,
@@ -283,12 +306,39 @@ class Rosy(Node):
             self.last_time = self.get_clock().now()
             self.is_initialized = True
             self.motor_ready_pub.publish(Bool(data=self.drive_enabled))
+            self._feedback_failures = 0
+            self._motor_ready_live = bool(self.drive_enabled)
             self.get_logger().info(
                 'Rosy Bringup with Dynamixel has been started successfully.'
             )
         except Exception:
             self.driver.terminate()
             raise
+
+    def _write_double_rpm(self, rpm_l, rpm_r):
+        if self._io_worker is not None:
+            return self._io_worker.set_double_rpm(rpm_l, rpm_r)
+        return self.driver.set_double_rpm(rpm_l, rpm_r)
+
+    def start_io_worker(self):
+        if self._io_worker is None:
+            worker = MotorBusWorker(
+                self.driver,
+                drive_enabled=self.drive_enabled,
+                feedback_period_s=1.0 / 30.0,
+                health_step_period_s=MOTOR_HEALTH_PERIOD_S / max(1, len(self.driver.DXL_IDS)),
+            )
+            worker.start()
+            self._io_worker = worker
+
+    def stop_io_worker(self, timeout_s: float = 2.0):
+        worker = self._io_worker
+        if worker is None:
+            return True
+        stopped = worker.stop(timeout_s=timeout_s)
+        if stopped:
+            self._io_worker = None
+        return stopped
 
     def twist_callback(self, msg: Twist):
         outcome = self.motor_controller.command_twist(msg.linear.x, msg.angular.z)
@@ -317,14 +367,8 @@ class Rosy(Node):
             self.command_deadman.mark_command()
 
     def update_and_publish(self):
-        if self.is_initialized and self.drive_enabled:
-            # This is the adapter lease.  CORE expires it if the motor process
-            # stops producing health updates, even though the topic is latched.
-            # A no-motion node never offers it: CORE must not plan on motors
-            # that cannot move.
-            self._ready_cycle = (getattr(self, '_ready_cycle', 0) + 1) % MOTOR_READY_EVERY
-            if self._ready_cycle == 0:  # CORE lease is 2 s; 10 Hz keeps 20x margin
-                self.motor_ready_pub.publish(Bool(data=True))
+        if self._io_worker is not None and not self._io_worker.last_stop_ok:
+            self.command_deadman.mark_stop_required()
         stop_result = self.command_deadman.attempt_stop(
             lambda: self.motor_controller.stop().accepted
         )
@@ -341,10 +385,32 @@ class Rosy(Node):
         dt = (current_time - self.last_time).nanoseconds / 1e9
         if dt <= 0: return
 
-        feedback = self.driver.get_feedback()
+        feedback = self._io_worker.read_feedback() if self._io_worker is not None else self.driver.get_feedback()
         if feedback[0] is None:
+            self._feedback_failures = getattr(self, '_feedback_failures', 0) + 1
+            if (self.is_initialized and self.drive_enabled
+                    and self._feedback_failures >= 3
+                    and getattr(self, '_motor_ready_live', True)):
+                self.motor_ready_pub.publish(Bool(data=False))
+                self._motor_ready_live = False
+                self.get_logger().error(
+                    "Motor feedback failed 3 consecutive cycles; cleared motor/ready lease."
+                )
             self.get_logger().warn("Failed to read motor data. Skipping update cycle.")
             return
+        self._feedback_failures = 0
+        if self.is_initialized and self.drive_enabled:
+            # This is the adapter lease.  CORE expires it if the motor process
+            # stops producing health updates, even though the topic is latched.
+            # A no-motion node never offers it: CORE must not plan on motors
+            # that cannot move.
+            self._ready_cycle = (getattr(self, '_ready_cycle', 0) + 1) % MOTOR_READY_EVERY
+            if not getattr(self, '_motor_ready_live', True):
+                self._motor_ready_live = True
+                self._ready_cycle = 0
+                self.motor_ready_pub.publish(Bool(data=True))
+            elif self._ready_cycle == 0:  # CORE lease is 2 s; 10 Hz keeps 20x margin
+                self.motor_ready_pub.publish(Bool(data=True))
         rpm_l, rpm_r, encoder_l, encoder_r = feedback
 
         delta_l = wrapped_encoder_delta(encoder_l, self.last_encoder_l)
@@ -366,40 +432,44 @@ class Rosy(Node):
         v_x = delta_distance / dt if dt > 0 else 0.0
         vth = delta_theta / dt if dt > 0 else 0.0
 
-        self._publish_tf(current_time)
-        self._publish_odometry(current_time, v_x, vth)
+        qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        self._publish_tf(current_time, qz, qw)
+        self._publish_odometry(current_time, v_x, vth, qz, qw)
         self._joint_cycle = (getattr(self, '_joint_cycle', 0) + 1) % JOINT_STATES_EVERY
         if self._joint_cycle == 0:  # wheel travel for the API; every message also costs one /tf wheel transform downstream
             self._publish_joint_states(current_time, rpm_l, rpm_r)
 
         self.last_time = current_time
 
-    def _publish_tf(self, current_time):
+    def _publish_tf(self, current_time, qz=None, qw=None):
         t = TransformStamped()
         t.header.stamp = current_time.to_msg()
         t.header.frame_id = self.odom_frame_id
         t.child_frame_id = self.odom_child_frame_id
         t.transform.translation.x = self.x
         t.transform.translation.y = self.y
-        q = quaternion_from_euler(0, 0, self.theta)
-        t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w = q
+        if qz is None or qw is None:
+            qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w = 0.0, 0.0, qz, qw
         self.tf_broadcaster.sendTransform(t)
 
-    def _publish_odometry(self, current_time, v_x, vth):
+    def _publish_odometry(self, current_time, v_x, vth, qz=None, qw=None):
         odom_msg = Odometry()
         odom_msg.header.stamp = current_time.to_msg()
         odom_msg.header.frame_id = self.odom_frame_id
         odom_msg.child_frame_id = self.odom_child_frame_id
         odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y = self.x, self.y
-        q = quaternion_from_euler(0, 0, self.theta)
-        odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w = q
+        if qz is None or qw is None:
+            qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w = 0.0, 0.0, qz, qw
         odom_msg.twist.twist.linear.x, odom_msg.twist.twist.angular.z = v_x, vth
         self.odom_pub.publish(odom_msg)
 
     def _publish_joint_states(self, current_time, rpm_l, rpm_r):
         joint_msg = JointState()
         joint_msg.header.stamp = current_time.to_msg()
-        joint_msg.name = [JOINT_NAME_WHEEL_L, JOINT_NAME_WHEEL_R]
+        prefix = getattr(self, "frame_prefix", "")
+        joint_msg.name = [f"{prefix}{JOINT_NAME_WHEEL_L}", f"{prefix}{JOINT_NAME_WHEEL_R}"]
         
         pos_l_rad = (self.last_encoder_l / PULSE_PER_ROT) * (2 * math.pi)
         pos_r_rad = (self.last_encoder_r / PULSE_PER_ROT) * (2 * math.pi)
@@ -409,7 +479,18 @@ class Rosy(Node):
         self.joint_pub.publish(joint_msg)
 
     def publish_motor_health(self):
-        self.motor_health_pub.publish(String(data=json.dumps({"motors": self.driver.read_health()})))
+        if self._io_worker is not None:
+            motors = self._io_worker.consume_health()
+            if motors is not None:
+                self.motor_health_pub.publish(String(data=json.dumps({"motors": motors})))
+            return
+        dxl_id = self.driver.DXL_IDS[self._health_idx]
+        self._health_rows[dxl_id] = self.driver.read_health_one(dxl_id)
+        self._health_idx = (self._health_idx + 1) % len(self.driver.DXL_IDS)
+        if self._health_idx == 0:
+            self.motor_health_pub.publish(String(data=json.dumps({
+                "motors": [self._health_rows[i] for i in self.driver.DXL_IDS],
+            })))
 
     def battery_voltage_callback(self, msg):
         self.current_voltage = msg.data
@@ -422,12 +503,55 @@ class Rosy(Node):
             )
 
 
+_EXECUTOR_KINDS = ("events", "single")
+
+
+def _executor_kind(environ=None):
+    """Return 'events' or 'single' from ROSY_EXECUTOR (D-185 R3)."""
+    env = os.environ if environ is None else environ
+    kind = env.get("ROSY_EXECUTOR", "single").strip().lower() or "single"
+    if kind not in _EXECUTOR_KINDS:
+        raise ValueError(
+            f"ROSY_EXECUTOR must be one of {', '.join(repr(k) for k in _EXECUTOR_KINDS)}, not {kind!r}"
+        )
+    return kind
+
+
+def _spin_node(node, *, rclpy_mod=None, environ=None, import_module=importlib.import_module):
+    """Spin bringup under SingleThreadedExecutor or rclpy.experimental.EventsExecutor."""
+    mod = rclpy if rclpy_mod is None else rclpy_mod
+    start_io = getattr(node, "start_io_worker", None)
+    stop_io = getattr(node, "stop_io_worker", None)
+    if callable(start_io):
+        start_io()
+    try:
+        if _executor_kind(environ) == "single":
+            mod.spin(node)
+            return
+        executor = import_module(f"{mod.__name__}.experimental").EventsExecutor()
+        external_shutdown = getattr(getattr(mod, "executors", None), "ExternalShutdownException", ())
+        executor.add_node(node)
+        try:
+            try:
+                executor.spin()
+            except external_shutdown:
+                pass
+        finally:
+            executor.remove_node(node)
+            shutdown = getattr(executor, "shutdown", None)
+            if callable(shutdown):
+                shutdown(timeout_sec=0)
+    finally:
+        if callable(stop_io):
+            stop_io()
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
         node = Rosy()
-        rclpy.spin(node)
+        _spin_node(node)
     except KeyboardInterrupt:
         pass
     finally:
@@ -435,6 +559,8 @@ def main(args=None):
         for signum in (signal.SIGINT, signal.SIGTERM):
             signal.signal(signum, signal.SIG_IGN)
         if node is not None:
+            if not node.stop_io_worker():
+                node.get_logger().error("bringup UART worker did not exit cleanly before driver terminate")
             if getattr(node, 'motor_ready_pub', None) is not None:
                 try:
                     node.motor_ready_pub.publish(Bool(data=False))

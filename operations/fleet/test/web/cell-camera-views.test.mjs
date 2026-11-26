@@ -1,14 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { register } from "node:module";
+
+register("./resolve-console-assets.mjs", import.meta.url);
 
 // 셀 S(arm_s·S3)에는 측면 카메라가 없고, Pinky 도킹은 천장 Cam ROI로 위에서 본다(D-136:
 // Fleet은 영상 바이트를 중계하지 않는다). 이 회귀 시험은 어떤 셀 S 카메라 목록에도 side가
 // 없고 도킹 뷰가 /side_camera를 쓰지 않음을 지킨다.
-import {chargeBayRows, inspectorTargetsFromRows} from "../../../../applications/fleet/web/charge-bays-model.js";
-import {
+const {chargeBayRows, inspectorTargetsFromRows} = await import("../../../../applications/fleet/web/charge-bays-model.js");
+const {
   visualCardSpecs, inspectorSpecs, CAMERA_WALL_VIEWS, S3_VIEWS, S5_VIEWS,
-} from "../../../../applications/fleet/web/cell/cell-real2sim-specs.js";
-import {createCellFrameFeed} from "../../../../applications/fleet/web/shared/cell-frames.js";
+} = await import("../../../../applications/fleet/web/cell/cell-real2sim-specs.js");
+const {createCellFrameFeed} = await import("../../../../applications/fleet/web/shared/cell-frames.js");
 
 const body = {
   cells: {
@@ -63,11 +66,11 @@ test("an image bound before it is attached is painted once attached", async () =
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const imageNode = () => ({
-  isConnected: true, hidden: false, src: '',
+  isConnected: true, hidden: false, src: '', parentElement: {dataset: {}},
   removeAttribute(name) { if (name === 'src') this.src = ''; },
 });
-const jpeg = (age = 10) => new Response('jpeg', {
-  headers: {'X-Frame-Age-Ms': String(age), 'X-Frame-Seq': '7'},
+const jpeg = (age = 10, seq = '7') => new Response('jpeg', {
+  headers: {'X-Frame-Age-Ms': String(age), 'X-Frame-Seq': seq},
 });
 
 function frameFeed(t, fetchFrame, sources = ['camera_a']) {
@@ -116,36 +119,53 @@ test("an unresolved camera does not delay peers or open unbounded fetches", asyn
   await flush();
 });
 
-test("429 clears the image and marks the previous live badge unavailable", async (t) => {
+test("429 holds the last live frame with disconnect text while 401 drops the frame", async (t) => {
   let response = jpeg();
   const {feed} = frameFeed(t, async () => response);
-  const img = imageNode();
+  const standby = {hidden: false, textContent: '', classList: {contains: (c) => c === 'omx-inspector-cam-standby'}};
+  const img = {...imageNode(), nextElementSibling: standby};
   const badge = {isConnected: true};
   feed.bind(img, {source: 'camera_a'}, badge);
   await flush();
   assert.match(badge.textContent, /#7/);
+  assert.equal(img.parentElement.dataset.camPhase, 'live');
   response = new Response(null, {status: 429});
   feed.setRunning(true);
   await flush();
   assert.doesNotMatch(badge.textContent, /#7/);
+  assert.match(badge.textContent, /끊어짐 · 0초간 끊어짐 · 영상 요청 한도 도달/);
+  assert.equal(img.hidden, false);
+  assert.match(img.src, /^blob:/);
+  assert.equal(img.parentElement.dataset.camPhase, 'disconnected');
+  assert.equal(standby.hidden, false);
+  response = new Response(null, {status: 401});
+  feed.setRunning(true);
+  await flush();
   assert.equal(img.src, '');
   assert.equal(img.hidden, true);
 });
 
-test("a cached ceiling ROI needs a fresh frame age before display", async (t) => {
-  let response = jpeg();
+test("a cached ceiling ROI holds last live frame on stale blip and keeps never-live hidden", async (t) => {
+  let response = new Response('old', {headers: {'X-Frame-Captured-At': '12.5'}});
   const {feed} = frameFeed(t, async () => response);
   const img = imageNode();
   const badge = {isConnected: true};
   feed.bind(img, {roiTarget: 'robot'}, badge);
+  await flush();
+  assert.equal(img.src, '');
+  assert.equal(img.hidden, true);
+
+  response = jpeg();
+  feed.setRunning(true);
   await flush();
   assert.equal(img.hidden, false);
   assert.match(img.src, /^blob:/);
   response = new Response('old', {headers: {'X-Frame-Captured-At': '12.5'}});
   feed.setRunning(true);
   await flush();
-  assert.equal(img.src, '');
-  assert.equal(img.hidden, true);
+  assert.equal(img.hidden, false);
+  assert.match(img.src, /^blob:/);
+  assert.equal(img.parentElement.dataset.camPhase, 'disconnected');
 });
 
 test("legacy ROI uses HTTP Date with a conservative one-second rounding bound", async (t) => {
@@ -154,15 +174,12 @@ test("legacy ROI uses HTTP Date with a conservative one-second rounding bound", 
   const legacy = (captureAt, responseDate = date.toUTCString(), reportedAge = {}) => new Response('jpeg', {
     headers: {'Date': responseDate, 'X-Frame-Captured-At': String(captureAt), ...reportedAge},
   });
-  let response = legacy(responseAt + 0.4); // The capture can be in the same rounded second.
+  let response = legacy(responseAt - 2.4);
   const {feed} = frameFeed(t, async () => response);
   const img = imageNode();
   feed.bind(img, {roiTarget: 'robot'});
   await flush();
-  assert.match(img.src, /^blob:/);
-
   for (const invalid of [
-    legacy(responseAt - 2.4), // The true age could exceed 3 s.
     legacy(responseAt + 1), // The capture is beyond the rounded second.
     legacy(responseAt, 'invalid'),
     legacy(responseAt, date.toUTCString(), {'X-Frame-Age-Ms': '4000'}),
@@ -173,6 +190,12 @@ test("legacy ROI uses HTTP Date with a conservative one-second rounding bound", 
     assert.equal(img.hidden, true);
     assert.equal(img.src, '');
   }
+
+  response = legacy(responseAt + 0.4); // The capture can be in the same rounded second.
+  feed.setRunning(true);
+  await flush();
+  assert.match(img.src, /^blob:/);
+  assert.equal(img.hidden, false);
 });
 
 test("disposing the feed aborts a read and discards its late result", async (t) => {
@@ -205,4 +228,106 @@ test("waiting, unregistered, and disconnected camera states give clear next-acti
   assert.match(badgeErr.textContent, /첫 프레임 대기/);
   await flush();
   assert.match(badgeErr.textContent, /영상 연결 끊김 — Vision 확인/);
+});
+
+test("synchronous multi-tile bind burst fetches all tiles, hides standby on frame, and reports 404 state", async (t) => {
+  const sources = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
+  const fetched = [];
+  const states = new Map();
+  const priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL('https://site.test') });
+  t.after(() => {
+    if (priorLocation) Object.defineProperty(globalThis, 'location', priorLocation);
+    else delete globalThis.location;
+  });
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    fetched.push(String(url));
+    if (String(url).includes('/c6/')) return new Response(null, {status: 404});
+    return jpeg();
+  });
+  const feed = createCellFrameFeed({
+    call: async (path, options) => {
+      if (path.endsWith('/sources')) return {sources};
+      const source = JSON.parse(options.body).source_id;
+      return {lease: 'test-lease', frame_path: `/api/vision/sources/${source}/frame`};
+    },
+    onStateChange: (key, state) => states.set(key, state),
+  });
+  t.after(() => feed.dispose());
+
+  const standbys = sources.map(() => ({ hidden: false, textContent: '', classList: { contains: (c) => c === 'omx-inspector-cam-standby' } }));
+  const imgs = sources.map((_, i) => ({
+    isConnected: true, hidden: false, src: '', dataset: {},
+    nextElementSibling: standbys[i],
+    removeAttribute(name) { if (name === 'src') this.src = ''; },
+  }));
+  sources.forEach((source, i) => feed.bind(imgs[i], {source}));
+  await new Promise(resolve => setTimeout(resolve, 25));
+
+  assert.equal(fetched.length, 6);
+  assert.equal(standbys[0].hidden, true);
+  assert.equal(states.get('source:c1')?.live, true);
+  assert.equal(standbys[5].hidden, false);
+  assert.match(standbys[5].textContent, /카메라 송신기 미연결/);
+  assert.equal(states.get('source:c6')?.live, false);
+});
+
+test("setPaused freezes display without tearing down streams and checkSources shares the source sample", async (t) => {
+  const priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL('https://site.test') });
+  t.after(() => {
+    if (priorLocation) Object.defineProperty(globalThis, 'location', priorLocation);
+    else delete globalThis.location;
+  });
+  let fetches = 0;
+  t.mock.method(globalThis, 'fetch', async () => { fetches += 1; return jpeg(); });
+  let sourceCalls = 0;
+  const samples = [];
+  const feed = createCellFrameFeed({
+    call: async (path, options) => {
+      if (path.endsWith('/sources')) { sourceCalls += 1; return {sources: ['c1']}; }
+      const source = JSON.parse(options.body).source_id;
+      return {lease: 'test-lease', frame_path: `/api/vision/sources/${source}/frame`};
+    },
+    onSourcesSample: (sample) => samples.push(sample),
+  });
+  t.after(() => feed.dispose());
+
+  let srcWrites = 0;
+  let _src = '';
+  const standby = { hidden: false, textContent: '', classList: { contains: (c) => c === 'omx-inspector-cam-standby' } };
+  const img = {
+    isConnected: true, hidden: false, dataset: {}, parentElement: {dataset: {}}, nextElementSibling: standby,
+    get src() { return _src; },
+    set src(v) { srcWrites += 1; _src = v; },
+    removeAttribute(name) { if (name === 'src') _src = ''; },
+  };
+  feed.bind(img, {source: 'c1'});
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(srcWrites, 1);
+  assert.equal(standby.hidden, true);
+
+  feed.repaint({source: 'c1'});
+  assert.equal(srcWrites, 1);  // paint() !== guard skips redundant img.src writes
+
+  // Same X-Frame-Seq does not recreate blob URL or write img.src again
+  feed.setRunning(true);
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(srcWrites, 1);
+
+  feed.setPaused(true);
+  assert.equal(img.hidden, false);
+  assert.equal(img.parentElement.dataset.camPhase, 'paused');
+  assert.equal(standby.hidden, false);
+  assert.equal(standby.textContent, '영상 일시정지 · 마지막 프레임 유지');
+
+  await feed.checkSources();
+  assert.equal(sourceCalls, 1);
+  assert.deepEqual(samples, [{finished: true, status: 200, names: ['c1']}]);
+
+  const fetchesBeforeResume = fetches;
+  feed.setPaused(false);
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.ok(fetches > fetchesBeforeResume);
+  assert.equal(standby.hidden, true);
 });

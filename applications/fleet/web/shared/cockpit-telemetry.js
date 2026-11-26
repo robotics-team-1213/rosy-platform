@@ -1,7 +1,37 @@
-import { cssColor } from "/common/ui.js";
-import { node } from "/common/control-dom.js";
+import { html, render, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
+import { cssColor, iconSvg } from "/common/ui.js";
+import { node, patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
 import { owns } from "/console/assets/unit-scope.js";
 import { powerHealthView } from "/console/assets/power-health-view.js";
+import { fleetMotion } from "/console/assets/measured-motion.js";
+
+export function batteryMeterState({ percent = null, charging = false, online = true, stale = false } = {}) {
+  const valid = online && !stale && typeof percent === "number" && Number.isFinite(percent);
+  const clamped = valid ? Math.max(0, Math.min(100, Math.round(percent))) : null;
+  const tone = clamped === null ? "unknown" : clamped <= 15 ? "crit" : clamped <= 30 ? "warn" : "good";
+  return { tone, charging: Boolean(charging && valid), meter: `${clamped ?? 0}%` };
+}
+
+export function BatteryMeter(props) {
+  const st = batteryMeterState(props);
+  return html`<span class="batt-meter" data-tone=${st.tone} data-batt-charging=${String(st.charging)} aria-hidden="true"><span class="batt-fill" data-meter=${st.meter}></span></span>`;
+}
+
+export function createBatteryMeter(props) {
+  const wrap = node("span", "", "batt-meter");
+  wrap.setAttribute("aria-hidden", "true");
+  wrap.append(node("span", "", "batt-fill"));
+  patchBatteryMeter(wrap, props);
+  return wrap;
+}
+
+export function patchBatteryMeter(el, props) {
+  if (!el) return;
+  const st = batteryMeterState(props);
+  patchData(el, "tone", st.tone);
+  patchData(el, "battCharging", String(st.charging));
+  patchAttr(el.firstElementChild, "data-meter", st.meter);
+}
 
 let uPlotLoader = null;
 function loadUPlot() {
@@ -11,15 +41,23 @@ function loadUPlot() {
   return uPlotLoader;
 }
 
-function makeHudCell(key, labelText) {
-  const cell = document.createElement("div");
-  cell.className = "cockpit-hud-cell";
-  cell.dataset.hudKey = key;
-  cell.dataset.tone = "neutral";
-  const label = node("span", labelText, "cockpit-hud-label");
-  const val = node("strong", "—", "cockpit-hud-val");
-  cell.append(label, val);
-  return { cell, label, val };
+function HudIcon({ name }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const svg = name ? iconSvg(name) : null;
+    ref.current?.replaceChildren(...(svg ? [svg] : []));
+  }, [name]);
+  return name ? html`<span class="hud-icon" aria-hidden="true" ref=${ref} />` : null;
+}
+
+function CockpitHudCells({ items }) {
+  return html`${items.map((item) => html`
+    <div class="cockpit-hud-cell" key=${item.key} data-hud-key=${item.key} data-tone=${item.tone} title=${item.title || undefined}>
+      <span class="cockpit-hud-label"><${HudIcon} name=${item.icon} />${item.label}</span>
+      ${item.battery ? html`<${BatteryMeter} ...${item.battery} />` : null}
+      <strong class="cockpit-hud-val">${item.text}</strong>
+    </div>
+  `)}`;
 }
 
 export function createCockpitHud({ el }) {
@@ -27,31 +65,21 @@ export function createCockpitHud({ el }) {
   if (!pathbar) return { update() {} };
 
   let hud = el("cockpit-hud");
-  let cells;
   if (!hud) {
     hud = document.createElement("div");
     hud.id = "cockpit-hud";
     hud.className = "cockpit-hud";
     hud.setAttribute("role", "region");
     hud.setAttribute("aria-label", "함대 계기 요약");
-    cells = {
-      online: makeHudCell("online", "FLEET"),
-      mission: makeHudCell("mission", "MISSION"),
-      battery: makeHudCell("battery", "BATT MIN"),
-      arms: makeHudCell("arms", "OMX CELL"),
-      alerts: makeHudCell("alerts", "ALERTS"),
-    };
-    for (const c of Object.values(cells)) hud.append(c.cell);
     pathbar.append(hud);
   }
 
-  function setCell(key, text, tone = "neutral", labelText = null, title = "") {
-    const target = cells?.[key];
-    if (!target) return;
-    if (labelText && target.label.textContent !== labelText) target.label.textContent = labelText;
-    if (target.val.textContent !== text) target.val.textContent = text;
-    if (target.cell.dataset.tone !== tone) target.cell.dataset.tone = tone;
-    if (target.cell.title !== title) target.cell.title = title;
+  let lastHudSig = "";
+  function renderItems(items) {
+    const sig = JSON.stringify(items);
+    if (sig === lastHudSig) return;
+    lastHudSig = sig;
+    render(html`<${CockpitHudCells} items=${items} />`, hud);
   }
 
   function update(view) {
@@ -63,13 +91,15 @@ export function createCockpitHud({ el }) {
 
     if (!owns("drive") && owns("arms")) {
       const unitId = view.controlUnit?.unit_id || "ARM-CELL";
-      const critTotal = critCount + (sum?.heldCount || 0) + (sum?.faultArmCount || 0);
+      const critTotal = critCount + (sum?.incidentHeldCount || 0) + (sum?.faultArmCount || 0);
       const warnTotal = warnCount + (sum?.warnArmCount || 0);
-      setCell("online", view.stateUnavailable ? "연결 끊김" : unitId, view.stateUnavailable ? "crit" : "neutral", "관제 단위");
-      setCell("mission", !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn", "팔 피드백");
-      setCell("battery", !sum ? "—" : `${sum.camsTotal}대`, sum?.camsTotal ? "neutral" : "warn", "셀 카메라");
-      setCell("arms", !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral", "보류 · 사건");
-      setCell("alerts", critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral", "경보");
+      renderItems([
+        { key: "online", label: "관제 단위", text: view.stateUnavailable ? "연결 끊김" : unitId, tone: view.stateUnavailable ? "crit" : "neutral" },
+        { key: "mission", label: "팔 피드백", text: !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, tone: !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn" },
+        { key: "battery", label: "셀 카메라", text: !sum ? "—" : view.cellCamChecked ? `${view.cellLiveCamCount ?? 0}/${sum.camsTotal} 실시간` : `${sum.camsTotal}대`, tone: view.cellCamChecked ? ((view.cellLiveCamCount ?? 0) > 0 ? "active" : "warn") : (sum?.camsTotal ? "neutral" : "warn") },
+        { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.incidentHeldCount > 0 ? `보류 ${sum.incidentHeldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : sum.homeRecoveryCount ? "홈 복구 대기" : "이상 없음", tone: sum?.incidentHeldCount > 0 ? "crit" : sum?.openIncidentCount || sum?.homeRecoveryCount ? "warn" : "neutral" },
+        { key: "alerts", label: "경보", text: critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", tone: critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral" },
+      ]);
       return;
     }
 
@@ -78,68 +108,30 @@ export function createCockpitHud({ el }) {
     const onlineRobots = robots.filter((r) => r.online);
     const online = onlineRobots.length;
     const estopActive = !view.stateUnavailable && robots.some((r) => r.state?.safety?.estop === true);
-    const activeCount = robots.filter(
-      (r) => r.online && (r.state?.navigation === "NAVIGATING" || r.goal),
-    ).length;
-
     const nowMs = Date.now();
-    const validPcts = view.stateUnavailable ? [] : onlineRobots
-      .map((r) => powerHealthView(r, view.receivedAtMs, nowMs).percent)
-      .filter((n) => n !== null);
+    const motion = fleetMotion(robots, view, nowMs);
+    const readPwr = (r) => (view.calmPower ? view.calmPower.read(r, { receivedAtMs: view.receivedAtMs, nowMs, stateUnavailable: view.stateUnavailable }) : powerHealthView(r, view.receivedAtMs, nowMs));
+    const validPcts = view.stateUnavailable ? [] : onlineRobots.map((r) => readPwr(r).percent).filter((n) => n !== null);
     const minBatt = validPcts.length ? Math.min(...validPcts) : null;
-    const battText = online === 0 || view.stateUnavailable ? "—"
-      : minBatt === null ? "확인 불가"
-      : validPcts.length < online ? `${minBatt}% (${validPcts.length}/${online})`
-      : `${minBatt}%`;
-    const battTone = online === 0 || view.stateUnavailable ? "neutral"
-      : minBatt === null ? (view.stateLoaded ? "warn" : "neutral")
-      : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral";
-    const battTitle = online === 0 || view.stateUnavailable ? ""
-      : minBatt === null ? "유효 배터리 근거 없음"
-      : validPcts.length < online ? `유효 배터리 근거 ${validPcts.length}/${online}대 기준 최저값`
-      : "";
+    const battText = online === 0 || view.stateUnavailable ? "—" : minBatt === null ? "확인 불가" : validPcts.length < online ? `${minBatt}% (${validPcts.length}/${online})` : `${minBatt}%`;
+    const battTone = online === 0 || view.stateUnavailable ? "neutral" : minBatt === null ? (view.stateLoaded ? "warn" : "neutral") : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral";
+    const battTitle = online === 0 || view.stateUnavailable ? "" : minBatt === null ? "유효 배터리 근거 없음" : validPcts.length < online ? `유효 배터리 근거 ${validPcts.length}/${online}대 기준 최저값` : "";
 
     const anchors = view.anchors || [];
-    const anchorHeld = anchors.filter(
-      (a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN",
-    ).length;
+    const anchorHeld = anchors.filter((a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN").length;
     const anchorLive = anchors.filter((a) => a.live === true).length;
     const armTotal = sum?.armsTotal > 0 ? sum.armsTotal : anchors.length;
     const armHeld = sum?.armsTotal > 0 ? sum.heldCount : anchorHeld;
     const armReady = sum?.armsTotal > 0 ? sum.armsFresh : anchorLive;
-    const armsText = armTotal === 0
-      ? "—"
-      : armHeld > 0
-        ? `${armHeld}/${armTotal} HOLD`
-        : armReady === 0
-          ? `0/${armTotal} NO FEED`
-          : `${armReady}/${armTotal} LIVE`;
+    const armsText = armTotal === 0 ? "—" : armHeld > 0 ? `${armHeld}/${armTotal} HOLD` : armReady === 0 ? `0/${armTotal} NO FEED` : `${armReady}/${armTotal} LIVE`;
 
-    setCell(
-      "online",
-      view.stateUnavailable ? "LINK LOST" : `${online}/${total} ON`,
-      view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral",
-      "FLEET",
-    );
-    setCell(
-      "mission",
-      activeCount > 0 ? `${activeCount} RUN` : "0 STBY",
-      activeCount > 0 ? "active" : "neutral",
-      "MISSION",
-    );
-    setCell("battery", battText, battTone, "BATT MIN", battTitle);
-    setCell(
-      "arms",
-      armsText,
-      armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral",
-      "OMX CELL",
-    );
-    setCell(
-      "alerts",
-      estopActive ? "E-STOP" : totalAlerts > 0 ? `${critCount}C · ${warnCount}W` : "0 CLEAR",
-      estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral",
-      "ALERTS",
-    );
+    renderItems([
+      { key: "online", icon: "robot", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
+      { key: "mission", icon: "next", label: "이동 중", ...motion },
+      { key: "battery", icon: null, label: "최저 배터리", text: battText, tone: battTone, title: battTitle, battery: { percent: minBatt, online: online > 0 && !view.stateUnavailable, charging: false } },
+      { key: "arms", icon: "arm", label: "셀 팔", text: armsText, tone: armHeld > 0 ? (sum?.armsTotal && !sum.incidentHeldCount ? "warn" : "crit") : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
+      { key: "alerts", icon: "notification", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
+    ]);
   }
 
   return { update };
@@ -153,9 +145,13 @@ export function createTelemetryTrace() {
   const head = document.createElement("div");
   head.className = "telemetry-chart-head";
   const titleEl = node("span", "TELEMETRY", "telemetry-chart-title");
+  const readoutEl = node("span", "", "batt-readout");
+  const battMeter = createBatteryMeter();
+  battMeter.hidden = true;
   const valueEl = node("strong", "—", "telemetry-chart-value");
+  readoutEl.append(battMeter, valueEl);
   const metaEl = node("span", "—", "telemetry-chart-meta");
-  head.append(titleEl, metaEl, valueEl);
+  head.append(titleEl, metaEl, readoutEl);
 
   const plotHost = document.createElement("div");
   plotHost.className = "telemetry-chart-plot";
@@ -186,30 +182,36 @@ export function createTelemetryTrace() {
   }
 
   const MAX_SAMPLES = 24;
-  const SAMPLE_MIN_MS = 850;
+  const SAMPLE_MIN_MS = 5000;
   function ensureSeries(id, value, now = Date.now()) {
     let entry = history.get(id);
     if (!entry) {
       entry = { values: [value], lastAt: now };
       history.set(id, entry);
-      return entry.values;
+      return { values: entry.values, changed: true };
     }
     if (entry.values[entry.values.length - 1] !== value || now - entry.lastAt >= SAMPLE_MIN_MS) {
       entry.values.push(value);
       if (entry.values.length > MAX_SAMPLES) entry.values.shift();
       entry.lastAt = now;
+      return { values: entry.values, changed: true };
     }
-    return entry.values;
+    return { values: entry.values, changed: false };
+  }
+
+  function measurePlotWidth() {
+    return Math.floor(plotHost.clientWidth || head.clientWidth || root.clientWidth || 0);
   }
 
   function scheduleSizeSync() {
     if (rafSync || disposed || typeof window.requestAnimationFrame !== "function") return;
     rafSync = window.requestAnimationFrame(() => {
       rafSync = 0;
-      if (disposed || !plot || !plotHost.clientWidth) return;
-      const w = Math.max(180, Math.floor(plotHost.clientWidth));
-      if (Math.abs((plot.width || 0) - w) > 2) {
-        plot.setSize({ width: w, height: PLOT_HEIGHT });
+      const w = measurePlotWidth();
+      if (disposed || !plot || !w) return;
+      const clamped = Math.max(180, w);
+      if (Math.abs((plot.width || 0) - clamped) > 2) {
+        plot.setSize({ width: clamped, height: PLOT_HEIGHT });
       }
     });
   }
@@ -233,7 +235,8 @@ export function createTelemetryTrace() {
       currentBounds = useBounds;
       const xs = useYs.map((_, idx) => MAX_SAMPLES - useYs.length + idx);
       const { stroke, fill, grid, warn, crit, bg } = colorsForTone(useTone);
-      const measured = Math.floor(plotHost.clientWidth || 0);
+      const measured = measurePlotWidth();
+      if (!measured && typeof ResizeObserver === "function") return;
       const width = Math.max(180, measured || 256);
       if (!plot || plotTone !== useTone || plotId !== useId || currentBoundsKey !== nextBoundsKey) {
         plot?.destroy?.();
@@ -344,37 +347,52 @@ export function createTelemetryTrace() {
 
   const resize = typeof ResizeObserver === "function"
     ? new ResizeObserver(() => {
-        if (!disposed && plot && plotHost.clientWidth > 0) {
-          const w = Math.max(180, Math.floor(plotHost.clientWidth));
-          if (Math.abs((plot.width || 0) - w) > 4) plot.setSize({ width: w, height: PLOT_HEIGHT });
+        const measured = measurePlotWidth();
+        if (disposed || !measured) return;
+        if (!plot && lastSeries && !rendering) {
+          void drawPlot(lastSeries.id, lastSeries.ys, lastSeries.tone, lastSeries.yBounds);
+          return;
+        }
+        if (plot) {
+          const w = Math.max(180, measured);
+          if (Math.abs((plot.width || 0) - w) > 2) plot.setSize({ width: w, height: PLOT_HEIGHT });
         }
       })
     : null;
+  resize?.observe(root);
   resize?.observe(plotHost);
 
   return {
     root,
-    update({ id, title = "TELEMETRY", readout = "—", value = null, unit = "", minBound = null, maxBound = null, tone = "primary" } = {}) {
+    update({ id, title = "TELEMETRY", readout = "—", value = null, unit = "", minBound = null, maxBound = null, tone = "primary", battery = null } = {}) {
       if (disposed) return;
-      titleEl.textContent = title;
-      valueEl.textContent = readout;
+      patchText(titleEl, title);
+      const meterProps = battery ?? (typeof id === "string" && id.startsWith("batt:") ? { percent: value, online: value !== null, charging: false } : null);
+      patchHidden(battMeter, !meterProps);
+      if (meterProps) patchBatteryMeter(battMeter, meterProps);
+      patchText(valueEl, readout);
       if (typeof value !== "number" || !Number.isFinite(value) || !id) {
-        metaEl.textContent = "NO DATA";
-        lastSeries = null;
-        pendingRedraw = false;
-        plot?.destroy?.();
-        plot = null;
-        plotId = null;
-        plotHost.replaceChildren();
+        patchText(metaEl, "NO DATA");
+        if (lastSeries || plot || plotHost.childElementCount) {
+          lastSeries = null;
+          pendingRedraw = false;
+          plot?.destroy?.();
+          plot = null;
+          plotId = null;
+          plotHost.replaceChildren();
+        }
         return;
       }
-      const ys = ensureSeries(id, value);
+      const { values: ys, changed } = ensureSeries(id, value);
       const lo = Math.min(...ys);
       const hi = Math.max(...ys);
-      metaEl.textContent = ys.length < 2
+      const nextMeta = ys.length < 2
         ? "1 SAMPLE"
         : Math.round(lo) === Math.round(hi) ? "STEADY" : `${Math.round(lo)}–${Math.round(hi)}${unit}`;
+      patchText(metaEl, nextMeta);
       const yBounds = typeof minBound === "number" && typeof maxBound === "number" ? [minBound, maxBound] : null;
+      const nextBoundsKey = yBounds ? yBounds.join(",") : "auto";
+      if (!changed && plot && plotId === id && plotTone === tone && currentBoundsKey === nextBoundsKey) return;
       lastSeries = { id, ys: [...ys], tone, yBounds };
       void drawPlot(id, lastSeries.ys, tone, yBounds);
     },

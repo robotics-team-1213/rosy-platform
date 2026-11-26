@@ -42,6 +42,39 @@ def report(session=SESSION, source="arm_b", frames=(b"top", b"side"), **over):
     return {**body, **over}
 
 
+def test_disconnected_session_is_home_recovery_and_keeps_its_hold():
+    store = ArmIncidentStore()
+    facts = {"safe_end": True, "caps_restored": True, "folded": False, "latched": {}, "windup_hits": [],
+             "stops": [], "torque_after": {str(i): 0 for i in range(11, 17)}, "flagged_total": 1,
+             "home": [0]*6, "last_state": [7, 0, 0, 0, 0, 0],
+             "flagged": [{"fault": "session ended: RuntimeError: torque OFF not confirmed: DeviceNotConnectedError"}],
+             "fault_records_total": 1, "fault_records": ["f.json"],
+             "fault_record_kinds": [{"fault": "(5, 'Input/output error')", "stop_reasons": []}]}
+    def submit(source, changes):
+        payload = report(source=source, facts={**facts, **changes}, recovery=None,
+                         decision={"hold": True, "reason": "torque off with arm extended; guarded fold required"})
+        return store.report(ArmIncidentReport.model_validate(payload))
+
+    incident_id = submit("arm_s", {})
+    row, = store.snapshot("arm_s")
+    assert row["event_kind"] == "home_recovery" and row["held"]
+    assert store.hold("arm_s").incident_ids == [incident_id]
+    assert store.hold("arm_s").reason == row["decision"]["reason"]
+    second = report(session="6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a56", source="arm_s")
+    fault_id = store.report(ArmIncidentReport.model_validate(second))
+    mixed = store.hold("arm_s")
+    assert set(mixed.incident_ids) == {incident_id, fault_id}
+    assert "overload" in mixed.reason
+    for i, changes in enumerate([{"latched": {"11": {"hw_error": 32}}}, {"stops": [{"command": "contact"}]},
+                                 {"flagged_total": 2}, {"torque_after": {"11": 0}}, {"truncated": True},
+                                 {"home": None}, {"last_state": [0]*6},
+                                 {"fault_record_kinds": [{"fault": "overload", "stop_reasons": ["contact"]}]}]):
+        source = f"arm_{i}"
+        submit(source, changes)
+        assert "event_kind" not in store.snapshot(source)[0]
+        assert store.hold(source).held
+
+
 def service():
     def arm(name, secret):
         return {"source_id": name, "arm_id": name, "label": name, "board_id": f"{name}-board",
@@ -185,6 +218,7 @@ def test_only_a_named_operator_clears_with_a_note_and_nothing_is_deleted(client)
     [row] = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
              if a["source_id"] == "arm_b"][0]["incidents"]
     assert row["state"] == "cleared" and row["cleared"]["by"] == "op-7" and row["cleared"]["note"] == note["note"]
+    assert row["held"] is False
 
 
 def test_only_the_ai_observer_reads_open_incidents_and_posts_an_explanation_that_changes_nothing(client):
@@ -377,6 +411,10 @@ def test_an_open_software_stop_reported_as_held_stops_holding_by_the_shared_rule
     lagging = {**facts, "flagged": [{"command": "tick", "fault": fault.replace("2105.79", "2200.0")}]}
     held = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", facts=lagging)).json()
     assert held["hold"]["incident_ids"] == [held["incident_id"]]
+    rows = {r["incident_id"]: r for r in [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
+                                           if a["source_id"] == "arm_b"][0]["incidents"]}
+    assert rows[stop["incident_id"]]["held"] is False
+    assert rows[held["incident_id"]]["held"] is True
 
 
 def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():

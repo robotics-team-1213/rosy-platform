@@ -742,3 +742,95 @@ def test_real_trip_runner_and_pipeline_routes_e2e(tmp_path, monkeypatch):
     asyncio.run(scenario_normal_to_arrived())
     asyncio.run(scenario_estop_during_plan())
     asyncio.run(scenario_http_cancel_during_real_start_caps())
+
+
+def test_depart_s3_dispatch_revalidation_and_reservation_cleanup():
+    now = time.time()
+
+    def depart_world(*, folded=True):
+        task = _task(task_id="p1", action="depart_s3", place_id="S1", target_place="S1", unload_batch_id="u-1")
+        state = _state(task)
+        state.omx_cell_tasks = {
+            "u-1-1": {"task_id": "u-1-1", "robot_id": "rosy_46", "unload_batch_id": "u-1", "unload_index": 0,
+                      "status": "COMPLETED", "completed_at": now, "stage_result": {"source_clearance": {"objects": 0}}}
+        }
+        state.omx_cell_states = {"cell_s": {"phase": "RELEASED", "amr_motion_inhibited": False,
+                                            "robot_id": "rosy_46", "unload_batch_id": "u-1", "stage_id": "u-1-1"}}
+        state.arm_live_states = {"arm_s": {"folded": folded, "updated_at": now}}
+        state.unload_releases = {"u-1": {"robot_id": "rosy_46", "task_id": "p1", "state": "OPERATOR", "target": "S1"}}
+        return state, task, World(state)
+
+    # 1. Valid OPERATOR reservation + ready release dispatches normally to S1.
+    st_ok, t_ok, w_ok = depart_world(folded=True)
+    sent = w_ok.tick()
+    assert len(sent) == 1 and t_ok["status"] == "SENT" and w_ok.plans[0][1] == "S1"
+    w_ok.runner.trips[t_ok["trip_id"]]["state"] = "arrived"
+    w_ok.tick()
+    assert t_ok["status"] == "ARRIVED" and "u-1" in st_ok.unload_releases
+
+    # 1b. Mismatched place_id against reserved target must refuse and release OPERATOR reservation.
+    st_mis, t_mis, w_mis = depart_world(folded=True)
+    t_mis["place_id"] = "S3"
+    w_mis.tick()
+    assert (t_mis["status"], t_mis["reason"]) == ("REFUSED", "DEPART_RESERVATION_MISMATCH")
+    assert w_mis.plans == [] and "u-1" not in st_mis.unload_releases
+
+    # 2. If arm_s unfolds before tick, refusal() rejects and clears OPERATOR reservation.
+    st_ref, t_ref, w_ref = depart_world(folded=False)
+    w_ref.tick()
+    assert (t_ref["status"], t_ref["reason"]) == ("REFUSED", "ARM_NOT_HOME")
+    assert "u-1" not in st_ref.unload_releases
+
+    # 3. If arm_s unfolds during plan(), start_guard rejects before start and clears OPERATOR reservation.
+    st_grd, t_grd, w_grd = depart_world(folded=True)
+    orig_plan = w_grd.plan
+
+    async def unfold_during_plan(robot_id, request, principal_id):
+        res = await orig_plan(robot_id, request, principal_id)
+        st_grd.arm_live_states["arm_s"]["folded"] = False
+        return res
+
+    w_grd.plan = unfold_during_plan
+    w_grd.tick()
+    assert (t_grd["status"], t_grd["reason"]) == ("FAILED", "ARM_NOT_HOME")
+    assert w_grd.runner.starts == [] and "u-1" not in st_grd.unload_releases
+
+
+def test_failed_dock_and_unload_cancels_queued_cell_task_only():
+    t_q = _task(task_id="p1", action="dock_and_unload_s3", spawned_cell_task_id="c-q")
+    st_q = _state(t_q)
+    st_q.omx_cell_tasks = {"c-q": {"task_id": "c-q", "cell_id": "cell_s", "status": "QUEUED"}}
+    w_q = World(st_q, console=Console(online=False))
+    w_q.tick()
+    assert (t_q["status"], t_q["reason"]) == ("REFUSED", "ROBOT_OFFLINE")
+    assert st_q.omx_cell_tasks["c-q"]["status"] == "CANCELLED"
+    assert st_q.omx_cell_tasks["c-q"]["cancel_reason"] == "PINKY_TASK_REFUSED"
+
+    t_r = _task(task_id="p1", action="dock_and_unload_s3", spawned_cell_task_id="c-r")
+    st_r = _state(t_r)
+    st_r.omx_cell_tasks = {"c-r": {"task_id": "c-r", "cell_id": "cell_s", "status": "RUNNING"}}
+    w_r = World(st_r, console=Console(online=False))
+    w_r.tick()
+    assert t_r["status"] == "REFUSED" and st_r.omx_cell_tasks["c-r"]["status"] == "RUNNING"
+
+
+def test_pinky_dispatch_enabled_exposed_on_list_endpoints(tmp_path, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from fleet.server.sitemap import pipeline_routes as routes
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+
+    site, graph, _ = build_world_261026_site_map()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
+    app = FastAPI()
+    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (1, site, graph, None)))
+    client = TestClient(app)
+
+    monkeypatch.setenv(pd.FLAG, "1")
+    assert client.get("/api/fleet/pipeline/cell-tasks").json()["pinky_dispatch_enabled"] is True
+    assert client.get("/api/fleet/pipeline/pinky-tasks").json()["pinky_dispatch_enabled"] is True
+
+    monkeypatch.delenv(pd.FLAG, raising=False)
+    assert client.get("/api/fleet/pipeline/cell-tasks").json()["pinky_dispatch_enabled"] is False
+    assert client.get("/api/fleet/pipeline/pinky-tasks").json()["pinky_dispatch_enabled"] is False

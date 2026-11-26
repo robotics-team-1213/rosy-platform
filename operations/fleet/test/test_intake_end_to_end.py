@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 import pytest
+from pydantic import ValidationError
 
 from core_common.protocol.port_events import IntakeReading
 from fleet.server.intake_readings import record, stored_due
@@ -17,6 +18,7 @@ from test_cell_job_store import _stores
 from test_intake_transfer import _trips
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401 - pytest fixtures
 from test_physical_transfer_store import NOW, PROPOSER, admit, api, installation  # noqa: F401
+from test_port_events import control as relay_control
 
 T = datetime(2026, 11, 8, 3, 0, tzinfo=timezone.utc)
 CELL = "supply"
@@ -92,3 +94,45 @@ def test_the_conveyor_end_never_guesses_and_translates_each_reading_once(tmp_pat
         record(store, ports, intake, CELL, read("conveyor_end", "f", tag=101))
     [again] = record(store, ports, intake, CELL, read("conveyor_end", "g"))  # already received: not twice
     assert ports.after(again - 1, 1)[0]["event"].reason == "MISMATCH"
+
+
+def test_rfid_epc_delivers_one_existing_intake_event(tmp_path, cell):
+    path, _, store, ports, intake = cell
+    epc = "432D31000000000000000000"
+    intake["container_epcs"] = {epc: "CNTR-1"}
+    trips = _trips(tmp_path, [("trip-1", "CNTR-1", "SUPPLY", "ADMITTED", "GOAL_CONFIRMED")])
+    [supply] = propose_arrived(trips, store, supply_place="SUPPLY", instance_id=intake["instance_id"])
+    first = asyncio.run(read_page(ports, None, None, 50))
+    reading = IntakeReading(observation_ref="rfid-1", point="rfid_intake", state="read",
+                            epc=epc.lower(), observed_at=T)
+    assert reading.epc == epc
+    [early] = record(store, ports, intake, CELL, reading)
+    refused = ports.after(early - 1, 1)[0]["event"]
+    assert refused.reason == "MISMATCH" and refused.object_ref is None
+    confirm(path, supply)
+    reading = reading.model_copy(update={"observation_ref": "rfid-2"})
+    [seq] = record(store, ports, intake, CELL, reading)
+    assert record(store, ports, intake, CELL, reading) == [seq]
+    with pytest.raises(PortEventConflict):
+        record(store, ports, intake, CELL, reading.model_copy(update={"epc": "AABB"}))
+    page = asyncio.run(read_page(ports, None, first["cursor"], 50))
+    received = [event for event in page["events"] if event["kind"] == "container.received_at_intake"]
+    assert len(received) == 1
+    assert received[0]["object_ref"] == "CNTR-1" and received[0]["identity"] == "observed"
+    assert "epc" not in received[0]
+    peer = relay_control({"cell-a": [(row["seq"], row["event"]) for row in ports.after(0, 50)], "cell-b": []})
+    relayed = asyncio.run(read_page(None, peer, None, 50))
+    assert relayed["complete"] and received[0] in relayed["events"]
+    assert asyncio.run(read_page(None, peer, relayed["cursor"], 50))["events"] == []
+
+
+@pytest.mark.parametrize("point,fields", [
+    ("rfid_intake", {"tag": 100}),
+    ("rfid_intake", {"epc": "AB1"}),
+    ("rfid_intake", {"epc": "AABB", "tag": 100}),
+    ("wrist", {"epc": "AABB"}),
+    ("rfid_intake", {"epc": "AABB", "arm_mission_id": "arm-1"}),
+])
+def test_rfid_requires_an_epc_at_the_intake_point_only(point, fields):
+    with pytest.raises(ValidationError):
+        IntakeReading(observation_ref="rfid-1", point=point, state="read", observed_at=T, **fields)

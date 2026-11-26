@@ -239,3 +239,40 @@ test("the console counts every Fleet answer and keeps asking while signed out", 
   assert.match(poll, /if \(auth\.locked\) return void fleetApi\("\/api\/fleet\/auth\/connection"/);
   assert.doesNotMatch(poll, /noteLink\(err\)/);  // a throw after the answer (render) never paints 연결 끊김
 });
+
+test("policy-admin gets its own data-fleet-role and active role tag", () => {
+  const nodes = fakeHeader();
+  document.documentElement = {dataset: {}};
+  showSession({principal_id: "alice", role: "policy-admin", via: "cookie", account_id: "acct-1"});
+  assert.equal(document.documentElement.dataset.fleetRole, "policy-admin");
+  assert.equal(nodes["user-role"].getAttribute("status"), "active");
+  assert.equal(nodes["user-role"].textContent, "관리자");
+  assert.equal(nodes.estop.disabled, false);
+
+  showSignedOut();
+  assert.equal(document.documentElement.dataset.fleetRole, undefined);
+});
+
+test("Escape closes topbar-extra and watchFleet registers onto scope", async () => {
+  const nodes = fakeHeader();
+  globalThis.MutationObserver = class { observe() {} };
+  bindTopbarToggle();
+  nodes["topbar-more"].listeners.click();
+  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  document.listeners.keydown({key: "Escape", defaultPrevented: false});
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+  assert.equal(nodes["topbar-more"].getAttribute("aria-expanded"), "false");
+
+  const listeners = [];
+  const intervals = [];
+  const scope = {
+    listen(target, type, fn) { listeners.push({target, type, fn}); },
+    interval(fn, ms) { intervals.push({fn, ms}); return 42; },
+  };
+  const timerId = watchFleet(async () => ({fleet: {total: 1, online: 1}, robots: []}), {scope, every: 1234});
+  assert.equal(timerId, 42);
+  assert.equal(intervals.length, 1);
+  assert.equal(intervals[0].ms, 1234);
+  assert.ok(listeners.some(entry => entry.target === document && entry.type === "visibilitychange"));
+  await new Promise(setImmediate);
+});

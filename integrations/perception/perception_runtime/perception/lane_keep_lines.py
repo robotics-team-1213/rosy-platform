@@ -82,18 +82,26 @@ def _validate_positive(name, value):
 
 def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     """uint8 0/1 mask of white floor paint below the horizon and wall bases."""
-    if bgr.ndim == 2:
-        value = bgr
-        saturation = np.zeros_like(bgr)
-    else:
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        value, saturation = hsv[..., 2], hsv[..., 1]
-    height, width = value.shape
+    height, width = bgr.shape[:2]
     top = max(0, min(height, int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))
     mask = np.zeros((height, width), np.uint8)
     if top >= height:
         return mask
-    floor = value[top:].astype(np.float32)
+    start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
+    # Include one extra row above `start` so 3x3 box blur at row `start` matches full-frame blur.
+    slice_start = min(top, max(0, start - 1))
+    top_rel = top - slice_start
+    start_rel = start - slice_start
+    if bgr.ndim == 2:
+        value_slice = bgr[slice_start:]
+        saturation_floor = np.zeros_like(value_slice[top_rel:])
+        hsv_floor = None
+    else:
+        hsv_slice = cv2.cvtColor(bgr[slice_start:], cv2.COLOR_BGR2HSV)
+        value_slice = hsv_slice[..., 2]
+        saturation_floor = hsv_slice[top_rel:, :, 1]
+        hsv_floor = hsv_slice[top_rel:]
+    floor = value_slice[top_rel:].astype(np.float32)
     reference = np.percentile(floor, CARPET_PERCENTILE, axis=1)
     # Smooth the carpet reference over rows and cap it near the whole floor's
     # median: rows full of tape (a stop line seen across, near) must not lift
@@ -102,24 +110,23 @@ def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     reference = np.minimum(reference, float(np.median(floor)) + CARPET_ROW_EXCESS)
     threshold = reference + np.maximum(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - reference))
     # Coloured paint and overlays (and their blended, paler edges) are not tape.
-    coloured = saturation[top:] > MAX_SATURATION
-    if bgr.ndim == 3:
-        coloured |= _pink(hsv[top:])
+    coloured = saturation_floor > MAX_SATURATION
+    if hsv_floor is not None:
+        coloured |= _pink(hsv_floor)
     coloured = cv2.dilate(coloured.astype(np.uint8), np.ones((5, 5), np.uint8))
     lit = (floor >= threshold[:, None]) & (coloured == 0)
     mask[top:] = lit
     # Walls: a bright run through the row just above the horizon, followed down.
-    start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
     if start < height:
         # A wall filling the upper floor rows lifts their carpet reference (up
         # to 255, no wall found); the darkest floor bounds it.
         carpet = float(np.percentile(floor, WALL_CARPET_PERCENTILE))
         wall_threshold = min(float(np.median(threshold[:max(1, len(threshold) // 4)])),
                              carpet + max(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - carpet)))
-        bright = value[start:] >= wall_threshold
+        bright = value_slice[start_rel:] >= wall_threshold
         # Tape laid at the wall base is bright too: the run ends where the
         # (smoothed) column drops by a step, not only where it turns dark.
-        smooth = cv2.blur(value, (3, 3)).astype(np.int16)[start:]
+        smooth = cv2.blur(value_slice, (3, 3)).astype(np.int16)[start_rel:]
         step = np.zeros_like(bright)
         step[WALL_STEP_ROWS:] = (smooth[:-WALL_STEP_ROWS] - smooth[WALL_STEP_ROWS:]) > WALL_TAPE_STEP
         run = np.cumprod(bright & ~step, axis=0).sum(axis=0)
@@ -146,8 +153,9 @@ def _median_filter_1d(values: np.ndarray, size: int) -> np.ndarray:
 
 def _fit_axis(points: np.ndarray):
     centre = points.mean(axis=0)
-    _, _, vt = np.linalg.svd(points - centre, full_matrices=False)
-    direction = vt[0]
+    dx, dy = points[:, 0] - centre[0], points[:, 1] - centre[1]
+    theta = 0.5 * math.atan2(2.0 * float(dx @ dy), float(dx @ dx - dy @ dy))
+    direction = np.array([math.cos(theta), math.sin(theta)])
     if direction[0] < 0:
         direction = -direction
     return centre, direction
@@ -317,11 +325,25 @@ DENOISE_MIN_AREA_PX = 40
 def denoise_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     """floor_white_mask with glare suppression: a median blur before the threshold, a small
     opening after it, and blobs smaller than a tape fragment dropped."""
-    img = cv2.medianBlur(bgr, DENOISE_MEDIAN_PX) if DENOISE_MEDIAN_PX > 1 else bgr
-    mask = floor_white_mask(img, horizon_row).astype(np.uint8)
+    height, width = bgr.shape[:2]
+    top = max(0, min(height, int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))
+    out = np.zeros((height, width), np.uint8)
+    if top >= height:
+        return out
+    start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
+    slice_start = min(top, max(0, start - 1))
+    med_start = max(0, slice_start - DENOISE_MEDIAN_PX // 2) if DENOISE_MEDIAN_PX > 1 else slice_start
+    roi = bgr[med_start:]
+    img = cv2.medianBlur(roi, DENOISE_MEDIAN_PX) if DENOISE_MEDIAN_PX > 1 else roi
+    floor_mask = floor_white_mask(img, horizon_row - med_start).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (DENOISE_OPEN_PX, DENOISE_OPEN_PX))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    return drop_small_components(mask)
+    # When top > 0, row top-1 is guaranteed 0, so slicing at top-1 preserves default OpenCV borders on left/right/bottom.
+    if top > 0:
+        sub = cv2.morphologyEx(floor_mask[top - 1 - med_start:], cv2.MORPH_OPEN, kernel)[1:]
+    else:
+        sub = cv2.morphologyEx(floor_mask, cv2.MORPH_OPEN, kernel)
+    out[top:] = drop_small_components(sub)
+    return out
 
 
 def drop_small_components(mask: np.ndarray) -> np.ndarray:

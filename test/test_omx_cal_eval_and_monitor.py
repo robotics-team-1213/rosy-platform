@@ -20,6 +20,25 @@ import cell_wrist_cal  # noqa: E402
 import omx_tcp  # noqa: E402
 
 
+@pytest.mark.parametrize(("measurement", "expected_diff", "message"), [
+    ({"depth_surface_z_m": -0.030}, 36.1, "D435 depth(-0.03) vs surface_z(-0.0661) = +36.1 mm"),
+    ({"relative_depth_diff_mm": 35.8}, None, "상대 높이 차이 +35.8 mm (절대 높이 미측정)"),
+    ({}, None, "높이 차이 초과 (차이값 없음)"),
+])
+def test_depth_failure_keeps_relative_and_absolute_measurements_distinct(measurement, expected_diff, message):
+    hygiene = []
+    fields = cell_cal_eval.attach_site_cross_verify(
+        "belt", False, -0.0661, {**measurement, "flags": ["depth_diff_gt_6mm"]}, None, hygiene,
+    )
+
+    assert fields["depth_diff_mm"] == expected_diff
+    assert fields["cross_verify_status"] == "fail"
+    assert hygiene == [{"level": "warning", "code": "depth_diff:belt", "message": f"belt: {message}"}]
+    summary = cell_cal_eval.build_cross_verify({"belt": fields}, {"verdict": "fail"}, [], {}, None)
+    assert summary["depth"]["verdict"] == "fail"
+    assert summary["eval_verdict"] == "hold"
+
+
 def test_learn_bias_preserves_pivot_circle_writes_map_sha_and_logs_rejected(tmp_path):
     cal_path = tmp_path / "map.json"
     rec = {"homography": [[1e-3, 0, -0.2], [0, 1e-3, -0.1], [0, 0, 1]], "points": []}
@@ -162,3 +181,46 @@ def test_plan_leverage_and_rgb_only_verify_capture_skip(tmp_path):
         {"sites": {"a": {}}}, [{"stale_map": False, "over_limit": True, "bias_sigma_mm": 1.5}], {"present": True, "stale": False, "tcp": {"z": 0.1}}, None,
     )
     assert over["bias"]["verdict"] == "fail" and over["bias"]["over_limit_regions"] == 1 and over["eval_verdict"] == "hold"
+
+
+def test_verify_profile_depth_uses_factory_and_fk_table_anchor_and_inter_site_deltas(tmp_path):
+    import math
+
+    factory = {
+        "K": [[618.5, 0, 320.0], [0, 618.7, 240.0], [0, 0, 1]],
+        "depth": {"size": [640, 480], "K": [[388.7, 0, 320.0], [0, 388.7, 240.0], [0, 0, 1]]},
+        "depth_to_colour": {"R": np.eye(3).tolist(), "t_m": [0.0, 0.0, 0.0]},
+    }
+    factory_path = tmp_path / "factory.json"
+    factory_path.write_text(json.dumps(factory), encoding="utf-8")
+
+    # 5 deg camera tilt -> nadir offset ~54 px (> verify.nadir_off_px 20.0), table at 600 mm, site_b raised 40 mm
+    K = np.asarray(factory["depth"]["K"])
+    v, u = np.mgrid[0:480, 0:640]
+    rays = np.dstack([(u - K[0, 2]) / K[0, 0], (v - K[1, 2]) / K[1, 1], np.ones((480, 640))])
+    t = math.radians(5.0)
+    normal = np.array([0.0, -math.sin(t), -math.cos(t)])
+    depth = np.where((u >= 400) & (u < 500) & (v >= 200) & (v < 300), 560.0 / -(rays @ normal), 600.0 / -(rays @ normal)).astype(np.uint16)
+
+    cfg = {
+        "arm_id": "arm_a",
+        "cameras": {"top": {"height_m": 0.60, "center_px": [320, 240], "d435_factory": str(factory_path), "depth_roi": [40, 150, 380, 470]}},
+        "sites": {
+            "site_a": {"surface_z": -0.020, "surface_px": [[150, 200], [200, 200], [200, 250], [150, 250]]},
+            "site_b": {"surface_z": 0.020, "surface_px": [[420, 220], [480, 220], [480, 280], [420, 280]]},
+        },
+    }
+    # 1) Anchored by touch_receipts (no plate_px!) -> no plate_not_found flag, exact depth_surface_z_m
+    rep = cell_cal_eval.verify_profile_depth(cfg, None, depth=depth, touch_receipts={"site_a": {"result": "touched", "surface_z": -0.020}})
+    assert rep["camera_top"]["cam_to_table_mm"] == pytest.approx(600.0, abs=1.5)
+    assert rep["camera_top"]["tilt_deg"] == pytest.approx(5.0, abs=0.3)
+    assert rep["camera_top"]["nadir_off_px"] > 20.0
+    assert "nadir_off_gt_limit" in rep["flags"] and "plate_not_found" not in rep["flags"]
+    assert rep["camera_top"]["fk_table_z_m"] == pytest.approx(-0.020, abs=0.002)
+    assert rep["sites"]["site_b"]["depth_surface_z_m"] == pytest.approx(0.020, abs=0.003)
+
+    # 2) Neither touch_receipts nor plate_mm -> records site_above_table_mm & catches inter-site delta error
+    cfg_bad = {**cfg, "sites": {**cfg["sites"], "site_b": {**cfg["sites"]["site_b"], "surface_z": -0.010}}}
+    rep2 = cell_cal_eval.verify_profile_depth(cfg_bad, None, depth=depth)
+    assert rep2["sites"]["site_b"]["site_above_table_mm"] == pytest.approx(40.0, abs=2.0)
+    assert "depth_diff_gt_6mm" in rep2["sites"]["site_b"]["flags"] and rep2["verdict"] == "fail"

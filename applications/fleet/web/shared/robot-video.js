@@ -4,10 +4,13 @@
 // 위임 토큰은 Authorization 헤더로만 보낸다. 패널이 가려지거나 탭이 숨으면 세션을 닫고,
 // 다시 보이면 같은 선택으로 연다. 새 화면이 1초 넘게 없으면 경고, 2초 넘으면 영상을 숨긴다.
 // 실패한 타일은 "영상 없음"으로 남는다: Fleet 경유 JPEG나 고속 MJPEG는 열지 않는다.
+import { formatDisconnectDuration } from "/common/camera-frame-hold.js";
 import { setOffBy } from "/common/cause-line.js";
 
 import {createFleetClient} from "/common/fleet-client.js";
 import {openRobotCamera} from "/console/assets/app-runtime.js";
+
+const readToken = () => { try { return sessionStorage.getItem("rosy-console-token") || ""; } catch { return ""; } };
 
 const MAX_TILES = 6;
 
@@ -17,9 +20,21 @@ const LABEL = {
   hidden: (robot) => `${robot} · 영상 숨김(2초 넘게 새 화면 없음)`,
   waiting: (robot) => `${robot} · 첫 화면 대기`,
   connecting: (robot) => `${robot} · 연결 중`,
-  lost: (robot) => `${robot} · 영상 없음`,
+  lost: (robot) => `${robot} · 영상 연결 실패`,
   closed: (robot) => `${robot} · 중지`,
 };
+
+function lostLabel(robot, phase, error) {
+  const status = error?.status;
+  if (status === 403) return `${robot} · 영상 권한 없음`;
+  if (status === 401) return `${robot} · 로그인 필요`;
+  if (status === 404 || status === 503) {
+    return phase === "grant"
+      ? `${robot} · 전면 카메라 미연결(미디어 서버 미구성)`
+      : `${robot} · 로봇 카메라 송신 대기 중`;
+  }
+  return error?.message ? `${robot} · 영상 연결 실패 (${error.message})` : `${robot} · 영상 연결 실패`;
+}
 
 function el(doc, tag, text, attrs = {}) {
   const node = doc.createElement(tag);
@@ -28,12 +43,48 @@ function el(doc, tag, text, attrs = {}) {
   return node;
 }
 
+function ensureVideoCss(doc) {
+  if (doc?.head && !doc.querySelector?.('link[href$="/robot-video.css"]')) {
+    doc.head.append(el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"}));
+  }
+}
+
 export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
   let sessions = [], running = null;
+  const views = [];
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
+
+  function clearTicker(view) {
+    if (view.disconnectTimer !== null) {
+      clearInterval(view.disconnectTimer);
+      view.disconnectTimer = null;
+    }
+  }
 
   function show(view, robot, state) {
     view.tile.dataset.state = state.state;
+    if (state.state === "live") {
+      view.hadLive = true;
+      view.disconnectedAt = null;
+      clearTicker(view);
+      view.video.hidden = false;
+      view.label.textContent = LABEL.live(robot, state);
+      return;
+    }
+    if (state.state === "hidden" && view.hadLive) {
+      view.video.hidden = false;
+      view.disconnectedAt ??= Date.now();
+      const paintDisconnect = () => {
+        view.label.textContent = `${robot} · 끊어짐 · ${formatDisconnectDuration(Date.now() - view.disconnectedAt)}`;
+      };
+      paintDisconnect();
+      if (view.disconnectTimer === null) view.disconnectTimer = setInterval(paintDisconnect, 1000);
+      return;
+    }
+    if (state.state !== "stale") {
+      view.disconnectedAt = null;
+      clearTicker(view);
+    }
     view.video.hidden = !["live", "stale"].includes(state.state);
     view.label.textContent = (LABEL[state.state] ?? (() => robot))(robot, state);
   }
@@ -45,11 +96,14 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
     const label = el(doc, "figcaption", LABEL.connecting(robot));
     tile.append(video, label);
     stage.append(tile);
-    const view = {tile, video, label};
+    const view = {tile, video, label, hadLive: false, disconnectedAt: null, disconnectTimer: null};
+    views.push(view);
     let grant = null;
+    let phase = "grant";
     try {
       grant = await call(grantPath(robot), {method: "POST"});
       if (running?.stage !== stage) throw new Error("stopped");
+      phase = "whep";
       sessions.push(await open({
         grant, video, onState: (state) => show(view, robot, state), ...(fetchImpl ? {fetchImpl} : {}),
         renewGrant: async () => (grant = await call(grantPath(robot, `/${grant.grant_id}/renew`), {method: "POST"})),
@@ -57,7 +111,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
       }));
     } catch (error) {
       show(view, robot, {state: "lost"});
-      if (error?.status === 403) label.textContent = `${robot} · 영상 권한 없음`;
+      label.textContent = lostLabel(robot, phase, error);
       if (grant && error?.message !== "stopped") call(grantPath(robot, `/${grant.grant_id}`), {method: "DELETE"}).catch(() => {});
     }
   }
@@ -65,12 +119,14 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
   return {
     async start(stage, robots) {
       this.stop();
+      ensureVideoCss(doc);
       const picked = [...new Set(robots)].slice(0, MAX_TILES);
       running = {stage, robots: picked};
       stage.dataset.tiles = String(picked.length);
       await Promise.all(picked.map((robot) => openTile(stage, robot)));
     },
     stop() {
+      views.splice(0).forEach(clearTicker);
       sessions.splice(0).forEach((session) => session.close("stopped"));
       running?.stage.replaceChildren();
       running = null;
@@ -100,22 +156,21 @@ export function bindVisibility({doc = document, target, video, Observer = global
 function mountRobotVideoPanel({doc = document} = {}) {
   const anchor = doc.querySelector(".vision-preview");
   if (!anchor || doc.getElementById("robot-video")) return null;
-  const link = el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"});
-  doc.head.append(link);
+  ensureVideoCss(doc);
   // 접힌 채 시작한다: 펼치기 전에는 Fleet에 아무것도 묻지 않고(상태 폴링에 요청을 더하지 않는다) 영상도 열지 않는다.
   const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video"});
-  const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading"});
+  const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading", class: "ui-disclosure-row"});
   const picker = el(doc, "fieldset", null, {"data-robot-video-picker": ""});
   picker.append(el(doc, "legend", `로봇 선택(최대 ${MAX_TILES}대)`));
-  const show = el(doc, "button", "영상 보기", {type: "button", "data-robot-video-start": ""});
-  const stopButton = el(doc, "button", "중지", {type: "button", "data-robot-video-stop": ""});
+  const show = el(doc, "ui-button", "영상 보기", {kind: "quiet", type: "button", "data-robot-video-start": ""});
+  const stopButton = el(doc, "ui-button", "중지", {kind: "quiet", type: "button", "data-robot-video-stop": ""});
   const status = el(doc, "p", "로봇을 고르고 영상 보기를 누르세요.", {class: "hint", role: "status"});
   const stage = el(doc, "div", null, {class: "robot-video-stage", "data-robot-video-stage": ""});
   panel.append(heading, picker, show, stopButton, status, stage);
   anchor.after(panel);
 
   // console.js와 같은 자격: 로그인 쿠키, 또는 이 탭의 고급 접속 토큰.
-  const call = createFleetClient({credential: () => sessionStorage.getItem("rosy-console-token") || ""});
+  const call = createFleetClient({credential: () => readToken()});
   const video = createRobotVideo({doc, call});
   // 관찰자는 패널이 펼쳐진 동안만 둔다: 접힘·pagehide에서 세션과 관찰자를 모두 정리한다.
   let unbind = null;
@@ -129,8 +184,8 @@ function mountRobotVideoPanel({doc = document} = {}) {
       const rows = active.length ? active : all;
       picker.replaceChildren(picker.firstChild, ...rows.map((robot, idx) => {
         const id = robot.robot_id;
-        const label = el(doc, "label", null);
-        const input = el(doc, "input", null, {type: "checkbox", value: id, "data-robot-video-choice": id});
+        const label = el(doc, "label", null, {class: "ui-check"});
+        const input = el(doc, "input", null, {type: "checkbox", class: "ui-field", value: id, "data-robot-video-choice": id});
         if (active.length === 1 && idx === 0) input.checked = true;
         label.append(input, ` ${id}`);
         return label;
@@ -148,6 +203,11 @@ function mountRobotVideoPanel({doc = document} = {}) {
     if (!robots.length) { status.textContent = "로봇을 한 대 이상 고르세요."; return; }
     status.textContent = `${robots.length}대 영상을 엽니다.`;
     await video.start(stage, robots);
+    const tiles = [...stage.querySelectorAll("[data-robot-video-tile]")];
+    if (tiles.length && tiles.every((t) => t.dataset.state === "lost")
+        && tiles.some((t) => t.textContent?.includes("미디어 서버 미구성"))) {
+      status.textContent = "전면 카메라 미디어 서버가 구성되지 않았습니다 — 각 로봇의 천장 확대(ROI)나 상단 카메라를 이용하세요.";
+    }
   });
   stopButton.addEventListener("click", () => { video.stop(); status.textContent = "영상을 닫았습니다."; });
   panel.addEventListener("toggle", () => {

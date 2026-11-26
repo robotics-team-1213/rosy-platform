@@ -80,21 +80,23 @@ def cmd_pull(client: FleetClient, args: argparse.Namespace) -> dict[str, Any]:
     meta_path = args.out_dir / f"{stem}.meta.json"
     pgm_path.write_bytes(pgm)
     yaml_doc = {**bundle["yaml"], "image": pgm_path.name}
-    yaml_path.write_text(yaml.safe_dump(yaml_doc, sort_keys=False), encoding="utf-8", newline="\n")
+    yaml_path.write_text(yaml.safe_dump(yaml_doc, sort_keys=False, default_flow_style=None), encoding="utf-8", newline="\n")
+    # The Fleet export carries no grid_id; compute it from the saved bundle exactly as CORE does.
+    grid_id = sma.load_map_bundle_module().occupancy_grid_id(yaml_path)
     meta_doc = {
         "robot_id": bundle.get("robot_id", robot_id),
         "map_id": bundle.get("map_id"),
-        "grid_id": bundle["grid_id"],
+        "grid_id": grid_id,
         "sha256": bundle["sha256"],
         "width": bundle["width"],
         "height": bundle["height"],
-        "resolution": bundle["resolution"],
-        "origin": bundle["origin"],
+        "resolution": round(float(bundle["yaml"]["resolution"]), 6),
+        "origin": [float(v) for v in bundle["yaml"]["origin"]],
     }
     meta_path.write_text(json.dumps(meta_doc, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     return {
         "robot_id": robot_id,
-        "grid_id": bundle["grid_id"],
+        "grid_id": grid_id,
         "sha256": bundle["sha256"],
         "yaml": str(yaml_path),
         "pgm": str(pgm_path),

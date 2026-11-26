@@ -123,6 +123,8 @@ class Guarded:
 
     def __init__(self, cell, config: dict):
         self.cell, self.monitor, self._last_state = cell, Monitor(cell, config), None
+        if callable(getattr(cell, "frame_receipt", None)):
+            self.frame_receipt = cell.frame_receipt
 
     def act(self, command: str) -> dict:
         if command == "state":
@@ -131,7 +133,7 @@ class Guarded:
             return state
         words, cached = command.split(), self._last_state
         self._last_state = None
-        if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat"):
+        if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat", "human-hold"):
             reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
             if reason:
                 cd.emit(

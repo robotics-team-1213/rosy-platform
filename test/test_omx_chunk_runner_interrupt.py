@@ -974,3 +974,100 @@ def test_fifo_human_hold_ignores_pre_dispatch_status_row_and_reads_post_dispatch
     r3.tick()
     ack2 = [row for row in status3 if row.get("command") == "human-hold"][-1]
     assert ack2["ok"] is False and ack2["hold_req"] == "req2" and ack2["person_needed"] is True and r3.torque_hold_commanded is False
+
+
+def test_pr2_guard_stopped_clears_port_and_retries_per_motor():
+    from types import SimpleNamespace
+
+    cleared = []
+
+    class _FlakyBus:
+        def __init__(self, mode: str):
+            self.mode = mode
+            self.sync_calls = 0
+            self.port_handler = SimpleNamespace(clearPort=lambda: cleared.append(True))
+
+        def sync_read(self, reg, normalize=False, num_retry=0):
+            self.sync_calls += 1
+            if self.mode == "retry_ok":
+                if self.sync_calls == 1:
+                    raise ConnectionError("stale rx")
+                return {mot: 0 for mot in ci.MOTORS}
+            raise ConnectionError("sync down")
+
+        def read(self, reg, motor, normalize=False, num_retry=0):
+            if self.mode == "per_motor_partial":
+                return 0 if motor != ci.MOTORS[0] else 1
+            if self.mode == "per_motor_all_off":
+                return 0
+            raise ConnectionError("bus down")
+
+    class _FakeRunner:
+        def __init__(self, mode: str):
+            self.robot = SimpleNamespace(motion=SimpleNamespace(failed=True), bus=_FlakyBus(mode))
+            self._interrupt = {"signal": None, "guard_kind": None, "phase": "park"}
+            self.last_present = list(HOME)
+            self.target = list(HOME)
+            self.human_hold_latched = False
+            self.signals = []
+            self.rows = []
+
+        def report(self, **kw):
+            self.rows.append(kw)
+
+        def hold(self, present, why, human=True):
+            self.human_hold_latched = True
+
+    r_retry = _FakeRunner("retry_ok")
+    t1 = ci._guard_stopped(r_retry)
+    assert len(cleared) == 1 and ci._torque_complete(t1)
+    assert ci._guard_verdict(r_retry, t1, "err") is True
+
+    r_part = _FakeRunner("per_motor_partial")
+    t2 = ci._guard_stopped(r_part)
+    assert ci._torque_complete(t2) and t2[ci.MOTORS[0]] == 1
+    assert ci._guard_verdict(r_part, t2, "err") is False and r_part.human_hold_latched is True
+
+    r_off = _FakeRunner("per_motor_all_off")
+    t3 = ci._guard_stopped(r_off)
+    assert ci._guard_verdict(r_off, t3, "err") is True
+
+    r_err = _FakeRunner("all_fail")
+    t4 = ci._guard_stopped(r_err)
+    assert "error" in t4 and ci._guard_verdict(r_err, t4, "err") is False and r_err.human_hold_latched is True
+
+
+def test_guard_stopped_drains_rx_and_retries_when_torque_read_has_write_ack_bytes():
+    robot = GuardRobot(fail_after=30)
+    cleared, calls = [], []
+    robot.bus.port_handler = type("P", (), {"clearPort": lambda self: cleared.append("clear")})()
+    orig_sync = robot.bus.sync_read
+
+    def flaky_sync(name, normalize=True, num_retry=0):
+        if name == "Torque_Enable":
+            calls.append(len(calls) + 1)
+            if len(calls) == 1:
+                return dict(zip(m.MOTORS, (145, 250, 129, 9, 114, 89)))
+            return dict.fromkeys(m.MOTORS, 0)
+        return orig_sync(name, normalize=normalize, num_retry=num_retry)
+
+    robot.bus.sync_read = flaky_sync
+    robot.motion.failed = True
+    r = m.Runner(robot, library(), fps=30, status=lambda _row: None, clock=lambda: 0.0, sleep=lambda _s: None)
+    res = ci._guard_stopped(r)
+    assert cleared == ["clear"]
+    assert calls == [1, 2]
+    assert set(res.values()) == {0}
+
+
+def test_idle_parks_twice_latches_human_hold_without_deadlock():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock = Robot(), [], [0.0]
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 params={"runner.idle_park_s": 1.0, "runner.idle_retry_s": 1.0})
+    r.target = [18.0, -30.0, 20.0, 40.0, 10.0, 46.6]
+    r.idle_parks = 2
+    assert r.idle() is False
+    assert r.idle_parks == 3 and r.human_hold_latched is True and r._human_hold_ack_pending is True
+    assert status[-1]["person_needed"] is True and "idle fold held twice" in status[-1]["error"]

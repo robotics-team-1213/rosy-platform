@@ -116,6 +116,7 @@ class RosGraphMonitor:
         self._cache_seconds = max(0.0, float(cache_seconds))
         self._cached: Optional[dict[str, Any]] = None
         self._cached_at: Optional[float] = None
+        self._cached_isolation: Optional[dict[str, Any]] = None
         self._lock = threading.Lock()
 
     def snapshot(self) -> dict[str, Any]:
@@ -160,7 +161,9 @@ class RosGraphMonitor:
             domain_id = None
             risks.append({'code': 'DOMAIN_ID_INVALID', 'message': str(error)})
 
-        isolation = _dds_isolation(self._dds_uri, self._dds_config_reader)
+        if self._cached_isolation is None:
+            self._cached_isolation = _dds_isolation(self._dds_uri, self._dds_config_reader)
+        isolation = self._cached_isolation
         if self._rmw and self._rmw != REQUIRED_RMW:
             risks.append({
                 'code': 'RMW_NOT_CYCLONE',

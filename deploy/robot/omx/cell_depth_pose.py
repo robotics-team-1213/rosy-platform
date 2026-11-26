@@ -32,20 +32,227 @@ HEIGHT_MOVED_MM = 6.0  # +-0.6 mm within a run, but D435 depth drifts up to ~1 %
 MIN_SHARE, MAX_RMS_MM = 0.3, 3.0  # 2026-11-13 board: share 0.40, rms 2.2 mm
 
 
+def _intrinsics_k(block: dict) -> np.ndarray:
+    if "K" in block:
+        return np.asarray(block["K"], float)
+    return np.asarray([[block["fx"], 0.0, block["ppx"]], [0.0, block["fy"], block["ppy"]], [0.0, 0.0, 1.0]], float)
+
+
 def calibration(factory: dict) -> tuple:
-    """(depth K, colour K, R, t in mm) from a `cell_device_intrinsics read` record; R maps depth to colour, row-major."""
+    """(depth K, colour K, R, t in mm) from canonical (`depth_to_colour`) or pyrealsense2 dump (`depth_to_color`) schema."""
     try:
-        depth_K = np.asarray(factory["depth"]["K"], float)
-        colour_K = np.asarray(factory["K"], float)
-        R = np.asarray(factory["depth_to_colour"]["R"], float)
-        t = np.asarray(factory["depth_to_colour"]["t_m"], float) * 1000.0
-    except (KeyError, TypeError) as exc:
+        stream = factory.get("stream") if isinstance(factory.get("stream"), dict) else {}
+        depth_K = np.asarray(factory["depth"]["K"], float) if "depth" in factory and "K" in factory["depth"] else _intrinsics_k(stream["depth"])
+        colour_K = np.asarray(factory["K"], float) if "K" in factory else _intrinsics_k(stream["color"])
+        if "depth_to_colour" in factory:
+            ext = factory["depth_to_colour"]
+            R_raw = np.asarray(ext["R"], float)
+            R = R_raw.reshape(3, 3) if R_raw.size == 9 else R_raw
+        else:
+            ext = factory["depth_to_color"]
+            R_raw = np.asarray(ext["R"], float)
+            R = R_raw.reshape(3, 3).T if R_raw.size == 9 else R_raw
+        t = np.asarray(ext["t_m"] if "t_m" in ext else ext["t"], float) * 1000.0
+    except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("factory record lacks depth K or the depth -> colour transform") from exc
     if depth_K.shape != (3, 3) or colour_K.shape != (3, 3) or R.shape != (3, 3) or t.shape != (3,):
         raise ValueError("factory record has malformed depth calibration")
+    if not (np.isfinite(depth_K).all() and np.isfinite(colour_K).all() and np.isfinite(R).all() and np.isfinite(t).all()):
+        raise ValueError("factory record has non-finite depth calibration")
     if not np.allclose(R @ R.T, np.eye(3), atol=1e-4):
         raise ValueError("depth -> colour rotation is not a rotation")
     return depth_K, colour_K, R, t
+
+
+def _colour_size(factory: dict, depth_shape: tuple[int, int]) -> tuple[int, int]:
+    if isinstance(factory.get("size"), (list, tuple)) and len(factory["size"]) == 2:
+        return int(factory["size"][0]), int(factory["size"][1])
+    cs = (factory.get("stream") or {}).get("color") or {}
+    if "width" in cs and "height" in cs:
+        return int(cs["width"]), int(cs["height"])
+    return int(depth_shape[1]), int(depth_shape[0])
+
+
+def height_map_in_colour(depth_mm: np.ndarray, factory: dict, roi: tuple = (40, 150, 620, 470),
+                         tol_mm: float = 4.0, seed: int = 0) -> tuple[np.ndarray, dict]:
+    """Signed perpendicular height (mm) above the workboard plane at each colour pixel (positive toward camera)."""
+    import cell_shared_markers
+
+    plane = surface(depth_mm, factory, roi, tol_mm=tol_mm, seed=seed)
+    if not plane.get("ok"):
+        return np.full(depth_mm.shape, np.nan), plane
+    size = _colour_size(factory, depth_mm.shape)
+    colour_depth = cell_shared_markers.depth_in_colour(depth_mm, factory, size)
+    _, colour_K, _, _ = calibration(factory)
+    h_c, w_c = colour_depth.shape
+    v_grid, u_grid = np.mgrid[0:h_c, 0:w_c]
+    nx, ny, nz = (float(x) for x in plane["normal"])
+    ray_dot = ((u_grid - colour_K[0, 2]) * (nx / colour_K[0, 0])
+               + (v_grid - colour_K[1, 2]) * (ny / colour_K[1, 1]) + nz)
+    return colour_depth * ray_dot + float(plane["height_mm"]), plane
+
+
+def patch_ray_coverage(depth, grid, box, height, plane, factory):
+    """Count native rays expected at the local surface, including missing/out-of-sensor rays.
+
+    Only an expected ray that actually projects into the patch and wins the colour
+    z-buffer is evidence. At a discontinuity an entering ray cannot replace one
+    that left the patch or was hidden behind a foreground return.
+    """
+    kd, kc, rot, trans = calibration(factory)
+    a, b, c, d = box
+    normal = np.asarray(plane["normal"])
+    offset = float(plane["height_mm"]) - height
+    corners = np.array([[a-.5, b-.5, 1], [c-.5, b-.5, 1], [a-.5, d-.5, 1], [c-.5, d-.5, 1]])
+    rays = corners @ np.linalg.inv(kc).T
+    dots = rays @ normal
+    if np.any(dots >= -1e-6) or offset <= 0:
+        return 0, 0
+    depth_corners = (rays * (-offset / dots)[:, None] - trans) @ rot
+    if np.any(depth_corners[:, 2] <= 0):
+        return 0, 0
+    pix = depth_corners @ kd.T
+    bounds = pix[:, :2] / pix[:, 2:]
+    lo, hi = np.floor(bounds.min(axis=0)).astype(int), np.ceil(bounds.max(axis=0)).astype(int)
+    if np.any(hi - lo > 2 * np.array(depth.shape[::-1])):
+        return 0, 0
+    v, u = np.mgrid[lo[1]:hi[1]+1, lo[0]:hi[0]+1]
+    u, v = u.ravel(), v.ravel()
+    rays = np.column_stack([u, v, np.ones(len(u))]) @ np.linalg.inv(kd).T @ rot.T
+
+    def project(z):
+        points = rays * z[:, None] + trans
+        pixels = points @ kc.T
+        uv = np.rint(pixels[:, :2] / pixels[:, 2:]).astype(int)
+        x, y = uv.T
+        return x, y, (points[:, 2] > 0) & (x >= a) & (x < c) & (y >= b) & (y < d), points[:, 2]
+
+    nominal = -(offset + normal @ trans) / (rays @ normal)
+    _, _, expected, _ = project(nominal)
+    sensor = (u >= 0) & (u < depth.shape[1]) & (v >= 0) & (v < depth.shape[0])
+    raw = depth[np.clip(v, 0, depth.shape[0]-1), np.clip(u, 0, depth.shape[1]-1)]
+    measured = expected & sensor & np.isfinite(raw) & (raw > 0)
+    x, y, inside, z = project(np.where(measured, raw, nominal))
+    visible = measured & inside
+    x, y, z = x[visible], y[visible], z[visible]
+    dot = (np.column_stack([x, y, np.ones(len(x))]) @ np.linalg.inv(kc).T) @ normal
+    winners = np.isclose(z * dot + plane["height_mm"], grid[y, x], rtol=0, atol=1e-5)
+    # Two native rays rounding onto one colour pixel provide one visible sample.
+    observed = np.unique(y[winners] * grid.shape[1] + x[winners]).size
+    return int(observed), int(expected.sum())
+
+
+def capture_median_depth(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth",
+                         n: int = 5, timeout_s: float = 12.0) -> np.ndarray | None:
+    """Capture `n` locked depth frames and return their median, falling back to locked single-frame capture."""
+    import tempfile
+    import cell_depth_lock
+    import cell_depth_slots
+
+    if n > 1:
+        try:
+            with cell_depth_lock.hold_depth_lock(timeout_s=timeout_s):
+                with tempfile.TemporaryDirectory(prefix="depth-median-") as scratch:
+                    frames, _ = cell_depth_slots.capture_depth_frames(
+                        dev_path, n, Path(scratch) / "depth.raw",
+                        timeout_s=min(float(timeout_s), cell_depth_slots.DEPTH_BURST_S),
+                    )
+            if frames is not None:
+                med, valid = cell_depth_slots.median_depth(frames)
+                if valid >= 0.40:
+                    return med
+        except (TimeoutError, OSError, ValueError):
+            pass
+    return cell_depth.capture_top_depth_z16(dev_path, timeout_s=timeout_s)
+
+
+def cal_eval_depth_setup(depth, colour, cam_top: dict, cam_report: dict, flags: list[str],
+                         params, load_json_opt, find_base_px):
+    """Align depth to colour using `d435_factory` when readable, else fall back to `align_edges`."""
+    import cell_params as prm
+
+    cfg_height_m = cam_top.get("height_m")
+    factory = load_json_opt(Path(str(cam_top["d435_factory"])).expanduser()) if cam_top.get("d435_factory") else None
+    heights = to_depth = None
+    if depth is not None and factory is not None:
+        roi = tuple(cam_top["depth_roi"]) if cam_top.get("depth_roi") else (40, 150, 620, 470)
+        try:
+            heights, plane = height_map_in_colour(depth, factory, roi)
+            to_depth = np.eye(3)
+            if plane.get("ok"):
+                cam_mm = float(plane["height_mm"])
+                nadir, center = plane.get("nadir_px"), cam_top.get("center_px")
+                nadir_off = round(math.hypot(float(nadir[0]) - float(center[0]), float(nadir[1]) - float(center[1])), 1) if (nadir and center) else None
+                cam_report.update({
+                    "cam_to_table_mm": cam_mm, "tilt_deg": plane.get("tilt_deg"), "nadir_px": nadir,
+                    "nadir_off_px": nadir_off, "depth_basis": "d435_factory",
+                    "height_diff_mm": round(cam_mm - float(cfg_height_m) * 1000.0, 1) if cfg_height_m is not None else None,
+                })
+                if nadir_off is not None and nadir_off > float(prm.get(params, "verify.nadir_off_px")):
+                    flags.append("nadir_off_gt_limit")
+            else:
+                flags.append(str(plane.get("reason") or "depth_plane_failed"))
+        except (ValueError, KeyError, TypeError):
+            heights = to_depth = None
+    if heights is None and depth is not None and colour is not None:
+        plane = cell_depth.table_plane(depth)
+        cam_mm = round(abs(float(plane[1])), 2)
+        heights = cell_depth.height_map(depth, plane)
+        to_depth, edge_px = cell_depth.align_edges(colour, heights)
+        cam_report.update({
+            "cam_to_table_mm": cam_mm, "align_scale": round(float(to_depth[0, 0]), 3),
+            "align_shift": [round(float(to_depth[0, 2]), 1), round(float(to_depth[1, 2]), 1)],
+            "align_edge_px": round(float(edge_px), 2),
+            "height_diff_mm": round(cam_mm - float(cfg_height_m) * 1000.0, 1) if cfg_height_m is not None else None,
+        })
+    if heights is not None:
+        base_px = find_base_px()
+        plate_mm = cell_depth.plate_top(heights, to_depth, base_px) if base_px is not None else None
+        if plate_mm is not None:
+            plate_mm = round(float(plate_mm), 2)
+            cam_mm = cam_report.get("cam_to_table_mm")
+            cam_report.update({"plate_mm": plate_mm, "cam_to_plate_mm": round(cam_mm - plate_mm, 2) if cam_mm is not None else None})
+    else:
+        flags.append("missing_depth")
+    return heights, to_depth
+
+
+def cal_eval_anchor_sites(sites_raw: dict[str, dict], cam_report: dict, flags: list[str], d_lim: float,
+                          has_depth: bool) -> dict[str, dict]:
+    """Anchor site depth heights using rigid touch FK median (fallback plate_mm; else relative inter-site deltas)."""
+    anchors = [float(v["touch_z"]) - float(v["site_mm"]) / 1000.0
+               for v in sites_raw.values() if v["touch_z"] is not None and v["site_mm"] is not None]
+    fk_table_z_m = float(np.median(anchors)) if anchors else None
+    plate_mm = cam_report.get("plate_mm")
+    cam_report["fk_table_z_m"] = round(fk_table_z_m, 4) if fk_table_z_m is not None else None
+    if has_depth and fk_table_z_m is None and plate_mm is None:
+        flags.append("plate_not_found")
+    rel_items = [(n, v) for n, v in sites_raw.items() if v["site_mm"] is not None and v["surface_z"] is not None]
+    rel_diffs: dict[str, float] = {}
+    if fk_table_z_m is None and plate_mm is None:
+        if len(rel_items) == 2:
+            (n0, v0), (n1, v1) = rel_items
+            delta = round((float(v1["site_mm"]) - float(v0["site_mm"])) - (float(v1["surface_z"]) - float(v0["surface_z"])) * 1000.0, 1)
+            rel_diffs[n0], rel_diffs[n1] = -delta, delta
+        elif len(rel_items) >= 3:
+            base_off = float(np.median([float(v["surface_z"]) * 1000.0 - float(v["site_mm"]) for _, v in rel_items]))
+            for n, v in rel_items:
+                rel_diffs[n] = round((float(v["site_mm"]) + base_off) - float(v["surface_z"]) * 1000.0, 1)
+    sites_report: dict[str, dict] = {}
+    for name, v in sites_raw.items():
+        site_mm, surface_z, sflags = v["site_mm"], v["surface_z"], list(v["flags"])
+        depth_z = (round(fk_table_z_m + site_mm / 1000.0, 4) if (site_mm is not None and fk_table_z_m is not None)
+                   else (round((site_mm - plate_mm) / 1000.0, 4) if (site_mm is not None and plate_mm is not None) else None))
+        depth_diff_mm = round((depth_z - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else None
+        rel_diff = rel_diffs.get(name)
+        check_diff = depth_diff_mm if depth_diff_mm is not None else rel_diff
+        if check_diff is not None and abs(check_diff) > d_lim and "depth_diff_gt_6mm" not in sflags:
+            sflags.append("depth_diff_gt_6mm")
+        flags.extend(f"{name}:{fl}" for fl in sflags)
+        sites_report[name] = {**v["entry"], "site_above_table_mm": site_mm, "depth_surface_z_m": depth_z,
+                              "depth_diff_mm": depth_diff_mm, **({"relative_depth_diff_mm": rel_diff} if rel_diff is not None else {}),
+                              "flags": sflags}
+    return sites_report
 
 
 def surface(depth_mm: np.ndarray, factory: dict, roi: tuple, tol_mm: float = 4.0, seed: int = 0) -> dict:

@@ -39,3 +39,18 @@ def test_no_body_scan_is_taken_when_no_bay_dock_is_active():
     assert p.manager.body_scan_rear_overhang() is None
     bay_body_scan(_services(p.manager), _open_scan(), received_at=p.clock.now)
     assert p.manager._bay_phases._body is None
+
+
+def test_bay_body_scan_ignores_wide_side_hits_and_blocks_on_empty_scan():
+    p = a_bay()
+    p.manager.dock()
+    svc = _services(p.manager)
+    ranges = [3.0] * 360
+    ranges[200] = 0.20  # 20 deg off forward (0.20*sin(20 deg)=0.068 m > band): side corridor clutter
+    scan = {"ranges": ranges, "angle_min": -math.pi, "angle_increment": 2.0 * math.pi / 360,
+            "range_min": 0.05, "range_max": 10.0}
+    bay_body_scan(svc, scan, received_at=p.clock.now)
+    body = p.manager._bay_phases._body
+    assert body is not None and (body[1] is None or body[1] > 0.30)
+    bay_body_scan(svc, _open_scan(rng=float("inf")), received_at=p.clock.now + 0.1)
+    assert p.manager._bay_phases._body[1] == 0.0

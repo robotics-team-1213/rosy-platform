@@ -12,10 +12,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import threading
 import time
 import traceback
 from datetime import datetime, timezone  # noqa: F401 — re-exported
-from typing import Optional  # noqa: F401 — re-exported
+from typing import Any, Optional  # noqa: F401 — re-exported
 
 import rclpy
 from rclpy.action import ActionClient
@@ -88,9 +89,19 @@ _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 
 
 class RosBridge(RosBridgeHelpersMixin):
-    def __init__(self, node: Node, services) -> None:
+    def __init__(
+        self,
+        node: Node,
+        services,
+        *,
+        tf_buffer: Any = None,
+        sensor_sink: Any = None,
+        file_writer: Any = None,
+    ) -> None:
         self._node = node
         self._svc = services
+        self._sensor_sink = sensor_sink
+        self._file_writer = file_writer
         self._mirror = SensorMirror()  # /sensors imu·odometry·wheels·motor·dock, converted on GET
         self._mirror.install(services.state)
         self._bounded_trial_guard = None
@@ -109,7 +120,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")
         self.plan_client = ActionClient(node, ComputePathToPose, "compute_path_to_pose")
         self.path_client = ActionClient(node, FollowPath, "follow_path")
-        self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
+        self.tf_buffer = tf_buffer if tf_buffer is not None else Buffer(cache_time=Duration(seconds=10.0))
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
         node.create_subscription(Odometry, "odom", self._on_odom, 10)
@@ -143,7 +154,8 @@ class RosBridge(RosBridgeHelpersMixin):
         node.create_subscription(JointState, "joint_states", self._on_joint_states, qos_profile_sensor_data)
         node.create_subscription(Range, "us_sensor/range", self._on_us_range, qos_profile_sensor_data)
         node.create_subscription(BatteryState, "batt_state", self._on_batt_state, 10)
-        node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
+        self._map_sub_lock = threading.Lock()
+        self._map_sub = node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
         node.create_subscription(Path, "plan", self._on_plan, 10)
         node.create_subscription(Costmap, "local_costmap/costmap_raw", self._on_local_costmap, 10)
         node.create_subscription(Costmap, "global_costmap/costmap_raw", self._on_global_costmap, 10)
@@ -158,6 +170,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self.dock_exemption_pub = node.create_publisher(Bool, "docking/collision_exemption", _LATCHED)
         self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
+        self.loc_window_pub = node.create_publisher(String, "localization/search_window", 1)
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
         self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
@@ -220,6 +233,8 @@ class RosBridge(RosBridgeHelpersMixin):
         loc.bind_clock(self._line_clock)
         loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
+        loc.publish_search_window = lambda body: self.loc_window_pub.publish(String(data=json.dumps(body)))
+        loc.search_window_listener = lambda: self.loc_window_pub.get_subscription_count() > 0
         self._svc.loc_mission.publish = (
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
         self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
@@ -306,10 +321,22 @@ class RosBridge(RosBridgeHelpersMixin):
                 pass
         return str(getattr(goal, "label", "")).strip().lower() == "active"
 
+    def _refresh_map_subscription(self) -> None:
+        # map_server emits latched /map during on_activate before ACTIVE transition_event clears _map_grid_id.
+        with self._map_sub_lock:
+            if self._map_sub is not None:
+                self._node.destroy_subscription(self._map_sub)
+            self._map_sub = self._node.create_subscription(
+                OccupancyGrid, "map", self._on_map, _LATCHED
+            )
+
     def _on_map_server_transition(self, msg: TransitionEvent) -> None:
-        map_observation.lifecycle(self, self._lifecycle_active(msg))
+        active = self._lifecycle_active(msg)
+        map_observation.lifecycle(self, active)
+        if active:
+            self._refresh_map_subscription()
         if self._readiness is not None:
-            self._readiness.observe("map_server", self._lifecycle_active(msg))
+            self._readiness.observe("map_server", active)
 
     def _on_slam_transition(self, msg: TransitionEvent) -> None:
         map_observation.lifecycle(self, self._lifecycle_active(msg))
@@ -333,8 +360,7 @@ class RosBridge(RosBridgeHelpersMixin):
         map_pose.receive_map_pose(self, lambda: self.tf_buffer.lookup_transform(
             self._map_frame, self._base_frame, rclpy.time.Time()))
         self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()))
-        snapshot = self._svc.state.snapshot()
-        self._svc.power.on_robot_mode(snapshot.mode)
+        self._svc.power.on_robot_mode(self._svc.state.mode)
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         map_observation.receive_map(self, msg, warn=self._node.get_logger().warning)

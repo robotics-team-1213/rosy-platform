@@ -35,6 +35,22 @@
 # 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
+  - id: world
+    title_prefix: Rosy World
+    api_owners: []
+    path: applications/world/web
+    themes: [dark, light]
+    surface: site
+    medium: web
+    grammar: spatial
+    ports:
+      - {port: 8140, source: applications/world/build_bundle.py}
+    audience: 지도와 OMX 셀의 보관 자료를 확인하는 현장 관제자
+    role: 보관 지도와 셀, 지도 좌표계가 일치하는 위치 기록을 표시한다.
+    owns: []
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: 독립 오프라인 번들의 브라우저 기준선은 첫 시연에서 확보한다.
+
   - id: monitoring
     title_prefix: Rosy Monitoring
     api_owners: []
@@ -199,8 +215,8 @@ surfaces:
     medium: web
     ports:
       - {port: 8776, source: applications/calibration/calibration_web.py}
-    audience: 관제 PC 옆 셀 작업자 — 줄자·감독 시험으로 실측 요청에 답하는 사람 (D-951 덧붙임·D-1004)
-    role: Rosy Calibration — 셀 보정이 사람에게 묻는 실측 요청을 보여 주고 답을 받는다. 답은 후보 판정일 뿐 셀 값을 쓰지 않는다. 로그인한 세션이 보고, calibration.operate가 답한다 (D-951·D-1004).
+    audience: 관제 PC 옆 셀 작업자 — 줄자·감독 시험으로 보정 요청에 답하는 사람 (D-951 덧붙임·D-1004)
+    role: Rosy Calibration — 셀 보정이 사람에게 묻는 보정 요청을 보여 주고 답을 받는다. 답은 후보 판정일 뿐 셀 값을 쓰지 않는다. 로그인한 세션이 보고, calibration.operate가 답한다 (D-951·D-1004).
     owns: [calibration-request-answer]
     grammar: procedure
     contracts: [shared_controls, typography_focus, dialog]

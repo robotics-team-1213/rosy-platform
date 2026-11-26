@@ -307,3 +307,154 @@ def test_sample_uses_batch_sync_read_on_real_dynamixel_bus(tmp_path):
     assert sync_calls == ['Present_Temperature', 'Present_Input_Voltage', 'Hardware_Error_Status', 'Torque_Enable']
     # All 20 per-motor health reads across the 5 body joints use 4 sync_read packets instead of 20 unicast reads
     assert len(arm.follower.reads) - before_reads == 0
+
+
+def test_sample_throttles_snapshot_publish_to_cadence_and_warning_changes(tmp_path, monkeypatch):
+    monitor = monitor_type()(tmp_path / 'health.jsonl')
+    clock = [10.0]
+    arm = motion()
+    arm.clock = lambda: clock[0]
+    monitor.admit(arm)
+    publishes = []
+    monkeypatch.setattr(monitor, 'publish', lambda: publishes.append(len(rows(monitor.path))))
+    cur = dict.fromkeys(NAMES, 2028)
+    quiet = dict.fromkeys(NAMES, 0)
+    warn = {**quiet, 'shoulder_lift': -391}
+
+    for ts, pwm in ((10.0, quiet), (10.25, quiet), (10.50, warn), (10.75, warn), (11.10, warn)):
+        clock[0] = ts
+        monitor.sample(arm, cur, pwm, ts)
+
+    assert len([r for r in rows(monitor.path) if r['event'] == 'sample']) == 5
+    # Published on 1st sample (10.0 -> 2 records), warning transition (10.50 -> 4), and >=0.5 s later (11.10 -> 6).
+    assert publishes == [2, 4, 6]
+
+
+def test_async_publish_coalesces_off_thread_and_flushes_on_end_and_fault(tmp_path, monkeypatch):
+    import importlib.util
+    import threading
+    import time
+
+    spec = importlib.util.spec_from_file_location('motor_health_async_test', DIRECTORY / 'motor_health.py')
+    mh_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mh_mod)
+
+    calls = []
+    block_sample = threading.Event()
+    entered_sample = threading.Event()
+    orig_atomic = mh_mod.atomic_snapshot
+
+    def gated_atomic(path, row):
+        calls.append((row.get('status'), len(row.get('motors') or [])))
+        if len(calls) == 2:  # 1st async sample after synchronous admit()
+            entered_sample.set()
+            block_sample.wait(2.0)
+        orig_atomic(path, row)
+
+    monkeypatch.setattr(mh_mod, 'atomic_snapshot', gated_atomic)
+    monitor = mh_mod.MotorHealth(tmp_path / 'health.jsonl', async_publish=True)
+    clock = [10.0]
+    arm = motion()
+    arm.clock = lambda: clock[0]
+    monitor.admit(arm)  # calls[0] synchronous
+    cur, quiet = dict.fromkeys(NAMES, 2028), dict.fromkeys(NAMES, 0)
+
+    t0 = time.monotonic()
+    monitor.sample(arm, cur, quiet, 10.0)
+    assert time.monotonic() - t0 < 0.25 and entered_sample.wait(1.0)
+    for ts in (10.3, 10.6, 10.9, 11.2):
+        clock[0] = ts
+        monitor.sample(arm, cur, quiet, ts)
+    block_sample.set()
+    monitor.end()
+    assert json.loads(monitor.state_path.read_text())['status'] == 'ended'
+    assert len(calls) <= 4  # middle async sample writes coalesced while gated
+
+    m2 = mh_mod.MotorHealth(tmp_path / 'health2.jsonl', async_publish=True)
+    clock[0] = 12.0
+    m2.admit(arm)
+    m2.sample(arm, cur, quiet, 12.0)
+    m2.fault(arm, ValueError('wrist_roll: following error'))
+    assert json.loads(m2.state_path.read_text())['status'] == 'fault'
+
+    def fail_atomic(path, row):
+        raise OSError('disk stalled')
+
+    m3 = mh_mod.MotorHealth(tmp_path / 'health3.jsonl', async_publish=True)
+    m3.admit(arm)
+    monkeypatch.setattr(mh_mod, 'atomic_snapshot', fail_atomic)
+    clock[0] = 10.0
+    m3.sample(arm, cur, quiet, 10.0, allow_gap=True)  # schedules async write that fails
+    time.sleep(0.05)
+    clock[0] = 10.4
+    m3.sample(arm, cur, quiet, 10.4, allow_gap=True)
+    clock[0] = 10.6
+    m3.sample(arm, cur, quiet, 10.6, allow_gap=True)  # allow_gap=True tolerates prior async error
+    time.sleep(0.05)
+    clock[0] = 11.1
+    with pytest.raises(OSError, match='disk stalled'):
+        m3.sample(arm, cur, quiet, 11.1, allow_gap=False)
+    monkeypatch.undo()
+    m3.end()
+
+
+def test_async_emit_preserves_order_off_thread_and_surfaces_write_errors(tmp_path):
+    import importlib.util
+    import threading
+    import time
+
+    spec = importlib.util.spec_from_file_location('motor_health_emit_test', DIRECTORY / 'motor_health.py')
+    mh_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mh_mod)
+
+    entered = threading.Event()
+    release = threading.Event()
+    written = []
+
+    def slow_writer(path, line):
+        if len(written) == 1:
+            entered.set()
+            release.wait(2.0)
+        written.append(line)
+        with path.open('a', encoding='utf-8') as handle:
+            handle.write(line)
+            handle.flush()
+
+    path = tmp_path / 'health.jsonl'
+    monitor = mh_mod.MotorHealth(path, async_publish=True)
+    monitor._async_emit.flush(close=True)
+    monitor._async_emit = mh_mod.AsyncJsonlWriter(slow_writer)
+    clock = [10.0]
+    arm = motion()
+    arm.clock = lambda: clock[0]
+    monitor.admit(arm)
+    cur, quiet = dict.fromkeys(NAMES, 2028), dict.fromkeys(NAMES, 0)
+    t0 = time.monotonic()
+    monitor.sample(arm, cur, quiet, 10.0)
+    assert time.monotonic() - t0 < 0.1 and entered.wait(1.0)
+    for ts in (10.2, 10.4, 10.6):
+        clock[0] = ts
+        monitor.sample(arm, cur, quiet, ts)
+    assert time.monotonic() - t0 < 0.25
+    release.set()
+    monitor.end()
+    logged = rows(path)
+    assert [r['event'] for r in logged] == ['admission', 'sample', 'sample', 'sample', 'sample']
+    assert [r['sample_time'] for r in logged[1:]] == [10.0, 10.2, 10.4, 10.6]
+
+    def failing_writer(_path, _line):
+        raise OSError('jsonl disk full')
+
+    m2 = mh_mod.MotorHealth(tmp_path / 'health_err.jsonl', async_publish=True)
+    m2._async_emit.flush(close=True)
+    m2._async_emit = mh_mod.AsyncJsonlWriter(failing_writer)
+    clock[0] = 10.0
+    m2.admit(arm)
+    time.sleep(0.05)
+    m2.sample(arm, cur, quiet, 10.0, allow_gap=True)
+    with pytest.raises(OSError, match='jsonl disk full'):
+        clock[0] = 10.2
+        m2.sample(arm, cur, quiet, 10.2, allow_gap=False)
+    m2.fault(arm, ValueError('wrist_roll: following error'))
+    assert rows(tmp_path / 'health_err.jsonl')[-1]['event'] == 'fault'
+

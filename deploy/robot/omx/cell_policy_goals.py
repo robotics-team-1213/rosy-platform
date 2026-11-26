@@ -8,6 +8,8 @@ GOALS = tuple(f"ship-h1r{column}-l{tier}" for column in range(3) for tier in ran
 def resolve_goal_site(site: str) -> tuple[str, int]:
     if not isinstance(site, str):
         raise ValueError("expected a Cell site ID")
+    if site in GOALS[:-1]:
+        return site, GOALS.index(site)
     here = Path(__file__).resolve()
     candidates = ((here.parents[3] / "tools" / "sim",) if len(here.parents) > 3 else ()) + (here.parent / "tools" / "sim",)
     sim_tools = str(next((p for p in candidates if p.is_dir()), candidates[0]))

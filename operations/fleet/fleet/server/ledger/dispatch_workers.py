@@ -22,10 +22,11 @@ async def mission_feedback_schedule_loop(scheduler, logger) -> None:
 async def mission_dispatch_loop(dispatcher, logger) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
+        result = None
         try:
-            await asyncio.to_thread(dispatcher.dispatch_next)
+            result = await asyncio.to_thread(dispatcher.dispatch_next)
         except asyncio.CancelledError:
             raise
         except Exception:
             logger.exception("Fleet Mission dispatcher cycle failed")
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(1.0 if result is None else 0.25)

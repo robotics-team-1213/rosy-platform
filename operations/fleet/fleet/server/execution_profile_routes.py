@@ -43,16 +43,38 @@ def _device_identity_ok(identity, workcell_id, instance_id, expected) -> bool:
 
 def install_execution_profile_routes(app, *, deployment_profile, instances, grant_revisions, transport,
                                      workcell_observations, arm_transfer_observer, require_viewer,
-                                     monotonic=time.monotonic):
+                                     monotonic=time.monotonic, relay_profile_fn=None):
     installed = dict(instances)
     revisions = grant_revisions or {}
     cache: dict[str, tuple[bool, float]] = {}
+    relay_cache: dict[str, tuple[bool, float, str | None]] = {}
 
     def revision():
         if len(installed) != 1:
             return None
         row = revisions.get(next(iter(installed.values())), {})
         return row.get("commissioning_revision") or row.get("config_revision") or None
+
+    async def relay_profile() -> tuple[bool, str | None]:
+        """(physical, revision) from the child cells' own execution profiles, cached with the identity TTLs.
+
+        Only a child that proves a physical arm lifts this unit's closed answer; an unreachable or refusing
+        child reports nothing and the parent stays closed (D-797: closed unless proven).
+        """
+        hit = relay_cache.get("answer")
+        if hit is not None and hit[1] > monotonic():
+            return hit[0], hit[2]
+        physical, revision_row = False, None
+        try:
+            for row in (await relay_profile_fn()) or ():
+                if isinstance(row, dict) and row.get("arm_execution") == "physical":
+                    physical, revision_row = True, row.get("revision")
+                    break
+        except Exception:
+            pass
+        relay_cache["answer"] = (physical, monotonic() + (IDENTITY_TTL_S if physical else NEGATIVE_IDENTITY_TTL_S),
+                                 revision_row)
+        return physical, revision_row
 
     def device_ok() -> bool:  # blocking: owner identity query over the local socket
         if len(installed) != 1 or transport is None:  # D-797: one arm only
@@ -87,14 +109,24 @@ def install_execution_profile_routes(app, *, deployment_profile, instances, gran
             rows.append({"id": arm_transfer_observer.producer_id, "kind": "arm_transfer_observer"})
         return [{**row, "authenticated": True} for row in rows]
 
-    @app.get("/api/fleet/execution-profile", response_model=ExecutionProfileResponse, tags=["fleet-work"])
-    async def execution_profile(principal=Depends(require_viewer)):
+    async def answer():
+        relayed = (await relay_profile()) if (deployment_profile == DEVICE_TRIAL and len(installed) == 0
+                                              and relay_profile_fn is not None) else None
         if deployment_profile == "simulation":
             arm = "simulated"
         elif deployment_profile == DEVICE_TRIAL and await asyncio.to_thread(device_ok):
             arm = "physical"
+        elif relayed is not None and relayed[0]:
+            arm = "physical"
         else:
             arm = "closed"  # production, an unknown profile, or a device_trial owner not proven
-        return {"profile": deployment_profile, "arm_execution": arm, "revision": revision(),
+        return {"profile": deployment_profile, "arm_execution": arm,
+                "revision": relayed[1] if relayed is not None and relayed[0] else revision(),
                 "observation_producers": observation_producers(), "evidence_producers": evidence_producers(),
                 "checked_at": datetime.now(timezone.utc)}
+
+    app.state.execution_profile_answer = answer  # the child-side control-unit information route relays this
+
+    @app.get("/api/fleet/execution-profile", response_model=ExecutionProfileResponse, tags=["fleet-work"])
+    async def execution_profile(principal=Depends(require_viewer)):
+        return await answer()

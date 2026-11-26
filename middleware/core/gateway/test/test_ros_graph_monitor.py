@@ -220,3 +220,27 @@ def test_graph_collection_failure_degrades_without_raising():
     assert snapshot['status'] == 'UNAVAILABLE'
     assert snapshot['node_count'] is None
     assert snapshot['risks'][0]['code'] == 'GRAPH_UNAVAILABLE'
+
+
+def test_dds_config_reader_runs_once_across_expired_snapshots():
+    ticks = iter((1.0, 10.0, 20.0))
+    reads = []
+
+    def reader(uri):
+        reads.append(uri)
+        return '<NetworkInterface name="lo"/>'
+
+    monitor = RosGraphMonitor(
+        FakeGraphNode([], []),
+        domain_id='42',
+        namespace='rosy_01',
+        dds_uri='file:///etc/rosy/cyclonedds.xml',
+        dds_config_reader=reader,
+        monotonic=lambda: next(ticks),
+        cache_seconds=2.0,
+    )
+    first = monitor.snapshot()
+    second = monitor.snapshot()
+    third = monitor.snapshot()
+    assert len(reads) == 1
+    assert first['isolation'] == second['isolation'] == third['isolation']

@@ -70,6 +70,18 @@
       "path": "cell/cell.js",
       "media_type": "application/javascript"
     },
+    "cell-channel-mission.js": {
+      "path": "cell/cell-channel-mission.js",
+      "media_type": "application/javascript"
+    },
+    "cell-observation-text.js": {
+      "path": "cell/cell-observation-text.js",
+      "media_type": "application/javascript"
+    },
+    "cell-camera-zoom.js": {
+      "path": "cell/cell-camera-zoom.js",
+      "media_type": "application/javascript"
+    },
     "cell-observation.js": {
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"
@@ -90,6 +102,10 @@
       "path": "cell/cell-real2sim.js",
       "media_type": "application/javascript"
     },
+    "cell-readiness-model.js": {
+      "path": "cell/cell-readiness-model.js",
+      "media_type": "application/javascript"
+    },
     "cell-real2sim-specs.js": {
       "path": "cell/cell-real2sim-specs.js",
       "media_type": "application/javascript"
@@ -102,12 +118,32 @@
       "path": "cell/cell-real2sim-views.js",
       "media_type": "application/javascript"
     },
+    "cell-pipeline-panel.js": {
+      "path": "cell/cell-pipeline-panel.js",
+      "media_type": "application/javascript"
+    },
     "cell-frames.js": {
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "cell-obs-model.js": {
+      "path": "shared/cell-obs-model.js",
+      "media_type": "application/javascript"
+    },
+    "omx-inspector.js": {
+      "path": "shared/omx-inspector.js",
+      "media_type": "application/javascript"
+    },
+    "omx-inspector.css": {
+      "path": "shared/omx-inspector.css",
+      "media_type": "text/css"
+    },
     "cell-cockpit-stage.js": {
       "path": "shared/cell-cockpit-stage.js",
+      "media_type": "application/javascript"
+    },
+    "cell-context-panel.js": {
+      "path": "shared/cell-context-panel.js",
       "media_type": "application/javascript"
     },
     "motor-health-view.js": {
@@ -150,8 +186,20 @@
       "path": "shared/fleet-header.js",
       "media_type": "application/javascript"
     },
+    "fleet-session.js": {
+      "path": "shared/fleet-session.js",
+      "media_type": "application/javascript"
+    },
     "unit-scope.js": {
       "path": "shared/unit-scope.js",
+      "media_type": "application/javascript"
+    },
+    "unit-links.js": {
+      "path": "shared/unit-links.js",
+      "media_type": "application/javascript"
+    },
+    "disclosure-list.js": {
+      "path": "shared/disclosure-list.js",
       "media_type": "application/javascript"
     },
     "styles.css": {
@@ -330,6 +378,10 @@
       "path": "formation.js",
       "media_type": "application/javascript"
     },
+    "measured-motion.js": {
+      "path": "devices/measured-motion.js",
+      "media_type": "application/javascript"
+    },
     "motion-source.js": {
       "path": "motion-source.js",
       "media_type": "application/javascript"
@@ -382,6 +434,18 @@
       "path": "calibration/map-fit-view.js",
       "media_type": "application/javascript"
     },
+    "manual-fit-math.js": {
+      "path": "calibration/manual-fit-math.js",
+      "media_type": "application/javascript"
+    },
+    "manual-fit-view.js": {
+      "path": "calibration/manual-fit-view.js",
+      "media_type": "application/javascript"
+    },
+    "manual-fit.css": {
+      "path": "calibration/manual-fit.css",
+      "media_type": "text/css"
+    },
     "map-view.js": {
       "path": "map/map-view.js",
       "media_type": "application/javascript"
@@ -396,6 +460,10 @@
     },
     "map-datum.js": {
       "path": "map/map-datum.js",
+      "media_type": "application/javascript"
+    },
+    "map-hover-card.js": {
+      "path": "map/map-hover-card.js",
       "media_type": "application/javascript"
     },
     "poll-gate.js": {
@@ -424,6 +492,14 @@
     },
     "card-trip.js": {
       "path": "card-trip.js",
+      "media_type": "application/javascript"
+    },
+    "trip-geometry.js": {
+      "path": "sitemap/trip-geometry.js",
+      "media_type": "application/javascript"
+    },
+    "trip-receipts.js": {
+      "path": "work/trip-receipts.js",
       "media_type": "application/javascript"
     },
     "site-rules-judge.js": {
@@ -480,6 +556,10 @@
     },
     "site-map-model.js": {
       "path": "shared/site-map-model.js",
+      "media_type": "application/javascript"
+    },
+    "trip-wait.js": {
+      "path": "work/trip-wait.js",
       "media_type": "application/javascript"
     },
     "trip-display.js": {
@@ -654,6 +734,14 @@
       "path": "shared/cockpit-telemetry.js",
       "media_type": "text/javascript"
     },
+    "cockpit-hosts.js": {
+      "path": "shared/cockpit-hosts.js",
+      "media_type": "text/javascript"
+    },
+    "calm-power.js": {
+      "path": "shared/calm-power.js",
+      "media_type": "application/javascript"
+    },
     "robot-dock.js": {
       "path": "shared/robot-dock.js",
       "media_type": "text/javascript"
@@ -685,6 +773,42 @@
     "selection.js": {
       "path": "shared/selection.js",
       "media_type": "text/javascript"
+    },
+    "decision-slot.js": {
+      "path": "decision-slot.js",
+      "media_type": "application/javascript"
+    },
+    "localization-panel.js": {
+      "path": "localization-panel.js",
+      "media_type": "application/javascript"
+    },
+    "trip-preview-summary.js": {
+      "path": "sitemap/trip-preview-summary.js",
+      "media_type": "application/javascript"
+    },
+    "localization-panel-logic.js": {
+      "path": "localization-panel-logic.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-model.js": {
+      "path": "map/zone-blueprint-model.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-2d.js": {
+      "path": "map/zone-blueprint-2d.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-3d.js": {
+      "path": "map/zone-blueprint-3d.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-inspector.js": {
+      "path": "map/zone-blueprint-inspector.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint.css": {
+      "path": "map/zone-blueprint.css",
+      "media_type": "text/css"
     }
   }
 }

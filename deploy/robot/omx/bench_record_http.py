@@ -38,7 +38,25 @@ def camera_frame(bench, label):
         return stream.read()
 
 
-def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False):
+def fleet_clear_target(origin, source_id):
+    """Link to Fleet's authenticated operator workflow, without passing credentials."""
+    if not isinstance(origin, str) or not isinstance(source_id, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,64}", source_id):
+        return None
+    try:
+        url = urllib.parse.urlsplit(origin)
+        host = url.hostname
+        port = url.port
+    except ValueError:
+        return None
+    if (url.scheme != "https" or not host or not re.fullmatch(r"[a-zA-Z0-9.-]+", host)
+            or url.username is not None or url.password is not None or url.path not in ("", "/")
+            or url.query or url.fragment or port == 0 or any(c.isspace() for c in origin)):
+        return None
+    authority = f"{host}:{port}" if port is not None else host
+    return f"https://{authority}/console/cell?focus=arm:{source_id}"
+
+
+def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False, fleet_console_origin=None):
     class Handler(BaseHTTPRequestHandler):
         def reply(self, code, value, kind="application/json"):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
@@ -61,6 +79,22 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             if not self.readonly_allowed():
                 return self.reply(403, {"error": "local bench or allowed mDNS host only"})
             path = self.path.split("?", 1)[0]
+            if path == "/api/recover/fleet_clear":
+                params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                arms = params.get("arm", [])
+                if set(params) != {"arm"} or len(arms) != 1 or arms[0] not in ("arm_a", "arm_b", "arm_s"):
+                    return self.reply(400, {"error": "Select one arm for Fleet incident clearance"})
+                from omx_incident_fleet import link_for
+                link = link_for(arms[0]) if fleet_console_origin else None
+                target = fleet_clear_target(fleet_console_origin, link.source_id if link else None)
+                if target is None:
+                    return self.reply(503, {"error": "Fleet operator console is not configured"})
+                self.send_response(303)
+                self.send_header("Location", target)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+                return
             if path == "/cameras.json":
                 return self.reply(200, camera_state(bench))
             if path.startswith("/camera/") and path.endswith(".jpg"):
@@ -74,6 +108,12 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(200, jpg, "image/jpeg")
             if path == "/api/arms":
                 return self.reply(200, bench.arms_status())
+            if path == "/api/leader_check":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    return self.reply(200, bench.check_leader_home_status((qs.get("arm") or ["all"])[0]))
+                except ValueError as exc:
+                    return self.reply(400, {"error": str(exc)})
             if path == "/api/grip_map":
                 return self.reply(200, bench.grip_maps())
             if path == "/api/telemetry":
@@ -81,6 +121,21 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             if path == "/api/camera_check":
                 qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
                 return self.reply(200, bench.check_camera_drift((qs.get("arm") or [""])[0]))
+            if path == "/api/camera_preparation":
+                from bench_camera_alignment import preparation
+
+                qs = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                try:
+                    return self.reply(200, preparation(bench, (qs.get("arm") or [""])[0]))
+                except ValueError as exc:
+                    return self.reply(400, {"error": str(exc)})
+            if path == "/api/camera_alignment/reference.jpg":
+                from bench_camera_alignment import reference_image
+
+                try:
+                    return self.reply(200, reference_image(bench.prep), "image/jpeg")
+                except (OSError, ValueError):
+                    return self.reply(404, {"error": "side reference unavailable"})
             if path == "/api/pipeline/status":
                 return self.reply(200, bench.pipeline_status())
             if path == "/api/hf/status":
@@ -148,6 +203,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_params.js": lambda: ((HERE / "bench_record_params.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_camera_alignment.js": lambda: ((HERE / "bench_camera_alignment.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_overlay.js": lambda: ((HERE / "bench_record_overlay.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -202,6 +258,10 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.restart_cameras(body))
                 if self.path == "/api/camera_baseline":
                     return self.reply(200, bench.save_camera_baseline(body))
+                if self.path == "/api/camera_alignment":
+                    from bench_camera_alignment import save_confirmed
+
+                    return self.reply(200, save_confirmed(bench, body))
                 if self.path == "/api/pipeline/generate_replay":
                     return self.reply(200, bench.pipeline_generate_replay(body))
                 if self.path == "/api/pipeline/run":
@@ -284,7 +344,8 @@ def main(argv=None, *, bench_cls=None):
     host_local = f"{socket.gethostname().split('.')[0].lower()}.local"
     mdns_hosts = tuple(cfg.get("mdns_hosts") or ((host_local,) if allow_mdns else ()))
     make_server(bench, args.port, bind="0.0.0.0" if allow_mdns else "127.0.0.1",
-                mdns_hosts=mdns_hosts, allow_mdns_control=allow_ctrl).serve_forever()
+                mdns_hosts=mdns_hosts, allow_mdns_control=allow_ctrl,
+                fleet_console_origin=cfg.get("fleet_console_origin")).serve_forever()
 
 
 if __name__ == "__main__":

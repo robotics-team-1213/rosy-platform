@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { register } from "node:module";
 
-import { FRAME_LATE_MS, frameBadge } from "../../../../applications/fleet/web/shared/vision-view.js";
+register("./resolve-console-assets.mjs", import.meta.url);
+
+const { FRAME_LATE_MS, frameBadge } = await import("../../../../applications/fleet/web/shared/vision-view.js");
 
 test("a fresh frame reads live, never an auth-waiting label", () => {
   const raw = frameBadge({ ok: true, status: 200, ageMs: "244", rectified: false });

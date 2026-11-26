@@ -19,12 +19,14 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String
 
 from . import executor_choice
+from .camera_shm import attach_camera_front_source
 from .sensing.perception.camera_homography import (
     CalibrationThresholds,
     load_homography_profile,
 )
 from perception_runtime.perception.camera_ground import simulation_ground_plane
 from .object_detector import TOPIC as DETECTIONS_TOPIC
+from .sensing.perception.drivable.drivable_preview import drivable as _is_drivable_keep
 from .sensing.perception.follow_preview import FrameEvidence
 from .sensing.perception.camera_visibility import visibility_reason
 from core_common.protocol.recording import RAW_PREVIEW_TOPIC
@@ -178,8 +180,13 @@ class RoadObserverNode(Node):
         self.preview_pub = self.create_publisher(
             CompressedImage, 'camera/preview/compressed', preview_qos)
         self.raw_preview_pub = self.create_publisher(CompressedImage, RAW_PREVIEW_TOPIC, preview_qos)
-        self.create_subscription(
-            Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(
+                Image, 'camera/front', self._on_camera, qos_profile_sensor_data),
+            image_cls=Image,
+        )
         latched = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -197,9 +204,17 @@ class RoadObserverNode(Node):
         # first. Only exact capture-stamp matches may annotate the latest frame.
         self.create_timer(1.0 / self._preview_config.fps, self._flush_preview)
 
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
+
     def _add_preview_evidence(self, kind, msg):
+        raw = str(msg.data)
+        if kind == 'line' and 'CAMERA_LINE' not in raw:
+            return
         try:
-            document = json.loads(msg.data)
+            document = json.loads(raw)
         except (ValueError, TypeError):
             return
         if kind == 'line' and (not isinstance(document, dict) or document.get('source') != 'CAMERA_LINE'):
@@ -338,17 +353,24 @@ class RoadObserverNode(Node):
         if not self._preview_rate.allow(time.monotonic()):
             return
         try:
+            keep = self._preview_evidence.for_frame('keep', stamp)
+            # draw_drivable never reads ArUco tags; skip full-frame marker detection in drivable mode.
+            frame_size = [int(frame.shape[1]), int(frame.shape[0])]
+            skip_tags = (isinstance(keep, dict)
+                         and keep.get('image_size', frame_size) == frame_size
+                         and _is_drivable_keep(keep))
+            tags = None if skip_tags else detect_visual_tags(frame)
             preview = render_road_preview(
                 frame,
                 observation,
                 source=self._preview_config.source,
                 max_width=self._preview_config.max_width,
-                keep=self._preview_evidence.for_frame('keep', stamp),
+                keep=keep,
                 objects=self._preview_evidence.for_frame('objects', stamp),
                 road_state=self._preview_evidence.for_frame('road_state', stamp),
                 line=self._preview_evidence.for_frame('line', stamp),
                 detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S),
-                tags=detect_visual_tags(frame),
+                tags=tags,
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
                 cv2.IMWRITE_JPEG_QUALITY,
@@ -380,7 +402,8 @@ class RoadObserverNode(Node):
         # A separate raw stream shares the capture header. The consumer joins
         # stamps, never independently substitutes the latest annotated frame.
         try:
-            raw = cv2.resize(frame, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_AREA)
+            raw = (frame if (preview.shape[1], preview.shape[0]) == (frame.shape[1], frame.shape[0])
+                   else cv2.resize(frame, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_AREA))
             ok, raw_encoded = cv2.imencode('.jpg', raw, [
                 cv2.IMWRITE_JPEG_QUALITY, self._preview_config.jpeg_quality])
         except (ValueError, cv2.error) as exc:

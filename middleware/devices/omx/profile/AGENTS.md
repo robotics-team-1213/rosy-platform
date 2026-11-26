@@ -31,7 +31,7 @@ OMX arm composition (D-232). Config only: the disabled profile the adapter valid
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Do not put adapter code or a launch file here. The validator stays in `middleware/devices/omx/adapter`.
 - Do not fill in a fake `hardware_plugin` or joint map. The OMX-AI target is selected; runtime waits on a measured revision, driver, mount, power, payload, calibration, and recovery procedure.
 

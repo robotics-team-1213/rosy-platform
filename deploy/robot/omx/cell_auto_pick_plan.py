@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import hashlib
+import inspect
 import os
 from pathlib import Path
 import sys
@@ -17,7 +18,8 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_auto_safety import finger_room, object_sized, square_entry  # noqa: E402
+from cell_auto_safety import finger_room, square_entry  # noqa: E402
+from cell_finger_room import finger_room_view, obstacle_mask  # noqa: E402,F401
 import cell_decisions as cd  # noqa: E402
 import cell_jaw_axis  # noqa: E402
 import cell_objects  # noqa: E402
@@ -52,8 +54,6 @@ def _parent_attr(name: str, default):
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list, *, image=None):
-    import cv2
-
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
@@ -80,12 +80,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
             c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))
         ]
         o["layers_below"] = config["sites"][site].get("layers_below", 0)  # the site is a stack's top: cell_finger_room
-    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
-    for p in config["sites"][site].get("markings_px", []):
-        cv2.fillPoly(near, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
-    mask = object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv"))
-    for p in config["sites"][site].get("markings_px", []):
-        cv2.fillPoly(mask, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
+    mask = obstacle_mask(img, config, site, roi)
     return img, mask, objects, None
 
 
@@ -137,13 +132,17 @@ def plan_pick(
     work: Path,
     yaw: float | None = None,
     place_yaw: float | None = None,
+    droop_z_mm: float = 0.0,
+    dest_droop_z_mm: float = 0.0,
 ):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20)."""
     config = cell_place_fit.with_tiers(config, catalog=[entry])[0]
-    cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
+    px_dest = [float(place_xy[0]), float(place_xy[1])]
+    cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm, "droop_z_mm": droop_z_mm}, config.get("params"))
+    cell_pivot.validate_bias({"point_m": px_dest, "bias_mm": [0.0, 0.0], "droop_z_mm": dest_droop_z_mm}, config.get("params"))
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
-    dz = float(o.get("dz_m", 0.0)) + float(config["sites"][site].get("z_offset_m", 0.0)) - (bias_mm[2] / 1000 if len(bias_mm) >= 3 else 0.0)
+    dz = float(o.get("dz_m", 0.0)) + float(config["sites"][site].get("z_offset_m", 0.0))
     yaw0, error = (grasp_yaw(config, site, o, entry, offset) if yaw is None else yaw), "no plan"
     cp_mod = _parent_attr("cp", cp)
     for approach in (config["plan"]["approach_m"], prm.get(config.get("params"), "auto.approach_near_m", 0.020)):
@@ -151,14 +150,14 @@ def plan_pick(
             pick = {
                 "x": round(x, 4),
                 "y": round(y, 4),
-                "z": round(surface_z(config, site) + height + dz, 4),
+                "z": round(surface_z(config, site) + height + dz - float(droop_z_mm or 0.0) / 1000.0, 4),
                 "yaw_deg": yaw_try,
             }
             s = config["sites"][dest_site]
             place = {
-                "x": place_xy[0],
-                "y": place_xy[1],
-                "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4),
+                "x": px_dest[0],
+                "y": px_dest[1],
+                "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0) - float(dest_droop_z_mm or 0.0) / 1000.0, 4),
                 "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw,
             }
             try:
@@ -192,10 +191,12 @@ def choose(
     work,
     failed_yaws=(),
     dest_view=None,
+    room_view=None,
 ):
     """Ordered usable targets: [{object, plan...}], and why the others were refused."""
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
+    rmask, rroi = room_view if room_view is not None else (mask, roi)
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
     site_fp = {k: v for k, v in (config["sites"][site].get("finger_params") or {}).items() if k in prm.DEFAULTS}
@@ -211,7 +212,7 @@ def choose(
             why = "no catalogue match"
         elif w := cell_objects.want_reason(config.get("want"), o):
             why = w
-        elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
+        elif px is None or not (rroi[0] + 12 <= px[0] <= rroi[2] - 12 and rroi[1] + 12 <= px[1] <= rroi[3] - 12):
             why = "not inside the camera view"
         elif (pan := past_pan_limit(config, o["raw_m"])) is not None:
             why = f"out of reach: pan {pan} deg past the joint1 limit"
@@ -221,13 +222,13 @@ def choose(
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
-            room = finger_room(mask, roi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
+            room = finger_room(rmask, rroi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
             if room["margin_mm"] is None:
                 o, room = next(
                     (
                         (e, r)
                         for e in reachable_ends(o, entries[o["object"]], fp)
-                        if (r := finger_room(mask, roi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
+                        if (r := finger_room(rmask, rroi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
                     ),
                     (o, room),
                 )
@@ -261,7 +262,7 @@ def choose(
             fresh = [
                 y for y in (base_yaw, base_yaw + 90.0) if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)
             ] or [base_yaw, base_yaw + 90.0]
-            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
+            rooms = [(y, finger_room(rmask, rroi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
                 reason = "neighbour clearance" if require_clearance else "no finger gap"
@@ -274,30 +275,32 @@ def choose(
         if region and "radius_mm" not in region:
             pivot = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p, pivot_only=True)
             if pivot:
-                region = {**pivot, "bias_mm": region["bias_mm"], **({"kind": region["kind"]} if "kind" in region else {})}
+                region = {**pivot, "bias_mm": region["bias_mm"], **({"kind": region["kind"]} if "kind" in region else {}),
+                          **({"droop_z_mm": region["droop_z_mm"]} if "droop_z_mm" in region else {})}
         bias = region["bias_mm"] if region else [0.0, 0.0]
+        dest_region = cell_pivot.bias_at(bias_data, dest_site, place_xy, params=p, blend=use_blend)
+        dbias = dest_region["bias_mm"] if dest_region else [0.0, 0.0]
+        droop_z = float(region.get("droop_z_mm") or 0.0) if region else 0.0
+        dest_droop_z = float(dest_region.get("droop_z_mm") or 0.0) if dest_region else 0.0
+        sig = inspect.signature(plan_fn).parameters
+        has_varkw = any(par.kind == inspect.Parameter.VAR_KEYWORD for par in sig.values())
+        plan_kw = {k: v for k, v in (("droop_z_mm", droop_z), ("dest_droop_z_mm", dest_droop_z))
+                   if has_varkw or (k in sig and sig[k].kind != inspect.Parameter.POSITIONAL_ONLY)}
         held_axis = o["long_axis_deg"] - (yaw if yaw is not None else grasp_yaw(config, site, o, entry, offset))
         places, why = cell_place_fit.options(
-            config,
-            dest_site,
-            place_xy,
-            held_axis,
-            entry,
-            lambda q: predicted_pixel(config, calibration, dest_site, q),
+            config, dest_site, place_xy, held_axis, entry,
+            lambda q: predicted_pixel(config, calibration, dest_site, (q[0] + dbias[0] / 1000.0, q[1] + dbias[1] / 1000.0)),
             *(dest_view or (None, None)),
         )
         if why:
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"place: {why}"})
             continue
-        o, planned = (
-            dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"], mark_half_mm=room["mark_half_mm"]),
-            "no place",
-        )
+        o, planned = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"], mark_half_mm=room["mark_half_mm"]), "no place"
         for xy, place_yaw in places:
-            planned = plan_fn(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw)
+            planned = plan_fn(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw, **plan_kw)
             # The IK retry inherits room and bias measured at the original point.
             for end in (reachable_ends(o, entry, p) if not require_clearance and isinstance(planned, str) and "UNREACHABLE" in planned else []):
-                planned = plan_fn(config, site, dest_site, xy, end, entry, offset, bias, work, yaw, place_yaw)
+                planned = plan_fn(config, site, dest_site, xy, end, entry, offset, bias, work, yaw, place_yaw, **plan_kw)
                 if not isinstance(planned, str):
                     o = end
                     break

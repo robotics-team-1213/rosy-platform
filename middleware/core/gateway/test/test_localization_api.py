@@ -605,3 +605,66 @@ def test_pose_request_404_until_lane_return_asks_then_200_with_the_evidence(core
         {"request_id": body["request_id"], "accepted": True, "state": "LOCALIZED"}))
     assert client.get("/api/v1/localization/request", headers=OPERATOR).status_code == 404
     assert [e.type for e in _types(services)].count("localization.request_cleared") == 1
+
+
+def test_fit_drop_during_local_bay_approach_keeps_docking_alive_while_fleet_monitor_still_halts(core):
+    from types import SimpleNamespace
+    from core_common.protocol.schemas import DockState
+    from core_features.docking.manager import DockPhase
+
+    _client, services = core
+    services.localization.on_state(_state("LOCALIZED"))
+    cancels = []
+    services.docking._state = DockState.DOCKING
+    services.docking._phase = DockPhase.ALIGNING
+    services.docking._bay_phases = SimpleNamespace(active=lambda: True, _has_reference=lambda: True)
+    assert services.docking.active
+    services.docking.cancel = lambda reason="": cancels.append(reason)
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fit_drop"},
+        "pose": None, "stamp": 2.0,
+    }))
+    assert cancels == []
+    services.localization.on_state(_state("LOCALIZED"))
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fleet_monitor"},
+        "pose": None, "stamp": 3.0,
+    }))
+    assert len(cancels) == 1
+    services.localization.on_state(_state("LOCALIZED"))
+    services.docking._phase = DockPhase.STAGING
+    services.localization.on_state(json.dumps({
+        "status": {"state": "SUSPECT", "pose_frame": "map", "reason": "fit_drop"},
+        "pose": None, "stamp": 4.0,
+    }))
+    assert len(cancels) == 2
+
+
+def test_search_window_can_only_relay_a_freshly_bound_prior(core):
+    client, services = core
+    path = "/api/v1/localization/search-window"
+    grid_id = "occupancy:0123456789ab"
+    body = {"expected_map_grid_id": grid_id, "center": {"x": 1.0, "y": 2.0, "yaw": 0.0}}
+    services.state.set_map_id("map", grid_id)
+    loc = services.localization
+    loc.on_state(_state("SUSPECT"))
+    assert client.post(path, headers=OPERATOR, json=body).status_code == 501
+    captured = []
+    loc.publish_search_window = captured.append
+    loc.search_window_listener = lambda: True
+    caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()
+    assert caps["localization"]["search_window"] is True
+    assert client.post(path, headers=VIEWER, json=body).status_code == 403
+    wrong = {**body, "expected_map_grid_id": "occupancy:aaaaaaaaaaaa"}
+    assert client.post(path, headers=OPERATOR, json=wrong).status_code == 409
+    loc.on_state(_state("LOCALIZED"))
+    assert client.post(path, headers=OPERATOR, json=body).status_code == 409
+    loc.on_state(_state("CANDIDATES", request_id="req-1"))
+    assert client.post(path, headers=OPERATOR, json=body).status_code == 409
+    loc.on_state(_state("SUSPECT"))
+    response = client.post(path, headers=OPERATOR, json=body)
+    assert response.status_code == 202 and response.json() == {"accepted": True}
+    assert client.post(path, headers=OPERATOR, json=body).status_code == 409
+    assert len(captured) == 1
+    assert captured[0]["window"] == body and captured[0]["issued_ns"] > 0
+    assert services.sent == {"decision": [], "suspect": []}

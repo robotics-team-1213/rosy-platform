@@ -315,6 +315,12 @@ class HttpRobotClient(StationTransport, NavigationTransport):
             return None
         return self._check(resp)
 
+    async def localization_search_window(self, expected_map_grid_id: str, center: tuple[float, float, float]) -> dict:
+        return await self._post("/api/v1/localization/search-window", {
+            "expected_map_grid_id": expected_map_grid_id,
+            "center": dict(zip(("x", "y", "yaw"), center)),
+        })
+
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
 

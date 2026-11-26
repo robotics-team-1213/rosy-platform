@@ -1,6 +1,7 @@
 """PR-2 regression tests: D-430 safety tags, :8781 token split/gates, worker 3-state, upkeep, depth lock, zone verification."""
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,24 @@ def _make_workdir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_job_log_tail_is_bounded_when_a_writer_appends():
+    class GrowingLog(io.BytesIO):
+        def seek(self, offset, whence=os.SEEK_SET):
+            position = super().seek(offset, whence)
+            if whence == os.SEEK_END:
+                self.write(b"more")
+                super().seek(position)
+            return position
+
+    class LogPath:
+        def open(self, mode):
+            assert mode == "rb"
+            return GrowingLog(b"old-tail")
+
+    assert api.read_tail_bytes(LogPath(), 4) == b"tail"
+    assert api.read_tail_bytes(LogPath(), 0) == b""
+
+
 def test_platform_parts_registers_d1072_safety_review_paths():
     manifest = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))
     review = set(manifest["safety_review_paths"])
@@ -50,6 +69,7 @@ def test_platform_parts_registers_d1072_safety_review_paths():
         "deploy/robot/omx/cell_vlm_orchestrator.py",
         "deploy/robot/omx/cell_envelope_review.py",
         "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+        "operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py",
         "operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py",
         "operations/fleet/fleet/server/sitemap/pipeline_evidence.py",
     }
@@ -71,6 +91,7 @@ def test_dual_token_auth_machine_commissioning_ban_and_proposer_binding(tmp_path
         api.make_server("127.0.0.1", 0, human_tok, runner, machine_token=human_tok)
 
     srv = api.make_server("127.0.0.1", 0, human_tok, runner, machine_token=machine_tok)
+    assert srv.RequestHandlerClass.timeout == 10
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         mclient = client_mod.CellJobClient(f"http://127.0.0.1:{srv.server_port}", machine_tok)
@@ -337,3 +358,79 @@ def test_upkeep_autonomous_mode_and_direct_verify_zones(tmp_path):
         "--config", "c.json", "--catalog", "k.json", "--roi", "0", "0", "1", "1", "--dest", "belt", "--verify-zones",
     ])
     assert args.verify_zones is True
+
+
+def test_peer_fold_passive_motor_health_recovery_and_fail_closed(tmp_path):
+    import cell_arm_lease
+    import cell_job_guards as guards
+
+    wd = _make_workdir(tmp_path)
+    (wd / "chunk-io-a").mkdir(exist_ok=True)
+    leases = tmp_path / "leases"
+    leases.mkdir()
+    mh_dir = tmp_path / "motor-health"
+    mh_dir.mkdir()
+    cal_dir = tmp_path / "cal"
+    cal_dir.mkdir()
+    now = time.time()
+
+    def _cal_doc(*, lift_max=4095, drive_mode=0, homing_offset=0):
+        joints = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+        return {
+            j: {"id": 11 + i, "drive_mode": drive_mode if j == "shoulder_lift" else 0,
+                "homing_offset": homing_offset if j == "shoulder_lift" else 0,
+                "range_min": 0, "range_max": lift_max if j == "shoulder_lift" else 4095}
+            for i, j in enumerate(joints)
+        }
+
+    def _mh_doc(*, obs_at=now, status="active", torque=False, fault=False, raw2=854, raw3=3170, hw_err=0):
+        raws = [2063, raw2, raw3, 3056, 2973, 2017]
+        return {
+            "schema_version": "rosy.motor-health.v1", "owner_id": "arm_a", "status": status,
+            "observed_at": obs_at, "stop_reasons": [],
+            "motors": [{"id": 11 + i, "present_raw": float(raws[i]), "torque_enabled": torque,
+                        "fault": fault, "hardware_error": hw_err} for i in range(6)],
+        }
+
+    def _check():
+        return guards.check_peer_ab_folded(
+            "arm_b", wd, leases, wd, session_lock_held_fn=lambda *_: False, read_json_fn=guards.read_json_dict,
+            live_max_age_s=15.0, incident_check_fn=lambda _: None, motor_health_dir=mh_dir, calibration_dir=cal_dir,
+        )
+
+    # Stale live.json with stuck chunk recovers ONLY when unlocked/unleased, cal matches, and passive motor-health is fresh, torque-off, folded.
+    (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": "goto above_pick", "t": now - 3600.0}), encoding="utf-8")
+    (mh_dir / "arm_a.json").write_text(json.dumps(_mh_doc()), encoding="utf-8")
+    (cal_dir / "arm_a_follower.json").write_text(json.dumps(_cal_doc()), encoding="utf-8")
+    assert _check() is None
+
+    # Narrow/bad follower calibration or missing cal fails closed even with low raw ticks.
+    for bad_cal in (None, _cal_doc(lift_max=3000), _cal_doc(drive_mode=1), _cal_doc(homing_offset=50)):
+        cpath = cal_dir / "arm_a_follower.json"
+        cpath.unlink(missing_ok=True) if bad_cal is None else cpath.write_text(json.dumps(bad_cal), encoding="utf-8")
+        assert _check() is not None
+    (cal_dir / "arm_a_follower.json").write_text(json.dumps(_cal_doc()), encoding="utf-8")
+
+    # Every unsafe passive motor-health state or live/latched condition remains strictly fail-closed.
+    for bad_mh in (
+        None, _mh_doc(obs_at=now - 60.0), _mh_doc(status="ended"), _mh_doc(torque=True),
+        _mh_doc(fault=True), _mh_doc(hw_err=False), _mh_doc(raw2=2048, raw3=2048),
+    ):
+        mh_path = mh_dir / "arm_a.json"
+        mh_path.unlink(missing_ok=True) if bad_mh is None else mh_path.write_text(json.dumps(bad_mh), encoding="utf-8")
+        assert _check() is not None
+
+    (mh_dir / "arm_a.json").write_text(json.dumps(_mh_doc()), encoding="utf-8")
+    for live_payload in (
+        {"chunk": "goto above_pick", "t": now},
+        {"chunk": None, "human_hold_latched": True, "t": now - 3600.0},
+        {"chunk": "goto above_pick"},
+        {"chunk": "goto above_pick", "t": now + 100.0},
+        {"chunk": "goto above_pick", "t": 10**400},
+    ):
+        (wd / "chunk-io-a" / "live.json").write_text(json.dumps(live_payload), encoding="utf-8")
+        assert _check() is not None
+
+    (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": "goto above_pick", "t": now - 3600.0}), encoding="utf-8")
+    cell_arm_lease.claim("arm_a", "cell-job-api:1", "task", pid=os.getpid(), root=leases)
+    assert _check() is not None

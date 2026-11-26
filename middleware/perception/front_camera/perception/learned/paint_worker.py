@@ -142,12 +142,18 @@ class LearnedPaintWorker:
                 warped, dxy, dyaw = moved
                 crosswalk = summary.get("crosswalk")
                 if crosswalk is not None:
-                    crosswalk = motion(crosswalk, summary["stamp"], stamp)
-                    crosswalk = None if isinstance(crosswalk, str) else crosswalk[0]
+                    if not crosswalk.any():
+                        crosswalk = np.zeros_like(crosswalk)
+                    else:
+                        crosswalk = motion(crosswalk, summary["stamp"], stamp)
+                        crosswalk = None if isinstance(crosswalk, str) else crosswalk[0]
                 speed_bump = summary.get('speed_bump')
                 if speed_bump is not None:
-                    speed_bump = motion(speed_bump, summary['stamp'], stamp)
-                    speed_bump = None if isinstance(speed_bump, str) else speed_bump[0]
+                    if not speed_bump.any():
+                        speed_bump = np.zeros_like(speed_bump)
+                    else:
+                        speed_bump = motion(speed_bump, summary['stamp'], stamp)
+                        speed_bump = None if isinstance(speed_bump, str) else speed_bump[0]
                 self.reuse.update(paint_reuse='warped', paint_warp_skipped=None,
                                   paint_motion_dxy_m=round(dxy, 4), paint_motion_dyaw_rad=round(dyaw, 4))
                 self._mark_used(summary)

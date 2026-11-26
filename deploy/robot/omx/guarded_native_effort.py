@@ -31,7 +31,9 @@ from guarded_native_probe import (  # noqa: E402,F401
     TelemetryReadError,
     check_hold_deadlines,
     check_hold_health,
+    check_sync_hw_status,
     check_temp_limit,
+    drain_rx,
     enforce_temperatures,
     is_hardware_fault,
     is_valid_hw_status,
@@ -45,21 +47,15 @@ from guarded_native_probe import (  # noqa: E402,F401
 def check_hardware_errors(motion) -> None:
     if "read" not in vars(motion.follower) and hasattr(motion.follower, "model_ctrl_table"):
         errors = motion.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
-        if not isinstance(errors, dict):
-            raise TelemetryReadError("missing or non-finite joint sample")
-        for name in NAMES:
-            if is_hardware_fault(errors.get(name)):
-                raise ValueError(f"{name}: hardware error")
-        for name in NAMES:
-            if name not in errors or not is_valid_hw_status(errors.get(name)):
-                raise TelemetryReadError("missing or non-finite joint sample")
+        check_sync_hw_status(motion.follower, errors, READ_RETRY)
         return
     first_err = None
     for name in NAMES:
         val = motion.follower.read("Hardware_Error_Status", name, num_retry=READ_RETRY)
         if is_hardware_fault(val):
-            raise ValueError(f"{name}: hardware error")
+            raise ValueError(f"{name}: hardware error ({val})")
         if not is_valid_hw_status(val):
+            drain_rx(motion.follower)
             first_err = first_err or TelemetryReadError(f"{name}: invalid hardware status {val}")
     if first_err is not None:
         raise first_err
@@ -96,6 +92,26 @@ def watch_hold(motion, name: str, saturated: bool, pwm: float, read_started: flo
         hold["saturated_since"] = read_started
 
 
+def _sampled_gripper_effort(motion, sample_time: float | None):
+    mon = getattr(motion, "monitor", None)
+    motions = getattr(mon, "motions", None)
+    key_fn = getattr(mon, "key", None)
+    if not isinstance(motions, dict) or not callable(key_fn):
+        return None, None
+    state = motions.get(key_fn(motion))
+    if not isinstance(state, dict):
+        return None, None
+    grip_lim = ((state.get("limits") or {}).get("gripper") or {}).get("pwm_limit")
+    grip_pwm = None
+    last = state.get("last")
+    if sample_time is not None and isinstance(last, dict) and last.get("sample_time") == sample_time:
+        for entry in last.get("motors") or ():
+            if entry.get("joint") == "gripper" and isinstance(entry.get("pwm"), (int, float)) and not isinstance(entry.get("pwm"), bool):
+                grip_pwm = entry["pwm"]
+                break
+    return grip_pwm, grip_lim
+
+
 def check_effort(motion, current: dict, started: float, *, allow_stale_hold: bool = False) -> dict:
     before = motion.clock()
     if motion.last_effort_time is not None and before - motion.last_effort_time < 0.2 - 1e-9:
@@ -103,12 +119,15 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
     pwm = motion._read_body_pwm()
     finite_values(pwm, BODY)
     monitor_io_error = None
+    monitor_started = None
     if motion.monitor is not None:
         try:
             if allow_stale_hold and getattr(motion.monitor, "supports_hold_gap", False):
-                motion.monitor.sample(motion, current, pwm, motion.clock(), allow_gap=True)
+                monitor_started = motion.clock()
+                motion.monitor.sample(motion, current, pwm, monitor_started, allow_gap=True)
             else:
-                motion.monitor.sample(motion, current, pwm, motion.clock())
+                monitor_started = motion.clock()
+                motion.monitor.sample(motion, current, pwm, monitor_started)
         except (OSError, ValueError) as exc:
             if not allow_stale_hold or (isinstance(exc, ValueError) and not getattr(exc, "recoverable_telemetry", False)):
                 raise
@@ -120,7 +139,18 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
         or not 0 <= now - motion.last_time <= max_gap
         or (motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= max_gap)
     ):
-        raise ValueError("stale effort sample (>0.5 seconds)")
+        def ms(seconds):
+            return "n/a" if seconds is None else f"{seconds * 1000:.1f}"
+
+        last_tick_age = None if motion.last_time is None else now - motion.last_time
+        last_effort_age = None if motion.last_effort_time is None else now - motion.last_effort_time
+        pwm_age = (now if monitor_started is None else monitor_started) - before
+        monitor_age = None if monitor_started is None else now - monitor_started
+        raise ValueError(
+            "stale effort sample (>0.5 seconds): "
+            f"tick_ms={ms(now - started)} last_tick_ms={ms(last_tick_age)} "
+            f"last_effort_ms={ms(last_effort_age)} pwm_ms={ms(pwm_age)} monitor_ms={ms(monitor_age)}"
+        )
     staged = {}
     for name in BODY:
         saturated = abs(pwm[name]) >= 0.9 * motion.pwm_limits[name]
@@ -169,8 +199,11 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
     if "gripper" in motion.active:  # a gripper that squeezes (its command leads it: blocked by the box) keeps its bounded lead; it is NEVER frozen or cut for it
         if motion.grip_way is None and abs(motion.command["gripper"] - current["gripper"]) >= (LEAD_DEG - 0.5) * TICKS_PER_DEGREE:
             squeeze = motion.squeeze.setdefault("gripper", {"saturated_since": None})
-            grip_pwm = motion.follower.read("Present_PWM", "gripper", num_retry=READ_RETRY)
-            grip_lim = motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY)
+            grip_pwm, grip_lim = _sampled_gripper_effort(motion, monitor_started)
+            if grip_pwm is None:
+                grip_pwm = motion.follower.read("Present_PWM", "gripper", num_retry=READ_RETRY)
+            if grip_lim is None:
+                grip_lim = motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY)
             if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (grip_pwm, grip_lim)):
                 raise TelemetryReadError(f"gripper: invalid squeeze telemetry ({grip_pwm}, {grip_lim})")
             if abs(grip_pwm) < 0.9 * grip_lim:
@@ -224,7 +257,7 @@ def seed_follower_pose(motion, current: dict, target: dict, started: float, raw:
     use_sync = "read" not in vars(motion.follower) and hasattr(motion.follower, "model_ctrl_table")
     origin = dict(current)
     for _ in range(3):
-        motion.follower.sync_write("Goal_Position", current, normalize=False)
+        motion.write_goal(current)
         goals = motion.follower.sync_read("Goal_Position", motors=list(motion.active), normalize=False, num_retry=READ_RETRY)
         fresh = motion.follower.sync_read("Present_Position", motors=list(motion.active), normalize=False, num_retry=READ_RETRY)
         detail = f"initial goal readback mismatch: expected={current}, readback={goals}, fresh={fresh}"

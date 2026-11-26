@@ -105,6 +105,7 @@ def execute_directive(
         return recover_hover(_run_cmd, grip_open_val, steps_log, park_after=park_after)
 
     def _recovery_hold(at: str = "recovery") -> dict[str, Any]:
+        _run_cmd("human-hold")
         return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
                 "result": "held", "task_verified": False, "at": at, "steps": steps_log}
 
@@ -154,7 +155,7 @@ def execute_directive(
                 return _recovery_hold()
             return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick",
                     "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
-                    "recovery": recovery_log, "steps": steps_log}
+                    "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
 
         r_grasp = _run_cmd("run grasp_pick")
         state = r_grasp.get("state") or []
@@ -242,7 +243,7 @@ def execute_directive(
                     return _recovery_hold("empty_park")
             out_empty = {"directive_id": cur_directive.get("directive_id"), "result": "empty", "task_verified": False,
                          "at": "run grasp_pick", "pick": cur_directive["pick"], "place": cur_directive["place"],
-                         "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+                         "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_empty)
             return out_empty
 
@@ -277,7 +278,7 @@ def execute_directive(
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, closed=closed_pos, open_pos=open_pos)
                     if exec_cfg.get("grasp_deliberation", True) and r_step.get("ok"):
                         k_lift = cgd.kinesthetic_judge(r_grasp, r_lift=r_lift_step, grasp_dynamics=grasp_dynamics, params=params)
-                        v_lift = cgd.vision_judge(frame_fn("wrist"), dict(exec_cfg.get("wrist_hsv") or cell_fingers.GREEN_HSV), 36.0 if cal.get("finger_color") == "dark" else 44.0, float(plan["pick"].get("yaw_deg", -90.0)) + 90.0, sign=exec_cfg.get("wrist_sign"), params=params, color=exec_cfg.get("object_color")) if (frame_fn is not None and exec_cfg.get("vision_after_grasp", False)) else v_judge
+                        v_lift = cgd.vision_judge(frame_fn("wrist"), (exec_cfg.get("wrist_hsv") or ([5, 95, 110], [32, 255, 255])), 36.0 if cal.get("finger_color") == "dark" else 44.0, float(plan["pick"].get("yaw_deg", -90.0)) + 90.0, sign=exec_cfg.get("wrist_sign"), params=params, color=exec_cfg.get("object_color")) if (frame_fn is not None and exec_cfg.get("vision_after_grasp", False)) else v_judge
                         if k_lift.get("verdict") == "reinsert" or v_lift.get("verdict") == "reinsert":
                             d_lift_res = cgd.debate_and_decide(
                                 stage="run lift_pick", telemetry=t_judge, vision=v_lift, kinesthetic=k_lift,
@@ -301,8 +302,6 @@ def execute_directive(
                     if stay_hover and attempt + 1 < max_attempts:
                         return _recovery_hold("slip_stay_hover")
                     if not stay_hover:
-                        if chunk_cmd != "goto above_place" and not _run_cmd("goto above_place").get("ok"):
-                            return _recovery_hold("slip_above_place")
                         if not _run_cmd("park").get("ok"):
                             return _recovery_hold("slip_park")
                     break
@@ -311,7 +310,7 @@ def execute_directive(
             if chunk_cmd == "run descend_place":
                 tactile_eval = evaluate_tactile_place_compliance(
                     r_step, target_z_m=float(cur_directive["place"]["effective_xyz_m"][2]),
-                    current_z_m=r_step.get("z_m"), holding=held_at_above_place or True,
+                    current_z_m=r_step.get("z_m"), holding=held_at_above_place,
                 )
                 if r_step.get("ok") and tactile_eval["compliant"]:
                     tactile_or_full_place = True
@@ -327,7 +326,7 @@ def execute_directive(
                         return _recovery_hold()
                 out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
                            "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
-                           "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+                           "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
                 cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
                 return out_err
 
@@ -396,4 +395,4 @@ def execute_directive(
         return out_final
 
     return {"directive_id": cur_directive.get("directive_id"), "result": "stopped", "task_verified": False,
-            "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+            "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}

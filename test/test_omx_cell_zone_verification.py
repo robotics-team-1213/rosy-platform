@@ -14,6 +14,7 @@ for _p in (ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):
         sys.path.insert(0, str(_p))
 
 import cell_zone_verification as czv  # noqa: E402
+from cell_route_check import pick_site, route_check
 
 SITE = {"col": 2, "row": 1}
 CONFIG = {"sites": {"pallet-l0": {"layer": 0, **SITE}, "pallet-l2": {"layer": 2, **SITE}, "belt-l0": {"layer": 0, **SITE},
@@ -21,6 +22,47 @@ CONFIG = {"sites": {"pallet-l0": {"layer": 0, **SITE}, "pallet-l2": {"layer": 2,
 PASS = {"verified": True, "basis": czv.BASIS, "z_gate": {"verdict": "PASS"},
         "place_slot": {"top_zone": {"within_zone": True, "orientation_ok": True, "fill_ratio": 0.5}}}
 BLANK = np.zeros((480, 640, 3), np.uint8)
+
+
+def test_named_route_requires_exact_tiers_geometry_rois_and_floor(tmp_path):
+    from cell_job_spec import JOBS, build_argv
+
+    src, dst = "tmp-a-1-l1", "ship-h1r0-l0"
+    (tmp_path / "cell-a.json").touch()
+    params = {"config": "cell-a.json", "route": [src, dst]}
+    assert build_argv(JOBS["calibrate_check"], params, tmp_path)[-3:] == ["--route", src, dst]
+    cfg = {"arm_id": "arm_a", "sites": {src: {"place": [0.1, 0.1], "layer": 1, "surface_z": 0},
+                     dst: {"place": [0.2, 0.2], "layer": 0, "surface_z": 0}},
+           "zone_rois": {"top": {"tmp-a-1": [0, 0, 10, 10], "ship-h1r0": [10, 10, 20, 20]},
+                         "floor": [[50, 50, 60, 60]], "floor_depth_mm": [550]}}
+    assert not route_check(cfg, src, dst)["depth_inputs_configured"]
+    assert pick_site(cfg, src, dst, [90, 90, 100, 100]) == (src, None)
+    cfg["sites"][src]["zone_rois"] = {"floor": [[70, 70, 80, 80]], "floor_depth_mm": [500]}
+    assert route_check(cfg, src, dst)["depth_inputs_configured"]
+    assert pick_site(cfg, src, dst, None) == (src, [0, 0, 10, 10])
+    cfg["arm_id"] = "arm_b"
+    assert not route_check(cfg, src, dst)["depth_inputs_configured"]
+    cfg["arm_id"] = "arm_a"
+    cfg["sites"][src]["layer"] = 0
+    assert not route_check(cfg, src, dst)["sites"]["source"]["site_geometry"]
+    del cfg["zone_rois"]["floor_depth_mm"]
+    assert not route_check(cfg, src, dst)["floor_reference_configured"]
+
+
+def test_fleet_rejects_old_destination_only_receipt_for_tier_transfer():
+    from cell_presence import zone_acceptance
+
+    src, dst = "tmp-a-1-l1", "ship-h1r0-l0"
+    claim = {"src_site": src, "tier": 1}
+    zone = {"basis": czv.BASIS, "verified": True, "target": {"site": dst, "tier": 1, "row": 1, "col": 1}}
+    assert not zone_acceptance(zone, claim, dst)
+    zone["source_transition"] = {
+        "before": {"binding": {"source": {"site": src}, "destination": {"site": dst}},
+                   "receipt": {"depth_sha256": "a"*64, "last_stamp": 1},
+                   "source": {"tier_ok": True, "tier": 2}},
+        "after_receipt": {"depth_sha256": "b"*64, "first_stamp": 4}, "after": {"tier_ok": True, "tier": 1}}
+    assert zone_acceptance(zone, claim, dst)
+    assert not zone_acceptance(zone, {**claim, "src_site": "tmp-a-2-l1"}, dst)
 
 
 class Cell:

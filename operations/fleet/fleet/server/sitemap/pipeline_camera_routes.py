@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import copy
 import functools
 import hashlib
 import json
+import math
 import os
 import time
 from fastapi import HTTPException, Request
+from fleet.server.pipeline.bound_home_receipt import sync_home_receipts, verified_hold_reason
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
@@ -22,48 +25,13 @@ from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
 
 
+from fleet.server.pipeline_recovery_policy import effective_stop_fence
+from fleet.server.pipeline_recovery_tools import (
+    clear_label as _clear_label,
+    clear_open_arm_incidents as _clear_open_arm_incidents,
+)
+
 _CELL_ARMS = (("cell_s", ("arm_s",)), ("cell_ab", ("arm_a", "arm_b")))
-
-
-def _clear_label(body, key):
-    """An optional clear label from the operator: only a non-empty string of at most 64 chars passes."""
-    value = body.get(key)
-    return value if isinstance(value, str) and value.strip() and len(value) <= 64 else None
-
-
-def _arm_incident_sources(app, arm):
-    """Observation source_id candidates for a pipeline arm; incidents are keyed by source_id (D-971)."""
-    candidates = [f"omx_{arm}", arm]  # fallback: the OMX naming the cell control PCs report under
-    obs = getattr(app.state, "workcell_observations_service", None)
-    snapshot = getattr(obs, "snapshot", None)
-    if not callable(snapshot):
-        return candidates
-    try:
-        cells = snapshot().get("workcells") or []
-    except Exception:
-        return candidates
-    matched = [entry["source_id"] for cell in cells for entry in cell.get("arms") or ()
-               if entry.get("arm_id") == arm
-               or str(entry.get("arm_id") or "").removesuffix("_follower") == arm
-               or entry.get("source_id") in (arm, f"omx_{arm}")]
-    return matched + [c for c in candidates if c not in matched]
-
-
-def _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis):
-    """Clearing the Fleet arm hold also clears that arm's open incident rows in the shared D-971 store."""
-    incidents = getattr(app.state, "arm_incidents", None)
-    if incidents is None:
-        return
-    for arm in arms:
-        for source_id in _arm_incident_sources(app, arm):
-            hold = incidents.hold(source_id)
-            if not hold.held:
-                continue
-            for incident_id in hold.incident_ids:
-                try:  # already cleared or not this arm's row: the first record stands
-                    incidents.clear(source_id, incident_id, note, principal_id, cause=cause, basis=basis)
-                except (KeyError, ValueError):
-                    pass
 
 
 # Refusals the console explains as missing evidence or a held cell; malformed requests leave the ledger as it was.
@@ -80,7 +48,9 @@ def install_cameras_routes(app, ctx) -> None:
     operator_guard = ctx.operator_guard
     proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
     _arm_live_catalog = ctx._arm_live_catalog
+    gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     _save_ledger = ctx._save_ledger
+    _commit_ledger = getattr(ctx, "_commit_ledger", None)
     _is_human_detected = ctx._is_human_detected
     rules = ctx.rules
     _ready_amr = ctx._ready_amr
@@ -118,15 +88,20 @@ def install_cameras_routes(app, ctx) -> None:
     @app.post("/api/fleet/pipeline/cell-quality", dependencies=proposer_guard)
     async def ingest_cell_quality(request: Request):
         body = await request.json()
+        from fleet.server.pipeline_recovery_policy import (
+            ARM_CELL, CAM_CELL, cell_quality_key_allowed,
+        )
+
         cams = body.get("cameras")
         if isinstance(cams, dict):
+            cam_recorded = round(time.time(), 3)
             for k, v in cams.items():
-                if isinstance(v, dict):
-                    app.state.cell_camera_quality[str(k)] = v
+                if isinstance(v, dict) and cell_quality_key_allowed(app, request, CAM_CELL.get(str(k))):
+                    app.state.cell_camera_quality[str(k)] = {**v, "recorded_at": cam_recorded}
         holds = body.get("arm_holds")
         if isinstance(holds, dict):
             for arm_id in ("arm_s", "arm_a", "arm_b"):
-                if isinstance(holds.get(arm_id), dict):
+                if isinstance(holds.get(arm_id), dict) and cell_quality_key_allowed(app, request, ARM_CELL[arm_id]):
                     h = holds[arm_id]
                     new_held = bool(h.get("local_held") or h.get("fleet_held") or h.get("held"))
                     if arm_id in app.state.pending_clear_arms:
@@ -139,34 +114,60 @@ def install_cameras_routes(app, ctx) -> None:
                     app.state.arm_holds[arm_id] = {
                         "arm": arm_id,
                         "held": new_held,
-                        "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
+                        "reason": verified_hold_reason(h),
                         "incident_ids": list(h.get("incident_ids") or []),
                     }
+                    if new_held and not prev_held and gov is not None:
+                        gov.bump_stop_generation()
         arm_states = body.get("arm_states")
         if isinstance(arm_states, dict):
             now_ts = round(time.time(), 3)
             for arm_id in ("arm_s", "arm_a", "arm_b"):
-                if isinstance(arm_states.get(arm_id), dict):
+                if isinstance(arm_states.get(arm_id), dict) and cell_quality_key_allowed(app, request, ARM_CELL[arm_id]):
                     s = arm_states[arm_id]
+                    if "updated_at" in s:
+                        raw_ts = s["updated_at"]
+                        if isinstance(raw_ts, bool) or not isinstance(raw_ts, (int, float)):
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
+                        try:
+                            ts = float(raw_ts)
+                        except OverflowError:
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"}) from None
+                        if not math.isfinite(ts):
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
+                    else:
+                        ts = now_ts
+                    if "folded" in s and s["folded"] is not None and not isinstance(s["folded"], bool):
+                        raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
                     prev = dict(app.state.arm_live_states.get(arm_id) or {})
                     joints = s.get("joints_deg") or s.get("state")
                     if isinstance(joints, list) and len(joints) >= 6:
                         prev["joints_deg"] = [round(float(x), 1) for x in joints[:6]]
                     if "folded" in s and s["folded"] is not None:
-                        prev["folded"] = bool(s["folded"])
+                        prev["folded"] = s["folded"]
+                        prev["folded_updated_at"] = ts
+                    else:
+                        if prev.get("source") == "boot_default":
+                            prev["folded"] = None
+                        prev.setdefault("folded_updated_at", None)
                     if s.get("temp_c") is not None:
                         prev["temp_c"] = round(float(s["temp_c"]), 1)
                     if s.get("current_ma") is not None:
                         prev["current_ma"] = round(float(s["current_ma"]), 1)
                     if s.get("voltage_v") is not None:
                         prev["voltage_v"] = round(float(s["voltage_v"]), 2)
-                    prev["updated_at"] = float(s.get("updated_at") or now_ts)
+                    prev["updated_at"] = ts
                     prev["source"] = str(s.get("source") or "live_stream")
                     app.state.arm_live_states[arm_id] = prev
         if auto_events.add(app.state, body.get("auto_events"), "cell") and not app.state._pipeline_ledger_fault:
             _save_ledger()  # what the cell did by itself, kept with the ledger (pipeline_auto_events)
         for ack_arm in body.get("clear_ack_arms") or ():
             app.state.pending_clear_arms.pop(str(ack_arm), None)
+        fence_held, fence_gen = effective_stop_fence(app.state)
+        human_hold = bool(_is_human_detected() or fence_held or any(
+            (s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values()
+        ))
+        pending_home_out = sync_home_receipts(app, request, body, human_hold, _save_ledger, time.time())
         pending = dict(app.state.pending_clear_arms)
         return {
             "ok": True,
@@ -175,6 +176,9 @@ def install_cameras_routes(app, ctx) -> None:
             "arm_holds": app.state.arm_holds,
             "arm_live_states": _arm_live_catalog(),
             "pending_clear_arms": pending,
+            "pending_safe_home_arms": pending_home_out,
+            "human_hold": human_hold,
+            "safety_stop_generation": fence_gen,
         }
 
     @app.post("/api/fleet/pipeline/arm-holds/clear", dependencies=operator_guard)
@@ -194,6 +198,9 @@ def install_cameras_routes(app, ctx) -> None:
             arms = ["arm_s", "arm_a", "arm_b"]
         else:
             raise HTTPException(422, detail={"code": "UNKNOWN_ARM_OR_CELL"})
+        from fleet.server.pipeline_recovery_policy import ensure_clearable_after_homing, mark_homing_cleared
+
+        ensure_clearable_after_homing(app.state, arms)
         cause, basis = _clear_label(body, "cause"), _clear_label(body, "basis")
         principal = getattr(request.state, "site_principal", None)
         raw_principal_id = getattr(principal, "principal_id", None)
@@ -209,10 +216,11 @@ def install_cameras_routes(app, ctx) -> None:
                 raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
         principal_id = named_principal_id or "operator"
         _missing = object()
-        prev_holds = {a: copy.deepcopy(app.state.arm_holds.get(a, _missing)) for a in arms}
+        prev_holds = {a: (copy.deepcopy(app.state.arm_holds[a]) if a in app.state.arm_holds else _missing) for a in arms}
         prev_pending = {a: app.state.pending_clear_arms.get(a, _missing) for a in arms}
         prev_states = {cid: copy.deepcopy(app.state.omx_cell_states[cid])
                        for cid, _ in aborted_targets if cid in app.state.omx_cell_states}
+        prev_homing = copy.deepcopy(app.state.pipeline_homing_sessions) if hasattr(app.state, "pipeline_homing_sessions") else _missing
         for a in arms:
             app.state.arm_holds[a] = {"arm": a, "held": False, "reason": None, "incident_ids": [], "last_cleared_note": note}
             app.state.pending_clear_arms[a] = note
@@ -224,36 +232,32 @@ def install_cameras_routes(app, ctx) -> None:
                                 for t in app.state.omx_cell_tasks.values())):
                 prev = dict(app.state.omx_cell_states[cid])
                 docked = prev.get("docked_robot")
-                cleared_docked = ({**docked, "wheel_brake_locked": False, "bed_ready": False}
-                                  if isinstance(docked, dict) else None)
+                cleared_docked = {**docked, "wheel_brake_locked": False, "bed_ready": False} if isinstance(docked, dict) else None
                 app.state.omx_cell_states[cid] = {
-                    "phase": "IDLE",
-                    "robot_id": prev.get("robot_id"),
-                    "amr_motion_inhibited": False,
-                    "reason": "OPERATOR_ABORT_CLEARED",
-                    "cleared_by": principal_id,
-                    "cleared_note": note,
-                    "cleared_at": round(time.time(), 3),
-                    **({"docked_robot": cleared_docked} if cleared_docked is not None else {}),
+                    "phase": "IDLE", "robot_id": prev.get("robot_id"), "amr_motion_inhibited": False,
+                    "reason": "OPERATOR_ABORT_CLEARED", "cleared_by": principal_id, "cleared_note": note,
+                    "cleared_at": round(time.time(), 3), **({"docked_robot": cleared_docked} if cleared_docked is not None else {}),
                 }
                 cleared_cells.append(cid)
-        if cleared_cells:
-            try:
-                _save_ledger()
-            except Exception:
-                for a, old in prev_holds.items():
-                    if old is _missing:
-                        app.state.arm_holds.pop(a, None)
-                    else:
-                        app.state.arm_holds[a] = old
-                for a, old in prev_pending.items():
-                    if old is _missing:
-                        app.state.pending_clear_arms.pop(a, None)
-                    else:
-                        app.state.pending_clear_arms[a] = old
-                for cid, old in prev_states.items():
-                    app.state.omx_cell_states[cid] = old
-                raise
+        try:
+            mark_homing_cleared(app.state, arms)
+            _commit_ledger(bump_stop=True) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_stop_generation())
+        except Exception:
+            for a, old in prev_holds.items():
+                app.state.arm_holds.pop(a, None) if old is _missing else app.state.arm_holds.__setitem__(a, old)
+            for a, old in prev_pending.items():
+                app.state.pending_clear_arms.pop(a, None) if old is _missing else app.state.pending_clear_arms.__setitem__(a, old)
+            for cid, old in prev_states.items():
+                app.state.omx_cell_states[cid] = old
+            if prev_homing is _missing:
+                if hasattr(app.state, "pipeline_homing_sessions"):
+                    delattr(app.state, "pipeline_homing_sessions")
+            else:
+                app.state.pipeline_homing_sessions = prev_homing
+            if callable(_commit_ledger) and not getattr(app.state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    _commit_ledger(commit=False)
+            raise
         _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis)
         return {"ok": True, "cleared_arms": arms, "cleared_cells": cleared_cells, "note": note,
                 "arm_holds": app.state.arm_holds}
@@ -302,56 +306,70 @@ def install_cameras_routes(app, ctx) -> None:
         # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
         if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
+        if cell_id == "cell_ab":
+            store = getattr(app.state, "arm_transfer_job_store", None)
+            if callable(getattr(store, "has_active_transfer", None)) and store.has_active_transfer():
+                return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_WORK_CONFLICT"}
+        # D-1072: cell_internal on cell_ab allows claim without docked AMR once all gates above pass.
+        internal = cell_id == "cell_ab" and task.get("interlock_scope") == "cell_internal"
         amr = _ready_amr(task)
-        if amr is None:
-            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
-        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
-        if station is None:
-            raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
-        robot = {
-            "robot_id": task["robot_id"],
-            "robot_kind": task["robot_kind"],
-            "pose": dict(amr["pose"]),
-            "wheel_brake_locked": amr["wheel_brake_locked"],
-            "bed_ready": amr["bed_ready"],
-            "v_cmd_mps": amr["v_cmd_mps"],
-        }
+        robot = None
         state = {"phase": "ARM_IN_BED_ZONE", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task["task_id"]}
-        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
-                                        map_version=getattr(active[2], "version", None))
-        if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
-            return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
+        if amr is None:
+            if not internal:
+                return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+            res = {"gate": {"cell_can_claim": True, "interlock_scope": "cell_internal"},
+                   "handoff": {"handoff_lease_id": f"cell_ab:cell_internal:{task['task_id']}", "cell_id": cell_id}}
+        else:
+            station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+            if station is None:
+                raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
+            robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict(amr["pose"]),
+                     "wheel_brake_locked": amr["wheel_brake_locked"], "bed_ready": amr["bed_ready"], "v_cmd_mps": amr["v_cmd_mps"]}
+            res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
+            if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
+                return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
         from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
 
-        claim_now = time.time()
-        if task.get("execution_mode") == "act_policy" and not has_valid_presence(app, task, now=claim_now):
+        claim_now, tid, _missing = time.time(), task["task_id"], object()
+        if (task.get("execution_mode") == "act_policy" or task.get("requires_presence_confirm")) and not has_valid_presence(app, task, now=claim_now):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
-
-        # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
-        if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
+        pres_map = getattr(app.state, "cell_presence", None) or {}
+        bed_map = getattr(app.state, "cell_bed_confirmations", None) or {}
+        prev_cell = copy.deepcopy(app.state.omx_cell_states[cell_id]) if cell_id in app.state.omx_cell_states else _missing
+        prev_task = copy.deepcopy(task)
+        prev_pres = copy.deepcopy(pres_map[tid]) if tid in pres_map else _missing
+        prev_bed = copy.deepcopy(bed_map[tid]) if tid in bed_map else _missing
+        # D-1057: bind bed confirmation atomically with going RUNNING (skipped only for AMR-less cell_internal claims).
+        if amr is not None and not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
-        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
-
-        task["presence"] = take_presence(app, task, now=claim_now)  # D-1057/D-911: set only for a task a named operator confirmed in time
-        task["status"] = "RUNNING"
-        task["amr_claim_evidence"] = dict(amr)
-        task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
-        task["claimed_at"] = round(time.time(), 3)
-        _enrich_task_health(task)
-        _save_ledger()
+        try:
+            app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+            task["presence"] = take_presence(app, task, now=claim_now, delete_gov=not callable(_commit_ledger))  # D-1057/D-911
+            task["status"], task["amr_claim_evidence"] = "RUNNING", (dict(amr) if amr is not None else None)
+            task["handoff_lease_id"], task["claimed_at"] = res["handoff"].get("handoff_lease_id"), round(time.time(), 3)
+            _enrich_task_health(task)
+            _commit_ledger(bump_dispatch=True, delete_confirmation=("presence", tid)) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_dispatch_generation())
+        except Exception:
+            app.state.omx_cell_states.pop(cell_id, None) if prev_cell is _missing else app.state.omx_cell_states.__setitem__(cell_id, prev_cell)
+            task.clear(); task.update(prev_task)
+            if prev_pres is not _missing and isinstance(getattr(app.state, "cell_presence", None), dict):
+                app.state.cell_presence[tid] = prev_pres
+            if prev_bed is not _missing and isinstance(getattr(app.state, "cell_bed_confirmations", None), dict):
+                app.state.cell_bed_confirmations[tid] = prev_bed
+                if gov is not None:
+                    with suppress(Exception):
+                        gov.save_confirmation("bed", tid, prev_bed)
+            if callable(_commit_ledger) and not getattr(app.state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    _commit_ledger(commit=False)
+            raise
         handoff = {
-            **res["handoff"],
-            "task_id": task["task_id"],
-            "arm_id": task["arm_id"],
-            "tier": task["tier"],
-            "directive": task.get("directive"),
-            "src_site": task["src_site"],
-            "dst_site": task["dst_site"],
-            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks")
-               if task.get(k) is not None},
-            "displaced_to": task.get("displaced_to"),
-            "tier_hint": task.get("tier_hint"),
-            "presence": task["presence"],
+            **res["handoff"], "task_id": tid, "arm_id": task["arm_id"], "tier": task["tier"],
+            "directive": task.get("directive"), "src_site": task["src_site"], "dst_site": task["dst_site"],
+            "interlock_scope": task.get("interlock_scope"), "displaced_to": task.get("displaced_to"),
+            "tier_hint": task.get("tier_hint"), "presence": task["presence"],
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks") if task.get(k) is not None},
         }
         return {"claimed": True, "task": strip_task_for_claim(task), "handoff": handoff, "gate": res["gate"]}
 
@@ -384,12 +402,18 @@ def install_cameras_routes(app, ctx) -> None:
             if stored is not None and stored["principal_id"] != getattr(
                     getattr(request.state, "site_principal", None), "principal_id", None):
                 raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
-        amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
-        if phase == "RELEASED" and amr is None:
-            from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
+        # P0-1/D-1072: AMR-less cell_internal claims skip AMR re-check on release; owner/hold/receipt checks still run.
+        internal_release = cell_id == "cell_ab" and task.get("interlock_scope") == "cell_internal" and task.get("amr_claim_evidence") is None
+        amr = None
+        if phase == "RELEASED" and not internal_release:
+            amr = _ready_amr(task)
+            if amr is None:
+                from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
 
-            raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
-                                             else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+                raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
+                                                 else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+        elif phase != "RELEASED":
+            amr = task.get("amr_claim_evidence")
         if phase == "RELEASED":
             trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
             if not isinstance(trusted, dict):
@@ -434,60 +458,79 @@ def install_cameras_routes(app, ctx) -> None:
                 raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
             if objects > 0:
                 cell_phase = "CLAIMED"
-        robot = {
-            "robot_id": task["robot_id"],
-            "robot_kind": task["robot_kind"],
-            "pose": dict((amr or {}).get("pose") or task["pose"]),
-            "wheel_brake_locked": bool((amr or {}).get("wheel_brake_locked")),
-            "bed_ready": bool((amr or {}).get("bed_ready")),
+        robot = None if internal_release else {
+            "robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict((amr or {}).get("pose") or task["pose"]),
+            "wheel_brake_locked": bool((amr or {}).get("wheel_brake_locked")), "bed_ready": bool((amr or {}).get("bed_ready")),
             "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0)),
         }
-        state = {
-            "phase": cell_phase,
-            "tier": task["tier"],
-            "robot_id": task["robot_id"],
-            "stage_id": task_id,
-            **({"unload_batch_id": task["unload_batch_id"]} if task.get("unload_batch_id") else {}),
-            "goal_evidence_digest": body.get("goal_evidence_digest"),
-            "reason": body.get("reason") or ("TRANSFER_CONFIRMED" if phase == "RELEASED" else "TASK_ABORTED"),
-            "amr_motion_inhibited": cell_phase in ("ABORTED", "CLAIMED"),
-        }
-        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
-                                        map_version=getattr(active[2], "version", None))
-        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
-        task["status"] = "COMPLETED" if phase == "RELEASED" else "ABORTED"
-        task["completed_at"] = round(time.time(), 3)
-        task["receipt"] = body.get("receipt") or state
-        task["stage_result"] = body.get("stage_result")
-        task["hardware_telemetry"] = body.get("hardware_telemetry")
-        stop_ev = ((task.get("hardware_telemetry") or {}).get("stop_event") or {})
-        arm_id = task.get("arm_id")
-        if arm_id in ("arm_s", "arm_a", "arm_b") and isinstance(stop_ev.get("state"), list) and len(stop_ev["state"]) >= 6:
-            prev = dict(app.state.arm_live_states.get(arm_id) or {})
-            health = stop_ev.get("health") or {}
-            temps = health.get("temp_c") or []
-            curs = health.get("current_ma") or []
-            prev["joints_deg"] = [round(float(x), 1) for x in stop_ev["state"][:6]]
-            prev["folded"] = bool(stop_ev.get("folded", False))
-            if temps:
-                prev["temp_c"] = round(float(max(temps)), 1)
-            if curs:
-                prev["current_ma"] = round(float(max(curs)), 1)
-            prev["updated_at"] = task["completed_at"]
-            prev["source"] = "task_complete"
-            prev["last_task_id"] = task_id
-            app.state.arm_live_states[arm_id] = prev
-        _enrich_task_health(task)
-        if phase == "ABORTED":
-            pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
-        elif phase == "RELEASED":
-            pending_events = build_completion_events(
-                app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},
-                human_detected=bool(_is_human_detected(cell_id)),
-            )
-            if pending_events:
-                task["pending_port_events"] = pending_events
-        _save_ledger()
+        state = {"phase": cell_phase, "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task_id,
+                 **({"unload_batch_id": task["unload_batch_id"]} if task.get("unload_batch_id") else {}),
+                 "goal_evidence_digest": body.get("goal_evidence_digest"),
+                 "reason": body.get("reason") or ("TRANSFER_CONFIRMED" if phase == "RELEASED" else "TASK_ABORTED"),
+                 "amr_motion_inhibited": cell_phase in ("ABORTED", "CLAIMED")}
+        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
+        _missing, arm_id = object(), task.get("arm_id")
+        arm_map = getattr(app.state, "arm_live_states", None) or {}
+        prev_cell = copy.deepcopy(app.state.omx_cell_states[cell_id]) if cell_id in app.state.omx_cell_states else _missing
+        prev_task = copy.deepcopy(task)
+        prev_arm = copy.deepcopy(arm_map[arm_id]) if (arm_id and arm_id in arm_map) else _missing
+        prev_repark = copy.deepcopy(app.state.repark_requests) if hasattr(app.state, "repark_requests") else _missing
+        prev_events = copy.deepcopy(app.state.cell_auto_events) if hasattr(app.state, "cell_auto_events") else _missing
+        try:
+            app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+            task["status"], task["completed_at"] = ("COMPLETED" if phase == "RELEASED" else "ABORTED"), round(time.time(), 3)
+            task["receipt"], task["stage_result"], task["hardware_telemetry"] = (body.get("receipt") or state), body.get("stage_result"), body.get("hardware_telemetry")
+            stop_ev = ((task.get("hardware_telemetry") or {}).get("stop_event") or {})
+            if arm_id in ("arm_s", "arm_a", "arm_b") and isinstance(stop_ev.get("state"), list) and len(stop_ev["state"]) >= 6:
+                prev = dict(app.state.arm_live_states.get(arm_id) or {})
+                health = stop_ev.get("health") or {}
+                temps, curs = (health.get("temp_c") or []), (health.get("current_ma") or [])
+                prev["joints_deg"] = [round(float(x), 1) for x in stop_ev["state"][:6]]
+                prev["folded"] = stop_ev["folded"] if isinstance(stop_ev.get("folded"), bool) else False
+                prev["folded_updated_at"] = task["completed_at"] if prev["folded"] or isinstance(stop_ev.get("folded"), bool) else None
+                if temps:
+                    prev["temp_c"] = round(float(max(temps)), 1)
+                if curs:
+                    prev["current_ma"] = round(float(max(curs)), 1)
+                prev.update({"updated_at": task["completed_at"], "source": "task_complete", "last_task_id": task_id})
+                app.state.arm_live_states[arm_id] = prev
+            _enrich_task_health(task)
+            if phase == "ABORTED":
+                hw_err, rcpt_why = str(((task.get("hardware_telemetry") or {}).get("error") or "")), str(((task.get("receipt") or {}).get("reason") or ""))
+                if "FOLD_READBACK_MISSING" not in (hw_err, rcpt_why):
+                    pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
+            elif phase == "RELEASED":
+                pending_events = build_completion_events(app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},
+                                                         human_detected=bool(_is_human_detected(cell_id)))
+                if pending_events:
+                    task["pending_port_events"] = pending_events
+            if callable(_commit_ledger):
+                _commit_ledger(bump_dispatch=(phase == "RELEASED"), bump_stop=(phase == "ABORTED"))
+            else:
+                _save_ledger()
+                if gov is not None and phase == "ABORTED":
+                    gov.bump_stop_generation()
+                elif gov is not None and phase == "RELEASED":
+                    gov.bump_dispatch_generation()
+        except Exception:
+            app.state.omx_cell_states.pop(cell_id, None) if prev_cell is _missing else app.state.omx_cell_states.__setitem__(cell_id, prev_cell)
+            task.clear(); task.update(prev_task)
+            if arm_id and isinstance(getattr(app.state, "arm_live_states", None), dict):
+                app.state.arm_live_states.pop(arm_id, None) if prev_arm is _missing else app.state.arm_live_states.__setitem__(arm_id, prev_arm)
+            if prev_repark is _missing:
+                if hasattr(app.state, "repark_requests"):
+                    delattr(app.state, "repark_requests")
+            else:
+                app.state.repark_requests = prev_repark
+            if prev_events is _missing:
+                if hasattr(app.state, "cell_auto_events"):
+                    delattr(app.state, "cell_auto_events")
+            else:
+                app.state.cell_auto_events = prev_events
+            if callable(_commit_ledger) and not getattr(app.state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    _commit_ledger(commit=False)
+            raise
         flushed = 0
         if task.get("pending_port_events"):
             try:

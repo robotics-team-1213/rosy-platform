@@ -2376,6 +2376,14 @@
           "expression": "/api/fleet/policy-admission",
           "resolution": "literal-or-template",
           "request_ids": [
+            "GET:/api/fleet/policy-admission"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/policy-page.js",
+          "expression": "/api/fleet/policy-admission",
+          "resolution": "literal-or-template",
+          "request_ids": [
             "GET:/api/fleet/policy-admission",
             "POST:/api/fleet/policy-admission"
           ]
@@ -2983,16 +2991,33 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/cell/cell.js",
         "applications/fleet/web/console-refresh.js",
+        "applications/fleet/web/shared/cell-context-panel.js",
         "applications/fleet/web/shared/fleet-header.js",
-        "applications/fleet/web/work/channel-request-view.js",
         "applications/fleet/web/work/work-view.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
         {
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
+          "expression": "/api/fleet/dispatch-control",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/dispatch-control"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/cell/cell.js",
+          "expression": "/api/fleet/dispatch-control",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/dispatch-control"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-context-panel.js",
           "expression": "/api/fleet/dispatch-control",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -3029,14 +3054,6 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/estop"
-          ]
-        },
-        {
-          "consumer": "applications/fleet/web/work/channel-request-view.js",
-          "expression": "/api/fleet/dispatch-control",
-          "resolution": "literal-or-template",
-          "request_ids": [
-            "GET:/api/fleet/dispatch-control"
           ]
         },
         {
@@ -3185,17 +3202,36 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/map/trail-view.js",
         "applications/fleet/web/roster.js",
+        "applications/fleet/web/shared/cell-context-panel.js",
         "applications/fleet/web/shared/site-map-model.js",
         "applications/fleet/web/signals.js",
         "applications/fleet/web/sitemap/site-map.js",
         "applications/fleet/web/trip-replan.js",
-        "applications/fleet/web/work/work-view.js"
+        "applications/fleet/web/work/work-view.js",
+        "applications/fleet/web/work/trip-receipts.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
+          "expression": "/api/fleet/work",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/work"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-context-panel.js",
+          "expression": "/api/fleet/work",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/work"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/map/map-polling.js",
           "expression": "/api/fleet/trips",
@@ -3213,11 +3249,19 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
-          "expression": "/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel",
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/trips/{trip_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/trips/{trip_id}"
           ]
         },
         {
@@ -3276,6 +3320,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/work"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trip-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/trip-requests"
           ]
         }
       ],
@@ -3434,6 +3486,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/confirm-replan"
+        },
+        {
+          "id": "GET:/api/fleet/trip-requests",
+          "method": "GET",
+          "path": "/api/fleet/trip-requests",
+          "implementation": "operations/fleet/fleet/server/trips/trip_routes.py",
+          "handler": "trip_request_history",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_trip.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/trip-requests"
         }
       ],
       "flows": [
@@ -3494,15 +3563,26 @@
       "id": "mission",
       "title": "제안·Mission·채널",
       "entrypoints": [
+        "applications/fleet/web/cell/cell.html",
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/cell/cell.js",
+        "applications/fleet/web/shared/cell-context-panel.js",
         "applications/fleet/web/work/channel-request-view.js",
         "applications/fleet/web/work/work-view.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/shared/cell-context-panel.js",
+          "expression": "/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/missions/{mission_id}/admit"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/cell/cell.js",
           "expression": "/api/fleet/channel-requests/${encodeURIComponent(channelId)}",
@@ -3533,6 +3613,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/missions/{mission_id}/admit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/channel-request-view.js",
+          "expression": "/api/fleet/channel-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/channel-requests"
           ]
         },
         {
@@ -3569,7 +3657,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/work/channel-request-view.js",
+          "consumer": "applications/fleet/web/cell/cell-channel-mission.js",
           "expression": "/api/fleet/proposals/${encodeURIComponent(sourceId)}",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4134,7 +4222,9 @@
       ],
       "consumers": [
         "applications/fleet/web/cell/cell.js",
-        "applications/fleet/web/cell/cell-real2sim-specs.js"
+        "applications/fleet/web/cell/cell-real2sim-specs.js",
+        "applications/fleet/web/cell/cell-pipeline-panel.js",
+        "applications/fleet/web/map/zone-blueprint-inspector.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4260,6 +4350,94 @@
           "request_ids": [
             "GET:/api/fleet/pipeline/station-zones",
             "PUT:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/status",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/status"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/unload-release",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/unload-release"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/pinky-tasks/${encodeURIComponent(id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/repark/${encodeURIComponent(id)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/repark/{request_id}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/recovery-tools/invoke",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/recovery-tools/invoke"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-plans"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/admit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/cells/${encodeURIComponent(id)}/readiness",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/pipeline/station-zones",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
@@ -4629,6 +4807,159 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/status",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/status",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "pipeline_status",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/status"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/unload-release",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/unload-release",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_unload_release.py",
+          "handler": "read_unload_release",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_unload_release.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/unload-release"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cell-plans",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cell-plans",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "list_cell_plans",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cell-plans"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/admit",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "admit_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful batch admit response",
+          "contract_tests": [
+            "operations/fleet/test/test_wave4_integration.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/admit"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-plans/{plan_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_plan_routes.py",
+          "handler": "cancel_cell_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful plan cancellation response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-plans/{plan_id}/cancel"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cells/{cell_id}/readiness",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "cell_readiness",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful cell readiness response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_plans.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cells/{cell_id}/readiness"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_pinky_dispatch.py",
+          "handler": "cancel_pinky_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful cancel acknowledgment",
+          "contract_tests": [
+            "operations/fleet/test/test_pinky_task_dispatch.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/repark/{request_id}",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/repark/{request_id}",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_repark.py",
+          "handler": "close_repark",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful repark completion or refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_repark.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/repark/{request_id}"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/recovery-tools/invoke",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/recovery-tools/invoke",
+          "implementation": "operations/fleet/fleet/server/pipeline/pipeline_recovery_tools.py",
+          "handler": "invoke_recovery_tool",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; guarded tool execution and fail-closed refusals",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_recovery_tools.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/recovery-tools/invoke"
         }
       ],
       "flows": [
@@ -4700,6 +5031,7 @@
         "applications/fleet/web/site-rules-judge.js",
         "applications/fleet/web/platoon-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
@@ -4708,7 +5040,8 @@
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
         "applications/fleet/web/sitemap/map-authoring.js",
-        "applications/fleet/web/sitemap/map-editor.js"
+        "applications/fleet/web/sitemap/map-editor.js",
+        "applications/fleet/web/map/zone-blueprint-inspector.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4730,6 +5063,14 @@
         },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/site-lanes",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-lanes"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
           "expression": "/api/fleet/site-lanes",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -5071,6 +5412,14 @@
         },
         {
           "consumer": "applications/fleet/web/sitemap/map-editor.js",
+          "expression": "/api/fleet/site-points",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
           "expression": "/api/fleet/site-points",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -6551,6 +6900,7 @@
         "applications/fleet/web/sitemap/site-map.html"
       ],
       "consumers": [
+        "applications/fleet/web/calibration/manual-fit-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/calibration/measured-calibration-view.js",
         "applications/fleet/web/console-goal.js",
@@ -6565,6 +6915,63 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations",
+            "POST:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations?include_history=true",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/calibrations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/fit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/fit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/freeze",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/freeze"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/rollback",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/rollback"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/accept",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/manual-fit-view.js",
+          "expression": "/api/fleet/calibrations/${encodeURIComponent(src)}/recalibrate/dismiss",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/calibrations",
@@ -6889,6 +7296,108 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/fit",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/fit",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "fit_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/fit"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/freeze",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/freeze",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "freeze_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/freeze"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/rollback",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/rollback",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "rollback_calibration",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/rollback"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "submit_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/candidate"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/accept",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "accept_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/accept"
+        },
+        {
+          "id": "POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "method": "POST",
+          "path": "/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "dismiss_recal_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_recalibration_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/calibrations/{source_id}/recalibrate/dismiss"
         },
         {
           "id": "POST:/api/fleet/teach/confirm",
@@ -7414,6 +7923,7 @@
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
         "applications/fleet/web/shared/cell-cockpit-stage.js",
+        "applications/fleet/web/shared/cell-obs-model.js",
         "applications/fleet/web/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -7534,6 +8044,14 @@
         },
         {
           "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-obs-model.js",
           "expression": "/api/fleet/workcell-observations",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -8386,6 +8904,237 @@
           ],
           "test_scope": "Passed remote standalone sample-host browser and API readback/reconciliation, plus actual backend HTTP duplicate/restart/live-send guards. Recommissioning attestation is not device proof or automatic rearm.",
           "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
+        }
+      ]
+    },
+    {
+      "id": "pinky_localization_binding",
+      "title": "Pinky localization monitoring, candidate confirm/relocalize, and D-1022 map binding",
+      "entrypoints": [
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/localization-panel.js",
+        "applications/fleet/web/localization-panel-logic.js",
+        "applications/fleet/web/roster-workspace.js"
+      ],
+      "availability": "Configured Fleet console with LocalizationService and SiteMapStore; write actions require a named operator.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/localization"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/localization/confirm"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/relocalize",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/relocalize"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/map-binding",
+          "resolution": "template-literal; GET/POST/DELETE map-binding",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/map-binding",
+            "POST:/api/fleet/robots/{robot_id}/map-binding",
+            "DELETE:/api/fleet/robots/{robot_id}/map-binding"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/tracking/identity",
+          "resolution": "literal",
+          "request_ids": [
+            "GET:/api/fleet/tracking/identity"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/localization",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/localization",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/localization"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/localization/confirm",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization_confirm",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/localization/confirm"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/relocalize",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/relocalize",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_relocalize",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/relocalize"
+        },
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_read",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/map-binding"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_approve",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/map-binding"
+        },
+        {
+          "id": "DELETE:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "DELETE",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_revoke",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#DELETE:/api/fleet/robots/{robot_id}/map-binding"
+        }
+      ],
+      "flows": [
+        {
+          "id": "pinky_localization_binding.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/robots/{robot_id}/localization",
+                "POST:/api/fleet/robots/{robot_id}/relocalize",
+                "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+                "GET:/api/fleet/tracking/identity",
+                "POST:/api/fleet/robots/{robot_id}/map-binding",
+                "GET:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Candidate confirm transitions robot to LOCALIZED and D-1022 binding readback confirms matches=true."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.happy",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+        },
+        {
+          "id": "pinky_localization_binding.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+                "POST:/api/fleet/robots/{robot_id}/relocalize",
+                "POST:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Invalid candidate index, already localized relocalize, and missing holdout binding are refused with 404/409."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.refused",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+        },
+        {
+          "id": "pinky_localization_binding.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "DELETE:/api/fleet/robots/{robot_id}/map-binding",
+                "GET:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Revoking active map binding clears matches and restores MAP_BINDING_REQUIRED readback."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.terminal",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
         }
       ]
     }

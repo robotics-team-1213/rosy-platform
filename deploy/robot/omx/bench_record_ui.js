@@ -2,7 +2,7 @@ const H={'Content-Type':'application/json','X-Bench':'1'};
 const $=id=>document.getElementById(id);
 const f=$('bench-form');
 const STATUS_MAP={
-  idle:['대기','good'],
+  idle:['대기',''],
   handing_over:['시작 중 (인계)','live'],
   homing:['리더가 움직입니다 — 손을 대지 마세요','live'],
   recording:['녹화 중','live'],
@@ -36,6 +36,12 @@ function benchSessionActive(st=lastStatus){
   if(st?.status==='homing'&&(st?.error||st?.manual_hold?.active))return false;
   return BUSY.has(st?.status)||st?.phase==='prepare'||st?.phase==='recording';
 }
+
+// only the recording phase with the server's recording status is an active take; setup/prepare/result/idle are standby
+function isActivelyRecording(){
+  return currentBenchPhase()==='recording'&&lastStatus?.status==='recording';
+}
+window.isActivelyRecording=isActivelyRecording;
 
 function resolveBenchPhase(statusCode,telemetryActive,phase){
   if(BENCH_PHASES.includes(phase))return phase;
@@ -71,6 +77,7 @@ function applyBenchPhase(phase){
   if(p==='prepare'||p==='recording'){const secSt=$('sec-status');if(secSt)secSt.open=true;}
   if(benchSessionActive()&&typeof window.closeDrawer==='function'&&window.activeDrawerName?.()!=='records')window.closeDrawer(false);
   if(p!=='result')renderCamGuide();
+  if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();
   if(typeof updateGoalSummaryRows==='function')updateGoalSummaryRows();
 }
 

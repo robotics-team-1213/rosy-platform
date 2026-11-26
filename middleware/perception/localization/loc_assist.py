@@ -58,11 +58,14 @@ MISSION_PAUSE_S = 130.
 #: a scan taken while the robot still turns puts the candidate degrees off. A twist
 #: older than SETTLE_S is unknown motion, not still (odom silent or lost).
 STILL_MPS, STILL_RADPS, SETTLE_S = .01, .02, .5
+#: Candidate rechecks are cheaper than searches but still bounded on the robot.
+CANDIDATE_SCAN_PERIOD_S, CANDIDATE_MISMATCH_SCANS = 1., 3
 #: A robot that never settles (odom lost, a creeping wheel) still gets a search after this.
 SETTLE_CAP_S = 5.
 #: LOCALIZED objects (S1 R1): computed at most once per state period, sent while the scan
 #: they came from is younger than this.
 OBJECTS_FRESH_S = 1.
+AUTO_UNIQUE_MAX_FAILS = 2
 
 
 @dataclass(frozen=True)
@@ -106,19 +109,22 @@ def verify_recovery_pose(
 
 
 class LocAssist:
-    def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5.,
-                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1., max_gap_s=.5):
-        self.machine = LocalizationStateMachine(new_request_id, hold_s=hold_s, min_fit=min_fit,
-                                                fit_drop_s=fit_drop_s, max_gap_s=max_gap_s)
+    def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5., moved_m=.05,
+                 moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=2.5, max_gap_s=.5, auto_unique=True, drop_fit=.70):
+        self.machine = LocalizationStateMachine(
+            new_request_id, hold_s=hold_s, min_fit=min_fit, fit_drop_s=fit_drop_s, max_gap_s=max_gap_s, drop_fit=drop_fit)
         self.rereport_s, self.state_period_s, self.retry_s = rereport_s, state_period_s, retry_s
         self.moved_m, self.moved_rad = moved_m, moved_rad
+        self._auto_unique, self._auto_unique_fails = bool(auto_unique), 0
         self.pose = self.fit = None
         self.held = False
         self._epoch = 0                     # pickups so far: a search spanning one is void
         self._wanted = True                 # power-on: search at once
         self._searching = None              # (odom, epoch, start s) of the running search
         self._searched_at, self._searched_odom = -math.inf, None
+        self._empty_streak = 0
         self._report, self._reported_s = None, -math.inf
+        self._candidate_scan_s, self._candidate_mismatches = -math.inf, 0
         self._state_s, self._state_key = -math.inf, None
         self._pending = None                # request id whose 3 s check is running
         self._mission = None                # since when a CORE mission moves the robot (P2-7)
@@ -146,6 +152,8 @@ class LocAssist:
             self._epoch += 1
             out = self._after(self.machine.picked_up(now_s), now_s)
             self._wanted = True
+            self._empty_streak = 0
+            self._auto_unique_fails = 0
         self.held = bool(active)
         return out
 
@@ -159,7 +167,7 @@ class LocAssist:
             self._mission = float(now_s)
             self.machine.request_id, self._report = None, None
         elif state in ('done', 'aborted'):
-            self._mission, self._wanted = None, True
+            self._mission, self._wanted, self._empty_streak = None, True, 0
 
     def on_twist(self, now_s, linear_mps, angular_radps):
         """Odom twist: speed in m/s and yaw rate in rad/s. Still means both under the limits."""
@@ -167,14 +175,14 @@ class LocAssist:
         still = abs(linear_mps) < STILL_MPS and abs(angular_radps) < STILL_RADPS  # NaN: moving
         if not still:
             self._still_since = None
+            self._candidate_mismatches = 0
         elif self._still_since is None:
             self._still_since = float(now_s)
 
     def objects_due(self, now_s):
-        """Whether the node should compute unmapped objects from this scan: LOCALIZED, no
-        check running, and none handed in for a state period (D-395 rev. 4 §5, S1 R1)."""
-        return (self.machine.state is LocState.LOCALIZED and self.machine.check is None
-                and now_s - self._objects_at >= self.state_period_s)
+        """LOCALIZED, no check running, fit healthy, and none handed in for a state period (D-395 rev. 4 §5)."""
+        return (self.machine.state is LocState.LOCALIZED and self.machine.check is None and self.machine._low_since is None
+                and (self.fit is None or self.fit >= self.machine.drop_fit) and now_s - self._objects_at >= self.state_period_s)
 
     def on_objects(self, now_s, scan_s, objects):
         """Base_link (x, y) objects from the full scan stamped `scan_s`; kept only while LOCALIZED."""
@@ -227,33 +235,17 @@ class LocAssist:
                                     decision.request_id))]
         return out + self._state_if_changed(now_s)
 
-    def try_auto_recovery(
-        self,
-        now_s,
-        candidate_pose,
-        *,
-        fit,
-        camera_xy,
-        camera_yaw=None,
-        request_id: Optional[str] = None,
-        min_fit=0.85,
-        max_xy_m=0.15,
-        max_yaw_rad=math.radians(20.0),
-    ) -> tuple[list, Optional[str]]:
+    def try_auto_recovery(self, now_s, candidate_pose, *, fit, camera_xy, camera_yaw=None,
+                          request_id: Optional[str] = None, min_fit=0.85, max_xy_m=0.15,
+                          max_yaw_rad=math.radians(20.0)) -> tuple[list, Optional[str]]:
         """Path B bounded-window auto-recovery: inject only when stationary and verified."""
         if self.held:
             return [], 'held'
         if not self._is_settled(now_s):
             return [], 'not_settled'
-        ok, reason = verify_recovery_pose(
-            candidate_pose,
-            fit=fit,
-            camera_xy=camera_xy,
-            camera_yaw=camera_yaw,
-            min_fit=min_fit,
-            max_xy_m=max_xy_m,
-            max_yaw_rad=max_yaw_rad,
-        )
+        ok, reason = verify_recovery_pose(candidate_pose, fit=fit, camera_xy=camera_xy,
+                                          camera_yaw=camera_yaw, min_fit=min_fit,
+                                          max_xy_m=max_xy_m, max_yaw_rad=max_yaw_rad)
         if not ok:
             return [], reason
         xy_std, yaw_std = COVARIANCE['auto_recovery']
@@ -278,6 +270,42 @@ class LocAssist:
         fresh = self._twist_at is not None and now_s - self._twist_at <= SETTLE_S
         return fresh and self._still_since is not None and now_s - self._still_since >= SETTLE_S
 
+    def candidate_scan_due(self, now_s, scan_stamp):
+        """Only compare a new, recent scan against an open stationary candidate set."""
+        return (self.machine.state is LocState.CANDIDATES and self.machine.request_id is not None
+                and bool(self.machine.candidates) and self._report is not None and self.machine.check is None
+                and self._searching is None and not self.held and not self._mission_running(now_s)
+                and self._is_settled(now_s)
+                and 0. <= now_s - scan_stamp <= SETTLE_S
+                and scan_stamp - self._candidate_scan_s >= CANDIDATE_SCAN_PERIOD_S)
+
+    def on_candidate_scan(self, now_s, scan_stamp, fits, unmapped):
+        """Re-ground a report, or retire it when all candidates repeatedly disagree."""
+        if (not self.candidate_scan_due(now_s, scan_stamp)
+                or len(fits) != len(self.machine.candidates)
+                or not all(0. <= fit <= 1. for fit in fits)):
+            return []
+        if scan_stamp - self._candidate_scan_s > 2. * CANDIDATE_SCAN_PERIOD_S:
+            self._candidate_mismatches = 0
+        self._candidate_scan_s = scan_stamp
+        if any(fit >= self.machine.min_fit for fit in fits):
+            self._candidate_mismatches = 0
+            if unmapped is not None and all(fit >= self.machine.min_fit for fit in fits):
+                self._report.update(
+                    stamp=scan_stamp,
+                    candidates=[{**row, 'scan_fit': fit, 'paint_score': None}
+                                for row, fit in zip(self._report['candidates'], fits)],
+                    unmapped_objects=[{'x': float(x), 'y': float(y)} for x, y in unmapped[:MAX_OBJECTS]],
+                    square_sightings=[],
+                )
+            return []
+        self._candidate_mismatches += 1
+        if (self._candidate_mismatches < CANDIDATE_MISMATCH_SCANS
+                or now_s - self._searched_at < self.retry_s):
+            return []
+        self._report = None
+        return self._after(self.machine.retire_candidates('candidate_scan_mismatch'), now_s)
+
     # --- search -------------------------------------------------------------
     def search_due(self, now_s, odom):
         """Whether the node should start a candidate search now (odom: current (x, y, yaw)).
@@ -301,13 +329,18 @@ class LocAssist:
         if (self._searching is not None or self.held or self.machine.check is not None
                 or self._mission_running(now_s)):
             return False
-        waited = now_s - self._searched_at >= self.retry_s
+        moved = (odom is not None and self._searched_odom is not None
+                 and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
+        if moved:
+            self._empty_streak = 0
+            self._auto_unique_fails = 0
+        retry_s = min(30.0, self.retry_s * (2 ** min(max(0, self._empty_streak - 1), 4)))
+        waited = now_s - self._searched_at >= retry_s
         state = self.machine.state
         if state in (LocState.UNKNOWN, LocState.SUSPECT):
             return self._wanted or waited
         if state is LocState.CANDIDATES:
-            return self._wanted or (waited and odom is not None and self._searched_odom is not None
-                                    and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
+            return self._wanted or (waited and moved)
         return False
 
     def _mission_running(self, now_s):
@@ -318,20 +351,31 @@ class LocAssist:
         """Square and paint evidence only matter outside LOCALIZED; the node drops the camera there."""
         return self.machine.state is not LocState.LOCALIZED
 
-    def search_started(self, now_s, odom):
-        self._searching = (tuple(odom), self._epoch, float(now_s))
+    def on_map_changed(self):
+        """Reset empty-search backoff when a new map arrives."""
+        self._empty_streak = 0
+        self._auto_unique_fails = 0
+
+    def search_window_ready(self, now_s):
+        return (self.machine.state in (LocState.UNKNOWN, LocState.SUSPECT)
+                and self.machine.check is None and not self.held
+                and not self._mission_running(now_s) and self._is_settled(now_s))
+
+    def search_started(self, now_s, odom, *, scan_stamp=None):
+        self._searching = (tuple(odom), self._epoch, float(now_s), scan_stamp)
         self._due_since = None
 
     def search_finished(self, now_s, odom, candidates, unmapped=(), sightings=(), paint_scores=None,
-                        evidence_s=None):
+                        evidence_s=None, *, allow_unique=True):
         """Offer what the search found. `sightings`: SquareObservation-like objects;
         `paint_scores`: one score (or None) per candidate, None for no camera paint;
         `evidence_s`: when that camera evidence was seen. Evidence from before the
         search started is dropped: it may belong to where the robot was before."""
         searching, self._searching = self._searching, None
-        if searching is None or self.machine.check is not None or self.machine.state is LocState.LOCALIZED:
+        if (searching is None or self.machine.check is not None
+                or self.machine.state is LocState.LOCALIZED or self._mission_running(now_s)):
             return []
-        started, epoch, start_s = searching
+        started, epoch, start_s, scan_stamp = searching
         if self.held or epoch != self._epoch:
             return []                       # picked up meanwhile: the set-down searches again
         if odom is None or _moved(odom, started, STILL_M, STILL_RAD):
@@ -340,19 +384,31 @@ class LocAssist:
             sightings, paint_scores = (), None
         self._searched_at, self._searched_odom, self._wanted = now_s, tuple(odom), False
         candidates = list(candidates)[:MAX_CANDIDATES]
+        self._empty_streak = 0 if candidates else self._empty_streak + 1
         step = self.machine.offer(candidates, now_s)
         if 'report_candidates' not in step.actions:
             return self._state_if_changed(now_s)
         scores = list(paint_scores or [None] * len(candidates))
         self._report = {
             'request_id': self.machine.request_id,
+            'stamp': float(now_s if scan_stamp is None else scan_stamp),
             'candidates': [{'x': c.x, 'y': c.y, 'yaw': c.yaw, 'scan_fit': min(1., max(0., c.scan_fit)),
                             'paint_score': s} for c, s in zip(candidates, scores)],
             'unmapped_objects': [{'x': float(x), 'y': float(y)} for x, y in list(unmapped)[:MAX_OBJECTS]],
             'square_sightings': [{'bearing_rad': s.bearing_rad, 'range_m': s.range_m,
                                   'confidence': s.confidence} for s in list(sightings)[:MAX_SIGHTINGS]],
         }
-        return [self._candidates(now_s)] + self._state_if_changed(now_s)
+        self._candidate_scan_s, self._candidate_mismatches = self._report['stamp'], 0
+        out = [self._candidates(now_s)]
+        if (allow_unique and self._auto_unique and self._auto_unique_fails < AUTO_UNIQUE_MAX_FAILS
+                and self._is_settled(now_s) and len(candidates) == 1
+                and getattr(candidates[0], 'unique_margin', None) is not None):
+            auto = self.machine.auto_lock_unique(now_s)
+            if 'inject_pose' in auto.actions:
+                self._pending = self.machine.request_id
+                xy_std, yaw_std = COVARIANCE['candidate']
+                out.append(('inject', Injection(auto.pose, xy_std, yaw_std, 'unique_map', self.machine.request_id)))
+        return out + self._state_if_changed(now_s)
 
     # --- outputs ------------------------------------------------------------
     def _after(self, step, now_s):
@@ -361,11 +417,15 @@ class LocAssist:
         if self._pending is not None and state is LocState.LOCALIZED:
             out.append(self._result(self._pending, True, None))
             self._pending = None
+            self._auto_unique_fails = 0
         elif self._pending is not None and self.machine.check is None:
             out.append(self._result(self._pending, False, step.reason or self.machine.reason))
             self._pending = None
+            if self.machine.source == 'unique_map':
+                self._auto_unique_fails += 1
         if state is LocState.SUSPECT and 'report_status' in step.actions:
             self._wanted = True             # a fresh SUSPECT searches at once
+            self._empty_streak = 0
         return out + self._state_if_changed(now_s)
 
     def _reason(self):
@@ -387,7 +447,7 @@ class LocAssist:
     def _state(self, now_s):
         m = self.machine
         seen = {}
-        if (m.state is LocState.LOCALIZED and self._objects is not None
+        if (m.state is LocState.LOCALIZED and m._low_since is None and self._objects is not None
                 and now_s - self._objects[0] <= OBJECTS_FRESH_S):
             seen = {'unmapped_objects': [{'x': x, 'y': y} for x, y in self._objects[1]],
                     'objects_stamp': self._objects[0]}
@@ -406,7 +466,7 @@ class LocAssist:
 
     def _candidates(self, now_s):
         self._reported_s = now_s
-        payload = {**self._report, 'pickup': self.machine.pickup, 'stamp': float(now_s)}
+        payload = {**self._report, 'pickup': self.machine.pickup}
         CandidateReport.model_validate({**payload, 'robot_id': 'self'})
         return 'candidates', payload
 
@@ -415,7 +475,8 @@ class LocAssist:
                           'state': self.machine.state.value}
 
 
-def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9, object_scan=None):
+def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9, object_scan=None,
+           diagnostics=None):
     """Slot then global candidates (at most 8) and the unmapped objects at the first one.
 
     `clear` is the cached `field.clear_poses(radius)` mask, or None to compute it;
@@ -426,7 +487,7 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
     clear = field.clear_poses(radius) if clear is None else clear
     found = merge(slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit, clear=clear),
                   global_candidates(field, ranges, angles, radius, mount, minimum_fit, clear=clear,
-                                    fine_scan=object_scan))
+                                    fine_scan=object_scan, diagnostics=diagnostics))
     found = found[:MAX_CANDIDATES]
     objects = []
     if found:

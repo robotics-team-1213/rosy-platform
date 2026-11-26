@@ -280,10 +280,62 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
             if any(word in path for word in ("detections", "tracking", "calibrations"))}
     assert ours == {"/api/fleet/detections", "/api/fleet/detections/config", "/api/fleet/tracking",
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
+                    "/api/fleet/calibrations/fit",
                     "/api/fleet/calibrations/{source_id}",
+                    "/api/fleet/calibrations/{source_id}/rollback",
+                    "/api/fleet/calibrations/{source_id}/freeze",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/candidate",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/accept",
+                    "/api/fleet/calibrations/{source_id}/recalibrate/dismiss",
                     "/api/fleet/detections/identity", "/api/fleet/tracking/identity",
                     "/api/fleet/detections/preview-status",  # D-472, D-775 numeric readback
                     "/api/fleet/detections/anchors"}  # display-only head-tracker states (source token)
+
+
+def test_fit_freeze_and_rollback_calibration_routes(tmp_path):
+    with _client(tmp_path, calibration_path=tmp_path / "fleet.sqlite3") as client:
+        fit_req = {
+            "source_id": "ceiling_north",
+            "image": {"width": 640, "height": 360},
+            "track_bounds_m": {"min_x": 0.0, "min_y": 0.0, "max_x": 4.0, "max_y": 2.0},
+            "correspondences": [
+                {"image_px": [100.0, 300.0], "map_m": [0.0, 0.0]},
+                {"image_px": [500.0, 300.0], "map_m": [4.0, 0.0]},
+                {"image_px": [500.0, 100.0], "map_m": [4.0, 2.0]},
+                {"image_px": [100.0, 100.0], "map_m": [0.0, 2.0]},
+            ],
+        }
+        assert client.post("/api/fleet/calibrations/fit", json=fit_req,
+                           headers=_auth(VIEWER_TOKEN)).status_code == 403
+        fit_res = client.post("/api/fleet/calibrations/fit", json=fit_req, headers=_auth(OPERATOR_TOKEN))
+        assert fit_res.status_code == 200, fit_res.text
+        fitted = fit_res.json()
+        assert fitted["accepted"] is True and fitted["rms_m"] < 1e-4
+
+        first = client.post("/api/fleet/calibrations", json={
+            **APPROVAL, "method": "manual_points", "metrics": {"rms_m": fitted["rms_m"]},
+        }, headers=_auth(OPERATOR_TOKEN)).json()
+        second = client.post("/api/fleet/calibrations", json={
+            **APPROVAL, "map_to_image": fitted["map_to_image"],
+        }, headers=_auth(OPERATOR_TOKEN)).json()
+        assert first["calibration_revision"] != second["calibration_revision"]
+
+        frozen = client.post("/api/fleet/calibrations/ceiling_north/freeze", json={"frozen": True},
+                             headers=_auth(OPERATOR_TOKEN))
+        assert frozen.status_code == 200 and frozen.json()["frozen"] is True
+        auto_refused = client.post("/api/fleet/calibrations", json={**APPROVAL, "auto": True},
+                                   headers=_auth(OPERATOR_TOKEN))
+        assert auto_refused.status_code == 409
+        assert auto_refused.json()["detail"]["code"] == "CALIBRATION_FROZEN"
+
+        listed = client.get("/api/fleet/calibrations?include_history=true", headers=_auth(VIEWER_TOKEN)).json()
+        assert len(listed["history"]["ceiling_north"]) == 2
+
+        rolled = client.post("/api/fleet/calibrations/ceiling_north/rollback", json={},
+                             headers=_auth(OPERATOR_TOKEN))
+        assert rolled.status_code == 200
+        assert rolled.json()["method"] == "rollback"
+        assert rolled.json()["map_to_image"] == first["map_to_image"]
 
 
 def test_tracking_needs_the_sighting_sources():

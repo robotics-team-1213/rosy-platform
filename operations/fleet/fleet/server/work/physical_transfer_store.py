@@ -70,6 +70,9 @@ def _principal(principal, *, propose=False, operator=False):
 #: D-977 2: production stays closed; device_trial additionally needs exactly one participating arm.
 ARM_TRANSFER_PROFILES = frozenset({"simulation", "device_trial"})
 
+#: A physical transfer in one of these holds the cell: proposed, admitted (prepared), executing, or awaiting confirmation.
+ACTIVE_TRANSFER_STATUSES = ("PROPOSED", "READY", "RUNNING", "ACTION_SUCCEEDED")
+
 
 def _check_parent_proof(checked_at):
     if (type(checked_at) is not float or not math.isfinite(checked_at)
@@ -257,6 +260,19 @@ class PhysicalTransferStore:
                                       "WHERE provenance_kind='physical' AND status='PROPOSED' ORDER BY rowid LIMIT ?",
                                       (int(limit),)).fetchall()
         return [(row["mission_id"], row["proposal_principal_id"]) for row in rows]
+
+    def has_active_transfer(self) -> bool:
+        """True while any physical transfer is active or still holds unreleased action claims."""
+        with closing(self._journal._connect()) as connection:
+            marks = ",".join("?" * len(ACTIVE_TRANSFER_STATUSES))
+            row = connection.execute(
+                "SELECT 1 FROM fleet_cell_jobs j WHERE j.provenance_kind='physical' AND ("
+                f"j.status IN ({marks}) OR EXISTS ("
+                "SELECT 1 FROM fleet_action_claims c WHERE c.owner_kind='mission' "
+                "AND c.owner_id=j.mission_id AND c.phase IN ('HELD', 'UNKNOWN'))) LIMIT 1",
+                ACTIVE_TRANSFER_STATUSES,
+            ).fetchone()
+        return row is not None
 
     def admit_by_policy(self, mission_id, *, scope_revision, enabled_by, proposers,
                         capabilities, capabilities_observed_at_ns, recheck=None, delegation_checked_at=None):

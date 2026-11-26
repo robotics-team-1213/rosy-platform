@@ -1,0 +1,127 @@
+# Co-located Rosy World overlay for deploy/site/compose.yaml: Caddy serves /world/
+# behind Fleet forward_auth (same origin, ROSY_WORLD_SAME_ORIGIN), the world service
+# stays on site_backend only, and the read-only bridge pushes real Fleet state over
+# that network (Docker DNS, no mDNS). Off-host pairs keep compose.world-link.yaml.
+x-world-logging: &world-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  fleet:
+    environment:
+      ROSY_WORLD_SAME_ORIGIN: "${ROSY_WORLD_SAME_ORIGIN:-1}"
+      ROSY_WORLD_HEALTH_URL: "http://world:${ROSY_WORLD_PORT:-8140}/healthz"
+
+  world:
+    image: rosy-site-world:${ROSY_SITE_IMAGE_TAG:-local}
+    mem_limit: 256m
+    user: "10001:10001"
+    entrypoint: ["python3", "-B", "/opt/rosy/world/serve.py"]
+    command:
+      - --bundle
+      - /opt/rosy/world/web
+      - --data-dir
+      - /opt/rosy/world-data/data
+      - --worlds-dir
+      - /var/lib/rosy-world/worlds
+      - --trusted-map-proxy
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${ROSY_WORLD_PORT:-8140}"
+    environment:
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /opt/rosy/world-data
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+      - /var/lib/rosy-world/worlds:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${ROSY_WORLD_PORT:-8140}/healthz', timeout=2).read()"]
+      interval: 60s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [site_backend]
+    logging: *world-logging
+
+  world-real-bridge:
+    image: rosy-site-world:${ROSY_SITE_IMAGE_TAG:-local}
+    mem_limit: 128m
+    # secret_exec reads the mounted token, then drops to the image's runtime UID.
+    user: "0:0"
+    command:
+      - --
+      - python3
+      - -B
+      - /opt/rosy/world/bridge_real_fleet.py
+      - --fleet-url
+      - "https://fleet:${ROSY_FLEET_PORT:-8080}"
+      - --world-url
+      - "http://world:${ROSY_WORLD_PORT:-8140}"
+      - --bundle
+      - /opt/rosy/world-data
+      - --interval
+      - "1.0"
+      - --heartbeat-file
+      - /tmp/bridge.alive
+    environment:
+      SSL_CERT_FILE: /run/secrets/site_ca
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_FLEET_TOKEN":"/run/secrets/world_fleet_viewer_token"}'
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+    secrets:
+      - site_ca
+      - world_fleet_viewer_token
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /opt/rosy/world-data
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os, sys, time; sys.exit(0 if os.path.isfile('/tmp/bridge.alive') and time.time() - os.path.getmtime('/tmp/bridge.alive') < 15 else 1)"]
+      interval: 60s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      fleet:
+        condition: service_healthy
+      world:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [site_backend]
+    logging: *world-logging
+
+  proxy:
+    labels:
+      org.rosy.site-world-caddy-sha256: unbuilt
+    volumes:
+      - type: bind
+        source: ./Caddyfile.world
+        target: /etc/caddy/world/routes.caddy
+        read_only: true
+        bind:
+          create_host_path: false
+
+secrets:
+  world_fleet_viewer_token:
+    file: "${ROSY_WORLD_FLEET_TOKEN_HOST_FILE:-${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/world_fleet_viewer.token}"

@@ -4,8 +4,11 @@ import { register } from "node:module";
 
 register("./resolve-console-assets.mjs", import.meta.url);
 
-const { canonicalArmId, normalizeWorkcellObservations } = await import(
+const { canonicalArmId, normalizeWorkcellObservations, isArmAttentionOrLive } = await import(
   "/console/assets/cell-cockpit-stage.js"
+);
+const { activeCellWorkRows } = await import(
+  "/console/assets/cell-context-panel.js"
 );
 
 test("canonicalArmId normalizes omx_ and _follower affixes", () => {
@@ -42,6 +45,7 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
             {
               arm_id: "arm_s",
               label: "Arm S",
+              incidents: [{ state: "open", event_kind: "home_recovery", decision: { hold: true } }],
               fresh: false,
               positions: { joint1: 0, joint2: 0 },
               motor_health: {
@@ -84,6 +88,10 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
   assert.equal(armS.jointsText, null);
   assert.equal(armS.maxPwmPct, 80);
   assert.equal(armS.hwFaultMotors, 1);
+  assert.equal(armS.held, true);
+  assert.equal(armS.homeRecoveries.length, 1);
+  assert.deepEqual(armS.openIncidents, []);
+  assert.deepEqual(armS.heldIncidents, []);
 
   assert.deepEqual(
     obs.cameras.map((c) => c.source_id),
@@ -96,10 +104,34 @@ test("normalizeWorkcellObservations keeps fresh metrics and redacts stale positi
     armsFresh: 1,
     camsTotal: 4,
     camsLive: 3,
-    heldCount: 1,
+    heldCount: 2,
+    incidentHeldCount: 1,
+    homeRecoveryCount: 1,
     openIncidentCount: 1,
     faultArmCount: 1,
     warnArmCount: 1,
     receivedAtMs: 12345,
   });
+});
+
+test("isArmAttentionOrLive and activeCellWorkRows isolate active work and attention-needing arms", () => {
+  assert.equal(isArmAttentionOrLive({ id: "arm_a", fresh: false, held: false, openIncidents: [], hwFaultMotors: 0, warnMotors: 0 }), false);
+  assert.equal(isArmAttentionOrLive({ id: "arm_a", fresh: false, held: false, openIncidents: [], hwFaultMotors: 0, warnMotors: 0 }, "arm_a"), true);
+  assert.equal(isArmAttentionOrLive({ id: "arm_b", fresh: true, held: false, openIncidents: [], hwFaultMotors: 0, warnMotors: 0 }), true);
+  assert.equal(isArmAttentionOrLive({ id: "arm_s", fresh: false, held: true, openIncidents: [{}], hwFaultMotors: 0, warnMotors: 0 }), true);
+
+  const filtered = activeCellWorkRows([
+    { source: "cell_job", source_id: "j1", status: "PROPOSED", visible_state: "approval_pending" },
+    { source: "mission", source_id: "m1", status: "RUNNING", visible_state: "in_progress" },
+    { source: "cell_job", source_id: "j2", status: "COMPLETED", visible_state: "ended" },
+    { source: "trip", source_id: "t1", status: "RUNNING", visible_state: "in_progress" },
+  ]);
+  assert.deepEqual(filtered.map((r) => r.source_id), ["j1", "m1"]);
+});
+
+test("cell-cockpit-stage keeps previously-live camera visible during disconnect and avoids #seq re-render churn", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../../../applications/fleet/web/shared/cell-cockpit-stage.js", import.meta.url), "utf8");
+  assert.match(src, /hasFrame/);
+  assert.doesNotMatch(src, /onLoad=\$\(\(\) => \{ if \(standbyRef\.current\) standbyRef\.current\.hidden = true; \}\)/);
 });

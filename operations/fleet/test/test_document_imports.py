@@ -31,25 +31,34 @@ SHARED = {
     "account-permissions.js",  # D-757: shared read-only session capability predicates
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
+    "fleet-session.js",  # Shared topbar token, cookie login and D-1043 auth failure classifier
     "unit-scope.js",  # D-960 §4: what this control unit's screen shows, read by the header and work views
+    "unit-links.js",  # D-977: verified child-unit cross-links shared by Cell and integrated control
+    "disclosure-list.js",  # Active-first collapsible history list shared across Fleet views
     "map-fit.js",
+    "camera-warp.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
+    "cell-obs-model.js",  # Pure workcell observation & camera normalization shared by Console and Cell.
+    "omx-inspector.js",  # Shared OMX right-inspector DOM builder used by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
     "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-wait.js",
     "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
+    "trip-preview-summary.js",  # Read-only preview distance from the plan pose to the parking staging place.
     "drawing-errors.js",
 }
 
 OWN = {
     "account-page.js": set(),
     "console.js": {
+        "trip-geometry.js", "trip-receipts.js",
         "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
@@ -78,7 +87,10 @@ OWN = {
         "robot-3d-assets.js",
         "selection.js",
         "cockpit-telemetry.js",
+        "cockpit-hosts.js",
+        "calm-power.js",
         "cell-cockpit-stage.js",
+        "cell-context-panel.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "robot-video.js",  # D-801: the robot card's front camera reuses the console video tiles
@@ -91,6 +103,7 @@ OWN = {
         "line-stuck.js",
         "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
+        "decision-slot.js",  # shared calm decision-slot builder & filler
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
@@ -98,13 +111,15 @@ OWN = {
         "trail-view.js",
         "site-path.js",
         "confirmed-action.js",
-        "camera-warp.js",
         "camera-backdrop.js",
         "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
+        "map-hover-card.js",
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",
+        "localization-panel.js",
+        "localization-panel-logic.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
         "charge-bays-model.js",  # its DOM-free display model
@@ -112,8 +127,13 @@ OWN = {
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
+        "measured-motion.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
+        "zone-blueprint-inspector.js",
+        "zone-blueprint-model.js",
+        "zone-blueprint-2d.js",
+        "zone-blueprint-3d.js",
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
@@ -125,6 +145,8 @@ OWN = {
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
+        "manual-fit-math.js",
+        "manual-fit-view.js",
         "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
@@ -134,16 +156,21 @@ OWN = {
         "host-health.js",  # D-530: 읽기 전용 PC 상태 판정
     },
     "cell.js": {
+        "cell-channel-mission.js",
+        "cell-camera-zoom.js",
         "cell-document-editor.js",
         "cell-observation.js",
+        "cell-observation-text.js",
         "subnav-screens.js",  # D-926 3: each Cell step is its own screen
         "file-picker.js",  # D-926 C7: one Korean file picker
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
         "cell-real2sim.js",  # 실물↔시뮬(Real-to-Sim / Sim-to-Real) 파이프라인 상태 및 핸드오프 평가
         "cell-real2sim-specs.js",  # split from cell-real2sim.js
+        "cell-readiness-model.js",
         "cell-real2sim-actions.js",  # split from cell-real2sim.js
         "cell-real2sim-views.js",  # split from cell-real2sim.js
+        "cell-pipeline-panel.js",  # fleet E2E pipeline panel mounted above visual cards
         "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {

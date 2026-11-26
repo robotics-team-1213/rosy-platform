@@ -8,10 +8,47 @@ export function node(tag, text = "", className = "") {
   return result;
 }
 
+export function uiTag(text, status = "neutral", variant = "") {
+  const tag = node("ui-tag", text);
+  if (status) tag.setAttribute("status", status);
+  if (variant) tag.setAttribute("variant", variant);
+  return tag;
+}
+
+export function patchText(el, value) {
+  const next = String(value ?? "");
+  if (el && el.textContent !== next) el.textContent = next;
+}
+
+export function patchAttr(el, name, value) {
+  if (!el) return;
+  if (value === null || value === undefined) {
+    if (el.hasAttribute ? el.hasAttribute(name) : el.getAttribute?.(name) !== null) el.removeAttribute(name);
+    return;
+  }
+  const next = String(value);
+  if (el.getAttribute?.(name) !== next) el.setAttribute(name, next);
+}
+
+export function patchData(el, key, value) {
+  if (!el?.dataset) return;
+  if (value === null || value === undefined) {
+    if (Object.hasOwn(el.dataset, key)) delete el.dataset[key];
+    return;
+  }
+  const next = String(value);
+  if (el.dataset[key] !== next) el.dataset[key] = next;
+}
+
+export function patchHidden(el, hidden) {
+  const next = Boolean(hidden);
+  if (el && el.hidden !== next) el.hidden = next;
+}
+
 export function setStatus(el, text, state) {
-  el.textContent = text;
-  el.hidden = !text;
-  if (state) el.setAttribute("state", state);
+  patchText(el, text);
+  patchHidden(el, !text);
+  if (state) patchAttr(el, "state", state);
 }
 
 export function action(label, onClick, kind = "quiet") {

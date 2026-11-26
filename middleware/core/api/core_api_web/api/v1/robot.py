@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import math
 import time
+from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from core_api_web.api.v1.common import battery_health, operator, require_calibration_owner, viewer
-from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike, assess_straight_corridor
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
 from core_common.protocol.power_health import PowerHealthResponse
@@ -71,6 +72,14 @@ def list_sensors(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     for sensor in samples.keys() & _TOPIC_SENSORS:
         samples[sensor] = {key: value for key, value in samples[sensor].items() if key != "sample_age_s"}
     return {"sensors": _json_safe(samples)}
+
+
+@sensors_router.get("/lidar/corridor")
+def lidar_corridor(direction: Literal["forward", "reverse"], distance_m: float = Query(gt=0, le=.03),
+                   _: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    return assess_straight_corridor(svc.state.get_sensor("lidar"), svc.line_follow.config,
+                                    svc.docking.tray_extents_m, svc.identity.robot_id,
+                                    direction, distance_m, time.time())
 
 
 @sensors_router.get("/{sensor_type}")

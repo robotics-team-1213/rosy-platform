@@ -30,8 +30,9 @@ if TYPE_CHECKING:
 # preview (the worker stopped feeding detections; show the raw frame instead).
 FIELD_REPORT_TTL_S = 5.0
 _STATS_WINDOW_S = 1.0
-# Minimum spacing between one viewer's frame reads of one source.
-_FRAME_INTERVAL_S = 0.2
+# Minimum spacing between one viewer's frame reads of one source (token bucket: 10 req/s, burst 5).
+_FRAME_INTERVAL_S = 0.1
+_FRAME_BURST = 5.0
 # Field proposals (D-360) are operator-requested and CPU-bound: own, slower bucket.
 _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # D-341 11: an upgrade refused because the paired-credential state is unknown asks the phone
@@ -178,7 +179,7 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     if view == "map-proposal" and self.map_paint is None:
         return _http_response(404, b"site map paint not configured\n")
     if view == "frame":
-        limited = self._rate_limited((str(lease["sub"]), source), _FRAME_INTERVAL_S)
+        limited = self._rate_limited((str(lease["sub"]), source), _FRAME_INTERVAL_S, burst=_FRAME_BURST)
     else:
         limited = self._rate_limited((str(lease["sub"]), source, view), _FIELD_PROPOSAL_INTERVAL_S)
     if limited is not None:
@@ -202,8 +203,10 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     if "rectification" in lease:
         try:
             settings = PreviewRectification.from_mapping(lease["rectification"])
-            if settings.mode == "map":
-                return await self._map_plane_response(source, frame, age, lease)
+            if settings.mode in ("map", "map_overlay"):
+                return await self._map_plane_response(
+                    source, frame, age, lease, annotated=(settings.mode == "map_overlay"),
+                )
             if settings.mode == "auto":
                 # D-484: swap the lease's corners for the calibration's accepted quad.
                 field = self._field_corners(source)
@@ -245,14 +248,31 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     })
 
 
-async def _map_plane_response(self, source, frame, age, lease=None):
+async def _map_plane_response(self, source, frame, age, lease=None, *, annotated: bool = False):
     return await map_plane_response(self, source, frame, age, lease,
                                     unavailable=_plane_unavailable, response=_http_response,
-                                    lens_header=_lens_header)
+                                    lens_header=_lens_header, annotated=annotated)
 
 
-def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:
+def _rate_limited(self, key: tuple[str, ...], interval_s: float, *, burst: float = 1.0) -> Response | None:
     now_mono = time.monotonic()
+    if burst > 1.0:
+        buckets = getattr(self, "_preview_frame_buckets", None)
+        if buckets is None:
+            buckets = {}
+            self._preview_frame_buckets = buckets
+        if key not in buckets and len(buckets) >= 512:
+            buckets = {item: val for item, val in buckets.items() if now_mono - val[1] < 10.0}
+            self._preview_frame_buckets = buckets
+            if len(buckets) >= 512:
+                return _http_response(429, b"preview capacity reached\n", extra={"Retry-After": "1"})
+        tokens, last_t = buckets.get(key, (burst, now_mono))
+        tokens = min(burst, tokens + max(0.0, now_mono - last_t) / interval_s)
+        if tokens < 1.0:
+            buckets[key] = (tokens, now_mono)
+            return _http_response(429, b"rate limited\n", extra={"Retry-After": "1"})
+        buckets[key] = (tokens - 1.0, now_mono)
+        return None
     previous = self._preview_last_sent.get(key)
     if previous is not None and now_mono - previous < interval_s:
         return _http_response(429, b"rate limited\n", extra={"Retry-After": "1"})

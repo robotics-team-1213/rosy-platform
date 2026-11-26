@@ -98,6 +98,7 @@ def docking_status(_: AuthContext = Depends(viewer),
     """상태 조회는 capability 로 막지 않는다 — 막으면 대시보드가 "도킹 없음"
     조차 표시할 수 없다."""
     body = svc.docking.status().model_dump()
+    body["operation_cancel_supported"] = True
     body["supported"] = svc.capability.supports("docking.supported")
     body.update(svc.docking.native_readback(run_id))
     return body
@@ -131,6 +132,51 @@ def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
                 svc: CoreServicesLike = Depends(get_services)):
     try:
         return svc.docking.database.add(DockInstance(**body.model_dump())).model_dump()
+    except DockError as exc:
+        raise _dock_error(exc)
+
+
+class CommissionDock(BaseModel):
+    dock: DockRequest
+    dock_type: DockTypeRequest
+    robot_id: str
+    map_grid_id: str = Field(min_length=1)
+    map_generation: int = Field(ge=0, strict=True)
+    map_id: str = Field(min_length=1)
+
+
+@docking_router.post("/commission")
+def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """Register a stationary measurement in its exact native grid with create-only semantics."""
+    def register():
+        snapshot = svc.state.snapshot()
+        if (snapshot.robot_id != body.robot_id or snapshot.map_id != body.map_id
+                or snapshot.map_grid_id != body.map_grid_id or snapshot.map_generation != body.map_generation):
+            raise ApiError("MAP_FRAME_CHANGED", 409, "robot identity or SLAM frame changed before registration")
+        if (snapshot.pose_frame != "map" or snapshot.localization is None or snapshot.localization.state != "LOCALIZED"
+                or snapshot.mode != "IDLE" or snapshot.navigation not in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
+                or snapshot.line_follow.mode != "OFF" or svc.docking.active
+                or any(k not in snapshot.evidence or snapshot.evidence[k].evidence != "fresh" for k in ("pose", "velocity"))
+                or snapshot.velocity.linear != 0 or snapshot.velocity.angular != 0):
+            raise ApiError("STATIONARY_REQUIRED", 409, "fresh native localization and standstill are required")
+        token = svc.nav.claim_precision()
+        if token is None:
+            raise ApiError("STATIONARY_REQUIRED", 409, "native navigation is active or admitting a goal")
+        try:
+            dock = DockInstance(**body.dock.model_dump())
+            dock.metadata.update(commissioned_grid_id=body.map_grid_id, commissioned_map_generation=body.map_generation)
+            return svc.docking.database.commission(DockType(**body.dock_type.model_dump()), dock, body.map_id).model_dump()
+        finally:
+            svc.nav.release_precision(token)
+
+    try:
+        with svc.state.map_grid_gate, localized_start(svc):
+            owner = svc.docking.native_owner()
+            if owner["owner_run_id"] is not None:
+                raise ApiError("STATIONARY_REQUIRED", 409, "native docking owns a run")
+            return svc.docking.bind_station(register, expected_boot_id=UUID(owner["boot_id"]),
+                                            expected_owner_generation=owner["owner_generation"])
     except DockError as exc:
         raise _dock_error(exc)
 
@@ -201,6 +247,24 @@ def docking_undock(auth: AuthContext = Depends(operator),
         raise _dock_error(exc)
     return {**svc.docking.status().model_dump(),
             "operation": receipt[0].model_dump(mode="json")}
+
+
+class DockOperationCancel(BaseModel):
+    run_id: UUID
+    expected_boot_id: UUID
+    expected_owner_generation: int = Field(ge=0, strict=True)
+
+
+@docking_router.post("/cancel-operation")
+def cancel_dock_operation(body: DockOperationCancel, _: AuthContext = Depends(operator),
+                          svc: CoreServicesLike = Depends(get_services)):
+    TaskKind.DOCK.require(svc.capability)
+    try:
+        svc.docking.cancel_operation(run_id=body.run_id, boot_id=body.expected_boot_id,
+                                     owner_generation=body.expected_owner_generation)
+    except DockError as exc:
+        raise _dock_error(exc)
+    return svc.docking.native_readback(body.run_id)
 
 
 @docking_router.post("/cancel")

@@ -14,6 +14,7 @@ install(FILES
   template.css
   app-shell.css
   core_ui_logic.js
+  camera-frame-hold.js
   hold-ticker.js
   ui.js
   workspace.js
@@ -39,6 +40,8 @@ install(FILES
   interaction-controls.js
   workflow-controls.js
   cause-line.js
+  plane-math.js
+  preact-ui.js
   component-controls.css
   component-gallery.css
   component-gallery.html
@@ -68,6 +71,8 @@ install(FILES
   vendor/three.LICENSE
   vendor/uPlot.esm.min.js
   vendor/uPlot.LICENSE
+  vendor/htm-preact.esm.min.js
+  vendor/htm-preact.LICENSE
   DESTINATION share/${PROJECT_NAME}/vendor
 )
 
@@ -83,6 +88,7 @@ install(FILES
   meshes/omx-link7.stl
   meshes/pinky-body.stl
   meshes/pinky-pro.urdf
+  meshes/pinky-tray.stl
   meshes/pinky-wheel.stl
   DESTINATION share/${PROJECT_NAME}/meshes
 )

@@ -45,7 +45,8 @@ def check_backups(directory: Path, *, max_age_hours: int) -> dict:
 
 DEFAULT_HISTORY_RETENTION_DAYS = 30
 DEFAULT_AUDIT_RETENTION_DAYS = 90
-DEFAULT_API_AUDIT_RETENTION_DAYS = 90
+DEFAULT_API_AUDIT_RETENTION_DAYS = 14
+UNARCHIVED_API_AUDIT_RETENTION_DAYS = 90
 DEFAULT_SIGHTING_RETENTION_DAYS = 90
 
 
@@ -94,19 +95,43 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                 if audit_cutoff_iso is not None and "core_event_audit" in tables:
                     removed["core_event_audit"] = db.execute(
                         "DELETE FROM core_event_audit WHERE received_at < ?", (audit_cutoff_iso,)).rowcount
-                if api_audit_cutoff_iso is not None and "fleet_api_audit" in tables:
-                    watermark = db.execute("SELECT last_rowid FROM fleet_audit_flush WHERE kind='fleet_api_audit'").fetchone() \
-                        if "fleet_audit_flush" in tables else None
-                    removed["fleet_api_audit"] = db.execute(
-                        "DELETE FROM fleet_api_audit WHERE created_at < ?" + (" AND rowid <= ?" if watermark else ""),
-                        (api_audit_cutoff_iso, int(watermark[0])) if watermark else (api_audit_cutoff_iso,)).rowcount
                 if sighting_cutoff is not None and "sighting_audit" in tables:
                     removed["sighting_audit"] = db.execute(
                         "DELETE FROM sighting_audit WHERE received_at < ?", (sighting_cutoff,)).rowcount
+                if "fleet_ai_facts" in tables:
+                    removed["fleet_ai_facts"] = (
+                        db.execute("DELETE FROM fleet_ai_facts WHERE received_at < ?", (audit_cutoff,)).rowcount
+                        if audit_cutoff is not None else 0
+                    )
                 db.commit()
             except sqlite3.Error:
                 db.rollback()
                 raise
+            if api_audit_cutoff_iso is not None and "fleet_api_audit" in tables:
+                if "fleet_audit_flush" in tables:
+                    watermark = db.execute(
+                        "SELECT last_rowid FROM fleet_audit_flush WHERE kind='fleet_api_audit'"
+                    ).fetchone()
+                    where = "created_at < ? AND rowid <= ?"
+                    params = (api_audit_cutoff_iso, int(watermark[0]) if watermark else 0)
+                else:
+                    # The backup container cannot see Fleet's archive connection settings.
+                    where = "created_at < ?"
+                    params = (iso_cutoff(max(api_audit_days, UNARCHIVED_API_AUDIT_RETENTION_DAYS)),)
+                while True:
+                    db.execute("BEGIN IMMEDIATE")
+                    try:
+                        batch = db.execute(
+                            f"DELETE FROM fleet_api_audit WHERE rowid IN (SELECT rowid FROM fleet_api_audit WHERE {where} LIMIT 5000)",
+                            params,
+                        ).rowcount
+                        db.commit()
+                    except sqlite3.Error:
+                        db.rollback()
+                        raise
+                    removed["fleet_api_audit"] += batch
+                    if batch < 5000:
+                        break
     except sqlite3.Error as exc:
         raise DatabaseError("ledger retention prune failed") from exc
     return removed
@@ -137,7 +162,7 @@ def vacuum_database(path: Path | str) -> dict:
             db.execute("PRAGMA auto_vacuum=INCREMENTAL")
             db.execute("VACUUM")
     except sqlite3.Error as exc:
-        raise DatabaseError("vacuum failed") from exc
+        raise DatabaseError(f"vacuum failed: {exc}") from exc
     return {"bytes_before": before, "bytes_after": target.stat().st_size}
 
 
@@ -245,7 +270,6 @@ def backup_database(source: Path | str, destination: Path | str) -> DatabaseResu
         raise DatabaseError("backup source and destination must differ")
     if not source_path.is_file():
         raise DatabaseError("source database is missing")
-    verify_database(source_path)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     if destination_path.exists():
         raise DatabaseError("backup destination already exists")
@@ -464,10 +488,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.destination = args.dest_dir / f"{BACKUP_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.sqlite3"
             result = backup_database(args.source, args.destination)
             if args.dest_dir is not None:
-                vacuumed, pruned = vacuum_database(args.destination), _prune_backups(args.dest_dir, args.prune)
+                pruned = _prune_backups(args.dest_dir, args.prune)
             pruned_ledger = prune_ledger(args.source, history_days=args.prune_history, audit_days=args.prune_audit,
                                          api_audit_days=args.prune_api_audit, sighting_days=args.prune_sightings)
             checkpointed = checkpoint_wal(args.source)
+            if args.dest_dir is not None:
+                vacuumed = vacuum_database(args.destination)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
             return 0

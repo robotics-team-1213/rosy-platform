@@ -34,6 +34,8 @@ class WorkcellObservations:
                     raise ValueError("arm credential does not match its registered fingerprint")
         self._credential_fingerprints = frozenset(source.credential_sha256 for cell in manifest.workcells
                                                   for source in [*cell.arms, *cell.cameras])
+        self._camera_credentials = {camera.source_id: camera.credential_sha256
+                                    for cell in manifest.workcells for camera in cell.cameras}
         self._tokens = dict(tokens)
         self._wall, self._monotonic = wall, monotonic
         self._lock = threading.Lock()
@@ -71,6 +73,10 @@ class WorkcellObservations:
 
     def camera_source_ids(self) -> tuple[str, ...]:
         return tuple(camera["source_id"] for cell in self._workcells for camera in cell["cameras"])
+
+    def authenticated_camera(self, source_id: str, token: str | None) -> bool:
+        expected = self._camera_credentials.get(source_id)
+        return bool(expected and token and hmac.compare_digest(expected, sha256(token.encode()).hexdigest()))
 
     def credential_fingerprints(self) -> frozenset[str]:
         return self._credential_fingerprints

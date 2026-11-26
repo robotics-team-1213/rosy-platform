@@ -122,6 +122,7 @@ class IngestServer:
             raise ValueError("preview_max_age_s must be positive")
         self.preview_max_age_s = float(preview_max_age_s)
         self._preview_last_sent: dict[tuple[str, ...], float] = {}
+        self._preview_frame_buckets: dict[tuple[str, ...], tuple[float, float]] = {}
         # Last detection per source, keyed by frame identity (a reconnect restarts seq);
         # dropped with the source.
         self._field_cache: dict[str, _FieldRun] = {}
@@ -137,6 +138,8 @@ class IngestServer:
         # keyed by frame identity and record revision.
         self._plane_records: dict[str, tuple[Mapping, str]] = {}
         self._plane_cache: dict[str, tuple[LatestFrame, str, asyncio.Future]] = {}
+        self._overlay_cache: dict[str, tuple] = {}
+        self._overlay_context: dict[str, dict] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -147,13 +150,32 @@ class IngestServer:
         self._demand = StreamDemand()
         self._demand_tasks: set[asyncio.Task] = set()
 
+    def _max_bytes_for_width(self, width: int | None) -> int:
+        base = self.config["max_bytes"]
+        default_w = protocol.DEFAULT_CONFIG["width"]
+        if width is None or width <= default_w:
+            return base
+        return min(1_500_000, max(base, int(base * (width / default_w) ** 2)))
+
+    def _source_stream_config(self, source_name: str) -> dict:
+        cfg = dict(self.config)
+        width = self._source_widths.get(source_name)
+        if width is not None:
+            cfg["width"] = width
+            if width > protocol.DEFAULT_CONFIG["width"]:
+                cfg["max_bytes"] = self._max_bytes_for_width(width)
+                cfg["jpeg_quality"] = max(cfg["jpeg_quality"], 82)
+        return cfg
+
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
+        max_frame_bytes = max([self.config["max_bytes"],
+                               *(self._max_bytes_for_width(w) for w in self._source_widths.values())])
         return await serve(
             self._handler,
             host,
             port,
             process_request=self._process_request,
-            max_size=self.config["max_bytes"] + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
+            max_size=max_frame_bytes + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
             max_queue=RECEIVE_QUEUE_FRAMES,
             ssl=ssl_context,
             logger=_WS_LOGGER,
@@ -227,6 +249,45 @@ class IngestServer:
         else:
             self._plane_records.pop(source, None)
 
+    def report_overlay_context(self, source: str, *, places=(), robots=()) -> None:
+        """Record display-only map places and robot positions for ``mode: map_overlay``."""
+        import math
+        clean_places: list[dict] = []
+        for item in places or ():
+            if not isinstance(item, Mapping):
+                continue
+            x, y = item.get("x"), item.get("y")
+            if isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            clean_places.append({
+                "id": str(item.get("id") or "")[:64],
+                "name": str(item.get("name") or item.get("id") or "")[:64],
+                "x": float(x),
+                "y": float(y),
+            })
+            if len(clean_places) >= 64:
+                break
+        clean_robots: list[dict] = []
+        for item in robots or ():
+            if not isinstance(item, Mapping):
+                continue
+            rid = item.get("robot_id")
+            x, y = item.get("x"), item.get("y")
+            if not isinstance(rid, str) or not rid or isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            yaw = item.get("yaw")
+            row = {"robot_id": rid[:64], "x": float(x), "y": float(y)}
+            if isinstance(yaw, (int, float)) and not isinstance(yaw, bool) and math.isfinite(yaw):
+                row["yaw"] = float(yaw)
+            clean_robots.append(row)
+            if len(clean_robots) >= 32:
+                break
+        self._overlay_context[source] = {"places": clean_places, "robots": clean_robots}
+
     # -- handshake & preview handlers (bound from ingest_helpers / ingest_proposals) --
     _field_corners = ingest_helpers._field_corners
     _process_request = ingest_helpers._process_request
@@ -291,6 +352,7 @@ class IngestServer:
         self._map_cache.pop(source_name, None)
         self._map_done.pop(source_name, None)
         self._plane_cache.pop(source_name, None)
+        self._overlay_cache.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -299,8 +361,7 @@ class IngestServer:
             task.add_done_callback(self._closing.discard)
 
         try:
-            source_config = self.config | ({'width': self._source_widths[source_name]}
-                if source_name in self._source_widths else {})
+            source_config = self._source_stream_config(source_name)
             await connection.send(json.dumps(protocol.make_config(**source_config)))
             await self._send_demand(src, force=True)
         except websockets.exceptions.ConnectionClosed:
@@ -441,7 +502,7 @@ class IngestServer:
             src.stats.dropped_bad_header += 1
             return
         jpeg = message[protocol.HEADER_SIZE:]
-        if len(jpeg) > self.config["max_bytes"]:
+        if len(jpeg) > self._max_bytes_for_width(self._source_widths.get(src.name)):
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0

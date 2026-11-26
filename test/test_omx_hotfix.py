@@ -4,6 +4,7 @@ subprocess.run is stubbed throughout: no git writes, no network, no remote pytes
 """
 from __future__ import annotations
 
+import json
 import shlex
 import subprocess
 import sys
@@ -123,8 +124,8 @@ def test_deploy_refuses_a_log_without_the_sha_marker(fake, tmp_path):
 
 def test_deploy_ships_archive_then_switches(fake, tmp_path):
     fake.rules.update({"archive": b"TARGZ", "readlink": "omx-tools-aaaaaaaaaa"})
-    folder, previous = oh.deploy("HEAD", "user@host", passing_log(tmp_path))
-    assert (folder, previous) == (f"~/rosy-test/omx-tools-{SHORT}", "omx-tools-aaaaaaaaaa")
+    folder, previous, restart = oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    assert (folder, previous, restart) == (f"~/rosy-test/omx-tools-{SHORT}", "omx-tools-aaaaaaaaaa", 0)
     archive = [cmd for cmd, _ in fake.calls if "archive" in cmd][0]
     assert f"--add-virtual-file=omx-tools-{SHORT}/REVISION:{SHORT}\n" in archive
     assert archive[-1 - len(oh.PATHS):] == [SHA, *oh.PATHS]
@@ -139,7 +140,7 @@ def test_deploy_ships_archive_then_switches(fake, tmp_path):
 
 def test_deploy_switches_only_the_named_link_and_rejects_other_names(fake, tmp_path):
     oh.deploy("HEAD", "user@host", passing_log(tmp_path), "omx-bench-current")
-    last = fake.ssh_scripts()[-1]
+    last = [s for s in fake.ssh_scripts() if "mv -T" in s][-1]
     assert "mv -T .omx-bench-current.tmp omx-bench-current" in last and "omx-tools-current" not in last
     oh.deploy("HEAD", "user@host", passing_log(tmp_path))
     assert "mv -T .omx-tools-current.tmp omx-tools-current" in fake.ssh_scripts()[-1]  # default stays the cell link
@@ -208,8 +209,6 @@ def test_deploy_records_the_main_floor_before_switching(fake, tmp_path):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the floor script runs on the Linux cell (fcntl)")
 def test_the_floor_script_changes_only_floor_sha_in_the_updater_state(tmp_path):
-    import json
-
     root = tmp_path / "rosy-omx"
     root.mkdir()
     old = {"current": "a" * 12, "previous": "b" * 12, "current_sha": "a" * 40, "env": "e1", "failed": "c" * 12,
@@ -239,4 +238,222 @@ def test_hotfix_paths_include_policy_site_map_and_gripper_assets():
         "learning/envs/isaac/palletizing_gripper.py",
         "learning/envs/isaac/assets/omx_f_palletizing_description",
     ):
-        assert required in oh.PATHS
+        assert any(Path(required).is_relative_to(entry) for entry in oh.PATHS)
+
+
+def test_hotfix_paths_include_calibration_common_assets():
+    common = Path("shared/web")
+    manifest = common / "shared-assets.json"
+    assets = json.loads((ROOT / manifest).read_text(encoding="utf-8"))["shared_assets"]
+    required = [Path("applications/calibration/web/index.html"), manifest, *(common / name for name in assets)]
+    missing = [
+        path for path in required
+        if not (ROOT / path).is_file() or not any(path.is_relative_to(entry) for entry in oh.PATHS)
+    ]
+    assert not missing, f"Calibration payload is missing files: {missing}"
+
+
+def test_storage_lock_wraps_reuse_unpack_and_switch_but_never_floor(fake, tmp_path):
+    name = f"omx-tools-{SHORT}"
+    expected_lock = (
+        f"[ ! -L {oh.STORAGE_LOCK} ] && {{ [ ! -e {oh.STORAGE_LOCK} ] || [ -f {oh.STORAGE_LOCK} ]; }}"
+        f" && exec 9>>{oh.STORAGE_LOCK} && flock -w {oh.STORAGE_LOCK_WAIT} 9"
+    )
+    for script in (oh.reuse_script(name), oh.unpack_script(name), oh.switch_script(name)):
+        assert "[ ! -L rosy-test ]" in script
+        assert expected_lock in script
+    assert f"touch -c -- {name}" in oh.reuse_script(name)
+    assert f"touch -c -- {name}" in oh.unpack_script(name)
+    assert f"[ -d {name} ] && [ ! -L {name} ]" in oh.switch_script(name)
+    assert oh.STORAGE_LOCK not in oh.FLOOR_SCRIPT
+    assert oh.STORAGE_LOCK not in oh.floor_command("0" * 40)
+
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    ssh_cmds = [cmd for cmd, _ in fake.calls if cmd[0] == "ssh"]
+    assert all("--" in cmd and cmd[cmd.index("--") + 1] == "user@host" for cmd in ssh_cmds)
+
+
+def test_rejects_invalid_tree_names_and_hosts(fake, monkeypatch, tmp_path):
+    monkeypatch.delenv(oh.HOST_ENV, raising=False)
+    for bad_tree in ("omx-tools-current", "../escape", "omx-tools-short", "omx-tools-1234567;rm"):
+        for fn in (oh.reuse_script, oh.unpack_script, oh.switch_script):
+            with pytest.raises(SystemExit, match="release tree"):
+                fn(bad_tree)
+    with pytest.raises(SystemExit, match="no host"):
+        oh.host_of(None)
+    log = passing_log(tmp_path)
+    for bad_host in ("", "   ", "-oProxyCommand=id", "@host", "user@host;id", "user@host x"):
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh._ssh(bad_host, "true")
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.host_of(bad_host)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.deploy("HEAD", bad_host, log)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.status(bad_host)
+        monkeypatch.setenv(oh.HOST_ENV, bad_host)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.host_of(None)
+    assert not fake.ssh_scripts()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell and flock check")
+def test_reuse_and_switch_guards_run_in_bash(tmp_path, monkeypatch):
+    import fcntl
+    import io
+    import os
+    import tarfile
+
+    rt = tmp_path / "rosy-test"
+    rt.mkdir()
+    tree = rt / f"omx-tools-{SHORT}"
+    tree.mkdir()
+    (tree / "REVISION").write_text(SHORT, encoding="utf-8")
+    os.utime(tree, (1000, 1000))
+    res = subprocess.run(["bash", "-c", oh.reuse_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert res.returncode == 0 and res.stdout == SHORT
+    assert tree.stat().st_mtime > 1000 and (rt / oh.STORAGE_LOCK).is_file()
+
+    miss_reuse = subprocess.run(
+        ["bash", "-c", oh.reuse_script("omx-tools-" + "0" * 10)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert miss_reuse.returncode == 0 and miss_reuse.stdout == ""
+
+    sym_tree = rt / ("omx-tools-" + "b" * 10)
+    sym_tree.symlink_to(tree)
+    sym_reuse = subprocess.run(
+        ["bash", "-c", oh.reuse_script(sym_tree.name)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert sym_reuse.returncode == 0 and sym_reuse.stdout == ""
+    assert subprocess.run(["bash", "-c", oh.switch_script(sym_tree.name)], cwd=tmp_path).returncode != 0
+    sym_tree.unlink()
+
+    rev_target = rt / "rev-target"
+    rev_target.write_text(SHORT, encoding="utf-8")
+    (tree / "REVISION").unlink()
+    (tree / "REVISION").symlink_to(rev_target)
+    rev_sym = subprocess.run(["bash", "-c", oh.reuse_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert rev_sym.returncode == 0 and rev_sym.stdout == ""
+    (tree / "REVISION").unlink()
+    (tree / "REVISION").write_text(SHORT, encoding="utf-8")
+
+    sym_rt_cwd = tmp_path / "sym-root"
+    sym_rt_cwd.mkdir()
+    (sym_rt_cwd / "rosy-test").symlink_to(rt)
+    assert subprocess.run(["bash", "-c", oh.switch_script(tree.name)], cwd=sym_rt_cwd).returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    (rt / oh.STORAGE_LOCK).symlink_to(tree / "REVISION")
+    sym_res = subprocess.run(["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert sym_res.returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    os.mkfifo(rt / oh.STORAGE_LOCK)
+    fifo_res = subprocess.run(
+        ["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True, timeout=5
+    )
+    assert fifo_res.returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    monkeypatch.setattr(oh, "STORAGE_LOCK_WAIT", 1)
+    with (rt / oh.STORAGE_LOCK).open("a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        busy_res = subprocess.run(
+            ["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True, timeout=5
+        )
+        assert busy_res.returncode != 0
+    miss_res = subprocess.run(
+        ["bash", "-c", oh.switch_script("omx-tools-" + "0" * 10)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert miss_res.returncode != 0
+
+    bad_name = "omx-tools-" + ("c" * 10)
+    bad_unp = subprocess.run(
+        ["bash", "-c", oh.unpack_script(bad_name)], cwd=tmp_path, input=b"not-a-gzip-archive", capture_output=True
+    )
+    assert bad_unp.returncode != 0 and not (rt / f".{bad_name}.part").exists()
+
+    new_name = "omx-tools-" + ("a" * 10)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        dir_info = tarfile.TarInfo(new_name)
+        dir_info.type = tarfile.DIRTYPE
+        dir_info.mode = 0o755
+        dir_info.mtime = 1000
+        tf.addfile(dir_info)
+        payload = b"aaaaaaaaaa\n"
+        info = tarfile.TarInfo(f"{new_name}/REVISION")
+        info.size = len(payload)
+        tf.addfile(info, io.BytesIO(payload))
+    unp = subprocess.run(
+        ["bash", "-c", oh.unpack_script(new_name)], cwd=tmp_path, input=buf.getvalue(), capture_output=True, timeout=10
+    )
+    assert unp.returncode == 0, unp.stderr
+    assert (rt / new_name).stat().st_mtime > 1000
+    assert (rt / new_name / "REVISION").read_text() == "aaaaaaaaaa\n"
+    assert not (rt / f".{new_name}.part").exists()
+    sw = subprocess.run(["bash", "-c", oh.switch_script(new_name)], cwd=tmp_path, capture_output=True, text=True)
+    assert sw.returncode == 0, sw.stderr
+    assert os.readlink(rt / oh.LINK) == new_name
+
+
+IDLE = json.dumps({"status": "idle", "arms": {"arm_a": {"locked_by": []}, "arm_s": {"locked_by": []}}})
+BUSY = json.dumps({"status": "idle", "arms": {"arm_a": {"locked_by": [{"lock": "session-arm_a.lock", "pid": 7}]},
+                                              "arm_s": {"locked_by": []}}})
+
+
+def ssh_stub(monkeypatch, arms, fake):
+    """Stub _ssh by script: /api/arms answers `arms` (an exception raises), systemctl answers active."""
+    seen = []
+
+    def stub(host, script, data=None):
+        seen.append(script)
+        if script == oh.BENCH_ARMS:
+            if isinstance(arms, BaseException):
+                raise arms
+            return arms
+        return "active" if "systemctl" in script else ""
+    monkeypatch.setattr(oh, "_ssh", stub)  # git still goes through the `fake` subprocess.run
+    return seen
+
+
+def restarts(seen):
+    return [s for s in seen if "systemctl --user restart" in s]
+
+
+def test_bench_deploy_restarts_an_idle_bench_after_the_switch(fake, monkeypatch, tmp_path, capsys):
+    seen = ssh_stub(monkeypatch, IDLE, fake)
+    assert oh.deploy("HEAD", "user@host", passing_log(tmp_path), oh.BENCH_LINK)[2] == 0
+    switch = next(i for i, s in enumerate(seen) if "mv -T" in s)
+    assert seen[switch + 1:] == [oh.BENCH_ARMS, f"systemctl --user restart {oh.BENCH_SERVICE}"
+                                 f" && systemctl --user is-active {oh.BENCH_SERVICE}"]
+    assert "restarted: active" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("arms, why", [
+    (BUSY, "locked arm_a"),
+    (json.dumps({"status": "recording", "arms": {"arm_a": {"locked_by": []}}}), "status recording"),
+    (SystemExit("[omx-hotfix] ssh user@host failed (exit 7)"), "read failed"),
+    ("<html>", "unreadable"),
+    (json.dumps({"status": "idle"}), "unreadable"),
+], ids=["locked", "recording", "ssh-failed", "not-json", "no-arms"])
+def test_bench_deploy_holds_the_restart_when_busy_or_unread(fake, monkeypatch, tmp_path, capsys, arms, why):
+    seen = ssh_stub(monkeypatch, arms, fake)
+    folder, _, code = oh.deploy("HEAD", "user@host", passing_log(tmp_path), oh.BENCH_LINK)
+    assert code == oh.HELD != 0 and folder == f"~/rosy-test/omx-tools-{SHORT}"  # the deploy itself stands
+    assert not restarts(seen) and any("mv -T" in s for s in seen)
+    out = capsys.readouterr().out
+    assert "[omx-hotfix] bench restart held: " in out and why in out and "; restart when idle" in out
+
+
+def test_cell_link_deploy_never_reads_or_restarts_the_bench(fake, monkeypatch, tmp_path):
+    seen = ssh_stub(monkeypatch, IDLE, fake)
+    assert oh.deploy("HEAD", "user@host", passing_log(tmp_path))[2] == 0
+    assert oh.BENCH_ARMS not in seen and not any("systemctl" in s for s in seen)
+
+
+def test_main_returns_the_held_status(fake, monkeypatch, tmp_path):
+    ssh_stub(monkeypatch, BUSY, fake)
+    argv = ["deploy", "--sha", "HEAD", "--tested-log", str(passing_log(tmp_path)), "--host", "u@h", "--link"]
+    assert oh.main([*argv, oh.BENCH_LINK]) == oh.HELD
+    assert oh.main([*argv, oh.LINK]) == 0

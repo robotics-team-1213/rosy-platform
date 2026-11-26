@@ -108,3 +108,28 @@ def test_offline_learning_export_preserves_hashes_and_has_no_automatic_labels(tm
         with pytest.raises(ValueError, match="validation"):
             exporter.export(store.path, tmp_path / f"unsafe-{index}")
         assert not (tmp_path / f"unsafe-{index}/manifest.json").exists()
+
+
+def test_observation_debounce_and_60s_prune_throttling(tmp_path):
+    store = ObservationStore(tmp_path / "fleet.sqlite3", max_rows=2, retention_s=5,
+                             debounce_s=10.0, prune_interval_s=60.0)
+    base = sample()
+    store.append_snapshot([base], received_at=10.0, monotonic_now=10.0)
+    # Ticking timestamp/seq with identical robot state within 10 s is debounced.
+    ticked = {**base, "state": {**base["state"], "timestamp": "2026-10-12T00:00:02Z", "seq": 2}}
+    store.append_snapshot([ticked], received_at=12.0, monotonic_now=12.0)
+    assert len(store.read_observations()) == 1
+
+    # State change writes immediately.
+    changed = {**base, "state": {**base["state"], "battery": {"voltage": 8.0}}}
+    store.append_snapshot([changed], received_at=13.0, monotonic_now=13.0)
+    assert len(store.read_observations()) == 2
+
+    # 10 s heartbeat writes, but DELETE pruning is still throttled until 60 s.
+    store.append_snapshot([changed], received_at=23.0, monotonic_now=23.0)
+    assert len(store.read_observations()) == 3
+
+    # At t=70.0 (>= 60 s from t=10.0), retention + max_rows DELETE runs.
+    store.append_snapshot([changed], received_at=70.0, monotonic_now=70.0)
+    rows = store.read_observations()
+    assert len(rows) == 1 and rows[0]["received_at"] == 70.0

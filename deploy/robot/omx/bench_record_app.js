@@ -170,16 +170,17 @@ async function pollCameras(){
     }
     emptyCamPolls=0;
     const {liveReq,missingReq}=renderCamHealthHeader(lastCamState,labels,curArm);
+    const recNow=typeof isActivelyRecording==='function'&&isActivelyRecording();
     note.textContent=missingReq.length
-      ? ('미리보기 ('+(liveReq.join(', ')||'없음')+') · 미수신: '+missingReq.join(', '))
-      : ('실시간 미리보기 ('+labels.join(', ')+')');
+      ? ((recNow?'녹화 중':'미리보기 (녹화 대기)')+' — 수신: '+(liveReq.join(', ')||'없음')+' · 미수신: '+missingReq.join(', '))
+      : ((recNow?'녹화 중 — ':'실시간 미리보기 (녹화 대기) — ')+labels.join(', '));
     if(labels.join(',')!==camLabels.join(',')){
       camLabels=labels;
       grid.innerHTML='';
       for(const lbl of labels){
         const box=document.createElement('div');box.className='cam-box';box.dataset.camBox=lbl;
         const title=document.createElement('span');title.className='cam-title-pill';title.textContent=lbl+' ('+(st[lbl]?.quality?.condition||'확인 중')+')';
-        const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 녹화';
+        const rec=document.createElement('span');rec.className='cam-rec-badge armed';rec.textContent='녹화 대상';
         const tag=document.createElement('span');tag.className='cam-tag';tag.hidden=true;
         const img=document.createElement('img');img.alt=lbl+' 카메라 (프레임 대기 중)';img.dataset.cam=lbl;
         img.style.display='none';
@@ -199,7 +200,7 @@ async function pollCameras(){
         const lbl=box.dataset.camBox;
         const info=st[lbl];
         const pill=box.querySelector('.cam-title-pill');
-        if(pill)pill.textContent=lbl+' ('+(info?.fresh===false?'지연':(info?.quality?.condition||'정상'))+')';
+        if(pill)pill.textContent=lbl+' ('+(info?.fresh===false?'지연':(info?.quality?.condition||'최신'))+')';
       }
       if(curArm!==lastCamArm)syncPrimaryCamForArm(curArm);
     }
@@ -222,7 +223,7 @@ async function pollStatus(){
   }catch(err){
     if(seq!==latestStatusSeq)return;
     const inActive=benchSessionActive();
-    setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive,sig:'conn-error:'+(err.message||'net'),action:{label:'지금 다시 조회',run:()=>pollStatus()}});
+    setNotice('conn-error','warn','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive,sig:'conn-error:'+(err.message||'net'),action:{label:'지금 다시 조회',run:()=>pollStatus()}});
     if(!inActive){
       statusLoaded=false;
     }
@@ -509,11 +510,29 @@ async function loadChoices(){
   }
 }
 
+let lastLeaderCheck={};
+let leaderCheckInFlight=false;
+async function pollLeaderCheck(arm='all'){
+  if(leaderCheckInFlight||benchSessionActive()||poseInFlight||startInFlight)return;
+  leaderCheckInFlight=true;
+  try{
+    const res=await api('/api/leader_check?arm='+encodeURIComponent(arm||'all'));
+    if(res&&!res.skipped&&res.arms&&typeof res.arms==='object'){
+      lastLeaderCheck=Object.assign({},lastLeaderCheck,res.arms);
+      if(typeof renderArmCards==='function')renderArmCards();
+      if(typeof validateStart==='function')validateStart();
+    }
+  }catch(_){}
+  finally{leaderCheckInFlight=false;}
+}
+window.pollLeaderCheck=pollLeaderCheck;
+
 function init(){
   pollStatus();
   setInterval(pollStatus,2000);
   pollArms();
   setInterval(()=>{if(!benchSessionActive())pollArms();},5000);
+  pollLeaderCheck('all');
   if(typeof loadGripMaps==='function')loadGripMaps();
   if(typeof loadCellMap==='function')loadCellMap();
   pollCameras();

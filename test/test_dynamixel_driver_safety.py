@@ -348,3 +348,36 @@ def test_terminate_turns_torque_off_before_any_sleep_a_repeat_sigint_can_interru
     assert ("write1", 1, driver.ADDR_TORQUE_ENABLE, 0) in events
     assert ("write1", 2, driver.ADDR_TORQUE_ENABLE, 0) in events
     assert events[-1] == ("close",)
+
+
+def test_read_health_caches_temperature_limit_after_first_valid_read(monkeypatch):
+    driver = _load_driver(monkeypatch, [])
+    reads = []
+
+    class Reader:
+        def __init__(self):
+            self.fail_limit = True
+
+        def read1ByteTxRx(self, _port, motor_id, address):
+            reads.append((motor_id, address))
+            if address == driver.ADDR_TEMPERATURE_LIMIT and self.fail_limit:
+                return 0, -1, 0
+            return (72 if address == driver.ADDR_TEMPERATURE_LIMIT else 55), 0, 0
+
+        def read2ByteTxRx(self, _port, motor_id, address):
+            reads.append((motor_id, address))
+            return 120, 0, 0
+
+    reader = Reader()
+    driver.packetHandler = reader
+    first = driver.read_health()
+    assert [row["temperature_limit_c"] for row in first] == [None, None]
+
+    reader.fail_limit = False
+    second = driver.read_health()
+    assert [row["temperature_limit_c"] for row in second] == [72, 72]
+
+    reads.clear()
+    third = driver.read_health()
+    assert [row["temperature_limit_c"] for row in third] == [72, 72]
+    assert all(addr != driver.ADDR_TEMPERATURE_LIMIT for _mid, addr in reads)

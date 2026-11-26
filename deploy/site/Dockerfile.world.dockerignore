@@ -1,0 +1,8 @@
+**
+!deploy/site/secret_exec.py
+!applications/world/*.py
+!applications/world/web/**
+!shared/web/**
+!tools/sim/world_env_adapter.py
+**/.pytest_cache
+**/__pycache__

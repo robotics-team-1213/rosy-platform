@@ -1,16 +1,20 @@
+import {tripPreviewSummary as planSummaryText} from '/console/assets/trip-preview-summary.js';
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
+import {mapPoint} from '/console/assets/geometry-edit.js';
 import {setOffBy} from '/common/cause-line.js';
 import {operatorReason as roleReason} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
+import {createPageScope} from '/common/scope.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
-import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
-import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
+import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/assets/fleet-session.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, mapEvidence, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
+import {roadOverlayPoints, surveyedRoadPoints, surveyText, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -21,19 +25,20 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, renderMapInspector,
+  renderSitePointsSummary, sitePointsForActiveMap, svgElement as el, syncMapInspectorTargets} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
 
-// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
-const stored = sessionStorage.getItem('rosy-console-token') || '';
-$('console-token').value = stored;
-const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
+const pageScope = createPageScope();
+const tokenAccess = bindTokenAccess({scope: pageScope, persist: false, onCredential: () => { void connect(true); }});
+const request = createFleetClient({credential: () => tokenAccess.getToken(), origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null, sitePoints: null};
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
-const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
+let displayedSitePoints = null;
+const teach = createTeachPanel({request, scope: pageScope, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
@@ -73,9 +78,18 @@ function render() {
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
+  syncMapInspectorTargets(map, state.selected, state.band !== null);
+  const sitePoints = sitePointsForActiveMap(state.sitePoints, state.active, $('map-source').value);
+  if (sitePoints !== displayedSitePoints) {
+    renderSitePointsSummary($('site-points-panel'), $('site-points-body'), sitePoints);
+    displayedSitePoints = sitePoints;
+  }
   if (!sourcePanel.renderStatus(map)) return;
   const {view, point: backgroundPoint} = sourcePanel.drawBackground(svg, map, () => fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs()));
   state.view = view;
+  const activeSource = $('map-source').value === 'active';
+  const evidence = mapEvidence(state.active, surveyedRoadPoints), evidenceText = (activeSource ? '' : '초안 표시 · 기준 ') + evidence.text;
+  if ($('map-evidence').textContent !== evidenceText) Object.assign($('map-evidence'), {textContent: evidenceText, title: evidence.title});
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
   // D-573 1/7: crosswalk areas under the lanes (read-only polygons) and their waiting bands.
   for (const crosswalk of map.crosswalks || []) {
@@ -87,13 +101,27 @@ function render() {
   for (const place of map.places) if (place.stop_zone) el('polygon', {class: 'stop-zone', points: line(place.stop_zone)}, svg);
   if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
   for (const edge of map.edges) {
-    const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
-      class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
-    el('title', {}, path).textContent = `${edge.id} · ${edge.direction === 'two_way' ? '양방' : '일방'} · ${edge.speed_cap_mps} m/s`;
+    const surveyed = activeSource ? surveyedRoadPoints(edge) : null;
+    const points = activeSource ? surveyed ?? roadOverlayPoints(map.map_id, edge) : edge.polyline;
+    const selected = state.selected?.edge === edge.id;
+    const path = el('polyline', {points: line(points), 'data-edge': edge.id,
+      class: 'edge ' + edge.drive_mode + (surveyed ? ' surveyed' : '') + (selected ? ' selected' : '')}, svg);
+    const routeLabel = edge.id + ' · ' + (edge.direction === 'two_way' ? '양방' : '일방') + ' · ' + edge.speed_cap_mps + ' m/s';
+    el('title', {}, path).textContent = surveyed ? edge.id + ' · ' + surveyText(edge.display_source) : routeLabel;
     if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
-    for (const mark of arrowMarks(edge)) {
+    if (surveyed) {
+      const stored = selected ? edge.polyline : unmeasuredRoadPoints(edge);
+      if (stored) {
+        const attrs = {points: line(stored), class: 'stored-road'};
+        attrs[selected ? 'data-stored-road' : 'data-road-prefix'] = edge.id;
+        const overlay = el('polyline', attrs, svg);
+        el('title', {}, overlay).textContent = (selected ? '저장 주행 경로 · ' : '저장 주행 경로 · 영상 기준선 없음 · ') + routeLabel;
+      }
+    }
+    if (surveyed && !selected) continue;
+    for (const mark of arrowMarks({...edge, polyline: surveyed ? edge.polyline : points})) {
       const [px, py] = view.toPx(mark.x, mark.y);
-      el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
+      el('polygon', {class: surveyed ? 'arrow stored-road-arrow' : 'arrow', points: '8,0 -6,-6 -6,6',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);
     }
   }
@@ -102,20 +130,9 @@ function render() {
   }
   if ($('map-source').value !== 'profile')
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
-  for (const [index, place] of map.places.entries()) {
-    const [px, py] = view.toPx(place.x, place.y);
-    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id, tabindex: 0, role: 'button',
-      'aria-label': `장소 ${place.name} 선택`, class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
-    el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
-    if (place.kind === 'start') {
-      el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
-        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
-    }
-    // Name, not just an ordinal: the map is where the operator picks a destination, and touch has no <title>.
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
-  }
+  drawPlaces(svg, map, view, {selectedPlace: state.selected?.place, kindLabels: PLACE_KIND_LABEL});
   drawFacilities(svg, map, view);
-  if ($('map-source').value === 'active') drawSitePointsOverlay(svg, state.sitePoints, view);
+  drawSitePointsOverlay(svg, sitePoints, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
   svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
@@ -182,39 +199,15 @@ function drawRobots() {
 
 function select(selection) {
   state.selected = selection;
-  const map = state.working;
-  const place = selection?.place && map?.places.find(item => item.id === selection.place);
-  const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
-  const crosswalk = selection?.crosswalk && (map?.crosswalks || []).find(item => item.id === selection.crosswalk);
   const reason = operatorReason() || ($('map-source').value === 'profile' ? '지도 설정은 규칙 JSON으로 고치거나 초안으로 불러오세요' : '');
-  $('place-form').hidden = !place || Boolean(reason);
-  $('edge-form').hidden = !edge || Boolean(reason);
-  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
-  if (!crosswalk && place?.kind !== 'stop') state.band = null;
-  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
-  if (place) {
-    $('selection').textContent = `장소 ${place.id}`;
-    $('place-name').value = place.name;
-    $('place-kind').value = place.kind;
-    $('place-pinned').checked = Boolean(place.pinned);
-    $('place-stop').hidden = place.kind !== 'stop';
-    $('place-approach').value = place.approach_m ?? '';
-  } else if (crosswalk) {
-    $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
-    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
-    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
-      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
-  } else if (edge) {
-    $('selection').textContent = `차로 ${edge.id} · ${edge.from} → ${edge.to}`;
-    $('edge-direction').value = edge.direction;
-    $('edge-mode').value = edge.drive_mode;
-    $('edge-speed').value = edge.speed_cap_mps;
-    $('edge-pinned').checked = Boolean(edge.pinned);
-  } else {
-    $('selection').textContent = selection ? '초안에 없는 항목입니다 · 초안 보기에서 고르세요' : '선택 없음';
-  }
+  if (!renderMapInspector(selection, shown(), state.working, reason)) state.band = null;
   render();
 }
+$('map-inspector-target').addEventListener('change', event => {
+  const value = event.target.value, separator = value.indexOf(':');
+  select(separator < 0 ? null : {[value.slice(0, separator)]: value.slice(separator + 1)});
+  syncButtons();
+});
 
 function syncButtons() {
   authoring.sync();
@@ -262,15 +255,18 @@ function syncButtons() {
 }
 
 // D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
+let robotPollBusy = false;
 async function pollRobots() {
-  if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
+  if (robotPollBusy || state.loadState !== 'ready' || document.hidden) return;  // a background tab does not keep reading trips and guide
+  robotPollBusy = true;
+  try {
     const [tripsRes, guideRes] = await Promise.allSettled([
       request('/api/fleet/trips'),
       request('/api/fleet/guide'),
     ]);
     if (tripsRes.status === 'fulfilled') {
       state.open = tripsRes.value.open || [];
-      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
+      status('trip-run', state.open.length ? `${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
         : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
     } else {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');
@@ -285,10 +281,12 @@ async function pollRobots() {
     // The map redraw (view turn, source change) clears the robot layer, so every poll repaints it.
     drawRobots();
     syncButtons();
+  } finally {
+    robotPollBusy = false;
   }
-  setTimeout(pollRobots, ROBOT_POLL_MS);
 }
-pollRobots();
+pageScope.interval(() => { void pollRobots(); }, ROBOT_POLL_MS);
+pageScope.listen(document, 'visibilitychange', () => { if (!document.hidden) void pollRobots(); });
 
 async function load() {
   state.planEpoch += 1;
@@ -313,7 +311,7 @@ async function load() {
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
   catch { calibrations = []; }
-  state.sitePoints = await loadSitePointsOverlay(request, active, $('site-points-panel'), $('site-points-body'));
+  state.sitePoints = await loadSitePointsOverlay(request, active);
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
@@ -371,10 +369,10 @@ async function connect(credentialChange = false) {
   notice('접속 중 · 0초 경과');
   try {
     const session = await request('/api/fleet/session');
-    sessionStorage.setItem('rosy-console-token', $('console-token').value);
+    writeStoredToken(tokenAccess.getToken());
     state.role = session.role;
     showSession(session, {credentialChange});
-    loginForm.refresh(false);
+    tokenAccess.refreshLogin(false);
     syncButtons();
     await load();
     if (localEdit) {
@@ -389,12 +387,13 @@ async function connect(credentialChange = false) {
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
-    // D-1043: a 403 FORBIDDEN is a role refusal, not a lost session: the E-stop stays live for it.
-    if (error.status === 401 || (error.status === 403 && error.code !== 'FORBIDDEN')) {
+    // D-1043: 403 FORBIDDEN keeps the session and E-stop live; 401 and generic 403 sign out and lock E-stop.
+    const failure = classifyAuthFailure(error);
+    if (failure.signOut) {
       state.role = null;
       showSignedOut();
     }
-    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') loginForm.refresh(true);
+    if (failure.offerLogin) tokenAccess.refreshLogin(true);
     render();
     if (localEdit) select(state.selected);
     syncButtons();
@@ -405,7 +404,6 @@ async function connect(credentialChange = false) {
     setOffBy($('token-save'), '');
   }
 }
-$('token-save').addEventListener('click', () => connect(true));
 
 $('profile-save').addEventListener('click', () => guarded(async () => {
   if (operatorReason()) return;
@@ -443,31 +441,33 @@ function clearPlan() {
   syncButtons();
 }
 
+const isTripPicking = () => $('trip-pick').checked && $('map-source').value === 'active' && state.view;
+function pickTripPoint(x, y) {
+  state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
+  $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
+  clearPlan();
+}
+
 $('site-map-svg').addEventListener('click', event => {
   if (survey.pick(event)) return;
   if (sourcePanel.pick(event)) return;
-  if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
-    const svg = event.currentTarget;
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    const [x, y] = state.view.toMap(at.x, at.y);
-    state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
-    $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
-    clearPlan();
+  if (isTripPicking()) {
+    pickTripPoint(...mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     return;
   }
   if (state.band !== null && state.view) {  // D-573: drawing a waiting band on the draft
-    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
-    state.band.push(state.view.toMap(at.x, at.y));
+    state.band.push(mapPoint(event.currentTarget, state.view, new DOMPoint(event.clientX, event.clientY)));
     render(); syncButtons();
     return;
   }
-  const target = event.target.closest('[data-place], [data-edge], [data-crosswalk]');
+  const target = event.target.closest('[data-place], [data-edge], [data-road-prefix], [data-crosswalk]');
   if (!target) return;
   // The map is where the operator picks a destination; the list follows the click.
   if (target.dataset.place && $('map-source').value === 'active') { $('trip-place').value = target.dataset.place; clearPlan(); }
   select(target.dataset.place ? {place: target.dataset.place}
-    : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
+    : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge || target.dataset.roadPrefix});
   syncButtons();
+  if (screens.current() === 'map-heading') location.hash = '#edit-heading';
 });
 
 installBandEditing({request, guarded, state, select, render, syncButtons, notice});
@@ -559,39 +559,36 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   render();
 }));
 
-bindEstop(request);
-bindTopbarToggle();
+bindEstop(request, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture()});
+bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 tickClock();
-setInterval(tickClock, 1000);
-watchFleet(request);
+pageScope.interval(tickClock, 1000);
+watchFleet(request, {scope: pageScope});
 const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
   groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
     'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
   label: document.getElementById('site-map-screen')});
-// The map legend promises that picking a place or lane on the view screen opens it for editing.
-$('site-map-svg').addEventListener('click', event => {
-  if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
-});
-// Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
+// Pick the focused marker's world point without a round trip through integer mouse coordinates.
 $('site-map-svg').addEventListener('keydown', event => {
   const dot = event.target.closest?.('[data-place]');
-  if (!dot || !['Enter', ' '].includes(event.key)) return;
+  if (event.defaultPrevented || !dot || !['Enter', ' '].includes(event.key)) return;
   event.preventDefault();
   const id = dot.dataset.place;
-  dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+  if (isTripPicking() && !$('plane-pick').checked) {
+    const place = state.active.map.places.find(item => item.id === id);
+    if (place) pickTripPoint(place.x, place.y);
+  } else {
+    const circle = dot.querySelector('circle.place'), matrix = circle?.getScreenCTM();
+    if (matrix) {
+      const point = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value).matrixTransform(matrix);
+      dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, clientX: point.x, clientY: point.y}));
+    }
+  }
   $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
-$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
-
-developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; connect(); }
-  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
-  else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) connect();
-    else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
-  });
-}).catch(() => {});
-// D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('console-token').value = ''; connect(true);
-}});
+pageScope.onResume(() => { void connect(); });
+void tokenAccess.bootstrap({
+  developmentToken,
+  connect: () => connect(),
+  onSignedOut: () => { if (!state.role && state.loadState === 'idle') showSignedOut(); },
+});

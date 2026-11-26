@@ -153,8 +153,16 @@ def test_unknown_or_changed_health_cannot_publish_usable_evidence(tmp_path, monk
     assert journal.read_bytes() == before
 
 
-def test_health_with_a_fake_root_never_uses_the_real_service_manager(tmp_path):
-    m = importlib.import_module("os_update_health")
+def _import_os_update_health(monkeypatch):
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "deploy/robot/pinky_pro/sd"))
+    monkeypatch.syspath_prepend(str(root / "deploy/robot/pinky_pro/native"))
+    return importlib.import_module("os_update_health")
+
+
+def test_health_with_a_fake_root_never_uses_the_real_service_manager(tmp_path, monkeypatch):
+    m = _import_os_update_health(monkeypatch)
     with pytest.raises(ValueError, match="explicit test runner"):
         m.check(tmp_path, TRANSACTION)
 
@@ -179,7 +187,7 @@ def test_malformed_private_health_receipt_is_a_hold(tmp_path, monkeypatch, damag
 def test_actual_loopback_probe_uses_existing_core_readiness_contract(monkeypatch, status, accepted):
     import http.server
     import threading
-    m = importlib.import_module("os_update_health")
+    m = _import_os_update_health(monkeypatch)
     paths = []
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -236,7 +244,7 @@ def test_actual_tls_probe_verifies_the_configured_device_identity(tmp_path, monk
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
-    m = importlib.import_module("os_update_health")
+    m = _import_os_update_health(monkeypatch)
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "rosy-fixture.local")])
     now = datetime.now(timezone.utc)

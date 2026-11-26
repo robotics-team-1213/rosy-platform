@@ -163,6 +163,8 @@ class NativeReleaseManager:
 
     @staticmethod
     def _systemctl_start_nav() -> None:
+        # Stop rosy-io first so wheel_torque_off.py releases /dev/rosy-motor before navigation opens it.
+        subprocess.run(["systemctl", "stop", "rosy-io.service"], check=False, timeout=30)
         subprocess.run(
             ["systemctl", "start", "rosy-navigation.service"],
             check=True,

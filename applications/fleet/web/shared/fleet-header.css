@@ -1,4 +1,4 @@
-/* D-540 2 — Rosy Fleet 공통 머리. 관제·설치·보정·현장 지도·Cell 네 문서가 같은 마크업과 이 시트를 쓴다.
+/* D-540 2 — Rosy Fleet 공통 머리. 관제·설치·현장 지도·Cell 네 문서가 같은 마크업과 이 시트를 쓴다.
    문서 시트(styles.css, site-map.css, cell.css)는 머리를 칠하지 않는다. CSP: 클래스와 id만. */
 
 /* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
@@ -149,7 +149,18 @@ ui-topbar {
 /* D-960 §4: a block another control unit owns stays off this unit's screen (unit-scope.js sets the flags). */
 html[data-unit-scope-ready]:not([data-unit-drive]) [data-unit-scope="drive"],
 html[data-unit-scope-ready]:not([data-unit-arms]) [data-unit-scope="arms"],
+html[data-unit-scope-ready]:not([data-unit-children]) [data-unit-scope="children"],
 html[data-unit-scope-ready]:not([data-unit-root]) [data-unit-scope="root"],
 html[data-unit-scope-ready]:not([data-unit-enrollment]) [data-unit-scope="enrollment"],
 html:not([data-unit-scope-ready]) [data-unit-scope="no-arms"],
-html[data-unit-arms] [data-unit-scope="no-arms"] { display: none; }
+html[data-unit-arms] [data-unit-scope="no-arms"] { display: none !important; }
+
+/* Prune navigation items unavailable in the current control-unit scope or role. */
+html[data-unit-scope-ready]:not([data-unit-drive]) .doc-tabs a[href="/console/site-map"]:not([aria-current="page"]),
+html[data-unit-scope-ready]:not([data-unit-drive]):not([data-unit-enrollment]) .doc-tabs a[href="/console/install"]:not([aria-current="page"]),
+html[data-fleet-role="viewer"] .doc-tabs a[href="/console/install"]:not([aria-current="page"]),
+html[data-fleet-role="viewer"] #work-create,
+html[data-fleet-role="viewer"] #work-status-filter a[href="/console?view=work&show=pending"]:not([aria-current]),
+html[data-fleet-role="viewer"] .ui-subnav-nav[aria-label="작업 화면"] :is(a[href="/console/policy"]:not([aria-current="page"]), a[href="/console/learning"]:not([aria-current="page"]), .ui-subnav-head:has(+ a[href="/console/policy"]:not([aria-current="page"]))),
+html[data-unit-scope-ready]:not([data-unit-drive]) .ui-subnav-nav[aria-label="기록 화면"] :is(a[href="/console?view=records&show=facts"]:not([aria-current="page"]), .ui-subnav-head:has(+ a[href="/console?view=records&show=facts"]:not([aria-current="page"]))),
+html[data-fleet-role="viewer"][data-unit-scope-ready]:not([data-unit-drive]) #context-tools-tab { display: none; }

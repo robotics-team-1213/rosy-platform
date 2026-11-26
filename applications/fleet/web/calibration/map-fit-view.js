@@ -104,10 +104,10 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   // 승인된 추적 보정. 렌즈·지도가 이 프레임과 같아야 한다. 없으면 null.
   function fleetFit(source) {
     if (!source) return null;
-    const record = calibrations.find((row) => row?.source_id === source);
-    if (!record) return null;
     const laneSet = lanes ? pickLanes(lanes, source) : null;
-    if (laneSet?.mapId && record.map_id && record.map_id !== laneSet.mapId) return null;
+    const record = calibrations.find((row) => row?.source_id === source
+      && (!laneSet?.mapId || !row?.map_id || row.map_id === laneSet.mapId));
+    if (!record) return null;
     return fitFromCalibration(record, visionView.currentLensInfo());
   }
 
@@ -365,9 +365,12 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       life.check();
       await ensureCalibrations({ force: true });
       life.check();
+      pending = null;
       const lensNote = body.lens ? "" : " 렌즈 정보가 없어 렌즈 검사 없이 적용했습니다.";
       showSummary({ tone: "good", guidance: null, headline: `추적 보정 ${record.calibration_revision} 적용 — `
         + `관제 카메라 추적 표시에만 씁니다(관측·주행 아님). 렌즈를 바꾸면 다시 맞추세요.${lensNote}` });
+      render();
+      onChanged();
     } catch (error) {
       if (error.name === "AbortError") return;
       showSummary({ tone: "warn", guidance: null, headline: `추적 보정 적용 실패: ${error.message || error}` });

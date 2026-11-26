@@ -1,6 +1,7 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import { setOff } from "/common/cause-line.js";
 import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
+import { invert3 as invert3x3 } from "/common/plane-math.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -14,12 +15,13 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
 
 const READING_REASON = '상태 읽는 중';
 
-export function createMeasuredCalibrationView({scope, root, call, visionView, auth}) {
+export function createMeasuredCalibrationView({scope, root, call, visionView, auth, onPromoted = () => {}}) {
   const el = id => root.querySelector(`#measured-${id}`);
   const file = el('bundle'), p95 = el('p95'), maximum = el('max'), conditions = el('conditions');
   const message = el('state'), summary = el('summary'), image = el('image');
-  const buttons = Object.fromEntries(['approve','revoke','confirm','read','refresh'].map(id => [id,el(id)]));
+  const buttons = Object.fromEntries(['approve','revoke','confirm','read','refresh','promote'].map(id => [id,el(id)]));
   let source = '', generation = 0, candidate = null, record = null, status = null;
+  let pendingFile = null;
   let busy = false, reading = false, imageURL = null, cancelImageExpiry = null;
   let sourceLifetime = new AbortController();
   const identity = () => `${auth.token}\n${auth.role}\n${auth.principal}`;
@@ -33,13 +35,13 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   function reset() {
     sourceLifetime.abort(); sourceLifetime = new AbortController(); generation++;
-    candidate = record = status = null; busy = reading = false; conditions.checked = false;
+    candidate = record = status = pendingFile = null; busy = reading = false; conditions.checked = false;
     p95.value = maximum.value = file.value = ''; clearImage();
     message.textContent = '저장 기록 확인 중'; summary.textContent = '';
   }
   function pause() {
     sourceLifetime.abort(); sourceLifetime = new AbortController(); generation++;
-    status = null; busy = reading = false; conditions.checked = false; clearImage(); render();
+    status = pendingFile = null; busy = reading = false; conditions.checked = false; clearImage(); render();
     message.textContent = '적용 상태 확인 대기';
   }
   function syncSource() {
@@ -65,6 +67,13 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     if (control.hasAttribute('data-reading-reason') !== (value === READING_REASON)) control.toggleAttribute('data-reading-reason');
     for (const name of ['title','aria-description']) if (control.getAttribute(name) !== value) control.setAttribute(name, value);
   }
+  function promotableBundle() {
+    const bundle = record?.bundle;
+    const readback = record?.readback;
+    if (file.files.length || status?.state === 'invalid'
+      || (readback?.state === 'invalid' && readback.reason !== 'readback_stale')) return null;
+    return bundle?.evidence_kind === 'measured' && bundle.source_id === source ? bundle : null;
+  }
   function render() {
     // A read's reason is title/aria only (measured-calibration.css hides its line): a visible line would resize the
     // layout above the checkbox between mousedown and mouseup on a slow device.
@@ -74,7 +83,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const editReason = busy ? busyReason : `${NAMED_OPERATOR_REASON}.`;
     const setOperable = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? (reading ? readingReason : '') : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
-    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
+    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 보정을 승인 저장하세요.');
     setOperable(buttons.approve,!!candidate && candidate.evidence_kind === 'measured' && !!limits() && candidate.source_id === source,
       '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
     setOperable(buttons.revoke,!!record,'철회할 승인 기록이 없습니다.');
@@ -84,7 +93,12 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? (reading ? readingReason : '') : why);
     watch(buttons.read,!!current,'현재 교정·촬영 상태를 먼저 확인하세요.');
     watch(buttons.refresh,!!source,'카메라를 먼저 선택하세요.');
-    const b = candidate || record?.bundle;
+    const activeBundle = candidate || record?.bundle;
+    if (buttons.promote) {
+      setOperable(buttons.promote, !!promotableBundle(),
+        candidate || pendingFile ? '가져온 교정 묶음을 먼저 승인 저장하세요.' : '현재 유효한 보정 승인 기록이 필요합니다.');
+    }
+    const b = activeBundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }
   async function request(path, body, t, method='POST') {
@@ -100,10 +114,18 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       || url.search || url.hash || url.username || url.password) throw new Error('영상 주소를 확인하세요.');
     return {...lease,url};
   }
+  async function readStored(t) {
+    try {
+      const body = await call('/api/fleet/calibrations?purpose=preview',{signals:[t.signal]}); t.check();
+      if (body.use !== 'preview-only') throw new Error('이 서버는 보정 미리보기를 지원하지 않습니다.');
+      return body.calibrations?.find(row => row.source_id === t.source) || null;
+    } catch (error) {
+      if (t.current()) { record = status = null; conditions.checked = false; }
+      throw error;
+    }
+  }
   async function readState(t) {
-    const body = await call('/api/fleet/calibrations?purpose=preview',{signals:[t.signal]}); t.check();
-    if (body.use !== 'preview-only') throw new Error('이 서버는 실측 교정 미리보기를 지원하지 않습니다.');
-    const next = body.calibrations?.find(row => row.source_id === t.source) || null;
+    const next = await readStored(t);
     if (next?.calibration_revision !== record?.calibration_revision) { clearImage(); conditions.checked = false; }
     const previousSession = status?.session_id;
     record = next; status = null;
@@ -111,7 +133,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       const lease = await grant(t);
       const response = await fetch(lease.url.href.replace(/\/frame$/,'/measured-status'), {
         signal:t.signal,credentials:'omit',redirect:'error',cache:'no-store',headers:{Authorization:`Bearer ${lease.lease}`}});
-      if (!response.ok) throw new Error('실측 교정 적용 상태를 읽지 못했습니다.');
+      if (!response.ok) throw new Error('보정 적용 상태를 읽지 못했습니다.');
       const result = await response.json(); t.check();
       if (result.source_id !== t.source) throw new Error('카메라 상태의 출처가 다릅니다.');
       status = result;
@@ -144,7 +166,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   function failure(error,t) {
     if (error.name === 'AbortError' || !t.current()) return;
-    clearImage(); message.textContent = `실측 교정 확인 실패: ${error.message}`;
+    clearImage(); message.textContent = `보정 확인 실패: ${error.message}`;
   }
   async function action(fn) {
     if (busy || reading) return;
@@ -164,25 +186,33 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   scope.listen(file,'change',async () => {
     const selected = file.files[0], t = ticket();
+    pendingFile = selected || null; candidate = null; render();
     if (!selected) return;
     try {
       if (selected.size > 200000) throw new Error('교정 묶음은 200 KB 이하여야 합니다.');
       const value = JSON.parse(await selected.text()); t.check();
+      if (pendingFile !== selected) return;
       const keys = ['schema','source_id','map_id','map_revision','lens','floor','training_digests',
         'validation_digests','survey_digest','capture','bounds_m','evidence_kind','digest'];
       if (value.schema !== 'rosy.measured-calibration/1' || value.source_id !== t.source
         || !value.floor?.validation || !value.capture?.signature || Object.keys(value).some(k=>!keys.includes(k))) {
         throw new Error('선택한 카메라의 교정 묶음이 필요합니다.');
       }
-      candidate = value; conditions.checked = false; clearImage(); render();
-    } catch(error) { if (t.current()) { candidate = null; failure(error,t); render(); } }
+      candidate = value; conditions.checked = false; clearImage();
+    } catch(error) {
+      if (t.current() && pendingFile === selected) failure(error,t);
+    } finally {
+      if (t.current() && pendingFile === selected) { pendingFile = null; render(); }
+    }
   });
   for (const field of [p95,maximum,conditions]) scope.listen(field,'input',render);
   scope.listen(buttons.approve,'click',() => action(async t => {
     if (!operator() || !candidate || !limits()) return;
     record = await request('/api/fleet/calibrations',{purpose:'preview',kind:'measured',bundle:candidate,
       expected_revision:record?.calibration_revision || null,limits:limits()},t);
-    candidate = null; conditions.checked = false; clearImage(); await readState(t);
+    candidate = null; file.value = '';
+    file.dispatchEvent(new Event('change', {bubbles:true}));
+    conditions.checked = false; clearImage(); await readState(t);
   }));
   scope.listen(buttons.revoke,'click',() => action(async t => {
     if (!operator() || !record) return;
@@ -194,6 +224,38 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }));
   scope.listen(buttons.read,'click',() => action(t => showFrame(t,false)));
   scope.listen(buttons.refresh,'click',refresh);
+  if (buttons.promote) {
+    scope.listen(buttons.promote,'click',() => action(async t => {
+      const expected = record?.calibration_revision;
+      if (!operator() || !expected || !promotableBundle()) return;
+      record = await readStored(t);
+      if (record?.calibration_revision !== expected) {
+        status = null; conditions.checked = false;
+        throw new Error('승인 기록이 바뀌었습니다. 현재 보정을 다시 확인하세요.');
+      }
+      const bundle = promotableBundle();
+      if (!bundle) throw new Error('현재 유효한 보정 승인 기록이 필요합니다.');
+      const mapToImage = invert3x3(bundle.floor.undistorted_to_map);
+      if (!mapToImage) throw new Error('실측 평면 행렬을 뒤집을 수 없습니다.');
+      const [bx0, by0, bx1, by1] = bundle.bounds_m;
+      const [w, h] = bundle.lens.image_size;
+      const lensProfile = {
+        model: bundle.lens.model, K: bundle.lens.K, D: bundle.lens.D, image_size: [w, h],
+        source: 'measured', revision: bundle.lens.revision, reproj_p95_px: bundle.lens.validation?.p95_px,
+      };
+      const promoted = await request('/api/fleet/calibrations', {
+        source_id: bundle.source_id, map_id: bundle.map_id, map_to_image: mapToImage,
+        image: {width: w, height: h},
+        track_bounds_m: {min_x: bx0, min_y: by0, max_x: bx1, max_y: by1},
+        fit_score: Math.max(0, Math.min(1, Number((1 - bundle.floor.validation.p95_m * 5).toFixed(3)))),
+        lens: bundle.capture.lens,
+        lens_profile: lensProfile, method: 'measured',
+        metrics: {p95_m: bundle.floor.validation.p95_m, max_m: bundle.floor.validation.max_m},
+      }, t);
+      message.textContent = `추적 보정 저장 완료 (${promoted.calibration_revision})`;
+      onPromoted(promoted);
+    }));
+  }
   scope.listen(document.getElementById('vision-source'),'change',() => {syncSource(); render(); return refresh();});
   scope.interval(refresh,2000); scope.onResume(refresh); scope.onDispose(reset);
   syncSource(); render();

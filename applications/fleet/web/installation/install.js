@@ -1,4 +1,4 @@
-// D-410 — 설치·보정 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
+// D-410 — 설치 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 import { evidenceAgeText } from "/common/core_ui_logic.js";
@@ -13,6 +13,7 @@ import { createUsbCameraPanel } from "./usb-camera.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
+import { createManualFitView } from "/console/assets/manual-fit-view.js";
 import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createInstallLine } from "./install-line.js";
@@ -28,6 +29,7 @@ import { createTaskChooser } from "/common/task-chooser.js";
 import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
+import { bindTokenAccess, classifyAuthFailure, readStoredToken, writeStoredToken } from "/console/assets/fleet-session.js";
 import '/console/assets/file-picker.js';
 
 const pageScope = createPageScope();
@@ -49,7 +51,7 @@ let measuredCalibration = null;
 let deviceProfiles = null;
 
 const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
+  token: readStoredToken(),
   role: null,
   principal: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
@@ -73,13 +75,14 @@ function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
   startPoints?.updateAuthorization();
   measuredCalibration?.updateAuthorization();
+  manualFit?.updateAuthorization();
   deviceProfiles?.updateAuthorization();
 }
 
 function markLocked(reason = "auth") {
   stopNotice();
   // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
-  if (!auth.locked) loginForm.refresh(true);
+  if (!auth.locked) tokenAccess?.refreshLogin(true);
   auth.locked = true;
   auth.role = null;
   peerPicker?.reset();
@@ -108,7 +111,7 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
+    if (classifyAuthFailure(error).offerLogin && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -137,6 +140,21 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   if ((location.hash.slice(1) || installTasks[0].id) !== id) history.pushState(null, "", `#${id}`);
 }});
 el("install-chooser").append(taskChooser.element);
+const relatedNav = document.createElement("nav");
+relatedNav.className = "ui-subnav-nav";
+relatedNav.setAttribute("aria-label", "관련 문서");
+const relatedHead = document.createElement("span");
+relatedHead.className = "ui-subnav-head";
+relatedHead.textContent = "다른 문서";
+relatedNav.append(relatedHead);
+for (const [href, label] of [["/console/maintenance", "PC 정비"], ["/console/site-map", "현장 지도"]]) {
+  const link = document.createElement("a");
+  link.className = "ui-subnav-item";
+  link.href = href;
+  link.textContent = label;
+  relatedNav.append(link);
+}
+el("install-chooser").append(relatedNav);
 taskChooser.setReady();
 // 주소의 #작업-id가 첫 화면을 고른다(공유·새로고침 보존). task id ≠ 패널 id라 스크롤 점프도 없다.
 const initialTask = location.hash.slice(1);
@@ -187,8 +205,10 @@ const visionView = createVisionView({ scope: pageScope, el, call,
 let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
+let manualFit = null;
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
-measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth});
+manualFit = createManualFitView({ scope: pageScope, el, call, visionView, auth, onApplied: () => { mapFit.reset(); fieldView.render(); } });
+measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth, onPromoted: () => { manualFit?.refresh(); mapFit.reset(); }});
 // D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
 startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
 const installLine = createInstallLine({ root: el("install-line"), call, scope: pageScope });
@@ -208,35 +228,28 @@ peerPicker = createPeerPicker({scope: pageScope, el, call,
 
 bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 
-el("console-token").value = auth.token;
 function saveToken() {
   stopNotice();
   pageScope.invalidate();
   peerPicker.reset();
-  auth.token = el("console-token").value.trim();
+  auth.token = tokenAccess.getToken();
   auth.role = null;
   applyRole();
-  if (auth.token) {
-    sessionStorage.setItem("rosy-console-token", auth.token);
-  } else {
-    sessionStorage.removeItem("rosy-console-token");
-  }
+  writeStoredToken(auth.token);
   visionView.reset();
   mapFit.reset();
+  manualFit?.reset();
   startPoints.reset();
   relearn.reset();
   refreshAuthorization(false, true);
   visionView.refreshSources();
 }
-pageScope.listen(el("token-save"), "click", saveToken);
-// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
-  el("console-token").value = "";
-  saveToken();
-}});
-pageScope.listen(el("console-token"), "keydown", (event) => {
-  if (event.key === "Enter") saveToken();
+const tokenAccess = bindTokenAccess({
+  scope: pageScope,
+  createLogin: createPasswordLogin,
+  onCredential: () => saveToken(),
 });
+if (auth.token) tokenAccess.setToken(auth.token, { persistValue: false });
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
@@ -317,7 +330,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    loginForm.refresh(false);
+    tokenAccess.refreshLogin(false);
     showSession(identity, {credentialChange});
     applyRole();
     await Promise.allSettled([
@@ -340,19 +353,19 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
         const token = await developmentToken(auth.token);
         if (token && token !== auth.token) {
           auth.token = token;
-          el("console-token").value = token;
+          tokenAccess.setToken(token, { persistValue: false });
           await refreshAuthorization(true, credentialChange);
           return;
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
     }
-    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
+    if (!auth.locked) markLocked(classifyAuthFailure(_err).offerLogin ? "auth" : "connection");
   }
 }
 
 tickClock();
 pageScope.interval(tickClock, 1000);
-watchFleet(fleetClient, {interval: (fn, ms) => pageScope.interval(fn, ms)});
+watchFleet(fleetClient, {scope: pageScope});
 applyRole();
 refreshAuthorization();
 visionView.refreshSources();
@@ -367,6 +380,7 @@ pageScope.interval(() => {
 pageScope.onResume(() => {
   visionView.reset();
   mapFit.reset();
+  manualFit?.reset();
   startPoints.reset();
   relearn.reset();
   refreshAuthorization();

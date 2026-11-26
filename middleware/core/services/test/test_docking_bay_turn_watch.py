@@ -209,3 +209,26 @@ def test_a_staging_turn_the_lidar_finds_8_deg_short_is_closed_on_the_lidar():
     run(p, follow=0.955, seen=seen)
     assert p.manager.state is DockState.DOCKED, p.manager._error
     assert any(e and e.startswith("turn closed on the LiDAR") for e in seen), seen
+
+
+def test_pitin_over_pi_target_and_flipped_cw_past_threshold_do_not_false_overshoot():
+    import pytest
+    from test_docking_bay_pitin import _at_the_junction
+
+    p, bp = _at_the_junction(0.562, bay_heading=167.0)
+    assert abs(bp._turn_want - math.radians(167.0)) < 1e-6
+    pose = bp._odometry()
+    bp._turn_dir = -1.0
+    bp._turn_want, bp._turn_passed_pi = math.pi + 0.25, False
+    bp._turn_target = pose[2] + bp._turn_dir * (math.pi + 0.25)
+    bp._tw_start(pose[2], p.clock.now, want=math.pi + 0.25)
+    bp._tick_turning(p.clock.now)
+    assert p.manager.state is not DockState.DOCK_FAILED
+    bp._tw_flipped = False
+    bp._tw = {"lidar": -0.30, "lidar_odo": -0.30}
+    bp._turn_dir = -1.0
+    bp._h._cfg.bay_turn_flip_max_rad = 0.50
+    assert bp._tw_flip(pose, p.clock.now) is True
+    assert bp._turn_want == pytest.approx(math.pi + 0.30) and bp._turn_passed_pi is False
+    bp._tick_turning(p.clock.now)
+    assert p.manager.state is not DockState.DOCK_FAILED

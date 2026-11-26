@@ -4,10 +4,12 @@ Fakes only; the robot is a `FakeRobot` and the service a real `LocalizationServi
 console's clients, like the map-pin route tests beside this file.
 """
 
+import asyncio
 import math
 import time
 from hashlib import sha256
 
+import pytest
 from fastapi.testclient import TestClient
 
 from core_common.protocol.localization import CandidateReport
@@ -18,12 +20,14 @@ from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
+from fleet.swarm.api.ports import RobotApiError
 
 OPERATOR, NAMED, VIEWER = "operator-secret", "named-secret", "viewer-secret"
 
 
 def _state(loc, frame="odom"):
-    return {"robot_id": "r1", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+    return {"robot_id": "r1", "map_id": "test-site", "map_grid_id": "occupancy:123456789012",
+            "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
             "odom_pose": {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": time.time()},
             "localization": {"state": loc, "pose_frame": frame, "request_id": "q1"}}
 
@@ -182,6 +186,31 @@ def test_confirm_refuses_anything_the_robot_did_not_report(tmp_path):
     assert len(_events(app, "localization_confirm")) == 1
 
 
+@pytest.mark.parametrize("outcome", ["matching", "wrong_pose", "new_grid", "wrong_receipt"])
+def test_confirm_anchors_only_matching_core_localization(tmp_path, monkeypatch, outcome):
+    app, robot = _app(tmp_path)
+    service = app.state.localization_service
+    if outcome == "wrong_receipt":
+        async def wrong_receipt(decision):
+            return {"request_id": "different"}
+        monkeypatch.setattr(robot, "localization_decision", wrong_receipt)
+
+    named = {"Authorization": f"Bearer {NAMED}"}
+    reply = TestClient(app).post("/api/fleet/robots/r1/localization/confirm",
+                                 json={"candidate_id": 0}, headers=named)
+    assert reply.status_code == 200
+    assert service.anchors() == set()
+
+    robot._state = _state("LOCALIZED", "map")
+    robot._state["pose"] = {"x": 1.0, "y": 2.0, "yaw": 0.5}
+    if outcome == "wrong_pose":
+        robot._state["pose"]["x"] = -1.0
+    if outcome == "new_grid":
+        robot._state["map_grid_id"] = "occupancy:987654321098"
+    asyncio.run(service.tick())
+    assert service.anchors() == ({"r1"} if outcome == "matching" else set())
+
+
 def test_confirm_without_a_candidate_report_is_refused(tmp_path):
     app, robot = _app(tmp_path)
     robot.candidates = None
@@ -189,3 +218,35 @@ def test_confirm_without_a_candidate_report_is_refused(tmp_path):
         reply = client.post("/api/fleet/robots/r1/localization/confirm",
                             json={"candidate_id": 0}, headers={"Authorization": f"Bearer {NAMED}"})
         assert reply.status_code == 409 and reply.json()["detail"]["code"] == "NO_CANDIDATES"
+
+
+def test_localization_view_reports_candidate_rate_limit(tmp_path, monkeypatch):
+    app, robot = _app(tmp_path)
+
+    async def limited():
+        raise RobotApiError("r1", 429, "RATE_LIMITED", "retry later", {"retry_after_s": 15})
+
+    monkeypatch.setattr(robot, "localization_candidates", limited)
+    with TestClient(app) as client:
+        reply = client.get("/api/fleet/robots/r1/localization", headers={"Authorization": f"Bearer {VIEWER}"})
+    assert reply.status_code == 429
+    assert reply.headers["Retry-After"] == "15"
+    assert reply.json()["detail"]["code"] == "RATE_LIMITED"
+
+
+@pytest.mark.parametrize("method", ["localization_candidates", "localization_decision"])
+def test_confirm_reports_receiver_rate_limit(tmp_path, monkeypatch, method):
+    app, robot = _app(tmp_path)
+
+    async def limited(*args):
+        raise RobotApiError("r1", 429, "RATE_LIMITED", "retry later", {"retry_after_s": 15})
+
+    monkeypatch.setattr(robot, method, limited)
+    with TestClient(app) as client:
+        reply = client.post("/api/fleet/robots/r1/localization/confirm",
+                            json={"candidate_id": 0}, headers={"Authorization": f"Bearer {NAMED}"})
+    assert reply.status_code == 429
+    assert reply.headers["Retry-After"] == "15"
+    assert reply.json()["detail"]["code"] == "RATE_LIMITED"
+    assert reply.json()["detail"]["retry_after_s"] == 15
+    assert not _events(app, "localization_confirm")

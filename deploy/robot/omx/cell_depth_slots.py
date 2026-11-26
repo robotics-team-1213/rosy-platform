@@ -50,11 +50,11 @@ def _depth_roi(to_depth: np.ndarray, roi, margin: int, shape) -> tuple[int, int,
     return (xa, ya, xb, yb) if xb - xa >= 4 and yb - ya >= 4 else None
 
 
-def _patch(depth: np.ndarray, box) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+def _patch(grid: np.ndarray, box, *, finite_valid: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     a, b, c, d = box
-    sub = depth[b:d, a:c]
+    sub = grid[b:d, a:c]
     yy, xx = np.mgrid[b:d, a:c]
-    ok = sub > 0
+    ok = np.isfinite(sub) if finite_valid else (sub > 0)
     return xx[ok], yy[ok], sub[ok], float(ok.mean())
 
 
@@ -99,9 +99,19 @@ def _orientation(sx: np.ndarray, sy: np.ndarray, raised: np.ndarray) -> dict[str
     return out
 
 
+def frame_alignment(depth: np.ndarray, colour: np.ndarray):
+    """Fit the global RGB-to-depth transform once for all ROIs in a frame pair."""
+    if depth is None or getattr(depth, "ndim", 0) != 2 or colour is None:
+        raise ValueError("missing depth or colour frame")
+    raw = depth.astype(np.uint16)
+    heights = cell_depth.height_map(raw, cell_depth.table_plane(raw))
+    return cell_depth.align_edges(colour, heights)
+
+
 def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_roi, floor_rois, tier: int, *,
                     floor_depth_mm=None, floor_tol_mm: float = FLOOR_DEPTH_TOL_MM,
-                    to_depth: np.ndarray | None = None, align_edge_px: float | None = None) -> dict[str, Any]:
+                    to_depth: np.ndarray | None = None, align_edge_px: float | None = None,
+                    factory: dict | None = None) -> dict[str, Any]:
     """Occupancy and tier of one slot from depth: {"ok", "occupied", "tier_ok", "median_rel_mm", ...}.
 
     `ok` says the reference itself is usable; `occupied`/`tier_ok` are the finding. Every floor patch is checked on its own:
@@ -120,13 +130,22 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
         out["reasons"].append("no recorded floor depth for every floor patch")
         return out
     depth = np.asarray(depth, dtype=float)
-    if to_depth is None:
+    grid, finite_valid, plane_info, cam_k = depth, False, None, None
+    if factory is not None:
+        import cell_depth_pose
+
+        grid, plane_info = cell_depth_pose.height_map_in_colour(depth, factory)
+        if not plane_info.get("ok"):
+            out["reasons"].append(str(plane_info.get("reason") or "factory depth plane failed"))
+            return out
+        _, cam_k, _, _ = cell_depth_pose.calibration(factory)
+        to_depth, align_edge_px, finite_valid = np.eye(3), 0.0, True
+    elif to_depth is None:
         if colour is None:
             out["reasons"].append("no colour frame to place the ROIs")
             return out
         try:
-            heights = cell_depth.height_map(depth.astype(np.uint16), cell_depth.table_plane(depth.astype(np.uint16)))
-            to_depth, align_edge_px = cell_depth.align_edges(colour, heights)
+            to_depth, align_edge_px = frame_alignment(depth, colour)
         except (ValueError, TypeError, IndexError):
             out["reasons"].append("RGB-depth alignment failed (too little valid depth)")
             return out
@@ -137,19 +156,37 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
         return out
     margin = int(np.ceil(float(align_edge_px))) + 2
     out["roi_margin_depth_px"] = margin
+    raw_floor_mode = not finite_valid or any(abs(float(v)) > 100.0 for v in floor_depth_mm)
+
+    def _to_floor_val(val: float, mx: float, my: float) -> float:
+        if not (finite_valid and raw_floor_mode and plane_info and cam_k is not None):
+            return val
+        nx, ny, nz = (float(c) for c in plane_info["normal"])
+        rdot = (mx - cam_k[0, 2]) * (nx / cam_k[0, 0]) + (my - cam_k[1, 2]) * (ny / cam_k[1, 1]) + nz
+        return (val - float(plane_info["height_mm"])) / rdot if abs(rdot) > 1e-6 else val
+
+    def read_patch(box, label):
+        x, y, z, ratio = _patch(grid, box, finite_valid=finite_valid)
+        if finite_valid and len(z):
+            seen, total = cell_depth_pose.patch_ray_coverage(
+                depth, grid, box, float(np.median(z)), plane_info, factory)
+            out.setdefault("native_ray_support", {})[label] = {"visible": seen, "expected": total}
+            ratio = seen / total if total else 0.0
+        return x, y, z, ratio
+
     patches = []
     for index, roi in enumerate(floor_rois):
-        box = _depth_roi(to_depth, roi, margin, depth.shape)
+        box = _depth_roi(to_depth, roi, margin, grid.shape)
         if box is None:
             out["reasons"].append(f"floor patch {index} is outside the depth frame or too small")
             continue
-        x, y, z, valid = _patch(depth, box)
+        x, y, z, valid = read_patch(box, f"floor_{index}")
         if valid < MIN_VALID_RATIO or len(z) < 50:
             out["reasons"].append(f"floor patch {index}: valid depth ratio below 0.80 (covered or missing)")
             continue
         own = np.c_[x, y, np.ones(len(x))]
         own_rms = float(np.sqrt(np.mean((own @ np.linalg.lstsq(own, z, rcond=None)[0] - z) ** 2)))
-        median = float(np.median(z))
+        median = _to_floor_val(float(np.median(z)), float(np.mean(x)), float(np.mean(y)))
         if own_rms > PLANE_RMS_MAX_MM:
             out["reasons"].append(f"floor patch {index} is not flat (rms {own_rms:.1f} mm)")
         elif abs(median - float(floor_depth_mm[index])) > floor_tol_mm:
@@ -163,7 +200,8 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
     design0 = np.c_[x, y, np.ones(len(x))]
     coef0 = np.linalg.lstsq(design0, z, rcond=None)[0]
     for px, py, _pz, _median, index in patches:
-        at_patch = float(coef0[0] * np.mean(px) + coef0[1] * np.mean(py) + coef0[2])
+        mx, my = float(np.mean(px)), float(np.mean(py))
+        at_patch = _to_floor_val(float(coef0[0] * mx + coef0[1] * my + coef0[2]), mx, my)
         if abs(at_patch - float(floor_depth_mm[index])) > floor_tol_mm:
             out["reasons"].append(f"the common floor plane differs from the calibration plane by more than {floor_tol_mm} mm")
             return out
@@ -177,21 +215,22 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
     if rms > PLANE_RMS_MAX_MM or worst > PATCH_OFFSET_MAX_MM:
         out["reasons"].append(f"floor patches disagree (rms {rms:.1f} mm, offset {worst:.1f} mm)")
         return out
-    box = _depth_roi(to_depth, slot_roi, margin, depth.shape)
+    box = _depth_roi(to_depth, slot_roi, margin, grid.shape)
     if box is None:
         out["reasons"].append("slot ROI is outside the depth frame or too small")
         return out
-    sx, sy, sz, slot_valid = _patch(depth, box)
+    sx, sy, sz, slot_valid = read_patch(box, "slot")
     out["valid_depth_ratio"] = round(slot_valid, 4)
     if slot_valid < MIN_VALID_RATIO:
         out["reasons"].append("slot valid depth ratio below 0.80")
         return out
-    local = local_edge_error(colour, depth, to_depth, slot_roi)
+    edge_src = np.where(np.isfinite(grid), np.maximum(1.0, float(plane_info["height_mm"]) - grid), 0.0) if finite_valid else grid
+    local = local_edge_error(colour, edge_src, to_depth, slot_roi)
     out["local_edge_px"] = None if local is None else round(local, 2)
     if local is not None and local > LOCAL_EDGE_MAX_PX:
         out["reasons"].append(f"RGB-depth edge error {local:.1f} px inside the slot ROI exceeds {LOCAL_EDGE_MAX_PX} px")
         return out
-    rel = (coef[0] * sx + coef[1] * sy + coef[2]) - sz  # > 0: nearer to the camera than the floor
+    rel = (sz - (coef[0] * sx + coef[1] * sy + coef[2])) if finite_valid else ((coef[0] * sx + coef[1] * sy + coef[2]) - sz)  # > 0: nearer to the camera than the floor
     median = float(np.median(rel))
     fraction = float((rel >= 0.5 * expected).mean())
     out["orientation"] = _orientation(sx, sy, rel >= 0.5 * expected)
@@ -254,11 +293,12 @@ def tier_gate(ref: dict[str, Any], tier: int, spec_id: str = "C3") -> dict[str, 
                                                        spec_id=spec_id), "basis": "depth_relative_height"}
 
 
-def perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois, floor_depth_mm=None):
+def perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois,
+             floor_depth_mm=None, *, factory: dict | None = None):
     """The perceive_slot_z_mm record from a usable depth reference, or None (the caller then runs its original path)."""
     import cell_z_profile
 
-    ref = depth_reference(top_depth, top_colour, slot_roi, floor_rois, tier, floor_depth_mm=floor_depth_mm)
+    ref = depth_reference(top_depth, top_colour, slot_roi, floor_rois, tier, floor_depth_mm=floor_depth_mm, factory=factory)
     if not ref["ok"]:
         return None
     checks = cell_z_profile._current_frame_calibration_checks(side_img, top_colour, top_depth, None, z_profile,

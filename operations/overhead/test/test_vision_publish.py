@@ -1,5 +1,6 @@
 import asyncio
 import json
+import ssl
 
 import httpx
 import pytest
@@ -14,6 +15,23 @@ def _sighting():
         seq=17, map_id="site-v1", calibration_revision="cal-v3",
         processor_revision="aruco-v1", quality=None, corner_marker_ids=(30, 31, 32, 33),
     )
+
+
+def test_publisher_uses_the_configured_site_ca_without_environment_proxies(monkeypatch):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    seen = {}
+
+    def create_context(*, cafile):
+        assert cafile == "/run/secrets/site_ca"
+        return context
+
+    monkeypatch.setenv("SSL_CERT_FILE", "/run/secrets/site_ca")
+    monkeypatch.setattr(ssl, "create_default_context", create_context)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: seen.update(kwargs))
+    SightingPublisher("https://proxy:8443", "source-token")
+
+    assert seen.get("verify") is context
+    assert seen["trust_env"] is False
 
 
 def test_publisher_sends_only_derived_sighting_with_source_token_header():

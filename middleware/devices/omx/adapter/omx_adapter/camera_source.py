@@ -129,12 +129,13 @@ def main():
     if depth and not (0 < unit_m < 1 and len(range_mm) == 2 and 0 <= range_mm[0] < range_mm[1]):
         parser.error('ROSY_DEPTH_UNIT_M is metres per count and ROSY_DEPTH_RANGE_MM is near,far')
     import cv2
+    getattr(cv2, 'setNumThreads', lambda _: None)(1)
     import numpy as np
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
     from core_common.camera_quality import frame_quality
 
     # a depth role keeps its preview on the topic (viewer, bridge, Fleet unchanged) and the raw depth beside it
-    channel, capture = SnapshotChannel(args.topic), None
+    channel, capture, last_quality, quality_at = SnapshotChannel(args.topic), None, None, 0.0
     raw = SnapshotChannel(args.topic + ':depth16') if depth else None
     previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
     try:
@@ -156,15 +157,16 @@ def main():
                 frame = read_frame(capture)
                 captured_at = time.time()
                 # shortcut: receipt time only; use exposure timestamps before calibrated control or recording.
-                quality = frame_quality(frame)
+                if last_quality is None or started - quality_at >= 0.5:
+                    last_quality, quality_at = frame_quality(frame), started
                 ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if not ok:
                     raise OSError('camera JPEG encoding failed')
-                channel.write('jpeg', encoded.tobytes(), captured_at=captured_at, quality=quality)
+                channel.write('jpeg', encoded.tobytes(), captured_at=captured_at, quality=last_quality)
             except (OSError, cv2.error) as error:
                 if capture is not None:
                     capture.release()
-                capture = None
+                capture = last_quality = None
                 print(str(error), flush=True)
                 time.sleep(1)
             time.sleep(max(0, 1/args.max_fps-(time.monotonic()-started)))

@@ -222,3 +222,34 @@ def test_realign_selection_is_recorded_and_keeps_the_other_robots_records(tmp_pa
                     {k: v for k, v in selection.items() if k != 'realign_sha256'},
                     {**records['peer']['selection'], 'realign_sha256': 'a' * 64}):
         with pytest.raises(ValueError): validate_rule({**records['pinky'], 'selection': changed})
+
+
+def test_rule_selection_debounce_and_judgment_prune_throttling(tmp_path):
+    import sqlite3
+    from fleet.observe.rules import RuleSelectionStore
+
+    loop, _ = make_loop(tmp_path, autonomous=True)
+    asyncio.run(loop.run_once())
+    receipt = loop.rule_selections.read()[0]['receipt']
+
+    store = RuleSelectionStore(tmp_path / 'debounced.db', max_rows=1, retention_s=5,
+                               debounce_s=10.0, prune_interval_s=60.0)
+    store.append_batch([receipt], now=100.0)
+    store.append_batch([receipt], now=105.0)
+    assert len(store.read()) == 1
+    store.append_batch([receipt], now=110.0)
+    assert len(store.read()) == 2
+    store.append_batch([receipt], now=160.0)
+    assert len(store.read()) == 1
+
+    log = LineStuckAnswerLog(tmp_path / 'judgment.db')
+    board = LineStuckBoard(log=log, clock=lambda: 100.0, wall=lambda: 100.0)
+    board.observe([row(100.0)])
+    normal = board.judgment_view('pinky')
+    log.record_judgment(normal)
+    log.record_judgment({**normal, 'evaluated_at': 105.0, 'valid_until': 108.0})
+    with sqlite3.connect(log.path) as db:
+        assert db.execute('SELECT recorded_at FROM fleet_judgment_current').fetchone()[0] == 100.0
+    log.record_judgment({**normal, 'evaluated_at': 110.0, 'valid_until': 113.0})
+    with sqlite3.connect(log.path) as db:
+        assert db.execute('SELECT recorded_at FROM fleet_judgment_current').fetchone()[0] == 110.0

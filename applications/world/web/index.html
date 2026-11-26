@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy World — 공장 3D · 현장 지도 · OMX 셀</title>
+  <link rel="icon" type="image/svg+xml" href="./common/brand/mark.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./common/tokens.css">
+  <script src="./common/theme.js"></script>
+  <link rel="stylesheet" href="./common/components.css">
+  <link rel="stylesheet" href="./common/component-controls.css">
+  <link rel="stylesheet" href="./common/template.css">
+  <link rel="stylesheet" href="./common/app-shell.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./common/ui.js"></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body class="ui-template">
+  <ui-shell grammar="spatial" class="ui-app-shell">
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+    <noscript><ui-status state="error">이 화면은 브라우저 스크립트로 보관 자료를 읽습니다. 스크립트를 허용한 뒤 다시 여세요.</ui-status></noscript>
+    <ui-topbar role="banner">
+      <ui-brand>
+        <b>Rosy World</b>
+        <small>공장 3D · 관측</small>
+      </ui-brand>
+      <nav class="world-tabs" role="tablist" aria-label="화면 전환">
+        <ui-button id="tab-factory" kind="segment" type="button" role="tab" aria-selected="false" aria-controls="panel-factory" hidden>공장 3D</ui-button>
+        <ui-button id="tab-map" kind="segment" type="button" role="tab" aria-selected="true" aria-controls="panel-map">현장 지도</ui-button>
+        <ui-button id="tab-cell" kind="segment" type="button" role="tab" aria-selected="false" aria-controls="panel-cell">OMX 셀</ui-button>
+        <ui-button id="tab-rec" kind="segment" type="button" role="tab" aria-selected="false" aria-controls="panel-rec">실행 기록</ui-button>
+      </nav>
+      <span data-spacer></span>
+      <a id="world-experiments-link" class="ui-action-link" data-kind="quiet" href="/console/learning/world" hidden>학습 실험</a>
+      <ui-button id="btn-theme" kind="quiet" type="button">테마 전환</ui-button>
+    </ui-topbar>
+    <div class="world-health world-viewbar" role="group" aria-label="시연 상태">
+      <ui-status id="view-health" state="pending">지도 초기화 중</ui-status>
+      <ui-status id="isaac-health" state="empty">Isaac · 끔</ui-status>
+    </div>
+
+    <main id="main-content" class="world-main" tabindex="-1">
+
+      <section id="panel-factory" class="world-page world-factory-page" role="tabpanel" aria-labelledby="tab-factory" hidden>
+        <div id="factory-adapters" class="world-viewbar world-adapter-bar" role="group" aria-label="환경 어댑터 선택">
+          <ui-button kind="segment" type="button" data-adapter="all" aria-pressed="true">전체</ui-button>
+          <ui-button kind="segment" type="button" data-adapter="real" aria-pressed="false">Real 현장</ui-button>
+          <ui-button kind="segment" type="button" data-adapter="isaac" aria-pressed="false">Isaac Sim</ui-button>
+          <ui-button kind="segment" type="button" data-adapter="gazebo" aria-pressed="false">Gazebo</ui-button>
+          <ui-button kind="segment" type="button" data-adapter="mujoco" aria-pressed="false">MuJoCo</ui-button>
+          <ui-status id="factory-parity" state="pending">동등성 확인 중…</ui-status>
+        </div>
+        <div id="factory-worlds" class="world-monitor-strip" role="group" aria-label="병렬 시뮬레이션 월드 모니터" hidden></div>
+        <div class="world-viewbar" role="group" aria-label="공장 재생 및 시점">
+          <ui-button id="factory-play-toggle" kind="primary" type="button" aria-pressed="true">일시 정지</ui-button>
+          <ui-button id="factory-restart" kind="quiet" type="button">처음부터</ui-button>
+          <ui-button id="factory-speed-1" kind="segment" type="button" aria-pressed="true">1×</ui-button>
+          <ui-button id="factory-speed-2" kind="segment" type="button" aria-pressed="false">2×</ui-button>
+          <ui-button id="factory-speed-4" kind="segment" type="button" aria-pressed="false">4×</ui-button>
+          <ui-button id="factory-cam-auto" kind="toggle" type="button" aria-pressed="true">자동 시점</ui-button>
+          <ui-button id="factory-cam-all" kind="segment" type="button" aria-pressed="true">전체 공장</ui-button>
+          <ui-button id="factory-cam-s3" kind="segment" type="button" aria-pressed="false">S3·벨트</ui-button>
+          <ui-button id="factory-cam-omx" kind="segment" type="button" aria-pressed="false">OMX 적재</ui-button>
+          <ui-button id="factory-cam-outbound" kind="segment" type="button" aria-pressed="false">반출대</ui-button>
+          <ui-button id="factory-cam-d435" kind="segment" type="button" aria-pressed="false">D435 상단</ui-button>
+          <ui-button id="factory-cam-ceiling" kind="segment" type="button" aria-pressed="false">천장 시점</ui-button>
+          <ui-status id="factory-stream-status" state="pending">공장 3D 초기화 중…</ui-status>
+        </div>
+        <div id="factory-r2s-bar" class="world-viewbar world-r2s-bar" role="group" aria-label="실물 사진 R2S 투영">
+          <ui-button id="factory-r2s-off" kind="segment" type="button" aria-pressed="false">CAD 재질</ui-button>
+          <ui-button id="factory-r2s-birdview" kind="segment" type="button" aria-pressed="true">실물 버드뷰</ui-button>
+          <ui-button id="factory-r2s-field" kind="segment" type="button" aria-pressed="false">최신 현장사진</ui-button>
+          <label class="world-r2s-slider">
+            <span>사진 겹침</span>
+            <input id="factory-r2s-opacity" class="ui-field" type="range" min="0" max="100" value="55" step="5">
+            <span id="factory-r2s-pct" class="world-viewbar-note">55%</span>
+          </label>
+          <span id="factory-r2s-note" class="world-viewbar-note">R2S 사진 보정 불러오는 중…</span>
+        </div>
+        <div id="factory-stages" class="world-factory-stages" role="group" aria-label="공정 단계 선택">
+          <ui-button kind="segment" type="button" data-stage="c2_departure" aria-pressed="false">1. C2 출발</ui-button>
+          <ui-button kind="segment" type="button" data-stage="s1_yield" aria-pressed="false">2. S1 양보</ui-button>
+          <ui-button kind="segment" type="button" data-stage="s3_stop" aria-pressed="false">3. S3 정차</ui-button>
+          <ui-button kind="segment" type="button" data-stage="cell_claim" aria-pressed="false">4. 셀 점유</ui-button>
+          <ui-button kind="segment" type="button" data-stage="arm_s_to_belt" aria-pressed="false">5. 암 S→벨트</ui-button>
+          <ui-button kind="segment" type="button" data-stage="belt_transit" aria-pressed="false">6. 벨트 이송</ui-button>
+          <ui-button kind="segment" type="button" data-stage="ab_stack" aria-pressed="false">7. A/B 적재</ui-button>
+          <ui-button kind="segment" type="button" data-stage="ab_rehandle" aria-pressed="false">8. A↔B 임시대 정리</ui-button>
+          <ui-button kind="segment" type="button" data-stage="outbound_dispatch" aria-pressed="false">9. 반출대 접안·출발</ui-button>
+        </div>
+        <div class="world-factory-timeline">
+          <label class="world-factory-scrubber">
+            <span class="sr-only">공정 타임라인 위치</span>
+            <input id="factory-scrubber" class="ui-field" type="range" min="0" max="36" value="0" step="0.1">
+          </label>
+          <p id="factory-meta" class="world-note"></p>
+        </div>
+        <div class="world-stage world-factory-stage">
+          <canvas id="factory-canvas" class="world-orbit" role="img" tabindex="0" aria-label="ROSY 공장 7단계 3D 라이브 보기" aria-describedby="factory-meta"></canvas>
+          <ui-status id="factory-cad-status" state="pending" hidden></ui-status>
+        </div>
+      </section>
+
+      <section id="panel-map" class="world-page" role="tabpanel" aria-labelledby="tab-map">
+        <section id="world-play" class="world-provenance" aria-label="Pinky 시뮬레이션 조종" hidden>
+          <ui-status id="play-status" state="pending">격리 시뮬레이션 연결 확인 중</ui-status>
+          <div class="world-viewbar" role="group" aria-label="시뮬레이션 실행">
+            <ui-button id="play-start" kind="primary" type="button" hidden>조종 시작</ui-button>
+            <ui-button id="play-reset" kind="quiet" type="button" hidden>C2로 초기화</ui-button>
+          </div>
+          <div id="play-keys" class="world-viewbar" role="group" aria-label="누르는 동안 Pinky 조종" hidden>
+            <ui-button data-drive="forward" kind="quiet" type="button">전진 ↑</ui-button>
+            <ui-button data-drive="left" kind="quiet" type="button">좌회전 ←</ui-button>
+            <ui-button data-drive="reverse" kind="quiet" type="button">후진 ↓</ui-button>
+            <ui-button data-drive="right" kind="quiet" type="button">우회전 →</ui-button>
+            <span class="world-viewbar-note">방향키나 버튼을 누르는 동안 이동합니다.</span>
+          </div>
+          <p id="play-pose" class="world-note"></p>
+        </section>
+        <header id="map-provenance" class="world-provenance">
+          <ui-status id="map-status" state="pending">보관 지도를 읽는 중…</ui-status>
+          <dl id="map-readout" class="ui-readout" hidden></dl>
+          <label id="map-active-place-control" hidden>지도 위치
+            <select id="map-active-place" class="ui-field" aria-controls="map-active-canvas"></select>
+          </label>
+          <span id="map-active-keys" class="sr-only">지도에서 화살표 키로 위치를 고르고 Home 키로 전체 위치를 봅니다.</span>
+        </header>
+        <div class="world-viewbar" role="group" aria-label="지도 보기">
+          <ui-button id="map-mode-field" kind="segment" type="button" aria-pressed="false" hidden>현장 사진</ui-button>
+          <ui-button id="map-mode-birdview" kind="segment" type="button" aria-pressed="false" hidden>보관 버드뷰</ui-button>
+          <ui-button id="map-mode-active" kind="segment" type="button" aria-pressed="false">현장 활성 지도</ui-button>
+          <ui-button id="map-mode-vector" kind="segment" type="button" aria-pressed="true">보관 차로 그래프</ui-button>
+          <ui-button id="map-mode-image" kind="segment" type="button" aria-pressed="false">보관 이미지</ui-button>
+          <ui-button id="map-mode-cad" kind="segment" type="button" aria-pressed="false" hidden>보관 CAD 3D</ui-button>
+          <ui-button id="pinky-camera-toggle" kind="toggle" type="button" aria-pressed="false" aria-controls="pinky-camera-panel">카메라 보기</ui-button>
+          <span id="map-alignment-note" class="world-viewbar-note">보관 이미지와 차로 그래프 사이의 좌표 정합은 미확인입니다.</span>
+        </div>
+        <ui-status id="map-cad-status" state="pending" hidden></ui-status>
+        <div id="map-cad-controls" class="world-viewbar" role="group" aria-label="CAD 시점" hidden>
+          <ui-button id="cad-view-top" kind="segment" type="button" aria-pressed="true">위에서</ui-button>
+          <ui-button id="cad-view-iso" kind="segment" type="button" aria-pressed="false">비스듬히</ui-button>
+          <span id="map-cad-note" class="world-viewbar-note">2026-10-26 CAD · 유도선과 색은 2026-11-01 사진 기준 · 드래그로 회전 · +/−로 확대·축소</span>
+          <span id="site-equipment-note" class="world-viewbar-note" hidden>보관 Pinky 위치는 사진 기준 추정 · C1–C3 스테이션은 설계 배치 · SIM 표시는 시뮬레이션 관측</span>
+          <ui-button id="pinky-sim-toggle" kind="toggle" type="button" aria-pressed="true" aria-controls="map-cad-canvas">Pinky SIM 위치</ui-button>
+          <ui-status id="pinky-sim-status" state="pending">Pinky SIM 관측을 확인하는 중…</ui-status>
+        </div>
+        <div id="map-cad-focus" class="world-viewbar" role="group" aria-label="장비 위치" hidden>
+          <ui-button id="cad-focus-all" kind="segment" type="button" aria-pressed="true">전체 배치</ui-button>
+          <ui-button id="cad-focus-stations" kind="segment" type="button" aria-pressed="false">C1–C3 충전소</ui-button>
+          <ui-button id="cad-focus-pinky" kind="segment" type="button" aria-pressed="false">차로 Pinky</ui-button>
+          <ui-button id="cad-focus-omx" kind="segment" type="button" aria-pressed="false">OMX 작업대</ui-button>
+          <ui-button id="cad-open-cell" kind="quiet" type="button">OMX 셀 상세</ui-button>
+        </div>
+        <div id="cad-registration" class="world-viewbar" hidden>
+          <ui-button id="cad-design" kind="segment" type="button" aria-pressed="false">R08 설계 배치</ui-button>
+          <span id="cad-design-status" class="world-viewbar-note" role="status">보관 CAD 상판 기준 · 최신 현장 정합 미확인</span>
+        </div>
+        <div class="world-stage">
+          <canvas id="map-canvas" role="img" aria-label="보관 지도 벡터 그래프 — 노드와 유도선"></canvas>
+          <canvas id="map-active-canvas" role="img" tabindex="0" aria-label="Fleet 활성 지도 — 위치와 차로" aria-describedby="map-active-keys" hidden></canvas>
+          <canvas id="map-cad-canvas" class="world-orbit" role="img" tabindex="0" aria-label="2026-10-26 보관 CAD" aria-describedby="map-cad-note" hidden></canvas>
+          <figure id="map-field-figure" class="world-figure" hidden>
+            <img id="map-field-photo" alt="Rosy Cam 현장 원본" hidden>
+            <img id="map-field-corrected" alt="지도 평면에 보정한 Rosy Cam 현장 사진" hidden>
+            <canvas id="map-field-plane" class="world-orbit" role="img" tabindex="0" aria-label="사진 질감을 입힌 현장 평면" hidden></canvas>
+            <figcaption id="map-field-caption" class="world-caption"></figcaption>
+            <div class="world-viewbar">
+              <ui-button id="map-field-original" kind="segment" type="button" aria-pressed="false" aria-controls="map-field-photo" hidden>카메라 원본</ui-button>
+              <ui-button id="map-field-map" kind="segment" type="button" aria-pressed="false" aria-controls="map-field-corrected" hidden>지도 보정 사진</ui-button>
+              <ui-button id="map-field-orbit" kind="segment" type="button" aria-pressed="false" aria-controls="map-field-plane" hidden>사진 평면 회전</ui-button>
+            </div>
+          </figure>
+          <figure id="map-birdview-figure" class="world-figure" hidden>
+            <figcaption id="map-birdview-caption" class="world-caption">2026-11-01 보관 버드뷰 · 천장 카메라 보정 평면 · 매트 2.44 × 1.22 m</figcaption>
+          </figure>
+          <figure id="map-image-figure" class="world-figure" hidden>
+            <img id="map-image" src="./data/site-map.png" alt="보관 지도 렌더 이미지 — 현장 바닥 지도">
+            <figcaption class="world-caption">Fleet 지도 보관 이미지 · world_261026 v7</figcaption>
+          </figure>
+          <ui-empty id="map-empty" hidden>보관 지도 파일이 없거나 읽지 못했다.</ui-empty>
+        </div>
+        <p id="map-evidence" class="world-caption" hidden></p>
+        <section id="pinky-camera-panel" class="world-provenance" aria-label="카메라 보기" hidden>
+          <div class="world-viewbar" role="group" aria-label="카메라 선택">
+            <ui-button id="camera-source-field" kind="segment" type="button" aria-pressed="false">Rosy Cam 현장 상단</ui-button>
+            <ui-button id="camera-source-gazebo" kind="segment" type="button" aria-pressed="true">Gazebo Pinky 전방</ui-button>
+            <ui-button id="camera-source-mujoco" kind="segment" type="button" aria-pressed="false">MuJoCo OMX 셀 상단</ui-button>
+            <ui-button id="camera-source-isaac" kind="segment" type="button" aria-pressed="false">Isaac Sim 실시간</ui-button>
+          </div>
+          <ui-status id="pinky-camera-status" state="pending"></ui-status>
+          <figure id="camera-figure" class="world-figure world-camera">
+            <img id="pinky-camera-image" alt="선택한 카메라 영상" hidden>
+          </figure>
+        </section>
+      </section>
+
+      <section id="panel-cell" class="world-page" role="tabpanel" aria-labelledby="tab-cell" hidden>
+        <header class="world-provenance">
+          <ui-status id="cell-status" state="pending">보관 셀 형상을 읽는 중…</ui-status>
+          <dl id="cell-readout" class="ui-readout" hidden></dl>
+          <div class="world-viewbar">
+            <ui-tag id="cal-tag" status="warn" hidden>보정 미확인</ui-tag>
+            <p id="cell-calibration-note" class="world-note"></p>
+          </div>
+          <p id="cell-scope-note" class="world-note" hidden></p>
+          <div class="world-viewbar">
+            <ui-button id="isaac-status-toggle" kind="toggle" type="button" aria-pressed="false" aria-controls="isaac-status-panel">Isaac SIM 상태</ui-button>
+          </div>
+          <section id="isaac-status-panel" class="world-provenance" aria-label="Isaac SIM 상태" hidden>
+            <p class="world-note">ROS 2 시뮬레이션에서 받은 관절과 물체의 수치입니다. 스위치로 관측을 끄면 요청을 멈춥니다.</p>
+            <ui-status id="isaac-status" state="empty">SIM 관측이 꺼져 있습니다 — 스위치로 켤 수 있습니다.</ui-status>
+            <dl id="isaac-readout" class="ui-readout" hidden></dl>
+          </section>
+        </header>
+        <div class="world-stage world-cell-stage">
+          <div id="cell-view" class="world-cell-view" data-d435="false">
+            <canvas id="cell-canvas" class="world-orbit" role="img" tabindex="0" aria-label="OMX 베이스 3D 보기. 파란색은 팔 A, 중립색은 팔 B" aria-describedby="cell-controls-note"></canvas>
+            <img id="cell-r2s-overlay" class="world-cell-r2s-overlay" src="./data/cell-photo.jpg" alt="" aria-hidden="true" data-r2s-alpha="0">
+          </div>
+          <div id="cell-fallback" class="world-cell-fallback" hidden>
+            <ui-status state="unavailable">3D를 그릴 수 없다 — 보관 렌더와 실물 사진으로 대체한다.</ui-status>
+          </div>
+        </div>
+        <div id="cell-tools" class="world-cell-tools">
+          <div role="group" aria-label="3D 시점" class="world-viewbar">
+            <ui-button id="cell-preset-iso" kind="segment" type="button" aria-pressed="true">기본 시점</ui-button>
+            <ui-button id="cell-preset-front" kind="segment" type="button" aria-pressed="false">정면</ui-button>
+            <ui-button id="cell-preset-top" kind="segment" type="button" aria-pressed="false">위에서</ui-button>
+            <ui-button id="cell-preset-d435" kind="segment" type="button" aria-pressed="false">D435 실물 시점</ui-button>
+            <ui-button id="cell-r2s-alpha-0" kind="segment" type="button" aria-pressed="true">사진 끔</ui-button>
+            <ui-button id="cell-r2s-alpha-50" kind="segment" type="button" aria-pressed="false">R2S 50% 겹침</ui-button>
+            <ui-button id="cell-r2s-alpha-80" kind="segment" type="button" aria-pressed="false">R2S 80%</ui-button>
+          </div>
+          <p id="cell-controls-note" class="world-note">드래그나 방향키로 시점을 돌립니다. +/−로 확대·축소하고 Home으로 기본 시점으로 돌아갑니다.</p>
+        </div>
+        <div class="world-photo-pair">
+          <figure class="world-figure">
+            <img src="./data/cell-render.png" alt="Isaac 시뮬레이터로 보관한 OMX 셀 렌더">
+            <figcaption class="world-caption">Isaac 보관 렌더 (시뮬)</figcaption>
+          </figure>
+          <figure class="world-figure">
+            <img src="./data/cell-photo.jpg" alt="현장 OMX 셀 실물 사진">
+            <figcaption class="world-caption">실물 사진 (현장)</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="panel-rec" class="world-page" role="tabpanel" aria-labelledby="tab-rec" hidden>
+        <header class="world-provenance">
+          <ui-status id="rec-status" state="pending">보관 기록을 확인하는 중…</ui-status>
+          <dl id="rec-readout" class="ui-readout" hidden></dl>
+        </header>
+        <div id="rec-player" class="world-player" hidden>
+          <div class="world-player-bar">
+            <ui-button id="rec-play" kind="primary" type="button" aria-pressed="false">재생</ui-button>
+            <label class="world-player-range">
+              <span class="sr-only">재생 위치</span>
+              <input id="rec-range" class="ui-field" type="range" min="0" max="0" value="0" step="any">
+            </label>
+            <ui-text id="rec-clock" scale="value">0.0 / 0.0 s</ui-text>
+          </div>
+          <canvas id="rec-canvas" role="img" aria-label="보관 기록 재생 — 지도 위 기록 위치"></canvas>
+          <p id="rec-frame-note" class="world-note"></p>
+        </div>
+        <div id="rec-fallback" class="world-photo-pair" hidden>
+          <figure class="world-figure">
+            <img src="./data/cell-render.png" alt="Isaac 시뮬레이터로 보관한 OMX 셀 렌더">
+            <figcaption class="world-caption">Isaac 보관 렌더 (시뮬)</figcaption>
+          </figure>
+          <figure class="world-figure">
+            <img src="./data/cell-photo.jpg" alt="현장 OMX 셀 실물 사진">
+            <figcaption class="world-caption">실물 사진 (현장)</figcaption>
+          </figure>
+        </div>
+      </section>
+
+    </main>
+  </ui-shell>
+</body>
+</html>

@@ -160,3 +160,58 @@ def test_launch_learns_the_tried_candidate_from_the_result_path(tmp_path, incide
     _launch(tmp_path, "i-3", {"result": "held", "reason": "ALL_PATHS_BLOCKED", "choices_path": str(path)})
     tried = {c["value"]: (c["tries"], c["ok"]) for c in Choices(path).data["values"][af.CHOICE] if c["tries"]}
     assert tried == {"park": (1, 1), "pan+5": (1, 0)}
+
+
+def test_tail_read_and_stat_caches_handle_large_files_and_ssl_mtime(tmp_path, monkeypatch):
+    import os
+    import ssl
+    from unittest.mock import patch
+
+    prep = tmp_path / "prep"
+    (prep / "chunk-io-a").mkdir(parents=True)
+    status_file = prep / "chunk-io-a" / "chunk-status.jsonl"
+    padding = json.dumps({"padding": "x" * 2048}) + "\n"
+    first_row = json.dumps({"state": [1.0, -60.0, 50.0, 40.0, 0.0, 10.0], "health": {"temp_c": [31.0], "current_ma": [12.0]}})
+    # >200 KB file so _read_tail_lines (64 KB initial span) actually seeks past leading lines
+    status_file.write_text((padding * 110) + first_row + "\n", encoding="utf-8")
+
+    tail = sync._read_tail_lines(status_file, 25)
+    assert len(tail) == 25 and tail[-1] == first_row
+    states = sync._collect_live_arm_states(prep)
+    assert states["arm_a"]["joints_deg"] == [1.0, -60.0, 50.0, 40.0, 0.0, 10.0]
+
+    # Stat cache hit avoids re-reading unchanged file; growth invalidates cache cleanly
+    with patch.object(sync, "_read_tail_lines", side_effect=AssertionError("should use stat cache")):
+        assert sync._collect_live_arm_states(prep)["arm_a"]["temp_c"] == 31.0
+
+    new_row = json.dumps({"state": [2.0, -58.0, 48.0, 40.0, 0.0, 10.0], "health": {"temp_c": [33.5], "current_ma": [15.0]}})
+    bad_row = json.dumps({"state": [None, 0, 0, 0, 0, 0], "health": "bad"})
+    with status_file.open("a", encoding="utf-8") as fh:
+        fh.write(new_row + "\n" + bad_row + "\n")
+    st = status_file.stat()
+    os.utime(status_file, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+    assert sync._collect_live_arm_states(prep)["arm_a"]["joints_deg"][0] == 2.0
+    assert sync._collect_live_arm_states(prep)["arm_a"]["temp_c"] == 33.5
+
+    # SSL context cache keys on (ca_path, mtime_ns, verified, is_https) without relaxing verification
+    monkeypatch.setattr(sync, "_SSL_CACHE", {})
+    calls = []
+
+    def fake_ctx(*args, **kwargs):
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        calls.append(kwargs.get("cafile"))
+        return ctx
+
+    monkeypatch.setattr(ssl, "create_default_context", fake_ctx)
+    ca = tmp_path / "ca.pem"
+    ca.write_text("ca-1", encoding="utf-8")
+    c1 = sync._ssl_context(ca, True, True)
+    c2 = sync._ssl_context(ca, True, True)
+    assert c1 is c2 and calls == [str(ca)]
+    st_ca = ca.stat()
+    os.utime(ca, ns=(st_ca.st_atime_ns, st_ca.st_mtime_ns + 1_000_000))
+    c3 = sync._ssl_context(ca, True, True)
+    assert c3 is not c1 and len(calls) == 2
+    uv = sync._ssl_context(None, False, True)
+    vf = sync._ssl_context(None, True, True)
+    assert uv is not vf and uv.verify_mode == ssl.CERT_NONE and len(calls) == 3

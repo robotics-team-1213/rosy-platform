@@ -234,3 +234,85 @@ def test_a_creeping_gripper_is_recorded_and_not_stable(cell):
                         sleep=lambda s: None)
     assert block["first_gripper_pos"] == 52.6 and block["gripper_pos"] == 53.6
     assert block["stable"] is False
+
+
+def test_pause_and_resume_observer_sole_holder_vs_foreign_holder(tmp_path):
+    from types import SimpleNamespace
+
+    port = tmp_path / "ttyACM0"
+    port.write_text("", encoding="utf-8")
+    calls, holders_seq = [], iter([{4242}, set(), {5151}])
+
+    def run(*args):
+        calls.append(args)
+        if args[0] == "is-active":
+            return SimpleNamespace(returncode=0, stdout="active\n", stderr="")
+        if args[0] == "show":
+            return SimpleNamespace(returncode=0, stdout="4242\n" if len(calls) <= 2 else "5151\n", stderr="")
+        if args[0] == "is-enabled":
+            return SimpleNamespace(returncode=0, stdout="enabled\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    cur = next(holders_seq)
+    def poll(_d):
+        nonlocal cur
+        val = cur
+        cur = next(holders_seq, set())
+        return SimpleNamespace(returncode=0 if val else 1, stdout=" ".join(map(str, val)), stderr="")
+
+    assert ra.pause_observer_if_sole_holder("arm_s", port, run=run, users=poll, scan=lambda _p: set(), sleep=lambda _s: None) is True
+    assert ("stop", "rosy-omx-observer@arm_s.service") in calls
+    # Foreign holder on port must NOT stop observer (fails closed).
+    foreign_calls = []
+    assert ra.pause_observer_if_sole_holder(
+        "arm_s", port,
+        run=lambda *a: foreign_calls.append(a) or SimpleNamespace(returncode=0, stdout="active\n" if a[0] == "is-active" else "4242\n", stderr=""),
+        users=lambda _p: SimpleNamespace(returncode=0, stdout="4242 9999", stderr=""),
+        scan=lambda _p: set(),
+    ) is False
+    assert all(c[0] != "stop" for c in foreign_calls)
+
+
+def test_reassess_unlocks_before_resuming_paused_observer(cell, monkeypatch):
+    import register_probe
+
+    events = []
+    class _Lock:
+        def close(self):
+            events.append("unlock")
+
+    monkeypatch.setattr("joint_tune.session_lock", lambda _arm: _Lock())
+    monkeypatch.setattr(ra, "pause_observer_if_sole_holder", lambda *_a, **_kw: events.append("pause") or True)
+    monkeypatch.setattr(ra, "resume_observer", lambda *_a, **_kw: events.append("resume"))
+    monkeypatch.setattr(register_probe, "collect", lambda _p: events.append("read") or motors())
+    block = ra.reassess("arm_b", cell["configs"]["arm_b"], fetch=lambda _v: JPEG, lease_root=cell["leases"],
+                        by_id=cell["by_id"], calibration_dir=cell["cal"], now=tick(), sleep=lambda _s: None)
+    assert block["folded"] is True and events == ["pause", "read", "read", "unlock", "resume"]
+
+
+def test_resume_observer_passes_by_id_symlink_to_restart(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import observer_handoff as oh
+
+    target = tmp_path / "ttyACM0"
+    target.write_text("", encoding="utf-8")
+    link = tmp_path / "usb-ROBOTIS_OpenRB-150_TEST-if00"
+    link.symlink_to(target)
+    monkeypatch.setattr(oh, "BY_ID", tmp_path)
+    seq = iter([set(), {6161}])
+    seen = []
+
+    def fake_restart(arm, **kw):
+        seen.append((arm, kw["device"]))
+        assert oh.resolve_device(kw["device"]) == str(target.resolve())
+        return ("resumed", None)
+
+    monkeypatch.setattr(oh, "restart", fake_restart)
+    res = ra.resume_observer(
+        "arm_s", link,
+        run=lambda *a: SimpleNamespace(returncode=0, stdout="enabled\n" if a[0] == "is-enabled" else "6161\n", stderr=""),
+        users=lambda _d: SimpleNamespace(returncode=1 if not (v := next(seq, {6161})) else 0, stdout=" ".join(map(str, v)), stderr=""),
+        scan=lambda _d: set(),
+        sleep=lambda _s: None,
+    )
+    assert res == ("resumed", None) and seen == [("arm_s", str(link))]

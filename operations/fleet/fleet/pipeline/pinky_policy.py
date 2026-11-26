@@ -27,7 +27,7 @@ class RobotKindProfile:
     dock_fusion_weight: float = 0.35
     road_lookahead_m: float = 0.28
     road_step_m: float = 0.12
-    road_v_max_mps: float = 0.15
+    road_v_max_mps: float = 0.20
     road_w_max_rad_s: float = 1.60
     turn_in_place_rad: float = 0.42
     charge_rise_v: float = 0.08

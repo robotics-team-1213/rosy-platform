@@ -76,3 +76,24 @@ def test_badge_of_a_lapsed_d395_robot_is_untrusted_not_legacy():
     lapsed = trust.badge(snap(), lapsed=True)
     assert lapsed["legacy"] is False and lapsed["trusted"] is False
     assert lapsed["label"] == "위치 모름"
+
+
+def test_only_fresh_map_pose_supersedes_a_previous_recovery_ladder():
+    fresh = {**snap(loc()), "timestamp": "2026-11-25T20:20:55.575+00:00",
+             "evidence": {"pose": {"evidence": "fresh", "received_at": "2026-11-25T20:20:55.480+00:00"}}}
+    ladder = {"rung": "needs_human", "needs_human": True, "candidates_for_s": 304.0, "rung_missions": []}
+
+    assert trust.badge(fresh, ladder, state_age_s=1.0)["needs_human"] is False
+    assert trust.ladder_for_state(fresh, ladder)["rung"] is None
+    assert trust.ladder_for_state(fresh, ladder, state_age_s=2.0)["rung"] == "needs_human"
+    assert ladder["rung"] == "needs_human"
+    stale = trust.badge(fresh, ladder, state_age_s=2.0)
+    assert stale["needs_human"] is True and stale["trusted"] is False
+    assert trust.badge(None, ladder) is None
+
+    no_pose = {**fresh, "evidence": {"pose": {"evidence": "disconnected"}}}
+    assert trust.badge(no_pose, ladder)["trusted"] is False
+    assert trust.badge({**fresh, "localization": loc("LOCALIZED", "odom")}, ladder)["needs_human"] is True
+    assert trust.badge({**fresh, "localization": loc(needs_human=True)}, ladder)["needs_human"] is True
+    manual = trust.badge(fresh, {**ladder, "pose_request": {"state": "needs_human"}})
+    assert manual["needs_human"] and manual["pose_request_needs_human"]

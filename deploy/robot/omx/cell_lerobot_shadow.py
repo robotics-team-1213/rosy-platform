@@ -122,7 +122,16 @@ def _has_openvino() -> bool:
 
 
 def _load_torch(root: Path, device: str):
+    if device == "cpu":
+        for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            os.environ.setdefault(var, "2")
     import torch
+    if device == "cpu":
+        torch.set_num_threads(min(2, os.cpu_count() or 1))
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            pass
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
 
@@ -142,7 +151,7 @@ def _load_torch(root: Path, device: str):
     return predict
 
 
-def _load_lerobot(root: Path, device: str):
+def _load_lerobot(root: Path, device: str, *, policy_revision: str | None = None, onnx_sha256: str | None = None):
     """predict(obs) -> (chunk, 6) via OpenVINO pure-NumPy on CPU when valid model.onnx is present, else PyTorch."""
     backend = os.environ.get("ROSY_ACT_BACKEND", "auto").strip().lower()
     if backend not in ("auto", "torch", "openvino"):
@@ -154,7 +163,7 @@ def _load_lerobot(root: Path, device: str):
             raise ValueError("ROSY_ACT_BACKEND='openvino' requires device='cpu'")
         import cell_lerobot_openvino as ov_backend
 
-        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+        return ov_backend.load_openvino(root, policy_revision, onnx_sha256=onnx_sha256, action_width=len(JOINT_NAMES))
     onnx_present = (
         (root / ONNX_MODEL).is_file()
         or (root / ONNX_MODEL).is_symlink()
@@ -164,7 +173,7 @@ def _load_lerobot(root: Path, device: str):
     if device == "cpu" and onnx_present and _has_openvino():
         import cell_lerobot_openvino as ov_backend
 
-        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+        return ov_backend.load_openvino(root, policy_revision, onnx_sha256=onnx_sha256, action_width=len(JOINT_NAMES))
     return _load_torch(root, device)
 
 
@@ -187,9 +196,12 @@ class LeRobotShadow:
         self.sim_rule = read_sim_rule(root / UNITS, cell_config)
         self.arm_id = (cell_config or {}).get("arm_id")
         self.warp = read_warp(root / WARP, self.image_views)
-        self._predict = loader(root, device)
+        self._predict = (
+            loader(root, device, policy_revision=self.policy_revision, onnx_sha256=self.files.get(ONNX_MODEL))
+            if loader is _load_lerobot else loader(root, device)
+        )
 
-    def inputs(self, state, frames: dict, *, goal=None) -> tuple[dict, dict]:
+    def inputs(self, state, frames: dict, *, goal=None, mask_goal: bool = False) -> tuple[dict, dict]:
         """(model observation, row metadata); a missing camera, a wrong size or a non-finite joint raises."""
         import cv2
 
@@ -204,6 +216,8 @@ class LeRobotShadow:
             positions = np.asarray([body[name] for name in JOINTS[:-1]] + [sim_gripper(float(positions[-1]), self.sim_rule)],
                                    dtype=np.float32)
         obs, meta = {"observation.state": positions}, {"model_frame_sha256": {}, "warp_sha256": None}
+        if mask_goal and self.goal_size is None:
+            raise ValueError("goal masking requires a goal-conditioned checkpoint")
         if self.goal_size is not None:
             if goal is None:
                 raise ValueError(f"checkpoint requires a goal slot (0..{self.goal_size - 1})")
@@ -217,8 +231,11 @@ class LeRobotShadow:
                 if vector.shape != (self.goal_size,) or not np.isin(vector, (0, 1)).all() or np.count_nonzero(vector) != 1:
                     raise ValueError(f"goal must be a {self.goal_size}-element one-hot vector")
                 vector = vector.astype(np.float32)
-            obs[GOAL] = vector
             meta["goal_slot"] = int(vector.argmax())
+            if mask_goal:
+                meta["goal_masked"] = True
+                vector.fill(0)
+            obs[GOAL] = vector
         for view, (height, width) in self.image_views.items():
             frame = frames.get(view)
             if frame is None:

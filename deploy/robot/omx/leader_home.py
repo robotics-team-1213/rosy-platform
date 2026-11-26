@@ -30,7 +30,8 @@ DEFAULT_GAINS = {n: {"p": 1200, "i": 100} for n in BODY}
 KEEP_DEG = 30
 EXACT_HOME_PWM = 380
 EXACT_HOME_CURRENT = 270
-EXACT_HOME_RATE_DEG_S = 10.0
+EXACT_HOME_RATE_DEG_S = 8.0
+EXACT_HOME_ACCEL_DEG_S2 = 30.0
 # the Follower's resting pose; pan and roll carry no weight, so any offset moves onto the Follower.
 MAX_TRAVEL_DEG = 100  # per joint, one automatic Leader move
 GRAVITY_JOINTS = ("shoulder_lift", "elbow_flex", "wrist_flex")
@@ -189,12 +190,37 @@ def read_leader_pose(config_path: Path, arm: str) -> dict[str, int]:
         close_device(leader)
 
 
+def _travel_diffs(present: dict, target: dict) -> dict[str, float]:
+    return {name: abs(present[name] - target[name]) / TICKS_PER_DEGREE for name in BODY}
+
+
 def check_travel(present: dict, target: dict) -> None:
-    for name in BODY:
-        degrees = abs(present[name] - target[name]) / TICKS_PER_DEGREE
+    for name, degrees in _travel_diffs(present, target).items():
         if degrees > MAX_TRAVEL_DEG:
             raise ValueError(f"리더 {name}이(가) {degrees:.0f}도 움직여야 합니다 (자동 이동은 {MAX_TRAVEL_DEG}도까지). "
                              "리더를 손으로 팔로워 가까이 옮긴 뒤 다시 하세요. 리더는 움직이지 않았습니다")
+
+
+def check_leader_home(config_path: Path, arm: str, pose_path: Path | None = None, *,
+                      follower: list[int] | None = None, exact: bool = False) -> dict:
+    """Read-only passive check of Leader travel distance to target/follower (never enables torque)."""
+    teleop_cfg = _load_teleop_cfg(config_path, arm)
+    leader = _connect_leader(teleop_cfg)
+    try:
+        present = _present_ticks(leader)
+        target = _resolve_target(pose_path, leader) if follower is None else _match_target(follower, present, leader, exact=exact)
+        raw_diffs = _travel_diffs(present, target)
+    finally:
+        close_device(leader)
+    worst = max(raw_diffs, key=raw_diffs.__getitem__)
+    raw_max = raw_diffs[worst]
+    over = raw_max > MAX_TRAVEL_DEG
+    diffs = {name: round(val, 1) for name, val in raw_diffs.items()}
+    max_deg = diffs[worst]
+    msg = (f"리더 {worst}이(가) {max_deg:.1f}도 벗어나 자동 이동 한도({MAX_TRAVEL_DEG}도)를 초과했습니다 — 손으로 가깝게 옮기세요"
+           if over else f"리더 최대 편차 {max_deg:.1f}도 (한도 {MAX_TRAVEL_DEG}도 이내)")
+    return {"ok": not over, "arm": arm, "max_deg": max_deg, "worst_joint": worst,
+            "over_limit": over, "max_travel_deg": MAX_TRAVEL_DEG, "diffs_deg": diffs, "message": msg}
 
 
 def check_attest(attest: str) -> None:
@@ -210,6 +236,7 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
     rate_deg_s, accel_deg_s2 = validate_motion_limits(rate_deg_s, accel_deg_s2)
     if exact:
         rate_deg_s = min(rate_deg_s, EXACT_HOME_RATE_DEG_S)
+        accel_deg_s2 = min(accel_deg_s2, EXACT_HOME_ACCEL_DEG_S2)
     teleop_cfg = _load_teleop_cfg(config_path, arm)
     protect_signals()
     _END.update(torque_off_confirmed=False, restore_failures=[])  # device access starts: unconfirmed until the connect returns
@@ -276,6 +303,18 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
             raise close_exc
 
 
+def _follower_arg(args) -> list[int] | None:
+    if not args.target_follower_ticks:
+        return read_follower_pose(args.config, args.arm) if args.match_follower else None
+    parts = [p.strip() for p in args.target_follower_ticks.split(",")]
+    if len(parts) != 5 or any(not p.lstrip("+-").isdigit() for p in parts):
+        raise ValueError("--target-follower-ticks must be 5 integers")
+    vals = [int(p) for p in parts]
+    if any(not 0 <= v <= 4095 for v in vals):
+        raise ValueError("--target-follower-ticks values must be in 0..4095")
+    return vals
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Guarded OMX Leader Home runner")
     ap.add_argument("--config", type=Path, required=True)
@@ -289,6 +328,7 @@ def main(argv=None) -> int:
     ap.add_argument("--exact", action="store_true", help="move all 5 body joints to exact target using EXACT_HOME caps")
     ap.add_argument("--read-pose", action="store_true")
     ap.add_argument("--read-follower-pose", action="store_true")
+    ap.add_argument("--check-home", action="store_true", help="passive read-only check of Leader distance vs MAX_TRAVEL_DEG")
     args = ap.parse_args(argv)
     if args.read_follower_pose:
         print(json.dumps({"ok": True, "arm": args.arm, "state": read_follower_pose(args.config, args.arm)}))
@@ -300,16 +340,12 @@ def main(argv=None) -> int:
         ap.error("--target-follower-ticks cannot be combined with --match-follower or --pose")
     if not args.pose and not args.match_follower and not args.target_follower_ticks:
         ap.error("--pose is required unless --match-follower, --target-follower-ticks, --read-pose or --read-follower-pose is set")
+    if args.check_home:
+        res = check_leader_home(args.config, args.arm, args.pose, follower=_follower_arg(args), exact=args.exact)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res["ok"] else 2
     check_attest(args.attest)  # before any device access
-    if args.target_follower_ticks:
-        parts = [p.strip() for p in args.target_follower_ticks.split(",")]
-        if len(parts) != 5 or any(not p.lstrip("+-").isdigit() for p in parts):
-            raise ValueError("--target-follower-ticks must be 5 integers")
-        follower = [int(p) for p in parts]
-        if any(not 0 <= v <= 4095 for v in follower):
-            raise ValueError("--target-follower-ticks values must be in 0..4095")
-    else:
-        follower = read_follower_pose(args.config, args.arm) if args.match_follower else None
+    follower = _follower_arg(args)
     print(json.dumps(move_leader_home(args.config, args.arm, args.pose, args.attest, timeout_s=args.timeout_s,
                                       follower=follower, rate_deg_s=args.rate_deg_s, exact=args.exact)))
     return 0

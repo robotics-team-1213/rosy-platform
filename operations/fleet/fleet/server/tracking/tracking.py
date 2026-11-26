@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Mapping, Optional, Sequence
 
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload
+from fleet.server.recalibration import RecalibrationPipeline
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking_anchors import (
     _finite,
@@ -32,6 +33,7 @@ ROBOT_RADIUS_M = 0.0826
 OWN_POSE_EXTRA_M = 0.05
 MAX_BRIDGE_EXTRA_M = 0.3
 LAST_SEEN_S = 60.0
+PREVIOUS_REVISION_GRACE_S = 10.0
 
 
 class TrackingError(ValueError):
@@ -89,6 +91,8 @@ class TrackingService:
         self._anchors: dict[str, dict] = default_anchors(self._clock())
         self._anchor_states: dict[str, dict] = {}
         self._omx_cells: dict[str, dict] = {}
+        self._prev_revisions: dict[str, tuple[str, str, float]] = {}
+        self.recalibration = RecalibrationPipeline(clock=self._clock)
 
     @property
     def enabled(self) -> bool:
@@ -165,6 +169,9 @@ class TrackingService:
         map_id = body.get("map_id") or source.map_id
         if map_id != source.map_id:
             raise TrackingError(409, "MAP_MISMATCH", "calibration map does not match source configuration")
+        prev = self.calibrations.get(source.source_id)
+        if bool(body.get("auto")) and prev is not None and prev.frozen:
+            raise TrackingError(409, "CALIBRATION_FROZEN", "calibration is frozen")
         try:
             image, bounds = body["image"], body["track_bounds_m"]
             record = build_record(
@@ -172,20 +179,110 @@ class TrackingService:
                 image_width=image["width"], image_height=image["height"],
                 track_bounds_m=(bounds["min_x"], bounds["min_y"], bounds["max_x"], bounds["max_y"]),
                 lens=body.get("lens"), fit_score=body["fit_score"], frame_seq=body.get("frame_seq"),
-                approved_by=approved_by, approved_at=self._clock())
+                approved_by=approved_by, approved_at=self._clock(),
+                lens_profile=body.get("lens_profile"), frozen=bool(body.get("frozen", False)),
+                method=body.get("method") or "paint", metrics=body.get("metrics"))
         except (KeyError, TypeError, ValueError) as exc:
             raise TrackingError(422, "INVALID_CALIBRATION", str(exc)) from exc
         self.calibrations.put(record)
+        if prev is not None and prev.map_id == source.map_id and prev.calibration_revision != record.calibration_revision:
+            self._prev_revisions[source.source_id] = (
+                prev.map_id, prev.calibration_revision, self._clock() + PREVIOUS_REVISION_GRACE_S)
         return record.to_dict()
+
+    def rollback(self, source_id: str, *, target_revision: Optional[str] = None, principal_id: str) -> dict:
+        source = self._by_id.get(source_id)
+        if source is None:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        cur = self.calibrations.get(source_id)
+        if target_revision is None:
+            entries = self.calibrations.history(source_id, limit=20)
+            target_revision = next(
+                (item["calibration_revision"] for item in entries
+                 if cur is None or item["calibration_revision"] != cur.calibration_revision),
+                None,
+            )
+            if target_revision is None:
+                raise TrackingError(409, "NO_PREVIOUS_CALIBRATION", "no previous calibration revision available")
+        stored = self.calibrations.get_revision(source_id, target_revision)
+        if stored is None:
+            raise TrackingError(404, "CALIBRATION_REVISION_NOT_FOUND", "calibration revision not found")
+        if stored.map_id != source.map_id:
+            raise TrackingError(409, "MAP_MISMATCH", "calibration map does not match source configuration")
+        restored = build_record(
+            source_id=source_id, map_id=stored.map_id, map_to_image=stored.map_to_image,
+            image_width=stored.image_width, image_height=stored.image_height,
+            track_bounds_m=stored.track_bounds_m,
+            lens=None if stored.lens is None else {"kind": stored.lens[0], "focal_mm": stored.lens[1], "hfov_deg": stored.lens[2]},
+            fit_score=stored.fit_score, frame_seq=stored.frame_seq,
+            approved_by=principal_id, approved_at=self._clock(),
+            lens_profile=stored.lens_profile, frozen=False, method="rollback", metrics=stored.metrics,
+        )
+        self.calibrations.put(restored)
+        if cur is not None and cur.map_id == source.map_id and cur.calibration_revision != restored.calibration_revision:
+            self._prev_revisions[source_id] = (
+                cur.map_id, cur.calibration_revision, self._clock() + PREVIOUS_REVISION_GRACE_S)
+        return restored.to_dict()
+
+    def set_frozen(self, source_id: str, frozen: bool, *, principal_id: str) -> dict:
+        if source_id not in self._by_id:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        updated = self.calibrations.set_frozen(source_id, frozen, principal_id=principal_id, at=self._clock())
+        if updated is None:
+            raise TrackingError(404, "CALIBRATION_NOT_FOUND", "no active calibration for this source")
+        return updated.to_dict()
 
     def revoke(self, source_id: str, *, principal_id: str) -> dict:
         if source_id not in self._by_id:
             raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        self._prev_revisions.pop(source_id, None)
         removed = self.calibrations.delete(source_id, principal_id=principal_id, at=self._clock())
         return {"source_id": source_id, "removed": removed}
 
-    def calibration_listing(self) -> dict:
-        return {"calibrations": [record.to_dict() for record in self.calibrations.all()], "use": "display-only"}
+    def calibration_listing(self, *, include_history: bool = False) -> dict:
+        out = {"calibrations": [record.to_dict() for record in self.calibrations.all()], "use": "display-only"}
+        if include_history:
+            out["history"] = {s.source_id: self.calibrations.history(s.source_id, limit=10) for s in self.sources}
+            out["recalibration"] = {s.source_id: self.recalibration.status(s.source_id) for s in self.sources}
+        return out
+
+    def submit_recalibration_candidate(self, source_id: str, body: Mapping, *, principal_id: str) -> dict:
+        source = self._by_id.get(source_id)
+        if source is None:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        map_id = body.get("map_id") or source.map_id
+        if map_id != source.map_id:
+            raise TrackingError(409, "MAP_MISMATCH", "calibration map does not match source configuration")
+        return self.recalibration.submit_candidate(
+            source_id,
+            {**body, "source_id": source_id, "map_id": map_id},
+            approved=self.calibrations.get(source_id),
+            route_active=bool(body.get("route_active", False)),
+            approve_fn=lambda p: self.approve(p, approved_by=principal_id),
+        )
+
+    def accept_recalibration_candidate(self, source_id: str, *, approved_by: str) -> dict:
+        if source_id not in self._by_id:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        try:
+            return self.recalibration.accept_pending(
+                source_id, approved_by=approved_by, approve_fn=lambda p: self.approve(p, approved_by=approved_by))
+        except LookupError as exc:
+            raise TrackingError(404, "NO_PENDING_CANDIDATE", str(exc)) from exc
+
+    def dismiss_recalibration_candidate(self, source_id: str, *, principal_id: str) -> dict:
+        if source_id not in self._by_id:
+            raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        return self.recalibration.dismiss_pending(source_id, principal_id=principal_id)
+
+    def observe_recalibration_health(self, source_id: str, health_view: Mapping) -> Optional[dict]:
+        return self.recalibration.observe_health(
+            source_id,
+            health_state=str(health_view.get("state") or "unknown"),
+            move_m=(health_view.get("last") or {}).get("move_m"),
+            current_revision=health_view.get("calibration_revision"),
+            rollback_fn=lambda sid, rev: self.rollback(sid, target_revision=rev, principal_id="recalibration-shadow"),
+        )
 
     def request_relearn(self, source_id: str) -> dict:
         if source_id not in self._by_id:
@@ -358,6 +455,14 @@ class TrackingService:
         record = self.calibrations.get(source.source_id)
         if record is not None and record.map_id == source.map_id:
             allowed.add(record.calibration_revision)
+        prev = self._prev_revisions.get(source.source_id)
+        if prev is not None:
+            prev_map_id, prev_rev, expires_at = prev
+            now = self._clock()
+            if now <= expires_at and prev_map_id == source.map_id:
+                allowed.add(prev_rev)
+            elif now > expires_at:
+                self._prev_revisions.pop(source.source_id, None)
         return allowed
 
     def _pose(self, robot_id: str, map_id: str, now: float) -> Optional[Pose]:

@@ -54,7 +54,7 @@ test('plan summary and refusal text', () => {
 
 test('repeat reason: map, running trip, two start places, a chosen start', () => {
   assert.equal(repeatTripReason({active: null, running: null, start: 'A'}), '활성 지도가 없습니다');
-  assert.equal(repeatTripReason({active: ACTIVE, running: {}, start: 'A'}), '이 로봇은 이미 운행 중입니다');
+  assert.equal(repeatTripReason({active: ACTIVE, running: {}, start: 'A'}), '이 로봇에 접수된 운행이 있습니다');
   const one = {version: 4, map: {places: [{id: 'A', kind: 'start'}]}};
   assert.equal(repeatTripReason({active: one, running: null, start: 'A'}), '반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
   assert.equal(repeatTripReason({active: ACTIVE, running: null, start: ''}), '출발 자리를 고르세요');
@@ -77,5 +77,6 @@ test('D-601 start check: 출발 가능, 방향 반대, 차선 밖, with numbers 
   assert.match(tripErrorText('TRIP_HEADING_CONFLICT', {heading_err_deg: 178}), /방향 반대\(178°\)$/);
   assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.12}), /차선 밖 12 cm$/);
   assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE'), /카메라/);
+  assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE', {error: 'RATE_LIMITED'}), /조회가 요청 한도/);
   assert.doesNotMatch(tripErrorText('TRIP_LINE_FOLLOW_NOT_ACTIVE'), /카메라 또는 IR/);
 });

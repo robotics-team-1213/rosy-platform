@@ -1,7 +1,11 @@
 """Fleet traffic configuration parsing for the CLI."""
 
+import math
 import sys
 from pathlib import Path
+
+DEFAULT_SITE_KEEP_OUT_M = 0.32
+MIN_SITE_KEEP_OUT_M = 0.28
 
 
 def _traffic_zones(args) -> dict:
@@ -68,6 +72,24 @@ def _traffic_authority(args) -> bool:
 def _traffic_signal_advice(args) -> bool:
     """D-551 6: ``fleet.traffic.signal_advice`` (display-only signal advice to CORE)."""
     return _traffic_flag(args, "signal_advice")
+
+
+def _traffic_site_keep_out_m(args) -> float:
+    """Site-frame obstacle keep-out radius in metres (``fleet.traffic.site_keep_out_m``, default 0.32, >= 0.28)."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        value = ((site_config.get("fleet") or {}).get("traffic") or {}).get("site_keep_out_m", DEFAULT_SITE_KEEP_OUT_M)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"traffic config: {exc}")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        sys.exit("traffic config: fleet.traffic.site_keep_out_m must be a finite number")
+    if float(value) < MIN_SITE_KEEP_OUT_M:
+        sys.exit(f"traffic config: fleet.traffic.site_keep_out_m must be >= {MIN_SITE_KEEP_OUT_M:g}")
+    return float(value)
 
 
 def _trip_lease(args) -> dict:

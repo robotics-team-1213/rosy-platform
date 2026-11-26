@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 import cell_params as prm
-from cell_fingers import on_surface_blob
+from cell_fingers import finger_pads, on_surface_blob, resolve_finger_color
 
 
 def ref_path(work: Path, arm: str, site: str = "any") -> Path:
@@ -98,7 +98,8 @@ def ref_servo(cell, camera: str, hsv, ref: dict, replan, params=None, J=None) ->
         rows.append({"iteration": i, "error_px": [round(float(v), 1) for v in err], "pos_mm": [round(float(v), 1) for v in pos]})
         if np.hypot(*err) <= prm.get(params, "wrist.ref_tol_px"):
             return {"verdict": "pass", "dx_mm": round(float(pos[0]), 1), "dy_mm": round(float(pos[1]), 1), "J": J.tolist(), "iterations": rows}
-        if abs(np.linalg.det(J)) < 1e-3 or i == int(prm.get(params, "wrist.servo_iter")):
+        sv = np.linalg.svd(J, compute_uv=False)
+        if abs(np.linalg.det(J)) < 1e-3 or sv[-1] < 0.35 or (sv[0] / max(sv[-1], 1e-9)) > 15.0 or i == int(prm.get(params, "wrist.servo_iter")):
             break
         step = prm.get(params, "wrist.servo_gain") * np.linalg.solve(J, err)
         if np.hypot(*step) > prm.get(params, "wrist.max_step_mm"):
@@ -193,21 +194,29 @@ def capture_reference(cell, camera: str, hsv, work: Path, arm: str, site: str, p
     return ref
 
 
-def fingertip_point(img):
+def fingertip_point(img, color: str | int = "auto"):
     """Where the open fingertips' centreline meets their top in the wrist view: (mid of the pads' inner edges, top
     row of the pads), or None."""
     import cv2
 
-    h = img.shape[0]
-    band = (cv2.cvtColor(img[2 * h // 3:], cv2.COLOR_BGR2GRAY) < 60).astype(np.uint8)
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(band)
-    blobs = sorted((i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > 800), key=lambda i: -stats[i, cv2.CC_STAT_AREA])[:2]
-    if len(blobs) < 2:
+    mode = resolve_finger_color(color=color)
+    if mode != "white":
+        h = img.shape[0]
+        band = (cv2.cvtColor(img[2 * h // 3:], cv2.COLOR_BGR2GRAY) < 60).astype(np.uint8)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(band)
+        blobs = sorted((i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > 800), key=lambda i: -stats[i, cv2.CC_STAT_AREA])[:2]
+        if len(blobs) >= 2:
+            left, right = sorted(blobs, key=lambda i: stats[i, 0])
+            mid = (stats[left, 0] + stats[left, 2] + stats[right, 0]) / 2
+            top = min(stats[left, 1], stats[right, 1]) + 2 * h // 3
+            return np.array([float(mid), float(top)])
+        if mode == "dark":
+            return None
+    pads = finger_pads(img, color="white")
+    if pads is None:
         return None
-    left, right = sorted(blobs, key=lambda i: stats[i, 0])
-    mid = (stats[left, 0] + stats[left, 2] + stats[right, 0]) / 2
-    top = min(stats[left, 1], stats[right, 1]) + 2 * h // 3
-    return np.array([float(mid), float(top)])
+    a, b, _ = pads
+    return np.array([0.5 * (float(a[0]) + float(b[0])), min(float(a[1]), float(b[1]))])
 
 
 def estimate_reference(cell, camera: str, hsv, hover_up, params=None) -> dict | None:
@@ -215,7 +224,7 @@ def estimate_reference(cell, camera: str, hsv, hover_up, params=None) -> dict | 
     from the fingertips down to the container top at the hover (wrist.tip_to_top_mm). The shift per mm comes from
     one probe: hover_up(mm) raises the hover, the container's pixel moves. Never saved: a confirmed place replaces it."""
     first = cell.frame(camera)
-    tip, box0 = fingertip_point(first), on_surface_blob(first, hsv, params)
+    tip, box0 = fingertip_point(first, color=resolve_finger_color(params)), on_surface_blob(first, hsv, params)
     if tip is None or box0 is None:
         return None
     up = prm.get(params, "wrist.z_probe_mm")

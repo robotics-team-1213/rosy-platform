@@ -133,6 +133,9 @@ class RecordingNode:
         self.subscriptions.append((topic, callback.__name__, _qos_kind(qos)))
         return object()
 
+    def destroy_subscription(self, _subscription):
+        return True
+
     def create_publisher(self, _type, topic, qos):
         self.publishers.append((topic, _qos_kind(qos)))
         return object()
@@ -324,6 +327,7 @@ EXPECTED_PUBLISHERS = [
     # D-395 P2-4 (contract §1): reliable, depth 5.
     ("localization/decision", 5),
     ("localization/suspect", 5),
+    ("localization/search_window", 1),
     # D-395 P2-7: mission start/end for the sensing node's search-after-mission.
     ("localization/mission", 5),
     # D-411 A: teleop decisions as evidence for the Pilot recorder.
@@ -449,6 +453,47 @@ def test_lifecycle_transition_parser_accepts_active_id_and_label(registered):
     assert registered.bridge._lifecycle_active(label_only) is True
 
 
+def test_map_server_active_refreshes_latched_map_subscription_after_lifecycle(registered, monkeypatch):
+    bridge = registered.bridge
+    node = registered.node
+    ros_bridge = sys.modules[type(bridge).__module__]
+    initial_sub = bridge._map_sub
+    assert initial_sub is not None
+
+    events = []
+    orig_create = node.create_subscription
+
+    def fake_create(msg_type, topic, callback, qos):
+        sub = orig_create(msg_type, topic, callback, qos)
+        events.append(("subscribe", topic, callback.__name__, _qos_kind(qos), sub))
+        return sub
+
+    monkeypatch.setattr(node, "create_subscription", fake_create)
+    monkeypatch.setattr(node, "destroy_subscription", lambda sub: events.append(("destroy", sub)))
+    monkeypatch.setattr(ros_bridge.map_observation, "lifecycle", lambda _b, active: events.append(("lifecycle", active)))
+
+    active = types.SimpleNamespace(goal_state=types.SimpleNamespace(id=3, label="active"))
+    inactive = types.SimpleNamespace(goal_state=types.SimpleNamespace(id=2, label="inactive"))
+
+    bridge._on_map_server_transition(inactive)
+    assert events == [("lifecycle", False)]
+    assert bridge._map_sub is initial_sub
+
+    events.clear()
+    bridge._on_slam_transition(active)
+    assert events == [("lifecycle", True)]
+    assert bridge._map_sub is initial_sub
+
+    events.clear()
+    bridge._on_map_server_transition(active)
+    assert len(events) == 3
+    assert events[0] == ("lifecycle", True)
+    assert events[1] == ("destroy", initial_sub)
+    assert events[2][:4] == ("subscribe", "map", "_on_map", "LATCHED")
+    assert events[2][4] is not initial_sub
+    assert bridge._map_sub is events[2][4]
+
+
 def test_constructor_declares_inactive_trial_before_registered_callbacks(registered):
     # Structural constructor contract only; no stub motion semantics.
     assert registered.bridge._bounded_trial_guard is None
@@ -486,3 +531,12 @@ def test_face_publication_uses_injected_host_owner_and_recovers_after_write_fail
     assert len(attempts) == 4 and attempts[-1]["face"] == "happy"
     bridge._maybe_write_face_inputs(status, 100.0 + FACE_INPUTS_PERIOD_S * 1.5)
     assert len(attempts) == 5 and len(warnings) == 1
+
+
+def test_ros_bridge_reuses_injected_tf_buffer(registered):
+    from core.bridge.ros_bridge import RosBridge
+
+    shared = object()
+    bridge = RosBridge(RecordingNode(), registered.services, tf_buffer=shared)
+    assert bridge.tf_buffer is shared
+    assert bridge.tf_listener is not None

@@ -27,7 +27,7 @@ from cell_lerobot_shadow import CAMERA_ROLES, JOINT_NAMES, UNITS, read_sim_rule
 
 _HEX64_CHARS = frozenset("0123456789abcdef")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
-MAX_TIMEOUT_S = 2.0
+MAX_TIMEOUT_S, DEFAULT_JPEG_QUALITY = 2.0, 85
 
 
 def _pos_int(val: Any) -> int | None:
@@ -62,7 +62,7 @@ def _rad_to_body_units(rad: float) -> float:
     return raw_tick * 200.0 / 4095.0 - 100.0
 
 
-def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int]) -> bytes:
+def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int], *, quality: int = DEFAULT_JPEG_QUALITY) -> bytes:
     import cv2
     import numpy as np
 
@@ -70,7 +70,7 @@ def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int]) -> bytes:
     h, w = expected_hw
     if arr.ndim != 3 or arr.shape != (h, w, 3) or arr.dtype != np.uint8:
         raise ValueError(f"camera image shape/dtype {arr.shape}/{arr.dtype} != ({h}, {w}, 3)/uint8")
-    ok, encoded = cv2.imencode(".jpg", arr)
+    ok, encoded = cv2.imencode(".jpg", arr, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
         raise ValueError("cv2.imencode('.jpg', ...) failed")
     return bytes(encoded.tobytes())
@@ -85,29 +85,36 @@ class RemotePolicyShadow:
     def __init__(
         self, endpoint_url: str, arm_id: str, policy_revision: str, *,
         token: str | None = None, timeout_s: float = 0.8, expected_views: Mapping[str, tuple[int, int]] | None = None,
-        sim_rule: dict[str, Any] | None = None, policy_root: Path | None = None, config: dict[str, Any] | None = None, opener: Any = None,
+        sim_rule: dict[str, Any] | None = None, policy_root: Path | None = None, config: dict[str, Any] | None = None,
+        opener: Any = None, jpeg_quality: int = DEFAULT_JPEG_QUALITY,
     ) -> None:
         self._conn_lock = threading.Lock()
         self._conn: http.client.HTTPConnection | None = None
+        self._closed = False
         self._resolved_addrs: list[tuple[int, int, int, Any]] = []
         parsed = urllib.parse.urlsplit(endpoint_url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        if parsed.scheme not in ("http", "https") or not parsed.netloc or not parsed.hostname:
             raise ValueError(f"invalid endpoint_url {endpoint_url!r}")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("endpoint_url must not contain credentials, query, or fragment")
         if not isinstance(arm_id, str) or not arm_id.strip():
             raise ValueError("arm_id must be a non-empty string")
-        host = (parsed.hostname or "").lower()
+        host = parsed.hostname.lower()
         if host not in _LOOPBACK_HOSTS and not token:
             raise ValueError(f"bearer token required for non-loopback endpoint {endpoint_url!r}")
         if token is not None and not token.strip():
             raise ValueError("bearer token cannot be blank")
         if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not (0.0 < float(timeout_s) <= MAX_TIMEOUT_S):
             raise ValueError(f"timeout_s must be in (0, {MAX_TIMEOUT_S}], got {timeout_s!r}")
+        if type(jpeg_quality) is not int or not (50 <= jpeg_quality <= 100):
+            raise ValueError(f"jpeg_quality must be an int in [50, 100], got {jpeg_quality!r}")
 
         self.endpoint_url = endpoint_url.rstrip("/")
         self.arm_id = arm_id
         self.policy_revision = _validate_revision(policy_revision)
         self._token = token
         self.timeout_s = float(timeout_s)
+        self.jpeg_quality = jpeg_quality
         self._opener = opener
         self._scheme = parsed.scheme
         self._host = parsed.hostname or ""
@@ -119,34 +126,38 @@ class RemotePolicyShadow:
             read_sim_rule(Path(policy_root) / UNITS, config) if policy_root is not None else None
         )
 
-        health = self._request_json("GET", "/health")
-        if not isinstance(health, dict) or health.get("ok") is not True:
-            raise RemotePolicyError(f"unhealthy remote policy server at {self.endpoint_url}")
-        arm_meta = (health.get("arms") or {}).get(arm_id)
-        if not isinstance(arm_meta, dict):
-            raise RemotePolicyError(f"remote server does not host arm {arm_id!r}")
-        if arm_meta.get("revision") != self.policy_revision:
-            raise RemotePolicyError(
-                f"remote revision {arm_meta.get('revision')!r} != pinned {self.policy_revision!r}"
-            )
-        raw_views = arm_meta.get("views")
-        if not isinstance(raw_views, dict) or not raw_views:
-            raise RemotePolicyError(f"remote arm {arm_id!r} returned invalid views {raw_views!r}")
-        views: dict[str, tuple[int, int]] = {}
-        for role, hw in raw_views.items():
-            if (role not in CAMERA_ROLES or not isinstance(hw, list) or len(hw) != 2
-                    or _pos_int(hw[0]) is None or _pos_int(hw[1]) is None):
-                raise RemotePolicyError(f"unsupported remote camera view {role!r}: {hw!r}")
-            views[role] = (int(hw[0]), int(hw[1]))
-        if expected_views is not None and views != {k: tuple(v) for k, v in expected_views.items()}:
-            raise RemotePolicyError(f"remote views {views} != expected {dict(expected_views)}")
+        try:
+            health = self._request_json("GET", "/health")
+            if not isinstance(health, dict) or health.get("ok") is not True:
+                raise RemotePolicyError(f"unhealthy remote policy server at {self.endpoint_url}")
+            arm_meta = (health.get("arms") or {}).get(arm_id)
+            if not isinstance(arm_meta, dict):
+                raise RemotePolicyError(f"remote server does not host arm {arm_id!r}")
+            if arm_meta.get("revision") != self.policy_revision:
+                raise RemotePolicyError(
+                    f"remote revision {arm_meta.get('revision')!r} != pinned {self.policy_revision!r}"
+                )
+            raw_views = arm_meta.get("views")
+            if not isinstance(raw_views, dict) or not raw_views:
+                raise RemotePolicyError(f"remote arm {arm_id!r} returned invalid views {raw_views!r}")
+            views: dict[str, tuple[int, int]] = {}
+            for role, hw in raw_views.items():
+                if (role not in CAMERA_ROLES or not isinstance(hw, list) or len(hw) != 2
+                        or _pos_int(hw[0]) is None or _pos_int(hw[1]) is None):
+                    raise RemotePolicyError(f"unsupported remote camera view {role!r}: {hw!r}")
+                views[role] = (int(hw[0]), int(hw[1]))
+            if expected_views is not None and views != {k: tuple(v) for k, v in expected_views.items()}:
+                raise RemotePolicyError(f"remote views {views} != expected {dict(expected_views)}")
 
-        n_steps = _pos_int(arm_meta.get("n_action_steps"))
-        chunk_sz = _pos_int(arm_meta.get("chunk_size"))
-        raw_goal_sz = arm_meta.get("goal_size")
-        goal_sz = None if raw_goal_sz is None else _pos_int(raw_goal_sz)
-        if n_steps is None or chunk_sz is None or n_steps > chunk_sz or (raw_goal_sz is not None and goal_sz is None):
-            raise RemotePolicyError(f"invalid remote arm metadata: {arm_meta!r}")
+            n_steps = _pos_int(arm_meta.get("n_action_steps"))
+            chunk_sz = _pos_int(arm_meta.get("chunk_size"))
+            raw_goal_sz = arm_meta.get("goal_size")
+            goal_sz = None if raw_goal_sz is None else _pos_int(raw_goal_sz)
+            if n_steps is None or chunk_sz is None or n_steps > chunk_sz or (raw_goal_sz is not None and goal_sz is None):
+                raise RemotePolicyError(f"invalid remote arm metadata: {arm_meta!r}")
+        except BaseException:
+            self.close()
+            raise
 
         self.image_views = views
         self.n_action_steps = n_steps
@@ -232,6 +243,7 @@ class RemotePolicyShadow:
 
     def close(self) -> None:
         with self._conn_lock:
+            self._closed = True
             self._close_conn_locked(reset_dns=False)
 
     def __enter__(self) -> "RemotePolicyShadow":
@@ -254,6 +266,9 @@ class RemotePolicyShadow:
         return hdrs
 
     def _request_json(self, method: str, route: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        with self._conn_lock:
+            if getattr(self, "_closed", False):
+                raise RemotePolicyError("remote policy shadow is closed")
         raw_req = json.dumps(body).encode("utf-8") if body is not None else None
         ct = "application/json" if body is not None else None
         if self._opener is not None:
@@ -270,6 +285,8 @@ class RemotePolicyShadow:
         target = f"{self._base_path}{route}" if self._base_path else route
         headers = {"Host": self._host_header, "Connection": "keep-alive", **self._headers(content_type=ct)}
         with self._conn_lock:
+            if getattr(self, "_closed", False):
+                raise RemotePolicyError("remote policy shadow is closed")
             try:
                 conn = self._ensure_conn()
                 conn.request(method, target, body=raw_req, headers=headers)
@@ -311,7 +328,7 @@ class RemotePolicyShadow:
         encoded_frames: dict[str, str] = {}
         frame_hashes: dict[str, str] = {}
         for role, hw in self.image_views.items():
-            jpg = _encode_jpeg_bgr(frames[role], hw)
+            jpg = _encode_jpeg_bgr(frames[role], hw, quality=self.jpeg_quality)
             encoded_frames[role] = base64.b64encode(jpg).decode("ascii")
             frame_hashes[role] = sha256(jpg).hexdigest()
 
@@ -339,7 +356,7 @@ class RemotePolicyShadow:
     def infer(self, obs: dict[str, Any], *, state: Any = None) -> SimpleNamespace:
         t0 = time.perf_counter()
         req_id = f"{self.arm_id}-{uuid.uuid4().hex[:16]}"
-        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id})
+        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id, **({"full_chunk": True} if getattr(self, "full_chunk", False) else {})})
         rtt_s = time.perf_counter() - t0
         if not isinstance(reply, dict) or reply.get("ok") is not True:
             raise RemotePolicyError(f"inference error reply: {reply!r}")

@@ -8,7 +8,6 @@ coupled `human-hold` across both arms and optional non-faulted `safe_fold`.
 """
 from __future__ import annotations
 
-import copy
 from hashlib import sha256
 import json
 import math
@@ -17,14 +16,17 @@ import threading
 import time
 from typing import Any, Callable, Mapping, Sequence
 
+from cell_policy_entry import build_two_arm_chunk_library as _build_chunk_library, check_obs_stamp as _check_stamp, pose6, two_arm_roll_bounds
 import cell_policy_shape
-from cell_policy_timing import MAX_OBSERVATION_AGE_S
+from cell_policy_timing import MAX_OBSERVATION_AGE_S, send_hold
 import cell_two_arm
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, validate_two_arm_task_pair
+from cell_two_arm_verification import transfer_refusal
 import numpy as np
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S
 
 SCHEMA = "rosy.omx-two-arm-policy-run.v1"
+MAX_WAIT_REOBSERVE = 3
 
 
 def _checked_act(cell: Any, auth: Mapping[str, Any], command: str) -> dict[str, Any]:
@@ -33,29 +35,24 @@ def _checked_act(cell: Any, auth: Mapping[str, Any], command: str) -> dict[str, 
     return cell.act(f"checked {auth['session_id']} {auth['library_sha256']} {command}")
 
 
-def _hold_arm(cell: Any) -> bool:
+def _hold_arm(cell: Any, *, log: Callable[[dict[str, Any]], Any] | None = None) -> bool:
     try:
-        res = cell.act("human-hold")
-        return bool(isinstance(res, Mapping) and res.get("ok", True))
+        send_hold(cell, log=log)
+        return True
     except Exception:
         return False
 
 
-def _hold_both(cells: Mapping[str, Any], faulted: Mapping[str, bool], *, dry_run: bool) -> dict[str, bool]:
+def _hold_both(
+    cells: Mapping[str, Any], faulted: Mapping[str, bool], *, dry_run: bool,
+    log: Callable[[dict[str, Any]], Any] | None = None,
+) -> dict[str, bool]:
     if dry_run:
         return {arm: False for arm in ARMS}
-    return {arm: (False if faulted.get(arm) else _hold_arm(cells[arm])) for arm in ARMS}
-
-
-def _check_stamp(stamp: Any, now_wall: float, max_age_s: float, label: str) -> float:
-    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(float(stamp)):
-        raise ValueError(f"invalid {label} stamp {stamp!r}")
-    val = float(stamp)
-    if val - now_wall > 0.5:
-        raise ValueError(f"future {label} stamp {val:.3f} > {now_wall:.3f}")
-    if now_wall - val > max_age_s:
-        raise ValueError(f"stale {label} stamp (age {now_wall - val:.3f}s > {max_age_s:.3f}s)")
-    return val
+    return {
+        arm: (False if faulted.get(arm) else _hold_arm(cells[arm], log=(lambda row, _a=arm: log({"arm": _a, **row})) if log else None))
+        for arm in ARMS
+    }
 
 
 def _read_state(cell: Any, *, dry_run: bool, max_age_s: float, label: str = "state") -> tuple[dict[str, Any], list[float], float]:
@@ -83,22 +80,29 @@ def _read_state(cell: Any, *, dry_run: bool, max_age_s: float, label: str = "sta
 
 
 def _capture_frames(
-    cell: Any, views: Mapping[str, tuple[int, int]], *, dry_run: bool, max_age_s: float, prev_receipts: dict[str, dict[str, Any]],
+    cell: Any, views: Mapping[str, tuple[int, int]], *, dry_run: bool, max_age_s: float,
+    state_mono: float, prev_receipts: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, Any], float]:
     frames: dict[str, Any] = {}
-    now_wall, now_mono = time.time(), time.monotonic()
-    obs_mono = now_mono
+    obs_mono = state_mono
     use_receipt = hasattr(cell, "frame_receipt")
     for role in views:
+        remaining = obs_mono + max_age_s - time.monotonic()
+        if not dry_run and remaining <= 0:
+            raise ValueError(f"stale policy observation before camera {role}")
         if use_receipt:
-            rec = cell.frame_receipt(role, previous=prev_receipts.get(role))
-            prev_receipts[role] = rec
+            limits = {} if dry_run else {"max_age_s": max_age_s, "timeout_s": remaining}
+            rec = cell.frame_receipt(role, previous=prev_receipts.get(role), **limits)
             if not dry_run:
+                now_wall, now_mono = time.time(), time.monotonic()
                 stamp = _check_stamp(rec.get("source_stamp"), now_wall, max_age_s, f"camera {role}")
                 obs_mono = min(obs_mono, now_mono - max(0.0, now_wall - stamp))
+            prev_receipts[role] = rec
             frames[role] = rec["image"]
         else:
             frames[role] = cell.frame(role)
+        if not dry_run and time.monotonic() >= obs_mono + max_age_s:
+            raise ValueError(f"stale policy observation after camera {role}")
     return frames, obs_mono
 
 
@@ -119,23 +123,6 @@ def _shape_candidate(
     return [[float(x) for x in row] for row in shaped], fastest
 
 
-def _build_chunk_library(
-    lib: Mapping[str, Any], shaped: list[list[float]], obs_mono: float, max_obs_age_s: float, fastest: float, jaw_spec: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    # Budget 2 runner ticks (cell_policy_timing) for authorize + FIFO load/run latency before frame 0 is due.
-    fps = max(1.0, float(lib.get("fps", 30.0)))
-    start_mono = max(obs_mono, time.monotonic()) + 2.0 / fps
-    chunk_lib = copy.deepcopy(dict(lib))
-    chunk_lib.setdefault("chunks", {})["policy"] = shaped
-    playback: dict[str, Any] = {"observed": obs_mono, "start": start_mono, "max_age": max_obs_age_s, "max_step": float(fastest)}
-    if jaw_spec is not None:
-        playback["jaw_gate"] = dict(jaw_spec)
-        if jaw_spec.get("rim_z_m") is not None:
-            chunk_lib["source"] = {**(chunk_lib.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}
-    chunk_lib["policy_playback"] = playback
-    return chunk_lib
-
-
 def run_two_arm_policy(
     cells: Mapping[str, Any], shadows: Mapping[str, Any], libraries: Mapping[str, Mapping[str, Any]],
     guard: TwoArmChunkGuard, task_a: Mapping[str, Any], task_b: Mapping[str, Any], work_dir: Path, *,
@@ -152,7 +139,7 @@ def run_two_arm_policy(
     """Run supervised concurrent per-arm 6-DoF remote policy loops guarded per chunk."""
     if set(cells) != set(ARMS) or set(shadows) != set(ARMS) or set(libraries) != set(ARMS):
         raise ValueError("cells, shadows, and libraries must specify keys 'a' and 'b'")
-    if max_chunks < 1 or max_obs_age_s <= 0.0:
+    if max_chunks < 1 or not math.isfinite(max_obs_age_s) or max_obs_age_s <= 0.0:
         raise ValueError("max_chunks >= 1 and max_obs_age_s > 0 required")
     if not dry_run and (authorizers is None or set(authorizers) != set(ARMS) or not all(callable(authorizers[k]) for k in ARMS)):
         raise ValueError("live execution requires per-arm D-911 authorizers")
@@ -162,6 +149,8 @@ def run_two_arm_policy(
                 raise ValueError(f"arm {arm}: jaw_spec requires kinematics in kins")
 
     plan = validate_two_arm_task_pair(task_a, task_b)
+    if refusal := transfer_refusal({"a": task_a, "b": task_b}, dry_run=dry_run):
+        return {"schema": SCHEMA, "task_id": plan["task_id"], "plan": plan, **refusal}
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
     state_lock = threading.Lock()
@@ -181,7 +170,7 @@ def run_two_arm_policy(
     def hold_both_safe() -> dict[str, bool]:
         with state_lock:
             flt = dict(faulted)
-        holds = _hold_both(cells, flt, dry_run=dry_run)
+        holds = _hold_both(cells, flt, dry_run=dry_run, log=lambda row: emit({"event": "hold", **row}))
         with state_lock:
             for k, sent in holds.items():
                 if sent:
@@ -210,77 +199,89 @@ def run_two_arm_policy(
             }
 
     def worker(arm: str) -> None:
-        cell, shadow, lib = cells[arm], shadows[arm], libraries[arm]
-        offset = list(offsets[arm]) if offsets and offsets.get(arm) is not None else [0.0] * 6
-        demo_rng = demo_ranges.get(arm) if demo_ranges else None
-        goal = goals.get(arm) if goals else None
-        jaw_spec = jaw_specs.get(arm) if jaw_specs else None
-        arm_kin = kins.get(arm) if kins else None
-        need_mid = bool(plan["need_mid"][arm])
-        sim_rule = getattr(shadow, "sim_rule", None)
-        sim_units = sim_rule is not None
-        prev_receipts: dict[str, dict[str, Any]] = {}
         chunks_done, reason = 0, None
         outcome = "dry_run" if dry_run else "chunks_done"
-        home_rows = (lib.get("chunks") or {}).get("home") or []
-        home_roll = float(home_rows[0][4]) if home_rows else 0.0
+        try:
+            cell, shadow, lib = cells[arm], shadows[arm], libraries[arm]
+            offset = list(offsets[arm]) if offsets and offsets.get(arm) is not None else [0.0] * 6
+            demo_rng = demo_ranges.get(arm) if demo_ranges else None
+            goal = goals.get(arm) if goals else None
+            jaw_spec = jaw_specs.get(arm) if jaw_specs else None
+            arm_kin = kins.get(arm) if kins else None
+            need_mid = bool(plan["need_mid"][arm])
+            sim_rule = getattr(shadow, "sim_rule", None)
+            sim_units = sim_rule is not None
+            prev_receipts: dict[str, dict[str, Any]] = {}
+            home_roll, roll_range = two_arm_roll_bounds(arm, lib, demo_rng, sim_units)
+            closed, ever_held = cell_policy_shape.closed_gripper(dict(lib)), False
+        except Exception as exc:
+            outcome = "refused"
+            reason = f"{arm}:setup:{exc}"
+            guard.latch_stop(reason)
+            hold_both_safe()
+            emit({"arm": arm, "event": "error", "reason": reason})
+            with state_lock:
+                arm_reports[arm] = {"outcome": outcome, "chunks_done": 0, "reason": reason}
+            return
 
         for idx in range(max_chunks):
-            if guard.stopped_reason is not None:
-                outcome, reason = "refused", guard.stopped_reason
-                break
-            try:
-                st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
-                guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
-                frames, cam_mono = _capture_frames(
-                    cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s, prev_receipts=prev_receipts,
-                )
-                obs_mono = min(st_mono, cam_mono)
-                model_state = vec if sim_units else [vec[i] + float(offset[i]) for i in range(6)]
-                obs, meta = shadow.inputs(model_state, frames, goal=goal)
-                inferred = shadow.infer(obs, state=vec)
-                raw_actions = (
-                    inferred.chunk if sim_units
-                    else [[float(r[i]) - float(offset[i]) for i in range(6)] for r in inferred.chunk]
-                )
-                refreshed, cur_vec, _ = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:auth")
-                cur_holding = bool(refreshed.get("holding", False))
-                guard.update_pose(arm, cur_vec, holding=cur_holding)
-                shaped, fastest = _shape_candidate(
-                    raw_actions, cur_vec, lib, demo_rng, sim_units=sim_units, sim_rule=sim_rule, holding=cur_holding,
-                )
-                if jaw_spec is not None:
-                    jaw_warn = (
-                        cell_policy_shape.jaw_zone_error([cur_vec], arm_kin, dict(jaw_spec))
-                        or cell_policy_shape.jaw_zone_error(shaped, arm_kin, dict(jaw_spec))
+            admitted: dict[str, Any] | None = None
+            for attempt in range(MAX_WAIT_REOBSERVE + 1):
+                if guard.stopped_reason is not None:
+                    outcome, reason = "refused", guard.stopped_reason
+                    break
+                try:
+                    st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
+                    guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
+                    frames, obs_mono = _capture_frames(
+                        cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s,
+                        state_mono=st_mono, prev_receipts=prev_receipts,
                     )
-                    if jaw_warn:
+                    model_state = vec if sim_units else [vec[i] + float(offset[i]) for i in range(6)]
+                    obs, meta = shadow.inputs(model_state, frames, goal=goal)
+                    inferred = shadow.infer(obs, state=vec)
+                    raw_actions = inferred.chunk if sim_units else [[float(r[i]) - float(offset[i]) for i in range(6)] for r in inferred.chunk]
+                    refreshed, cur_vec, _ = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:auth")
+                    cur_holding = bool(refreshed.get("holding", False))
+                    guard.update_pose(arm, cur_vec, holding=cur_holding)
+                    shaped, fastest = _shape_candidate(
+                        raw_actions, cur_vec, lib, demo_rng, sim_units=sim_units, sim_rule=sim_rule, holding=cur_holding,
+                    )
+                    if jaw_spec is not None and (jaw_warn := cell_policy_shape.jaw_zone_error([cur_vec], arm_kin, dict(jaw_spec)) or cell_policy_shape.jaw_zone_error(shaped, arm_kin, dict(jaw_spec))):
                         emit({"arm": arm, "chunk_index": idx, "event": "jaw_warning", "reason": jaw_warn})
                         if not dry_run:
                             raise ValueError(jaw_warn)
-                roll_warn = cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll) if arm == "b" else None
-                if roll_warn and sim_units and not dry_run:
-                    emit({"arm": arm, "chunk_index": idx, "event": "wrist_roll_warning", "reason": roll_warn})
-                    raise ValueError(roll_warn)
-                if not dry_run and (time.monotonic() - obs_mono) > max_obs_age_s:
-                    raise ValueError("stale policy observation")
-                admitted = guard.admit_chunk(arm, shaped, holding=cur_holding, need_mid=need_mid)
-            except Exception as exc:
-                if "fault:" in str(exc) and not _is_coupled_hold(exc):
-                    mark_fault(arm)
-                with state_lock:
-                    outcome = "fault" if faulted[arm] else "refused"
-                reason = f"{arm}:{type(exc).__name__}:{exc}"
-                guard.latch_stop(reason)
-                hold_both_safe()
-                emit({"arm": arm, "chunk_index": idx, "event": "error", "reason": reason})
+                    roll_warn = cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll, roll_range=roll_range) if arm == "b" else None
+                    if roll_warn and sim_units and not dry_run:
+                        emit({"arm": arm, "chunk_index": idx, "event": "wrist_roll_warning", "reason": roll_warn})
+                        raise ValueError(roll_warn)
+                    if not dry_run and (time.monotonic() - obs_mono) > max_obs_age_s:
+                        raise ValueError("stale policy observation")
+                    admitted = guard.admit_chunk(arm, shaped, holding=cur_holding, need_mid=need_mid)
+                except Exception as exc:
+                    if "fault:" in str(exc) and not _is_coupled_hold(exc):
+                        mark_fault(arm)
+                    with state_lock:
+                        outcome = "fault" if faulted[arm] else "refused"
+                    reason = f"{arm}:{type(exc).__name__}:{exc}"
+                    guard.latch_stop(reason)
+                    hold_both_safe()
+                    emit({"arm": arm, "chunk_index": idx, "event": "error", "reason": reason})
+                    admitted = None
+                    break
+                if not admitted.get("admitted"):
+                    outcome, reason = "refused", f"{arm}:guard:{admitted.get('reason', 'refused')}"
+                    guard.latch_stop(reason)
+                    hold_both_safe()
+                    emit({"arm": arm, "chunk_index": idx, "event": "guard_refused", **admitted})
+                    break
+                if not dry_run and guard.stopped_reason is None and (time.monotonic() - obs_mono) > max_obs_age_s and attempt < MAX_WAIT_REOBSERVE:
+                    guard.release_chunk(arm, final_pose=cur_vec, holding=cur_holding)
+                    emit({"arm": arm, "chunk_index": idx, "event": "reobserve_after_wait", "attempt": attempt + 1, "waited_s": admitted.get("waited_s")})
+                    admitted = None
+                    continue
                 break
-
-            if not admitted.get("admitted"):
-                outcome, reason = "refused", f"{arm}:guard:{admitted.get('reason', 'refused')}"
-                guard.latch_stop(reason)
-                hold_both_safe()
-                emit({"arm": arm, "chunk_index": idx, "event": "guard_refused", **admitted})
+            if not admitted or not admitted.get("admitted"):
                 break
 
             final_pose: Sequence[float] = cur_vec
@@ -326,6 +327,12 @@ def run_two_arm_policy(
                 with state_lock:
                     moved_arms[arm] = True
                 run_reply = _checked_act(cell, auth, "run policy")
+                if not isinstance(run_reply, Mapping):
+                    raise RuntimeError("invalid run policy reply")
+                if (end_pose := pose6(run_reply.get("state"))) is not None:
+                    final_pose = end_pose
+                if isinstance(run_reply.get("holding"), bool):
+                    final_holding = bool(run_reply["holding"])
                 if run_reply.get("fault"):
                     raise RuntimeError(f"fault:{run_reply['fault']}")
                 if not run_reply.get("ok") or run_reply.get("contact"):
@@ -333,14 +340,17 @@ def run_two_arm_policy(
                 if run_reply.get("settled") is False:
                     raise RuntimeError("chunk did not settle")
 
-                final_pose = run_reply.get("state") or shaped[-1]
-                final_holding = bool(run_reply.get("holding", final_holding))
+                final_pose = end_pose or shaped[-1]
                 chunks_done += 1
                 emit({
                     "arm": arm, "chunk_index": idx, "event": "chunk_done", "admitted": admitted,
                     "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None),
                     **({"wrist_roll_warning": roll_warn} if roll_warn else {}),
                 })
+                ever_held = ever_held or final_holding
+                if ever_held and not final_holding and shaped[-1][5] > closed + 10.0:
+                    outcome = "released"
+                    break
             except Exception as exc:
                 if "fault:" in str(exc) and not _is_coupled_hold(exc):
                     mark_fault(arm)
@@ -367,6 +377,8 @@ def run_two_arm_policy(
     with state_lock:
         any_moved, any_faulted, any_held = any(moved_arms.values()), any(faulted.values()), any(held_arms.values())
     stopped = guard.stopped_reason
+    if set(arm_reports) != set(ARMS) and stopped is None:
+        stopped = "incomplete_arm_reports"
     if not dry_run and fold_context is not None and any_moved and not any_faulted and not any_held and stopped is None:
         if cell_two_arm.away_from_home(cells, libraries):
             park_report = cell_two_arm.safe_fold(
@@ -377,7 +389,8 @@ def run_two_arm_policy(
             if not park_report.get("folded"):
                 stopped = str(park_report.get("person_needed") or "safe_fold_failed")
 
-    overall = "fault" if any_faulted else ("refused" if stopped is not None else ("dry_run" if dry_run else "chunks_done"))
+    all_released = not dry_run and len(arm_reports) == len(ARMS) and all(r.get("outcome") == "released" for r in arm_reports.values())
+    overall = "fault" if any_faulted else ("refused" if stopped is not None else ("dry_run" if dry_run else ("released" if all_released else "chunks_done")))
     return {
         "schema": SCHEMA, "task_id": plan["task_id"], "plan": plan, "result": overall,
         "stopped_reason": stopped, "dry_run": dry_run, "arms": arm_reports, "park": park_report, "events": events,

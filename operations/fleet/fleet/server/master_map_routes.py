@@ -1,7 +1,6 @@
 """Fleet <-> CORE bidirectional master-map exchange routes (2026-11-23).
 
-Bridges ``GET /api/v1/map`` (robot SLAM/localization occupancy snapshot -> PGM/YAML
-bundle) and ``POST /api/v1/map/site`` (site-aligned master grid upload/activation),
+Bridges (the robot map pull is ``map_binding_routes``) and ``POST /api/v1/map/site`` (site-aligned master grid upload/activation),
 storing one SQLite-persisted master grid bound to the active site map version.
 """
 
@@ -109,52 +108,6 @@ def _pgm_to_cells_and_id(
     return width, height, _grid_digest(width, height, resolution, origin, data)
 
 
-def _ros_grid_to_bundle(robot_id: str, raw: dict[str, Any]) -> dict[str, Any]:
-    width = int(raw["width"])
-    height = int(raw["height"])
-    raw_data = raw["data"]
-    if width < 1 or height < 1 or width * height > _MAX_CELLS or len(raw_data) != width * height:
-        raise ValueError("robot map dimensions do not match occupancy data")
-    res = _clean_zero(round(float(raw["resolution"]), 6))
-    raw_origin = raw.get("origin") or {}
-    if isinstance(raw_origin, dict):
-        origin = [_clean_zero(float(raw_origin.get(k, 0.0))) for k in ("x", "y", "yaw")]
-    elif isinstance(raw_origin, (list, tuple)) and len(raw_origin) == 3:
-        origin = [_clean_zero(float(v)) for v in raw_origin]
-    else:
-        raise ValueError("robot map origin is malformed")
-    cells = [100 if int(v) >= 65 else (0 if 0 <= int(v) <= 19 else -1) for v in raw_data]
-    px_map = {0: 254, 100: 0, -1: 205}
-    top_rows = [
-        bytes(px_map[c] for c in cells[r * width:(r + 1) * width])
-        for r in range(height - 1, -1, -1)
-    ]
-    stem = f"robot_{re.sub(r'[^A-Za-z0-9._-]', '_', robot_id)}"
-    pgm = f"P5\n# robot {robot_id}\n{width} {height}\n255\n".encode("ascii") + b"".join(top_rows)
-    sha = hashlib.sha256(pgm).hexdigest()
-    grid_id = _grid_digest(width, height, res, origin, cells)
-    return {
-        "robot_id": robot_id,
-        "map_id": raw.get("map_id"),
-        "grid_id": grid_id,
-        "width": width,
-        "height": height,
-        "resolution": res,
-        "origin": origin,
-        "sha256": sha,
-        "pgm_base64": base64.b64encode(pgm).decode("ascii"),
-        "yaml": {
-            "image": f"{stem}.pgm",
-            "mode": "trinary",
-            "resolution": res,
-            "origin": origin,
-            "negate": 0,
-            "occupied_thresh": 0.65,
-            "free_thresh": 0.196,
-        },
-    }
-
-
 class _MasterGridStore:
     """SQLite persistence for the active site map's master occupancy grid."""
 
@@ -251,26 +204,6 @@ def install_master_map_routes(app, *, console, site_maps, read_guard, require_na
         if active is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE", "activate a site map first")
         return active[1].map_id, int(active[0])
-
-    @app.get("/api/fleet/robots/{robot_id}/map/bundle", dependencies=read_guard, tags=["site-map"])
-    async def fleet_robot_map_bundle(robot_id: str) -> dict[str, Any]:
-        client = console.clients().get(robot_id)
-        if client is None:
-            raise site_map_error(404, "UNKNOWN_ROBOT", f"unknown robot: {robot_id}")
-        try:
-            raw = await client.map()
-        except RobotApiError as exc:
-            if exc.status == 404:
-                raise site_map_error(404, "NO_MAP", "robot has not published an occupancy map yet") from exc
-            raise http_error(exc) from exc
-        except (OSError, httpx.RequestError) as exc:
-            raise http_error(exc) from exc
-        if not raw or not raw.get("data") or int(raw.get("width") or 0) < 1 or int(raw.get("height") or 0) < 1:
-            raise site_map_error(404, "NO_MAP", "robot has not published an occupancy map yet")
-        try:
-            return _ros_grid_to_bundle(robot_id, raw)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise site_map_error(502, "VALIDATION_ERROR", f"robot returned malformed map data: {exc}") from exc
 
     @app.put("/api/fleet/site-map/master-grid", tags=["site-map"])
     async def fleet_upload_master_grid(

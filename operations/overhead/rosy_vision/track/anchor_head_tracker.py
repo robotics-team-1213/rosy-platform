@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-import math, threading, time
+import functools, math, threading, time
 import cv2, numpy as np
 from core_common.protocol.sightings import SiteSightingPayload
 from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration, Detection, DetectorResult, ROBOT_TOP_HEIGHT_M
 
 OMX_HEAD_HEIGHT_M, PINKY_HEAD_OFFSET_M, SIGHTING_MIN_INTERVAL_S = 0.11, 0.055, 0.22
+MOBILE_ANCHOR_KIND = "pinky"
 
 
 @dataclass
@@ -26,6 +27,7 @@ class TrackedHeadState:
     vx: float = 0.0; vy: float = 0.0; speed_mps: float = 0.0; moving: bool = False
     confidence: float = 0.0; zoom: int = 4; reach_m: float = 0.28; captured_at: float = 0.0
     roi_jpeg: bytes | None = field(default=None, repr=False)
+    _roi_render: Callable[[], bytes | None] | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict:
         return {"target_id": self.target_id, "kind": self.kind, "label": self.label, "base_x": round(self.base_x, 4),
@@ -49,6 +51,50 @@ def default_anchors() -> dict[str, TargetAnchor]:
 
 def _wrap_angle(angle: float) -> float: return math.atan2(math.sin(angle), math.cos(angle))
 def _blend_angle(a: float, b: float, weight_b: float) -> float: return _wrap_angle(a + weight_b * _wrap_angle(b - a))
+
+
+def _encode_omx_roi(
+    zoomed: np.ndarray, chosen_cnt, ub_z: float, vb_z: float, head_uz: float, head_vz: float,
+    target_id: str, zoom: int, base_x: float, base_y: float, hx: float, hy: float, hyaw: float, ext_m: float,
+) -> bytes | None:
+    vis = zoomed.copy()
+    zw = vis.shape[1]
+    if chosen_cnt is not None:
+        cv2.drawContours(vis, [chosen_cnt], -1, (0, 215, 255), 2)
+    bx_i, by_i, hx_i, hy_i = int(round(ub_z)), int(round(vb_z)), int(round(head_uz)), int(round(head_vz))
+    cv2.circle(vis, (bx_i, by_i), 10, (80, 230, 100), 2)
+    cv2.drawMarker(vis, (bx_i, by_i), (80, 230, 100), cv2.MARKER_CROSS, 16, 2)
+    cv2.arrowedLine(vis, (bx_i, by_i), (hx_i, hy_i), (255, 220, 0), 3, tipLength=0.18)
+    cv2.rectangle(vis, (hx_i - 18, hy_i - 18), (hx_i + 18, hy_i + 18), (255, 255, 0), 2)
+    cv2.circle(vis, (hx_i, hy_i), 5, (0, 80, 255), -1)
+    cv2.rectangle(vis, (0, 0), (zw, 52), (18, 22, 28), -1)
+    cv2.putText(vis, f"{target_id.upper()} {zoom}x ZOOM | BASE ({base_x:.2f},{base_y:.2f})",
+                (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (180, 240, 200), 1, cv2.LINE_AA)
+    cv2.putText(vis, f"HEAD ({hx:.3f},{hy:.3f})m | YAW {math.degrees(hyaw):.0f}deg | EXT {ext_m:.2f}m",
+                (10, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (100, 235, 255), 1, cv2.LINE_AA)
+    ok, enc = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 86])
+    return bytes(enc) if ok else None
+
+
+def _encode_pinky_roi(
+    zoomed: np.ndarray, chosen_cnt, uc_z: float, vc_z: float, uh_z: float, vh_z: float,
+    target_id: str, zoom: int, fx: float, fy: float, fyaw: float,
+) -> bytes | None:
+    vis = zoomed.copy()
+    zw = vis.shape[1]
+    if chosen_cnt is not None:
+        cv2.drawContours(vis, [chosen_cnt], -1, (80, 220, 120), 2)
+    cx_i, cy_i, hx_i, hy_i = int(round(uc_z)), int(round(vc_z)), int(round(uh_z)), int(round(vh_z))
+    cv2.circle(vis, (cx_i, cy_i), int(round(12 * zoom / 3.0)), (255, 190, 60), 2)
+    cv2.arrowedLine(vis, (cx_i, cy_i), (hx_i, hy_i), (60, 240, 255), 3, tipLength=0.25)
+    cv2.circle(vis, (hx_i, hy_i), 5, (0, 90, 255), -1)
+    cv2.rectangle(vis, (0, 0), (zw, 48), (18, 22, 28), -1)
+    cv2.putText(vis, f"{target_id.upper()} {zoom}x HEAD TRACKER",
+                (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (180, 240, 200), 1, cv2.LINE_AA)
+    cv2.putText(vis, f"POSE ({fx:.3f},{fy:.3f})m | HEAD {math.degrees(fyaw):.0f}deg",
+                (8, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 235, 255), 1, cv2.LINE_AA)
+    ok, enc = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 86])
+    return bytes(enc) if ok else None
 
 
 class AnchorHeadTracker:
@@ -146,7 +192,7 @@ class AnchorHeadTracker:
             anchors = list(self._anchors.values())
             enrolled_robots = set(self._enrolled_robots)
         omx_anchors = [a for a in anchors if a.kind == "omx_ai"]
-        pinky_anchors = [a for a in anchors if a.kind == "pinky"]
+        pinky_anchors = [a for a in anchors if a.kind == MOBILE_ANCHOR_KIND]
 
         for anchor in omx_anchors:
             st = self._track_omx_target(image, captured_at, anchor, img_to_map, map_to_img, camera_pose, scale_x, scale_y)
@@ -224,7 +270,6 @@ class AnchorHeadTracker:
         patch = image[y0:y1, x0:x1]
         zoom = max(2, int(anchor.zoom or 4))
         zoomed = cv2.resize(patch, (0, 0), fx=zoom, fy=zoom, interpolation=cv2.INTER_CUBIC)
-        zh, zw = zoomed.shape[:2]
         ub_z, vb_z = (u_base - x0) * zoom, (v_base - y0) * zoom
 
         gray = cv2.cvtColor(zoomed, cv2.COLOR_BGR2GRAY)
@@ -284,28 +329,16 @@ class AnchorHeadTracker:
         speed = math.hypot(vx, vy)
         ext_m = math.hypot(hx - anchor.base_x, hy - anchor.base_y)
 
-        vis = zoomed.copy()
-        if chosen_cnt is not None:
-            cv2.drawContours(vis, [chosen_cnt], -1, (0, 215, 255), 2)
-        bx_i, by_i, hx_i, hy_i = int(round(ub_z)), int(round(vb_z)), int(round(head_uz)), int(round(head_vz))
-        cv2.circle(vis, (bx_i, by_i), 10, (80, 230, 100), 2)
-        cv2.drawMarker(vis, (bx_i, by_i), (80, 230, 100), cv2.MARKER_CROSS, 16, 2)
-        cv2.arrowedLine(vis, (bx_i, by_i), (hx_i, hy_i), (255, 220, 0), 3, tipLength=0.18)
-        cv2.rectangle(vis, (hx_i - 18, hy_i - 18), (hx_i + 18, hy_i + 18), (255, 255, 0), 2)
-        cv2.circle(vis, (hx_i, hy_i), 5, (0, 80, 255), -1)
-        cv2.rectangle(vis, (0, 0), (zw, 52), (18, 22, 28), -1)
-        cv2.putText(vis, f"{anchor.target_id.upper()} {zoom}x ZOOM | BASE ({anchor.base_x:.2f},{anchor.base_y:.2f})",
-                    (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (180, 240, 200), 1, cv2.LINE_AA)
-        cv2.putText(vis, f"HEAD ({hx:.3f},{hy:.3f})m | YAW {math.degrees(hyaw):.0f}deg | EXT {ext_m:.2f}m",
-                    (10, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (100, 235, 255), 1, cv2.LINE_AA)
-        ok, enc = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 86])
         return TrackedHeadState(
             target_id=anchor.target_id, kind="omx_ai", label=anchor.label,
             base_x=anchor.base_x, base_y=anchor.base_y, base_yaw=anchor.base_yaw,
             head_x=hx, head_y=hy, head_yaw=hyaw, extension_m=ext_m, vx=vx, vy=vy,
             speed_mps=speed, moving=speed >= 0.015, confidence=confidence,
             zoom=zoom, reach_m=anchor.reach_m, captured_at=captured_at,
-            roi_jpeg=bytes(enc) if ok else None,
+            _roi_render=functools.partial(
+                _encode_omx_roi, zoomed, chosen_cnt, ub_z, vb_z, head_uz, head_vz,
+                anchor.target_id, zoom, anchor.base_x, anchor.base_y, hx, hy, hyaw, ext_m,
+            ),
         )
 
     def _track_pinky_target(
@@ -352,7 +385,6 @@ class AnchorHeadTracker:
         patch = image[y0:y1, x0:x1]
         zoom = max(2, int(anchor.zoom or 3))
         zoomed = cv2.resize(patch, (0, 0), fx=zoom, fy=zoom, interpolation=cv2.INTER_CUBIC)
-        zh, zw = zoomed.shape[:2]
         uc_z, vc_z = (u_c - x0) * zoom, (v_c - y0) * zoom
 
         gray = cv2.cvtColor(zoomed, cv2.COLOR_BGR2GRAY)
@@ -375,11 +407,14 @@ class AnchorHeadTracker:
         confidence = 0.90 if best_blob is not None else 0.78
         chosen_cnt = None
         if valid_cnts:
-            chosen_cnt = min(valid_cnts, key=lambda c: math.hypot(
-                cv2.moments(c)["m10"] / max(1.0, cv2.moments(c)["m00"]) - uc_z,
-                cv2.moments(c)["m01"] / max(1.0, cv2.moments(c)["m00"]) - vc_z,
-            ))
-            m = cv2.moments(chosen_cnt)
+            with_moments = [(c, cv2.moments(c)) for c in valid_cnts]
+            chosen_cnt, m = min(
+                with_moments,
+                key=lambda item: math.hypot(
+                    item[1]["m10"] / max(1.0, item[1]["m00"]) - uc_z,
+                    item[1]["m01"] / max(1.0, item[1]["m00"]) - vc_z,
+                ),
+            )
             if m["m00"] > 50.0:
                 cx_z, cy_z = m["m10"] / m["m00"], m["m01"] / m["m00"]
                 if best_blob is None:
@@ -445,25 +480,15 @@ class AnchorHeadTracker:
         uh_z = (float(h_px[0] * scale_x) - x0) * zoom if np.all(np.isfinite(h_px)) else uc_z
         vh_z = (float(h_px[1] * scale_y) - y0) * zoom if np.all(np.isfinite(h_px)) else vc_z - 28
 
-        vis = zoomed.copy()
-        if chosen_cnt is not None:
-            cv2.drawContours(vis, [chosen_cnt], -1, (80, 220, 120), 2)
-        cx_i, cy_i, hx_i, hy_i = int(round(uc_z)), int(round(vc_z)), int(round(uh_z)), int(round(vh_z))
-        cv2.circle(vis, (cx_i, cy_i), int(round(12 * zoom / 3.0)), (255, 190, 60), 2)
-        cv2.arrowedLine(vis, (cx_i, cy_i), (hx_i, hy_i), (60, 240, 255), 3, tipLength=0.25)
-        cv2.circle(vis, (hx_i, hy_i), 5, (0, 90, 255), -1)
-        cv2.rectangle(vis, (0, 0), (zw, 48), (18, 22, 28), -1)
-        cv2.putText(vis, f"{anchor.target_id.upper()} {zoom}x HEAD TRACKER",
-                    (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (180, 240, 200), 1, cv2.LINE_AA)
-        cv2.putText(vis, f"POSE ({fx:.3f},{fy:.3f})m | HEAD {math.degrees(fyaw):.0f}deg",
-                    (8, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 235, 255), 1, cv2.LINE_AA)
-        ok, enc = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 86])
         state = TrackedHeadState(
             target_id=anchor.target_id, kind="pinky", label=anchor.label,
             base_x=fx, base_y=fy, base_yaw=fyaw, head_x=hx, head_y=hy, head_yaw=fyaw,
             extension_m=PINKY_HEAD_OFFSET_M, vx=vx, vy=vy, speed_mps=speed, moving=speed >= 0.02,
             confidence=confidence, zoom=zoom, reach_m=anchor.reach_m, captured_at=captured_at,
-            roi_jpeg=bytes(enc) if ok else None,
+            _roi_render=functools.partial(
+                _encode_pinky_roi, zoomed, chosen_cnt, uc_z, vc_z, uh_z, vh_z,
+                anchor.target_id, zoom, fx, fy, fyaw,
+            ),
         )
         det = Detection(
             x=float(fx), y=float(fy),
@@ -500,4 +525,17 @@ class AnchorHeadTracker:
     def roi_jpeg(self, target_id: str) -> tuple[bytes | None, float]:
         with self._lock:
             st = self._states.get(target_id)
-            return (st.roi_jpeg, st.captured_at) if st is not None and st.roi_jpeg is not None else (None, 0.0)
+            if st is None:
+                return (None, 0.0)
+            if st.roi_jpeg is not None:
+                return (st.roi_jpeg, st.captured_at)
+            render = st._roi_render
+            captured_at = st.captured_at
+        if render is None:
+            return (None, 0.0)
+        jpeg = render()
+        with self._lock:
+            if self._states.get(target_id) is st and st.roi_jpeg is None:
+                st.roi_jpeg = jpeg
+                st._roi_render = None
+        return (jpeg, captured_at) if jpeg is not None else (None, 0.0)

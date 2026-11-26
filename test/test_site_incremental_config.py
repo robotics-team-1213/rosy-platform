@@ -10,15 +10,16 @@ import yaml
 
 from deploy.site.build_candidate import DEPLOY_FILES, DOC_FILES, build_candidate
 from test_site_candidate_verifier import TEST_KEY_ID, candidate, _add_account, _add_monitoring
+from test_site_incremental_update import _add_world
 
 
 def test_changed_mounted_caddy_config_recreates_proxy_without_image_transfer(candidate, tmp_path):
-    _add_monitoring(_add_account(candidate))
+    _add_world(_add_monitoring(_add_account(candidate)))
     repo = tmp_path / "repo"
     source = Path(__file__).resolve().parents[1]
     site = repo / "deploy/site"
     site.mkdir(parents=True)
-    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
+    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring", "Dockerfile.world"):
         shutil.copyfile(source / "deploy/site" / name, site / name)
     for name in DOC_FILES:
         dest = repo / name
@@ -40,7 +41,7 @@ def test_changed_mounted_caddy_config_recreates_proxy_without_image_transfer(can
         out = tmp_path / f"candidate-{index}"
         manifest = build_candidate(repo, out, runner=run, base_candidate=candidate[0],
                                    trusted_key_id=TEST_KEY_ID, trusted_public_key=candidate[3])
-        assert len(manifest["reused_images"]) == 6
+        assert len(manifest["reused_images"]) == 7
         docs = [yaml.safe_load((out / "deploy/site" / name).read_text())
                 for name in ("compose.yaml", "compose.account.yaml")]
         for config, name in zip(docs, ("Caddyfile", "Caddyfile.account")):

@@ -74,3 +74,22 @@ three nominal 90×30×90 mm stacking trials with native contact evidence and own
 cleanup. Additional collider and 240 Hz contact-integration changes were needed;
 the root correction alone did not establish the complete task. See the execution
 record for the failed intermediate runs and separate PPO outcome.
+
+## Reopening a flattened scene
+
+A moved ROSY World A/B scene (SHA-256 `3a051564d5e28f5f028d838a0f00bd4f822c673cd82a97e08f84aa05eae3b80e`)
+showed the two `Physics/world_fixed` roots in standalone OpenUSD 26.8.
+After Isaac Sim 6.2 started, both its USD context and an in-process
+`Usd.Stage.Open` also showed `Geometry/world/link0` roots for both arms.
+An exact root-list assertion in the transport probe aborted before play.
+
+Audit authored roots and the file hash in a separate OpenUSD process before
+opening the scene in Kit. In Kit, check that the intended publisher roots
+still resolve and record extra roots separately. Check native `fixed_base`
+and support geometry before accepting the reopened scene for physical use.
+
+In lab run `sim-a351d1ab14-a18772` at source `a351d1ab14`, the probe
+received 241 samples over 60.088 seconds with the same USD and both saved
+root paths. The cargo fell below the support level. This result establishes
+the transport path. Physical acceptance still requires the fixed-base and
+support checks.

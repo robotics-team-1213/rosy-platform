@@ -19,11 +19,19 @@ import {
 } from './cell-real2sim-specs.js';
 import {createCellActions} from './cell-real2sim-actions.js';
 import {createCellViews} from './cell-real2sim-views.js';
+import {
+  CELL_PLANS_PATH,
+  createPipelinePanel,
+  discoverPinkyIds,
+  PIPELINE_STATUS_PATH,
+  UNLOAD_RELEASE_PATH,
+} from './cell-pipeline-panel.js';
 
 export * from './cell-real2sim-specs.js';
 
 // namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
-export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null}) {
+export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null,
+  freshJointArmIds = () => []}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -31,8 +39,15 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     selectedInspectorTarget: 'arm_s',
     selectedInspectorCamByTarget: {},
     dualInspectorCamMode: false,
+    selectedRobotId: null,
+    unconfirmedStopWarning: '',
+    stopGen: 0,
   };
   let lastCellTasksBody = null;
+  let lastStatusBody = null;
+  let lastUnloadRelease = null;
+  let lastPlansBody = null;
+  let pollTimer = null;
   let liveStreamOn = true;
 
   const ctx = {
@@ -52,15 +67,23 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     runPresetTask, createCustomTask, loadStationZonesYaml, saveStationZonesYaml,
     runVisionAutoCheck, toggleCableGuard,
   } = actions;
+  const pipelinePanel = createPipelinePanel({
+    ...ctx,
+    onRobotChange: rid => {
+      state.selectedRobotId = rid;
+      void refreshCellTasks(++generation);
+    },
+  });
   const {renderRightInspector, renderVisualCards, renderCameraMatrix} = createCellViews(ctx);
 
   function toggleLiveStream() {
     liveStreamOn = !liveStreamOn;
     const btn = $('cell-live-stream-toggle');
     if (btn) {
-      btn.textContent = liveStreamOn ? '실시간 카메라 자동갱신 (ON · 2초)' : '실시간 카메라 자동갱신 (OFF · 일시정지)';
+      btn.textContent = liveStreamOn ? '영상 일시정지' : '영상 다시 보기';
+      btn.setAttribute('aria-pressed', String(liveStreamOn));
     }
-    cellFrames?.setRunning(liveStreamOn);
+    cellFrames?.setPaused(!liveStreamOn);
   }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {
@@ -164,8 +187,29 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     status.textContent = `스냅샷 ${body.active?.id || '—'} · 이전 ${body.previous?.id || '없음'} · Stage 1(MuJoCo) -> Stage 2(Isaac Sim) 파이프라인 준비 완료`;
   }
 
+  function stopPolling() {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function ensurePolling() {
+    if (pollTimer !== null || typeof window === 'undefined' || typeof window.setInterval !== 'function') return;
+    if (!$('cell-visual-cards')?.parentNode) return;
+    pollTimer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        void refreshCellTasks(generation);
+      }
+    }, 3000);
+    pollTimer?.unref?.();
+  }
+
   function clear() {
     generation++;
+    state.stopGen++;
+    state.unconfirmedStopWarning = '';
+    stopPolling();
     if ($('real2sim-figures')) {
       $('real2sim-figures').hidden = true;
       $('real2sim-figures').replaceChildren();
@@ -259,6 +303,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   function renderCellTasks(body) {
     lastCellTasksBody = body;
     renderDstOptions();
+    pipelinePanel.render(body, lastStatusBody, lastUnloadRelease, lastPlansBody);
     renderVisualCards(body);
     renderCameraMatrix();
     renderRightInspector(body);
@@ -278,8 +323,12 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     syncOperatorButtons();
     const taskStatus = $('cell-tasks-status');
     if (taskStatus) {
-      const s = body?.summary || {};
-      taskStatus.textContent = `OMX 셀 태스크 원장: 전체 ${s.total ?? (body?.tasks?.length || 0)}건 (대기 ${s.queued ?? 0} · 실행 ${s.running ?? 0} · 완료 ${s.completed ?? 0})`;
+      if (state.unconfirmedStopWarning) {
+        taskStatus.textContent = state.unconfirmedStopWarning;
+      } else {
+        const s = body?.summary || {};
+        taskStatus.textContent = `OMX 셀 태스크 원장: 전체 ${s.total ?? (body?.tasks?.length || 0)}건 (대기 ${s.queued ?? 0} · 실행 ${s.running ?? 0} · 완료 ${s.completed ?? 0})`;
+      }
     }
   }
 
@@ -287,10 +336,44 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     try {
       const body = await request(CELL_TASKS_PATH);
       if (expectedGen !== generation) return;
-      renderCellTasks(body);
+      let statusBody = null;
+      try {
+        statusBody = await request(PIPELINE_STATUS_PATH);
+      } catch {
+        statusBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastStatusBody = statusBody;
+      const ids = discoverPinkyIds(body, statusBody);
+      if (!state.selectedRobotId || !ids.includes(state.selectedRobotId)) {
+        state.selectedRobotId = ids[0] || 'rosy_46';
+      }
+      let unloadReleaseBody = null;
+      try {
+        unloadReleaseBody = await request(`${UNLOAD_RELEASE_PATH}?robot_id=${encodeURIComponent(state.selectedRobotId)}`);
+      } catch {
+        unloadReleaseBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastUnloadRelease = unloadReleaseBody;
+      let plansBody = null;
+      try {
+        plansBody = await request(CELL_PLANS_PATH);
+      } catch {
+        plansBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastPlansBody = plansBody;
+      renderCellTasks({
+        ...body,
+        live_joint_arms: freshJointArmIds(),
+        pinky_robots: ids,
+        selected_robot_id: state.selectedRobotId,
+      });
+      ensurePolling();
     } catch (error) {
       if (expectedGen !== generation) return;
-      if ($('cell-tasks-status')) {
+      if ($('cell-tasks-status') && !state.unconfirmedStopWarning) {
         $('cell-tasks-status').textContent = `OMX 셀 태스크 조회 실패: ${error.message}`;
       }
     }

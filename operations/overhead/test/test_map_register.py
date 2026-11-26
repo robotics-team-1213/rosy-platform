@@ -139,3 +139,18 @@ def test_the_pale_pink_bay_tape_is_not_white_lane_paint():
     img[:, 200:208] = cv2.cvtColor(np.uint8([[[170, 55, 200]]]), cv2.COLOR_HSV2BGR)[0, 0]  # the pink tape
     mask = mr._line_mask(img)
     assert mask[120, 100:108].any() and not mask[120, 200:208].any()
+
+
+def test_world_261026_fallback_cannot_bypass_stl_gate_with_fabricated_precision(paint, monkeypatch):
+    from rosy_vision import world_261026_auto as auto
+
+    fake_i2m = np.linalg.inv(similarity(400.0, 0.0, (640.0, 360.0)))
+    monkeypatch.setattr(auto, "auto_calibrate_and_trace_world_261026", lambda _img: {
+        "image_to_map": fake_i2m, "map_to_image": np.linalg.inv(fake_i2m),
+        "rms_m": 0.002, "lens_profile": None,
+    })
+    blank = np.full((720, 1280, 3), 90, np.uint8)
+    assert mr._register_world_261026(blank, paint) is None
+    # Negative projective scale should still evaluate _in_frame symmetrically against ref_w.
+    pts = np.array([[0.0, 0.0], [0.5, 0.0]], dtype=float)
+    assert mr._in_frame(-np.linalg.inv(fake_i2m), pts, 1280, 720).all()

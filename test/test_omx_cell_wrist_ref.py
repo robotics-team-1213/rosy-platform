@@ -120,3 +120,28 @@ def test_a_saved_reference_gets_its_height_scale_from_one_rise_probe_and_the_pic
     out = cr.ref_hook(config, Cam(), target, write_library, "any")()
     assert out["verdict"] == "pass" and out["top_offset_mm"] == pytest.approx(5, abs=2) and state["dz"] == 0.0
     assert json.loads(path.read_text())["scale_mm"] == pytest.approx(155, abs=10)
+
+
+def test_ref_estimate_defaults_off_and_ill_conditioned_jacobian_aborts():
+    import cell_params as prm
+
+    assert prm.default("wrist.ref_estimate") == 0
+
+    class Cam:
+        def frame(self, _c):
+            return frame(320, 200)
+
+        def act(self, _c):
+            return {"ok": True}
+
+    bad_j = [[-0.077, -0.096], [0.890, 3.768]]
+    out = cr.ref_servo(Cam(), "wrist", HSV, {"u": 150.0, "v": 150.0}, lambda dx, dy: "lib.json", J=bad_j)
+    assert out["verdict"] == "refuse" and len(out["iterations"]) == 1
+
+    # White pads also yield a valid fingertip_point when color="white"
+    img_w = np.full((480, 640, 3), 120, np.uint8)
+    cv2.fillPoly(img_w, [np.array([[220, 479], [355, 360], [362, 479]])], (235, 225, 215))
+    cv2.fillPoly(img_w, [np.array([[470, 479], [404, 360], [398, 479]])], (235, 225, 215))
+    tip_w = cr.fingertip_point(img_w, color="white")
+    assert tip_w is not None and 330.0 <= tip_w[0] <= 420.0
+

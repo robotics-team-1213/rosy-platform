@@ -53,6 +53,14 @@ on:
       - shared/web/**
       - operations/monitoring/src/**
       - applications/monitoring/web/**
+      - deploy/site/secret_exec.py
+      - applications/world/serve.py
+      - applications/world/bridge_real_fleet.py
+      - applications/world/world_state.py
+      - applications/world/world_mdns.py
+      - applications/world/world_mdns_probe.py
+      - applications/world/web/**
+      - tools/sim/world_env_adapter.py
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
       - middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
       - docs/reference/site-lan-discovery-profile.md

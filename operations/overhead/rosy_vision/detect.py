@@ -1,6 +1,11 @@
-"""CPU ArUco detector; OpenCV is deliberately isolated in this module."""
+"""CPU ArUco and robot QR detector; OpenCV is deliberately isolated in this module."""
 
 from __future__ import annotations
+
+import math
+import re
+import time
+from collections.abc import Iterable
 
 import cv2
 import numpy as np
@@ -42,12 +47,14 @@ def _marker_detector(aruco):
 _DETECT_MARKERS = _marker_detector(cv2.aruco)
 
 # D-575: a 40 mm sticker is ~10 px on the ceiling frame and decodes in only part of
-# the frames (D-562: ~61 %). A rejected candidate this small is read once more from
-# a 4x crop around it; the full frame is never enlarged (D-562 rejected that for CPU).
-_REREAD_MAX_PX = 16
+# the frames (D-562: ~61 %). A 4x crop rereads small rejected candidates, including
+# enlarged robot markers that span more than 16 px.
+_REREAD_MAX_PX = 32
 _REREAD_SCALE = 4
 _REREAD_PAD_PX = 6
 _REREAD_BORDER_PX = 20
+_REREAD_MAX_CROPS = 6
+_REREAD_BUDGET_S = 0.04
 
 
 def generate_marker_image(marker_id: int, side_pixels: int):
@@ -60,36 +67,288 @@ def generate_marker_image(marker_id: int, side_pixels: int):
     return cv2.aruco.drawMarker(_DICTIONARY, marker_id, side_pixels)
 
 
-def detect_markers(jpeg: bytes) -> dict[int, MarkerQuad]:
+def detect_markers(
+    jpeg: bytes,
+    *,
+    reread_qr: bool = True,
+    expected_marker_ids: Iterable[int] | None = None,
+) -> DetectedMarkers:
     """Decode one JPEG and return marker corners; malformed frames are empty."""
 
     if not isinstance(jpeg, bytes) or not jpeg:
-        return {}
+        return DetectedMarkers()
     image = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
-        return {}
+        return DetectedMarkers()
     corners, marker_ids, rejected = _DETECT_MARKERS(image)
     found: dict[int, MarkerQuad] = {}
     for marker_id, quad in zip(() if marker_ids is None else marker_ids.reshape(-1), corners):
         points = tuple((float(point[0]), float(point[1])) for point in quad.reshape(4, 2))
         found[int(marker_id)] = points  # type: ignore[assignment]
     _reread_small(image, rejected, found)
-    return found
+    qr_ids = _detect_qr_robot_markers(
+        image, found, rejected, reread_qr=reread_qr, expected_marker_ids=expected_marker_ids,
+    )
+    return DetectedMarkers(found, qr_ids=qr_ids, image=image)
+
+
+class DetectedMarkers(dict):
+    """Marker id -> 4 pixel corners; ``qr_ids`` names ids decoded from robot QR codes."""
+
+    def __init__(self, *args, qr_ids: Iterable[int] = (), image: np.ndarray | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.qr_ids: frozenset[int] = frozenset(qr_ids)
+        self.image: np.ndarray | None = image
+
+
+_QR_ROBOT_LABEL = re.compile(r"^\s*rosy[-_\s]?(\d{1,2})\s*$", re.IGNORECASE)
+_QR_STD = cv2.QRCodeDetector()
+_QR_ARUCO = cv2.QRCodeDetectorAruco() if hasattr(cv2, "QRCodeDetectorAruco") else None
+_QR_DETECTOR = _QR_ARUCO or _QR_STD
+_QR_MIN_SIDE_PX = 12.0
+_QR_MAX_CANDIDATES = 8
+_QR_ROI_MIN_PX = 12
+_QR_ROI_MAX_PX = 95
+_QR_ROI_PAD_PX = 8
+_QR_ROI_SCALE = 4
+_QR_ROI_MAX = 4
+_QR_ROI_BUDGET_S = 0.04
+_QR_WARP_SIZE = 270
+_QR_WARP_MARGIN = 30
+_QR_WARP_DST = np.array([
+    [_QR_WARP_MARGIN, _QR_WARP_MARGIN],
+    [_QR_WARP_SIZE - _QR_WARP_MARGIN, _QR_WARP_MARGIN],
+    [_QR_WARP_SIZE - _QR_WARP_MARGIN, _QR_WARP_SIZE - _QR_WARP_MARGIN],
+    [_QR_WARP_MARGIN, _QR_WARP_SIZE - _QR_WARP_MARGIN],
+], dtype=np.float32)
+
+
+def parse_robot_qr_id(text: str) -> int | None:
+    """Parse ``ROSY-45`` / ``rosy_45`` -> ``45``, or None for unrelated QR payloads."""
+    if not isinstance(text, str):
+        return None
+    match = _QR_ROBOT_LABEL.fullmatch(text)
+    return int(match.group(1)) if match else None
+
+
+def generate_qr_image(text: str, side_pixels: int, *, border_modules: int = 2) -> np.ndarray:
+    """Synthesize a square grayscale robot QR image (for unit tests)."""
+    if side_pixels <= 0:
+        raise ValueError("side_pixels must be positive")
+    params = cv2.QRCodeEncoder_Params()
+    params.correction_level = cv2.QRCodeEncoder_CORRECT_LEVEL_L
+    raw = cv2.QRCodeEncoder.create(params).encode(text)
+    if border_modules > 0:
+        raw = cv2.copyMakeBorder(raw, border_modules, border_modules, border_modules, border_modules,
+                                 cv2.BORDER_CONSTANT, value=255)
+    # Integer module scale first so module edges stay crisp before camera-like downsampling.
+    uniform = cv2.resize(raw, None, fx=10, fy=10, interpolation=cv2.INTER_NEAREST)
+    interp = cv2.INTER_AREA if side_pixels < uniform.shape[0] else cv2.INTER_NEAREST
+    return cv2.resize(uniform, (side_pixels, side_pixels), interpolation=interp)
+
+
+def _decode_qr_points(detector, image: np.ndarray, pts: np.ndarray) -> str:
+    try:
+        res = detector.decode(image, pts.reshape(1, 4, 2))
+    except cv2.error:
+        return ""
+    if isinstance(res, tuple):
+        return str(res[0] or "")
+    return str(res or "")
+
+
+def _quad_ok(pts: np.ndarray, *, min_side: float = _QR_MIN_SIDE_PX) -> bool:
+    if pts.shape != (4, 2) or not np.all(np.isfinite(pts)):
+        return False
+    sides = [float(np.linalg.norm(pts[(i + 1) % 4] - pts[i])) for i in range(4)]
+    return min(sides) >= min_side
+
+
+def _decode_qr_quad(gray: np.ndarray, pts: np.ndarray) -> tuple[str, np.ndarray]:
+    """Decode one detected QR quad and return ``(text, canonical_quad)``."""
+    direct = _decode_qr_points(_QR_DETECTOR, gray, pts)
+    if direct:
+        return direct, pts
+    try:
+        h_mat = cv2.getPerspectiveTransform(pts.astype(np.float32), _QR_WARP_DST)
+        warped = cv2.warpPerspective(gray, h_mat, (_QR_WARP_SIZE, _QR_WARP_SIZE),
+                                     flags=cv2.INTER_CUBIC, borderValue=255)
+    except cv2.error:
+        return "", pts
+    _, otsu = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    for candidate in (warped, otsu):
+        for detector in (_QR_STD, _QR_ARUCO):
+            if detector is None:
+                continue
+            try:
+                text, w_pts, _ = detector.detectAndDecode(candidate)
+            except cv2.error:
+                text, w_pts = "", None
+            if text:
+                if w_pts is not None:
+                    w_arr = np.asarray(w_pts, dtype=np.float32).reshape(-1, 2)
+                    if w_arr.shape == (4, 2) and np.all(np.isfinite(w_arr)):
+                        try:
+                            mapped = cv2.perspectiveTransform(w_arr.reshape(1, 4, 2), np.linalg.inv(h_mat)).reshape(4, 2)
+                            if _quad_ok(mapped):
+                                return str(text), mapped
+                        except (cv2.error, np.linalg.LinAlgError):
+                            pass
+                return str(text), pts
+        decoded = _decode_qr_points(_QR_STD, candidate, _QR_WARP_DST)
+        if decoded:
+            return decoded, pts
+    return "", pts
+
+
+def _reread_small_qr(
+    gray: np.ndarray, rejected, found: dict[int, MarkerQuad], qr_ids: set[int]
+) -> None:
+    """Decode small top-mounted robot QR stickers from 4x upscaled ROIs (mirrors D-575).
+
+    Reads compact bright sticker patches and rejected small marker quads without upscaling
+    the full frame, mapping corners back to full-frame pixel coordinates.
+    """
+    height, width = gray.shape[:2]
+    boxes: list[tuple[int, int, int, int, int]] = []
+    # Bright white label patches (circular or square sticker on robot top deck)
+    _, bright = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        if not (_QR_ROI_MIN_PX <= bw <= _QR_ROI_MAX_PX and _QR_ROI_MIN_PX <= bh <= _QR_ROI_MAX_PX):
+            continue
+        if max(bw / bh, bh / bw) > 2.5 or cv2.contourArea(contour) < 80:
+            continue
+        boxes.append((bw * bh, bx, by, bx + bw, by + bh))
+    for candidate in rejected:
+        pts = np.asarray(candidate, dtype=float).reshape(4, 2)
+        low, high = pts.min(axis=0), pts.max(axis=0)
+        bw, bh = high[0] - low[0], high[1] - low[1]
+        if _QR_ROI_MIN_PX <= max(bw, bh) <= _QR_ROI_MAX_PX:
+            x0, y0 = int(np.floor(low[0])), int(np.floor(low[1]))
+            x1, y1 = int(np.ceil(high[0])), int(np.ceil(high[1]))
+            boxes.append((max(1, (x1 - x0) * (y1 - y0)), x0, y0, x1, y1))
+
+    found_boxes = [
+        (min(p[0] for p in pts) - 4.0, min(p[1] for p in pts) - 4.0,
+         max(p[0] for p in pts) + 4.0, max(p[1] for p in pts) + 4.0)
+        for pts in found.values()
+    ]
+    deduped: list[tuple[int, int, int, int]] = []
+    for _, x0, y0, x1, y1 in sorted(boxes, reverse=True):
+        cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        if any(fx0 <= cx <= fx1 and fy0 <= cy <= fy1 for fx0, fy0, fx1, fy1 in found_boxes):
+            continue
+        if any(abs(cx - (a + c) / 2.0) < 12.0 and abs(cy - (b + d) / 2.0) < 12.0 for a, b, c, d in deduped):
+            continue
+        deduped.append((x0, y0, x1, y1))
+        if len(deduped) >= _QR_ROI_MAX:
+            break
+
+    scale, pad = _QR_ROI_SCALE, _QR_ROI_PAD_PX
+    deadline = time.monotonic() + _QR_ROI_BUDGET_S
+    for bx0, by0, bx1, by1 in deduped:
+        if time.monotonic() >= deadline:
+            break
+        x0, y0 = max(0, bx0 - pad), max(0, by0 - pad)
+        x1, y1 = min(width, bx1 + pad), min(height, by1 + pad)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        crop = gray[y0:y1, x0:x1]
+        if int(crop.max()) - int(crop.min()) < 40:
+            continue
+        up = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        blur = cv2.GaussianBlur(up, (0, 0), 1.5)
+        sharp = cv2.addWeighted(up, 1.7, blur, -0.7, 0)
+        _, otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        decoded_text, decoded_pts = "", None
+        for view in (sharp, up, otsu):
+            try:
+                text, w_pts, _ = _QR_DETECTOR.detectAndDecode(view)
+            except cv2.error:
+                text, w_pts = "", None
+            if text:
+                decoded_text, decoded_pts = str(text), w_pts
+                break
+        if not decoded_text or decoded_pts is None:
+            continue
+        marker_id = parse_robot_qr_id(decoded_text)
+        if marker_id is None or marker_id in found:
+            continue
+        w_arr = np.asarray(decoded_pts, dtype=np.float32).reshape(-1, 2)
+        if not _quad_ok(w_arr, min_side=8.0 * scale):
+            continue
+        mapped = (w_arr + 0.5) / scale - 0.5 + np.array([x0, y0], dtype=np.float32)
+        if not _quad_ok(mapped, min_side=8.0):
+            continue
+        found[marker_id] = tuple((float(px), float(py)) for px, py in mapped)  # type: ignore[assignment]
+        qr_ids.add(marker_id)
+
+
+def _detect_qr_robot_markers(
+    image: np.ndarray,
+    found: dict[int, MarkerQuad],
+    rejected=(),
+    *,
+    reread_qr: bool = True,
+    expected_marker_ids: Iterable[int] | None = None,
+) -> set[int]:
+    """Detect robot QR stickers on ``image`` without colliding with already-decoded ArUco ids."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    qr_ids: set[int] = set()
+    try:
+        ok, quads = _QR_DETECTOR.detectMulti(gray)
+    except cv2.error:
+        ok, quads = False, None
+    if ok and quads is not None:
+        for raw_quad in quads[:_QR_MAX_CANDIDATES]:
+            pts = np.asarray(raw_quad, dtype=np.float32).reshape(-1, 2)
+            if not _quad_ok(pts):
+                continue
+            text, canonical = _decode_qr_quad(gray, pts)
+            marker_id = parse_robot_qr_id(text)
+            if marker_id is None or marker_id in found:
+                continue
+            found[marker_id] = tuple((float(x), float(y)) for x, y in canonical)  # type: ignore[assignment]
+            qr_ids.add(marker_id)
+    expected = frozenset(expected_marker_ids) if expected_marker_ids is not None else frozenset()
+    if reread_qr and not (expected and expected.issubset(found)):
+        _reread_small_qr(gray, rejected, found, qr_ids)
+    return qr_ids
 
 
 def _reread_small(image, rejected, found: dict[int, MarkerQuad]) -> None:
     """D-575: decode small rejected candidates from an enlarged crop; first id wins."""
     height, width = image.shape[:2]
     pad, scale, border = _REREAD_PAD_PX, _REREAD_SCALE, _REREAD_BORDER_PX
+    deadline = time.monotonic() + _REREAD_BUDGET_S
+    candidates = []
     for candidate in rejected:
+        if time.monotonic() >= deadline:
+            return
         points = np.asarray(candidate, dtype=float).reshape(4, 2)
         low, high = points.min(axis=0), points.max(axis=0)
-        if (high - low).max() > _REREAD_MAX_PX:
+        span = float((high - low).max())
+        if span > _REREAD_MAX_PX:
+            continue
+        sides = [math.dist(points[k], points[(k + 1) % 4]) for k in range(4)]
+        min_side = min(sides)
+        if min_side <= 0.0:
+            continue
+        aspect = max(sides) / min_side
+        if aspect > 2.5:
             continue
         x0, y0 = (max(0, int(v) - pad) for v in np.floor(low))
         x1, y1 = min(width, int(np.ceil(high[0])) + pad), min(height, int(np.ceil(high[1])) + pad)
         if x1 <= x0 or y1 <= y0:
             continue
+        candidates.append((aspect, -span, x0, y0, x1, y1))
+
+    candidates.sort(key=lambda candidate: candidate[:2])
+    for _, _, x0, y0, x1, y1 in candidates[:_REREAD_MAX_CROPS]:
+        if time.monotonic() >= deadline:
+            break
         crop = cv2.resize(image[y0:y1, x0:x1], None, fx=scale, fy=scale,
                           interpolation=cv2.INTER_CUBIC)
         crop = cv2.copyMakeBorder(crop, border, border, border, border, cv2.BORDER_REPLICATE)

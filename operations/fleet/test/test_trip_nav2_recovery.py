@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import math
 import time
+from datetime import datetime, timezone
 from hashlib import sha256
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from fakes import FakeClock, FakeRobot, fresh_power_health, run
@@ -19,7 +21,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.server.trip_guard import install_trip_guard
-from fleet.server.trip_nav2_route import NAV2_RETRIES, NAV2_RETRY_S
+from fleet.server.trip_nav2_route import NAV2_RETRIES, NAV2_RETRY_S, NAV2_TRANSIENT_RETRY_S
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripRunner
 from fleet.site_map import SiteMap
@@ -247,7 +249,8 @@ def test_nav2_failed_no_detour_retries_then_holds_until_resume():
     assert len(sent_routes) == NAV2_RETRIES + 2
 
 
-def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
+@pytest.mark.parametrize("lost", [False, True])
+def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path, lost):
     clock = FakeClock()
     clock.now = time.time()
     store = SiteMapStore(tmp_path / "site.sqlite", clock=clock)
@@ -262,9 +265,11 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"},
         sha256(b"vw-tok").hexdigest(): {"principal_id": "carol", "role": "viewer"},
     }
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"])
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="bob")
     app = create_app(
         console,
-        task_service=FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"]),
+        task_service=tasks,
         site_maps=store, site_users=users,
     )
     app.state.trip_runner._clock = clock
@@ -286,30 +291,78 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         client.portal.call(runner.tick)
         assert len(robot.routes) == 1
 
+        runner.halts._clock = clock
+        cancel = runner._cancel_goal
+        attempts = []
+
+        async def controlled_cancel(rid):
+            attempts.append(rid)
+            if lost and len(attempts) == 1:
+                raise OSError("lost cancel")
+            return await cancel(rid)
+
+        runner._cancel_goal = controlled_cancel
+        camera_holds = []
+        if lost:
+            runner._live["rosy_42"].view["detail"]["camera_lane_fallback"] = {"phase": "starting", "index": 0}
+            async def hold_camera(rid):
+                camera_holds.append(rid)
+                return {"mode": "OFF"}
+            runner._junction.hold = hold_camera
+        robot._state.update(mode="IDLE", goal=None, velocity={"linear": 0., "angular": 0.}, line_follow={"mode": "OFF"})
+
+        def sample():
+            stamp = datetime.fromtimestamp(clock.now - .01, timezone.utc).isoformat()
+            robot._state["evidence"] = {"velocity": {"sampled_at": stamp, "evidence": "fresh"}}
+
+        sample()
         paused = client.post(f"/api/fleet/trips/{tid}/pause", json={"reason": "blocked_ahead"}, headers=op)
         assert paused.status_code == 200, paused.text
-        assert paused.json()["hold"]["reason"] == "fleet_hold" and robot._state["navigation"] == "CANCELED"
+        held = paused.json()["hold"]
+        assert held["reason"] == "fleet_hold" and held["stop"]["confirmed"] is False
+        assert runner._live["rosy_42"].active_route is not None
+        assert store.trip(tid)["hold"]["stop"] == held["stop"]
+        assert client.post(f"/api/fleet/trips/{tid}/pause", headers=op).json()["hold"]["at"] == held["at"]
+        assert len(attempts) == 1
+        assert camera_holds == (["rosy_42"] if lost else [])
+        for payload in ({}, {"blocked_edges": ["ab"]}):
+            refusal = client.post(f"/api/fleet/trips/{tid}/resume", headers=op, json=payload)
+            assert refusal.status_code == 409 and "TRIP_PAUSE_STOP_UNCONFIRMED" in refusal.text
 
-        # Holding across > stall_s keeps trip open without dispatching any route.
-        clock.advance(25.0)
+        clock.advance(25.)
         client.portal.call(runner.tick)
-        assert runner.view(tid)["state"] == "running" and len(robot.routes) == 1
+        assert len(robot.routes) == 1 and robot._state["navigation"] == "CANCELED"
+        clock.advance(.1)
+        sample()
+        robot._state["velocity"]["linear"] = .05
+        assert client.post(f"/api/fleet/trips/{tid}/resume", headers=op).status_code == 409
+        robot._state["velocity"]["linear"] = 0.
+        robot._state["goal"] = {"x": 1., "y": 2.}
+        assert client.post(f"/api/fleet/trips/{tid}/resume", headers=op).status_code == 409
+        clock.advance(.1)
+        sample()
+        robot._state["goal"] = None
+        client.portal.call(runner.tick)
+        assert runner.view(tid)["hold"]["stop"]["confirmed"] is True
+        assert runner._live["rosy_42"].active_route is None
 
         resumed = client.post(f"/api/fleet/trips/{tid}/resume", json={"blocked_edges": ["ab"]}, headers=op)
         assert resumed.status_code == 200, resumed.text
         data = resumed.json()
         assert data["hold"] is None and [s["edge_id"] for s in data["plan"]["segments"]] == ["ha", "ac", "cd"]
         assert data["detail"]["guided_blocked_edges"] == ["ab"]
+        assert "camera_lane_fallback" not in data["detail"]
 
         robot._state["navigation"] = "IDLE"
         client.portal.call(runner.tick)
         assert len(robot.routes) == 2
 
 
-def test_nav2_autonomous_waits_on_transient_conflict_and_fails_closed_on_untrusted():
+@pytest.mark.parametrize("reason", ["ROUTE_CONFLICT", "YIELDING", "LOCALIZATION_UNTRUSTED"])
+def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untrusted(reason):
     robot = RouteFakeRobot("rosy_42")
-    _clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
-    runner.autonomous_robots = frozenset({"rosy_42"})
+    clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    runner.autonomous_robots = frozenset() if reason == "LOCALIZATION_UNTRUSTED" else frozenset({"rosy_42"})
     pose["v"] = MapPose(0.5, -0.23, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
     ver = store.active()[0]
     plan = plan_body(plan_trip(graph, PlanRequest(
@@ -319,24 +372,38 @@ def test_nav2_autonomous_waits_on_transient_conflict_and_fails_closed_on_untrust
                       request={"to": "J_in", "drive_mode": "nav2"}, result={"plan": plan})
 
     orig_route = runner._route
-    reply_box = [{"accepted": False, "queued": False, "reason": "ROUTE_CONFLICT"}]
+    attempts = []
 
-    async def route_fn(_rid, _pts):
-        return reply_box[0]
+    async def route_fn(_rid, pts):
+        attempts.append(pts)
+        return {"accepted": False, "queued": False, "reason": reason, "blocked_by": "rosy_45",
+                "waiting_on": ["rosy_45"], "dispatch_attempted": False}
 
     runner._route = route_fn
     run(runner.start("p-cf", "bob"))
     run(runner.tick())
     view = runner.view("p-cf")
-    assert view["state"] == "running" and view["detail"]["goal_wait"] == "ROUTE_CONFLICT"
-    assert runner._live["rosy_42"].active_route is None
+    assert view["state"] == "running" and view["detail"]["goal_wait"] == reason
+    live = runner._live["rosy_42"]
+    assert live.active_route is None
+    assert live.nav2_retry_at == clock() + NAV2_TRANSIENT_RETRY_S
+    assert view["detail"]["peer_wait"]["waiting_on"] == ["rosy_45"]
 
-    # Transient conflict clears -> dispatches successfully.
+    clock.advance(0.5)
+    run(runner.tick())
+    assert len(attempts) == 1
+
+    # Once the cooldown expires, the cleared route can be dispatched.
+    clock.advance(runner.config.stall_s + NAV2_TRANSIENT_RETRY_S)
+    live.progress_at = clock() - runner.config.stall_s - 1
     runner._route = orig_route
     run(runner.tick())
     view = runner.view("p-cf")
     assert view["state"] == "running" and runner._live["rosy_42"].active_route is not None
     assert "goal_wait" not in view["detail"]
+    assert "peer_wait" not in view["detail"]
+    assert view["detail"]["last_peer_wait"]["cleared_at"] >= view["detail"]["last_peer_wait"]["since"]
+    assert live.nav2_retry_at == -math.inf
 
     # Non-transient LOCALIZATION_UNTRUSTED still fails closed as TRIP_GOAL_REFUSED.
     runner._live["rosy_42"].active_route = None
@@ -478,3 +545,72 @@ def test_planned_stop_goal_clears_stale_site_claims(monkeypatch):
                                                     "binding_id": "fit-1", "map_grid_id": "grid-A"}))
     assert reply["accepted"] is True and robot_id not in console._site_claims
     assert console._claims[robot_id] == [(0, 0), (0.5, 0.0)]
+
+
+@pytest.mark.parametrize("case", ["vacant", "old_core", "post_dispatch", "previous_route", "wrong_robot",
+                                  "moving", "old_twist", "skew", "new_owner", "new_wire", "wire_pending", "restart"])
+def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(case):
+    robot = RouteFakeRobot("rosy_42")
+    clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _corridor_map())
+    clock.now = time.time()
+    rid, tid = "rosy_42", "peer-paused"
+    pose["v"] = MapPose(.1, 0., 0., "LOCALIZED", "sighting", 0., .1, .1, "site-line")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=ver, start_pose=(.1, 0., 0.), goal="P3"), store.routing_config))
+    store.record_plan(plan_id=tid, robot_id=rid, principal_id="bob", map_version=ver,
+                      request={"to": "P3", "drive_mode": "nav2"}, result={"plan": plan})
+    async def refuse(_rid, _points):
+        return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED", "blocked_by": "peer",
+                "waiting_on": ["peer"], "dispatch_attempted": case == "post_dispatch",
+                "stage": "post_dispatch_peer_check" if case == "post_dispatch" else "pre_dispatch_peer_check",
+                "cancel_confirmed": case == "post_dispatch", "command_robot_id": "other" if case == "wrong_robot" else rid}
+    runner._route = refuse
+    run(runner.start(tid, "bob"))
+    run(runner.tick())
+    live = runner._live[rid]
+    assert live.view["detail"]["peer_wait"] and not robot.routes
+    if case == "previous_route":
+        live.view["detail"]["nav2_route"] = {"points": 3}
+    leases = console.goal_leases
+    if case == "wire_pending":
+        leases.pending[rid] = 1
+    owner = {"owner_run_id": None, "boot_id": "a2154d53-b016-4f96-ada0-22b191c9fb13",
+             "owner_generation": 4, "transport_generation": 3, "mode_epoch": 1, "dock_owner_generation": 0}
+    async def cancel(_rid):
+        stamp = datetime.fromtimestamp(clock() + (1. if case == "skew" else 0), timezone.utc).isoformat()
+        return {"navigation": "IDLE", "operation": None, "idle_observed_at": stamp,
+                **({} if case == "old_core" else {"idle_owner": owner})}
+    async def state(_rid):
+        clock.advance(.1)
+        stamp = datetime.fromtimestamp(clock.now - (1 if case == "old_twist" else .02), timezone.utc).isoformat()
+        return {"robot_id": rid, "mode": "IDLE", "navigation": "IDLE", "goal": None, "line_follow": {"mode": "OFF"},
+                "velocity": {"linear": .1 if case == "moving" else 0., "angular": 0.},
+                "evidence": {"velocity": {"evidence": "fresh", "sampled_at": stamp}}}
+    async def navigation(_rid):
+        if case == "new_wire":
+            with leases.motion_wire(rid, "POST", "/api/v1/navigation/goal", {}):
+                pass
+        return {"navigation": "IDLE", "idle_owner": owner | ({"owner_generation": 5} if case == "new_owner" else {})}
+    runner._cancel_goal = runner.halts._cancel_goal = cancel
+    runner.halts.read_stop_state = state
+    runner.halts.read_navigation = navigation
+    runner.halts.wire_epoch = leases.idle_wire_epoch
+    paused = run(runner.pause(tid, "bob"))
+    stop = paused["hold"]["stop"]
+    assert not stop["cancel_ack"]
+    if case == "restart":
+        from fleet.server.trip_halts import pause_proof_args
+        halted = run(runner.halts.halt_robot(rid, False, None, **pause_proof_args(paused)))
+        assert halted["stop_sent"] and halted["pause_proof"]["basis"] == "pre_dispatch_idle"
+    elif case == "vacant":
+        assert stop["proof"]["basis"] == "pre_dispatch_idle"
+        assert run(runner.resume(tid, "bob"))["hold"] is None
+        clock.advance(NAV2_TRANSIENT_RETRY_S + .1)
+        run(runner.tick())
+        assert live.view["detail"]["peer_wait"] and not robot.routes
+    else:
+        from fleet.server.trip_runner import TripError
+        with pytest.raises(TripError) as exc:
+            run(runner.resume(tid, "bob"))
+        assert exc.value.code == "TRIP_PAUSE_STOP_UNCONFIRMED"
+        assert stop["confirmed"] is False and not robot.routes

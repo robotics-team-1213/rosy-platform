@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from fastapi import Depends, HTTPException
 
 from fleet.charge_bays import bays_from_map
+from .pipeline_governance_store import PipelineGovernanceStore, canonical_digest
 from .pipeline_ledger import write_ledger
 from .pipeline_task_input import finite_json_value
 
@@ -40,6 +41,8 @@ def _enrich_task_health(task: dict) -> dict:
         substage = "사람 감지 비상정지 대기 (이탈 시 자동 재개)"
     elif status in ("CANCELLED", "ABORTED"):
         substage = "작업 취소·중단 (인터락 해제)"
+    elif status == "PROPOSED":
+        substage = "승인 대기 (PROPOSED)"
     else:
         substage = "큐 대기 (Approach 준비)"
     task["health_summary"] = {
@@ -71,6 +74,7 @@ def install_pipeline_routes(
     proposer_guard = resolved_proposer if resolved_proposer is not None else operator_guard
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
+    app.state.omx_cell_plans = getattr(app.state, "omx_cell_plans", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
     app.state.pipeline_decisions = getattr(app.state, "pipeline_decisions", None) or []
     app.state.detected_displaced_site = getattr(app.state, "detected_displaced_site", None)
@@ -153,48 +157,171 @@ def install_pipeline_routes(
     storage_dir = _storage_dir()
     ledger_path = storage_dir / "rosy-pipeline-ledger.json"
     zones_override_path = storage_dir / "station_zones.yaml"
+    gov_db = getattr(app.state, "pipeline_governance_db_path", None)
+    if gov_db is None:
+        gov_db = ":memory:" if (os.environ.get("PYTEST_CURRENT_TEST") or storage_dir == Path("/tmp")) else (storage_dir / "rosy-pipeline-governance.sqlite3")
+    if getattr(app.state, "pipeline_governance", None) is None:
+        app.state.pipeline_governance = PipelineGovernanceStore(gov_db)
+    def _ledger_payload() -> dict:
+        return {
+            "omx_cell_states": app.state.omx_cell_states,
+            "omx_cell_tasks": app.state.omx_cell_tasks,
+            "omx_cell_plans": app.state.omx_cell_plans,
+            "pinky_tasks": app.state.pinky_tasks,
+            "unload_releases": getattr(app.state, "unload_releases", {}),
+            "cell_auto_events": getattr(app.state, "cell_auto_events", None) or [],
+            "repark_requests": getattr(app.state, "repark_requests", {}),
+            "repark_done": getattr(app.state, "repark_done", []),
+            "pipeline_decisions": app.state.pipeline_decisions[-100:],
+            "pipeline_recovery_ledger": (getattr(app.state, "pipeline_recovery_ledger", None) or [])[-100:],
+            "pipeline_recovery_budgets": getattr(app.state, "pipeline_recovery_budgets", None) or {},
+            "pipeline_recovery_idempotency": getattr(app.state, "pipeline_recovery_idempotency", None) or {},
+            "pipeline_homing_sessions": getattr(app.state, "pipeline_homing_sessions", None) or {},
+            "pending_safe_home_arms": getattr(app.state, "pending_safe_home_arms", None) or {},
+            "safe_home_history": getattr(app.state, "safe_home_history", None) or {},
+            "pipeline_recovery_escalations": getattr(app.state, "pipeline_recovery_escalations", None) or {},
+            "detected_displaced_site": app.state.detected_displaced_site,
+            "cable_tangled": app.state.cable_tangled,
+            "human_detected": app.state.human_detected,
+            "_gov_managed": True,
+        }
+
+    def _disk_has_uncommitted_stop(disk_doc: dict | None, base_doc: dict | None) -> bool:
+        if not isinstance(disk_doc, dict):
+            return False
+        base_hd = (base_doc or {}).get("human_detected") or {}
+        if any(bool(v) and not bool(base_hd.get(k)) for k, v in (disk_doc.get("human_detected") or {}).items()):
+            return True
+        base_cells = (base_doc or {}).get("omx_cell_states") or {}
+        return any((st or {}).get("phase") == "HUMAN_HOLD" and ((base_cells.get(cid) or {}).get("phase") != "HUMAN_HOLD")
+                   for cid, st in (disk_doc.get("omx_cell_states") or {}).items())
+
+    def _apply_fail_closed_disk_hold(disk_doc: dict) -> None:
+        if isinstance(disk_doc.get("human_detected"), dict):
+            app.state.human_detected.update({k: bool(v) for k, v in disk_doc["human_detected"].items() if v})
+        for cid, st in (disk_doc.get("omx_cell_states") or {}).items():
+            if isinstance(st, dict) and st.get("phase") == "HUMAN_HOLD":
+                app.state.omx_cell_states[cid] = dict(st)
+
     app.state._pipeline_ledger_fault = storage_dir == Path("/tmp") and not os.environ.get("PYTEST_CURRENT_TEST")
-    if not os.environ.get("PYTEST_CURRENT_TEST") and ledger_path.is_file():
+    if not app.state._pipeline_ledger_fault and not os.environ.get("PYTEST_CURRENT_TEST"):
         try:
-            saved = json.loads(ledger_path.read_text(encoding="utf-8"))
-            app.state.omx_cell_states.update(saved.get("omx_cell_states") or {})
-            app.state.omx_cell_tasks.update(saved.get("omx_cell_tasks") or {})
-            app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
-            app.state.unload_releases = dict(saved.get("unload_releases") or {})
-            app.state.cell_auto_events = list(saved.get("cell_auto_events") or [])[-100:]
-            app.state.repark_requests = dict(saved.get("repark_requests") or {})
-            app.state.repark_done = list(saved.get("repark_done") or [])
-            app.state.pipeline_decisions = list(saved.get("pipeline_decisions") or [])[-100:]
-            app.state.detected_displaced_site = saved.get("detected_displaced_site")
-            if "cable_tangled" in saved:
-                app.state.cable_tangled = bool(saved["cable_tangled"])
-            if isinstance(saved.get("human_detected"), dict):
-                app.state.human_detected.update({k: bool(v) for k, v in saved["human_detected"].items()})
+            committed = app.state.pipeline_governance.load_committed_ledger()
+            saved: dict | None = None
+            if committed is not None:
+                saved = committed["payload"]
+                disk_raw: dict | None = None
+                file_ok = False
+                if ledger_path.is_file():
+                    try:
+                        disk_raw = json.loads(ledger_path.read_text(encoding="utf-8"))
+                        file_ok = canonical_digest(disk_raw) == committed["sha256"]
+                    except Exception:
+                        file_ok = False
+                if not file_ok and _disk_has_uncommitted_stop(disk_raw, committed["payload"]):
+                    app.state._pipeline_ledger_fault = True
+                    _apply_fail_closed_disk_hold(disk_raw)
+                    saved = None
+                elif not file_ok:
+                    write_ledger(ledger_path, saved)
+            elif ledger_path.is_file():
+                raw = json.loads(ledger_path.read_text(encoding="utf-8"))
+                if raw.get("_gov_managed"):
+                    if _disk_has_uncommitted_stop(raw, None):
+                        app.state._pipeline_ledger_fault = True
+                        _apply_fail_closed_disk_hold(raw)
+                    else:
+                        ledger_path.unlink(missing_ok=True)
+                else:
+                    saved = raw
+                    app.state.pipeline_governance.commit_enqueue(bump_dispatch=False, ledger_snapshot=raw)
+            if isinstance(saved, dict):
+                app.state.omx_cell_states.update(saved.get("omx_cell_states") or {})
+                app.state.omx_cell_tasks.update(saved.get("omx_cell_tasks") or {})
+                app.state.omx_cell_plans.update(saved.get("omx_cell_plans") or {})
+                app.state.pipeline_governance.reconcile_unpersisted_admissions(app.state.omx_cell_tasks)
+                app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
+                app.state.unload_releases = dict(saved.get("unload_releases") or {})
+                for _bid, _rec in app.state.unload_releases.items():
+                    if isinstance(_rec, dict) and _rec.get("submit_in_flight") and _rec.get("state") in ("SENDING", "SENT"):
+                        _rec.update(state="HELD", reason="DEPART_RESTART_AMBIGUOUS")
+                        _dt = app.state.pinky_tasks.setdefault(f"depart-{_bid}", {
+                            "task_id": f"depart-{_bid}", "robot_id": _rec.get("robot_id"), "action": "depart_s3",
+                            "target_place": _rec.get("target") or "S1", "status": "SENT", "auto": True,
+                            "created_at": _rec.get("at") or round(time.time(), 3),
+                        })
+                        _dt.update(cancel_requested=True, cancelled_by="depart_restart_recovery",
+                                   cancel_receipt={"error": "DEPART_RESTART_AMBIGUOUS"})
+                app.state.cell_auto_events = list(saved.get("cell_auto_events") or [])[-100:]
+                app.state.repark_requests = dict(saved.get("repark_requests") or {})
+                app.state.repark_done = list(saved.get("repark_done") or [])
+                app.state.pipeline_decisions = list(saved.get("pipeline_decisions") or [])[-100:]
+                app.state.pipeline_recovery_ledger = list(saved.get("pipeline_recovery_ledger") or [])[-100:]
+                app.state.pipeline_recovery_budgets = dict(saved.get("pipeline_recovery_budgets") or {})
+                app.state.pipeline_recovery_idempotency = dict(saved.get("pipeline_recovery_idempotency") or {})
+                app.state.pipeline_homing_sessions = dict(saved.get("pipeline_homing_sessions") or {})
+                app.state.pending_safe_home_arms = dict(saved.get("pending_safe_home_arms") or {})
+                app.state.safe_home_history = dict(saved.get("safe_home_history") or {})
+                app.state.pipeline_recovery_escalations = dict(saved.get("pipeline_recovery_escalations") or {})
+                app.state.detected_displaced_site = saved.get("detected_displaced_site")
+                if "cable_tangled" in saved:
+                    app.state.cable_tangled = bool(saved["cable_tangled"])
+                if isinstance(saved.get("human_detected"), dict):
+                    app.state.human_detected.update({k: bool(v) for k, v in saved["human_detected"].items()})
         except Exception:
             app.state._pipeline_ledger_fault = True
+    try:
+        from fleet.server.pipeline_recovery_policy import effective_stop_fence
 
-    def _save_ledger() -> None:
+        app.state.safety_stop_generation = int(app.state.pipeline_governance.snapshot()["stop_generation"])
+        _fence_held, _cur_fence = effective_stop_fence(app.state)
+        for _aid in list((getattr(app.state, "pending_safe_home_arms", None) or {}).keys()):
+            _row = app.state.pending_safe_home_arms.get(_aid)
+            if not isinstance(_row, dict) or _cur_fence is None or _row.get("stop_generation") != _cur_fence:
+                _popped = app.state.pending_safe_home_arms.pop(_aid, None) or {}
+                _rt = _popped.get("root_task_id")
+                if _rt and isinstance((getattr(app.state, "pipeline_homing_sessions", None) or {}).get(_rt), dict):
+                    app.state.pipeline_homing_sessions[_rt].update(stage="SKIPPED", last_error="RESTART_STOP_PREEMPTED")
+    except Exception:
+        app.state._pipeline_ledger_fault = True
+
+    def _write_ledger_only(payload: dict) -> None:
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return
         if app.state._pipeline_ledger_fault:
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
         try:
-            write_ledger(ledger_path, {
-                "omx_cell_states": app.state.omx_cell_states,
-                "omx_cell_tasks": app.state.omx_cell_tasks,
-                "pinky_tasks": app.state.pinky_tasks,
-                "unload_releases": getattr(app.state, "unload_releases", {}),
-                "cell_auto_events": getattr(app.state, "cell_auto_events", None) or [],
-                "repark_requests": getattr(app.state, "repark_requests", {}),
-                "repark_done": getattr(app.state, "repark_done", []),
-                "pipeline_decisions": app.state.pipeline_decisions[-100:],
-                "detected_displaced_site": app.state.detected_displaced_site,
-                "cable_tangled": app.state.cable_tangled,
-                "human_detected": app.state.human_detected,
-            })
+            write_ledger(ledger_path, payload)
         except Exception as exc:
             app.state._pipeline_ledger_fault = True
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"}) from exc
+
+    def _commit_ledger(
+        *,
+        bump_dispatch: bool = False,
+        bump_stop: bool = False,
+        idempotency: tuple[str, str, int, dict] | None = None,
+        delete_confirmation: tuple[str, str] | None = None,
+        commit: bool = True,
+    ) -> None:
+        gov = app.state.pipeline_governance
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            if commit and (bump_dispatch or bump_stop or idempotency is not None or delete_confirmation is not None):
+                gov.commit_enqueue(
+                    bump_dispatch=bump_dispatch, bump_stop=bump_stop, idempotency=idempotency,
+                    delete_confirmation=delete_confirmation,
+                )
+            return
+        payload = _ledger_payload()
+        _write_ledger_only(payload)
+        if commit:
+            gov.commit_enqueue(
+                bump_dispatch=bump_dispatch, bump_stop=bump_stop, idempotency=idempotency,
+                ledger_snapshot=payload, delete_confirmation=delete_confirmation,
+            )
+
+    def _save_ledger() -> None:
+        _commit_ledger()
 
     def _ready_amr(task: dict) -> dict | None:
         if app.state._pipeline_ledger_fault:
@@ -230,7 +357,8 @@ def install_pipeline_routes(
             return bool(hd.get(subject_id))
         return any(bool(v) for v in hd.values())
 
-    def _evaluate_decision(subject_id: str, domain: str | None = None, facts_override: dict | None = None) -> dict:
+    def _evaluate_decision(subject_id: str, domain: str | None = None, facts_override: dict | None = None,
+                           *, save: bool = True) -> dict:
         ov = dict(facts_override or {})
         if "human_detected" in ov and ov["human_detected"] is not None and not ov["human_detected"]:
             raise HTTPException(409, detail={"code": "HUMAN_CLEAR_EVIDENCE_UNAVAILABLE"})
@@ -346,7 +474,8 @@ def install_pipeline_routes(
         app.state.pipeline_decisions.append(row)
         if len(app.state.pipeline_decisions) > 100:
             app.state.pipeline_decisions = app.state.pipeline_decisions[-100:]
-        _save_ledger()
+        if save:
+            _save_ledger()
         return row
 
     def _maps():
@@ -375,19 +504,46 @@ def install_pipeline_routes(
         return active
 
     from fleet.server.sitemap.pipeline_cell_task_routes import install_cell_tasks_routes
+    from fleet.server.sitemap.pipeline_cell_plan_routes import install_cell_plan_routes
     from fleet.server.sitemap.pipeline_gate_routes import install_gates_routes
     from fleet.server.sitemap.pipeline_camera_routes import install_cameras_routes
     from fleet.server.sitemap.pipeline_evidence import install_evidence_routes
+    from fleet.server.pipeline_recovery_tools import install_recovery_tool_routes
 
     ctx = SimpleNamespace(
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
-        zones_override_path=zones_override_path, _save_ledger=_save_ledger,
+        zones_override_path=zones_override_path, _save_ledger=_save_ledger, _commit_ledger=_commit_ledger,
+        _ledger_payload=_ledger_payload, _write_ledger_only=_write_ledger_only,
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
         inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
         operator_guard=operator_guard, proposer_guard=proposer_guard,
-        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console,
+        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console, gov=app.state.pipeline_governance,
     )
     install_cell_tasks_routes(app, ctx)
+    install_cell_plan_routes(app, ctx)
     install_gates_routes(app, ctx)
     install_cameras_routes(app, ctx)
     install_evidence_routes(app, ctx)
+    install_recovery_tool_routes(app, ctx)
+
+    def _human_hold_active() -> bool:
+        if (
+            _is_human_detected()
+            or getattr(app.state, "_fleet_estop_latch_unresolved", False)
+            or getattr(app.state, "_pipeline_ledger_fault", False)
+            or any((s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values())
+        ):
+            return True
+        tsvc = getattr(app.state, "task_service", None)
+        if tsvc is not None:
+            try:
+                ctrl = tsvc.store.dispatch_control()
+            except Exception:
+                return True
+            if not isinstance(ctrl, dict) or ctrl.get("dispatch_enabled") is not True:
+                return True
+        return False
+
+    app.state.pipeline_human_hold_fn = _human_hold_active
+    if (tr := getattr(app.state, "trip_runner", None)) is not None:
+        tr.human_hold_fn = _human_hold_active

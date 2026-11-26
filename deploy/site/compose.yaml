@@ -113,6 +113,19 @@ services:
       # D-1057 cell pipeline: owner principals and the cell_ab release switch; empty keeps both off.
       ROSY_FLEET_CELL_OWNERS: "${ROSY_FLEET_CELL_OWNERS:-}"
       ROSY_FLEET_CELL_AB_RELEASE_ENABLED: "${ROSY_FLEET_CELL_AB_RELEASE_ENABLED:-}"
+      ROSY_INTAKE_RFID_WORKCELL: "${ROSY_INTAKE_RFID_WORKCELL:-}"
+      ROSY_INTAKE_RFID_WINDOW_SECONDS: "${ROSY_INTAKE_RFID_WINDOW_SECONDS:-300}"
+      ROSY_INTAKE_RFID_READER_EPOCH: "${ROSY_INTAKE_RFID_READER_EPOCH:-}"
+      ROSY_PLACEMENT_CAMERA_SOURCE: "${ROSY_PLACEMENT_CAMERA_SOURCE:-}"
+      ROSY_PLACEMENT_CALIBRATION_REVISION: "${ROSY_PLACEMENT_CALIBRATION_REVISION:-}"
+      # D-1060 Pinky task dispatcher: 1 enables QUEUED pinky-tasks -> Fleet trips; empty keeps off.
+      ROSY_FLEET_PINKY_TASK_DISPATCH: "${ROSY_FLEET_PINKY_TASK_DISPATCH:-}"
+      # Optional Rosy World 3D link (mDNS or static origin); empty keeps /console/world off.
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-}"
+      ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-}"
+      ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-}"
+      ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"
+      ROSY_CALIBRATION_ORIGIN: "${ROSY_CALIBRATION_ORIGIN:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy
@@ -158,7 +171,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}/healthz', timeout=2).read()"]
-      interval: 15s
+      interval: 60s
       timeout: 3s
       retries: 3
       start_period: 15s
@@ -226,7 +239,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}/healthz', timeout=2).read()"]
-      interval: 15s
+      interval: 60s
       timeout: 3s
       retries: 3
       start_period: 15s
@@ -268,7 +281,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U rosy -d rosy_context"]
-      interval: 15s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 20s
@@ -297,10 +310,13 @@ services:
       - --prune-audit
       - "90"
       - --prune-api-audit
-      - "90"
+      - "14"
       - --prune-sightings
       - "90"
     user: "10001:10001"
+    environment:
+      SQLITE_TMPDIR: /backup
+      TMPDIR: /backup
     volumes:
       - sighting_data:/var/lib/rosy:rw
       - ${ROSY_SITE_BACKUP_DIR:-/var/backups/rosy-site}:/backup
@@ -351,7 +367,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
-      interval: 30s
+      interval: 60s
       timeout: 5s
       retries: 3
       start_period: 10s

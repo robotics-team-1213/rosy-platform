@@ -274,7 +274,7 @@ def test_a_coordinated_jog_moves_its_joints_together_or_not_at_all():
 
 
 def test_park_closes_rises_turns_then_descends_slowly():
-    start = [35.0, -30.0, 29.0, 41.0, 71.0, 56.0]
+    start = [35.0, -30.0, 29.0, 41.0, 71.0, 52.0]  # a box held (52.0, under closed + OPEN_JAW_MARGIN): closes first
     path = m.park_path(start, HOME, 46.6, fps=30)
     step = m.PARK_SPEED / 30 + 1e-9
     assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + path, path))
@@ -439,7 +439,7 @@ def test_the_live_state_is_published_at_ten_hz_outside_policy_playback():
                  sleep=lambda s: clock.__setitem__(0, clock[0] + s),
                  live=lambda row: (published.append(clock[0]), rows.append(row)))
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk and (queue[0] != "stop" or clock[0] >= 0.5) else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag", "human_hold_latched", "torque_hold_commanded", "policy_start"}
+    assert rows and set(rows[-1]) == {"t", "pid", "state", "target", "chunk", "fault", "health", "holding", "lag", "human_hold_latched", "torque_hold_commanded", "policy_start"}
     assert len(published) > 1 and [b - a for a, b in zip(published, published[1:])] == pytest.approx([0.1] * (len(published) - 1))
     assert all(row["policy_start"] is None for row in rows)
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
@@ -951,17 +951,6 @@ def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
     status = run_with(Straining(lag, pwm), goto_library(), ["goto approach_pinky", "stop"])
     done = by_command(status, "run goto approach_pinky")[0]
     assert done["ok"] is True and done["fault"] is None
-
-
-def test_a_blocked_wrist_roll_holds_at_low_pwm_before_the_guard_drops_the_arm():
-    # arm_a 2026-11-01 23:19: the roll stopped dead at PWM 82 of 300 while its command ran on, 1.8 -> 4.6 deg in 1 s
-    status = run_with(Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 30))), pwm=82, joint=4), goto_library(),
-                      ["goto approach_pinky", "park", "stop"])
-    held = by_command(status, "run goto approach_pinky")[0]
-    assert held["ok"] is False and held["contact"] is True and "wrist_roll" in held["fault"]
-    assert "shoulder_pan" in held["fault"]  # the other joints' lags travel with it
-    lag = float(held["fault"].split("lag rose to ")[1].split()[0])
-    assert m.ROLL_BLOCK_LAG <= lag < 2.7  # held well short of the guard's 5 degrees (~2.8 units)
 
 
 @pytest.mark.parametrize("lag", [

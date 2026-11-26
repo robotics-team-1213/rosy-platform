@@ -22,14 +22,26 @@ export function profileBindingMismatch(profile, expected) {
 
 export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, historyOpen = false,
   bindingStatus = null, editDeviceId = null} = {}) {
-  root.replaceChildren(node('h4', '로봇 프로필 · 주의사항'));
   const changed = ['owner_changed', 'registration_changed', 'source_unregistered', 'unverified_link']
     .includes(bindingStatus || profile?.source_binding_status);
+  const link = node('a', '프로필·주의사항 편집');
+  const deviceId = profile?.device_id || editDeviceId;
+  link.href = `/console/install${deviceId ? '?profile=' + encodeURIComponent(deviceId) : ''}#device-profiles`;
+  link.className = 'ui-action-link';
+  link.dataset.kind = 'quiet';
+  if (!profile && !unavailable && !changed) {
+    const fold = node('details');
+    fold.className = 'profile-unbound-fold';
+    const summary = node('summary', '장치 주의사항 · 미연결');
+    summary.className = 'ui-disclosure-row';
+    fold.append(summary, node('p', '연결된 프로필이 없습니다. 장치 정보에서 연결하세요.'), link);
+    root.replaceChildren(fold);
+    return;
+  }
+  root.replaceChildren(node('h4', '로봇 프로필 · 주의사항'));
   if (changed) root.append(node('p', '관측원 등록이 달라졌거나 연결 근거가 없습니다. 프로필 연결을 다시 확인하세요.'));
   if (unavailable) root.append(node('p', '프로필을 읽지 못했습니다. 현재 상태는 실시간 관측에서 확인하세요.'));
-  if (!profile) {
-    if (!unavailable && !changed) root.append(node('p', '연결된 프로필이 없습니다. 장치 정보에서 연결하세요.'));
-  } else {
+  if (profile) {
     root.append(node('p', `${profile.display_name} · ${profile.model || '모델 미입력'}`),
       node('p', profile.caution || '저장된 주의사항 없음 · 고장 없음의 증거가 아닙니다.'));
     const diagnosis = node('p', analysisText(profile.latest_analysis, elapsedS));
@@ -68,11 +80,6 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, 
       root.append(history);
     }
   }
-  const link = node('a', '프로필·주의사항 편집');
-  const deviceId = profile?.device_id || editDeviceId;
-  link.href = `/console/install${deviceId ? '?profile=' + encodeURIComponent(deviceId) : ''}#device-profiles`;
-  link.className = 'ui-action-link';
-  link.dataset.kind = 'quiet';
   root.append(link);
 }
 
@@ -81,12 +88,18 @@ export function createRobotProfiles({call, scope, render = () => {}}) {
   let disposed = false;
   scope.onDispose(() => { disposed = true; cache.clear(); });
   function detail(kind, source, expectedBinding = null) {
-    const root = node('section'); root.dataset.robotProfile = source;
     const key = `${kind}/${encodeURIComponent(source)}`;
     let entry = cache.get(key);
-    if (!entry) { entry = {next: 0, received: performance.now(), profile: null}; cache.set(key, entry); }
+    if (!entry) {
+      const root = node('section'); root.dataset.robotProfile = source;
+      entry = {root, next: 0, received: performance.now(), profile: null, fetchSig: '', paintSig: ''};
+      root.addEventListener('toggle', (event) => {
+        if (event.target?.tagName === 'DETAILS') entry.historyOpen = event.target.open;
+      }, true);
+      cache.set(key, entry);
+    }
     if (!disposed && !entry.pending && performance.now() >= entry.next) {
-      entry.pending = true; entry.next = performance.now() + 1000;
+      entry.pending = true; entry.next = performance.now() + 2000;
       const started = performance.now();
       void call(`/api/fleet/device-profile-sources/${key}`).then(({profile, source_binding_status, device_id}) => {
         if (disposed) return;
@@ -95,16 +108,28 @@ export function createRobotProfiles({call, scope, render = () => {}}) {
       }).catch(() => {
         entry.profile = null; entry.bindingStatus = null; entry.unavailable = true;
         entry.next = performance.now() + 5000;
-      })
-        .finally(() => { entry.pending = false; if (!disposed) render(); });
+      }).finally(() => {
+        entry.pending = false;
+        const nextFetchSig = JSON.stringify([entry.profile, entry.unavailable, entry.bindingStatus, entry.editDeviceId]);
+        if (!disposed && nextFetchSig !== entry.fetchSig) {
+          entry.fetchSig = nextFetchSig;
+          render();
+        }
+      });
     }
+    const elapsedS = (performance.now() - entry.received) / 1000;
     const mismatch = profileBindingMismatch(entry.profile, expectedBinding);
-    paintProfile(root, mismatch ? null : entry.profile, {elapsedS: (performance.now() - entry.received) / 1000,
-      unavailable: entry.unavailable, historyOpen: entry.historyOpen, bindingStatus: mismatch || entry.bindingStatus,
-      editDeviceId: entry.profile?.device_id || entry.editDeviceId});
-    const history = root.querySelector('details');
-    history?.addEventListener('toggle', () => { entry.historyOpen = history.open; });
-    return root;
+    const shownProfile = mismatch ? null : entry.profile;
+    const bindingStatus = mismatch || entry.bindingStatus;
+    const editDeviceId = entry.profile?.device_id || entry.editDeviceId;
+    const analysisLine = shownProfile ? analysisText(shownProfile.latest_analysis, elapsedS) : '';
+    const paintSig = JSON.stringify([shownProfile, entry.unavailable, Boolean(entry.historyOpen), bindingStatus, editDeviceId, analysisLine]);
+    if (entry.paintSig !== paintSig) {
+      entry.paintSig = paintSig;
+      paintProfile(entry.root, shownProfile, {elapsedS, unavailable: entry.unavailable, historyOpen: entry.historyOpen,
+        bindingStatus, editDeviceId});
+    }
+    return entry.root;
   }
   return {detail};
 }

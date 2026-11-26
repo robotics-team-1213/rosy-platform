@@ -1,16 +1,8 @@
 """Per-tick expiry and measured handoff for a guarded runner policy chunk."""
 import math
 
+from cell_policy_entry import finite_stamp as _finite
 from chunk_runner_guards import safe_stderr
-
-
-def _finite(v) -> float | None:
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        return None
-    try:
-        return f if math.isfinite(f := float(v)) else None
-    except OverflowError:
-        return None
 
 
 class Handoff:
@@ -217,12 +209,13 @@ def _is_holding(runner) -> bool:
 
 
 def absorb_telemetry_error(runner, present, reason: str, error: Exception) -> bool:
-    """Keep torque ON on telemetry/status OSError while jaw-gated, holding, latched, or interrupted."""
-    from chunk_runner_guards import runner_has_configured_rim
+    """Keep torque ON on telemetry/status OSError while jaw-gated, holding, latched, recovery-parking, or interrupted."""
+    from chunk_runner_guards import RECOVERY_PARKS, runner_has_configured_rim
     if getattr(runner, "human_hold_latched", False) or getattr(runner, "signals", None):
         return True
     if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
-            or runner_has_configured_rim(runner) or getattr(runner, "trusted_grasp", None) is not None):
+            or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or runner_has_configured_rim(runner)
+            or getattr(runner, "trusted_grasp", None) is not None or getattr(runner, "_recovery_active", False)):
         return False
     play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
     _hold_and_report(runner, present, f"{reason}: {error}", play.receipt() if play is not None else None)
@@ -230,7 +223,8 @@ def absorb_telemetry_error(runner, present, reason: str, error: Exception) -> bo
 
 
 def read_present_or_hold(runner, reason: str):
-    """Read encoders; when jaw-gated, holding, latched, or interrupted, keep torque ON on read failure."""
+    """Read encoders; when jaw-gated, holding, latched, recovery-parking, or interrupted, keep torque ON on read failure."""
+    from chunk_runner_guards import RECOVERY_PARKS
     try:
         return runner.present(), True
     except Exception as error:  # noqa: BLE001
@@ -240,7 +234,8 @@ def read_present_or_hold(runner, reason: str):
         fallback = list(fallback)
         if getattr(runner, "human_hold_latched", False):
             return fallback, True
-        if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)):
+        if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
+                or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or getattr(runner, "_recovery_active", False)):
             raise
         play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
         _hold_and_report(runner, fallback, f"{reason}: {error}", play.receipt() if play is not None else None)
@@ -253,20 +248,22 @@ def _hold_and_report(runner, present, reason: str, timing=None, **extra) -> bool
     if (getattr(runner, "_committed_grip", None) is None and runner.target is not None
             and len(runner.target) >= 6 and not runner.holding and len(present) >= 6 and runner.target[5] < present[5]):
         runner.target[5] = present[5]
+    chunk_name = getattr(runner, "chunk", None)
     runner.policy_playback = runner.jaw_gate = runner._trailing_jaw_gate = None
     runner.hold(present, "human hold", human=True)
+    cmd = f"run {chunk_name}" if chunk_name in ("policy", "entry", "park-slow", "fold-from-hold") else "run policy"
     try:
-        runner.report(command="run policy", ok=False, policy_stop=reason,
+        runner.report(command=cmd, ok=False, policy_stop=reason,
                       **({"timing": timing} if timing is not None else {}), present=present, **extra)
     except OSError as error:
-        safe_stderr({"command": "run policy", "policy_stop": reason, "status_write_failed": str(error)[:300]})
+        safe_stderr({"command": cmd, "policy_stop": reason, "status_write_failed": str(error)[:300]})
     return False
 
 
 def active_jaw_gate(runner, play):
     if play is not None:
         return play.jaw_gate
-    return getattr(runner, "jaw_gate", None) if runner.chunk == "policy" else (
+    return getattr(runner, "jaw_gate", None) if runner.chunk in ("policy", "entry") else (
         getattr(runner, "_trailing_jaw_gate", None) if not runner.human_hold_latched else None)
 
 
@@ -302,8 +299,10 @@ def send_hold_action(robot, target):
 
 def send_with_jaw_gate(runner, action: dict, gate, play, prev_target: list):
     """Validate guard-retimed Goal_Position before sync_write when `Guarded`; HOLD with torque ON if rejected."""
+    from chunk_runner_guards import RECOVERY_PARKS
     from chunk_runner_settle import note_sent_grip
-    protect = gate is not None or runner.human_hold_latched or _is_holding(runner) or bool(getattr(runner, "_stop_after_park", None))
+    protect = (gate is not None or runner.human_hold_latched or _is_holding(runner)
+               or bool(getattr(runner, "_stop_after_park", None)) or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or getattr(runner, "_recovery_active", False))
     if not protect or not callable(getattr(runner.robot, "send_action_checked", None)):
         sent = runner.robot.send_action(action)
         note_sent_grip(runner, sent)

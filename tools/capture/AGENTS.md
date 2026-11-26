@@ -1,38 +1,21 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-07 | Updated: 2026-10-07 -->
 
 # capture
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
-## Purpose
-
-Robot side of the edge-capture loop: short supervised drives over the CORE API that record a Pilot session for pixel drafts (D-379, D-465). Runs on the operator PC with the operator at the robot and Fleet watching. The data side is `learning/curation/perception/edge_capture_session.py`; the whole run order is in `learning/curation/perception/AGENTS.md` ("Edge-capture loop").
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `edge_drive.py` | `nudge` (MANUAL teleop within 0.08 m/s, 0.6 rad/s, 4 s, then IDLE and save the front and raw frames), `drive` (recording + CAMERA_LINE under a 1 s hold deadman until a stop reason, 3 s still or `--max-s`), `rec start|stop`, `cam-watch` (raw frames + road-band clipping). One kept-alive HTTPS connection; Operator token from `--token-file` or `ROSY_CORE_OPERATOR_TOKEN_FILE`; `--ca-file` or an explicit `--insecure` |
-| `ceiling_record.py` | D-563 3: site ceiling camera beside a collection drive. Leases the Rosy Cam preview, saves raw frames + `frames.jsonl` (`seq`, `captured_at` site clock, `saved_at`), snapshots the approved tracking calibration (`map_to_image`, lens) once. Site URL/token from `--site`/`--token` or `ROSY_SITE_URL`/`ROSY_SITE_TOKEN` |
-| `drivable_steer.py` | D-592 drivable steering field test. Runs on the robot by default (`--source ros` raw camera topic; `--source stream` is the preview-rate driver MJPEG, too slow for the 0.5 s limit). Dry run unless `--drive`; then MANUAL teleop at <= 0.03 m/s, |w| <= 0.4, stops on low drivable, stale frame, RobotBody LiDAR guard (a gate here, per D-592) or time cap, ends with zero + IDLE. Rightmost branch (D-384 decision 2) |
-| `charge_bay_return.py` | Low-battery evaluation (`/api/v1/power/health`) and empty charging bay selection (`select_empty_charge_bay`: checks peer robot occupancy within `bay_radius_m` and `/api/v1/map` occupancy grid clearance) with automatic Nav2 charging bay return dispatch |
-| `slam_pickup_pipeline.py` | End-to-end 360-deg SLAM mapping (`slam_toolbox`), atomic `site.{yaml,pgm}` installation (`rosy-io:rosy-core` `0640`), D-986 Nav2 autonomous pickup, empty-bay low-battery charging return (`--charge-go-percent`, `--charge-bays`, `--occupied-pose`), Fleet R peer `swarm.pose` `map_id` normalization, and guaranteed `finally` deterministic stop |
-| `cable_twist.py` | D-512/D-1034 cable twist, run on the robot with an operator token: `judge` turns +/-30 deg in place and names the winding direction (the way the robot turns LESS than commanded is the one the cable resists); `unwind` turns the other way in 20 deg steps, with a known `--twist-deg` until slack, or with an unknown twist re-probing every 90 deg until both ways are equally easy. The turn is measured from consecutive LiDAR scans (`scan_yaw_delta`), never odometry. Every step is refused when `RobotBody.rotation_check` is not clear; a robot the cable holds ends the run and asks a person; always ends zero teleop + IDLE (exit 2 abort, 3 not IDLE) |
-| `test/test_cable_twist.py` | Turn measured from synthetic room scans (sign and size), `TwistTracker` states, the probe verdict, and `judge`/`unwind` on a simulated cable that resists the winding direction (converges to slack, stops when held) |
-| `map_health.py` | Health verdict (ok/warn/fail + reasons) for a REAL slam_toolbox map (pgm + yaml, stdlib only): occupied/free/unknown counts, largest free region, openings to the border, isolated speckle, resolution; `--compare OTHER` gives wall overlap after a rigid search (rotation +-30 deg, shift +-0.3 m, 1-cell tolerance) with the recovered pose and the origin-only overlap. The sim rule "border cells not occupied" in `map_bundle check` does not fit real maps |
-| `test/test_map_health.py` | Synthetic rooms (clean ok, empty fail, speckle fail, opening warn, overlap) and the real fresh1/unwind1 maps when present |
-| `test/test_drivable_steer.py` | Steering math on synthetic labels: error and angular sign, clamp, stop reasons, inner line half, rightmost branch, guard |
-| `test/test_edge_drive_advisory.py` | Body advisory on synthetic scans, LiDAR angle source order, a warned nudge still drives and ends with zero + IDLE |
-| `test/test_slam_pickup_pipeline.py` | Unit tests for preflight sensor/battery/LiDAR checks, 3-step 360-deg SLAM loop, `site.{yaml,pgm}` installation, Nav2 pickup & return dispatch, and deterministic stop |
+Robot side of the edge-capture loop (D-379, D-465): short supervised drives over the CORE API on the operator PC, operator at the robot, Fleet watching. Data side: `learning/curation/perception/edge_capture_session.py`; run order in `learning/curation/perception/AGENTS.md` ("Edge-capture loop").
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - The RobotBody check before a nudge is advisory (user decision 2026-10-07): it prints `WARN` and the robot moves anyway. CORE's own stop stays authoritative. Do not turn it into a gate without the user.
-- The LiDAR forward angle is the URDF nominal (`core_common.robot_body.PINKY_PRO`), refined by the device's accepted `lidar_mount` record in `data/calibration/` (`--device`), overridden by `--lidar-forward-deg`. No hard-coded per-robot angle.
+- `edge_drive.py nudge` is MANUAL teleop within 0.08 m/s, 0.6 rad/s, 4 s, then IDLE; `drive` holds a 1 s deadman. These drives end with zero teleop + IDLE.
+- `drivable_steer.py` (D-592): dry run unless `--drive`; then MANUAL teleop at most 0.03 m/s, |w| 0.4; the RobotBody LiDAR guard is a gate there.
+- `cable_twist.py` (D-512/D-1034): turns are measured from LiDAR scans, never odometry; every step is refused unless `RobotBody.rotation_check` is clear; a robot the cable holds ends the run and asks a person.
+- The LiDAR forward angle is the URDF nominal (`core_common.robot_body.PINKY_PRO`), refined by the accepted `lidar_mount` record (`--device`), overridden by `--lidar-forward-deg`. No hard-coded per-robot angle.
+- `slam_pickup_pipeline.py` (D-986) ends in a deterministic stop; `site.{yaml,pgm}` install is atomic.
 - Robot addresses, tokens and CA files go on the command line or in env only; examples use `<robot-ip>`.
 
 ### Testing Requirements
@@ -41,14 +24,3 @@ Robot side of the edge-capture loop: short supervised drives over the CORE API t
 python -m pytest tools/capture/test -q -p no:cacheprovider
 ```
 
-## Dependencies
-
-### Internal
-
-- `contracts/foundation/core_common` (`robot_body`, `calibration_store`)
-
-### External
-
-- `opencv-python`, `numpy` for `cam-watch` only
-
-<!-- MANUAL: -->

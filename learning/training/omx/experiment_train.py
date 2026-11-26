@@ -8,8 +8,10 @@ from contextlib import contextmanager
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 
 import numpy as np
 
@@ -63,7 +65,8 @@ def transform_action(values, normal, *, inverse=False, declared=False):
 
 
 def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_size=8,
-          device='cpu', seed=42750, progress=None, arm_id=None, learning_task=None):
+          device='cpu', seed=42750, progress=None, arm_id=None, learning_task=None,
+          expected_dataset_revision=None):
     for label, value, low, high in (('steps', steps, 1, 100000),
             ('batch_size', batch_size, 1, 256), ('seed', seed, 0, 2**32 - 1)):
         if type(value) is not int or not low <= value <= high:
@@ -77,6 +80,9 @@ def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_siz
         raise ValueError('new output directory outside dataset and source checkout required')
     with dataset_lease(dataset_root):
         dataset = load_dataset(dataset_root, method=method)
+        if expected_dataset_revision is not None and (
+                dataset.source != 'scripted_teacher' or dataset.revision != expected_dataset_revision):
+            raise ValueError('worker dataset differs from the pinned MuJoCo teacher dataset')
         if learning_task is not None:
             from experiment_scope import select_dataset
             _, scope = select_dataset(dataset, arm_id, method=method)
@@ -306,24 +312,63 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--request', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--world-id', default=os.environ.get('ROSY_WORLD_ID', '').strip() or None)
+    parser.add_argument('--world-url', default=os.environ.get('ROSY_WORLD_URL', '').strip() or None)
+    parser.add_argument('--world-mdns-host', default=os.environ.get('ROSY_WORLD_MDNS_HOST', '').strip() or None)
+    parser.add_argument('--world-port', type=int, default=int(os.environ.get('ROSY_WORLD_PORT', '8140')))
+    parser.add_argument('--worlds-dir', type=Path, default=None)
+    parser.add_argument('--world-backend', default='mujoco', choices=('isaac', 'gazebo', 'mujoco'))
+    parser.add_argument('--site-map-sha256', default=os.environ.get('ROSY_WORLD_SITE_MAP_SHA256', '').strip() or None)
+    parser.add_argument('--world-token-env', default='ROSY_WORLD_INGEST_TOKEN')
     args = parser.parse_args(argv)
     # An existing directory belongs to a prior run and must never be modified.
     if args.out.exists():
         raise ValueError('new run-owned output directory required')
+    world_hook = None
     try:
         request = json.loads(args.request.read_text(encoding='utf-8'))
         if (not isinstance(request, dict)
-                or set(request) - {'arm_id', 'learning_task'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
+                or set(request) - {'arm_id', 'learning_task', 'expected_dataset_revision'}
+                != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
             raise ValueError('training request fields differ from schema')
         if 'learning_task' in request:
             check_learning_task(request['learning_task'])
+        progress_cb = None
+        if args.world_id and (args.world_url or args.world_mdns_host or args.worlds_dir):
+            repo_root = Path(__file__).resolve().parents[3]
+            sim_dir = repo_root / 'tools' / 'sim'
+            if str(sim_dir) not in sys.path:
+                sys.path.insert(0, str(sim_dir))
+            from world_env_adapter import TrainingWorldHook
+            from world_training_hooks import canonical_parity_inputs, make_experiment_train_progress
+
+            parity_in = canonical_parity_inputs(repo_root, site_map_sha256=args.site_map_sha256)
+            world_hook = TrainingWorldHook(
+                world_id=args.world_id,
+                backend=args.world_backend,
+                run_id=f"{args.world_id}-{request['method']}",
+                site_map_sha256=parity_in['site_map_sha256'],
+                worlds_dir=args.worlds_dir,
+                world_url=args.world_url,
+                world_mdns_host=args.world_mdns_host,
+                world_mdns_port=args.world_port,
+                token=os.environ.get(args.world_token_env, '').strip() or None,
+                physics_profile=f"lerobot-{request['method']}-{request['device']}",
+                cargo_tray=parity_in['cargo_tray'],
+            )
+            progress_cb = make_experiment_train_progress(
+                world_hook, method=request['method'], total_steps=request['steps'], arm_id=request.get('arm_id'),
+            )
         with gpu_lease(request['device']):
-            train(output=args.out, **request)
+            train(output=args.out, progress=progress_cb, **request)
     except Exception as error:
         args.out.mkdir(parents=True, exist_ok=True)
         # Server-visible diagnostics never expose arbitrary host paths or credentials.
         write_json(args.out / 'error.json', {'error': type(error).__name__, 'status': 'failed'})
         raise
+    finally:
+        if world_hook is not None:
+            world_hook.close()
     return 0
 
 

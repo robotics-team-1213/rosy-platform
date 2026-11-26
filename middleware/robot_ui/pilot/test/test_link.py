@@ -398,7 +398,7 @@ def test_idle_goes_quiet_after_three_zeros_and_timeout_does_not_throw():
     console.log(JSON.stringify({zeros, threw, timeoutPassed: posts.at(-1).options?.timeoutMs,
                                 failedReported: latencies.at(-1).failed}));
     """)
-    assert out == {"zeros": 3, "threw": False, "timeoutPassed": 400, "failedReported": True}
+    assert out == {"zeros": 3, "threw": False, "timeoutPassed": 200, "failedReported": True}
 
 
 def test_resume_after_409_allows_commands_again():
@@ -529,3 +529,22 @@ def test_ws_without_acks_is_abandoned_for_rest():
     console.log(JSON.stringify({posts: h.posts.length, failed: h.latencies.some(l => l.failed)}));
     """)
     assert out["posts"] == 1 and out["failed"] is True
+
+
+def test_stalled_rest_post_aborts_at_200ms_within_300ms_watchdog():
+    out = _run_js(_timed_session() + """
+    const s = make({hold: true});
+    s.command({linear: 0.1, angular: 0});
+    clock += 100;
+    s.command({linear: 0.2, angular: 0});
+    clock += 100;
+    inflight.shift()({status: 504});
+    await flush();
+    await advance(0);
+    console.log(JSON.stringify({
+      timeoutMs: link.POST_TIMEOUT_MS,
+      secondAt: posts[1]?.at,
+      secondLinear: posts[1]?.body.linear,
+    }));
+    """)
+    assert out == {"timeoutMs": 200, "secondAt": 200, "secondLinear": 0.2}

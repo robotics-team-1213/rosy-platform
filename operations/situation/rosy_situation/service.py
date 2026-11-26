@@ -44,6 +44,9 @@ from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
+INPUT_LOG_IDLE_S = 30.0
+PROBLEMS_POLL_S = 5.0
+READ_BACKOFF_MAX_S = 5.0
 ARM_POLL_S = 15.0     # D-971: how often the AI PC asks Fleet for arm incidents without an explanation
 TIMEOUT_S = 4.0       # /api/fleet/state is a shared cached gather; a cold gather can still take ~2 s
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
@@ -74,6 +77,20 @@ def build_commit(where: Path = Path(__file__).resolve().parent) -> Optional[str]
 def analyze(snapshot: dict) -> list[dict]:
     """No analyzers (tests of the transport alone). The service runs ``analyzers.Analyzer``."""
     return []
+
+
+def _input_summary(snapshot: dict) -> tuple:
+    robots = []
+    for robot in (snapshot.get("state") or {}).get("robots") or []:
+        state = robot.get("state") if isinstance(robot.get("state"), dict) else {}
+        line = state.get("line_follow") if isinstance(state.get("line_follow"), dict) else {}
+        stuck = line.get("stuck") if isinstance(line.get("stuck"), dict) else {}
+        robots.append((robot.get("robot_id"), bool(robot.get("online")), state.get("mode"),
+                       line.get("mode"), stuck.get("stuck_id"), stuck.get("phase")))
+    pending = tuple((row.get("robot_id"), row.get("stuck_id"), row.get("phase"))
+                    for row in (snapshot.get("line_stuck") or {}).get("pending") or [])
+    events = tuple((e.get("audit_id"), e.get("type")) for e in (snapshot.get("events") or []))
+    return (tuple(robots), pending, events)
 
 
 class Fleet:
@@ -158,6 +175,11 @@ class Situation:
         self.arm_incidents = arm_incidents      # D-971: off unless the AI PC owner configures it
         self._arm_task = None
         self._arm_next = 0.0
+        self._last_prune_day: Optional[str] = None
+        self._last_input_summary: Optional[tuple] = None
+        self._last_input_log_at: Optional[float] = None
+        self._problems_next = 0.0
+        self._read_failures = 0
 
     def owner_mode(self) -> str:
         try:
@@ -168,14 +190,17 @@ class Situation:
 
     def _log(self, kind: str, record: dict) -> None:
         day = datetime.fromtimestamp(self.wall(), timezone.utc)
+        day_str = f"{day:%Y-%m-%d}"
         logs = self.state_dir / "logs"
         logs.mkdir(exist_ok=True)
-        with open(logs / f"{day:%Y-%m-%d}-{kind}.jsonl", "a", encoding="utf-8") as out:
+        with open(logs / f"{day_str}-{kind}.jsonl", "a", encoding="utf-8") as out:
             out.write(json.dumps(record, separators=(",", ":")) + "\n")
-        oldest = f"{day - timedelta(days=KEEP_DAYS):%Y-%m-%d}"
-        for path in logs.glob("*.jsonl"):
-            if path.name[:10] < oldest:
-                path.unlink(missing_ok=True)
+        if day_str != self._last_prune_day:
+            self._last_prune_day = day_str
+            oldest = f"{day - timedelta(days=KEEP_DAYS):%Y-%m-%d}"
+            for path in logs.glob("*.jsonl"):
+                if path.name[:10] < oldest:
+                    path.unlink(missing_ok=True)
 
     def _heartbeat(self, mode: str) -> None:
         now = self.clock()
@@ -238,8 +263,10 @@ class Situation:
             events = {"events": [], "next_cursor": self.cursor}
         snapshot["events"] = events.get("events") or []
         stuck_event = any("line_stuck" in str(event.get("type", "")) for event in snapshot["events"])
-        self.cursor = int(events.get("next_cursor", self.cursor))
-        self._cursor_file.write_text(json.dumps({"after_id": self.cursor}))
+        new_cursor = int(events.get("next_cursor", self.cursor))
+        if new_cursor != self.cursor:
+            self.cursor = new_cursor
+            self._cursor_file.write_text(json.dumps({"after_id": self.cursor}))
         self.input_lag_s = round(self.clock() - started, 3)
         snapshot["observed_at"] = self.wall()
         return snapshot, stuck_event
@@ -277,11 +304,20 @@ class Situation:
         try:
             snapshot, stuck_event = self._read()
         except (OSError, ValueError) as exc:             # Fleet unreachable: nothing to say; Fleet runs rules
+            self._read_failures += 1
             _LOG.warning("fleet read failed: %s", exc)
-            return PERIOD_S
-        self._log("input", snapshot)
-        assessments = snapshot_assessments(snapshot)
+            return min(READ_BACKOFF_MAX_S, PERIOD_S * (2 ** (self._read_failures - 1)))
+        self._read_failures = 0
+        if stuck_event or (snapshot.get("line_stuck") or {}).get("pending"):
+            self._problems_next = 0.0
         now = self.clock()
+        summary = _input_summary(snapshot)
+        if (self._last_input_log_at is None or summary != self._last_input_summary
+                or now - self._last_input_log_at >= INPUT_LOG_IDLE_S):
+            self._log("input", snapshot)
+            self._last_input_summary = summary
+            self._last_input_log_at = now
+        assessments = snapshot_assessments(snapshot)
         for rid, result in assessments.items():
             signature = (result.request.case_id, result.request.owner, result.necessity, result.reason)
             previous = self._assessment_samples.get(rid)
@@ -326,7 +362,8 @@ class Situation:
             if self._profile_task is None and self._case_task is None and self.clock() >= self._profile_retry_at:
                 self._profile_task = self._executor.submit(self.vlm.profile)
             return
-        if self._case_task is None:
+        if self._case_task is None and self.clock() >= self._problems_next:
+            self._problems_next = self.clock() + PROBLEMS_POLL_S
             self._case_task = self._executor.submit(self._ai_cycle)
 
     def _arms(self, mode: str) -> None:

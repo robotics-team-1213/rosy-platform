@@ -19,13 +19,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_depth_lock import is_depth_lock_held  # noqa: E402
+from cell_failure_context import default_bundle_root  # noqa: E402
 from cell_job_guards import (  # noqa: E402
     IDEMPOTENCY_KEY_RE, ROLE_HUMAN, ROLE_MACHINE, IdempotencyStore, Principal,
     authenticate_bearer, authorize_principal, check_arm_incident_hold, check_fleet_safety_online,
-    check_peer_ab_folded, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
+    check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
-from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, moves_arm  # noqa: E402,F401
+from cell_job_peer_health import live_hold_attach_err  # noqa: E402
+from record_session_baseline import session_job_env  # noqa: E402
+from cell_job_readiness import (  # noqa: E402
+    CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
+)
+from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
 try:
     import fcntl
@@ -65,21 +71,36 @@ def _tools_tree(workdir: Path) -> str | None:
     return tools_tree_name(workdir)
 
 
+def _dirty_arms(run: dict) -> tuple[str, ...]:
+    if run.get("arms"):
+        return tuple(run["arms"])
+    return (run["arm"],) if run.get("arm") else ()
+
+
 class Runner:
     """Starts jobs detached, serializes moving jobs per arm and A/B space, and records state/audit in <workdir>/cell-job-api."""
 
     def __init__(self, workdir: Path, jobs: dict = JOBS, lock_dir: Path | None = None, lease_dir: Path | None = None,
                  *, incident_check_fn=None, fleet_safety_check_fn=None, fleet_r_url: str | None = None,
-                 fleet_token_file: Path | None = None, ca_file: Path | None = None):
+                 fleet_token_file: Path | None = None, ca_file: Path | None = None,
+                 motor_health_dir: Path | None = None, calibration_dir: Path | None = None,
+                 bundle_root: Path | None = None):
         self.workdir, self.jobs, self.out = workdir, jobs, workdir / "cell-job-api"
         self.lock_dir = lock_dir
         self.lease_dir = lease_dir or (Path.home() / ".local" / "state" / "rosy" / "arm-leases")
+        self.motor_health_dir = motor_health_dir
+        self.calibration_dir = calibration_dir
+        self.bundle_root = Path(bundle_root) if bundle_root is not None else default_bundle_root()
         self._lease_owner = f"cell-job-api:{os.getpid()}"
         self._incident_check_fn, self._fleet_safety_check_fn = incident_check_fn, fleet_safety_check_fn
         self._fleet_r_url, self._fleet_token_file, self._ca_file = fleet_r_url, fleet_token_file, ca_file
         self.out.mkdir(exist_ok=True)
         self._idempotency = IdempotencyStore(self.out / "idempotency.json")
+        self._state_gen = CellStateGen(self.out / "cell-state-gen.json")
         self.lock, self.runs = threading.Lock(), {}
+
+    def state_gen(self) -> int:
+        return self._state_gen.current()
 
     def _check_incident(self, arm: str | None) -> str | None:
         return self._incident_check_fn(arm) if self._incident_check_fn is not None else _check_arm_incident(arm)
@@ -110,12 +131,15 @@ class Runner:
         }
         with open(self.out / "audit.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(row) + "\n")
-        if run["moving"] and run["arm"]:
-            write_cell_state_dirty(
-                self.workdir, run["arm"], job_id=jid, job=run["job"], start=run["start"], end=ended, exit_code=code,
-                fleet_online=bool(run.get("fleet_online")),
-                principal=Principal(row["principal_role"], row["principal_id"]),
-            )
+        if run["moving"]:
+            for dirty_arm in _dirty_arms(run):
+                write_cell_state_dirty(
+                    self.workdir, dirty_arm, job_id=jid, job=run["job"], start=run["start"], end=ended, exit_code=code,
+                    fleet_online=bool(run.get("fleet_online")),
+                    principal=Principal(row["principal_role"], row["principal_id"]),
+                )
+        if run["moving"] and code == 0:
+            self._state_gen.bump()
         run["audited"] = True
 
     def _can_reuse_arm_session_locked(self, arm: str) -> bool:
@@ -140,9 +164,11 @@ class Runner:
             return auth_err
         try:
             argv = build_argv(job, eff_params, self.workdir)
-        except ValueError as exc:
+        except (ValueError, OSError, RuntimeError) as exc:  # RuntimeError: Path.resolve() on a symlink loop (3.12)
             return {"code": 400, "error": str(exc)}
-        arm = eff_params.get("arm")
+        arms = job_arms(job, eff_params)
+        target_arms = set(arms)
+        arm = arms[0] if len(arms) == 1 else ("arm_ab" if target_arms == AB_ARMS else None)
         moving = moves_arm(job, eff_params)
         idem_digest = IdempotencyStore.payload_sha256(name, eff_params) if idempotency_key else None
         with self.lock:
@@ -160,27 +186,40 @@ class Runner:
                 for r in self.runs.values():
                     if not r["moving"] or r["proc"].poll() is not None:
                         continue
-                    if r["arm"] == arm:
-                        return {"code": 409, "error": f"a moving job already runs on {arm}"}
-                    if arm in AB_ARMS and r["arm"] in AB_ARMS:
+                    r_arms = set(r.get("arms") or (() if not r.get("arm") else (r["arm"],)))
+                    if overlap := (target_arms & r_arms):
+                        return {"code": 409, "error": f"a moving job already runs on {sorted(overlap)[0]}"}
+                    if (target_arms & AB_ARMS) and (r_arms & AB_ARMS):
                         return {"code": 409, "error": f"A/B cell space is held by {r['arm']} ({r['job']})"}
-                if inc_reason := self._check_incident(arm):
-                    return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{arm} held: {inc_reason}"}
-                fleet_st = self._check_fleet_safety(arm)
-                fleet_online = bool(fleet_st.get("online"))
-                if fleet_st.get("blocked"):
-                    return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
+                if not job.get("recovery_home"):
+                    for a in arms:
+                        if inc_reason := self._check_incident(a):
+                            return held_job_response(a, inc_reason)
+                for a in arms or (None,):
+                    fleet_st = self._check_fleet_safety(a)
+                    fleet_online = fleet_online or bool(fleet_st.get("online"))
+                    if fleet_st.get("blocked"):
+                        return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
                 if _whole_cell_lock_held(self.lock_dir):
                     return {"code": 409, "error": "whole-cell session.lock is held by another process"}
-                for check_arm in (sorted(AB_ARMS) if arm in AB_ARMS else [arm]):
-                    if _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
+                attach_hold, rec_home = bool(job.get("attach_live_hold")), bool(job.get("recovery_home"))
+                attach_err = live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive) if (attach_hold or rec_home) else None
+                if attach_hold and attach_err: return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
+                lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
+                for check_arm in lock_arms:
+                    if not ((attach_hold or (rec_home and attach_err is None)) and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
-                if peer_err := check_peer_ab_folded(
-                    arm, self.workdir, self.lease_dir, self.lock_dir,
-                    session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
-                    live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
-                ):
-                    return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
+                if target_arms == AB_ARMS:
+                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
+                        return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
+                elif arm in AB_ARMS:
+                    if peer_err := check_peer_ab_folded(
+                        arm, self.workdir, self.lease_dir, self.lock_dir,
+                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
+                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
+                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
+                    ):
+                        return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
             if job.get("camera"):
                 if any(r["camera"] and r["proc"].poll() is None for r in self.runs.values()):
                     return {"code": 409, "error": "another camera job is running (one D435 depth reader at a time)"}
@@ -188,7 +227,7 @@ class Runner:
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
-            env = {**os.environ, "ROSY_ARM_LEASE_OWNER": self._lease_owner}
+            env = session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params)
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
@@ -199,20 +238,22 @@ class Runner:
             now = time.time()
             run = {
                 "job": name, "params": eff_params, "argv": argv, "proc": proc, "log": log,
-                "moving": moving, "camera": bool(job.get("camera")), "arm": arm,
+                "moving": moving, "camera": bool(job.get("camera")), "arm": arm, "arms": arms,
                 "purpose": eff_params.get("purpose") or name,
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
                 "proposer": eff_params.get("proposer"), "fleet_online": fleet_online,
                 "start": now, "expires_at": now + JOB_TTL_S,
-                "omx_tools_tree": _tools_tree(self.workdir), "audited": False,
+                "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
-            if moving and arm:
-                write_cell_state_dirty(
-                    self.workdir, arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
-                    fleet_online=fleet_online, principal=principal,
-                )
+            if moving:
+                for dirty_arm in _dirty_arms(run):
+                    write_cell_state_dirty(
+                        self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
+                        fleet_online=fleet_online, principal=principal,
+                    )
+                self._state_gen.bump()
             if idempotency_key and idem_digest is not None:
                 self._idempotency.record(idempotency_key, idem_digest, jid, name)
             if isinstance(proc, _REAL_POPEN):
@@ -245,8 +286,19 @@ class Runner:
             code = run["proc"].poll()
             if code is not None:
                 self._audit_locked(jid, run, code)
-        data = run["log"].read_bytes()[-tail:].decode("utf-8", "replace") if tail > 0 else ""
-        return {"id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code, "log": data}
+        data = read_tail_bytes(run["log"], tail).decode("utf-8", "replace")
+        if code is not None and "_parsed_result" in run:
+            structured_result, failure_bundle_id = run["_parsed_result"]
+        elif code is not None or tail > 0:
+            structured_result, failure_bundle_id = parse_structured_result(run["log"])
+            if code is not None:
+                run["_parsed_result"] = (structured_result, failure_bundle_id)
+        else:
+            structured_result, failure_bundle_id = None, None
+        return {
+            "id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code,
+            "log": data, "structured_result": structured_result, "failure_bundle_id": failure_bundle_id,
+        }
 
 
 def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = "http://127.0.0.1:8767",
@@ -256,14 +308,18 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
         raise ValueError("human and machine tokens must differ")
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 10
+
         def log_message(self, fmt, *args):
             pass
 
-        def _send(self, code: int, body, ctype="application/json"):
+        def _send(self, code: int, body, ctype="application/json", extra_headers: dict[str, str] | None = None):
             raw = body if isinstance(body, bytes) else json.dumps(body).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(raw)))
+            for k, v in (extra_headers or {}).items():
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(raw)
 
@@ -285,13 +341,14 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
             if self._auth_principal() is None:
                 return
             if m := re.fullmatch(r"/frame/(top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist)\.jpg", self.path):
-                try:
-                    with urllib.request.urlopen(f"{viewer}/frame/{m.group(1)}.jpg", timeout=5) as resp:
-                        return self._send(200, resp.read(), "image/jpeg")
-                except urllib.error.HTTPError as exc:
-                    return self._send(exc.code, {"error": f"viewer returned HTTP {exc.code}"})
-                except OSError as exc:
-                    return self._send(502, {"error": f"viewer unreachable: {exc}"})
+                code, body, ctype, hdrs = proxy_frame(viewer, m.group(1), urlopen_fn=urllib.request.urlopen)
+                return self._send(code, body, ctype, extra_headers=hdrs)
+            if routed := handle_get_route(
+                self.path, runner,
+                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held,
+            ):
+                code, body, ctype, hdrs = routed
+                return self._send(code, body, ctype, extra_headers=hdrs)
             if self.path == "/queue":
                 return self._send(200, runner.queue())
             if self.path == "/jobs":

@@ -264,7 +264,7 @@ def test_an_arrival_5_cm_off_the_axis_centres_itself_forward_and_back_then_turns
     p.world.pose = (-0.45, -0.06, 0.0)                                    # facing the bay, 6 cm to one side (the window)
     p.manager.dock()
     bp = p.manager._bay_phases
-    bp._observation = lambda: _camera(-true_bay_pose(p.world).y)
+    bp._observation = lambda: _camera(true_bay_pose(p.world).y)
     seen, ys = [], []
     for k in range(6000):
         if k % 2 == 0:
@@ -293,14 +293,14 @@ def test_the_saved_nose_in_pose_passes_the_row_gates_and_only_the_heading_window
     m = locate(ref, PINKY_PRO.scan_view(DATA["run5_end"][0], forward_deg=180.0).points)
     assert m.inliers >= CFG.bay_scan_inlier_min and m.margin >= CFG.bay_scan_margin_min and abs(m.x - 0.257) < 0.01        # inliers 0.75, margin 0.46: the row gates hold
     assert scan_geometry(m, STAGING, CFG) is None                                                                          # pose_gate / scan_geometry: the 45 deg heading window only
-    geo = backout_geometry(m, _camera(-m.y), CFG)
+    geo = backout_geometry(m, _camera(m.y), CFG)
     assert geo is None or geo[0] == m.x
-    geo = backout_geometry(m, _camera(-m.y), CFG)
+    geo = backout_geometry(m, _camera(m.y), CFG)
     assert geo is not None and abs(geo[1]) < 0.02
     assert backout_geometry(BayScanPose(x=m.x, y=m.y, heading=m.heading, inliers=m.inliers, margin=0.30, median_m=0.01), None, CFG) is None      # margin below 0.40
     assert backout_geometry(BayScanPose(x=m.x, y=m.y, heading=m.heading, inliers=0.65, margin=m.margin, median_m=0.01), None, CFG) is None       # inliers below 0.70
     assert backout_geometry(BayScanPose(x=m.x, y=m.y, heading=m.heading - math.pi, inliers=m.inliers, margin=m.margin, median_m=0.01), None, CFG) is None   # nose out
-    assert backout_geometry(m, _camera(-m.y + 0.08), CFG) is None                                                    # the measured camera lateral disagrees
+    assert backout_geometry(m, _camera(m.y + 0.08), CFG) is None                                                    # the measured camera lateral disagrees
 
 
 def _nose_in(front=1.0, rear=0.707, margin=0.46, staging=None, heading=None, start=-0.306, inliers=0.75, track_inliers=None, jump=None, y0=0.0, on_tick=None):
@@ -312,7 +312,7 @@ def _nose_in(front=1.0, rear=0.707, margin=0.46, staging=None, heading=None, sta
     if staging is not None:
         p.manager._dock_type.staging_offset_m = staging
     bp = p.manager._bay_phases
-    bp._observation = lambda: _camera(-true_bay_pose(p.world).y)
+    bp._observation = lambda: _camera(true_bay_pose(p.world).y)
     seen, cmds, phases = [], [], []
     for k in range(6000):
         t = true_bay_pose(p.world)
@@ -365,11 +365,11 @@ def test_where_a_turn_is_allowed_is_absolute_not_the_dock_types_staging_offset()
     # the live dock type bay_line_c has staging_offset_m 0.32 (band 0.20..0.44 turned a robot at x 0.257 INSIDE the row): the floor/ceiling are config, 0.38 / 0.45
     ref = PINKY_PRO.scan_view(DATA["seat_reference"], forward_deg=180.0).points
     m = locate(ref, PINKY_PRO.scan_view(DATA["run5_end"][0], forward_deg=180.0).points)       # x 0.257, nose in, inliers 0.75, margin 0.46
-    cam = _camera(-m.y)
+    cam = _camera(m.y)
     assert junction_geometry(m, cam, CFG) is None and junction_candidate(m, CFG) is False     # not a turn point
     assert backout_geometry(m, cam, CFG) is not None                                          # it backs out instead
     at41 = BayScanPose(x=0.41, y=m.y, heading=m.heading, inliers=0.68, margin=0.16, median_m=0.01)
-    assert junction_geometry(at41, _camera(-m.y), CFG) is not None and backout_geometry(at41, _camera(-m.y), CFG) is None
+    assert junction_geometry(at41, _camera(m.y), CFG) is not None and backout_geometry(at41, _camera(m.y), CFG) is None
     assert CFG.bay_turn_x_min_m > CFG.bay_line_x_m and CFG.bay_turn_x_min_m <= CFG.bay_turn_x_target_m <= CFG.bay_turn_x_max_m
 
 
@@ -394,10 +394,10 @@ def test_the_saved_x_0316_nose_in_pose_is_below_the_row_gates_and_backs_out_on_t
         view = PINKY_PRO.scan_view(sc, forward_deg=180.0)
         m = locate(ref, view.points)
         assert abs(m.x - 0.316) < 0.01 and m.inliers < CFG.bay_scan_inlier_min                                        # the row gate (0.70) is not met
-        assert backout_geometry(m, _camera(-m.y), CFG) is None                                                       # row tier: no
-        assert backout_geometry(m, _camera(-m.y), CFG, weak=True) is not None                                        # junction-level fit + camera lateral
+        assert backout_geometry(m, _camera(m.y), CFG) is None                                                       # row tier: no
+        assert backout_geometry(m, _camera(m.y), CFG, weak=True) is not None                                        # junction-level fit + camera lateral
         assert backout_geometry(m, None, CFG, weak=True) is None                                                     # needs the measured camera lateral
-        assert backout_geometry(m, _camera(-m.y + 0.06), CFG, weak=True) is None
+        assert backout_geometry(m, _camera(m.y + 0.06), CFG, weak=True) is None
         assert abs(PINKY_PRO.translation_gap(view.points) - expected_front_gap(ref, m.x, m.y, m.heading, CFG)) < 0.02   # the depth evidence: 0.398 vs 0.404
 
 
@@ -630,7 +630,7 @@ def test_the_centring_shuttle_and_the_over_edge_allowance_ship_off_and_a_6_cm_ar
     p.manager.dock()
     bp = p.manager._bay_phases
     from test_docking_bay_scan_pose import true_bay_pose  # noqa: PLC0415
-    bp._observation = lambda: _camera(-true_bay_pose(p.world).y)
+    bp._observation = lambda: _camera(true_bay_pose(p.world).y)
     cmds = []
     for k in range(2000):
         if k % 2 == 0:
@@ -649,3 +649,36 @@ def test_the_centring_shuttle_and_the_over_edge_allowance_ship_off_and_a_6_cm_ar
     assert p.manager.state is DockState.DOCK_FAILED and p.world.goals == []
     assert not [c for c in cmds if c != (0.0, 0.0)], "it moved"                                  # refused, no motion (not even a turn)
     assert any(k == "docking.person_call" for k, d in p.events), p.manager._error
+
+
+def test_nose_in_camera_lateral_sign_and_map_verified_localization_gate():
+    from core_features.docking import bay_zone
+
+    obs_nose = _camera(0.02)
+    assert bay_zone._camera_dock_lateral(obs_nose, math.pi) == pytest.approx(-0.02)
+    assert bay_zone._camera_dock_lateral(obs_nose, 0.0) == pytest.approx(0.02)
+
+    p = a_bay()
+    with_reference(p, verified=True)
+    p.world.pose = (-0.45, 0.0, math.pi)
+    p.manager.dock()
+    p.manager.localization_ok = lambda: False
+    assert p.manager._bay_phases._map_verified(p.world.pose) == "localization is not LOCALIZED before Nav2 staging"
+
+
+def test_classify_allows_entry_heading_after_past_first_x_and_clamps_creep():
+    from core_features.docking import bay_zone
+
+    p = a_bay()
+    with_reference(p)
+    yaw = math.pi - math.radians(10.0)
+    obs = DockObservation(x=0.40 * math.cos(yaw), y=0.40 * math.sin(yaw), yaw=yaw, confidence=1.0, at=0.0)
+    assert bay_zone.classify((0.0, 0.0, 0.0), p.manager._dock, 0.45, obs, CFG, scan=(0.25, 0.0, math.radians(10.0))).kind == "acquire"
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    p.manager._phase = DockPhase.ACQUIRING
+    bp._in_row, bp._crept = True, False
+    bp._row_pose = (0.295, 0.0, 0.0, p.clock.now, 0.0)
+    bp._observation = lambda: _camera(0.0)
+    bp._tick_acquiring(p.clock.now)
+    assert bp._crept is True and p.world.command == (0.0, 0.0)

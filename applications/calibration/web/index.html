@@ -3,13 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Calibration — 모눈종이 · 실측 요청</title>
+  <title>Rosy Calibration — 모눈종이 · 보정 요청</title>
+  <link rel="icon" type="image/svg+xml" href="/common/brand/platform.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/job-controls.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/app.js"></script>
 </head>
@@ -20,11 +22,11 @@
     <ui-topbar role="banner">
       <ui-brand href="/" aria-label="Rosy Calibration 홈">
         <b>Calibration</b>
-        <small>모눈종이 · 프로파일 · 실측 요청</small>
+        <small>모눈종이 · 프로파일 · 보정 요청</small>
       </ui-brand>
       <nav class="cal-tabs" role="tablist" aria-label="화면 전환">
         <ui-button id="tabGrid" kind="segment" type="button" role="tab" aria-selected="true" class="active">모눈종이 · 프로파일</ui-button>
-        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">실측 요청</ui-button>
+        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">보정 요청</ui-button>
       </nav>
       <span data-spacer></span>
       <ui-button id="btnTheme" kind="quiet" type="button">테마 전환</ui-button>
@@ -40,7 +42,7 @@
           <div id="profileBar" class="cal-profile-bar" role="group" aria-label="프로파일 선택"></div>
           <div class="cal-meta-badges">
             <ui-tag id="profileSourceTag" status="neutral">-</ui-tag>
-            <ui-tag id="holdBadge" status="neutral">HOLD</ui-tag>
+            <ui-tag id="holdBadge" status="neutral">HOLD 미확인</ui-tag>
             <ui-button id="btnReloadSnapshot" kind="quiet" type="button">상태 다시 읽기</ui-button>
           </div>
         </header>
@@ -120,12 +122,14 @@
             </div>
             <footer class="cal-legend">
               <span class="cal-leg-item"><i class="cal-sw cal-sw-grid"></i>mm 모눈(20/50mm)</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>Inlier · LOO(map−arm, z_view 기준)</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>Dropped/외삽</span>
-              <span class="cal-leg-item"><i class="cal-sw cal-sw-miss"></i>표적 미검출</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>LOO 오차 5 mm 이하</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-warn"></i>LOO 주의 · 5 mm 초과~15 mm 이하</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>LOO 15 mm 초과 · × 제외된 관측점</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-plan"></i>계획점 · 관측 연결 미확인</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-bias"></i>Bias = map−FK (적용 시 −bias)</span>
               <span class="cal-leg-item"><i class="cal-sw cal-sw-site"></i>Start/Place (Z 시차 반영)</span>
             </footer>
+            <details id="fixtureDetails" hidden><summary>실측 외곽 · 픽셀과 팔 기준 좌표</summary><pre id="fixtureValues"></pre></details>
           </article>
 
           <article id="armCanvasCard" class="cal-card">
@@ -147,6 +151,8 @@
           </article>
         </section>
 
+        <section id="routePanels" class="cal-route-panels" aria-label="팔별 이송 경로 사전 점검" hidden></section>
+        <a id="fleetCellConsole" hidden>연결된 셀 작업</a>
         <section class="cal-lower">
           <article class="cal-card" aria-label="선택 항목 검사기">
             <header class="cal-card-head">
@@ -195,6 +201,39 @@
             </header>
             <p id="jobStatusNote" class="cal-muted">작업 상태를 불러오는 중…</p>
             <div id="jobStatusBody" class="cal-job-status-body" hidden>
+              <form id="jobForm" class="answer-form" hidden>
+                <label for="jobArm">보정할 팔</label>
+                <select id="jobArm" class="ui-field" required></select>
+                <label for="jobStep">작업</label>
+                <select id="jobStep" class="ui-field">
+                  <option value="check">사전 점검</option>
+                  <option value="depth-verify">깊이 검증</option>
+                  <option value="remap">필요한 카메라 XY 맵 재측정</option>
+                  <option value="pivot-near">지정 좌표 주변 XY 편차 측정</option>
+                  <option value="post-eval">등록된 칸의 XY 위치 검증</option>
+                  <option value="surface">면 높이 측정</option>
+                </select>
+                <small id="jobRemapNote" hidden>집게를 관측 높이에서 촬영해 XY 맵을 맞춥니다. 이 작업만으로 면 높이에서의 정밀 XY 측정이 완료되지는 않습니다.</small>
+                <label id="jobRemeasureLabel" class="ui-check" hidden><input type="checkbox" class="ui-field" id="jobRemeasure"> 점검에서 필요 없다고 해도 지도를 다시 잽니다(성공하면 지정 좌표 편차 보정값도 다시 재야 합니다)</label>
+                <label id="jobSurfaceLabel" hidden>측정할 면
+                  <select id="jobSurface" class="ui-field"></select>
+                </label>
+                <label id="jobVisitLabel" hidden>검증할 칸
+                  <select id="jobVisitSite" class="ui-field" aria-describedby="jobVisitNote"></select>
+                  <small id="jobVisitNote">빈 집게를 관측 높이에서 촬영해 XY 편차를 측정합니다. 바닥 접촉 검증은 별도 작업입니다.</small>
+                </label>
+                <label id="jobTargetsLabel" hidden>측정 좌표 (팔 기준 미터, 한 줄에 site:x,y)
+                  <textarea id="jobTargets" class="ui-field" rows="2" spellcheck="false"></textarea>
+                  <small id="jobSites"></small>
+                </label>
+                <label id="jobSwitchLabel" class="ui-check" hidden><input type="checkbox" class="ui-field" id="jobSwitch"> <span id="jobSwitchText"></span></label>
+                <ui-button id="jobStart" kind="primary" type="submit">보정 작업 시작</ui-button>
+              </form>
+              <p id="jobActionNote" role="status" aria-live="polite"></p>
+              <div id="jobDetail" hidden>
+                <p id="jobProgress" role="status" aria-live="polite"></p>
+                <details><summary>작업 결과 및 로그</summary><pre id="jobOutput"></pre></details>
+              </div>
               <h3 class="cal-subhead">셀별 리스 점유</h3>
               <dl id="jobLeaseDl" class="ui-readout"></dl>
               <h3 class="cal-subhead">최근 작업 3건</h3>
@@ -207,7 +246,7 @@
       <section id="panelRequests" aria-labelledby="tabRequests" hidden>
         <div class="ui-app-body" data-seats="none">
           <main class="ui-app-main" id="request-main" tabindex="-1">
-            <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
+            <div class="ui-pathbar"><h1 class="ui-page-heading">보정 요청</h1></div>
             <div class="ui-stage-grid" data-layout="watch">
               <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
                 <h2 id="detail-heading" class="sr-only">요청 내용</h2>

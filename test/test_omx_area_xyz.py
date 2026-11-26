@@ -759,11 +759,11 @@ def test_refused_reinsert_does_not_start_next_attempt(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
     )
     assert result["result"] == "held" and result["at"] == "reinsert_pick"
-    assert result["task_verified"] is False and commands[-1] == "run reinsert_pick"
+    assert result["task_verified"] is False and commands[-2:] == ["run reinsert_pick", "human-hold"]
     assert len([c for c in commands if c.startswith("load ")]) == 1
 
 
-@pytest.mark.parametrize("failed, at", [("goto above_place", "slip_above_place"), ("park", "slip_park")])
+@pytest.mark.parametrize("failed, at", [("run lift_pick", "slip_run lift_pick"), ("park", "slip_park")])
 def test_refused_slip_recovery_does_not_start_next_attempt(tmp_path, monkeypatch, failed, at):
     directive = build_directive(
         arm_id="arm_b",
@@ -786,7 +786,9 @@ def test_refused_slip_recovery_does_not_start_next_attempt(tmp_path, monkeypatch
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
     )
     assert result["result"] == "held" and result["at"] == at
-    assert result["task_verified"] is False and commands[-1] == failed
+    assert result["task_verified"] is False and commands[-2:] == [failed, "human-hold"]
+    if failed == "park":
+        assert "goto above_place" not in commands
 
 
 def test_refused_above_place_is_not_reissued_after_slip(tmp_path, monkeypatch):
@@ -811,7 +813,7 @@ def test_refused_above_place_is_not_reissued_after_slip(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
     )
     assert result["result"] == "held" and result["at"] == "slip_goto above_place"
-    assert commands.count("goto above_place") == 1 and "park" not in commands
+    assert commands.count("goto above_place") == 1 and "park" not in commands and commands[-1] == "human-hold"
 
 
 def test_slip_retry_parks_before_loading_next_plan(tmp_path, monkeypatch):
@@ -842,7 +844,7 @@ def test_slip_retry_parks_before_loading_next_plan(tmp_path, monkeypatch):
     )
     loads = [i for i, c in enumerate(commands) if c.startswith("load ")]
     assert result["result"] == "held" and len(loads) == 2
-    assert "park" in commands[loads[0]:loads[1]]
+    assert "park" in commands[loads[0]:loads[1]] and "goto above_place" not in commands[loads[0]:loads[1]]
 
 
 def test_empty_grasp_park_refusal_is_held(tmp_path, monkeypatch):
@@ -865,7 +867,7 @@ def test_empty_grasp_park_refusal_is_held(tmp_path, monkeypatch):
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
     )
     assert result["result"] == "held" and result["at"] == "empty_park"
-    assert result["task_verified"] is False and commands[-1] == "park"
+    assert result["task_verified"] is False and commands[-2:] == ["park", "human-hold"]
 
 
 def test_post_release_z_failure_does_not_repick_empty_source(tmp_path, monkeypatch):
@@ -917,3 +919,99 @@ def test_stay_in_hover_macro_stops_before_place_and_release(tmp_path):
     assert "park" not in commands
     assert result["result"] == "hover"
     assert result["steps"][-1]["command"] == "goto above_place"
+
+
+def test_pr2_area_xyz_safety_fences_and_vision_after_grasp(tmp_path: Path, monkeypatch):
+    import cell_area_recovery as car
+    import cell_area_zones as caz
+    import cell_directive_compiler as cdc
+
+    # 1) No auto-low_zones punch + base hold_current_ma (93) respected without forcing 140
+    d_low = build_directive(
+        arm_id="arm_s",
+        pick={"area": "floor", "x": 0.08, "y": 0.14, "z": 0.010, "yaw_deg": -90.0},
+        place={"area": "floor", "x": -0.06, "y": 0.14, "z": 0.025, "yaw_deg": -90.0},
+    )
+    d_low["execution"] = {"keep_out": {"x_max_m": 0.25}}
+    high_floor = {**SAMPLE_BASE_PLAN, "limits": {**SAMPLE_BASE_PLAN["limits"], "workspace_min_m": [-0.05, -0.24, 0.020]}}
+    plan_low, _ = cdc.build_plan_from_directive(d_low, high_floor, work_dir=tmp_path)
+    assert "low_zones" not in plan_low["limits"]
+    assert plan_low["hold_current_ma"] == 93
+    assert plan_low["keep_out"] == {"x_max_m": 0.25}
+
+    # 2) limit_error enforcement raises ValueError in plan_library_from_directive
+    d_lim = build_directive(
+        arm_id="arm_b",
+        pick={"area": "floor", "x": 0.12, "y": -0.02, "z": 0.021, "yaw_deg": -90.0},
+        place={"area": "floor", "x": 0.16, "y": 0.02, "z": 0.025, "yaw_deg": -90.0},
+    )
+    d_lim["execution"] = {"joint_max": {"wrist_flex.pos": -99.0}}
+    with pytest.raises(ValueError, match="joint limit check failed"):
+        cdc.plan_library_from_directive(d_lim, SAMPLE_BASE_PLAN, work_dir=tmp_path)
+
+    # 3) normalize_pick_yaw_deg uses signed x_m (<0.04 / negative x) without x clamp
+    assert caz.normalize_pick_yaw_deg(-90.0, x_m=-0.10, y_m=0.02) == 90.0
+
+    # 4) verify_stack_outcome refuses verified=True when after_side is None
+    v_missing = caz.verify_stack_outcome(before_side=None, after_side=None, pick={"area": "floor"}, place={"area": "floor"})
+    assert v_missing["verified"] is False and v_missing["basis"] == "unverified_no_side_camera"
+
+    # 5) recover floor min_grasp_z = 0.005 and live recovery step capped <= 0.005m inside bounds
+    d_rec = build_directive(
+        arm_id="arm_b",
+        pick={"area": "floor", "x": 0.16, "y": 0.0, "z": 0.006, "yaw_deg": -90.0},
+        place={"area": "floor", "x": 0.16, "y": 0.10, "z": 0.025, "yaw_deg": -90.0},
+    )
+    d_rec["execution"] = {"live_perceived": True}
+    rec = car.diagnose_and_recover_pick(
+        attempt=0, cur_directive=d_rec, r_desc={"ok": True},
+        r_grasp={"ok": True, "state": [0, 0, 0, 0, 0, 48.0], "gripper_current_ma": 20.0},
+        cal={"held_30mm": 54.3}, tried_xs=[], wrist_obs=None,
+    )
+    assert abs(rec["recovered_pick_xyz_m"][0] - 0.16) <= 0.005 + 1e-9
+    assert rec["recovered_pick_xyz_m"][2] == 0.005
+
+    # 6) vision_after_grasp=True on run lift_pick calls vision_judge with sequence HSV (not dict) & tactile checks holding
+    seen_hsv = []
+    seen_holding = []
+    monkeypatch.setattr(cell_area_xyz.cgd, "vision_judge", lambda img, hsv, *a, **kw: (
+        seen_hsv.append(hsv), {"verdict": "proceed", "class": "ok", "found": False, "dx_mm": 0.0, "dy_mm": 0.0, "dz_mm": 0.0}
+    )[1])
+    orig_tactile = cell_area_xyz.evaluate_tactile_place_compliance
+
+    def _spy_tactile(r_step, *, target_z_m, current_z_m, holding):
+        seen_holding.append(holding)
+        return orig_tactile(r_step, target_z_m=target_z_m, current_z_m=current_z_m, holding=holding)
+
+    monkeypatch.setattr(cell_area_xyz, "evaluate_tactile_place_compliance", _spy_tactile)
+    d_vis = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 2},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 3},
+        vision_refine=False,
+    )
+    d_vis["execution"] = {"vision_after_grasp": True}
+    import numpy as np
+    cell_area_xyz.execute_directive(
+        d_vis, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, max_attempts=1,
+        act_fn=lambda _c: {"ok": True, "holding": True, "state": [0, -10, 15, 45, 41, 54.36], "gripper_current_ma": 172.0},
+        frame_fn=lambda _cam: np.zeros((32, 32, 3), dtype=np.uint8),
+    )
+    assert len(seen_hsv) == 2 and all(isinstance(h, (tuple, list)) for h in seen_hsv)
+    assert seen_holding == [True]
+
+
+def test_arm_s_v21_white_jaws_keeps_30mm_open_over_narrow_base_plan(tmp_path):
+    import cell_directive_compiler as cdc
+
+    directive = build_directive(
+        arm_id="arm_s",
+        pick={"area": "floor", "x": 0.1103, "y": 0.119, "z": 0.021},
+        place={"area": "floor", "x": -0.02, "y": 0.15, "z": 0.024},
+        vision_refine=False,
+    )
+    narrow_base = {**SAMPLE_BASE_PLAN, "tcp_x_m": 0.074, "grip_open": 54.7, "grip_release": 53.5}
+    plan, cal = cdc.build_plan_from_directive(directive, narrow_base, work_dir=tmp_path)
+    assert cal["finger_color"] == "white"
+    assert plan["grip_open"] == pytest.approx(58.1)
+    assert plan["grip_release"] == pytest.approx(57.5)

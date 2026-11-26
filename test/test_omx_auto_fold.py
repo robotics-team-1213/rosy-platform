@@ -46,7 +46,7 @@ class Cell:
         return {"ok": True, "state": self.state, "target": self.target}
 
 
-def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None):
+def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None, require_empty_gripper=False):
     seen, booked, released = [], [], []
 
     def look(frames):
@@ -59,7 +59,7 @@ def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None):
 
     result = af.recover(cell, HOME, CLOSED, plan=lambda s: [s, HOME], look=look, reserve=reserve,
                         release=lambda: released.append(1), release_and_rise=lambda c: {"result": rise},
-                        low=lambda s: low, order=order)
+                        low=lambda s: low, order=order, require_empty_gripper=require_empty_gripper)
     return result, seen, booked, released
 
 
@@ -160,6 +160,21 @@ def test_jaws_on_a_box_low_let_go_after_the_rise_is_checked():
 def test_open_approach_jaws_are_not_holding():
     assert af.holding([*REACH[:5], 60.0], [*REACH[:5], 60.0], CLOSED) is False
     assert af.holding([*REACH[:5], 56.0], [*REACH[:5], CLOSED], CLOSED) is True
+
+
+@pytest.mark.parametrize(("holding", "jaw_gap", "allowed"), [
+    (True, 0, False), (None, 0, False), (False, 3, False), (False, 0, True),
+])
+def test_usb_homing_requires_empty_jaws_before_any_release_or_park(holding, jaw_gap, allowed):
+    cell = Cell([*REACH[:5], CLOSED + jaw_gap], target=[*REACH[:5], CLOSED])
+    act = cell.act
+    cell.act = lambda cmd: {**act(cmd), "holding": holding}
+    result, seen, booked, _ = run(cell, require_empty_gripper=True)
+    if allowed:
+        assert result["result"] == "folded"
+    else:
+        assert result["reason"] == "PLACEMENT_REQUIRED_BEFORE_HOME"
+        assert not seen and not booked and cell.commands == ["state", "human-hold"]
 
 
 def test_other_arm_reservation_or_a_short_park_holds():
@@ -365,3 +380,166 @@ def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_i
                       "--site", "pinky", "--roi", "0", "0", "10", "10", "--out", str(out)])
     written_err = json.loads(out.read_text())
     assert rc_err == 3 and written_err["ended"] == "stop_now" and written_err["unmoved"] is True and "stop now" in err_cell.commands
+
+
+def test_fk_lift_plan_gentle_step_and_latched_prefers_fold_from_hold(monkeypatch):
+    import cell_recovery_plan as crp
+
+    monkeypatch.setattr(crp, "fk_z", lambda pose, tcp_x_m=None: 0.08 + (20.0 - float(pose[1])) * 0.003)
+    lift = crp.fk_lift_plan([10.0, 20.0, -10.0, 30.0, -20.0, 57.0], clear_z_m=0.10, home=HOME)
+    assert lift is not None
+    lift_cmds = [c for c in lift[0] if c.startswith("jog shoulder_lift.pos ")]
+    assert lift_cmds and all(abs(float(c.split()[-1])) <= 2.0 + 1e-9 for c in lift_cmds)
+
+    class _LatchedCell:
+        def __init__(self):
+            self.commands = []
+        def checked(self, cmd, _check=None):
+            return self.act(cmd)
+        def act(self, cmd):
+            self.commands.append(cmd)
+            if cmd == "state":
+                return {
+                    "ok": True, "state": [20.0, 22.0, -16.0, 31.0, -30.0, 57.0],
+                    "target": [20.0, 22.0, -16.0, 31.0, -30.0, 57.0],
+                    "human_hold_latched": True, "torque_hold_commanded": True,
+                    "holding": False, "library_sha256": "lib-sha",
+                    "operating_context": {"session_id": "s1"},
+                }
+            if "fold-from-hold" in cmd:
+                return {"ok": True, "settled": True, "state": list(HOME)}
+            return {"ok": True}
+
+    cell = _LatchedCell()
+    tried = []
+    res = af.recover(
+        cell, HOME, CLOSED,
+        plan=lambda s: [s, HOME],
+        look=lambda f: (tried.append(len(f)), {"clear": True, "low": [], "high": []})[1],
+        reserve=lambda f: {"ok": True}, release=lambda: None,
+        release_and_rise=lambda c: {"result": "risen"},
+        low=lambda s: True, allow_live_unlatch=True, extended_detours=True,
+        held_plan=lambda s: [s, HOME], library_sha256="lib-sha",
+    )
+    # Must try fold-from-hold BEFORE jog-based lift_then_park when latched without holding
+    assert res["result"] == "folded" and res["candidate"] == "fold-from-hold"
+    assert not any(c.startswith("jog ") for c in cell.commands)
+
+
+def test_tucked_park_path_stays_folded_above_base_and_within_speed_limit():
+    from omx_adapter.chunk_library import park_path, too_fast
+
+    tucked = [9.69, -27.67, 49.45, 43.44, -23.57, 49.13]
+    home = [0.0, -58.0, 50.0, 50.0, -5.0, 46.5]
+    frames = park_path(tucked, home, 49.0, 30, transit={"shoulder_lift.pos": -27.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0}, speed=0.3)
+    assert frames and not too_fast(frames, 30)
+    assert min(f[2] for f in frames) >= 42.5  # never unfolds to transit elbow=18
+    sh_mid = next(i for i, f in enumerate(frames) if f[1] <= -41.5)
+    assert max(abs(f[2] - 43.0) for f in frames[sh_mid - 1:sh_mid + 1]) <= 1.0  # lifts clear of plate before folding elbow with gravity
+    sh_done = next(i for i, f in enumerate(frames) if abs(f[1] - home[1]) <= 0.5)
+    assert abs(frames[sh_done][0] - tucked[0]) <= 0.5  # shoulder_lift clears before pan sweeps
+    assert abs(frames[sh_done][2] - home[2]) <= 0.5  # elbow folds to goal[2] together with shoulder_lift -> goal[1]
+    assert max(abs(a - b) for a, b in zip(frames[-1][:5], home[:5])) <= 0.1
+
+
+def test_clearable_after_fold_accepts_hw_clean_and_multi_incident_launch(tmp_path, monkeypatch):
+    import omx_incident
+    from core_common.protocol.arm_incident.arm_incidents import clearable_after_fold
+
+    result, *_ = run(Cell(REACH))
+    hw0 = {str(i): 0 for i in range(11, 17)}
+    proof = af.evidence(result, HOME, TORQUE0, "inc-1", 1000.0, hardware_error_after=hw0, caps_restored_after=True)
+    facts_fault = {**FACTS, "fault_records": ["f.json"], "fault_record_kinds": [{"fault": "shoulder_pan: hardware error", "stop_reasons": []}]}
+    assert clearable_after_fold(facts_fault, proof, "inc-1", 990.0)[0] is True
+    assert clearable_after_fold(facts_fault, {**proof, "caps_restored_after": False}, "inc-1", 990.0)[0] is False
+    assert clearable_after_fold(facts_fault, {**proof, "hardware_error_after": {**hw0, "11": 32}}, "inc-1", 990.0)[0] is False
+    assert clearable_after_fold({**facts_fault, "latched": {"11": {"hw_error": 32}}}, proof, "inc-1", 990.0)[0] is False
+
+    monkeypatch.setattr(omx_incident, "_probe_hold", lambda arm, link=None: (True, "held"))
+    omx_incident.refuse_if_held("arm_s", Link(["inc-1", "inc-2"]), allow_incident="inc-1,inc-2")
+    with pytest.raises(SystemExit):
+        omx_incident.refuse_if_held("arm_s", Link(["inc-1", "inc-3"]), allow_incident="inc-1,inc-2")
+
+    monkeypatch.setattr(omx_incident, "INCIDENTS", tmp_path / "incidents")
+    conf, cwd = _conf(tmp_path)
+    calls, cleared = [], []
+
+    def run_fn(command, **kw):
+        calls.append(kw["env"]["ROSY_RECOVERY_INCIDENT"])
+        Path(command[command.index("--out") + 1]).write_text(json.dumps(
+            {"result": "folded", "candidate": "park", "state": HOME, "home": HOME, "corridor": {"clear": True}}))
+        (cwd / "session.json").write_text(json.dumps({"torque_after": TORQUE0, "hardware_faults": {}, "caps_restored": True}))
+        return SimpleNamespace(stdout="", stderr="")
+
+    out = af.launch("arm_s", conf, link=Link(["inc-1", "inc-2"]), run=run_fn, sleep=lambda s: None,
+                    clear=lambda *a, **k: cleared.append((k["only"], k["recovery"])), allow_multi=True)
+    assert out["result"] == "cleared" and calls == ["inc-1,inc-2"]
+    assert [c[0] for c in cleared] == ["inc-1", "inc-2"]
+    assert cleared[0][1]["hardware_error_after"] == hw0 and cleared[0][1]["caps_restored_after"] is True
+
+
+def test_open_cell_binds_operating_profile_onto_fifo_cell(tmp_path, monkeypatch):
+    import cell_auto_setup as setup
+
+    seen = {}
+
+    class _SpyCell:
+        def __init__(self, io, cameras, **kwargs):
+            seen["io"], seen["cameras"], seen["kwargs"] = io, cameras, kwargs
+
+    prof = tmp_path / "prof.json"
+    prof.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "arm_s", "instance_id": "omx_s",
+        "robot_config_sha256": "d" * 64, "operating_envelope_path": "env.json", "work_dir": ".",
+    }), encoding="utf-8")
+    cfg = {
+        "arm_id": "arm_s", "io": str(tmp_path / "io"), "cameras": {},
+        "work_dir": str(tmp_path), "calibration_path": str(tmp_path / "cal.json"),
+        "operating_profile_path": str(prof),
+    }
+    monkeypatch.setattr(setup, "load_config", lambda _p: dict(cfg))
+    monkeypatch.setattr(setup.cp, "FifoCell", _SpyCell)
+    args = SimpleNamespace(
+        config=tmp_path / "cfg.json", want_object=None, want_colour=None,
+        layers_below=None, source="pinky", task_id=None, handoff_lease_id=None,
+        verify_zones=False, dry_run=True,
+    )
+    bound_cfg, _, _, _ = setup.open_cell(args, commissioning=True)
+    assert bound_cfg["_operating_profile_binding"]["device_id"] == "arm_s"
+    assert seen["kwargs"].get("operating_profile") == bound_cfg["_operating_profile_binding"]
+
+
+
+@pytest.mark.parametrize("changed", ["before", "after", "success"])
+def test_bound_usb_fold_rechecks_identity_before_session_and_before_clear(tmp_path, monkeypatch, changed):
+    import time
+    import omx_incident
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    incident = "a" * 32
+    ids = [incident] if changed != "before" else ["b" * 32]
+    conf, cwd = _conf(tmp_path)
+    calls, clears = [], []
+    link = SimpleNamespace(hold=lambda: SimpleNamespace(incident_ids=list(ids), held=True, reason=HOME_RECOVERY_REASON))
+
+    def run_fn(command, **kw):
+        assert kw["env"]["ROSY_RECOVERY_INCIDENT"] == command[command.index("--expected-incident-id") + 1] == incident
+        calls.append(command)
+        Path(command[command.index("--out") + 1]).write_text(json.dumps(
+            {"result": "folded", "candidate": "park", "state": HOME, "home": HOME, "incident_id": incident}))
+        (cwd / "session.json").write_text(json.dumps({"torque_after": TORQUE0}))
+        if changed == "after":
+            ids[:] = ["c" * 32]
+        return SimpleNamespace(stdout="", stderr="")
+
+    out = af.launch("arm_s", conf, link=link, run=run_fn, sleep=lambda _: None, clear=lambda *a, **k: clears.append(k),
+                    expected_incident_id=incident, request_id="bound-r", expires_at=time.time() + 60)
+    assert len(calls) == int(changed != "before")
+    if changed == "success":
+        assert out["result"] == "cleared" and out["bound_incident_id"] == incident and clears[0]["only"] == incident
+    else:
+        assert not clears and out["why"] == "HOME_RECOVERY_INCIDENT_MISMATCH"
+
+    monkeypatch.setattr(omx_incident, "_probe_hold", lambda *_: (False, None))
+    with pytest.raises(SystemExit):
+        omx_incident.refuse_if_held("arm_s", Link([]), allow_incident=incident)

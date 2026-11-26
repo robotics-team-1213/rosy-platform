@@ -1,0 +1,134 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const studioUrl = `data:text/javascript,${encodeURIComponent(
+  await readFile(new URL("../web/studio-look.js", import.meta.url), "utf8"),
+)}`;
+const armUrl = `data:text/javascript,${encodeURIComponent(
+  await readFile(new URL("../web/omx-arm.js", import.meta.url), "utf8"),
+)}`;
+const actorsCode = (await readFile(new URL("../web/factory-actors.js", import.meta.url), "utf8"))
+  .replace("./studio-look.js", studioUrl)
+  .replace("./omx-arm.js", armUrl);
+const { createFactoryLayer } = await import(`data:text/javascript,${encodeURIComponent(actorsCode)}`);
+
+function makeThreeMock() {
+  class Vector3 {
+    constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+    set(x, y, z) { this.x = x; this.y = y; this.z = z; }
+  }
+  class Object3D {
+    constructor() {
+      this.children = [];
+      this.visible = true;
+      this.position = new Vector3();
+      this.rotation = { x: 0, y: 0, z: 0 };
+    }
+    add(...items) { this.children.push(...items); }
+    traverse(fn) { fn(this); for (const c of this.children) c.traverse?.(fn); }
+  }
+  class Mesh extends Object3D {
+    constructor(geometry, material) {
+      super();
+      this.isMesh = true;
+      this.geometry = geometry;
+      this.material = material;
+      this.castShadow = false;
+      this.receiveShadow = false;
+    }
+  }
+  class Mat {
+    constructor(props = {}) { Object.assign(this, props); this.color = { setHex() {} }; }
+    clone() { return new Mat(this); }
+  }
+  class Geom { setFromPoints() { return this; } computeBoundingSphere() {} }
+  return {
+    DoubleSide: 2,
+    RepeatWrapping: 1000,
+    RGBAFormat: 1023,
+    SRGBColorSpace: "srgb",
+    Color: class { constructor() { this.r = 0.5; this.g = 0.5; this.b = 0.5; } },
+    DataTexture: class {},
+    Vector3,
+    Group: Object3D,
+    Mesh,
+    Line: Object3D,
+    BufferGeometry: Geom,
+    BoxGeometry: Geom,
+    PlaneGeometry: Geom,
+    RingGeometry: Geom,
+    MeshBasicMaterial: Mat,
+    MeshStandardMaterial: Mat,
+    LineBasicMaterial: Mat,
+    CanvasTexture: class {},
+  };
+}
+
+test("createFactoryLayer renders dynamic Pinky ids and hides absent roster ids", () => {
+  const prevDoc = globalThis.document;
+  const prevRaf = globalThis.requestAnimationFrame;
+  globalThis.document = {
+    createElement() {
+      const ctx = {
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 0,
+        fillRect() {},
+        beginPath() {},
+        moveTo() {},
+        lineTo() {},
+        stroke() {},
+      };
+      return { width: 0, height: 0, getContext: () => ctx };
+    },
+  };
+  globalThis.requestAnimationFrame = () => 0;
+  try {
+    const three = makeThreeMock();
+    const scene = new three.Group();
+    const labelsById = new Map();
+    const groupsById = new Map();
+    const layer = createFactoryLayer({
+      three,
+      scene,
+      redraw: () => {},
+      addLabel: (group, id) => {
+        const lbl = { visible: true, id };
+        labelsById.set(id, lbl);
+        groupsById.set(id, group);
+        return lbl;
+      },
+    });
+    layer.setFocusLabels("factory_omx");
+    layer.apply({
+      pinkys: [
+        { id: "rosy_42", pose_m: [0.1, 0.2, 0.0], yaw_rad: 0.5, observed: true },
+        { id: "rosy_99", pose_m: [0.5, -0.1, 0.0], yaw_rad: 1.5, observed: true },
+      ],
+      arms: {},
+    }, 0, true);
+
+    assert.ok(groupsById.has("rosy_99"), "dynamic Pinky rosy_99 actor created");
+    assert.equal(groupsById.get("rosy_42").visible, true);
+    assert.equal(groupsById.get("rosy_99").visible, true);
+    assert.equal(groupsById.get("rosy_45").visible, false, "omitted rosy_45 is hidden");
+    assert.equal(groupsById.get("rosy_46").visible, false, "omitted rosy_46 is hidden");
+    assert.equal(labelsById.get("rosy_99").visible, false, "active OMX focus hides new actor label");
+
+    // Switching back to a legacy single-pinky frame hides dynamic actors and restores legacy defaults.
+    layer.apply({
+      pinky: { id: "rosy_45", pose_m: [0.2, 0.3, 0.0], yaw_rad: 0.0 },
+      pinkys: [],
+      arms: {},
+    }, 0, true);
+    assert.equal(groupsById.get("rosy_99").visible, false, "dynamic rosy_99 hidden on legacy fallback");
+    assert.equal(groupsById.get("rosy_45").visible, true);
+    assert.equal(groupsById.get("rosy_42").visible, true);
+    assert.equal(groupsById.get("rosy_42").position.x, -0.414);
+    assert.equal(groupsById.get("rosy_42").position.y, 0.47);
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.requestAnimationFrame = prevRaf;
+  }
+});

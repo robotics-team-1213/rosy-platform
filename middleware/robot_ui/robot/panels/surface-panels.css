@@ -50,7 +50,7 @@
   max-width: calc(100% - 2 * var(--space-2));
   padding: var(--space-2) var(--space-3);
   background: var(--scrim-solid);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-panel);
   color: var(--text-primary);
   font: var(--weight-emphasis) var(--text-label)/var(--leading-copy) var(--body);

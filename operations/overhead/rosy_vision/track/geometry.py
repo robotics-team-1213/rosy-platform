@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
+
+from core_common.calibration_math import undistort_point
 
 #: A camera solved from a homography outside this height is not trusted (no parallax step).
 MIN_CAMERA_HEIGHT_M = 0.3
@@ -57,22 +59,30 @@ def centre_scale(kx: float, ky: float) -> np.ndarray:
     return np.array([[kx, 0.0, 0.5 * kx - 0.5], [0.0, ky, 0.5 * ky - 0.5], [0.0, 0.0, 1.0]])
 
 
-def camera_from_homography(image_to_map, image_size: Sequence[int],
-                           hfov_deg: float | None) -> tuple[float, float, float] | None:
-    """Camera nadir (x, y) and height above the floor in map metres, or None.
+def undistort_points(points, lens_profile: Mapping | None) -> np.ndarray:
+    """Undistort (N, 2) raw pixel coordinates to calibrated pinhole pixel space."""
+    pts = np.asarray(points, dtype=float).reshape(-1, 2)
+    if lens_profile is None or len(pts) == 0:
+        return pts
+    if not any(abs(float(c)) > 1e-12 for c in lens_profile["D"]):
+        return pts
+    return np.asarray([undistort_point(float(u), float(v), lens_profile) for u, v in pts], dtype=float)
 
-    Lens model and its limits: pinhole camera, principal point at the image centre, square
-    pixels, and ``hfov_deg`` is the lens FOV across the LONG image side. Lens distortion is
-    ignored and a cropped or re-scaled stream that no longer matches the lens FOV biases the
-    focal length, hence the camera height. A solution whose rotation is not close to
-    orthonormal (r1 and r2 differing in length or not perpendicular by more than 10 %) means
-    the lens model does not fit this homography, and None is returned.
-    """
-    if hfov_deg is None or not 0.0 < hfov_deg < 180.0:
-        return None
+
+def camera_from_homography(image_to_map, image_size: Sequence[int],
+                           hfov_deg: float | None,
+                           *, lens_profile: Mapping | None = None) -> tuple[float, float, float] | None:
+    """Camera nadir (x, y) and height above the floor in map metres, or None."""
     width, height = float(image_size[0]), float(image_size[1])
-    focal = (max(width, height) / 2.0) / math.tan(math.radians(hfov_deg) / 2.0)
-    k = np.array([[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]])
+    if lens_profile is not None:
+        k = np.asarray(lens_profile["K"], dtype=float).reshape(3, 3)
+        px_ref, py_ref = float(k[0, 2]), float(k[1, 2])
+    else:
+        if hfov_deg is None or not 0.0 < hfov_deg < 180.0:
+            return None
+        focal = (max(width, height) / 2.0) / math.tan(math.radians(hfov_deg) / 2.0)
+        k = np.array([[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]])
+        px_ref, py_ref = width / 2.0, height / 2.0
     try:
         i2m = as_matrix(image_to_map)
         b = np.linalg.solve(k, np.linalg.inv(i2m))  # K^-1 (map -> image) = s [r1 r2 t]
@@ -84,10 +94,12 @@ def camera_from_homography(image_to_map, image_size: Sequence[int],
     n1, n2 = float(np.linalg.norm(b[:, 0])), float(np.linalg.norm(b[:, 1]))
     if n1 < 1e-12 or n2 < 1e-12:
         return None
-    if abs(n1 / n2 - 1.0) > 0.1 or abs(float(b[:, 0] @ b[:, 1]) / (n1 * n2)) > 0.1:
+    if abs(n1 / n2 - 1.0) > 0.1 or abs(float(b[:, 0] @ b[:, 1]) / (n1 * n2)) > 0.2:
         return None
     r1, r2, t = b[:, 0] / norm, b[:, 1] / norm, b[:, 2] / norm
-    centre = apply(i2m, [[width / 2.0, height / 2.0]])[0]
+    centre = apply(i2m, [[px_ref, py_ref]])[0]
+    if not np.all(np.isfinite(centre)):
+        return None
     if (r1 * centre[0] + r2 * centre[1] + t)[2] < 0:  # the floor point in view is in front
         r1, r2, t = -r1, -r2, -t
     u, _, vt = np.linalg.svd(np.column_stack([r1, r2]), full_matrices=False)

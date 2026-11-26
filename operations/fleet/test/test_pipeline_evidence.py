@@ -97,7 +97,7 @@ class Env:
         """A heartbeat that arrived `age` s ago; `still_s` of earlier still samples are fed to the tracker."""
         row = self.registry.record("pinky_1")
         row.online, row.snapshot = True, snapshot or _snapshot()
-        row.last_heartbeat_monotonic = time.monotonic() - age
+        row.last_heartbeat_monotonic = ev.time.monotonic() - age
         tracker = ev._tracker(self.app)
         tracker._rows.pop("pinky_1", None)
         if still_s:
@@ -245,9 +245,10 @@ def _owner_parts(lease, basis="predefined_side_and_top_target_zones", cell="cell
 
 
 def _claimed(env, cell="cell_s"):
-    env.confirm_bed()
+    confirmation = env.confirm_bed()
+    assert confirmation.status_code == 200, confirmation.text
     claimed = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": cell}).json()
-    assert claimed["claimed"] is True
+    assert claimed["claimed"] is True, claimed
     return claimed["handoff"]["handoff_lease_id"]
 
 
@@ -715,13 +716,14 @@ def test_a_confirmation_that_lapses_between_the_check_and_the_bind_refuses_the_c
 def _real_tracker_env(monkeypatch, *, track_robots=(), max_anchor_age_s=10.0):
     from rosy.world.state.projections.map_pose import MapPoseConfig, MapPoseTracker
 
+    clock = [1000.0]
+    monkeypatch.setattr(time, "time", lambda: clock[0])
+    # Heartbeat age shares the synthetic wall clock without changing the event loop's clock.
+    monkeypatch.setattr(ev, "time", SimpleNamespace(time=time.time, monotonic=lambda: clock[0], sleep=time.sleep))
     env = Env()
     cfg = MapPoseConfig(track_anchor_robots=tuple(track_robots), track_modes=("led", "motion"),
                         max_anchor_age_s=max_anchor_age_s)
     tracker = MapPoseTracker("pinky_1", cfg)
-    clock = [1000.0]
-    monkeypatch.setattr(ev.time, "time", lambda: clock[0])
-    # Match wall=clock[0] on heartbeat still samples so observed_at stays within [0, 2] s of time.time().
     env.app.state.map_pose = SimpleNamespace(
         arbitrated_pose=lambda rid: tracker.pose(clock[0], "m1"),
         active_map_id=lambda: "m1",

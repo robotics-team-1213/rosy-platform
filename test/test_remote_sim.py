@@ -95,6 +95,7 @@ def test_runs_are_capped_on_loopback_hold_a_job_lock_and_clean_up_only_this_run(
     assert lock in rs.SIM and "exec " not in rs.SIM and rs.SIM.rstrip().endswith("wait $!")
     assert rs.SIM.index("trap cleanup EXIT") < rs.SIM.index(lock)
     assert 'systemctl --user stop "rosy-sim-$NAME.scope"' in rs.SIM and 'rm -f ~/rosy-jobs/"$NAME".lock' in rs.SIM
+    assert 'systemd-run --user --scope --collect ' in rs.SIM
     assert 'rosy-sim-$1.scope' in rs.STOP and '~/rosy-jobs/"$1".lock' in rp.CLEANUP
     for script in (rs.SIM, rs.STOP, rs.DROP):
         assert "docker" not in script and "pkill" not in script and "kill " not in script

@@ -88,3 +88,36 @@ def test_touched_heights_are_kept_beside_the_maps_and_unmeasured_ground_is_unkno
     with pytest.raises(ValueError):
         m.surface_record([], "fixture", "t3")
 
+
+def test_projective_parallax_on_tilted_camera_keeps_nadir_fixed_and_round_trips():
+    import cell_object_pose as cop
+
+    K = np.array([[618.5, 0.0, 322.3], [0.0, 618.7, 236.6], [0.0, 0.0, 1.0]])
+    normal = np.array([0.08169, -0.17488, -0.98119])  # ~11.13 deg tilt
+    cam = {"K": K.tolist(), "normal": normal.tolist(), "height_m": 0.60, "center_px": [322.3, 236.6]}
+    down = K @ (-normal / np.linalg.norm(normal))
+    nadir = (float(down[0] / down[2]), float(down[1] / down[2]))
+
+    # Nadir point stays fixed across height changes
+    assert math.dist(m.parallax(nadir, 0.0, 0.05, cam), nadir) < 1e-6
+
+    # Moving UP (to_z > from_z) shifts a point radially away from nadir_px and round-trips cleanly
+    p = (460.0, 140.0)
+    up = m.parallax(p, 0.0, 0.05, cam)
+    assert math.dist(up, nadir) > math.dist(p, nadir)
+    v_in = np.subtract(p, nadir)
+    v_out = np.subtract(up, nadir)
+    assert float(v_in @ v_out) / (np.linalg.norm(v_in) * np.linalg.norm(v_out)) == pytest.approx(1.0, abs=1e-6)
+    assert math.dist(m.parallax(up, 0.05, 0.0, cam), p) < 1e-6
+
+    # Opposite-sign normal input flips inward automatically and matches
+    cam_flipped = {**cam, "normal": (-normal).tolist()}
+    assert math.dist(m.parallax(p, 0.0, 0.05, cam_flipped), up) < 1e-6
+
+    # cell_object_pose.to_mm uses cal.parallax even without center_px when K/normal are present (0.05 -> 0.0 round-trip)
+    cam_only_kn = {"K": K.tolist(), "normal": normal.tolist(), "height_m": 0.60}
+    rec = {"homography": np.eye(3).tolist(), "z_view": 0.0}
+    mm = cop.to_mm(np.array([up, nadir]), rec, cam_only_kn, 0.05)
+    assert mm[0] == pytest.approx([p[0] * 1000.0, p[1] * 1000.0], abs=1e-3)
+    assert mm[1] == pytest.approx([nadir[0] * 1000.0, nadir[1] * 1000.0], abs=1e-3)
+

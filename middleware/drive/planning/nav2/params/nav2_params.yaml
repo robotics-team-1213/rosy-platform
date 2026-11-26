@@ -1,5 +1,6 @@
 amcl:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -47,6 +48,7 @@ amcl:
 
 bt_navigator:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     global_frame: map
     robot_base_frame: base_link
     odom_topic: odom
@@ -90,12 +92,12 @@ controller_server:
       max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
 
       # 경로 추종 (Lookahead, 시선 두기)
-      lookahead_dist: 0.6                    # [m] 기본 전방 주시 거리
+      lookahead_dist: 0.3                    # [m] 기본 전방 주시 거리
       use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
-      lookahead_time: 1.5                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
-      min_lookahead_dist: 0.3                # [m] 최소 주시 거리
-      max_lookahead_dist: 0.9                # [m] 최대 주시 거리
-      curvature_lookahead_dist: 0.6          # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
+      lookahead_time: 1.0                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
+      min_lookahead_dist: 0.2                # [m] 최소 주시 거리
+      max_lookahead_dist: 0.45               # [m] 최대 주시 거리
+      curvature_lookahead_dist: 0.35         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
       use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
 
       # 제자리 회전 (고개 먼저 돌리기)
@@ -112,13 +114,13 @@ controller_server:
 
       # 장애물 접근 시 감속 (Cost Regulated)
       use_cost_regulated_linear_velocity_scaling: true # 장애물 근처(비용맵 높은 곳)에서 속도 줄이기
-      cost_scaling_dist: 0.6                 # [m] 장애물 중심으로부터 이 거리 안쪽일 때 감속 고려
-      cost_scaling_gain: 1.5                 # 장애물 감속 민감도 (클수록 더 팍 줄임)
+      cost_scaling_dist: 0.2                 # [m] 장애물 중심으로부터 이 거리 안쪽일 때 감속 고려
+      cost_scaling_gain: 1.0                 # 장애물 감속 민감도 (클수록 더 팍 줄임)
       inflation_cost_scaling_factor: 3.0     # 컨트롤러 내부에서 비용을 계산할 때 쓰는 인플레이션 가중치
 
       # 목적지 접근 시 감속
-      approach_velocity_scaling_dist: 0.6    # [m] 목표 지점까지 이 거리만큼 남았을 때부터 서서히 감속
-      min_approach_linear_velocity: 0.05     # [m/s] 목표 지점 근처에서 속도를 줄이더라도 이 속도 밑으론 안 내림
+      approach_velocity_scaling_dist: 0.25   # [m] 목표 지점까지 이 거리만큼 남았을 때부터 서서히 감속
+      min_approach_linear_velocity: 0.08     # [m/s] 목표 지점 근처에서 속도를 줄이더라도 이 속도 밑으론 안 내림
 
       # 안전 및 충돌 방지
       use_collision_detection: true          # 현재 위치부터 주시점(Lookahead)까지 충돌 여부 미리 검사
@@ -138,7 +140,7 @@ controller_server:
     controller_frequency: 20.0                   # [Hz] 제어 명령(cmd_vel)을 1초에 20번 내보냄
     action_server_result_timeout: 10.0           # [s] 액션 서버 결과 대기 최대 시간
     autostart_node: false                        # 노드 켤 때 자동 활성화 여부
-    bond_heartbeat_period: 0.1                   # [s] 시스템 상태 체크(하트비트) 주기
+    bond_heartbeat_period: 0.0                   # [s] 시스템 상태 체크(하트비트) 주기 (0 = idle DDS 스톰 차단)
     costmap_update_timeout: 0.3                  # [s] 코스트맵 업데이트가 이 시간 지연되면 멈춤
     enable_stamped_cmd_vel: false                # TwistStamped 메시지 대신 일반 Twist 메시지 사용
     failure_tolerance: 0.3                       # [s] 제어 계산 실패를 허용하는 시간
@@ -176,7 +178,7 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       movement_time_allowance: 10.0              # [s] 이 시간 동안 아래 거리만큼 못 움직이면 끼인 것으로 판단
-      required_movement_radius: 0.5              # [m] 위 시간 동안 최소 0.5m 반경은 벗어나야 함 (못 벗어나면 Recovery 실행)
+      required_movement_radius: 0.25             # [m] 위 시간 동안 최소 0.25m 반경은 벗어나야 함 (못 벗어나면 Recovery 실행)
 
 
 local_costmap:
@@ -308,6 +310,10 @@ global_costmap:
 #   ros__parameters:
 #     yaml_filename: ""
 
+map_server:
+  ros__parameters:
+    bond_heartbeat_period: 0.0
+
 map_saver:
   ros__parameters:
     save_map_timeout: 5.0
@@ -317,6 +323,7 @@ map_saver:
 
 planner_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     expected_planner_frequency: 20.0
     planner_plugins: ["GridBased"]
     costmap_update_timeout: 1.0
@@ -346,6 +353,7 @@ planner_server:
 
 smoother_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -355,6 +363,7 @@ smoother_server:
 
 behavior_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     local_costmap_topic: local_costmap/costmap_raw
     global_costmap_topic: global_costmap/costmap_raw
     local_footprint_topic: local_costmap/published_footprint
@@ -383,6 +392,7 @@ behavior_server:
 
 waypoint_follower:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     loop_rate: 20
     stop_on_failure: false
     action_server_result_timeout: 900.0
@@ -394,6 +404,7 @@ waypoint_follower:
 
 velocity_smoother:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"

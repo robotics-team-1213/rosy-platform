@@ -173,6 +173,7 @@ class BirdsEye:
             np.intp
         )
         #: Range and |bearing| of every cell from base_link (fixed per view).
+        self.observable_count = int(self.observable.sum())
         self.radius = np.hypot(self.x, self.y)
         self.bearing = np.abs(np.arctan2(self.y, self.x))
 

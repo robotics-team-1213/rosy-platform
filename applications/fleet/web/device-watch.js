@@ -1,6 +1,7 @@
 // 지도 위 보기. 작동하는 것은 천장 영상과, 막힘 큐가 받아 둔 전방 사진뿐이다.
 // 로봇 API 를 부르지 않고, 천장 원본은 camera-backdrop 이 둔 #map-birdseye 한 장이다.
 import { setOffBy } from "/common/cause-line.js";
+import { patchAttr, patchHidden } from "/common/control-dom.js";
 
 /** The robot the map is already about: the open card, else the armed goal, else the only robot. */
 export function shownRobot(view) {
@@ -18,7 +19,7 @@ export function createDeviceWatch({ scope, el, view }) {
   function syncCeiling() {
     const frame = el("map-birdseye");
     const live = Boolean(frame && !frame.hidden);
-    ceiling.setAttribute("aria-pressed", String(stage.dataset.watch !== "off"));
+    patchAttr(ceiling, "aria-pressed", String(stage.dataset.watch !== "off"));
     setOffBy(ceiling, live ? "" : "영상 대기");
   }
 
@@ -30,14 +31,15 @@ export function createDeviceWatch({ scope, el, view }) {
       ? document.querySelector(`.stuck-item[data-robot-id="${CSS.escape(id)}"] .stuck-evidence img`)
       : null;
     if (!source?.getAttribute("src")) {
-      image.removeAttribute("src");
-      image.alt = "";
-      figure.hidden = true;
+      patchAttr(image, "src", null);
+      if (image.alt !== "") image.alt = "";
+      patchHidden(figure, true);
       return;
     }
     if (image.getAttribute("src") !== source.getAttribute("src")) image.src = source.src;
-    image.alt = source.alt || `${id} 전방`;
-    figure.hidden = false;
+    const alt = source.alt || `${id} 전방`;
+    if (image.alt !== alt) image.alt = alt;
+    patchHidden(figure, false);
   }
 
   function render() {

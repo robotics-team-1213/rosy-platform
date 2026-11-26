@@ -34,7 +34,7 @@ ROS-native OMX-AI profile boundary. Validates the selected model and emits the s
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Keep vendor transport behind this profile. Do not add a fake hardware plugin or joint-state publisher "so MoveIt has something to talk to."
 - `omx_ai` is the selected workcell target. Empty joints/plugin and `enabled: false` remain until the physical revision and integration are accepted.
 - A non-empty `ros2_control_contract()` is not physical acceptance.

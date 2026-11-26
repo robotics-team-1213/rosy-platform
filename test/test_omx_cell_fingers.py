@@ -161,3 +161,89 @@ def test_per_arm_auto_calibration_profile_persistence_and_infer_holding(tmp_path
     assert ac.infer_holding(status, closed=48.8) is True
     assert ac.infer_holding({"holding": False, "gripper_current_ma": 15, "state": [0, 0, 0, 0, 0, 49.1]}, closed=48.8) is False
 
+
+def test_white_pads_and_yellow_structural_vs_baseplate_filtering():
+    import cell_finger_container as cfc
+
+    # 1. Slanted/narrow v2.1 white jaws should use inner edges rather than saturating at [0.36*w, 0.72*w]
+    img_slanted = np.full((480, 640, 3), 130, np.uint8)
+    cv2.fillPoly(img_slanted, [np.array([[220, 479], [355, 360], [362, 479]])], (235, 225, 215))
+    cv2.fillPoly(img_slanted, [np.array([[470, 479], [404, 360], [398, 479]])], (235, 225, 215))
+    pads = cf.finger_pads(img_slanted, color="white")
+    assert pads is not None and 330.0 <= 0.5 * (pads[0][0] + pads[1][0]) <= 420.0 and pads[2] < 120.0
+
+    # 2. structural_container_between_fingers accepts yellow container on neutral grey floor
+    img_yel_ctr = np.full((480, 640, 3), (140, 140, 140), np.uint8)
+    img_yel_ctr[30:350, 210:420] = (30, 195, 215)
+    sc_ok = cfc.structural_container_between_fingers(img_yel_ctr)
+    assert sc_ok is not None and sc_ok["is_container_shape"] is True
+
+    # 3. structural_container_between_fingers rejects yellow housing surrounded by dark bracket/housing
+    img_housing = np.full((480, 640, 3), (18, 18, 18), np.uint8)
+    img_housing[30:350, 140:500] = (30, 195, 215)
+    img_housing[30:350, 0:140] = (18, 18, 18)
+    img_housing[30:350, 500:640] = (18, 18, 18)
+    sc_bad = cfc.structural_container_between_fingers(img_housing)
+    if sc_bad is not None:
+        assert sc_bad["is_container_shape"] is False
+    assert cfc.top_face_between_fingers(img_housing, np.array([250.0, 400.0]), np.array([390.0, 400.0])) is None
+
+    # 4. on_surface_blob rejects oversized (>45000 px) yellow baseplate and supports multi-range wrapped HSV
+    img_big = np.full((480, 640, 3), (160, 160, 160), np.uint8)
+    img_big[100:460, 80:400] = (20, 200, 220)  # 360*320 = 115200 px > 45000 px
+    assert cfc.on_surface_blob(img_big, ([10, 80, 80], [35, 255, 255])) is None
+    img_pink = np.full((480, 640, 3), (160, 160, 160), np.uint8)
+    img_pink[140:260, 260:380] = (140, 40, 230)  # wrapped pink/magenta hue near H=165..179
+    multi_hsv = [([0, 90, 90], [25, 255, 255]), ([155, 70, 90], [180, 255, 255])]
+    assert cfc.on_surface_blob(img_pink, multi_hsv) is not None
+
+
+def test_finger_hook_uses_live_fk_yaw_and_respects_target_offset(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen_closing = []
+    monkeypatch.setattr(cf, "finger_servo", lambda _c, _cam, _hsv, closing, *_a, **_kw: seen_closing.append(closing) or {"verdict": "refuse", "why": "stop", "dx_mm": 0.0, "dy_mm": 0.0, "total_mm": 0.0, "iterations": []})
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, **_kw: (0.12, 0.05, 0.10, 45.0))
+    cell = type("C", (), {"act": lambda self, cmd: {"ok": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 56.0]}})()
+    target = {"pick": {"x": 0.12, "y": 0.05, "z": 0.02, "yaw_deg": -135.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0}, "offset": 0.0}
+    cfg = {"params": {"wrist.finger_servo": 1}, "wrist": {"hsv_min": HSV[0], "hsv_max": HSV[1]}, "work_dir": str(tmp_path), "arm_id": "arm_b"}
+    fn = cf.finger_hook(cfg, cell, target, lambda _c, p, _pl, path: path, 44.0)
+    fn()
+    assert seen_closing == [45.0]  # live FK yaw 45 + target offset 0, not planned -135 + 90
+
+
+def test_finger_offset_rejects_implausible_gap_px_and_mm_per_px(monkeypatch):
+    # Narrow 5 px white seam at bottom must not produce white-pad detections.
+    seam = np.full((480, 640, 3), 120, np.uint8)
+    cv2.rectangle(seam, (250, 340), (310, 479), (240, 240, 240), -1)
+    cv2.rectangle(seam, (316, 340), (376, 479), (240, 240, 240), -1)
+    assert cf.finger_pads(seam, color="white") is None
+
+    # Even if an upstream pad detector emits gap_px=6.0 (mm_per_px=7.333, along_mm=1698), sanity check rejects it.
+    img = frame(cx=320, cy=280)
+    monkeypatch.setattr(cf, "finger_pads", lambda *_a, **_kw: (np.array([150.0, 440.0]), np.array([156.0, 440.0]), 6.0))
+    res = cf.finger_offset_mm(img, HSV, 44.0, color="white")
+    assert res["found"] is False and res["why"].startswith("wrist_sanity_rejected")
+
+
+def test_right_border_clipped_yellow_box_detected_and_clipped_housing_still_rejected():
+    import cell_finger_container as cfc
+
+    # Border-clipped yellow box on neutral gray floor (right edge at w-1, visible width ~115 px < 140)
+    img_clip = np.full((480, 640, 3), (145, 145, 145), np.uint8)
+    cv2.rectangle(img_clip, (120, 390), (190, 479), (235, 235, 235), -1)
+    cv2.rectangle(img_clip, (420, 390), (490, 479), (235, 235, 235), -1)
+    img_clip[20:360, 520:639] = (30, 195, 215)
+    sc_clip = cfc.structural_container_between_fingers(img_clip, np.array([190.0, 430.0]), np.array([420.0, 430.0]))
+    assert sc_clip is not None and sc_clip["is_container_shape"] is True and sc_clip["clipped_border"] is True
+    blob = cfc.on_surface_blob(img_clip, ([5, 95, 110], [36, 255, 255]), include_bbox=True)
+    assert blob is not None and len(blob) == 4 and blob[3] is True
+
+    # Right-clipped yellow stripe surrounded by dark housing/bracket on unclipped left side stays rejected
+    img_housing = np.full((480, 640, 3), (18, 18, 18), np.uint8)
+    img_housing[20:360, 490:639] = (30, 195, 215)
+    sc_house = cfc.structural_container_between_fingers(img_housing)
+    assert sc_house is None or sc_house["is_container_shape"] is False
+
+
+

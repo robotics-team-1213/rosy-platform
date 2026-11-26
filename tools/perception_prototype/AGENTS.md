@@ -20,8 +20,8 @@ Unreviewed D-205 prototypes from the 2026-09-24 session: estimating the real cam
 
 | Directory | Purpose |
 |-----------|---------|
-| `camcal/` | Camera estimation from video. Shared: `common.py`, `getframes.py`, `cammodel.py`. Ordered chain writing intermediates to the current folder: `findcw.py` -> `cwcorners.py` -> `calib.py` (crosswalk corners, focal length, pose); `horizon.py` -> `vpstats.py` (vanishing point, horizon, tilt); `wallh.py`, `ring.py`, `distort.py` (lens height, focal cross-check, distortion); `bevfinal.py`, `annotate.py` (BEV and overlays). Side statistics: `hazards.py`, `hazsum.py`, `samefr.py` |
-| `realrun/` | Replays video through the current `middleware/perception` perception, read-only: `replay.py` (modes `centre`, `line`, `lane`, `road`), `analyze.py` (aggregate the seven part files), `whatif.py` (threshold sensitivity), `stills.py`, `geom.py` (BEV range of real vs sim camera), `vo_test.py` (stand-in visual odometry check on synthetic floor) |
+| `camcal/` | Camera estimation from video. Shared: `common.py`, `getframes.py`, `cammodel.py`. Chain: `findcw.py` -> `cwcorners.py` -> `calib.py`; `horizon.py` -> `vpstats.py`; then `wallh.py`, `ring.py`, `distort.py`, `bevfinal.py`, `annotate.py`. Side statistics: `hazards.py`, `hazsum.py`, `samefr.py` |
+| `realrun/` | Replays video through current `middleware/perception`, read-only: `replay.py` (modes `centre`, `line`, `lane`, `road`), `analyze.py`, `whatif.py`, `stills.py`, `geom.py`, `vo_test.py` |
 
 ## For AI Agents
 

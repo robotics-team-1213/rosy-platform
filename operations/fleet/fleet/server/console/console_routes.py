@@ -22,6 +22,7 @@ from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.server.charge_bay_routes import install_charge_bay_routes
 from fleet import lane_progress
 from fleet.hub.hub import HubError
+from fleet.server.console_helpers import refresh_console_dispatch_fields
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.line_stuck_routes import (
     IncidentReviewRequest,
@@ -141,7 +142,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     observation_path = answer_log_path or (journal.path if journal is not None else None)
     if observation_path is not None:
         from fleet.server.observation_store import ObservationStore
-        gather.observations = ObservationStore(observation_path)
+        gather.observations = ObservationStore(observation_path, debounce_s=10.0, prune_interval_s=60.0)
 
     @app.get("/api/fleet/observations", dependencies=read_guard, tags=["fleet-observations"])
     def observation_history(after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
@@ -176,7 +177,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                    "judgment": board.judgment_view(row["robot_id"])}
             if lane is not None:   # D-511 M0: the monitor's latest result, read only
                 row["lane_compliance"] = lane.view(row["robot_id"])
-            observed = row.pop("_state_mono", None)
+            observed = row.get("_state_mono")
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
         power, motors = await asyncio.gather(
@@ -198,6 +199,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         runner = getattr(app.state, "trip_runner", None)
         trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}
         for row in rows:
+            refresh_console_dispatch_fields(console, row)
+            row.pop("_state_mono", None)
             robot_id = row["robot_id"]
             if row["online"]:  # an offline row already says the link is down
                 row["rule_m"] = rule_m.verdict(

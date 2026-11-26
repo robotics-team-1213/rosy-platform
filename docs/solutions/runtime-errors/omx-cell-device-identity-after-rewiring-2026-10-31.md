@@ -66,6 +66,14 @@ After anything is plugged, unplugged or moved on the control PC:
 
 Never select a RealSense node, or a camera whose serial another camera shares, by its kernel by-id name.
 
+### A populated USB port can still have the wrong camera (2026-11-25)
+
+The side camera had a registered Jieli USB model. When the RealSense top camera occupied the old side port, the automatic binder recorded the RealSense model for the side role. The binding journal showed the model change and the older registry backup still identified the side camera as Jieli.
+
+The binder now learns a USB model only when the registry has no valid model. When the occupied path has a different confirmed model, the bind run reports the role as waiting and stops the affected preview unit, including a pending restart. A single matching camera on another port can still follow its role. For a deliberate replacement, verify the camera's view and use `omx_cameras.py approve <node> <role>`.
+
+If the old binder already changed the registered model, compare the binding journal with the last verified registry. Restore only that role's model once the corrected binder runs. Verify the returned camera's view before accepting frames as evidence.
+
 ### Image-space site settings go stale with the camera (2026-11-01)
 
 A new or moved top camera also invalidates every per-site value given in its pixels or colours: `surface_px` and `surface_lab` in the cell configs.

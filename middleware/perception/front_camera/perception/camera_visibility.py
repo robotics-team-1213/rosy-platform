@@ -13,10 +13,10 @@ CLIP_LEVEL = 247
 
 
 def _road_band(bgr: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    h, w = gray.shape
+    h, w = bgr.shape[:2]
     # A bright ceiling/lamp is not evidence that the road is observable.
-    return gray[int(h * .35):int(h * .95), int(w * .10):int(w * .90)]
+    roi = bgr[int(h * .35):int(h * .95), int(w * .10):int(w * .90)]
+    return cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 
 
 def road_clip_stats(bgr: np.ndarray) -> tuple[float, float]:
@@ -31,6 +31,21 @@ def road_clip_stats(bgr: np.ndarray) -> tuple[float, float]:
         return 0.0, 0.0
     road = _road_band(bgr)
     return float(np.mean(road > CLIP_LEVEL)), float(np.median(road))
+
+
+def visibility_reason_and_clip_stats(bgr: np.ndarray) -> tuple[str, float, float]:
+    """Single-pass (visibility_reason, clipped_fraction, median) for _watch_exposure."""
+    if (not isinstance(bgr, np.ndarray) or bgr.dtype != np.uint8
+            or bgr.ndim != 3 or bgr.shape[2] != 3 or min(bgr.shape[:2]) < 8):
+        return 'low_light', 0.0, 0.0
+    road = _road_band(bgr)
+    clip = float(np.mean(road > CLIP_LEVEL))
+    median = float(np.median(road))
+    if clip > .95:
+        return 'overexposed', clip, median
+    p90, p99 = np.percentile(road, [90, 99])
+    reason = 'low_light' if p90 < 45 and p99 < 80 else 'usable'
+    return reason, clip, median
 
 
 def visibility_reason(bgr: np.ndarray) -> str:

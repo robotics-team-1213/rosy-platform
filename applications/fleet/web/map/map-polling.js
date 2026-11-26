@@ -1,13 +1,28 @@
+import { updateSelectedTrip } from "/console/assets/trip-receipts.js";
 // 현장 지도 폴링(D-798 3.2, map-view.js에서 나눔): 사이트 사각형·활성 지도·교정, 점유 격자, 교통 표,
 // 로봇 상황(guide), 카메라 관측. 주기는 셸(console.js)이 쥐고, 그리기는 map-view.js의 draw가 한다.
-import { classifySightings, siteViewTurn } from "./site-layer.js";
+import { classifySightings, surveyedRoadPoints } from "./site-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
-import { trafficClock } from "/console/assets/site-map-model.js";
+import { mapEvidence, trafficClock, viewTurnOf } from "/console/assets/site-map-model.js";
 
-export function createMapPolling({ scope, el, view, auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable,
-  onTrafficChanged }) {
+const guideSummarySig = (guide, unavailable) => JSON.stringify([
+  Boolean(unavailable),
+  (guide?.robots || []).map((r) => [r.robot_id, r.online, r.pose?.state || null, r.lane?.edge_id || null,
+    Number.isFinite(r.pose?.x) ? r.pose.x.toFixed(1) : null, Number.isFinite(r.pose?.y) ? r.pose.y.toFixed(1) : null]),
+]);
+const trafficSummarySig = (view) => JSON.stringify([
+  view.traffic?.units?.length || 0,
+  (view.trafficTrips || []).map((t) => [t.trip_id, t.state, t.robot_id]),
+  (view.endedTrips || []).slice(0, 5).map((t) => [t.trip_id, t.state]),
+  (view.trafficAi || []).length,
+]);
+
+export function createMapPolling({ scope, el, view, auth, call, camera, draw, scheduleDraw = draw, layerOn, onMapChanged, onMapUnavailable,
+  onTrafficChanged, onTrafficDraw = scheduleDraw }) {
   let calibrationsAt = 0;
+  let lastGuideSig = "";
+  let lastTrafficSig = "";
 
   function syncLegend(mode) {
     el("map-legend").hidden = mode === "none";
@@ -42,6 +57,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     } catch (error) { if (error.name === "AbortError") throw error; camera.setCalibrations([]); }
   }
 
+  // 2026-11-26: a new active map version shows on the map's evidence line (map-evidence), never silently.
+  function showActiveMap(active) {
+    view.activeSiteMap = active;
+    view.siteViewTurn = viewTurnOf(active?.map);
+    const line = el("map-evidence"), evidence = mapEvidence(active, surveyedRoadPoints);
+    if (line && line.textContent !== evidence.text) Object.assign(line, { textContent: evidence.text, title: evidence.title });
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     if (!life.current()) return;
@@ -53,12 +76,11 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       if (Date.now() - calibrationsAt > 30000) {
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
         try {
-          view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
-          view.siteViewTurn = siteViewTurn(view.activeSiteMap);
+          showActiveMap(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
           life.check();
         } catch (error) {
           if (error.name === "AbortError") return;
-          if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
+          if (error.status === 404 || error.status === 409) showActiveMap(null); // no active map; else keep the last turn
         }
         // The first site draw must use the active map turn; drawing at 0° then turning to 90°
         // makes the whole map jump while the camera and robot map requests are still pending.
@@ -90,11 +112,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
   // D-536: 로봇 상황(1 s, 교통 표와 같은 주기). 모르는 라우트(404)면 다음 로그인까지 묻지 않는다.
   const guideGate = createPollGate();
   let guideInFlight = false;
-  scope.onDispose(() => { guideInFlight = false; });
-  async function refreshGuide() {
+  let guidePending = false;
+  scope.onDispose(() => { guideInFlight = false; guidePending = false; });
+  async function refreshGuide({ force = false } = {}) {
     const life = scope.capture();
     life.check();
-    if (auth.locked || guideInFlight || !guideGate.due()) return;
+    if (auth.locked) return;
+    if (guideInFlight) { if (force) guidePending = true; return; }
+    if (!force && !guideGate.due()) return;
     guideInFlight = true;
     try {
       view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
@@ -106,9 +131,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       view.guide = null;
       view.guideUnavailable = guideGate.fail(err.status, err.code) !== "absent";
     } finally {
-      if (life.current()) guideInFlight = false;
+      if (life.current()) {
+        guideInFlight = false;
+        if (guidePending) { guidePending = false; void refreshGuide({ force: true }); }
+      }
     }
-    onTrafficChanged();  // the roster's exception queue reads view.guide too
+    const nextSig = guideSummarySig(view.guide, view.guideUnavailable);
+    if (nextSig !== lastGuideSig) { lastGuideSig = nextSig; onTrafficChanged(); }
+    else onTrafficDraw();
   }
   async function refreshTraffic() {
     const life = scope.capture();
@@ -120,14 +150,16 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       life.check();
       trafficGate.ok();
       // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
-      const trips = traffic.robots.length || view.trafficTrips?.length
+      const tracking = view.selectedGoal?.tripId && view.selectedGoal.status === "ACCEPTED";
+      const trips = tracking || traffic.robots.length || view.trafficTrips?.length
         ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      life.check();
+      if (updateSelectedTrip(view, trips)) onTrafficChanged();
       view.trafficTrips = trips.open || [];
       view.endedTrips = trips.trips || [];
       life.check();
       if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
-        view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
-        view.siteViewTurn = siteViewTurn(view.activeSiteMap);
+        showActiveMap(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
         life.check();
         await refreshCalibrations(life);
       }
@@ -145,15 +177,10 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     }
     view.trafficClock = trafficClock(view.trafficClock, view.traffic, Date.now());
     el("traffic-toggle").hidden = !view.traffic?.units?.length;
-    onTrafficChanged();
+    const nextSig = trafficSummarySig(view);
+    if (nextSig !== lastTrafficSig) { lastTrafficSig = nextSig; onTrafficChanged(); }
+    else onTrafficDraw();
   }
-  scope.listen(el("traffic-toggle"), "click", () => {
-    const on = !layerOn("traffic");
-    view.layers = { ...view.layers, traffic: on };
-    el("traffic-toggle").setAttribute("aria-pressed", String(on));
-    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
-    draw();
-  });
 
   function resetPolling() {
     trafficGate.reset();
@@ -257,7 +284,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     view.sightings = next;
     if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
     el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
-    draw();
+    scheduleDraw();
   }
 
   return { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling };

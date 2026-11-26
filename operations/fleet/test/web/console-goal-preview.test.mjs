@@ -19,15 +19,18 @@ const SITE_MAP = {
   ],
 };
 
-function setup(t, { tripHandler, onConfirm } = {}) {
+function setup(t, { tripHandler, onConfirm, handlers = {}, refreshGuide = () => {}, view: viewOverrides = {}, auth: authOverrides = {} } = {}) {
   const beforeDocument = globalThis.document;
   globalThis.document = { activeElement: null, querySelectorAll: () => [] };
   t.after(() => { globalThis.document = beforeDocument; });
 
+  const canvasListeners = new Map();
   const canvas = {
     classList: { add() {}, toggle() {} },
     tabIndex: 0,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }),
+    addEventListener(type, fn) { canvasListeners.set(type, fn); },
+    removeEventListener(type) { canvasListeners.delete(type); },
   };
   const elements = { "map-canvas": canvas };
   const calls = [];
@@ -54,10 +57,11 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     stateUnavailable: false,
     anchors: [],
     layers: {},
+    ...viewOverrides,
   };
 
   const pageScope = {
-    listen() {},
+    listen(target, type, fn) { if (target === canvas) canvasListeners.set(type, fn); },
     capture() {
       return {
         signal: new AbortController().signal,
@@ -77,8 +81,12 @@ function setup(t, { tripHandler, onConfirm } = {}) {
   };
 
   const call = async (path, init = {}) => {
-    calls.push({ path, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
-    if (path.endsWith("/trip")) return tripHandler(path, JSON.parse(init.body));
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ path, method: init.method || "GET", body });
+    for (const [suffix, fn] of Object.entries(handlers)) {
+      if (path.endsWith(suffix)) return fn(path, body);
+    }
+    if (path.endsWith("/trip")) return tripHandler(path, body);
     if (path.endsWith("/start")) return { trip_id: "trip-1", state: "running" };
     throw new Error(`unexpected call ${path}`);
   };
@@ -87,7 +95,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     pageScope,
     el: (id) => elements[id] || null,
     view,
-    auth: { role: "operator", principal: "kim", locked: false, token: "t" },
+    auth: { role: "operator", principal: "kim", locked: false, token: "t", ...authOverrides },
     inbox: { select() {} },
     log: (text, tone) => logs.push({ text, tone }),
     call,
@@ -95,7 +103,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     confirmedAction,
     namedReason: () => "",
     toWorld: () => ({ x: 0, y: 0 }),
-    refreshGuide: () => {},
+    refreshGuide,
     queuedReason: () => "",
     drawMap: () => { draws += 1; },
     onSelectRobot: () => {},
@@ -107,6 +115,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     calls,
     logs,
     confirmSpecs,
+    canvasListeners,
     counts: () => ({ draws, renders }),
   };
 }
@@ -161,8 +170,8 @@ test("S2: viaTrip plans on server and draws PREVIEW before confirm, then calls o
     "/api/fleet/robots/rosy_01/trip",
     "/api/fleet/trips/plan-123/start",
   ]);
-  assert.equal(env.view.selectedGoal.status, "DISPATCHED");
-  assert.equal(env.view.selectedGoal.statusText, "차로 주행 시작");
+  assert.equal(env.view.selectedGoal.status, "ACCEPTED");
+  assert.equal(env.view.selectedGoal.statusText, "Fleet 접수 · 기체 실행 확인 중");
 });
 
 test("S2: canceling confirm dispatches no /start and marks PREVIEW cancelled", async (t) => {
@@ -265,4 +274,164 @@ test("S2: eligible becomes false if plan expires or site-map version changes bef
   } finally {
     Date.now = origNow;
   }
+});
+
+test("Pinning UNKNOWN robot infers road tangent yaw, updates guide immediately, forces guide refresh, and suppresses trailing click", async (t) => {
+  const guideRefreshCalls = [];
+  const westMap = {
+    ...SITE_MAP,
+    edges: [{ id: "west_lane", from: "B", to: "A", direction: "one_way", polyline: [[1.2, 0.2], [0.2, 0.2]] }],
+  };
+  const env = setup(t, {
+    refreshGuide: (opts) => guideRefreshCalls.push(opts),
+    view: {
+      selected: null,
+      pinning: "rosy_01",
+      activeSiteMap: { version: 4, map: westMap },
+      siteToWorld: () => ({ x: 0.7, y: 0.2 }),
+      guide: { map_version: 4, robots: [{ robot_id: "rosy_01", online: true, pose: null }] },
+    },
+    handlers: {
+      "/tracking/identity": () => ({ robots: [] }),
+      "/map-pin": (_path, body) => ({ state: "LOCALIZED", x: body.x, y: body.y, yaw: body.yaw, anchor_source: "operator_pin", map_id: "site_a" }),
+    },
+    tripHandler: () => VALID_PLAN(),
+  });
+  const ev = { clientX: 100, clientY: 100 };
+  env.canvasListeners.get("pointerdown")(ev);
+  await env.canvasListeners.get("pointerup")(ev);
+  const pinCall = env.calls.find((c) => c.path.endsWith("/map-pin"));
+  assert.ok(pinCall);
+  assert.ok(Math.abs(Math.abs(pinCall.body.yaw) - Math.PI) < 1e-6);
+  const patched = env.view.guide.robots.find((r) => r.robot_id === "rosy_01")?.pose;
+  assert.equal(patched.state, "LOCALIZED");
+  assert.equal(patched.anchor_source, "operator_pin");
+  assert.equal(env.counts().draws >= 1 && env.counts().renders >= 1, true);
+  assert.deepEqual(guideRefreshCalls, [{ force: true }]);
+  // Trailing synthetic click right after pointerup must not arm or plan a trip.
+  await env.canvasListeners.get("click")(ev);
+  assert.equal(env.calls.some((c) => c.path.endsWith("/trip")), false);
+});
+
+test("Road-point click without placeId plans trip to coordinate and falls back to nav2 on camera unavailability", async (t) => {
+  const tripBodies = [];
+  const env = setup(t, {
+    view: {
+      robots: [{
+        robot_id: "rosy_01",
+        online: true,
+        capabilities: { controls: { items: [{ kind: "base_velocity", drive_modes: ["lane", "free"] }] } },
+        state: { map_id: "slam_local", safety: { estop: false }, pose: { x: 0.0, y: 0.0, yaw: 0.0 } },
+      }],
+    },
+    tripHandler: (_path, body) => {
+      tripBodies.push(body);
+      if (tripBodies.length === 1) {
+        const err = new Error("camera down");
+        err.code = "TRIP_LANE_CAMERA_UNAVAILABLE";
+        throw err;
+      }
+      return VALID_PLAN({ plan_id: "plan-nav2" });
+    },
+  });
+  await env.goal.commitWorldGoal({ x: 0.45, y: 0.0 }, "", "");
+  assert.deepEqual(tripBodies, [
+    { to: { x: 0.45, y: 0.0 } },
+    { to: { x: 0.45, y: 0.0 }, drive_mode: "nav2" },
+  ]);
+  assert.equal(env.confirmSpecs.length, 1);
+  assert.equal(env.view.selectedGoal.planId, "plan-nav2");
+});
+
+test("Clicking a road/place with focusRobot set and selected null plans trip, while off-road empty click does nothing", async (t) => {
+  let clickXY = { x: 5.0, y: 5.0 }; // off-road empty space
+  const env = setup(t, {
+    view: {
+      selected: null,
+      focusRobot: "rosy_01",
+      siteToWorld: () => clickXY,
+    },
+    tripHandler: () => VALID_PLAN({ plan_id: "plan-focus" }),
+  });
+  await env.canvasListeners.get("click")({ clientX: 10, clientY: 10 });
+  assert.equal(env.calls.length, 0);
+  assert.equal(env.view.selected, null);
+
+  clickXY = { x: 0.4, y: 0.0 }; // on edge e1
+  await env.canvasListeners.get("click")({ clientX: 50, clientY: 50 });
+  assert.equal(env.confirmSpecs.length, 1);
+  assert.deepEqual(env.calls[0].body, { to: { x: 0.4, y: 0.0 } });
+});
+
+test("Hover card uses S3/S5 handoffMap, 2-decimal coords, omits fabricated fallbacks, and arm segment click focuses arm", async (t) => {
+  const mkNode = (tag) => ({
+    tag, className: "", textContent: "", hidden: false, children: [],
+    get childElementCount() { return this.children.length; },
+    setAttribute() {},
+    append(...kids) { this.children.push(...kids); },
+    replaceChildren(...kids) { this.children = kids; },
+  });
+  const textOf = (n) => (typeof n === "string" ? n : [n.textContent, ...(n.children || []).map(textOf)].filter(Boolean).join(" | "));
+  const hoverCard = mkNode("div");
+  hoverCard.hidden = true;
+  const origDoc = globalThis.document;
+  let hoverWorld = { x: 0.504, y: 0.204 };
+  const selectedIds = [];
+  const env = setup(t, {
+    view: {
+      selected: null,
+      focusRobot: null,
+      siteToWorld: () => hoverWorld,
+      guide: { map_version: 4, robots: [{ robot_id: "rosy_42", online: true, pose: { state: "LOCALIZED", x: 0.504, y: 0.204, yaw: 0 } }] },
+      robots: [{ robot_id: "rosy_42", online: true, state: { safety: { estop: false } } }],
+      anchors: [
+        { target_id: "arm_a", kind: "omx_ai", label: "Arm A", base_x: 1.0, base_y: 0.4, head_x: 1.0, head_y: 0.1, live: false },
+        { target_id: "arm_s", kind: "omx_ai", label: "Arm S", base_x: 2.0, base_y: 0.0, head_x: 1.7, head_y: 0.0, live: true },
+      ],
+    },
+  });
+  globalThis.document = { ...origDoc, createElement: mkNode, createElementNS: (_ns, tag) => mkNode(tag) };
+  // Inject hover card into setup's closure via siteToWorld pointermove while testing el() lookup?
+  // Note: setup's elements only has map-canvas; exercise hover/click cleanly via arm segment click + separate el() call.
+  const origCanvasClick = env.canvasListeners.get("click");
+  hoverWorld = { x: 1.85, y: 0.02 }; // midpoint of arm_s segment (0.15m from both endpoints > 0.13m, 0.02m from segment)
+  await origCanvasClick({ clientX: 60, clientY: 60 });
+  assert.equal(env.view.focusAnchorId, "arm_s");
+
+  const { createConsoleGoal } = await import("../../../../applications/fleet/web/console-goal.js");
+  const canvasListeners2 = new Map();
+  const canvas2 = { classList: { add() {}, toggle() {} }, tabIndex: 0, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }) };
+  const els = { "map-canvas": canvas2, "map-hover-card": hoverCard };
+  const view2 = {
+    selected: null, focusRobot: null, map: null,
+    siteMap: { maps: [{ map_id: "site_a" }] }, activeSiteMap: { version: 4, map: SITE_MAP },
+    guide: { robots: [{ robot_id: "rosy_42", online: true, pose: { state: "LOCALIZED", x: 0.504, y: 0.204, yaw: 0 } }] },
+    robots: [{ robot_id: "rosy_42", online: true, state: { safety: { estop: false } } }],
+    anchors: [
+      { target_id: "arm_a", kind: "omx_ai", label: "Arm A", base_x: 1.0, base_y: 0.4, head_x: 1.0, head_y: 0.1, live: false },
+      { target_id: "arm_s", kind: "omx_ai", label: "Arm S", base_x: 2.0, base_y: 0.0, head_x: 1.7, head_y: 0.0, live: true },
+    ],
+    siteToWorld: () => hoverWorld,
+  };
+  createConsoleGoal({
+    pageScope: { listen(tgt, type, fn) { if (tgt === canvas2) canvasListeners2.set(type, fn); }, capture: () => ({ signal: new AbortController().signal, current: () => true, check() {} }) },
+    el: (id) => els[id] || null, view: view2, auth: { role: "operator" }, inbox: { select() {} }, log() {}, call: async () => ({}),
+    render() {}, confirmedAction: { async run() { return false; } }, namedReason: () => "", toWorld: () => ({ x: 0, y: 0 }),
+    refreshGuide() {}, queuedReason: () => "", selection: { set(id) { selectedIds.push(id); } },
+  });
+  hoverWorld = { x: 0.504, y: 0.204 };
+  canvasListeners2.get("pointermove")({ clientX: 10, clientY: 10 });
+  const pinkyText = textOf(hoverCard);
+  assert.match(pinkyText, /\(0\.50, 0\.20\) m/);
+  for (const fake of ["8.76V", "10.4cm", "5.0Hz", "4/4 정상", "±0.02m", "0.504"]) assert.doesNotMatch(pinkyText, new RegExp(fake.replace(".", "\\.")));
+
+  hoverWorld = { x: 1.0, y: 0.4 };
+  canvasListeners2.get("pointermove")({ clientX: 20, clientY: 20 });
+  const armAText = textOf(hoverCard);
+  assert.match(armAText, /S5 \(1·3층 적재\)/);
+  for (const fake of ["12.0V", "31°C", "98%", "6축 정상", "S2 (상차)"]) assert.doesNotMatch(armAText, new RegExp(fake.replace(/[().]/g, "\\$&")));
+
+  hoverWorld = { x: 1.85, y: 0.0 };
+  canvasListeners2.get("pointermove")({ clientX: 30, clientY: 30 });
+  assert.match(textOf(hoverCard), /S3 \(하역 셔틀\)/);
 });

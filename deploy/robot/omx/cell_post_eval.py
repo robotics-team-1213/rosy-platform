@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Post-calibration empty-arm X/Y target verification & bounded visit compensation (`cell_post_eval.py`).
 
-Single Responsibility:
   - Isolate camera shift, movable-site shift, joint droop, scene motion, and map/bias residual.
   - Measure true X/Y TCP via opposing yaw pairs (or 1-yaw advisory fallback) with finger-identity validation (`source="visit"`).
   - Save bounded `kind="visit"` local bias (preserving `pivot` R/phi) only under `D-911` (`--commissioning --person-at-switch --apply`).
@@ -16,9 +15,9 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, omx_tcp  # noqa: E402
+import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, cell_route_visit, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
-from cell_post_eval_summary import lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
+from cell_post_eval_summary import _visit_common_shift, lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
 
 SCHEMA = "rosy.omx-post-eval.v1"
 PAIR_OFFSETS = ((0.0, 180.0), (-60.0, 120.0), (-40.0, 140.0), (-80.0, 100.0), (-90.0, 90.0), (-20.0, 160.0))
@@ -96,20 +95,25 @@ def _clear_point_for_visit(frame, config: dict, calibration: dict, site: str, po
 
 
 def _finger_candidates(region: dict | None, config: dict) -> list[dict]:
+    params = config.get("params")
+    if (config.get("calibrate") or {}).get("tcp_marks"):
+        om, od = float(prm.get(params, "jaw_side.other_mm")), float(prm.get(params, "jaw_side.other_deg"))
+        base = dict(region or (config.get("pivot") or {}).get("geometry") or {"radius_mm": om / 2.0, "phase_deg": od + 180.0})
+        return [base, {"radius_mm": om / 2.0, "phase_deg": od}]
     base = dict(region or (config.get("pivot") or {}).get("geometry") or {})
     if "phase_deg" not in base or "radius_mm" not in base:
         return []
-    params = config.get("params")
     return [base, dict(base, phase_deg=float(base["phase_deg"]) + float(prm.get(params, "look.other_finger_deg")),
                        radius_mm=float(prm.get(params, "look.other_finger_mm")))]
 
 
-def _expected_finger_pixels(config: dict, record: dict, site: str, tcp_xy, jaw_z: float, yaw_deg: float, region: dict | None) -> list:
-    pts = []
+def _expected_finger_pixels(config: dict, record: dict, site: str, tcp_xy, jaw_z: float, yaw_deg: float,
+                            region: dict | None, used_bias=(0.0, 0.0)) -> list:
+    pts, bx, by = [], float(used_bias[0]) / 1000.0, float(used_bias[1]) / 1000.0
     for f in _finger_candidates(region, config):
         a, r_m = math.radians(yaw_deg + float(f["phase_deg"])), float(f["radius_mm"]) / 1000.0
         try:
-            pts.append(cell_pivot.mark_pixel(record, config, site, (tcp_xy[0] + r_m * math.cos(a), tcp_xy[1] + r_m * math.sin(a)), jaw_z))
+            pts.append(cell_pivot.mark_pixel(record, config, site, (tcp_xy[0] + bx + r_m * math.cos(a), tcp_xy[1] + by + r_m * math.sin(a)), jaw_z))
         except Exception:
             pass
     return pts
@@ -125,10 +129,12 @@ def _finger_identity_ok(m1, m2, fk1_yaw: float, fk2_yaw: float, region: dict | N
     if not (lo <= half_mm <= hi):
         return False, pair_err, half_mm, "finger_identity"
     radii = [float(src["radius_mm"]) for src in (region or {}, (config.get("pivot") or {}).get("geometry") or {}) if src.get("radius_mm") is not None]
-    if radii:
+    if (config.get("calibrate") or {}).get("tcp_marks"):
+        radii.append(float(prm.get(params, "jaw_side.other_mm")) / 2.0)
+    elif radii:
         radii.append(float(prm.get(params, "look.other_finger_mm")))
-        if min(abs(half_mm - r) for r in radii) > float(prm.get(params, "post.finger_tol_mm")):
-            return False, pair_err, half_mm, "finger_identity"
+    if radii and min(abs(half_mm - r) for r in radii) > float(prm.get(params, "post.finger_tol_mm")):
+        return False, pair_err, half_mm, "finger_identity"
     return True, pair_err, half_mm, None
 
 
@@ -158,7 +164,7 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
         return {"site": site, "point_m": list(point_m), "map_sha": map_sha, "status": "skipped", "reason": "no_ik"}
     used_reg, b_err = _safe_lookup(bias_data, bias_err, site, point_m, params)
     pivot_reg, _ = _safe_lookup(bias_data, bias_err, site, point_m, params, pivot_only=True)
-    if geom_dep and not (pivot_reg or (config.get("pivot") or {}).get("geometry")):
+    if geom_dep and not (pivot_reg or (config.get("pivot") or {}).get("geometry") or (config.get("calibrate") or {}).get("tcp_marks")):
         return {"site": site, "point_m": list(point_m), "map_sha": map_sha, "status": "skipped",
                 "geometry_dependent": True, "reason": "needs_pivot_geometry"}
 
@@ -169,7 +175,8 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
 
     writer, scoped = write_library_fn or cp.write_library, rp.scoped(config)
     approach_m, tcp_kw = float((config.get("plan") or {}).get("approach_m", 0.04)), _tcp_kw(config)
-    droops, marks_arm, fks = [], [], []
+    used_bias = [float(used_reg["bias_mm"][0]), float(used_reg["bias_mm"][1])] if used_reg else [0.0, 0.0]
+    droops, marks_arm, pixels, fks = [], [], [], []
     try:
         for idx, yaw in enumerate(yaws):
             pose = {"x": float(point_m[0]), "y": float(point_m[1]), "z": round(float(z_view) - approach_m, 4), "yaw_deg": yaw}
@@ -184,13 +191,14 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
                 return {"site": site, "point_m": list(point_m), "map_sha": map_sha, "status": "failed", "reason": "no_state"}
             fx, fy, fz, fyaw = cell_pivot.joints_tcp(state, **tcp_kw)
             if commanded is not None:
-                cx, cy, _, _ = cell_pivot.joints_tcp(commanded, **tcp_kw)
-                droops.append([round(1000.0 * (fx - cx), 2), round(1000.0 * (fy - cy), 2)])
-            exp_px = _expected_finger_pixels(config, rec, site, (fx, fy), fz, fyaw, pivot_reg)
+                cx, cy, cz, _ = cell_pivot.joints_tcp(commanded, **tcp_kw)
+                droops.append([round(1000.0 * (fx - cx), 2), round(1000.0 * (fy - cy), 2), round(1000.0 * (fz - cz), 2)])
+            exp_px = _expected_finger_pixels(config, rec, site, (fx, fy), fz, fyaw, pivot_reg, used_bias)
             near = (exp_px, float(prm.get(params, "pivot.follow_px")) + 40.0) if exp_px else None
             px = cell_pivot.mark_jaws(cell, config, sleep, near=near)
             if px is None:
                 return {"site": site, "point_m": list(point_m), "map_sha": map_sha, "status": "failed", "reason": "mark_not_seen"}
+            pixels.append(px)
             marks_arm.append(cell_pivot.mark_to_arm(rec, config, site, px, fz))
             fks.append((fx, fy, fz, fyaw))
     finally:
@@ -200,6 +208,7 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     scene_ok = not bool((scene_moved_fn or cell_scene_guard.scene_moved)(before, after))
     mark_sig = float(prm.get(params, "verify.mark_sigma_mm"))
     droop_mm = [round(sum(d[0] for d in droops) / len(droops), 2), round(sum(d[1] for d in droops) / len(droops), 2)] if droops else None
+    droop_z_mm = round(sum(d[2] for d in droops) / len(droops), 2) if droops else None
     finger_ok, pair_err, half_mm, f_why, jaw_sides = True, 0.0, None, None, None
     cand = _finger_candidates(pivot_reg, config)
     if not geom_dep and len(marks_arm) == 2:
@@ -229,7 +238,6 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
         sigma_mm = round(max(mark_sig, float((pivot_reg or {}).get("bias_sigma_mm") or mark_sig)), 2)
 
     raw_bias = [round(1000.0 * (tcp_map[0] - fk_xy[0]), 2), round(1000.0 * (tcp_map[1] - fk_xy[1]), 2)]
-    used_bias = [float(used_reg["bias_mm"][0]), float(used_reg["bias_mm"][1])] if used_reg else [0.0, 0.0]
     resid = [round(raw_bias[0] - used_bias[0], 2), round(raw_bias[1] - used_bias[1], 2)]
     resid_mag, accepted, reason = round(math.hypot(*resid), 2), (scene_ok and finger_ok), ("scene_moved" if not scene_ok else f_why)
     tol_mm = float(prm.get(params, "post.tol_mm"))
@@ -238,15 +246,16 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     cell_cal_monitor.record_observation(
         config, site=site, map_sha=map_sha, source="visit", raw_mm=raw_bias, residual_mm=resid,
         sigma_mm=sigma_mm, accepted=accepted, reason=reason,
-        extra={"place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
+        extra={**cell_route_visit.visit_evidence(config, calibration, site, before, point_m, pixels, fks), "place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
                "geometry_dependent": geom_dep, **({"droop_mm": droop_mm} if droop_mm is not None else {}),
+               **({"droop_z_mm": droop_z_mm} if droop_z_mm is not None else {}),
                **({"jaw_sides": jaw_sides} if jaw_sides else {})},
     )
     return {"site": site, "point_m": pt_r, "map_sha": map_sha, "status": status, "reason": reason, "accepted": accepted,
             "geometry_dependent": geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
             "half_radius_mm": round(half_mm, 1) if half_mm is not None else None, "raw_bias_mm": raw_bias,
             "used_bias_mm": used_bias, "residual_mm": resid, "residual_mag_mm": resid_mag, "sigma_mm": sigma_mm,
-            "droop_mm": droop_mm, "bias_error": b_err, "jaw_sides": jaw_sides}
+            "droop_mm": droop_mm, "droop_z_mm": droop_z_mm, "bias_error": b_err, "jaw_sides": jaw_sides}
 
 
 def _track_ok(cell, config: dict, calibration: dict, site: str) -> tuple[bool, dict | None]:
@@ -259,28 +268,6 @@ def _track_ok(cell, config: dict, calibration: dict, site: str) -> tuple[bool, d
                                        lambda q: predicted_pixel(config, calibration, site, q), config.get("work_dir"))
     lim = float(prm.get(config.get("params"), "calibrate.max_shift_px"))
     return bool(report.get("tracked") and math.hypot(*report.get("shift_px", (0.0, 0.0))) <= lim), report
-
-
-def _visit_common_shift(rows: list[dict[str, Any]], config: dict) -> tuple[bool, dict[str, Any]]:
-    """Detect common-mode translation or 2D rigid/scale drift across distinct real sites in one post-eval run."""
-    cfg_sites, vecs, pts_r, res_r = (config.get("sites") or {}), {}, [], []
-    for r in rows:
-        spec = cfg_sites.get(r.get("site") or "") or {}
-        if r.get("accepted") and not spec.get("tier_of") and not spec.get("map_from") and isinstance(r.get("residual_mm"), list):
-            v, pt = r["residual_mm"], r.get("point_m")
-            if isinstance(pt, list) and len(pt) >= 2 and len(v) >= 2:
-                pts_r.append(pt[:2])
-                res_r.append(v[:2])
-            if r.get("status") == "drift" and len(v) >= 2 and math.hypot(*v) > 0:
-                vecs[f"{r.get('map_sha')}:{r['site']}"] = np.asarray(v, float)
-    rigid = cpb.decompose_rigid_drift(pts_r, res_r, trans_tol_mm=float(prm.get((config or {}).get("params"), "post.tol_mm")))
-    vals = list(vecs.values())
-    pair_common = len(vals) >= 2 and all(
-        float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))) > math.cos(math.radians(45.0))
-        and max(np.linalg.norm(a), np.linalg.norm(b)) <= 2.0 * min(np.linalg.norm(a), np.linalg.norm(b))
-        for i, a in enumerate(vals) for b in vals[i + 1:]
-    )
-    return bool(pair_common or rigid.get("global_drift")), rigid
 
 
 def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply: bool = False,
@@ -300,6 +287,9 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
         if not s.get("tier_of") and isinstance(s.get("place") or s.get("start"), (list, tuple)) and len(s.get("place") or s.get("start")) >= 2
     ]
     chk = cell_calibrate.check(config, calibration, resolved, cell.frame("top"), params)
+    if cell_calibrate.stale(chk) == ["review-camera-reference"]:
+        return {"schema": SCHEMA, "verdict": "escalate", "todo": ["review-camera-reference"],
+                "reason": chk["camera_issue"], "check": chk}
     if chk.get("camera_moved"):
         return {"schema": SCHEMA, "verdict": "escalate", "todo": ["remap"], "reason": "camera_moved", "check": chk}
 
@@ -313,18 +303,18 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
 
     rows = []
     for site, pt in resolved:
+        attempt = cell_route_visit.begin_visit(config, calibration, site, pt)
         ok_track, track_rep = _track_ok(cell, config, calibration, site)
         if not ok_track:
             rows.append({"site": site, "point_m": list(pt), "status": "site_moved", "reason": "site_moved", "track": track_rep})
         else:
-            rows.append(measure_point(cell, config, calibration, bias_data, site, pt, work=work_dir, sleep=sleep,
+            rows.append(measure_point(cell, dict(config, _route_visit_id=attempt), calibration, bias_data, site, pt, work=work_dir, sleep=sleep,
                                       write_library_fn=write_library_fn, bias_err=bias_err))
 
     drift = cell_cal_monitor.summarize(config, calibration)
     v_common, rigid = _visit_common_shift(rows, config)
     common_shift = drift.get("pattern") == "common" or v_common
-    applied, escalated = (["remap"] if rigid.get("global_drift") else []), []
-    applied, escalated = [], list(applied)
+    applied, escalated = [], (["remap"] if rigid.get("global_drift") else [])
     learn_lim, tol_mm = float(prm.get(params, "auto.bias_learn_max_mm")), float(prm.get(params, "post.tol_mm"))
     for row in rows:
         if row.get("status") != "drift":
@@ -337,15 +327,22 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
                 escalated.append(f"fix_over_limit_bias:{row['site']}")
                 continue
             region = {"site": row["site"], "kind": "visit", "point_m": row["point_m"], "bias_mm": row["raw_bias_mm"],
-                      "centre_sigma_mm": round(float(row.get("sigma_mm") or 3.0), 2), "n": 1,
-                      "map_sha": row["map_sha"], "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                      "source": "post-eval opposing-yaw visit"}
+                      "centre_sigma_mm": round(float(row.get("sigma_mm") or 3.0), 2), "n": 1, "map_sha": row["map_sha"],
+                      "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "source": "post-eval opposing-yaw visit",
+                      **({"droop_z_mm": row["droop_z_mm"]} if row.get("droop_z_mm") is not None else {})}
             try:
                 cpb.save_bias(cpb.bias_path(cal_path), region, params)
+                sb = next((r["bias_mm"] for r in reversed(cpb.load_bias(cpb.bias_path(cal_path), params)["regions"])
+                           if r["site"] == row["site"] and r.get("kind") == "visit" and math.dist(r["point_m"], row["point_m"]) <= 0.010), region["bias_mm"])
+                post_res = [round(row["raw_bias_mm"][0] - float(sb[0]), 2), round(row["raw_bias_mm"][1] - float(sb[1]), 2)]
+                row["post_residual_mm"], row["post_residual_mag_mm"] = post_res, round(math.hypot(*post_res), 2)
+                cell_cal_monitor.record_observation(
+                    config, site=row["site"], map_sha=row["map_sha"], source="visit", raw_mm=row["raw_bias_mm"], residual_mm=post_res,
+                    sigma_mm=float(row.get("sigma_mm") or 3.0), accepted=True,
+                    extra={"place_xy": row["point_m"], "yaw_pair": True, "finger_ok": row.get("finger_ok", True), "scene_ok": row.get("scene_ok", True), "geometry_dependent": False, "post_apply": True})
                 applied.append(region)
             except ValueError as exc:
                 escalated.append(f"bias_refused:{row['site']}:{exc}")
-
     lateral = lateral_summary(config, calibration)
     return {"schema": SCHEMA, "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": rows,
             "applied": applied, "escalated": list(dict.fromkeys(escalated)), "drift": drift, "rigid_drift": rigid,
@@ -355,8 +352,7 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     for opt, kw in (("--config", {"required": True, "type": Path}), ("--targets", {"nargs": "*", "default": []}),
-                    ("--apply", {"action": "store_true"}), ("--commissioning", {"action": "store_true"}),
-                    ("--person-at-switch", {"action": "store_true"})):
+                    ("--apply", {"action": "store_true"}), ("--commissioning", {"action": "store_true"}), ("--person-at-switch", {"action": "store_true"})):
         ap.add_argument(opt, **kw)
     args = ap.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -364,7 +360,6 @@ def main(argv=None) -> int:
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)"}))
         return 2
     import cell_pipeline as cp
-
     config["params"] = prm.load(config.get("params_path"))["values"]
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text(encoding="utf-8"))
     cal_path = Path(config["calibration_path"]).expanduser()
@@ -374,7 +369,6 @@ def main(argv=None) -> int:
                            targets=targets, apply=args.apply, commissioning=args.commissioning, person_at_switch=args.person_at_switch)
     print(json.dumps(report, indent=1, default=str))
     return 2 if report.get("verdict") in ("held", "escalate", "fail") else 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

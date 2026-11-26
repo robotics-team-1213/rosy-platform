@@ -14,7 +14,7 @@ INCIDENTS = Path("incidents")
 
 def incidents_dir() -> Path:
     """The one place holds and the outbox live (under the cell's lock root, not the recording directory)."""
-    from joint_tune import lock_root
+    from joint_tune_lock import lock_root
 
     return lock_root() / "incidents"
 
@@ -83,9 +83,10 @@ def _bridge_environ() -> dict[str, str]:
 def link_for(arm: str):
     """The Fleet channel of this arm from the environment, or None (not configured or not usable here)."""
     here = Path(__file__).resolve()
-    for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
-        if extra.is_dir() and str(extra) not in sys.path:
-            sys.path.append(str(extra))
+    if len(here.parents) > 3:
+        for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
+            if extra.is_dir() and str(extra) not in sys.path:
+                sys.path.append(str(extra))
     env = _bridge_environ()
     try:
         from workcell_observation_bridge import ArmIncidentLink
@@ -131,22 +132,57 @@ def _effectively_held(answer) -> bool:
     return True
 
 
-def evidence_of(since: float) -> dict | None:
-    """The newest stop bundle (cell_evidence) of this session: its jaw-tip crops, then whole frames from 3 s before on,
-    at most ARM_INCIDENT_EVIDENCE_FRAMES; {"bundle", "files"} or None."""
+def _fc_evidence_of(since: float, arm: str | None, max_frames: int) -> dict | None:
+    try:
+        import cell_failure_context as cfc
+    except ImportError:
+        return None
+    root = cfc.default_bundle_root()
+    for row in cfc.list_bundles(root, arm=arm, limit=10):
+        if row.get("kind") == "control" or float(row.get("created_at_s") or 0.0) < since:
+            continue
+        try:
+            b = cfc.load_bundle(root, row["bundle_id"])
+        except Exception:
+            continue
+        frames = [f for f in (b.get("visual") or {}).get("frames") or [] if isinstance(f, dict) and isinstance(f.get("file"), str)]
+        tips = [f["file"] for f in frames if f.get("kind") == "tip_crop"]
+        wrist = [f["file"] for f in frames if f.get("kind") != "tip_crop" and "wrist" in str(f.get("camera") or "") and (f.get("t_rel_s") is None or f["t_rel_s"] >= -3)]
+        rest = [f["file"] for f in frames if f["file"] not in set(tips) | set(wrist) and (f.get("t_rel_s") is None or f["t_rel_s"] >= -3)]
+        if chosen := (tips + wrist + rest)[:max_frames]:
+            return {"bundle": str(root / row["bundle_id"]), "files": chosen, "format": "failure_context"}
+    return None
+
+
+def evidence_of(since: float, arm: str | None = None) -> dict | None:
+    """Newest stop bundle (`incidents_dir()/evidence`, `INCIDENTS`, or failure-bundles); tips + wrist first."""
     from core_common.protocol.arm_incident.arm_incidents import ARM_INCIDENT_EVIDENCE_FRAMES
 
-    bundles = [p for p in sorted((INCIDENTS / "evidence").glob("*-stop")) if p.stat().st_mtime >= since]
+    ev_dirs = []
+    for d in (incidents_dir() / "evidence", INCIDENTS / "evidence"):
+        if d.is_dir() and d.resolve() not in {x.resolve() for x in ev_dirs}:
+            ev_dirs.append(d)
+    bundles = sorted(
+        (p for d in ev_dirs for p in d.glob("*-stop") if (not arm or p.name.endswith(f"-{arm}-stop")) and p.stat().st_mtime >= since and (p / "manifest.json").is_file()),
+        key=lambda p: p.name,
+    )
     if not bundles:
-        return None
-    manifest = json.loads((bundles[-1] / "manifest.json").read_text())
-    tips = [f["file"] for f in manifest["files"] if f["file"].endswith("-tip.jpg")]
-    whole = [
-        f["file"]
-        for f in sorted(manifest["files"], key=lambda f: f.get("t_rel_s", 0))
-        if "camera" in f and f["t_rel_s"] >= -3
-    ]
-    return {"bundle": str(bundles[-1]), "files": (tips + whole)[:ARM_INCIDENT_EVIDENCE_FRAMES]}
+        return _fc_evidence_of(since, arm, ARM_INCIDENT_EVIDENCE_FRAMES)
+    files = [f for f in json.loads((bundles[-1] / "manifest.json").read_text()).get("files") or [] if isinstance(f, dict) and isinstance(f.get("file"), str)]
+    tips = [f["file"] for f in files if f["file"].endswith("-tip.jpg")]
+    ordered = sorted((f for f in files if "camera" in f and not f["file"].endswith("-tip.jpg") and f.get("t_rel_s", 0) >= -3), key=lambda f: f.get("t_rel_s", 0))
+    wrist = [f["file"] for f in ordered if "wrist" in str(f.get("camera") or "")]
+    whole = [f["file"] for f in ordered if f["file"] not in set(wrist)]
+    return {"bundle": str(bundles[-1]), "files": (tips + wrist + whole)[:ARM_INCIDENT_EVIDENCE_FRAMES]}
+
+
+def _load_evidence_entries(bdir: Path) -> dict[str, dict]:
+    if (bdir / "manifest.json").is_file():
+        return {f["file"]: f for f in json.loads((bdir / "manifest.json").read_text()).get("files") or [] if isinstance(f, dict) and "file" in f}
+    if (bdir / "bundle.json").is_file():
+        frames = (json.loads((bdir / "bundle.json").read_text()).get("visual") or {}).get("frames") or []
+        return {f["file"]: {"camera": f.get("camera") or "top", "t_rel_s": f.get("t_rel_s") or 0.0, "tip": f.get("kind") == "tip_crop"} for f in frames if isinstance(f, dict) and "file" in f}
+    raise FileNotFoundError(f"no manifest.json or bundle.json in {bdir}")
 
 
 def upload_evidence(sidecar: Path, reply, link) -> None:
@@ -157,15 +193,24 @@ def upload_evidence(sidecar: Path, reply, link) -> None:
         return
     try:
         chosen = json.loads(sidecar.read_text())
-        listed = {f["file"]: f for f in json.loads((Path(chosen["bundle"]) / "manifest.json").read_text())["files"]}
+        bdir = Path(chosen["bundle"])
+        listed = _load_evidence_entries(bdir)
+        cfc = None
+        if (bdir / "bundle.json").is_file() and not (bdir / "manifest.json").is_file():
+            try:
+                import cell_failure_context as cfc
+            except ImportError:
+                cfc = None
         for name in chosen["files"]:
             try:
-                data, tip = (Path(chosen["bundle"]) / name).read_bytes(), name.endswith("-tip.jpg")
+                data = cfc.resolve_asset(bdir.parent, bdir.name, name)[0].read_bytes() if cfc is not None else (bdir / name).read_bytes()
+                meta = listed.get(name, {})
+                tip = bool(meta.get("tip")) or name.endswith("-tip.jpg")
                 link.post_evidence(
                     reply.incident_id,
                     ArmIncidentEvidenceFrame(
-                        camera=listed.get(name, {}).get("camera") or name.removesuffix("-tip.jpg"),
-                        t_rel_s=listed.get(name, {}).get("t_rel_s", 0.0),
+                        camera=str(meta.get("camera") or name.removesuffix("-tip.jpg")),
+                        t_rel_s=float(meta.get("t_rel_s") if meta.get("t_rel_s") is not None else 0.0),
                         kind="tip" if tip else "full",
                         sha256=hashlib.sha256(data).hexdigest(),
                         jpeg_b64=base64.b64encode(data).decode(),
@@ -179,6 +224,35 @@ def upload_evidence(sidecar: Path, reply, link) -> None:
         sidecar.unlink(missing_ok=True)
 
 
+def latest_failure_summary(arm: str | None, since: float = 0.0, *, bundle_root: Path | None = None) -> dict | None:
+    """Compact summary (`<= 2 KiB`) of newest failure bundle for `ArmIncidentReport.facts`."""
+    try:
+        import cell_failure_context as cfc
+    except ImportError:
+        return None
+    root = Path(bundle_root) if bundle_root is not None else cfc.default_bundle_root()
+    for row in cfc.list_bundles(root, arm=arm, limit=5):
+        if row.get("kind") == "control" or float(row.get("created_at_s") or 0.0) < since:
+            continue
+        try:
+            b = cfc.load_bundle(root, row["bundle_id"])
+            hc, outcome = b.get("history_and_constraints") or {}, (b.get("measurement") or {}).get("outcome") or {}
+            why_raw = (b.get("measurement") or {}).get("cell_why") or (hc.get("recent_why") or [None])[-1]
+            why_txt = None if why_raw is None else (json.dumps(why_raw, separators=(",", ":"), ensure_ascii=False) if isinstance(why_raw, dict) else str(why_raw))
+            why_val = None if why_txt is None else why_txt.encode("utf-8", "replace")[:2048].decode("utf-8", "ignore")
+            return {"bundle_id": b["bundle_id"], "context_sha256": b["context_sha256"], "attempt_cause": outcome.get("attempt_cause"), "why": why_val,
+                    "measured_vetoes": [v.get("code") for v in (hc.get("measured_vetoes") or []) if isinstance(v, dict)][:16]}
+        except Exception:
+            continue
+    return None
+
+
+def remember_report_cargo(arm, session_id, cargo):
+    if cargo:
+        from cell_recovery_placement_context import remember_cargo
+        remember_cargo(incidents_dir(), arm, session_id, cargo)
+
+
 def send(arm: str, link, paths=None) -> bool:
     """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
     from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
@@ -187,6 +261,9 @@ def send(arm: str, link, paths=None) -> bool:
         try:
             report = ArmIncidentReport.model_validate_json(path.read_text())
             reply = link.post(report.model_copy(update={"source_id": link.source_id}))
+            if (incidents_dir() / "recovery-cargo.sqlite3").is_file():
+                from cell_recovery_placement_context import bind_incident
+                bind_incident(incidents_dir(), arm, report.session_id, getattr(reply, "incident_id", None))
         except Exception as exc:
             print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             return False
@@ -221,18 +298,18 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
                     "jpeg_b64": base64.b64encode(data).decode(),
                 }
             )
-    body = {
-        "source_id": source_id,
-        "session_id": session_id,
-        "decision": plain(d),
-        "recovery": plain(acted),
-        "frames": frames,
-    }
+    body = {"source_id": source_id, "session_id": session_id, "decision": plain(d), "recovery": plain(acted), "frames": frames}
+    if isinstance(f.get("failure_context"), dict):
+        shown["failure_context"] = plain(f["failure_context"])
     try:
         return ArmIncidentReport.model_validate({**body, "facts": plain(shown)})
     except ValueError:
-        keep = {k: shown[k] for k in ("safe_end", "latched", "torque_after", "folded") if k in shown}
-        return ArmIncidentReport.model_validate({**body, "facts": plain({**keep, "truncated": True})})
+        keep = {k: shown[k] for k in ("safe_end", "latched", "torque_after", "folded", "failure_context") if k in shown}
+        try:
+            return ArmIncidentReport.model_validate({**body, "facts": plain({**keep, "truncated": True})})
+        except ValueError:
+            keep.pop("failure_context", None)
+            return ArmIncidentReport.model_validate({**body, "facts": plain({**keep, "truncated": True})})
 
 
 def default_token_file() -> Path | None:
@@ -268,6 +345,8 @@ def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=
     cleared = list(answer.incident_ids)
     if only is not None:  # D-1048: the evidence belongs to one incident; never spend it on another
         cleared = [i for i in cleared if i == only]
+        if recovery is not None and not cleared:
+            raise SystemExit("the incident named by the recovery evidence is no longer open")
     for incident_id in cleared:
         # the read names the one incident it clears (D-1040); an older link without the argument still clears
         extra = {"remeasured": {**remeasured, "incident_id": incident_id}} if remeasured else {}

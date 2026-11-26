@@ -3,6 +3,8 @@ import '/common/ui.js';
 import '/commands.js';
 import {createDataTable,createSelectionBar} from '/common/collection-controls.js';
 import {createStatePanel} from '/common/workflow-controls.js';
+import {startVisibilityPoll} from '/learning-poll.js';
+import {domEl as node, makeUuid as uuid, fillSelectOptions as options} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks';
 const KINDS={omx:'OMX 팔',pinky:'Pinky 주행 로봇',manipulator:'팔',mobile:'주행 로봇',other:'기타',robot:'기타 로봇'};
 const kindLabel=kind=>KINDS[kind]||kind,modelLabel=model=>model==='unrecorded'?'모델 미기록':model;
@@ -13,12 +15,10 @@ const experienceDrafts=new Map();
 const contextKeys=['task','profile','dataset'];
 let contextQuery=new URLSearchParams(location.search),contextError='',contextLoaded=false;
 let actionError='',refreshError='';
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function error(message,owner='action'){
   if(owner==='refresh')refreshError=message||'';else actionError=message||'';
   const text=[refreshError,actionError].filter(Boolean).join('\n');$('tasks-error').hidden=!text;$('tasks-error').textContent=text;
 }
-function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
   const options={cache:'no-store'};
   if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':token};options.body=JSON.stringify(body);}
@@ -26,14 +26,6 @@ async function request(path,body){
   if(response.status===401){$('tasks-login').hidden=false;throw new Error('로그인이 필요합니다. 로그인·계정에서 접속한 뒤 다시 확인하세요.');}
   if(response.status===403){$('tasks-login').hidden=false;throw new Error('이 작업에 필요한 권한이 없습니다. 계정의 프로젝트 권한을 확인하세요.');}
   const value=await response.json();if(!response.ok)throw new Error(value.error||`요청 실패 (${response.status})`);return value;
-}
-function options(select,rows,placeholder){
-  const signature=JSON.stringify(rows),old=select.value;
-  if(select.dataset.options===signature)return;
-  select.dataset.options=signature;
-  const entries=placeholder==null?rows:[['',placeholder],...rows];
-  select.replaceChildren(...entries.map(([id,label])=>{const option=node('option',label);option.value=id;return option;}));
-  if(entries.some(([id])=>id===old))select.value=old;
 }
 function task(){return state.tasks.find(row=>row.id===$('task-select').value);}
 function selectedProfile(){return state.profiles.find(row=>row.id===$('task-profile').value);}
@@ -302,4 +294,4 @@ $('tasks-context-reset').onclick=()=>{contextKeys.forEach(key=>contextQuery.dele
 $('task-next-setup').onclick=()=>{const robots=!state.robots.length,setup=$(robots?'robot-setup':'task-setup');setup.open=true;(robots?$('owner-robots').querySelector('input[data-select]')||$('robot-manual-toggle'):setup.querySelector('input')).focus();};
 $('robot-manual-toggle').onclick=()=>{const form=$('robot-form'),open=form.hidden;form.hidden=!open;$('robot-manual-toggle').setAttribute('aria-expanded',String(open));if(open)$('robot-name').focus();};
 $('tasks-refresh').onclick=()=>{error('');refresh();loadOwners();};
-participant();refresh();loadOwners();setInterval(()=>{if(!busy&&!document.hidden)refresh();},5000);
+participant();refresh();loadOwners();startVisibilityPoll(()=>refresh(),5000,{shouldRun:()=>!busy});

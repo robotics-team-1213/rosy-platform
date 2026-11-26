@@ -19,7 +19,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RU
 from browser_harness import launch_options, safe_http_server  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"/common/webrtc.js": ROOT / "shared/web/webrtc.js",
+FILES = {"/common/camera-frame-hold.js": ROOT / "shared/web/camera-frame-hold.js",
+         "/common/webrtc.js": ROOT / "shared/web/webrtc.js",
          "/common/cause-line.js": ROOT / "shared/web/cause-line.js",
          "/common/fleet-client.js": ROOT / "shared/web/fleet-client.js",
          "/common/request.js": ROOT / "shared/web/request.js",
@@ -176,4 +177,20 @@ def test_refused_grant_shows_no_video_and_opens_no_session(console):
 
     label, calls = _run(console, ["rosy_01"], grant_status=403, steps=steps)
     assert "영상 권한 없음" in label
+    assert not any("media.site.example" in url for _, url, _ in calls)
+
+
+def test_unconfigured_grant_404_explains_missing_media_server(console):
+    def steps(page, calls):
+        page.check("[data-robot-video-choice=rosy_01]")
+        page.click("[data-robot-video-start]")
+        page.wait_for_function("document.querySelector('[data-robot-video-tile]')?.dataset.state === 'lost'")
+        return (
+            page.text_content("[data-robot-video-tile] figcaption"),
+            page.text_content("#robot-video [role=status]"),
+        )
+
+    (label, summary), calls = _run(console, ["rosy_01"], grant_status=404, steps=steps)
+    assert "전면 카메라 미연결(미디어 서버 미구성)" in label
+    assert "미디어 서버가 구성되지 않았습니다" in summary
     assert not any("media.site.example" in url for _, url, _ in calls)

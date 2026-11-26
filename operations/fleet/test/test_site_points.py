@@ -25,7 +25,7 @@ FORBIDDEN_PORT_KEYS = frozenset({
     "x", "y", "yaw", "pose", "edges", "edges_in", "edges_out", "polyline",
     "stop_zone", "approach_m", "approach_pose", "pinned", "width_m", "speed_cap_mps",
     "turn_bans", "drive_mode", "junction", "workcell_id", "instance_id", "marker_id",
-    "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases",
+    "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases", "slots", "hold_boundary",
     "berth", "nav2_berth_ready", "berth_missing", "repark_cap_m", "align_tol_deg",
     "intake_cell", "flow", "waypoints", "stand_ref", "zone_rules",
     "coordinate_frames", "conveyor_transfer", "end_to_end_stages", "arm_frame", "belt_end",
@@ -123,6 +123,16 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     assert by_id["S_OUT"]["status"] == "planned_unverified"
     assert by_id["S_OUT"]["dispatchable"] is False
     assert full["arm_zones"]["count"] == 37
+    arm_zones = {zone["id"]: zone for zone in full["arm_zones"]["zones"]}
+    assert {key: len(zone["slots"]) for key, zone in arm_zones.items()} == {
+        "yard": 6, "temp_a": 3, "temp_b": 3, "stand": 1,
+    }
+    yard = arm_zones["yard"]
+    assert yard["hold_boundary"] == {"columns": [3, 4]}
+    assert yard["slots"][0]["columns"] == [1, 3]
+    assert yard["slots"][0]["tiers"][0] == {"id": "yard:r1-s1-t1", "tier": 1}
+    assert all(slot["status"] == "planned_unverified"
+               for zone in arm_zones.values() for slot in zone["slots"])
     handoffs = {h["id"]: h for h in full["handoffs"]}
     assert handoffs["outbound_stand_load"]["vehicle_stop_resolved"] is False
     assert handoffs["outbound_stand_load"]["dispatchable"] is False
@@ -335,3 +345,65 @@ def test_site_points_stage_b_rejects_dangling_s_out_and_ambiguous_or_corrupt_rul
         con.execute("UPDATE site_rules_versions SET sha256='0' WHERE version=(SELECT MAX(version) FROM site_rules_versions)")
         con.commit()
     assert client.get("/api/fleet/site-points", headers=VIEWER).status_code == 422
+
+
+def test_site_points_accepts_raw_unsorted_site_rules_body_hash(tmp_path):
+    client, store = _client_and_store(tmp_path)
+    _activate_map_and_rules(store, _base_v348_map(), {"return": {"exit_place": "S1"}, "stops": [{"place": "S3", "role": "unload"}]})
+    raw_body = '{"stops": [{"place": "S3", "role": "unload"}], "return": {"exit_place": "S1"}}'
+    raw_sha = sha256(raw_body.encode("utf-8")).hexdigest()
+    with sqlite3.connect(store.path) as con:
+        con.execute(
+            "UPDATE site_rules_versions SET body=?, sha256=? WHERE version=(SELECT MAX(version) FROM site_rules_versions)",
+            (raw_body, raw_sha),
+        )
+        con.commit()
+    ok = client.get("/api/fleet/site-points?view=port", headers=VIEWER)
+    assert ok.status_code == 200
+    assert client.get("/api/fleet/site-rules/active", headers=VIEWER).status_code == 200
+
+    with sqlite3.connect(store.path) as con:
+        con.execute("UPDATE site_rules_versions SET sha256='0' WHERE version=(SELECT MAX(version) FROM site_rules_versions)")
+        con.commit()
+    bad = client.get("/api/fleet/site-points?view=port", headers=VIEWER)
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["code"] == "SITE_RULES_BODY_HASH_MISMATCH"
+    bad_rules = client.get("/api/fleet/site-rules/active", headers=VIEWER)
+    assert bad_rules.status_code == 422
+    assert bad_rules.json()["detail"]["code"] == "SITE_RULES_BODY_HASH_MISMATCH"
+
+
+def test_site_points_requires_edges_in_for_outbound_exit_stop(tmp_path):
+    client, store = _client_and_store(tmp_path)
+    raw_map = _base_v348_map()
+    raw_map["places"].extend([
+        {"id": "J_stand", "kind": "junction", "name": "반출 분기", "x": 0.615, "y": -0.207},
+        {
+            "id": "S_OUT", "kind": "stop", "name": "S_OUT 반출대", "x": 0.614, "y": 0.001, "yaw": 1.570796,
+            "pinned": True, "stop_zone": [[0.55, -0.06], [0.68, -0.06], [0.68, 0.06], [0.55, 0.06]],
+            "approach_m": 0.10,
+        },
+        {"id": "S_EXIT", "kind": "stop", "name": "고립 반출 출구", "x": -0.80, "y": -0.48, "yaw": 0.0, "pinned": True},
+    ])
+    raw_map["edges"] = [e for e in raw_map["edges"] if e["id"] != "upper_east"] + [
+        {"id": "upper_east_a", "from": "S3", "to": "J_stand", "polyline": [[0.745, -0.207], [0.615, -0.207]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "upper_east_b", "from": "J_stand", "to": "J_in", "polyline": [[0.615, -0.207], [0.32, -0.25]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "stand_spur", "from": "J_stand", "to": "S_OUT", "polyline": [[0.615, -0.207], [0.615, -0.103], [0.614, 0.001]], "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.08, "pinned": True},
+    ]
+    raw_rules = {
+        "return": {"exit_place": "S_EXIT"},
+        "stops": [
+            {"place": "S1", "role": "load"},
+            {"place": "S3", "role": "unload"},
+            {"place": "S_OUT", "role": "load"},
+        ],
+    }
+    _activate_map_and_rules(store, raw_map, raw_rules)
+    port = client.get("/api/fleet/site-points?view=port", headers=VIEWER).json()
+    port_places = {p["place_id"]: p for p in port["vehicle_places"]}
+    assert port_places["S_OUT"]["dispatchable"] is True
+    assert port_places["S_EXIT"]["port_role"] == "outbound_exit"
+    assert port_places["S_EXIT"]["status"] == "planned_unverified"
+    assert port_places["S_EXIT"]["dispatchable"] is False
+    assert port["outbound_handoffs"][0]["status"] == "planned_unverified"
+    assert port["outbound_handoffs"][0]["dispatchable"] is False

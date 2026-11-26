@@ -68,6 +68,9 @@ test("presence mark has the bed confirmation's states", () => {
 });
 
 test("REVIEW_REQUIRED comes as an ABORTED receipt reason and the used presence shows on the row", () => {
+  const blocked = queued({status: "ABORTED", receipt: {reason: "MEASURED_PLACEMENT_MISSING"},
+    hardware_telemetry: {error: "PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE"}});
+  assert.match(cellTaskRows({tasks: [blocked]})[0][5], /ACT 실물 실행 차단/);
   const review = queued({status: "ABORTED", receipt: {reason: "REVIEW_REQUIRED"}, presence: null});
   assert.match(abortText(review), /^검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다/);
   assert.equal(abortText(queued({status: "ABORTED", receipt: {reason: "MEASURED_PLACEMENT_MISSING"}})), "");
@@ -112,7 +115,7 @@ test("refusal codes are said as the missing evidence", () => {
   const rows = cellTaskRows({tasks: [queued({last_refusal: {code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}, status: "RUNNING"})]});
   assert.match(rows[0][5], /완료 거부/);
   const [card] = visualCardSpecs({tasks: [queued({last_refusal: {code: "AMR_BRAKE_BED_VELOCITY_UNMEASURED", op: "claim"}})]});
-  assert.match(card.folded_state, /시작 거부/);
+  assert.match(card.fieldStatus.refusal, /시작 거부/);
 });
 
 test("destinations come only from the server's presets and export stations for the cell", () => {

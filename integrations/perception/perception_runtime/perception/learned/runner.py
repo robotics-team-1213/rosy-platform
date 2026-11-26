@@ -19,9 +19,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .drivable_paint import drivable_target
-from .lane_mask import (LaneMaskEvidence, floor_gate_role_error, lane_evidence, lane_marking_mask, preprocess,
-                        uncrop_logits)
+from .drivable_paint import _drivable_target_from_labels, drivable_target
+from .lane_mask import (LaneMaskEvidence, NonFiniteLogits, _lane_marking_mask_from_labels, floor_gate_role_error,
+                        lane_evidence, lane_marking_mask, preprocess, uncrop_logits)
 from core_common.perception_model import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
 
 
@@ -176,21 +176,45 @@ class LaneSegModel:
         the paint worker takes these class observations out of info. The ignore role is
         passable for lane geometry; it does not authorize crossing a traffic mark."""
         t0 = time.perf_counter()
-        logits = self._logits(bgr)
         spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
-        way, info = drivable_target(logits, self.manifest.classes,
-                                    ignore_top=spec.crop[2] if spec.crop is not None else 0, prefer=prefer)
+        ignore_top = spec.crop[2] if spec.crop is not None else 0
+        if "_logits" in vars(self):
+            logits = self._logits(bgr)
+            if (logits.ndim != 4 or logits.shape[0] != 1
+                    or logits.shape[1] != len(self.manifest.classes)):
+                raise ValueError(f"logits shape {logits.shape} does not match {len(self.manifest.classes)} classes")
+            if not np.isfinite(logits).all():
+                raise NonFiniteLogits("non-finite logits")
+            labels = logits[0].argmax(axis=0)
+        else:
+            error = road_delivery_error(self.manifest.raw)
+            if error:
+                raise ManifestError(error)
+            raw_logits = self._session.run(preprocess(bgr, spec))
+            if (raw_logits.ndim != 4 or raw_logits.shape[0] != 1
+                    or raw_logits.shape[1] != len(self.manifest.classes)):
+                raise ValueError(f"logits shape {raw_logits.shape} does not match {len(self.manifest.classes)} classes")
+            if not np.isfinite(raw_logits).all():
+                raise NonFiniteLogits("non-finite logits")
+            crop_labels = raw_logits[0].argmax(axis=0)
+            if spec.crop is None:
+                labels = crop_labels
+            else:
+                frame_h, _, row_from, row_to = spec.crop
+                bg_index = [c.index for c in self.manifest.classes if c.role == "background"][0]
+                labels = np.full((frame_h, raw_logits.shape[3]), bg_index, dtype=crop_labels.dtype)
+                labels[row_from:row_to] = crop_labels
+        way, info = _drivable_target_from_labels(labels, self.manifest.classes, ignore_top=ignore_top, prefer=prefer)
         if way is None:
             if self.floor_gate and floor_gate_role_error(self.manifest.classes) is not None:
                 # Wall-less drivable models (GAZEBO_ROLES) cannot run the wall-based lane floor gate;
                 # return an empty drivable mask so callers retain revision, crosswalk and speed_bump masks.
                 mask, kind = np.zeros((size[1], size[0]), dtype=np.uint8), "drivable"
             else:
-                mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size,
-                                              floor_gate=self.floor_gate), "lane_marking"
+                mask, kind = _lane_marking_mask_from_labels(
+                    labels, self.manifest.classes, size=size, floor_gate=self.floor_gate), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
-        labels = logits[0].argmax(axis=0)
         for name in ('crosswalk', 'speed_bump'):
             indexes = [c.index for c in self.manifest.classes if c.name == name]
             if indexes:

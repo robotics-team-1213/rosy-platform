@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import threading
+from types import SimpleNamespace
 import urllib.request
 from unittest.mock import Mock
 
@@ -18,6 +19,27 @@ def _make_workdir(tmp_path: Path) -> Path:
         (tmp_path / name).write_text("{}", encoding="utf-8")
     (tmp_path / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc1234/deploy/robot/omx\n", encoding="utf-8")
     return tmp_path
+
+
+@pytest.mark.parametrize(("job", "arm", "expected"), [
+    ("remap", "arm_a", "arm_a"), ("remap", "arm_b", "arm_b"),
+    ("remap", "arm_s", None), ("calibrate_check", "arm_a", None),
+])
+def test_baseline_recovery_is_bound_to_supervised_ab_remap(tmp_path, monkeypatch, job, arm, expected):
+    popen = Mock(return_value=Mock(poll=Mock(return_value=0)))
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setenv("ROSY_BASELINE_RECOVERY_ARM", "arm_b")
+    runner = api.Runner(_make_workdir(tmp_path))
+    params = {"config": f"cell-{arm[-1]}.json"}
+    if job == "remap":
+        params.update(arm=arm, person_at_switch=True)
+    assert runner.start(job, params)["code"] == 202
+    assert popen.call_args.kwargs["env"].get("ROSY_BASELINE_RECOVERY_ARM") == expected
+    if expected:
+        wrapper = Path(popen.call_args.args[0][0])
+        assert wrapper == Path(api.__file__).parent / "session-wrappers" / Path(api.SESSION[arm]).name
+        assert wrapper.is_file()
+        assert popen.call_args.kwargs["env"]["TOOLS_ROOT"] == str(wrapper.parents[4])
 
 
 @pytest.mark.parametrize(
@@ -96,12 +118,16 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
     assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
-    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True}, wd)
-    assert "--paced-chunks" in paced_argv
+    assert (Path.home() / ".local/share/rosy/omx-devices/current").resolve() == Path(drive_argv[4])
+    assert "/session-wrappers/tools-env.sh" in drive_argv[2]
+    assert "tools-env-current.sh" not in drive_argv[2]
+    arm_b_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "arm": "arm_b"}, wd)
+    assert "tools-env-current.sh" in arm_b_argv[2]
+    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "n_action": 8}, wd)
+    assert "--paced-chunks" in paced_argv and "--n-action" in paced_argv
     for bad_paced in (
         {"mode": "hybrid", "goal_site": "yard:r3-s2-t1"},
         {"mode": "taught", "goal_site": "yard:r3-s2-t1"},
-        {"n_action": 8},
     ):
         with pytest.raises(ValueError, match="paced_chunks"):
             api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, **bad_paced}, wd)
@@ -147,8 +173,20 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
 
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "proposer": "op_b"}, wd)
+    assert api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 60}, wd)
     with pytest.raises(ValueError, match="max_chunks"):
-        api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 7}, wd)
+        api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 61}, wd)
+    remote_lo = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "arm": "arm_b", "endpoint_url": "http://127.0.0.1:8790"}, wd)
+    assert "--endpoint-url" in remote_lo and remote_lo[remote_lo.index("--arm-id") + 1] == "arm_b"
+    remote_tok = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "endpoint_url": "http://100.108.76.123:8790", "token_file": "tok", "timeout_s": 0.5}, wd)
+    assert "--token-file" in remote_tok and remote_tok[remote_tok.index("--timeout-s") + 1] == "0.5"
+    for bad_ep in (
+        {"endpoint_url": "http://100.108.76.123:8790"},
+        {"token_file": "tok"},
+        {"endpoint_url": "http://127.0.0.1:8790", "mode": "taught", "goal_site": "yard:r3-s2-t1"},
+    ):
+        with pytest.raises(ValueError):
+            api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, **bad_ep}, wd)
     with pytest.raises(ValueError, match="safe path"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "policy_root": "../secret"}, wd)
 
@@ -336,6 +374,52 @@ def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
     assert "ship-h1r0-l0" in out
 
 
+def test_check_arm_incident_hold_supports_standalone_cell_api_layout(tmp_path):
+    import os
+    import shutil
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[1]
+    stage = tmp_path / "cell-job-api"
+    stage.mkdir()
+    for name in (
+        "cell_decisions.py",
+        "cell_job_guards.py",
+        "cell_job_peer_health.py",
+        "cell_params.py",
+        "joint_push.py",
+        "joint_tune_lock.py",
+        "omx_incident.py",
+        "omx_incident_auto.py",
+        "omx_incident_fleet.py",
+        "omx_incident_reading.py",
+        "omx_incident_reassess.py",
+        "push_replay.py",
+    ):
+        shutil.copy2(repo_root / "deploy" / "robot" / "omx" / name, stage / name)
+
+    omx_home = tmp_path / "omx-home"
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["ROSY_OMX_HOME"] = str(omx_home)
+
+    script_unheld = (
+        "import cell_job_guards as g; "
+        "assert g.check_arm_incident_hold('arm_a') is None"
+    )
+    subprocess.check_call([sys.executable, "-c", script_unheld], cwd=stage, env=env)
+
+    inc_dir = omx_home / "incidents"
+    inc_dir.mkdir(parents=True)
+    (inc_dir / "HOLD-arm_a.json").write_text(json.dumps({"reason": "elbow overload"}), encoding="utf-8")
+
+    script_held = (
+        "import cell_job_guards as g; "
+        "res = g.check_arm_incident_hold('arm_a'); "
+        "assert res and 'elbow overload' in res, res"
+    )
+    subprocess.check_call([sys.executable, "-c", script_held], cwd=stage, env=env)
+
+
 def test_runner_whole_cell_ab_cross_lock_and_warm_reuse(tmp_path, monkeypatch):
     wd = _make_workdir(tmp_path)
     lease_dir = tmp_path / "leases"
@@ -507,3 +591,374 @@ def test_goal_site_import_error_returns_http_400(tmp_path, monkeypatch):
         },
     )
     assert res["code"] == 400 and "cannot read Cell site map" in res["error"]
+
+
+def test_cell_job_api_service_unit_preserves_detached_arm_sessions():
+    unit_path = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service"
+    text = unit_path.read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    assert "KillMode=process" in lines
+    assert "KillMode=control-group" not in lines
+    assert "NoNewPrivileges=true" in lines
+    assert "UMask=0077" in lines
+    assert any(line.startswith("ExecStart=") and "exec /usr/bin/python3" in line for line in lines)
+
+
+def test_surface_job_argv_requires_person_at_switch(tmp_path):
+    wd = _make_workdir(tmp_path)
+    (wd / "cell-b.json").write_text(json.dumps({"sites": {"pallet": {}}}), encoding="utf-8")
+    argv = api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True}, wd)
+    assert argv[0] == "./with-session-arm-b-par.sh"
+    assert "cell_calibrate.py" in argv
+    assert argv[argv.index("--only") + 1] == "surface"
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": False}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"place": [0.1, 0.2]}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="R cell-task -> cell_task_worker -> Gate"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text("{bad json", encoding="utf-8")
+    with pytest.raises(ValueError, match="surface calibration config"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"surface_z": 0.031}, "belt": {}}}), encoding="utf-8")
+    assert api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)[0] == "./with-session-arm-s-live.sh"
+
+
+def test_cell_job_api_is_managed_by_omx_devices_autoupdate():
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    unit = (root / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service").read_text(encoding="utf-8")
+    assert "Environment=ROSY_CELL_JOB_API_ROOT=%h/.local/share/rosy/omx-devices/current/deploy/robot/omx" in unit
+    example = json.loads((root / "deploy" / "robot" / "omx" / "omx-devices-autoupdate.json.example").read_text(encoding="utf-8"))
+    assert "rosy-omx-cell-job-api.service" in example["units"]
+    assert "deploy/robot/omx/rosy-omx-cell-job-api.service" in example["unit_files"]
+    assert "cell_job_api" in example["smoke"]
+    entry = yaml.safe_load((root / "deploy" / "hosts" / "services.yaml").read_text(encoding="utf-8"))["roles"]["omx"]["rosy-omx-cell-job-api.service"]
+    assert entry["channel"] == "autoupdate"
+    assert entry["source"] == ".local/share/rosy/omx-devices/current"
+
+
+def test_check_arm_incident_hold_syncs_stale_local_hold_only_when_fleet_confirmed_clear(monkeypatch):
+    from types import SimpleNamespace
+    import cell_job_guards as guards
+
+    def _run_case(statuses, *, sync_result):
+        calls = []
+        seq = list(statuses)
+
+        def _status(_arm):
+            return seq.pop(0) if len(seq) > 1 else seq[0]
+
+        def _sync(arm):
+            calls.append(arm)
+            return sync_result
+
+        fake_mod = SimpleNamespace(
+            status=_status,
+            sync_hold_from_fleet=_sync,
+            hold_file=lambda _arm: None,
+        )
+        monkeypatch.setitem(sys.modules, "omx_incident", fake_mod)
+        return guards.check_arm_incident_hold("arm_b"), calls
+
+    # (a) Fleet confirms clear and outbox is empty -> sync lifts stale local hold and re-check passes
+    res_a, calls_a = _run_case(
+        [
+            {"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0},
+            {"local_held": False, "local_reason": None, "fleet_held": False, "unsent_outbox": 0},
+        ],
+        sync_result=True,
+    )
+    assert res_a is None and calls_a == ["arm_b"]
+
+    # (b) Sync race (Fleet became held or unreachable during sync) -> stays held fail-closed
+    res_b, calls_b = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0}],
+        sync_result=False,
+    )
+    assert res_b == "runner: human hold" and calls_b == ["arm_b"]
+
+    # (c) Fleet unreachable (fleet_held=None) -> never calls sync, stays held fail-closed
+    res_c, calls_c = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": None, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_c == "runner: human hold" and calls_c == []
+
+    # (d) Unsent outbox pending -> never calls sync, stays held fail-closed
+    res_d, calls_d = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 1}],
+        sync_result=True,
+    )
+    assert res_d == "runner: human hold" and calls_d == []
+
+    # (e) Fleet also holds the arm -> never calls sync, stays held fail-closed
+    res_e, calls_e = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": True, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_e == "runner: human hold" and calls_e == []
+
+
+def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    base = {"arm": "arm_s", "config": "cell-s.json", "site": "floor", "x": -0.06, "y": 0.15, "person_at_switch": True}
+    argv = api.build_argv(api.JOBS["post_eval"], base, wd)
+    assert argv[0] == "./with-session-arm-s-live.sh"
+    assert "cell_post_eval.py" in argv
+    assert argv[argv.index("--targets") + 1] == "floor:-0.06,0.15"
+    assert "--apply" not in argv
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+
+    argv_apply = api.build_argv(api.JOBS["post_eval"], {**base, "apply": True}, wd)
+    assert "--apply" in argv_apply
+
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["post_eval"], {**base, "person_at_switch": False}, wd)
+
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    for bad_site in ("pinky", "bed-1"):
+        res = api.Runner(wd, lock_dir=wd).start("post_eval", {**base, "site": bad_site})
+        assert res["code"] == 400 and "R cell-task -> cell_task_worker -> Gate" in res["error"]
+    popen.assert_not_called()
+
+
+def test_safe_home_job_admits_incident_held_blocks_fleet_stop_and_machine_token(tmp_path, monkeypatch):
+    import cell_job_guards as guards
+
+    wd = _make_workdir(tmp_path)
+    for fn in ("cell-s.json", "chunks-s.json"):
+        (wd / fn).write_text("{}", encoding="utf-8")
+    (wd / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc/deploy/robot/omx\n", encoding="utf-8")
+    params = {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "site": "floor", "roi": [0, 0, 10, 10]}
+
+    monkeypatch.setattr(api, "_check_depth_lock_held", lambda _ld=None: False)
+    lock_held = [False]
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_s" and lock_held[0])
+    popen = Mock(return_value=Mock(poll=Mock(return_value=0)))
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+
+    runner = api.Runner(
+        wd, lock_dir=wd,
+        incident_check_fn=lambda arm: f"{arm}: 2 open incidents",
+        fleet_safety_check_fn=lambda _arm: {"online": True, "blocked": False},
+    )
+    home_res = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "operating_profile": "prof.json", "person_at_switch": True})
+    assert home_res["code"] == 409 and home_res["error_code"] == "ARM_INCIDENT_HELD"
+
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    original_check = runner._incident_check_fn
+    runner._incident_check_fn = lambda _arm: HOME_RECOVERY_REASON
+    pending = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json",
+                                   "operating_profile": "prof.json", "person_at_switch": True})
+    assert pending["code"] == 409 and pending["error_code"] == "HOME_RECOVERY_REQUIRED"
+    popen.assert_not_called()
+    runner._incident_check_fn = original_check
+
+    mach_res = runner.start("safe_home", params, principal=guards.Principal(guards.ROLE_MACHINE, "bot"))
+    assert mach_res["code"] == 403 and mach_res["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
+
+    # External non-hold session lock refuses safe_home (409), while live human-hold attaches (202), and cold arm admits (202).
+    lock_held[0] = True
+    busy_res = runner.start("safe_home", params)
+    assert busy_res["code"] == 409 and "session lock" in busy_res["error"]
+
+    import time as _time
+    (wd / "chunk-io-s").mkdir(exist_ok=True)
+    (wd / "chunk-io-s" / "live.json").write_text(json.dumps({"t": _time.time(), "chunk": None, "human_hold_latched": True, "torque_hold_commanded": True}), encoding="utf-8")
+    hold_res = runner.start("safe_home", params)
+    assert hold_res["code"] == 202 and popen.call_count == 1
+
+    lock_held[0] = False
+    ok_res = runner.start("safe_home", params)
+    assert ok_res["code"] == 202 and popen.call_count == 2
+
+    blocked = api.Runner(
+        wd, lock_dir=wd,
+        incident_check_fn=lambda arm: f"{arm}: open",
+        fleet_safety_check_fn=lambda _arm: {"online": True, "blocked": True, "reason": "E-stop"},
+    )
+    estop_res = blocked.start("safe_home", params)
+    assert estop_res["code"] == 409 and estop_res["error_code"] == "FLEET_SAFETY_STOP"
+
+
+def test_cell_safe_home_guards_hw_error_incident_cap_and_clears_multi(tmp_path, monkeypatch):
+    import cell_safe_home as csh
+
+    cfg_p, lib_p, out_p = tmp_path / "cell.json", tmp_path / "lib.json", tmp_path / "out.json"
+    cfg_p.write_text(json.dumps({"arm_id": "arm_s", "io": str(tmp_path / "io")}), encoding="utf-8")
+    lib_p.write_text("{}", encoding="utf-8")
+    args = SimpleNamespace(arm="arm_s", config=cfg_p, library=lib_p, site="floor", roi=[0, 0, 10, 10],
+                           out=out_p, device="/dev/null", max_incidents=3, no_clear=False)
+
+    args_missing = SimpleNamespace(arm="arm_s", config=cfg_p, library=lib_p, site="floor", roi=[0, 0, 10, 10],
+                                 out=out_p, device=None, max_incidents=3, no_clear=False)
+    monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "missing-boards.json"))
+    rc_unavail, res_unavail = csh.run_safe_home(args_missing, live_fn=lambda _c: False)
+    assert rc_unavail == 2 and res_unavail["result"] == "refused_hw_probe_unavailable"
+
+    rc_alert, res_alert = csh.run_safe_home(
+        args, live_fn=lambda _c: False,
+        read_fn=lambda _d: (_ for _ in ()).throw(RuntimeError("Motor 11: ping failed (0, 128)")),
+    )
+    assert rc_alert == 2 and res_alert["result"] == "refused_hw_error"
+
+    rc_hw, res_hw = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 32}],
+    )
+    assert rc_hw == 2 and res_hw["result"] == "refused_hw_error"
+
+    rc_cap, res_cap = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 0}],
+        status_fn=lambda _a: {"incident_ids": ["1", "2", "3", "4"]},
+    )
+    assert rc_cap == 2 and res_cap["result"] == "refused_too_many_incidents"
+
+    cleared = []
+    monkeypatch.chdir(tmp_path)
+    def fake_run(cmd, env=None, timeout=None):
+        assert env and env["ROSY_RECOVERY_INCIDENT"] == "inc-1,inc-2"
+        out_p.write_text(json.dumps({"result": "folded", "candidate": "park", "state": [0, -58, 50, 50, -5, 46.5], "home": [0, -58, 50, 50, -5, 46.5], "corridor": {"clear": True}}))
+        return SimpleNamespace(returncode=0)
+
+    tok_p = tmp_path / "assessor.token"
+    tok_p.write_text("tok", encoding="utf-8")
+    rc_ok, res_ok = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 0}],
+        status_fn=lambda _a: {"incident_ids": ["inc-1", "inc-2"]}, run_fn=fake_run,
+        wait_sess_fn=lambda *_a: ({"torque_after": {str(i): 0 for i in range(11, 17)}, "hardware_faults": {}, "caps_restored": True}, None),
+        token_fn=lambda: tok_p,
+        clear_fn=lambda *a, **kw: cleared.append((kw["only"], kw["recovery"])),
+    )
+    assert rc_ok == 0 and res_ok["cleared_ids"] == ["inc-1", "inc-2"]
+    assert [c[0] for c in cleared] == ["inc-1", "inc-2"] and cleared[0][1]["caps_restored_after"] is True
+
+
+def test_job_client_wait_timeout_and_cli_get_wait_run(monkeypatch, capsys):
+    import inspect
+    import cell_job_client as jc
+
+    assert inspect.signature(jc.CellJobClient.wait).parameters["timeout_s"].default == 600.0
+    calls = []
+
+    def fake_start(self, job, params, *, idempotency_key=None):
+        calls.append(("start", job, params, idempotency_key))
+        return {"id": "job-42", "running": True}
+
+    def fake_get(self, job_id):
+        calls.append(("get", job_id))
+        return {"id": job_id, "running": False, "exit": 0}
+
+    def fake_wait(self, job_id, *, poll_s=1.0, timeout_s=600.0):
+        calls.append(("wait", job_id, timeout_s))
+        return {"id": job_id, "running": False, "exit": 0 if job_id == "job-42" else 2}
+
+    monkeypatch.setattr(jc.CellJobClient, "start", fake_start)
+    monkeypatch.setattr(jc.CellJobClient, "get", fake_get)
+    monkeypatch.setattr(jc.CellJobClient, "wait", fake_wait)
+
+    assert jc.main(["--url", "http://127.0.0.1:8781", "get", "job-42"]) == 0
+    assert json.loads(capsys.readouterr().out)["id"] == "job-42"
+    assert jc.main(["--url", "http://127.0.0.1:8781", "wait", "job-42", "--timeout", "30"]) == 0
+    assert json.loads(capsys.readouterr().out)["exit"] == 0
+    assert jc.main(["--url", "http://127.0.0.1:8781", "wait", "job-99", "--timeout", "15"]) == 1
+    capsys.readouterr()
+    assert jc.main(["--url", "http://127.0.0.1:8781", "run", "pivot_near", "--params-json", '{"site":"floor"}', "--timeout", "45", "--idempotency-key", "k1", "--wait"]) == 0
+    capsys.readouterr()
+    assert calls == [
+        ("get", "job-42"),
+        ("wait", "job-42", 30.0),
+        ("wait", "job-99", 15.0),
+        ("start", "pivot_near", {"site": "floor"}, "k1"),
+        ("wait", "job-42", 45.0),
+    ]
+
+
+def test_calibrate_check_targets_validation_and_non_moving_argv(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    no_targets = api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json"}, wd)
+    assert "--targets" not in no_targets
+    assert no_targets[:2] == ["bash", "-c"] and no_targets[3:] == ["cell_calibrate.py", "--config", "cell-s.json", "check"]
+    with_targets = api.build_argv(
+        api.JOBS["calibrate_check"],
+        {"config": "cell-s.json", "targets": ["floor:-0.06,0.15", "belt:0.115,-0.05"]},
+        wd,
+    )
+    idx = with_targets.index("--targets")
+    assert with_targets[:idx] == no_targets  # the old argv, unchanged, then only the new option
+    assert with_targets[idx + 1 :] == ["floor:-0.06,0.15", "belt:0.115,-0.05"]
+    assert api.moves_arm(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": ["floor:0,0"]}) is False
+    for bad in (
+        [],
+        [f"s{i}:0,0" for i in range(13)],
+        "floor:0,0",
+        ["--only:0,0"],
+        ["-x:0,0"],
+        ["BAD SITE:0,0"],
+        ["floor:0.9,0.0"],
+        ["floor:nan,0.0"],
+        ["floor:inf,0.0"],
+        ["floor:0.1"],
+    ):
+        with pytest.raises(ValueError):
+            api.build_argv(api.JOBS["calibrate_check"], {"config": "cell-s.json", "targets": bad}, wd)
+
+    # a bad list is refused before any process starts; a good one starts
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    runner = api.Runner(wd, lock_dir=wd)
+    refused = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:nan,0.0"]})
+    assert refused["code"] == 400 and "targets" in refused["error"]
+    popen.assert_not_called()
+    started = runner.start("calibrate_check", {"config": "cell-s.json", "targets": ["floor:-0.06,0.15"]})
+    assert started["code"] == 202
+    popen.assert_called_once()
+
+
+def test_runner_records_the_release_for_an_s_policy_dry_run(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    runner = api.Runner(wd, lock_dir=wd)
+    dry = runner.start(
+        "cell_policy_drive",
+        {
+            "arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json",
+            "policy_root": "~/rosy-models/pinky_v1", "policy_revision": "a" * 64,
+            "model_calibration": "model.json", "cell_calibration": "cell.json",
+            "max_chunks": 3, "operator": "op_b", "proposer": "op_a",
+            "dry_run": True, "person_at_switch": True,
+        },
+    )
+    assert dry["code"] == 202
+    assert runner.runs[dry["id"]]["omx_tools_tree"] == (Path.home() / ".local/share/rosy/omx-devices/current").resolve().name
+
+
+def test_runner_keeps_the_workdir_tree_for_a_short_argv(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    popen.return_value.poll.return_value = None
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: ["true"])
+    runner = api.Runner(wd, lock_dir=wd)
+    res = runner.start("calibrate_check", {"config": "cell-s.json"})
+    assert res["code"] == 202
+    assert runner.runs[res["id"]]["omx_tools_tree"] == "omx-tools-abc1234"
+
+
+def test_runner_answers_400_when_the_release_path_cannot_be_resolved(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+
+    def cannot_resolve(job, params, workdir):  # Path.resolve() raises RuntimeError on Python 3.12 for a symlink loop
+        raise RuntimeError("symlink loop")
+
+    monkeypatch.setattr(api, "build_argv", cannot_resolve)
+    res = api.Runner(wd, lock_dir=wd).start("cell_policy_drive", {"dry_run": True})
+    assert res["code"] == 400 and "symlink loop" in res["error"]
+    popen.assert_not_called()

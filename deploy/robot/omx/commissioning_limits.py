@@ -182,7 +182,36 @@ def unique_object(pairs):
     return result
 
 
+def state_root():
+    return Path.home() / ".local/state/rosy/session-baseline"
+
+
+def _refuse_pending(device, *, owner=None):
+    """Called with the serial port exclusive. Only the marker published by this commissioning run is ours."""
+    device = Path(device)
+    found_owner = False
+    for arm in ("arm_a", "arm_b"):
+        pending = state_root() / arm / "pending"
+        try:
+            marker = pending.stat()
+        except FileNotFoundError:
+            continue
+        bound = Path((pending / "device").read_text(encoding="utf-8"))
+        if bound.parent != Path("/dev/serial/by-id") or not bound.name:
+            raise ValueError(f"invalid baseline recovery device binding at {pending}")
+        if device == bound or (bound.exists() and device.samefile(bound)):
+            if owner is None or not os.path.samestat(owner, marker):
+                raise ValueError(f"review interrupted baseline restoration at {pending}")
+            found_owner = True
+    if owner is not None and not found_owner:
+        raise ValueError("supervised baseline reservation changed before commissioning")
+
+
 def main(argv=None):
+    return _commission(argv, read=read_motors)
+
+
+def _commission(argv, *, read, owner=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -214,7 +243,8 @@ def main(argv=None):
 
         try:
             with open_readonly_port(args.device) as port:
-                configure_limits(port, limits, record)
+                _refuse_pending(args.device, owner=owner)
+                configure_limits(port, limits, record, read=read)
         except Exception as error:
             failure = repr(error)
     report = dict(device=args.device, motion_admitted=False, demonstrations=0, error=failure,

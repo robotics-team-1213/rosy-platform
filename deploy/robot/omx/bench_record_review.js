@@ -1,6 +1,21 @@
 // Manual hold diagnosis/recovery panel and per-episode evaluation, playback, DO_NOT_TRAIN, and deletion.
 (function(){
 let autoRecoverInFlight=false, lastAutoRecoverSig='', lastAutoRecoverAt=0;
+const fleetSyncInFlight=new Set(), fleetSyncAt=new Map();
+
+async function syncFleetIncident(arm, manual){
+  if(fleetSyncInFlight.has(arm))return;
+  fleetSyncInFlight.add(arm);
+  fleetSyncAt.set(arm,Date.now());
+  try{
+    const result=await api('/api/recover/sync_incident',{arm});
+    if(manual||result.cleared)await pollStatus();
+  }catch(error){
+    if(manual)setReqError(error.message);
+  }finally{
+    fleetSyncInFlight.delete(arm);
+  }
+}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function collectHardwareReadiness(arm){
@@ -102,6 +117,7 @@ function renderManualHoldCard(st){
   const hint=$('mh-cause-hint');
   if(hint){
     if(mh?.runner_alive&&rec?.auto_recover?.eligible===false&&rec?.auto_recover?.reason){hint.textContent='자동 토크 해제 보류: '+rec.auto_recover.reason;hint.hidden=false;}
+    else if(rec?.incident_holds&&Object.keys(rec.incident_holds).length&&rec?.auto_recover?.eligible===false&&rec?.auto_recover?.reason){hint.textContent='자동 복구 보류: '+rec.auto_recover.reason;hint.hidden=false;}
     else if(mh?.worker_human_hold){hint.textContent='원인 추정: cell-task-worker 또는 워치독이 홈 이동 중 human-hold를 보냈습니다. 새 버전에서는 홈 이동 중 워커를 자동 일시정지합니다.';hint.hidden=false;}
     else if(mh?.detail){hint.textContent='세부 사유: '+mh.detail;hint.hidden=false;}
     else{hint.hidden=true;}
@@ -135,15 +151,15 @@ function renderManualHoldCard(st){
   }
   const qa=$('mh-quick-actions');
   if(qa){
-    qa.innerHTML='';
+    const qaOld=[...qa.children];qa.innerHTML='';
     const tgtArm=rec?.auto_recover?.arm||mh?.arm||st?.arm||(f&&f.arm&&f.arm.value!=='arm_ab'?f.arm.value:'arm_a');
     if(rec?.auto_recover?.eligible){
       const arBtn=document.createElement('button');arBtn.type='button';arBtn.id='mh-auto-recover-btn';arBtn.className='btn-primary btn-xs';
-      arBtn.textContent=autoRecoverInFlight?'안전 자동 복구 중...':'안전 자동 복구 실행';
+      arBtn.textContent=autoRecoverInFlight?'안전 자동 복구 중...':'안전 자동 복구 · 홈 복귀';
       arBtn.disabled=autoRecoverInFlight;
       arBtn.addEventListener('click',()=>runAutoRecover(false,tgtArm));
       qa.append(arBtn);
-      const arSig=JSON.stringify([mh?.arm||'',mh?.runner_pid||null,(rec.issues||[]).map(i=>i.kind),rec.dead_lease_arms||[],rec.pending_units||[],Boolean(rec.baseline_needed)]);
+      const arSig=JSON.stringify([mh?.arm||'',mh?.runner_pid||null,Object.keys(rec.incident_holds||{}).sort(),(rec.issues||[]).map(i=>i.kind),rec.dead_lease_arms||[],rec.pending_units||[],Boolean(rec.baseline_needed)]);
       const nowMs=Date.now();
       if(!autoRecoverInFlight&&!(typeof benchSessionActive==='function'&&benchSessionActive())&&arSig!==lastAutoRecoverSig&&nowMs-lastAutoRecoverAt>=30000){
         lastAutoRecoverSig=arSig;lastAutoRecoverAt=nowMs;
@@ -162,8 +178,19 @@ function renderManualHoldCard(st){
     }
     if(rec?.incident_holds){
       for(const incArm of Object.keys(rec.incident_holds)){
+        if(rec.fleet_clear_available){
+          const link=document.createElement('a');
+          link.className='btn-tool btn-xs';link.textContent=incArm+' Fleet 사고 해제 ↗';
+          link.href='/api/recover/fleet_clear?arm='+encodeURIComponent(incArm);
+          link.target='_blank';link.rel='noopener noreferrer';
+          qa.append(link);
+        }
         const sBtn=document.createElement('button');sBtn.type='button';sBtn.className='btn-tool btn-xs';sBtn.textContent=incArm+' Fleet 보류 동기화';
-        sBtn.addEventListener('click',async()=>{sBtn.disabled=true;setReqError('');try{const r=await api('/api/recover/sync_incident',{arm:incArm});if(r.status)renderStatus(r.status);else await pollStatus();}catch(e){setReqError(e.message);}finally{sBtn.disabled=false;}});
+        sBtn.disabled=fleetSyncInFlight.has(incArm);
+        sBtn.addEventListener('click',async()=>{sBtn.disabled=true;setReqError('');try{await syncFleetIncident(incArm,true);}finally{sBtn.disabled=false;}});
+        const canSync=rec.fleet_clear_available&&(st.status==='idle'||ENDED.has(st.status)&&st.status!=='leader_manual_check')
+          &&!benchSessionActive(st)&&!mh&&!locks.length&&!rec.pending_units?.length;
+        if(canSync&&Date.now()-(fleetSyncAt.get(incArm)||0)>=15000)void syncFleetIncident(incArm,false);
         qa.append(sBtn);
       }
       const alt=['arm_a','arm_b','arm_s'].find(a=>!rec.incident_holds[a]);
@@ -195,30 +222,41 @@ function renderManualHoldCard(st){
         qa.append(swBtn);
       }
     }
+    const qaSig=tgtArm+'|'+qa.innerHTML;// same buttons: keep the old nodes so keyboard focus survives the poll
+    if(qaSig===qa.dataset.sig)qa.replaceChildren(...qaOld);else qa.dataset.sig=qaSig;
   }
 }
 async function runAutoRecover(isAuto,arm){
   if(autoRecoverInFlight||(typeof benchSessionActive==='function'&&benchSessionActive()))return;
   autoRecoverInFlight=true;setReqError('');
   if($('mh-auto-recover-btn')){$('mh-auto-recover-btn').disabled=true;$('mh-auto-recover-btn').textContent='안전 자동 복구 중...';}
-  if(typeof setActivity==='function')setActivity(isAuto?'안전 접힘 확인 · 자동 복구 중...':'안전 자동 복구 실행 중...','live',arm||'');
+  if(typeof setActivity==='function')setActivity(isAuto?'안전 접힘 확인 · 자동 복구 중...':'안전 자동 복구 · 홈 복귀 중...','live',arm||'');
   try{
-    const res=await api('/api/recover/auto',arm?{arm}:{});
-    const steps=Array.isArray(res?.steps)?res.steps.join(' → '):'완료';
-    if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good','안전 자동 복구 완료 ('+steps+')');
-    if(typeof setNotice==='function')setNotice('pose-feedback','good','안전 자동 복구 완료: '+steps,{ttlMs:6000});
-    if(typeof setActivity==='function')setActivity('안전 자동 복구 완료','good',steps);
+    const payload=Object.assign({},arm?{arm}:{},isAuto?{return_home:false}:{return_home:true,include_leader:true});
+    const res=await api('/api/recover/auto',payload);
     if(res&&res.status)renderStatus(res.status);else await pollStatus();
     if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
+    if(res&&res.home_failed){
+      const guide='복구는 완료되었으나 홈 복귀 실패: '+(res.home_error||'')+(res.next_action?(' → 다음 조치: '+res.next_action):'');
+      if($('mh-cause-hint')){$('mh-cause-hint').textContent=guide;$('mh-cause-hint').hidden=false;}
+      if(typeof setNotice==='function')setNotice('pose-feedback','warn',guide,{persistent:true});
+      if(typeof window.pushBenchLog==='function')window.pushBenchLog('pose','warn',guide);
+      if(typeof setActivity==='function')setActivity('홈 복귀 실패 — 조치 필요','warn',res.next_action||res.home_error||'');
+    }else{
+      const steps=Array.isArray(res?.steps)?res.steps.join(' → '):'완료';
+      if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good','안전 자동 복구 완료 ('+steps+')');
+      if(typeof setNotice==='function')setNotice('pose-feedback','good','안전 자동 복구 완료: '+steps,{ttlMs:6000});
+      if(typeof setActivity==='function')setActivity('안전 자동 복구 완료','good',steps);
+    }
   }catch(e){
     const msg=e.message||String(e);
-    setReqError('자동 복구 보류: '+msg);
+    if(typeof setNotice==='function')setNotice('pose-feedback','warn','자동 복구 보류: '+msg,{persistent:true});
     if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','warn','자동 복구 보류: '+msg);
     if(typeof setActivity==='function')setActivity('자동 복구 보류','warn',msg);
     await pollStatus();
   }finally{
     autoRecoverInFlight=false;
-    if($('mh-auto-recover-btn')){$('mh-auto-recover-btn').disabled=false;$('mh-auto-recover-btn').textContent='안전 자동 복구 실행';}
+    if($('mh-auto-recover-btn')){$('mh-auto-recover-btn').disabled=false;$('mh-auto-recover-btn').textContent='안전 자동 복구 · 홈 복귀';}
   }
 }
 window.runAutoRecover=runAutoRecover;
@@ -243,19 +281,32 @@ if($('mh-support-check')&&$('mh-release-btn')){
   });
 }
 if($('mh-clear-btn')&&$('mh-clear-confirm')){
-  $('mh-clear-btn').addEventListener('click',()=>{$('mh-clear-confirm').hidden=false;});
-  $('mh-clear-no')?.addEventListener('click',()=>{$('mh-clear-confirm').hidden=true;});
-  $('mh-clear-yes')?.addEventListener('click',async()=>{
+  const runManualClear=async(returnHome)=>{
     $('mh-clear-confirm').hidden=true;setReqError('');
     try{
       const forceDead=Boolean($('mh-dead-lease-check')?.checked);
-      const st=await api('/api/manual_hold/clear',{confirmed:true,force_dead_lease:forceDead});
+      const mhArm=lastStatus?.manual_hold?.arm||(typeof f!=='undefined'&&f?.arm&&f.arm.value!=='arm_ab'?f.arm.value:'');
+      const payload=returnHome?{confirmed:true,force_dead_lease:forceDead,return_home:true,include_leader:true,arm:mhArm}:{confirmed:true,force_dead_lease:forceDead,return_home:false};
+      const st=await api('/api/manual_hold/clear',payload);
       if($('mh-dead-lease-check'))$('mh-dead-lease-check').checked=false;
-      if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good','수동 확인 보류 해제 및 대기 복귀 완료');
       renderStatus(st);
       if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
+      if(st&&st.home_failed){
+        const guide='보류 해제는 완료되었으나 홈 복귀 실패: '+(st.home_error||'')+(st.next_action?(' → 다음 조치: '+st.next_action):'');
+        if($('mh-cause-hint')){$('mh-cause-hint').textContent=guide;$('mh-cause-hint').hidden=false;}
+        if(typeof setNotice==='function')setNotice('pose-feedback','warn',guide,{persistent:true});
+        if(typeof window.pushBenchLog==='function')window.pushBenchLog('pose','warn',guide);
+      }else{
+        const okMsg=returnHome?'보류 해제 및 홈 복귀 완료':'수동 확인 보류 해제 및 대기 복귀 완료';
+        if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',okMsg);
+        if(typeof setNotice==='function')setNotice('pose-feedback','good',okMsg,{ttlMs:6000});
+      }
     }catch(e){setReqError(e.message||String(e));await pollStatus();}
-  });
+  };
+  $('mh-clear-btn').addEventListener('click',()=>{$('mh-clear-confirm').hidden=false;});
+  $('mh-clear-no')?.addEventListener('click',()=>{$('mh-clear-confirm').hidden=true;});
+  $('mh-clear-yes')?.addEventListener('click',()=>runManualClear(true));
+  $('mh-clear-only-yes')?.addEventListener('click',()=>runManualClear(false));
 }
 $('mh-log-btn')?.addEventListener('click',()=>{$('sec-live-log')?.scrollIntoView({block:'nearest'});});
 

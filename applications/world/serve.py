@@ -1,0 +1,594 @@
+"""Serve a built ROSY World application, live observations, and SSE factory stream."""
+
+import argparse
+from functools import partial
+import hmac
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
+import json
+import os
+from pathlib import Path
+import posixpath
+import socket
+import sys
+import threading
+import time
+from urllib.parse import parse_qs, unquote, urlsplit
+
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+from world_state import (  # noqa: E402
+    ACTIVE_SITE_MAP_FILE,
+    ACTIVE_SITE_MAP_FRESH_MS,
+    ACTIVE_SITE_MAP_PATH,
+    ADAPTER_LABELS,
+    BACKENDS,
+    CANONICAL_FLEET_ROBOTS,
+    LIVE_FRESH_MS,
+    MAX_ACTIVE_SITE_MAP_BYTES,
+    SHA256_RE,
+    WORLD_ID_RE,
+    _atomic_write_json,
+    _canonical_reference,
+    _clamp,
+    _lerp_arms,
+    _lerp_pinkys,
+    _lerp_vec,
+    _lerp_yaw,
+    _live_state,
+    _live_stream_mode,
+    _read_fresh_json,
+    _read_json_strict,
+    _reject_constant,
+    _safe_world_path,
+    active_site_map_snapshot,
+    discover_worlds,
+    sample_timeline,
+    verify_world_parity,
+)
+
+DEFAULT_PORT = 8140
+MAX_INGEST_BYTES = 262_144
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
+LIVE_PATHS = {
+    ACTIVE_SITE_MAP_PATH,
+    "/data/pinky-sim.json", "/data/pinky-camera.jpg", "/data/isaac-live.json",
+    "/data/mujoco-top.jpg", "/data/field-live.jpg", "/data/isaac-view.json",
+    "/data/factory-live.json",
+}
+# SIM observation files the browser polls; the server adds age_ms/fresh_for_ms on its own clock.
+SIM_OBSERVATION_PATHS = frozenset({"/data/isaac-live.json", "/data/pinky-sim.json"})
+
+
+def _data_path(data_dir: Path, relative: str) -> Path:
+    path = (data_dir / relative).resolve()
+    if not path.is_relative_to(data_dir):
+        raise ValueError("path escapes the World data directory")
+    return path
+
+
+class _MountedBundle:
+    """Map the state reader's two bundle paths onto the mounted data layout."""
+
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+
+    def __truediv__(self, name: str) -> Path:
+        if name == "data":
+            return self.data_dir
+        if name != "manifest.json":
+            raise ValueError(f"unknown World bundle path: {name}")
+        manifest = _data_path(self.data_dir, name)
+        # The standalone bundle builder writes its manifest beside data/.
+        if (not manifest.exists() and self.data_dir.name == "data"
+                and (self.data_dir.parent / "SHA256SUMS.txt").is_file()):
+            return _data_path(self.data_dir.parent, name)
+        return manifest
+
+
+class WorldHandler(SimpleHTTPRequestHandler):
+    extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            self.close_connection = True
+
+    def json_reply(self, status, value):
+        data = json.dumps(value, allow_nan=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        return BytesIO(data)
+
+    def _worlds_dir(self) -> Path:
+        return getattr(self.server, "worlds_dir", Path(self.directory) / "data" / "worlds")
+
+    def _bundle(self) -> Path | _MountedBundle:
+        return getattr(self.server, "mounted_bundle", None) or Path(self.directory)
+
+    def translate_path(self, path):
+        bundle = getattr(self.server, "mounted_bundle", None)
+        if bundle is not None:
+            decoded = unquote(urlsplit(path).path)
+            normalized = posixpath.normpath(decoded).lstrip("/")
+            if normalized == "manifest.json":
+                return str(bundle / "manifest.json")
+            if normalized == "data" or normalized.startswith("data/"):
+                data_path = _data_path(bundle.data_dir, normalized[5:])
+                if data_path.is_dir():
+                    raise ValueError("directories cannot be served from World data")
+                return str(data_path)
+        return super().translate_path(path)
+
+    def _authorize_ingest(self) -> tuple[bool, int, str]:
+        token = getattr(self.server, "ingest_token", None)
+        if token:
+            header = self.headers.get("Authorization") or ""
+            scheme, _, supplied = header.partition(" ")
+            if scheme.lower() != "bearer" or not supplied:
+                return False, 401, "missing ingest bearer token"
+            if not hmac.compare_digest(supplied.strip(), token):
+                return False, 403, "invalid ingest bearer token"
+            return True, 200, ""
+        client_ip = (self.client_address[0] if self.client_address else "")
+        if client_ip in LOOPBACK_HOSTS:
+            return True, 200, ""
+        return False, 403, "remote ingest requires ROSY_WORLD_INGEST_TOKEN"
+
+    def _parse_world_ingest_id(self) -> str | None:
+        path = urlsplit(self.path).path
+        if not path.startswith("/api/worlds/"):
+            return None
+        return path.removeprefix("/api/worlds/")
+
+    def send_head(self):
+        parts = urlsplit(self.path)
+        if parts.path == ACTIVE_SITE_MAP_PATH:
+            if self.client_address[0] not in LOOPBACK_HOSTS and not self.server.trusted_map_proxy:
+                return self.json_reply(403, {"error": "active site map requires authenticated proxy access"})
+            site_map = _read_json_strict(self._worlds_dir() / ACTIVE_SITE_MAP_FILE)
+            observed_at = site_map.get("observed_at_ms") if site_map else None
+            now_ms = time.time_ns() // 1_000_000
+            fresh_for_ms = (
+                ACTIVE_SITE_MAP_FRESH_MS - abs(now_ms - observed_at) if type(observed_at) is int else 0
+            )
+            if fresh_for_ms <= 0:
+                return self.json_reply(200, {"site_map": None})
+            return self.json_reply(200, {"site_map": site_map, "fresh_for_ms": fresh_for_ms})
+        if posixpath.basename(posixpath.normpath(unquote(parts.path))).casefold() == ACTIVE_SITE_MAP_FILE:
+            self.send_error(404)
+            return None
+        if parts.path == "/api/mdns":
+            port = self.server.server_port
+            mdns_host = getattr(self.server, "mdns_host", None)
+            fleet_host = getattr(self.server, "fleet_mdns_host", None)
+            return self.json_reply(200, {
+                "schema": "rosy.world.mdns.v1",
+                "service_type": "_rosy-world._tcp",
+                "hostname": mdns_host,
+                "port": port,
+                "fleet_mdns_host": fleet_host,
+                "worlds_api": "/api/worlds",
+            })
+        if parts.path == "/api/worlds":
+            query = parse_qs(parts.query)
+            adapter_filter = (query.get("adapter") or [None])[0]
+            if adapter_filter and adapter_filter not in ("all", *BACKENDS):
+                return self.json_reply(400, {"error": f"invalid adapter: {adapter_filter}"})
+            now_ms = time.time_ns() // 1_000_000
+            return self.json_reply(
+                200, discover_worlds(self._bundle(), now_ms, adapter_filter, worlds_dir=self._worlds_dir()),
+            )
+        if self.path == "/sim/control":
+            controller = getattr(self.server, "sim_control", None)
+            if controller is not None:
+                return self.json_reply(200, controller.status())
+            self.send_error(404)
+            return None
+        if parts.path in SIM_OBSERVATION_PATHS:
+            sample = _read_json_strict(self._bundle() / "data" / posixpath.basename(parts.path))
+            if sample is None:
+                self.send_error(404)
+                return None
+            observed_at = sample.get("observed_at_ms")
+            if type(observed_at) is int:
+                age_ms = time.time_ns() // 1_000_000 - observed_at
+                sample = {**sample, "age_ms": age_ms, "fresh_for_ms": max(0, LIVE_FRESH_MS - abs(age_ms))}
+            return self.json_reply(200, sample)
+        if parts.path == "/healthz":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(self.server.health)))
+            self.end_headers()
+            return BytesIO(self.server.health)
+        if getattr(self.server, "mounted_bundle", None) is not None:
+            decoded = unquote(parts.path)
+            if ".." in decoded.split("/") or "\\" in decoded or "\0" in decoded:
+                self.send_error(404)
+                return None
+            try:
+                return super().send_head()
+            except (ValueError, RuntimeError):
+                self.send_error(404)
+                return None
+        return super().send_head()
+
+    def do_GET(self):
+        parts = urlsplit(self.path)
+        if parts.path == "/sim/stream":
+            return self._stream_factory(parse_qs(parts.query))
+        return super().do_GET()
+
+    def _stream_factory(self, query: dict[str, list[str]]) -> None:
+        mode = (query.get("mode") or ["auto"])[0]
+        if mode not in ("auto", "live", "timeline"):
+            mode = "auto"
+        world_id = (query.get("world") or [None])[0]
+        adapter = (query.get("adapter") or [None])[0]
+        if adapter and adapter not in ("all", *BACKENDS):
+            with self.json_reply(400, {"error": f"invalid adapter: {adapter}"}) as reply:
+                self.copyfile(reply, self.wfile)
+            return
+
+        bundle_dir = self._bundle()
+        data_dir = bundle_dir / "data"
+        worlds_dir = self._worlds_dir()
+        canonical = _canonical_reference(bundle_dir)
+        world_file: Path | None = None
+        if world_id is not None:
+            if world_id not in ("verified-replay", "real-site"):
+                world_file = _safe_world_path(worlds_dir, world_id)
+                if world_file is None:
+                    with self.json_reply(400, {"error": "invalid world id"}) as reply:
+                        self.copyfile(reply, self.wfile)
+                    return
+                if not world_file.is_file():
+                    with self.json_reply(404, {"error": f"unknown world: {world_id}"}) as reply:
+                        self.copyfile(reply, self.wfile)
+                    return
+
+        speed = _clamp(query.get("speed"), 1.0, 0.25, 8.0)
+        real = world_id == "real-site" or adapter == "real"
+        hz = _clamp(query.get("hz"), 5.0 if real else 25.0, 5.0, 30.0)
+        start_s = _clamp(query.get("start_s"), 0.0, 0.0, 3600.0)
+        max_events = None
+        if "max_events" in query:
+            try:
+                max_events = max(1, int(query["max_events"][0]))
+            except ValueError:
+                max_events = 1
+
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close" if max_events is not None else "keep-alive")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        timeline_path = data_dir / "factory-timeline.json"
+        cached_timeline: tuple[int, dict] | None = None
+        started = time.monotonic()
+        stop_event = getattr(self.server, "stop_event", None)
+        sent = 0
+        period = 1.0 / hz
+        try:
+            while max_events is None or sent < max_events:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                now_ms = time.time_ns() // 1_000_000
+                payload = None
+                event_name = "state"
+
+                if real:
+                    # Anti-faking guardrail: real mode never falls back to simulation replay.
+                    if world_id:
+                        candidates = [world_file or (worlds_dir / "real-site.json")]
+                    else:
+                        candidates = sorted(worlds_dir.glob("*.json"))
+                    live_real = None
+                    for path in candidates:
+                        cand = _read_fresh_json(path, now_ms)
+                        if (cand and cand.get("adapter") == "real"
+                                and cand.get("stream_mode") in (None, "live")):
+                            live_real = cand
+                            break
+                    if live_real is not None:
+                        payload = {**live_real, "stream_mode": "live", "adapter": "real", "parity": verify_world_parity(canonical, live_real)}
+                    else:
+                        event_name = "idle"
+                        payload = {
+                            "schema": "rosy.world.factory-state.v1",
+                            "stream_mode": "waiting",
+                            "state": "waiting",
+                            "adapter": "real",
+                            "world_id": world_id or "real-site",
+                            "reason": "실물 현장 미연결",
+                            "observed_at_ms": now_ms,
+                        }
+                elif world_file is not None:
+                    snap = _read_fresh_json(world_file, now_ms)
+                    if snap is not None:
+                        snap_adapter = str(snap.get("adapter") or snap.get("simulator") or "mujoco")
+                        payload = {
+                            **snap,
+                            "world_id": world_id,
+                            "adapter": snap_adapter,
+                            "stream_mode": _live_stream_mode(snap),
+                            "parity": verify_world_parity(canonical, snap),
+                        }
+                    else:
+                        event_name = "idle"
+                        payload = {
+                            "schema": "rosy.world.factory-state.v1",
+                            "stream_mode": "waiting",
+                            "state": "stalled",
+                            "world_id": world_id,
+                            "reason": "시뮬레이션 갱신 중단",
+                            "observed_at_ms": now_ms,
+                        }
+                else:
+                    if world_id != "verified-replay" and mode in ("auto", "live"):
+                        payload = _live_state(data_dir, now_ms)
+                    if payload is None and mode in ("auto", "timeline") and timeline_path.is_file():
+                        try:
+                            mtime = timeline_path.stat().st_mtime_ns
+                            if cached_timeline is None or cached_timeline[0] != mtime:
+                                cached_timeline = (mtime, json.loads(timeline_path.read_bytes()))
+                            payload = sample_timeline(cached_timeline[1], start_s + (time.monotonic() - started) * speed)
+                            payload["parity"] = verify_world_parity(canonical, payload)
+                        except (OSError, ValueError, KeyError):
+                            payload = None
+                    if payload is None:
+                        event_name = "idle"
+                        payload = {"schema": "rosy.world.factory-state.v1", "state": "waiting", "observed_at_ms": now_ms}
+
+                chunk = f"event: {event_name}\ndata: {json.dumps(payload, allow_nan=False)}\n\n".encode("utf-8")
+                self.wfile.write(chunk)
+                self.wfile.flush()
+                sent += 1
+                if max_events is not None and sent >= max_events:
+                    break
+                wait_s = 1.0 if event_name == "idle" else period
+                if stop_event is not None and stop_event.wait(wait_s):
+                    break
+                if stop_event is None:
+                    time.sleep(wait_s)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            return
+
+    def end_headers(self):
+        path = urlsplit(self.path).path
+        if (
+            path in LIVE_PATHS
+            or path in ("/", "/healthz", "/api/mdns", "/api/worlds", "/sim/control", "/sim/stream")
+            or path.endswith((".html", ".js", ".css", ".json", ".webmanifest"))
+        ):
+            self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
+
+    def list_directory(self, path):
+        self.send_error(404)
+        return None
+
+    def _reply_json(self, status: int, value: dict) -> None:
+        with self.json_reply(status, value) as reply:
+            self.copyfile(reply, self.wfile)
+
+    def _read_ingest_json(self, max_bytes: int = MAX_INGEST_BYTES) -> dict | None:
+        allowed, auth_status, auth_err = self._authorize_ingest()
+        if not allowed:
+            return self._reply_json(auth_status, {"error": auth_err})
+        if self.headers.get_content_type() != "application/json":
+            return self._reply_json(400, {"error": "expected application/json"})
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self._reply_json(400, {"error": "invalid Content-Length"})
+        if size <= 0:
+            return self._reply_json(400, {"error": "empty JSON body"})
+        if size > max_bytes:
+            return self._reply_json(413, {"error": f"payload exceeds {max_bytes} bytes"})
+        try:
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(size).decode("utf-8"), parse_constant=_reject_constant)
+        except (ValueError, UnicodeDecodeError, OSError) as error:
+            return self._reply_json(400, {"error": str(error)})
+        if not isinstance(body, dict):
+            return self._reply_json(400, {"error": "expected a JSON object"})
+        return body
+
+    def _ingest_active_site_map(self) -> None:
+        body = self._read_ingest_json(MAX_ACTIVE_SITE_MAP_BYTES)
+        if body is None:
+            return
+        snapshot = active_site_map_snapshot(body, body.get("observed_at_ms"))
+        if snapshot is None:
+            return self._reply_json(400, {"error": "invalid active site map snapshot"})
+        _atomic_write_json(self._worlds_dir() / ACTIVE_SITE_MAP_FILE, snapshot)
+        return self._reply_json(200, {"ok": True})
+
+    def _ingest_world(self, raw_id: str) -> None:
+        body = self._read_ingest_json()
+        if body is None:
+            return
+        if raw_id == "verified-replay":
+            return self._reply_json(400, {"error": "verified-replay cannot be overwritten"})
+        target = _safe_world_path(self._worlds_dir(), raw_id)
+        if target is None:
+            return self._reply_json(400, {"error": "invalid world id"})
+        if body.get("schema") != "rosy.world.factory-state.v1":
+            return self._reply_json(400, {"error": "expected rosy.world.factory-state.v1 object"})
+        adapter = str(
+            body.get("adapter")
+            or (body.get("env") or {}).get("backend")
+            or body.get("simulator")
+            or ""
+        )
+        if adapter not in BACKENDS:
+            return self._reply_json(400, {"error": f"unsupported adapter: {adapter!r}"})
+        if adapter == "real" or raw_id == "real-site":
+            if body.get("stream_mode") not in (None, "live"):
+                return self._reply_json(403, {"error": "real world rejects non-live stream_mode"})
+            adapter = "real"
+            body["stream_mode"] = "live"
+        body["world_id"] = raw_id
+        body["adapter"] = adapter
+        body.setdefault("observed_at_ms", time.time_ns() // 1_000_000)
+        canonical = _canonical_reference(self._bundle())
+        parity = verify_world_parity(canonical, body)
+        _atomic_write_json(target, body)
+        return self._reply_json(200, {"ok": True, "world_id": raw_id, "adapter": adapter, "parity": parity})
+
+    def do_POST(self):
+        if urlsplit(self.path).path == ACTIVE_SITE_MAP_PATH:
+            return self._ingest_active_site_map()
+        raw_id = self._parse_world_ingest_id()
+        if raw_id is not None:
+            return self._ingest_world(raw_id)
+        controller = getattr(self.server, "sim_control", None)
+        origin = f"http://127.0.0.1:{self.server.server_port}"
+        if controller is None or self.path != "/sim/control":
+            self.send_error(404)
+            return
+        if self.headers.get("Origin") != origin or self.headers.get("Host") != origin.removeprefix("http://"):
+            self.send_error(403)
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size <= 512 or self.headers.get_content_type() != "application/json":
+                raise ValueError("expected a small JSON control message")
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(size))
+            if not isinstance(body, dict):
+                raise ValueError("expected a control object")
+            if body.get("adapter") == "real" or body.get("world_id") == "real-site":
+                status, value = 403, {"error": "real hardware control forbidden"}
+            else:
+                status, value = controller.command(body)
+        except (ValueError, OSError) as error:
+            status, value = 400, {"error": str(error)}
+        self._reply_json(status, value)
+
+    def do_DELETE(self):
+        raw_id = self._parse_world_ingest_id()
+        if raw_id is None:
+            self.send_error(404)
+            return
+        allowed, auth_status, auth_err = self._authorize_ingest()
+        if not allowed:
+            return self._reply_json(auth_status, {"error": auth_err})
+        if raw_id == "verified-replay":
+            return self._reply_json(400, {"error": "verified-replay cannot be deleted"})
+        target = _safe_world_path(self._worlds_dir(), raw_id)
+        if target is None:
+            return self._reply_json(400, {"error": "invalid world id"})
+        existed = target.is_file()
+        target.unlink(missing_ok=True)
+        return self._reply_json(200, {"ok": True, "world_id": raw_id, "deleted": existed})
+
+    def log_message(self, fmt, *args):
+        if len(args) >= 2 and str(args[1]) == "200":
+            path = urlsplit(getattr(self, "path", "")).path
+            if (self.command == "GET" and path == "/healthz") or (
+                self.command == "POST" and path.startswith("/api/worlds/")
+            ):
+                return
+        if sys.stderr is not None:
+            super().log_message(fmt, *args)
+
+
+class WorldHTTPServer(ThreadingHTTPServer):
+    """HTTP/SSE server sized for concurrent static asset + EventSource loads on Windows and Linux."""
+
+    request_queue_size = 128
+    allow_reuse_address = True
+
+
+def make_server(
+    root: Path,
+    host: str = "127.0.0.1",
+    port: int = DEFAULT_PORT,
+    *,
+    data_dir: Path | None = None,
+    worlds_dir: Path | None = None,
+    ingest_token: str | None = None,
+    trusted_map_proxy: bool = False,
+    mdns_host: str | None = None,
+    fleet_mdns_host: str | None = None,
+) -> ThreadingHTTPServer:
+    bundle = _MountedBundle(data_dir.resolve()) if data_dir is not None else None
+    handler = partial(WorldHandler, directory=str(root))
+    server = WorldHTTPServer((host, port), handler)
+    server.daemon_threads = True
+    server.stop_event = threading.Event()
+    server.mounted_bundle = bundle
+    server.worlds_dir = (worlds_dir if worlds_dir is not None else ((bundle or root) / "data" / "worlds")).resolve()
+    resolved_token = ingest_token if ingest_token is not None else os.environ.get("ROSY_WORLD_INGEST_TOKEN", "")
+    server.ingest_token = resolved_token.strip() or None
+    server.trusted_map_proxy = trusted_map_proxy
+    default_mdns = f"{socket.gethostname().split('.')[0].lower()}.local"
+    resolved_mdns = (mdns_host if mdns_host is not None else os.environ.get("ROSY_WORLD_MDNS_HOST", "")).strip()
+    server.mdns_host = resolved_mdns or default_mdns
+    resolved_fleet = (fleet_mdns_host if fleet_mdns_host is not None else os.environ.get("ROSY_FLEET_MDNS_HOST", "")).strip()
+    server.fleet_mdns_host = resolved_fleet or None
+    server.health = b'{"application":"rosy-world","status":"ready"}\n'
+    return server
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--bundle", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--data-dir", type=Path, help="read data from this directory instead of <bundle>/data")
+    parser.add_argument("--worlds-dir", type=Path, default=None, help="writable directory for live world JSON snapshots")
+    parser.add_argument("--ingest-token-env", default="ROSY_WORLD_INGEST_TOKEN", help="env var holding bearer token for remote POST/DELETE /api/worlds/<id>")
+    parser.add_argument("--trusted-map-proxy", action="store_true",
+                        help="serve the active map behind a session-authenticating proxy on a private network")
+    parser.add_argument("--mdns-host", default=None, help="advertised .local hostname (or $ROSY_WORLD_MDNS_HOST)")
+    parser.add_argument("--fleet-mdns-host", default=None, help="paired Fleet .local hostname (or $ROSY_FLEET_MDNS_HOST)")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    args = parser.parse_args()
+    root = args.bundle.resolve()
+    env_worlds = os.environ.get("ROSY_WORLD_WORLDS_DIR", "").strip()
+    worlds_dir = args.worlds_dir if args.worlds_dir is not None else (Path(env_worlds) if env_worlds else None)
+    ingest_token = os.environ.get(args.ingest_token_env, "").strip() or None
+    try:
+        bundle = _MountedBundle(args.data_dir.resolve()) if args.data_dir is not None else root
+        required_web = ("index.html", "app.js") if args.data_dir is not None else ("index.html", "app.js", "SHA256SUMS.txt")
+        for name in required_web:
+            if not (root / name).is_file():
+                raise ValueError(f"incomplete bundle: {name} is missing")
+        manifest = json.loads((bundle / "manifest.json").read_bytes())
+        if not isinstance(manifest.get("inputs"), dict):
+            raise ValueError("invalid ROSY World manifest")
+        with make_server(
+            root,
+            args.host,
+            args.port,
+            data_dir=args.data_dir,
+            worlds_dir=worlds_dir,
+            ingest_token=ingest_token,
+            trusted_map_proxy=args.trusted_map_proxy,
+            mdns_host=args.mdns_host,
+            fleet_mdns_host=args.fleet_mdns_host,
+        ) as server:
+            try:
+                server.serve_forever()
+            finally:
+                server.stop_event.set()
+    except KeyboardInterrupt:
+        return
+    except (OSError, ValueError, AttributeError) as error:
+        parser.exit(1, f"rosy-world: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

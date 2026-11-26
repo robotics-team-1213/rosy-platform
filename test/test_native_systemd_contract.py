@@ -120,7 +120,9 @@ def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     for directive in (
         "ConditionPathExists=/etc/rosy/approvals/hardware.approved",
         "ConditionPathExists=/etc/rosy/approvals/navigation.approved",
-        "Conflicts=rosy-io.service", "DevicePolicy=closed",
+        "After=rosy-core.service rosy-io.service",
+        "Conflicts=rosy-io.service", "Restart=always", "StartLimitBurst=5",
+        "DevicePolicy=closed",
         "ros2 launch navigation hardware.launch.py",
         "cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S}",
     ):
@@ -424,6 +426,8 @@ DECLARED_WRITES = {
         "/var/lib/rosy/pilot-recordings",
         # D-789 T3: rosy_media_edge.camera_tap FrameWriter mailbox (and its .owner lock).
         "/run/rosy-media/front.rgb", "/run/rosy-media/front.rgb.owner",
+        # D-1065: 2-slot POSIX mmap front camera mailbox (and its .owner lock).
+        "/run/rosy-media/front.bgr", "/run/rosy-media/front.bgr.owner",
     },
     # D-789 T5: the optional media publisher writes nothing on disk (journal only).
     "rosy-media.service": set(),
@@ -1370,3 +1374,15 @@ def test_the_low_battery_halt_watches_the_file_core_really_writes():
     assert "[Install]" not in _read("rosy-lowbatt-shutdown.service")
     installer = _read("install-native-runtime.sh")
     assert 'cp "$SCRIPT_DIR/../rosy-lowbatt-shutdown.sh" "$DESTINATION/rosy-lowbatt-shutdown.sh"' in installer
+
+
+@pytest.mark.parametrize("unit_name", ("rosy-camera.service", "rosy-io.service", "rosy-navigation.service"))
+def test_pinky_units_enable_events_executor_before_runtime_env_override(unit_name):
+    raw = (NATIVE / unit_name).read_bytes()
+    assert b"\r" not in raw, f"{unit_name} must use LF line endings"
+    lines = raw.decode("utf-8").splitlines()
+    executor_idx = lines.index("Environment=ROSY_EXECUTOR=events")
+    env_file_idx = lines.index("EnvironmentFile=/etc/rosy/runtime.env")
+    assert executor_idx < env_file_idx, (
+        f"{unit_name} must set Environment=ROSY_EXECUTOR=events before /etc/rosy/runtime.env for rollback"
+    )

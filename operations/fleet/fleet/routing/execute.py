@@ -175,7 +175,8 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
 
 
 def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset, passed: set,
-               config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> tuple[Optional[dict], Optional[dict]]:
+               config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, *,
+               nav2_off_lane_margin_m: float = 0.0) -> tuple[Optional[dict], Optional[dict]]:
     """``(plan body, None)`` from ``start_pose`` on the active map, or ``(None, hold)`` saying why not."""
     to = request["to"]
     goal = to if isinstance(to, str) else (to["x"], to["y"], to.get("yaw"))
@@ -192,7 +193,8 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
             speed_cap=request.get("speed_cap"),
             blocked_edges=frozenset(blocked) | frozenset(request.get("blocked_edges") or ()),
             extra_cost=request.get("extra_cost") or {}, body_front_m=caps.get("body_front_m", FALLBACK_FRONT_M),
-            stop_offset=not (nav2 and bool(request.get("repeat")))), config)
+            stop_offset=not (nav2 and bool(request.get("repeat"))), ignore_start_heading=nav2,
+            nav2_off_lane_margin_m=nav2_off_lane_margin_m if nav2 else 0.0), config)
     except PlanError as exc:
         return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)
@@ -211,13 +213,15 @@ def route_key(segments: list) -> list:
 
 
 def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,
-                passed: set, map_version, config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> Optional[dict]:
+                passed: set, map_version, config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, *,
+                nav2_off_lane_margin_m: float = 0.0) -> Optional[dict]:
     """D-489 9: plan again from ``start_pose`` (just before the next place) on the active map.
 
     None when the route is unchanged (same map version); otherwise the hold to show the
     operator: a new plan to confirm, or ``plan: None`` with the reason it cannot go on.
     """
-    body, failed = plan_again(active, start_pose, request, caps, blocked, passed, config, max_turn_deg)
+    body, failed = plan_again(active, start_pose, request, caps, blocked, passed, config, max_turn_deg,
+                              nav2_off_lane_margin_m=nav2_off_lane_margin_m)
     if failed is not None:
         return failed
     if route_key(remaining) == route_key(body["segments"]) and body["map_version"] == map_version:

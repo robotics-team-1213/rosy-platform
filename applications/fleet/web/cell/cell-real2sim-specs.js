@@ -1,5 +1,8 @@
 // Real-to-Sim pipeline paths, table row builders and card/inspector specs (split from cell-real2sim.js).
 import { evidenceAgeText } from "/common/core_ui_logic.js";
+import { fieldStatus, refusalText } from "./cell-readiness-model.js";
+
+export { refusalText };
 
 export const REAL2SIM_PATH = '/api/fleet/cell-app/real2sim-pipeline';
 export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
@@ -20,24 +23,11 @@ export const presenceConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComp
 // D-1057: a named operator's bed confirmation lasts pipeline_evidence.BED_CONFIRM_TTL_S on the server.
 export const BED_CONFIRM_TTL_S = 120;
 
-// D-1057 refusals of claim/complete, said as the evidence that was missing.
-const REFUSAL_TEXT = {
-  AMR_BRAKE_BED_VELOCITY_UNMEASURED: '핑키 정지·정차 위치·적재함 확인 중 측정되지 않은 것이 있습니다',
-  OMX_OWNER_EVIDENCE_UNAVAILABLE: '팔 셀이 보낸 완료 증거가 없습니다',
-  OMX_OWNER_EVIDENCE_MISMATCH: '완료 보고가 팔 셀이 보낸 증거와 다릅니다',
-  UNVERIFIED_CELL_COMPLETION: '카메라 위치 확인·홈 복귀·적재 층 중 확인되지 않은 것이 있습니다',
-  OWNER_PRINCIPAL_NOT_REGISTERED: '증거를 보낸 계정이 이 셀의 주인으로 등록되지 않았습니다',
-  HUMAN_HOLD_ACTIVE: '사람 감지로 멈춘 상태입니다',
-  CELL_BUSY_OR_HELD: '셀이 다른 작업 중이거나 보류 중입니다',
-  PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
-  CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
-  BED_CONFIRMATION_INVALID: '적재함 확인이 무효가 되었습니다 (핑키 이동 또는 지도 변경). 핑키가 멈춘 상태에서 적재함을 다시 확인하세요',
-  PRESENCE_CONFIRMATION_REQUIRED: 'ACT 정책 구동은 이름 있는 운영자의 입회 표시가 필요합니다 (D-911)',
-};
-
 // Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
 export function abortText(task) {
-  return task?.status === 'ABORTED' && task.receipt?.reason === 'REVIEW_REQUIRED'
+  if (task?.status !== 'ABORTED') return '';
+  if ([task.hardware_telemetry?.error, task.receipt?.reason].includes('PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE')) return 'ACT 실물 실행 차단 · 팔 제어기에 정책 실행 권한을 전달할 연결이 없습니다';
+  return task.receipt?.reason === 'REVIEW_REQUIRED'
     ? '검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다. 입회 표시를 하고 다시 실행하거나 운전 범위 검토를 등록하세요'
     : '';
 }
@@ -49,16 +39,6 @@ export function presenceUsedText(task) {
   const at = Number.isFinite(p.at) ? ` · ${new Date(p.at * 1000).toLocaleTimeString('ko-KR', {hour12: false})}` : '';
   return `시운전 입회: ${p.operator}${at}`;
 }
-// Field names of the server's AMR evidence (pipeline_evidence.amr_evidence), when a refusal lists the missing ones.
-const AMR_EVIDENCE_TEXT = {wheel_brake_locked: '정지', v_cmd_mps: '정지', pose: '정차 위치', bed_ready: '적재함 확인', observed_at: '측정 시각'};
-
-export function refusalText(refusal) {
-  if (!refusal?.code) return '';
-  const missing = [...new Set((Array.isArray(refusal.missing) ? refusal.missing : []).map(k => AMR_EVIDENCE_TEXT[k] || k))];
-  const text = missing.length ? `측정되지 않음: ${missing.join(', ')}` : REFUSAL_TEXT[refusal.code] || `사유 확인 필요 (${refusal.code})`;
-  return `${refusal.op === 'complete' ? '완료 거부' : '시작 거부'} · ${text}`;
-}
-
 // A row's operator confirmation (GET /cell-tasks) as a state and plain words; age_s is server time, so no clock skew.
 function confirmState(rec, name, voidedWhy, nowMs) {
   if (!rec) return {state: 'none', text: ''};
@@ -244,14 +224,17 @@ export function visualCardSpecs(body = {}) {
     const matches = tasks.filter(t => t.cell_id === cellId);
     return matches.length ? matches[matches.length - 1] : null;
   };
-  const decisions = body?.decisions || {};
+  const decisions = body?.decisions;
+  const lastDecision = subjectId => Array.isArray(decisions)
+    ? [...decisions].reverse().find(d => d?.subject_id === subjectId) || null
+    : decisions?.[subjectId] || null;
   const formatTaskMeta = (task, subjectId) => {
-    const dec = decisions[subjectId] || task?.decision || null;
+    const dec = lastDecision(subjectId) || task?.decision || null;
     const decTxt = dec ? `Decision: ${dec.choice} (${dec.reason})` : '';
     if (!task) {
       return {
         last_task: '대기 중 (최근 태스크 없음)',
-        folded_state: ['folded: true (홈 대기)', decTxt].filter(Boolean).join(' · '),
+        folded_state: ['최근 작업의 관절 기록 없음', decTxt].filter(Boolean).join(' · '),
         task_id: null,
         status: null,
       };
@@ -275,10 +258,13 @@ export function visualCardSpecs(body = {}) {
   };
   const taskControlButtons = meta => {
     if (!meta?.task_id) return [];
-    if (meta.status === 'QUEUED' || meta.status === 'RUNNING' || meta.status === 'PAUSED_HUMAN') {
+    if (meta.status === 'QUEUED') {
       return [{label: '작업 취소', cancelTaskId: meta.task_id}];
     }
-    return [{label: '재실행', retryTaskId: meta.task_id}];
+    if (['COMPLETED', 'CANCELLED', 'ABORTED'].includes(meta.status)) {
+      return [{label: '재실행', retryTaskId: meta.task_id}];
+    }
+    return [];
   };
   // The claim takes a cell's first QUEUED task, so the bed confirmation goes to that one.
   const bedConfirmButtons = cellId => {
@@ -297,19 +283,15 @@ export function visualCardSpecs(body = {}) {
       {label: label(presence, '입회 표시'), presenceConfirmTaskId: t.task_id, robot_id: t.robot_id, presenceState: presence.state},
     ];
   };
-  const refusalFor = cellId => {
-    const t = [...tasks].reverse().find(x => x.cell_id === cellId && x.last_refusal && ['QUEUED', 'RUNNING'].includes(x.status));
-    return t ? refusalText(t.last_refusal) : '';
-  };
   const s3Gate = cells.cell_s?.gate || {};
   const s5Gate = cells.cell_ab?.gate || {};
   const s3Meta = formatTaskMeta(lastForCell('cell_s'), 'cell_s');
   const s5Meta = formatTaskMeta(lastForCell('cell_ab'), 'cell_ab');
-  s3Meta.folded_state = [s3Meta.folded_state, refusalFor('cell_s'), abortText(lastForCell('cell_s'))].filter(Boolean).join(' · ');
-  s5Meta.folded_state = [s5Meta.folded_state, refusalFor('cell_ab'), abortText(lastForCell('cell_ab'))].filter(Boolean).join(' · ');
+  s3Meta.folded_state = [s3Meta.folded_state, abortText(lastForCell('cell_s'))].filter(Boolean).join(' · ');
+  s5Meta.folded_state = [s5Meta.folded_state, abortText(lastForCell('cell_ab'))].filter(Boolean).join(' · ');
   const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
-  const pinkyId = lastPinky?.robot_id || 'rosy_46';
-  const pinkyDec = decisions[pinkyId] || lastPinky?.decision || null;
+  const pinkyId = body?.selected_robot_id || lastPinky?.robot_id || 'rosy_46';
+  const pinkyDec = lastDecision(pinkyId) || lastPinky?.decision || null;
   const hs = body?.human_safety || {};
   const s3Human = Boolean(hs.human_detected?.cell_s || hs.active_estop || s3Gate.phase === 'HUMAN_HOLD');
   const s5Human = Boolean(hs.human_detected?.cell_ab || hs.active_estop || s5Gate.phase === 'HUMAN_HOLD');
@@ -340,10 +322,11 @@ export function visualCardSpecs(body = {}) {
       phase: s3Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited),
       ...s3Meta,
+      fieldStatus: fieldStatus(body, tasks, 'cell_s', ['arm_s']),
       buttons: [
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
-        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
+        {label: '비전 안전 비상정지 (카메라 확인)', visionCheckCell: 'cell_s'},
         {label: 'S3 ACT 정책 구동 (arm_s)', preset: 's3_act_policy'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
@@ -351,9 +334,9 @@ export function visualCardSpecs(body = {}) {
         {label: '반출대3 반출 (YAML: EXP_S3_BELT)', zoneId: 'EXP_S3_BELT'},
         ...extraExportForCell('cell_s', ['EXP_S3_BELT']),
         {
-          label: s3Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s3Human ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_s',
-          humanDetected: !s3Human,
+          humanDetected: true,
         },
         {label: s3Hold ? '팔 홀드 해제 (arm_s · 확인됨)' : '팔 홀드 점검·해제 (arm_s)', clearArmHold: 'cell_s'},
         ...bedConfirmButtons('cell_s'),
@@ -367,19 +350,22 @@ export function visualCardSpecs(body = {}) {
       phase: s5Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s5Gate.amr_motion_inhibited),
       ...s5Meta,
+      fieldStatus: fieldStatus(body, tasks, 'cell_ab', ['arm_a', 'arm_b']),
       buttons: [
         {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_ab'},
-        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_ab'},
+        {label: '비전 안전 비상정지 (카메라 확인)', visionCheckCell: 'cell_ab'},
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
+        {label: 'ACT 벨트 → 1행 2번 1층 (arm_a)', preset: 's5_tier1_arm_a_act_policy'},
+        {label: 'ACT 벨트 → 1행 2번 1층 (arm_b)', preset: 's5_tier1_arm_b_act_policy'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
         {label: '반출대2 반출 (YAML: EXP_S5_PALLET)', zoneId: 'EXP_S5_PALLET'},
         ...extraExportForCell('cell_ab', ['EXP_S5_PALLET']),
         {
-          label: s5Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s5Human ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_ab',
-          humanDetected: !s5Human,
+          humanDetected: true,
         },
         {label: s5Hold ? '팔 홀드 해제 (arm_a/b · 확인됨)' : '팔 홀드 점검·해제 (arm_a/b)', clearArmHold: 'cell_ab'},
         ...bedConfirmButtons('cell_ab'),
@@ -414,15 +400,12 @@ export function visualCardSpecs(body = {}) {
           cableGuardToggle: true,
         },
         {label: 'S3 도킹', pinkyAction: 'dock_s3'},
-        {label: '미세 전진 1.5cm', pinkyAction: 'micro_forward_2cm'},
-        {label: '미세 후진 1.5cm', pinkyAction: 'micro_reverse_2cm'},
-        {label: '즉시 정지', pinkyAction: 'stop_now'},
         {label: '충전소(C1)', pinkyAction: 'charge_c1'},
         {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
         {
-          label: anyHuman ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: anyHuman ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'all',
-          humanDetected: !anyHuman,
+          humanDetected: true,
         },
       ],
     },
@@ -568,7 +551,16 @@ export function inspectorSpecs(body = {}) {
       ],
       buttons: s5Card.buttons || [],
     },
-    ...['rosy_46', 'rosy_45', 'rosy_42'].map(rid => ({
+    ...((() => {
+      const dyn = Array.isArray(body?.pinky_robots) && body.pinky_robots.length
+        ? body.pinky_robots
+        : [...new Set([
+          ...(Array.isArray(body?.pinky_tasks) ? body.pinky_tasks : []).map(t => t.robot_id),
+          body?.cells?.cell_s?.gate?.docked_robot?.robot_id,
+          body?.cells?.cell_ab?.gate?.docked_robot?.robot_id,
+        ].filter(Boolean))];
+      return dyn.length ? dyn : ['rosy_46', 'rosy_45', 'rosy_42'];
+    })()).map(rid => ({
       id: rid,
       robot_id: rid,
       shortTab: `🤖 ${rid}`,

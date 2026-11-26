@@ -25,7 +25,7 @@ class _HostLookups:
         self.executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='rosy-host-dns')
         self.max_hosts = max_hosts
         self.ttl_s = ttl_s
-        self.failure_ttl_s = max(ttl_s, 10.0) if failure_ttl_s is None else failure_ttl_s
+        self.failure_ttl_s = max(ttl_s, 3.0) if failure_ttl_s is None else failure_ttl_s
         self.clock = clock
         self.lock = threading.Lock()
         self.entries = {}

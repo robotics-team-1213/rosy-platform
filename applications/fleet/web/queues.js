@@ -1,10 +1,10 @@
-import { node } from "/common/control-dom.js";
+import { node, patchAttr, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
 // 예외 큐 (Fleet 분해 3에서 roster.js로부터 옮김, D-540 단계 (d) 크기 재판정). 주의/개입 큐의
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
 import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel, evidenceAgeText} from "/common/core_ui_logic.js";
 import { ruleMTag } from "./link-tag.js";
-import { localizationUrgent } from "./localization-badge.js";
+import { localizationAttention } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { estopText } from "./motion-readiness.js";
@@ -86,7 +86,10 @@ export function openTrip(view, robotId) {
 /** Why the robot's last trip stopped or failed ('' while a trip is open or the last one arrived or was canceled). */
 export function endedTripText(view, robotId) {
   if (openTrip(view, robotId)) return "";
-  return tripEndText((view.endedTrips || []).find((trip) => trip.robot_id === robotId));
+  const last = (view.endedTrips || []).find((trip) => trip.robot_id === robotId);
+  if (last?.state === "canceled" && (last.detail?.stop_sent === false || last.detail?.error))
+    return "운행 취소 · 기체 정지 응답 미확인";
+  return tripEndText(last);
 }
 
 // D-577 8: an escalated stuck nobody answered within this many seconds rises to the top. The robot
@@ -141,14 +144,15 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     const trip = openTrip(view, robot.robot_id);  // D-763 rev 2 Q7: past its bound a warn row; 개입 is the resolver's hand-off
     if (trip?.wait?.over_bound) items.push({ severity: "warn", text: `: ${tripWaitText(trip)}` });
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
-    if (localizationUrgent(robot.localization)) {
-      // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
-      items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
-    } else if (state.hitl_requested === true) {
+    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
+    const localization = localizationAttention(robot.localization, staleS === null ? state.localization : null,
+      view.guideUnavailable ? null : guideRow, staleS !== null);
+    if (localization) items.push(localization);
+    if (localization?.severity !== "crit" && state.hitl_requested === true) {
       // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는
       // 조작을 모의 버튼으로 걸면 경보가 거짓말을 한다(D-218, F-20). 진짜 개입은 로봇 화면에서.
       items.push({ severity: "crit", text: ": 개입 필요 — 로봇 화면에서 확인" });
-    } else if (state.capabilities_degraded?.length) {
+    } else if (localization?.severity !== "crit" && state.capabilities_degraded?.length) {
       items.push({ severity: "warn", text: `: 성능 저하 [${state.capabilities_degraded.join(", ")}]`, snapshotWarn: true });
     }
     const relay = streamEvidence(view.formation, robot.robot_id);
@@ -209,13 +213,16 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       .map((item) => `${item.text.replace(/\d+/g, "#")}${item.foldedDetails ? `:${item.foldedDetails.join(",")}` : ""}`)
       .join("|");
   }
-  // D-252 ui-triage head: category + robot count. D-540 3: names only in the rows (title keeps them).
+  // D-252 ui-triage head: queue row count and affected robot count (D-540 3).
   function setTriageHead(id, label, rows) {
     const head = el(id);
     if (!head) return;
     const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
-    head.querySelector("b").textContent = `${label} ${names.size}`;
-    Object.assign(head.querySelector("small"), { textContent: "", title: [...names].join(" · ") });
+    patchText(head.querySelector("b"), `${label} ${rows.length}건 · ${names.size}대`);
+    const small = head.querySelector("small");
+    patchText(small, "");
+    const title = [...names].join(" · ");
+    if (small && small.title !== title) small.title = title;
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
@@ -246,14 +253,14 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       }
       const line = row.decision ? li.firstElementChild : li;
       const name = line.querySelector("b");
-      name.textContent = row.robotId;
-      name.className = named ? "" : "sr-only";
+      patchText(name, row.robotId);
+      const cls = named ? "" : "sr-only";
+      if (name.className !== cls) name.className = cls;
       const text = line.querySelector(".queue-text");
-      const shown = queueRowText(row.text, named);
-      if (text.textContent !== shown) text.textContent = shown;
+      patchText(text, queueRowText(row.text, named));
       if (row.decision) {
-        line.setAttribute("aria-expanded", String(open === row.key));
-        li.lastElementChild.hidden = open !== row.key;
+        patchAttr(line, "aria-expanded", String(open === row.key));
+        patchHidden(li.lastElementChild, open !== row.key);
       }
       return li;
     });
@@ -335,18 +342,18 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
 
     // ADR-1000 & UX Law 1: Hide empty queues inside the drawer without closing the drawer itself.
     const total = rows.warn.length + rows.crit.length;
-    warnList.parentElement.hidden = rows.warn.length === 0;
-    critList.parentElement.hidden = rows.crit.length === 0;
+    if (warnList.parentElement.hidden !== (rows.warn.length === 0)) warnList.parentElement.hidden = rows.warn.length === 0;
+    if (critList.parentElement.hidden !== (rows.crit.length === 0)) critList.parentElement.hidden = rows.crit.length === 0;
     const container = document.querySelector(".queues-container");
-    if (container) container.hidden = total === 0;
+    if (container) patchHidden(container, total === 0);
     const empty = el("queues-empty");
-    if (empty) empty.hidden = total > 0;
+    if (empty) patchHidden(empty, total > 0);
     const summary = el("queues-summary");
     if (summary) {
       const parts = [];
-      if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}`);
-      if (rows.warn.length) parts.push(`주의 ${rows.warn.length}`);
-      summary.textContent = parts.join(" · ");
+      if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}건`);
+      if (rows.warn.length) parts.push(`주의 ${rows.warn.length}건`);
+      patchText(summary, parts.join(" · "));
     }
   }
 

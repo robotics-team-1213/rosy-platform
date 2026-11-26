@@ -31,17 +31,21 @@ def _code_digest() -> str:
 
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
-        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
-        "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
+        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_pipeline_liveness.py", "cell_attempts.py",
+        "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_auto_fold.py", "cell_recovery_plan.py", "cell_recovery_advisor.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
+        "cell_bound_home_placement.py", "cell_recovery_placement.py", "cell_recovery_placement_live.py",
+        "cell_recovery_placement_live_view.py", "cell_recovery_placement_trial.py", "cell_auto_fold_stages.py",
+        "cell_route_surface.py", "cell_route_depth.py", "cell_route_check.py", "cell_depth_slots.py",
+        "cell_recovery_cargo.py", "cell_recovery_placement_context.py", "cell_recovery_placement_journal.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
         "guarded_native.py", "guarded_native_effort.py", "guarded_native_probe.py", "guarded_native_track.py",
         "guarded_native_mount.py", "guarded_native_watch.py",
         "guarded_native_lag.py", "guarded_native_link.py",
         "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py",
-        "chunk_runner_commands.py", "chunk_runner_guards.py", "chunk_runner_interrupt.py", "chunk_runner_settle.py",
+        "chunk_runner_commands.py", "chunk_runner_guards.py", "chunk_runner_interrupt.py", "chunk_runner_recover.py", "chunk_runner_settle.py",
         "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_policy_playback.py", "motor_health.py",
-        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_shape.py", "cell_policy_handoff.py",
-        "cell_policy_paced.py")}
+        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_retreat.py", "cell_policy_shape.py",
+        "cell_policy_handoff.py", "cell_policy_paced.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     cache_key = (
         tuple((name, path.stat().st_mtime_ns, path.stat().st_size) for name, path in sorted(files.items())),

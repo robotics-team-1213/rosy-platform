@@ -82,23 +82,23 @@ def _white_pads(img):
     import cv2
 
     h, w = img.shape[:2]
+    try:
+        from cell_camera_invariant_wrist import detect_wrist_fingers_anchor
+
+        anchor = detect_wrist_fingers_anchor(img, finger_color="white")
+        if anchor.get("found") and max(32.0, 0.05 * w) <= float(anchor["gap_px"]) <= 0.78 * w:
+            return (
+                np.array(anchor["left_inner_px"], dtype=float),
+                np.array(anchor["right_inner_px"], dtype=float),
+                float(anchor["gap_px"]),
+            )
+    except Exception:
+        pass
+
     y0 = 2 * h // 3
     band_bgr = img[y0:]
     band_hsv = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
-    # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, S <= 170, V >= 135)
-    bot_off = max(0, int(h * 0.78) - y0)
-    bot = band_hsv[bot_off:]
-    bot_bgr = band_bgr[bot_off:]
-    not_orange = (bot_bgr[..., 2].astype(np.int16) - bot_bgr[..., 1].astype(np.int16)) <= 8
-    cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 1] <= 170) & (bot[..., 2] >= 135) & not_orange
-    left_xs = np.where(cool_white[:, int(w * 0.08):int(w * 0.36)].mean(axis=0) > 0.25)[0] + int(w * 0.08)
-    right_xs = np.where(cool_white[:, int(w * 0.72):int(w * 0.96)].mean(axis=0) > 0.25)[0] + int(w * 0.72)
-    if len(left_xs) and len(right_xs):
-        xl, xr = float(left_xs.max()), float(right_xs.min())
-        yp = float(int(h * 0.88))
-        return np.array([xl, yp]), np.array([xr, yp]), float(max(xr - xl, 1.0))
-
-    # 2. Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
+    # Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
     not_cyan = (band_bgr[..., 0].astype(np.int16) - band_bgr[..., 2].astype(np.int16)) <= 45
     mask = (
         (
@@ -120,10 +120,11 @@ def _white_pads(img):
     )[:2]
     if len(blobs) >= 2:
         left, right = sorted(blobs, key=lambda i: cents[i][0])
-        gap = stats[right, cv2.CC_STAT_LEFT] - (stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
-        if gap >= 4:
-            a, b = sorted((cents[i] + (0, y0) for i in blobs), key=lambda c: c[0])
-            return a, b, float(max(gap, 1))
+        xl = float(stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
+        xr = float(stats[right, cv2.CC_STAT_LEFT])
+        gap = xr - xl
+        if max(32.0, 0.05 * w) <= gap <= 0.78 * w:
+            return np.array([xl, float(cents[left][1] + y0)]), np.array([xr, float(cents[right][1] + y0)]), float(gap)
     return None
 
 
@@ -154,7 +155,11 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     if pads is None:
         return {"found": False, "why": "finger pads not seen"}
     a, b, gap_px = pads
-    target = on_surface_blob(img, hsv, params)
+    w_img = int(img.shape[1]) if hasattr(img, "shape") else 640
+    if not (max(32.0, 0.05 * w_img) <= float(gap_px) <= 0.78 * w_img):
+        return {"found": False, "why": "wrist_sanity_rejected: implausible gap_px", "gap_px": round(float(gap_px), 1)}
+    blob = on_surface_blob(img, hsv, params, include_bbox=True)
+    target, blob_clipped = (blob[:3], bool(blob[3])) if blob is not None else (None, False)
     if target is None or target[2] > 55000 or not (float(a[0]) <= target[0] <= float(b[0])):
         face = top_face_between_fingers(img, a, b)
         if face is not None:
@@ -164,7 +169,9 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
             ref_x = 0.5 * (a[0] + b[0]) - float(p_px)
             along_mm = round(float(cx - ref_x) * s_face, 1)
             across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
-            return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
+            if not (0.06 <= s_face <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
+                return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s_face, 3)}
+            return {"found": True, "along_mm": along_mm, "across_mm": across_mm, "clipped_border": blob_clipped,
                     "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face", "finger_color": mode}
     if target is None:
         return {"found": False, "why": "no container on a neutral surface in view"}
@@ -173,7 +180,10 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     across_dir = np.array([-axis[1], axis[0]])
     d = np.array([seen["cx"], seen["cy"]]) - (a + b) / 2
     s = gap_mm / gap_px
-    return {"found": True, "along_mm": round(float(d @ axis) * s, 1), "across_mm": round(float(d @ across_dir) * s, 1),
+    along_mm, across_mm = round(float(d @ axis) * s, 1), round(float(d @ across_dir) * s, 1)
+    if not (0.06 <= s <= 0.35 and abs(along_mm) <= 35.0 and abs(across_mm) <= 55.0):
+        return {"found": False, "why": "wrist_sanity_rejected", "gap_px": round(float(gap_px), 1), "mm_per_px": round(s, 3)}
+    return {"found": True, "along_mm": along_mm, "across_mm": across_mm, "clipped_border": blob_clipped,
             "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3), "finger_color": mode}
 
 
@@ -184,7 +194,7 @@ def resolve_wrist_servo_offset(
     structural_fallback: bool = True,
     prefer_structural: bool = False,
     camera_invariant_obb: bool = True,
-    hsv=([5, 95, 110], [32, 255, 255]),
+    hsv=([5, 95, 110], [36, 255, 255]),
 ) -> dict:
     """Unified wrist offset resolver combining pad-referenced `finger_offset_mm`, color-agnostic
     `structural_container_between_fingers`, and camera-invariant PCA/OBB `detect_wrist_container_obb`."""
@@ -259,12 +269,17 @@ def resolve_wrist_servo_offset(
         return obs
 
     if not obs.get("found") and obb_obs and obb_obs.get("found"):
+        anc = obb_obs.get("finger_anchor") or {}
+        gpx, mpx = anc.get("gap_px"), obb_obs.get("mm_per_px")
+        if ((gpx is not None and float(gpx) < 32.0) or (mpx is not None and not (0.06 <= float(mpx) <= 0.35))
+                or abs(float(obb_obs["along_mm"])) > 35.0 or abs(float(obb_obs["across_mm"])) > 55.0):
+            return {"found": False, "why": "wrist_sanity_rejected"}
         return {
             **obb_obs,
             "dx_mm": obb_obs["along_mm"],
             "dy_mm": obb_obs["across_mm"],
             "mode": "invariant_obb",
-            "finger_color": (obb_obs.get("finger_anchor") or {}).get("finger_color", f_color),
+            "finger_color": anc.get("finger_color", f_color),
         }
     return obs
 
@@ -334,12 +349,15 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
         return write_library(config, pick, target["place"], work / "finger-replan.json")
 
     camera = spec.get("camera", "wrist")
-    closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"  # the camera mounting stays: keep what was learned
     finger_color = resolve_finger_color(params, spec)
 
     def run():
+        import cell_remap_plan as rp
+
         base_pick = dict(target["pick"])
+        closing_off = next((v for v in (target.get("closing_offset_deg"), target.get("offset"), prm.get(params, "auto.closing_theory_deg")) if v is not None), 90.0)
+        closing = rp.live_fk_yaw(cell, config, base_pick["yaw_deg"]) + closing_off
 
         def replan_from_base(dx_mm, dy_mm):
             pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))

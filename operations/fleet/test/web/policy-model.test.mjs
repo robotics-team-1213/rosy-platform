@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
+  ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, formatFleetAdmissionScope, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from "../../../../applications/fleet/web/work/policy-model.js";
 
 const RULES = {
@@ -64,4 +64,19 @@ test("the figure strip only counts what the server returned", () => {
   assert.equal(busy.proposals.note, "등록 정책 2개");
   const shadow = policyFigures({...empty, windows: [{active: true, kind: "shadow", expires_ns: 60e9}]}).find(f => f.id === "window");
   assert.equal(shadow.alert, false);
+});
+
+test("formatFleetAdmissionScope summarizes enabled, disabled, and missing scopes", () => {
+  assert.equal(formatFleetAdmissionScope(null), null);
+  assert.equal(formatFleetAdmissionScope({scope: {enabled: false}}), "꺼짐 · 사람 전환 대기");
+  assert.equal(formatFleetAdmissionScope({scope: {enabled: false}, reason: "BUDGET_EXHAUSTED"}), "꺼짐 · BUDGET_EXHAUSTED");
+  const text = formatFleetAdmissionScope({
+    scope: {enabled: true, robots: ["rosy_01"], step_approval_kinds: ["one_person"], max_admits: 5, valid_until: null, scope_revision: "rev-7"},
+    admits_remaining: 3,
+  });
+  assert.match(text, /켜짐/);
+  assert.match(text, /로봇 rosy_01/);
+  assert.match(text, /종류 1인 승인/);
+  assert.match(text, /잔여 3\/5회/);
+  assert.match(text, /범위 rev-7/);
 });

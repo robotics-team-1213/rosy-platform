@@ -27,6 +27,25 @@ def _leader_mount_path(arm):
     return cal.with_suffix(".mount.json")
 
 
+def _seal_calibration_args(arm, calibrations):
+    """Build --calibration and --mount CLI args for record_seal.py including leader calibration & mount files when present."""
+    args = [a for c in calibrations for a in ("--calibration", c)]
+    seen_cals = {Path(c).name for c in calibrations}
+    seen_mounts = set()
+    targets = ("arm_a", "arm_b") if arm == "arm_ab" else ((arm,) if arm in ("arm_a", "arm_b", "arm_s") else ())
+    base = Path.home() / ".cache" / "huggingface" / "lerobot" / "calibration" / "teleoperators" / "omx_leader"
+    for sub in targets:
+        lp = base / f"{sub}_leader.json"
+        if lp.is_file() and not lp.is_symlink() and not lp.parent.is_symlink() and str(lp) not in calibrations and lp.name not in seen_cals and lp.name != "leader_follower_offset.json":
+            args += ["--calibration", str(lp)]
+            seen_cals.add(lp.name)
+        mp = _leader_mount_path(sub)
+        if mp.is_file() and not mp.is_symlink() and not mp.parent.is_symlink() and mp.name not in seen_mounts and mp.name not in seen_cals and mp.name != "leader_follower_offset.json":
+            args += ["--mount", str(mp)]
+            seen_mounts.add(mp.name)
+    return args
+
+
 class BenchLinkMixin:
     def _pre_start_home(self, body, replay_path=None):
         """Move a single follower arm home before leader alignment/start when home_before_start is requested."""

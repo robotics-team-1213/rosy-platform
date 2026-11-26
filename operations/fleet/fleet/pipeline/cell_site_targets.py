@@ -3,16 +3,18 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 from pathlib import Path
 from typing import Any
 
+ARM_CELL = {"arm_s": "cell_s", "arm_a": "cell_ab", "arm_b": "cell_ab"}
 _STACKING_AREAS = frozenset({"pallet", "yard", "temp_a", "temp_b"})
 _LEGACY_CELL_AB_AREAS = frozenset({"pallet", "belt", "temp_plate_a", "temp_plate_b"})
 _SIM_AREA_PREFIXES = ("ship-", "tmp-a-", "tmp-b-", "yard:", "temp_a:", "temp_b:", "stand:", "yard-", "temp_a-", "temp_b-", "stand-")
 
 
 @functools.lru_cache(maxsize=4)
-def _index(map_path_str: str) -> dict[str, Any]:
+def _index_cached(map_path_str: str, mtime_ns: int, size: int) -> dict[str, Any]:
     doc = json.loads(Path(map_path_str).read_text(encoding="utf-8"))
     by_tier_id: dict[str, dict[str, Any]] = {}
     by_sim: dict[str, dict[str, Any]] = {}
@@ -67,19 +69,33 @@ def _index(map_path_str: str) -> dict[str, Any]:
     }
 
 
+def _index(map_path_str: str) -> dict[str, Any]:
+    """Return cached canonical cell-site index, automatically reloading when file mtime or size changes."""
+    try:
+        st = os.stat(map_path_str)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = (0, 0)
+    return _index_cached(map_path_str, sig[0], sig[1])
+
+
+_index.cache_clear = _index_cached.cache_clear
+
+
 def _map_path(web_common: Path | None = None) -> Path:
     if web_common is not None and (web_common / "cell-site-map.json").is_file():
         return web_common / "cell-site-map.json"
     return Path(__file__).resolve().parents[4] / "shared/web/cell-site-map.json"
 
 
-def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
+def list_canonical_sites(web_common: Path | None = None, *, include_zone_layout: bool = False) -> dict[str, Any]:
     idx = _index(str(_map_path(web_common).resolve()))
     doc = idx["doc"]
+    status = doc.get("status", "planned_unverified")
     return {
         "schema": doc["schema"],
         "revision": doc.get("revision", 1),
-        "status": doc.get("status", "planned_unverified"),
+        "status": status,
         "tier_height_mm": doc.get("tier_height_mm"),
         "count": len(idx["sites"]),
         "zones": [
@@ -94,7 +110,8 @@ def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
                 },
                 "slot_cells": int(z["slot_cells"]),
                 "arms": list(z.get("arms") or ()),
-                "status": z.get("status", doc.get("status", "planned_unverified")),
+                "status": z.get("status", status),
+                **(_zone_layout(z) if include_zone_layout else {}),
             }
             for z in doc["zones"]
         ],
@@ -109,6 +126,23 @@ def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
         ],
         "not_places": list(doc.get("not_places") or []),
     }
+
+
+def _zone_layout(zone: dict[str, Any]) -> dict[str, Any]:
+    layout: dict[str, Any] = {"slots": [
+        {
+            "id": slot["id"], "label": slot.get("label", slot["id"]),
+            "row": slot["row"], "slot": slot["slot"], "columns": list(slot["columns"]),
+            "hold": slot.get("hold"), "arms": list(slot["arms"]),
+            "tiers": [{"id": tier["id"], "tier": tier["tier"]} for tier in slot["tiers"]],
+            "status": slot.get("status", "planned_unverified"),
+        }
+        for slot in zone["slots"]
+    ]}
+    boundary = zone.get("hold_boundary") or {}
+    if columns := boundary.get("columns"):
+        layout["hold_boundary"] = {"columns": list(columns)}
+    return layout
 
 
 def _check_tier_value(raw_tier: Any) -> int:
@@ -307,3 +341,28 @@ def cell_ab_completion_verified(
         if isinstance(slot, dict) and (vt.get("col") != slot.get("col") or vt.get("row") != slot.get("row")):
             return False
     return True
+
+
+def act_route_refusal(cell_id: str, arm_id: str, src_site: str, dst_site: str,
+                      tier: int, displaced_to: str | None) -> str | None:
+    """Check the resolved task sites against the route the selected policy can represent."""
+    if ARM_CELL.get(arm_id) != cell_id:
+        return "ACT_POLICY_UNSUPPORTED_ARM"
+    if displaced_to is not None:
+        return "INVALID_EXECUTION_MODE"
+    if cell_id == "cell_ab":
+        if type(tier) is not int or tier not in (1, 2, 3) or src_site != "belt":
+            return "ACT_POLICY_INVALID_TARGET"
+        if dst_site not in (f"ship-h1r{row}-l{tier - 1}" for row in range(3)):
+            return "ACT_POLICY_INVALID_TARGET"
+    return None
+
+
+
+def act_fallback_refusal(cell_id: str, task: dict | None) -> str | None:
+    """Why a failed task's own route cannot be retried as an ACT fallback, else None."""
+    if not task or not all(task.get(k) for k in ("arm_id", "src_site", "dst_site", "tier")):
+        return "ORIGINAL_TASK_ROUTE_REQUIRED"
+    if task.get("directive"):
+        return "DIRECTIVE_REQUIRES_NEW_TASK"
+    return act_route_refusal(cell_id, task["arm_id"], task["src_site"], task["dst_site"], task["tier"], task.get("displaced_to"))

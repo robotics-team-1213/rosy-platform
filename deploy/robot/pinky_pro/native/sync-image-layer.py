@@ -150,14 +150,14 @@ def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict, list[str]
             continue
         kinds = {_kind(str(record.get("path", "")).lstrip("/")) for record in records}
         if all(_landed(root, record) for record in records):
+            synth = [{"kind": _kind(str(r["path"]).lstrip("/")), "destination": str(r["path"]).lstrip("/"),
+                      "state": r.get("state")} for r in records if isinstance(r.get("path"), str)]
             owed = {"daemon_reload": "unit" in kinds, "udev_reload": "udev" in kinds,
-                    "enable": [], "units": []}
+                    "enable": [], "units": affected_units(root, synth)}
             for record in records:
                 name = Path(str(record["path"])).name
-                if _kind(str(record["path"]).lstrip("/")) == "unit":
-                    owed["units"].append(name)
-                    if record.get("state") == "new" and name in ENABLED_UNITS:
-                        owed["enable"].append(name)
+                if _kind(str(record["path"]).lstrip("/")) == "unit" and record.get("state") == "new" and name in ENABLED_UNITS:
+                    owed["enable"].append(name)
             _owe(root, owed)
             data["files_applied"] = True
             _write_json(path, data)
@@ -415,7 +415,7 @@ def sync(
         state_rules = state_directory_rules(root, native)
         pending, pending_report = _load_pending(root, dry_run=dry_run)
         reconciled, owed, legacy_ignored = reconcile(root, dry_run=dry_run)
-        if owed["daemon_reload"] or owed["udev_reload"] or owed["enable"]:
+        if owed["daemon_reload"] or owed["udev_reload"] or owed["enable"] or owed["units"]:
             pending = {
                 **pending,
                 "daemon_reload": bool(pending.get("daemon_reload")) or owed["daemon_reload"],
@@ -430,7 +430,10 @@ def sync(
         restored_units = {
             _unit_name(item) for item in cleanup if item["kind"] == "unit" and item["state"] == "restored"
         }
-        units = sorted(set(affected_units(root, work)) | restored_units | set(pending.get("units", [])))
+        removed_units = {
+            _unit_name(item) for item in cleanup if item["kind"] == "unit" and item["state"] == "removed"
+        }
+        units = sorted((set(affected_units(root, work + cleanup)) | restored_units | set(pending.get("units", []))) - removed_units)
         active = active_units(units, runner)
         result.update(
             ok=True,

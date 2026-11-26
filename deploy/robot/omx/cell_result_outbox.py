@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError
 
+from core_common.cell_failure_reason import hardware_abort_reason as abort_reason
+
 DROP_CODES = (409, 422)  # Fleet refused this exact body on its merits (another record, stale or invalid): not retried
 STALE_S = 65  # Fleet takes owner evidence for 60 s after measured_at; measured again only once that has surely passed
 WAITING_FOR_PERSON = "BED_CONFIRMATION_INVALID"  # 422 on /complete: the bed confirmation lapsed; a named operator confirms again
@@ -28,12 +30,6 @@ def refusal_code(exc: HTTPError) -> str:
         return str(json.loads(exc.read())["detail"]["code"])
     except Exception:
         return str(exc.msg)
-
-
-def abort_reason(hw_tel: dict[str, Any]) -> str:
-    """The receipt reason of an aborted run whose placement was not measured: held for review (the runner refused before any
-    motion, D-911) or the generic missing measurement."""
-    return "REVIEW_REQUIRED" if hw_tel.get("review_required") else "MEASURED_PLACEMENT_MISSING"
 
 
 def remeasurer(prep_dir: Path):

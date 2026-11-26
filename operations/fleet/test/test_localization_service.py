@@ -8,12 +8,14 @@ import asyncio
 import logging
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from core_common.protocol.localization import CandidateReport, LocState
 from fakes import FakeClock, FakeRobot, run
 from fleet.localization import cues, service_logic
+from fleet.localization.map_binding import Fit
 from fleet.localization.service_logic import Ladder, Monitor
 from fleet.server.localization_service import CALL_TIMEOUT_S, LocalizationService, load_lane_rules
 from fleet.swarm.transport import RobotApiError
@@ -39,7 +41,8 @@ def report(robot_id, pose, *, stamp=0.0, request_id=None, objects=()):
 
 
 def state(robot_id, loc_state, frame="map", pose=(0.0, 0.0, 0.0)):
-    return {"robot_id": robot_id, "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
+    return {"robot_id": robot_id, "map_id": "occupancy:123456789012", "map_grid_id": "occupancy:123456789012",
+            "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
             "localization": {"state": loc_state, "pose_frame": frame}}
 
 
@@ -48,9 +51,9 @@ class FakeSightings:
         self.clock = clock
         self.rows = {}
 
-    def see(self, robot_id, x, y, yaw, age_s=0.1):
+    def see(self, robot_id, x, y, yaw, age_s=0.1, *, map_id="occupancy:123456789012"):
         self.rows[robot_id] = {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw,
-                               "captured_at": self.clock() - age_s}
+                               "captured_at": self.clock() - age_s, "map_id": map_id}
 
     def snapshot(self):
         return {"sightings": list(self.rows.values())}
@@ -60,6 +63,7 @@ def service(*robots, clock, **kwargs):
     clients = {r.robot_id: r for r in robots}
     kwargs.setdefault("slots", SLOTS)
     kwargs.setdefault("squares", [A, B])
+    kwargs.setdefault("reference_map_id", "occupancy:123456789012")
     return LocalizationService(lambda: clients, clock=clock, wall=clock, **kwargs)
 
 
@@ -154,6 +158,26 @@ def test_the_mirror_signature_is_one_object_at_the_mirror_and_none_at_the_report
     # Two objects at the mirror: ambiguous, no evidence.
     assert service_logic.peer_observations(_report_at([(0.5, 0.0), (0.5, 0.1)]), ON_A,
                                            {"r1": reported}) == {}
+
+
+def test_peer_observations_ignores_mirror_object_explained_by_another_peer():
+    reported_a = (1.26, 0.01, math.pi)                   # mirror of (-1.26, -0.01, 0)
+    peer_b = (-1.26, -0.01, 0.0)                         # real robot standing at r1's mirror
+    seen = service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": reported_a, "r2": peer_b})
+    assert list(seen) == ["r2"]
+    assert seen["r2"][:2] == pytest.approx((-1.26, -0.01)) and seen["r2"][2] is None
+
+
+def test_peer_observations_ignores_mirror_object_explained_by_known_points():
+    reported = (1.26, 0.01, math.pi)                     # mirror of (-1.26, -0.01, 0)
+    assert "r1" in service_logic.peer_observations(_report_at([(0.5, 0.0)]), ON_A, {"r1": reported})
+    assert service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": reported}, known_points=[(-1.26, -0.01)]) == {}
+    # Direct observation of the peer itself still holds even when known_points includes other spots.
+    seen = service_logic.peer_observations(
+        _report_at([(0.5, 0.0)]), ON_A, {"r1": (-1.26, -0.01, 0.0)}, known_points=[(0.0, 0.0)])
+    assert seen["r1"][:2] == pytest.approx((-1.26, -0.01)) and seen["r1"][2] is None
 
 
 def test_the_ladder_rungs_and_their_reset():
@@ -431,6 +455,18 @@ def test_an_anchored_chain_localizes_through_peers():
     assert svc.anchors() == {"a", "x", "z"}
 
 
+@pytest.mark.parametrize("grid_id", ["occupancy:987654321098", None])
+def test_peer_pose_requires_the_same_known_occupancy_grid(grid_id):
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    x._state["map_grid_id"] = grid_id
+    svc = service(a, x, clock=clock)
+    ticks(svc, clock, 12.0)
+    assert svc.anchors() == {"a"}
+    assert x.decisions == []
+
+
 def test_a_robot_that_leaves_localized_loses_its_anchor():
     clock = FakeClock()
     a = Localizing("a", ON_A)
@@ -609,6 +645,36 @@ def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_on_the_sec
     assert r1.suspects == ["fleet_monitor"]
 
 
+@pytest.mark.parametrize(("pose", "scan_fit", "obj"), [
+    ((0.634, -0.117, 1.553), 0.982, (0.170, 1.308)),
+    ((0.105, -0.437, 1.475), 0.944, (0.422, 0.903)),
+])
+def test_single_scan_candidate_without_asymmetric_evidence_cannot_discredit_a_peer(pose, scan_fit, obj):
+    # Field replay: each observer had one unlabeled object within 25 cm of the target's mirror.
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.507, -0.041, 0.0)))
+    r2 = Reporting("r2", clock, pose, [obj])
+    svc = service(r1, r2, clock=clock, slots=[], squares=[])
+    original = r2.localization_candidates
+
+    async def one_candidate():
+        latest = await original()
+        candidate = latest.candidates[0].model_copy(update={"scan_fit": scan_fit})
+        return latest.model_copy(update={"candidates": [candidate]})
+
+    r2.localization_candidates = one_candidate
+    ticks(svc, clock, 1.0)
+    assert r1.suspects == []
+
+
+def test_reference_square_and_slot_from_another_map_cannot_authorize_decision_or_monitor():
+    clock = FakeClock()
+    _, r1, r2, svc = _mirror_locked(clock, reference_map_id="other-map")
+    ticks(svc, clock, 3.0)
+    assert r1.suspects == []
+    assert r2.decisions == []
+
+
 class Periodic(Reporting):
     """Re-reports only every `period_s` of Fleet time (S1: reports 4-7 s apart at RTF ~0.4)."""
 
@@ -767,6 +833,54 @@ def test_an_agreeing_anchor_observation_never_marks_suspect():
     assert r1.suspects == r2.suspects == [] and svc.anchors() == {"r1", "r2"}
 
 
+def test_anchor_ignores_offline_parked_robot_at_peers_mirror():
+    """Live regression (rosy_46/rosy_45/rosy_42): an offline parked robot in bay C3 near
+    the 180-degree origin twin of another robot must not fire fleet_monitor SUSPECT."""
+    clock = FakeClock()
+    p46 = (0.688, -0.365, 2.347)
+    p45 = (-0.238, 0.373, 1.658)
+    r46 = Anchor("rosy_46", p46, clock)
+    r45 = FakeRobot("rosy_45", state=state("rosy_45", "LOCALIZED", pose=p45))
+    r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
+    site_poses = {
+        "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        # Target also having a site pose must never mask its own mirror lock via exclude_ids.
+        "rosy_45": ("world_261026", 0.055, 0.450, 1.658),
+        "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
+    }
+    svc = service(r46, r45, r42, clock=clock, slots=[cues.Slot(*p46)], squares=[p46[:2]])
+    svc.set_site_obstacle_pose(lambda rid: site_poses.get(rid))
+    ticks(svc, clock, 10.0)
+    assert svc.anchors() == {"rosy_46"}
+    r46.see([(0.311, 0.417)])
+    ticks(svc, clock, 5.0)
+    assert r45.suspects == []
+    # Without the parked obstacle explanation, a lone object at the mirror still fires suspect.
+    site_poses.pop("rosy_42")
+    ticks(svc, clock, 1.0)
+    assert r45.suspects == ["fleet_monitor"]
+
+
+def test_candidates_observer_ignores_offline_parked_robot_at_peers_mirror():
+    """_arbitrate() also suppresses mirror suspects when an offline parked robot explains the point."""
+    clock = FakeClock()
+    r45 = FakeRobot("rosy_45", state=state("rosy_45", "LOCALIZED", pose=(-0.238, 0.373, 1.658)))
+    r46 = Reporting("rosy_46", clock, (0.688, -0.365, 2.347), [(0.311, 0.417)])
+    r42 = FakeRobot("rosy_42", state={"robot_id": "rosy_42"})
+    site_poses = {
+        "rosy_46": ("world_261026", -0.414, 0.344, -0.7944),
+        "rosy_42": ("world_261026", 0.03458, 0.470, -1.5708),
+    }
+    svc = service(r45, r46, r42, clock=clock,
+                  slots=[cues.Slot(0.688, -0.365, 2.347)], squares=[(0.688, -0.365)])
+    svc.set_site_obstacle_pose(lambda rid: site_poses.get(rid))
+    ticks(svc, clock, 5.0)
+    assert r45.suspects == []
+    site_poses.pop("rosy_42")
+    ticks(svc, clock, 1.0)
+    assert r45.suspects == ["fleet_monitor"]
+
+
 def test_a_stale_anchor_status_is_ignored():
     """The same objects_stamp re-read counts once and stops counting 1 s after Fleet first
     saw it: a robot whose state stopped arriving (CORE serves it for 3 s) is no evidence."""
@@ -795,6 +909,8 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
     sightings = FakeSightings(clock)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
     svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "occupancy:123456789012")
+    svc.set_wall_sync(SimpleNamespace(proves_loaded=lambda *_: True, sync=lambda _: asyncio.sleep(0)))
     for _ in range(8):
         sightings.see("r1", 1.0, 0.0, 0.0, age_s=0.4)   # older than 300 ms: not a cue
         ticks(svc, clock, 0.5)
@@ -805,11 +921,37 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
     assert r1.suspects == ["fleet_monitor"]
 
 
+@pytest.mark.parametrize("binding,same_map_label", [(None, False), (None, True), (Fit(math.pi / 2, 1.0, -0.5, ()), False)])
+def test_overhead_sighting_requires_proven_same_map_frame(binding, same_map_label):
+    clock = FakeClock()
+    sightings = FakeSightings(clock)
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED"))
+    if same_map_label:
+        r1._state["map_id"] = "site-map"
+    svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "site-map")
+    if binding is not None:
+        svc.set_site_maps(SimpleNamespace(
+            active=lambda: (3, SimpleNamespace(map_id="site-map")),
+            map_bindings=SimpleNamespace(binding_for_grid=lambda *_: (binding, None)),
+        ))
+    for _ in range(2):
+        sightings.see("r1", 1.0, -0.5, math.pi / 2, map_id="site-map")
+        ticks(svc, clock, 0.5)
+    assert r1.suspects == []
+    for _ in range(2):
+        sightings.see("r1", 1.0, -0.5, math.pi, map_id="site-map")
+        ticks(svc, clock, 0.5)
+    assert r1.suspects == (["fleet_monitor"] if binding is not None else [])
+
+
 def test_one_overhead_sighting_re_read_counts_once():
     clock = FakeClock()
     sightings = FakeSightings(clock)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
     svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    svc.set_active_map_id(lambda: "occupancy:123456789012")
+    svc.set_wall_sync(SimpleNamespace(proves_loaded=lambda *_: True, sync=lambda _: asyncio.sleep(0)))
     sightings.see("r1", 0.0, 0.0, math.radians(90), age_s=0.0)
     ticks(svc, clock, 0.5)
     ticks(svc, clock, 0.5)                               # the same row, 0.5 s old, read again
@@ -1072,6 +1214,25 @@ def test_an_unconfirmed_decision_the_robot_then_reaches_gives_an_anchor():
     assert svc.anchors() == {"r"}
 
 
+@pytest.mark.parametrize("robot_type", [Localizing, TimingOut])
+def test_automatic_decision_does_not_anchor_after_occupancy_grid_changes(robot_type):
+    clock = FakeClock()
+    robot = robot_type("r", ON_A)
+    svc = service(robot, clock=clock)
+    for _ in range(12):
+        ticks(svc, clock, 0.5)
+        if robot.decisions:
+            break
+    assert len(robot.decisions) == 1 and svc.anchors() == set()
+    robot._state = state("r", "UNKNOWN", "odom")
+    robot._state["map_grid_id"] = None
+    ticks(svc, clock, 0.5)
+    robot._state = state("r", "LOCALIZED", pose=ON_A)
+    robot._state["map_grid_id"] = "occupancy:987654321098"
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
 @pytest.mark.parametrize("pose", [(ON_A[0] + 0.06, ON_A[1], ON_A[2]),
                                   (ON_A[0], ON_A[1], ON_A[2] + math.radians(6)), mirror(ON_A)])
 def test_an_unconfirmed_decision_reached_elsewhere_gives_no_anchor(pose):
@@ -1128,9 +1289,9 @@ def test_a_busy_refusal_is_retried_on_later_polls():
 
 
 def candidates_state(robot_id, request_id, reason=None):
-    return {"robot_id": robot_id, "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-            "localization": {"state": "CANDIDATES", "pose_frame": "odom", "reason": reason,
-                             "request_id": request_id}}
+    result = state(robot_id, "CANDIDATES", "odom")
+    result["localization"].update(reason=reason, request_id=request_id)
+    return result
 
 
 def test_s1_a_lead_pending_at_the_rotate_rung_holds_the_ladder_until_the_decision():
@@ -1215,3 +1376,20 @@ def test_spread_reads_cap_in_flight_and_start_each_robot_at_its_own_offset():
     offsets = {read_spread.offset(f"r{i}", 0.05) for i in range(6)}
     assert all(0 <= o < 0.05 for o in offsets) and len(offsets) > 1
     assert read_spread.offset("r0", 0.05) == read_spread.offset("r0", 0.05)
+
+
+def test_bridged_observer_exceeding_drift_or_turn_bounds_cannot_accuse_an_anchor():
+    from types import SimpleNamespace
+
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r1.see([seen_from(ON_A, R2_TRUE)])
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=25.0, dead_reckon_m=0.05) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []
+    svc.set_overhead_pose(lambda rid: SimpleNamespace(
+        state="LOCALIZED", source="bridged", bridge_turn_deg=2.0, dead_reckon_m=0.40) if rid == "r1" else None)
+    ticks(svc, clock, 1.5)
+    assert r2.suspects == []

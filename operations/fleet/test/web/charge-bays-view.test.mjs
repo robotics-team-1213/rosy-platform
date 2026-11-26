@@ -7,13 +7,15 @@ const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', i
 const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
 const frames = new URL('../../../../applications/fleet/web/shared/cell-frames.js', import.meta.url);
 const causeLine = new URL('../../../../shared/web/cause-line.js', import.meta.url);
+const controlDom = new URL('../../../../shared/web/control-dom.js', import.meta.url);
 const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
   .replaceAll('/console/assets/charge-bays-model.js', model.href)
   .replaceAll('/console/assets/cell-frames.js', frames.href)
-  .replaceAll('/common/cause-line.js', causeLine.href);
+  .replaceAll('/common/cause-line.js', causeLine.href)
+  .replaceAll('/common/control-dom.js', controlDom.href);
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
-const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+const { createChargeBaysView, chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -121,7 +123,7 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].buttons[1].requiresPresence, true);
   assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
   assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
-    ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
+    ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier1_arm_a_act_policy', 's5_tier1_arm_b_act_policy', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
   assert.equal(rows.cards[0].quickControls[0].decisionSubject, 'cell_s');
   assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
@@ -173,4 +175,90 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   const blankCardTargets = inspectorTargetsFromRows({ cards: [{ id: 'cell_s', healthText: '' }, { id: 'cell_ab', healthText: '' }] });
   assert.equal(blankCardTargets[3].jointLiveText, '관절 관측 없음 · 홈 여부 미확인');
   assert.equal(blankCardTargets[4].jointLiveText, '관절 관측 없음 · 홈 여부 미확인');
+});
+
+test('charge-bays stop receipts latch warning across refreshes, keep retry human_detected=true, and keep vision enabled without occupant', async () => {
+  const mkNode = (tag = 'DIV') => {
+    const el = {
+      tagName: String(tag).toUpperCase(), dataset: {}, style: {}, attributes: {}, listeners: {}, children: [],
+      hidden: false, value: '', textContent: '', className: '', open: false, selected: false,
+      get firstElementChild() { return el.children[0] || null; },
+      get childElementCount() { return el.children.length; },
+      classList: {add() {}, remove() {}, toggle() {}, contains: () => false},
+      append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.parentNode = el; el.children.push(n); } },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      addEventListener(type, cb) { (el.listeners[type] ??= []).push(cb); },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] ?? null; },
+      hasAttribute(k) { return k in el.attributes; },
+      removeAttribute(k) { delete el.attributes[k]; },
+      querySelector: () => null, querySelectorAll: () => [],
+    };
+    return el;
+  };
+  const prevDoc = globalThis.document;
+  globalThis.document = {createElement: mkNode, hidden: false, querySelectorAll: () => []};
+  try {
+    const els = {};
+    let held = false;
+    let stopMode = 'unconfirmed';
+    const posts = [];
+    const view = createChargeBaysView({
+      scope: {capture: () => ({check() {}, signal: null}), listen() {}, onDispose() {}},
+      el: id => (els[id] ??= mkNode('DIV')),
+      auth: {locked: false},
+      call: async (path, opts) => {
+        if (opts?.method === 'POST') {
+          posts.push({path, body: JSON.parse(opts.body)});
+          held = true;
+          if (stopMode === 'throw') throw new Error('HTTP 503');
+          if (stopMode === 'confirmed') return {ok: true, stop_confirmed: true, unconfirmed_pinky_stops: []};
+          if (stopMode === 'missing_ack') return {ok: true};
+          return {ok: false, stop_confirmed: false, unconfirmed_pinky_stops: ['t-cb']};
+        }
+        return {
+          ...plan,
+          human_safety: {human_detected: {cell_s: held}},
+          omx_cells: {
+            cell_s: {gate: {phase: held ? 'HUMAN_HOLD' : 'IDLE', robot_id: null}},
+            cell_ab: {gate: {phase: 'IDLE', robot_id: null}},
+          },
+        };
+      },
+    });
+    await view.refresh();
+    const findButtons = (node, pred, out = []) => {
+      for (const c of node.children || []) {
+        if ((c.tagName === 'BUTTON' || c.tagName === 'UI-BUTTON') && pred(c)) out.push(c);
+        findButtons(c, pred, out);
+      }
+      return out;
+    };
+    const visionBtn = findButtons(els['omx-right-inspector'], b => b.textContent.includes('비전 안전 비상정지'))[0];
+    assert.ok(visionBtn && !visionBtn.hasAttribute('disabled'), 'vision button enabled even without robot_id');
+    await visionBtn.listeners.click[0]();
+    assert.equal(posts[0].body.human_detected, true);
+    assert.ok(posts[0].body.intrusion_score >= 0.35);
+    assert.match(els['charge-bays-hint'].textContent, /정지 미확인\(t-cb\)/);
+    await view.refresh();
+    assert.match(els['charge-bays-hint'].textContent, /정지 미확인\(t-cb\)/);
+    // Held cell retry button sends human_detected: true; missing_ack / thrown 503 preserve warning across refresh()
+    stopMode = 'missing_ack';
+    const retryBtn = findButtons(els['omx-right-inspector'], b => b.textContent.includes('비상정지 재전송'))[0];
+    assert.ok(retryBtn, 'held cell renders retry button');
+    await retryBtn.listeners.click[0]();
+    assert.equal(posts[1].body.human_detected, true);
+    assert.match(els['charge-bays-hint'].textContent, /정지 미확인/);
+    stopMode = 'throw';
+    await retryBtn.listeners.click[0]();
+    assert.match(els['charge-bays-hint'].textContent, /정지 미확인/);
+    await view.refresh();
+    assert.match(els['charge-bays-hint'].textContent, /정지 미확인/);
+    // Explicit stop_confirmed: true clears the sticky warning
+    stopMode = 'confirmed';
+    await findButtons(els['omx-right-inspector'], b => b.textContent.includes('비상정지 재전송'))[0].listeners.click[0]();
+    assert.doesNotMatch(els['charge-bays-hint'].textContent, /정지 미확인/);
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });

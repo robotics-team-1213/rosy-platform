@@ -43,6 +43,7 @@ decision/src/rosy/decision/deliberation/providers small
 decision/src/rosy/decision/deliberation/evaluation small
 perception/front_camera/perception
 perception/front_camera/perception/drivable
+perception/localization
 fleet/web
 fleet/web/devices
 fleet/fleet/server/ledger
@@ -82,6 +83,7 @@ fleet/web/cell
 fleet/fleet/server/tracking
 fleet/fleet/server/evidence
 fleet/fleet/server/sitemap
+fleet/fleet/server/pipeline
 fleet/fleet/server/pose
 fleet/fleet/server/recognition
 fleet/fleet/server/rightofway

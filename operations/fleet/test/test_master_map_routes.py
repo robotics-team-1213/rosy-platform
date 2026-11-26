@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import httpx
 
+from core_common.protocol.map_grid import occupancy_map_id
 from fakes import FakeRobot, run
 from fleet.hub.hub import HubError
 from fleet.server.app import create_app
@@ -73,25 +74,26 @@ def test_end_to_end_pull_upload_get_and_push_preserves_float32_grid_id(tmp_path)
     pulled = client.get("/api/fleet/robots/rosy_46/map/bundle", headers=VIEWER)
     assert pulled.status_code == 200, pulled.text
     b = pulled.json()
-    assert b["resolution"] == 0.05 and b["origin"] == [-0.1, -0.1, 0.0]
-    assert b["grid_id"].startswith("occupancy:")
+    assert b["yaml"]["resolution"] == 0.05000000074505806 and b["yaml"]["origin"] == [-0.1, -0.1, 0.0]
+    grid_id = occupancy_map_id(robot_map)  # the pull carries no grid_id; CORE and the upload compute it
+    assert grid_id.startswith("occupancy:")
 
     # Upload with canonical 0.05 resolution + comment-bearing PGM computes identical grid_id.
     _, upload_body = _pgm_payload(res=0.05, origin=[-0.1, -0.1, 0.0])
     up = client.put("/api/fleet/site-map/master-grid", json=upload_body, headers=OP)
     assert up.status_code == 200, up.text
-    assert up.json()["grid_id"] == b["grid_id"]
+    assert up.json()["grid_id"] == grid_id
 
     fetched = client.get("/api/fleet/site-map/master-grid", headers=VIEWER)
     assert fetched.status_code == 200
-    assert fetched.json()["grid_id"] == b["grid_id"]
+    assert fetched.json()["grid_id"] == grid_id
     assert fetched.json()["pgm_base64"] == upload_body["pgm_base64"]
 
     pushed = client.post("/api/fleet/robots/rosy_46/master-map/push", json={"activate": True}, headers=OP)
     assert pushed.status_code == 200, pushed.text
-    assert pushed.json()["grid_id"] == b["grid_id"]
+    assert pushed.json()["grid_id"] == grid_id
     assert len(bot.site_map_pushed) == 1
-    assert bot.site_map_pushed[0]["grid_id"] == b["grid_id"]
+    assert bot.site_map_pushed[0]["grid_id"] == grid_id
     assert bot.site_map_pushed[0]["activate"] is True
     assert bot.site_map_pushed[0]["map_id"] == "map_v2_fleet"
 

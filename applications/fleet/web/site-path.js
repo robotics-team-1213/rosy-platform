@@ -11,7 +11,7 @@ export function proxyRow(sample) {
     && body !== null && typeof body === "object" && !Array.isArray(body)
     && Object.keys(body).length === 1 && body.status === "ok";
   return exact ? { name: "프록시", word: "정상", kind: "good" }
-    : { name: "프록시", word: "끊김", kind: "crit" };
+    : { name: "프록시", word: "끊김", kind: "warn" };
 }
 
 export function fleetRow(sample) {
@@ -19,13 +19,13 @@ export function fleetRow(sample) {
   if (sample.finished === true && typeof sample.status === "number") {
     return { name: "Fleet", word: "정상", kind: "good" };
   }
-  return { name: "Fleet", word: "끊김", kind: "crit" };
+  return { name: "Fleet", word: "끊김", kind: "warn" };
 }
 
 export function visionRow(sample, { locked = false } = {}) {
   if (locked || sample?.authRequired === true) return { name: "Vision", word: "인증 필요", kind: "neutral" };
   if (!sample) return pending("Vision");
-  if (sample.finished !== true) return { name: "Vision", word: "끊김", kind: "crit" };
+  if (sample.finished !== true) return { name: "Vision", word: "끊김", kind: "warn" };
   if (sample.status === 200 && Array.isArray(sample.names) && sample.names.length) {
     return { name: "Vision", word: sample.names.join(", "), kind: "good" };
   }

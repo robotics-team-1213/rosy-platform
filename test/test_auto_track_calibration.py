@@ -165,7 +165,7 @@ def test_dry_run_and_mean_approval_in_main(tmp_path, monkeypatch, capsys):
     assert dry_line["decision"] == "approve"
     assert applied == []
 
-    # Reset idx to 4 for the real 5th run.
+    # Reset idx to 4 for default run (no --sync-map): calibration updates, map stays untouched.
     idx["n"] = 4
     assert mod.main([]) == 0
     upd_line = json.loads(capsys.readouterr().out.strip())
@@ -173,10 +173,26 @@ def test_dry_run_and_mean_approval_in_main(tmp_path, monkeypatch, capsys):
     assert upd_line["decision"] == "approve"
     assert len(applied) == 1
     approved_solved, needs_cal, needs_map = applied[0]
-    assert needs_cal and needs_map
+    assert needs_cal and not needs_map
     # Mean of shifts [0.030..0.038] is 0.034, NOT the last solve (0.038).
     assert abs(approved_solved["map_to_image"][2] - (-0.034)) < 1e-6
     assert abs(approved_solved["places"][0]["x"] - 0.134) < 1e-6
+
+    # Explicit --sync-map activates map sync alongside calibration when requested.
+    idx["n"] = 4
+    assert mod.main(["--sync-map", "--force"]) == 0
+    capsys.readouterr()
+    assert len(applied) == 2
+    assert applied[1][1] and applied[1][2]
+
+
+def test_place_diff_alone_holds_without_sync_map_flag():
+    mod = _load_module()
+    stable_small = [_shifted_corners(mod, 0.002) for _ in range(5)]
+    held = mod.decide(stable_small, place_diff_m=0.05, now=100_000.0)
+    assert held["decision"] == "hold" and held["reason"] == "within_threshold"
+    approved = mod.decide(stable_small, place_diff_m=0.05, now=100_000.0, sync_map=True)
+    assert approved["decision"] == "approve" and approved["reason"] == "place_diff_exceeded"
 
 
 def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
@@ -309,15 +325,15 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
 
     for _ in range(4):
-        assert mod.main([]) == 0
+        assert mod.main(["--sync-map"]) == 0
         capsys.readouterr()
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     deferred = json.loads(capsys.readouterr().out.strip())
     assert deferred["status"] == "deferred" and deferred["map_sync_status"] == 409
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
 
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     updated = json.loads(capsys.readouterr().out.strip())
     assert updated["status"] == "updated" and updated["map_updated"] is True
 
@@ -356,7 +372,7 @@ def test_auto_track_calibration_service_principal_is_scoped_to_calibration_and_s
 
 def test_spread_is_read_on_traced_places_not_off_screen_corners():
     mod = _load_module()
-    swinging = [_shifted_corners(mod, 0.30 + (0.05 if i % 2 else 0.0)) for i in range(5)]  # off-screen extrapolation
+    swinging = [_shifted_corners(mod, 0.08 + (0.05 if i % 2 else 0.0)) for i in range(5)]  # off-screen extrapolation within MAX_AUTO_DRIFT_M
     tight = [[{"id": "S1", "x": -0.675 + i * 0.001, "y": -0.136}] for i in range(5)]
     loose = [[{"id": "S1", "x": -0.675 + (0.04 if i % 2 else 0.0), "y": -0.136}] for i in range(5)]
     assert mod.places_spread_m(tight) < mod.STABLE_SPREAD_M < mod.places_spread_m(loose)
@@ -388,9 +404,9 @@ def test_forbidden_map_sync_still_applies_calibration_and_records_it(tmp_path, m
         "cal_updated": True, "calibration_revision": 2, "map_updated": False,
         "map_sync": "forbidden", "map_sync_status": 403})
     for _ in range(4):
-        assert mod.main([]) == 0
+        assert mod.main(["--sync-map"]) == 0
         capsys.readouterr()
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     cap = capsys.readouterr()
     out = json.loads(cap.out.strip())
     assert out["status"] == "updated" and out["map_sync"] == "forbidden" and out["map_sync_status"] == 403
@@ -420,7 +436,7 @@ def test_a_map_sync_refused_three_times_in_a_row_fails_the_run(tmp_path, monkeyp
     })
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
         "cal_updated": False, "map_updated": False, "map_sync": "forbidden", "map_sync_status": 403})
-    codes = [mod.main([]) for _ in range(7)]
+    codes = [mod.main(["--sync-map"]) for _ in range(7)]
     capsys.readouterr()
     assert codes == [0, 0, 0, 0, 0, 0, 1]  # 4 holds fill the series, then refusals 1, 2, 3
     assert json.loads(state_file.read_text(encoding="utf-8"))["map_sync_refused_runs"] == 3
@@ -558,3 +574,44 @@ def test_apply_fleet_update_clears_cal_when_site_map_returns_route_active(monkey
     mod.apply_fleet_update("t", {"places": [], "edges": []}, needs_cal=True, needs_map=True)
     compile(sent["code"], "apply", "exec")
     assert "SITE_MAP_ROUTE_ACTIVE" in sent["code"] and "needs_cal = False" in sent["code"]
+
+
+def test_frozen_calibration_and_large_drift_are_held():
+    mod = _load_module()
+    small = [_shifted_corners(mod, 0.04) for _ in range(5)]
+    frozen = mod.decide(small, cur_frozen=True, now=100_000.0)
+    assert frozen["decision"] == "hold" and frozen["reason"] == "calibration_frozen"
+
+    huge = [_shifted_corners(mod, 0.40) for _ in range(5)]
+    capped = mod.decide(huge, has_current_cal=True, now=100_000.0)
+    assert capped["decision"] == "hold" and capped["reason"] == "drift_exceeds_auto_cap"
+
+    forced = mod.decide(huge, has_current_cal=True, cur_frozen=True, force=True, now=100_000.0)
+    assert forced["decision"] == "approve" and forced["reason"] == "forced"
+
+
+def test_held_large_drift_submits_recalibration_candidate(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 22, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.40, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.40, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.50, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"route_active": False, "map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    submitted = []
+    monkeypatch.setattr(mod, "submit_recal_candidate", lambda *_a, **kw: submitted.append(kw["reason"]) or {"submitted": True})
+    for _ in range(5):
+        assert mod.main([]) == 0
+        line = json.loads(capsys.readouterr().out.strip())
+    assert line["decision"] == "hold" and line["reason"] == "drift_exceeds_auto_cap"
+    assert submitted == ["drift_exceeds_auto_cap"]

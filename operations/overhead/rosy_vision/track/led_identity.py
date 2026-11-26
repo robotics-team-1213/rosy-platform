@@ -90,21 +90,37 @@ class Sample:
 def sample_frame(image: np.ndarray, *, captured_at: float, calibration_revision: str | None,
                  blobs: Sequence[Blob], color: str, config: LedConfig = LedConfig()) -> Sample:
     low, high = config.hues[color]
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    lit_mask = (hue >= low) & (hue <= high) & (sat >= config.min_saturation) & (val >= config.min_value)
-    height, width = lit_mask.shape
-    rows, cols = np.ogrid[:height, :width]
+    if not blobs:
+        return Sample(captured_at, calibration_revision, (), (), ())
+    height, width = image.shape[:2]
     shares = []
     moments = []
     for blob in blobs:
+        inner_r = config.ring_inner * blob.radius_px
+        outer_r = config.ring_outer * blob.radius_px
+        x0 = max(0, math.floor(blob.x_px - outer_r))
+        x1 = min(width, math.ceil(blob.x_px + outer_r) + 1)
+        y0 = max(0, math.floor(blob.y_px - outer_r))
+        y1 = min(height, math.ceil(blob.y_px + outer_r) + 1)
+        if x1 <= x0 or y1 <= y0:
+            shares.append(0.0)
+            moments.append((0, 0.0, 0.0))
+            continue
+        hsv = cv2.cvtColor(image[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+        hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+        lit_mask = (hue >= low) & (hue <= high) & (sat >= config.min_saturation) & (val >= config.min_value)
+        rows, cols = np.ogrid[y0:y1, x0:x1]
         distance = np.hypot(cols - blob.x_px, rows - blob.y_px)
-        ring = (distance >= config.ring_inner * blob.radius_px) & (distance <= config.ring_outer * blob.radius_px)
+        disk = distance <= outer_r
+        ring = (distance >= inner_r) & disk
         count = int(ring.sum())
         shares.append(0.0 if count == 0 else float(lit_mask[ring].sum()) / count)
-        ys, xs = np.nonzero(lit_mask & (distance <= config.ring_outer * blob.radius_px))
+        ys, xs = np.nonzero(lit_mask & disk)
         n = int(xs.size)
-        moments.append((n, float((xs - blob.x_px).sum()), float((ys - blob.y_px).sum())) if n else (0, 0.0, 0.0))
+        moments.append(
+            (n, float(((xs + x0) - blob.x_px).sum()), float(((ys + y0) - blob.y_px).sum()))
+            if n else (0, 0.0, 0.0)
+        )
     return Sample(captured_at, calibration_revision, tuple(blobs), tuple(shares), tuple(moments))
 
 

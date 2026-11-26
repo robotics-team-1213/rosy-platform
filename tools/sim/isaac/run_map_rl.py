@@ -14,7 +14,9 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/envs/isaac'))
+from world_training_hooks import add_world_monitor_args, open_isaac_map_rl_world_hook, publish_isaac_map_rl_step
 from prepare_urdf import REPOSITORY, validate_output_path
 from model_checks import check_urdf
 from importer_compat import import_model, reference_model
@@ -91,6 +93,7 @@ def main():
     parser.add_argument('--camera-model', type=Path, help='existing frozen perception model; CAMERA_LINE diagnostic')
     parser.add_argument('--camera-model-revision')
     parser.add_argument('--camera-model-sha256')
+    add_world_monitor_args(parser)
     args = parser.parse_args()
     if not 1 <= args.train_episodes <= 20 or not 0 < args.time_limit <= 600 or not math.isfinite(args.time_limit):
         raise ValueError('bounded episode count and time limit required')
@@ -129,19 +132,14 @@ def main():
     from isaacsim import SimulationApp
     app = SimulationApp({'headless': True, 'fast_shutdown': False, 'width': 640, 'height': 480,
                          'anti_aliasing': 0, 'extra_args': ['--/app/extensions/excluded=["isaacsim.gui.menu"]']})
-    owner = None
-    stop_robot = None
-    recorder = None
-    camera = None
-    front_camera = None
-    lane = None
-    policy = None
+    owner = stop_robot = recorder = camera = front_camera = lane = policy = None
     summary = dict(source_revision=args.source_revision, map_sha256=track['source_sha256'],
                    segments=track['segments'], algorithm='CPU residual Q-learning, pursuit yaw gain',
                    operating_acceptance='HOLD', episodes=[], learning_steps={})
     if perception is not None:
         summary.update(algorithm='CPU residual Q-learning, existing CAMERA_LINE yaw gain', perception=perception,
                        camera_acceptance='HOLD', camera_guidance='map route direction + native odom, camera required')
+    world_hook = open_isaac_map_rl_world_hook(args, track['source_sha256'])
     try:
         import numpy as np
         import omni.kit.app
@@ -484,6 +482,7 @@ def main():
                     if owner.halted and not result['goal_reached']:
                         raise RuntimeError('policy envelope HOLD during active route')
                     previous = (state, action) if state is not None else None
+                    publish_isaac_map_rl_step(world_hook, elapsed=elapsed, phase=phase, pose=pose, epoch=epoch, step=frame - episode_start_frame, reward=result.get('reward', 0.0))
                     step()
             episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
                            sim_s=elapsed, wall_s=time.monotonic() - wall_start,
@@ -544,6 +543,7 @@ def main():
         (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
         raise
     finally:
+        if world_hook is not None: world_hook.close()
         summary['updates'] = 0 if policy is None else policy.updates
         try:
             cleanup_error = None

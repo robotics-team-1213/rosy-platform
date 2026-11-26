@@ -1,6 +1,6 @@
 # ROSY Calibration
 
-셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 실측 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
+셀의 보정을 한 곳에서 보고 돌리는 앱이다([D-951](../../docs/adr/D-951-rosy-calibration-application.md)). 첫 화면은 보정 요청이다(아래 「화면」). 이 문서는 앱의 경계와 보정 순서의 정본이다.
 
 ## 경계
 
@@ -18,10 +18,26 @@
 | 3. 카메라 모델 | `cell_frame.py learn` / `check`([D-933](../../docs/adr/D-933-arm-s-cell-coordinate-frame-markers.md) 마커) | 카메라 자세, 마커 위치 | 집게 마커를 FK 점에 보인다(감독) |
 | 4. 면 | `cell_depth` 결과 → 각 팔 설정의 `surface_z` | 면별 높이(FK) | 없음 |
 | 5. 관절 게인 | 세션 설정 `caps.json`의 `i` | 하중 관절 I 게인 | 정지 시험(감독) |
-| 6. 점검 | `cell_calibrate.py check` | 남은 할 일 없음 | 없음 |
+| 6. 점검 | `cell_calibrate.py check` | 카메라·맵 상태와 남은 작업 목록 | 없음 |
 
 - 사람이 정하는 것: 인쇄물 부착(D-933), 바닥을 낮출 사각형의 승인(`limits.low_zones`), 동작마다 스위치 확인.
 - 숫자를 손으로 고치지 않는다. 다시 재야 하면 그 단계를 다시 돌린다.
+
+### A·B 카메라 준비와 구도 맞추기
+
+녹화 벤치의 **포즈·기준 → 카메라 준비 점검 · A·B**에서 등록 장치·영상 연결, 새 프레임, 조명을 확인한다. 구도를 확인하고 **확인한 현재 구도를 기준으로 저장**을 누르면 측면 JPEG와 프레임 출처가 벤치 준비 폴더의 `camera-side-reference.json`에 함께 저장된다. 조명 기준 갱신은 이 파일을 변경하지 않는다.
+
+자동 구도 비교는 측면에 고정한 `DICT_4X4_50` 마커 두 개를 사용한다. 벤치 준비 폴더의 `camera-side-markers.json`에는 두 마커의 정수 ID를 `ids`에, 현장 검증으로 정한 최대 모서리 이동 허용치를 `max_shift_px`에 기록한다. 설정이나 마커 검출이 없으면 자동 판정은 보류한다. 기준 사진과 현재 영상을 비교해 선박과 임시대가 보이도록 맞춘다. 마커가 둘 다 보이면 현재 영상의 노란 점을 파란 목표점에 맞춘다.
+
+이 화면은 준비 점검용이다. 위치 보정의 수용 기준과 ACT 실행 권한은 각각 기존 절차를 따른다.
+
+### 보정 후 실물 검증
+
+1. 검증할 팔과 필수 좌표 `site:x,y` 목록을 정한다. 각 좌표는 팔 기준 미터로 기록한다.
+2. 맵을 다시 맞출 때는 감독하에 `remap`을 실행한다. `check`의 `camera_moved`와 `missing_map`을 확인한다. 카메라 이동이 감지되거나 맵이 빠지면 해당 맵을 쓰는 좌표의 방문을 보류한다.
+3. [셀 작업 클라이언트](../../deploy/robot/omx/cell_job_client.py)의 `run post_eval --params-json … --wait`로 좌표를 하나씩 관측한다. 요청에 `arm`, `config`, `site`, `x`, `y`를 넣는다. 매 동작 전 스위치 옆 감독자를 확인한다. 운영자 인증으로 `person_at_switch: true`와 `apply: false`를 보낸다. 맵이나 보정값이 바뀌면 영향을 받은 좌표를 다시 관측한다.
+4. 필수 좌표별 작업 ID와 `structured_result.results`를 모은다. 각 결과의 `site`와 `point_m`을 대상 목록과 대조한다. `map_sha`가 같은 설정의 현재 맵 지문과 일치하는지 확인한다. `status: pass`를 확인한다. 맵 지문, 잔차 `residual_mag_mm`, 측정 불확도 `sigma_mm`를 기록한다. 확인을 마치지 못한 좌표는 수용을 보류한다. [구역별 XY 요약](../../deploy/robot/omx/cell_post_eval_summary.py)은 최근 기록을 구역별로 모으며 관측이 없는 구역을 건너뛴다.
+5. `post_eval`은 빈 집게의 XY 잔차를 확인한다. 현장 평균 오차는 [D-951의 수용 기준](../../docs/adr/D-951-rosy-calibration-application.md#consequences)에 따라 별도로 실측한다. 적층 높이는 [측면 Z 수용 절차](#측면-적층-z-기준-설치와-수용)를 따른다.
 
 ## ChArUco 렌즈 보정
 
@@ -57,7 +73,7 @@ python3 deploy/robot/omx/cell_checkerboard.py intrinsics \
 - 세션 잠금은 팔마다다(`joint_tune.session_lock(arm)`, `record_session --arm`).
 - 움직이기 전에 경로 점검(`cell_corridor`)과 통로 예약(`cell_space`)을 거친다.
 
-## 실측 요청
+## 보정 요청
 
 사람만 확인할 수 있는 것(줄자 거리, 감독 시험으로 보는 자세)은 엔진 `deploy/robot/omx/cell_requests.py`가 요청으로 연다([D-951 덧붙임 2026-11-09](../../docs/adr/D-951-rosy-calibration-application.md)). 요청은 후보마다 예측값을 적고, 사람의 답은 어느 후보를 지지하는지만 정한다. 값을 직접 바꾸지 않는다.
 
@@ -73,7 +89,7 @@ python3 deploy/robot/omx/cell_requests.py answer <id> --value <mm> --by <이름>
 
 ## 화면
 
-실측 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
+보정 요청 화면이다([D-1004](../../docs/adr/D-1004-calibration-screen-and-operate-capability.md)). 서버는 `calibration_web.py`(stdlib, 127.0.0.1:8776), 페이지는 `web/`(번들러 없음). 저장소는 엔진 `cell_requests`가 유일한 작성자이고 화면은 `cell_requests.answer`만 부른다.
 
 ```
 python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/cell-requests --account-config <receiver.json> --port 8776
@@ -103,7 +119,21 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 ```
 
 - `GET /api/calibration/status`: 팔별 리스, incident(읽기 전용 `omx_incident.py status`), 설치 리비전, 자리별 지도(점 수·LOO·지문)·면 높이·바이어스.
-- `POST /api/calibration/jobs {arm, step, targets, person_at_switch}`: 단계는 `check`, `depth-verify`, `pivot-near`, `remap`만(그 밖은 422). 팔을 움직이는 `pivot-near`·`remap`은 `person_at_switch: true`가 없으면 422(D-911). 리스를 다른 주인이 쥐면 409. 202와 작업 기록; `GET /api/calibration/jobs`, `.../jobs/<id>`(로그 끝 4000자)로 본다.
+- 현장 PC·휴대폰에서 같은 tailnet HTTPS 주소의 `/?arm=arm_a`, `/?arm=arm_b`, `/?arm=arm_s`를 열면 로그인 후에도 선택한 팔을 유지한다. Fleet에 `ROSY_CALIBRATION_ORIGIN`을 설정하면 셀 화면의 팔 카드에서 바로 열 수 있다. 운영자는 보정 작업을 선택해 시작하고 작업 ID, 진행 상태, 결과를 같은 화면에서 확인한다.
+- `POST /api/calibration/jobs`는 상태 점검(`check`), 깊이 검증(`depth-verify`), 지정 좌표 XY 보정(`pivot-near`), 개략 맵 재측정(`remap`), 표면 높이 측정(`surface`)을 지원한다. 팔을 움직이는 작업에는 `person_at_switch: true`가 필요하다. 지정 고정면 재측정에는 해당 지점과 이동 경로가 비었는지도 확인한다. 다른 작업이 팔을 사용 중이면 409를 반환한다. 시작 시 반환된 ID로 `GET /api/calibration/jobs/<id>`에서 결과와 로그를 읽는다.
 - `POST /api/calibration/assessments {arm, verdict: clear|hold, reasons, evidence[{kind: frame|joints|torque, ref, sha256?}]}`: `<work>/assessments.jsonl`에 쌓는다.
 - `POST /api/calibration/incidents/<arm>/clear`: 10분 안의 최신 판정이 `clear`이고, 다른 주인의 리스와 실행 중인 `record_session`이 없을 때만 `omx_incident.py clear`를 부른다(측정이 먼저, 모델 판정만으로는 해제하지 않는다).
 - 쓰기 경로는 모두 같은 출처 + `calibration.operate` 세션이 필요하다.
+
+### B 경로의 CAD 영상 관측
+
+빈 임시대와 선박의 CAD 정합 결과를 같은 촬영 쌍으로 검증한 뒤, 보정 프로필이 참조하는 상단 사진에 중심 픽셀을 연결한다. 아래 예에서 `--reference`는 해당 보정 지도의 원본 사진이다. 도구는 받아들인 칸만 표준 출력에 쓰고 제외 사유는 표준 오류에 쓴다. 종료 코드를 확인한 뒤 생성 파일을 사용한다.
+
+```sh
+python tools/sim/omx_route_cad_evidence.py --stand stand/result.json --ship ship/result.json --reference reference-top.jpg > cad-route.json
+python deploy/robot/omx/cell_calibrate.py --config cell-arm-b-policy.json check --route tmp-b-2-l1 ship-h1r2-l0 --cad-image-evidence cad-route.json
+```
+
+웹의 **사전 점검**에도 같은 경로를 포함하려면 B 프로필의 기존 `preflight`에 `"check_route": ["tmp-b-2-l1", "ship-h1r2-l0"]`를 추가하고 최상위 `cad_image_evidence_path`에 파일 이름을 지정한다. 상대 경로는 프로필 폴더에서 찾는다. `check.route.calibration_evidence.sites`의 `recorded_image_only`는 해당 카메라 기준에서의 중심 픽셀과 검증 오차를 뜻한다. 팔 기준 XY, 지지면 높이와 이송 전 깊이 점검은 기존 절차로 확인한다.
+
+웹의 **등록된 칸의 XY 위치 검증**은 선택한 팔의 프로필에 저장된 지점과 중심 XY를 사용한다. 전원 스위치에서 감독을 확인하면 기존 post-eval 엔진이 방문 높이에서 집게 위치 오차를 재고 작업 결과를 남긴다. 부족한 좌표는 경로 사전 점검에서 확인한다. 지지면 높이에서의 중심 검증과 접촉 확인은 별도의 측정이다.

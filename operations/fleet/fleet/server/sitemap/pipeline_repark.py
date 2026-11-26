@@ -18,6 +18,7 @@ class UnknownRequest(KeyError):
 ROOT_KEY = "repark_root"
 CARRY_FIELDS = ("preset", "cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier",
                 "unload_batch_id", "unload_expected", "unload_index",
+                "fallback_from_task_id", "fallback_chain_depth", "execution_mode", "max_chunks", "requires_presence_confirm",
                 "object_ref", "identity", "identity_observation_ref", "identity_attested_by", "emit_release_permit")
 
 
@@ -75,6 +76,42 @@ def on_abort(state, task: dict, stage_result: dict, now: float, rules=None) -> d
     return request
 
 
+def _maybe_clear_aborted_cell(state, old: dict, request: dict, now: float) -> None:
+    """Clear ABORTED cell lock after a DONE repark only when no human, hold, live task, or unfolded arm remains."""
+    cell_id = old.get("cell_id")
+    cells = getattr(state, "omx_cell_states", None) or {}
+    cell = cells.get(cell_id)
+    if cell is None or "ABORTED" not in (cell.get("phase"), cell.get("prev_phase")):
+        return
+    human = getattr(state, "human_detected", None) or {}
+    if human.get("all") or human.get(cell_id):
+        return
+    arm_id = old.get("arm_id") or request.get("arm_id")
+    arms = ("arm_s",) if cell_id == "cell_s" else ("arm_a", "arm_b") if cell_id == "cell_ab" else (arm_id,)
+    if not any(arms):
+        return
+    holds = getattr(state, "arm_holds", None) or {}
+    if any((holds.get(arm) or {}).get("held") for arm in arms if arm):
+        return
+    if any(t.get("cell_id") == cell_id and t.get("status") in ("RUNNING", "PAUSED_HUMAN")
+           for t in (getattr(state, "omx_cell_tasks", None) or {}).values()):
+        return
+    live_states = getattr(state, "arm_live_states", None) or {}
+    for arm_name in arms:
+        if not arm_name:
+            continue
+        arm = live_states.get(arm_name) or {}
+        updated = arm.get("folded_updated_at")
+        if (arm.get("folded") is not True
+                or not isinstance(updated, (int, float)) or isinstance(updated, bool)
+                or not math.isfinite(updated) or not (-5.0 <= (now - updated) <= 120.0)):
+            return
+    cell.pop("prev_phase", None)
+    cell["phase"] = "CLAIMED" if (old.get("unload_batch_id") and (old.get("unload_index") or 0) > 0) else "IDLE"
+    cell["amr_motion_inhibited"] = False
+    cell.pop("reason", None)
+
+
 def close(state, request_id: str, body: dict, enqueue, now: float) -> dict:
     """The vehicle side reports DONE or FAILED; DONE queues the retry, FAILED needs a person."""
     request = next((r for r in (getattr(state, "repark_requests", None) or {}).values()
@@ -95,6 +132,7 @@ def close(state, request_id: str, body: dict, enqueue, now: float) -> dict:
     spec = {k: old[k] for k in CARRY_FIELDS if k in old}
     spec.update(task_id=f"{request['task_id']}-rp{request['attempt']}", **{ROOT_KEY: request["root"]})
     request["retry_task_id"] = enqueue(spec)["task_id"]
+    _maybe_clear_aborted_cell(state, old, request, now)
     _event(state, request, "done", f"retry {request['retry_task_id']}", now)
     return request
 

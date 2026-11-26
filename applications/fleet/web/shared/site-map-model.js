@@ -46,24 +46,44 @@ export function actionRows(plan, map) {
 }
 export function planIsCurrent(plan, active) { return Boolean(plan && active && plan.map_version === active.version); }
 
-export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
-  const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
-  const rot = (x, y) => [x * c + y * s, -x * s + y * c], xs = [], ys = [];
-  const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
-  for (const place of map.places) add(place.x, place.y);
-  for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+// 지도의 범위: 장소·도로·시설(+ 로봇 고리). 관제 지도와 현장 지도가 같은 범위로 맞춘다(2026-11-26 패널 C-6).
+export function mapBounds(map, discs = []) {
+  const xs = [], ys = [], add = (x, y) => { xs.push(x); ys.push(y); };
+  for (const place of map.places || []) add(place.x, place.y);
+  for (const edge of map.edges || []) for (const [x, y] of edge.polyline) add(x, y);
   for (const facility of map.facilities || []) for (const [x, y] of facility.geometry) add(x, y);
   for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);
   if (!xs.length) { const [x, y] = map.survey?.origin || [0, 0]; add(x - 1, y - 1); add(x + 1, y + 1); }
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  return {min_x: Math.min(...xs), min_y: Math.min(...ys), max_x: Math.max(...xs), max_y: Math.max(...ys)};
+}
+
+// 미터 범위 → 화면 px 하나: 축척·px 여백·y 뒤집기·화면 방향(D-513 7 시계 방향 quarter turn). matrix 는 같은 변환의 3×3.
+export function fitBox(b, width, height, pad = 24, turn = 0) {
+  const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
+  const rot = (x, y) => [x * c + y * s, -x * s + y * c], [ax, ay] = rot(b.min_x, b.min_y), [bx, by] = rot(b.max_x, b.max_y);
+  const minX = Math.min(ax, bx), maxX = Math.max(ax, bx), minY = Math.min(ay, by), maxY = Math.max(ay, by);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6), (height - 2 * pad) / Math.max(maxY - minY, 1e-6));
-  const ox = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2, oy = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2;
+  const ox = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2 - minX * scale, oy = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2 + maxY * scale;
   return {
-    scale, turn,
-    toPx: (x, y) => { const [rx, ry] = rot(x, y); return [ox + (rx - minX) * scale, oy + (maxY - ry) * scale]; },
-    toMap: (px, py) => { const rx = minX + (px - ox) / scale, ry = maxY - (py - oy) / scale; return [rx * c - ry * s, rx * s + ry * c]; },
+    scale, turn, matrix: [scale * c, scale * s, ox, scale * s, -scale * c, oy, 0, 0, 1],
+    toPx: (x, y) => { const [rx, ry] = rot(x, y); return [ox + rx * scale, oy - ry * scale]; },
+    toMap: (px, py) => { const rx = (px - ox) / scale, ry = (oy - py) / scale; return [rx * c - ry * s, rx * s + ry * c]; },
     rotateDeg: (angle) => -angle * 180 / Math.PI + turn,
   };
+}
+
+// 2026-11-26 지도 근거 줄: 지도 vN · 활성 HH:MM:SS(KST) · 출처 · 측량 근거. UTC 원문은 title. drawn(edge): 그 측량선을 그렸는가.
+export function mapEvidence(active, drawn) {
+  if (!active?.map) return {text: '활성 지도 없음', title: ''};
+  const at = new Date(active.activated_at * 1000), known = Number.isFinite(at.getTime());
+  const surveys = new Set((active.map.edges || []).filter(drawn).map(({display_source: s}) => `측량 ${s.surveyed_at} ${s.plane}`));
+  const time = known ? at.toLocaleTimeString('en-GB', {timeZone: 'Asia/Seoul', hourCycle: 'h23'}) : '시각 모름';
+  return {text: `지도 v${active.version} · 활성 ${time} · 출처 Fleet 활성 지도 · ${[...surveys].join(' · ') || '측량선 없음'}`,
+    title: `${active.map.map_id}${known ? ` · 활성 ${at.toISOString()} (UTC)` : ''}`};
+}
+
+export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
+  return fitBox(mapBounds(map, discs), width, height, pad, turn);
 }
 
 export function rectangularView(record, mapId, width, height, turn = 0) {
@@ -137,6 +157,11 @@ export function repeatPlaces(map) {
   return starts.length >= 2 ? starts : all.filter(place => ['start', 'stop'].includes(place.kind));
 }
 
+export function tripNav2Body(driveMode) {
+  if (driveMode === "nav2_slam") return {drive_mode: "nav2", approved_slam_required: true};
+  return driveMode === "nav2" ? {drive_mode: "nav2"} : {};
+}
+
 export function repeatTripBody(map, start, leader = '', driveMode = '') {
   const starts = repeatPlaces(map).map(place => place.id);
   if (!starts.includes(start)) throw new Error('출발 자리를 고르세요');
@@ -146,7 +171,7 @@ export function repeatTripBody(map, start, leader = '', driveMode = '') {
   return {
     to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true,
     ...(leader ? {convoy: {leader}} : {}),
-    ...(driveMode === 'nav2' ? {drive_mode: 'nav2'} : {}),
+    ...tripNav2Body(driveMode),
   };
 }
 
@@ -158,7 +183,7 @@ export function oneLapBody(map, start, via) {
 
 export function oneLapReason({active, running, start, via}) {
   if (!active) return '활성 지도가 없습니다';
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   const stops = (active.map?.places || []).filter(place => ['start', 'stop'].includes(place.kind));
   if (stops.length < 2) return '한 바퀴에는 정지 장소가 두 곳 이상 필요합니다';
   return start && via && start !== via ? '' : '서로 다른 출발·경유 장소를 고르세요';
@@ -184,13 +209,13 @@ export function tripPoseReason(guide, robotId, active, corePose = null) {
 export function planTrip(request, robotId, body) { return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)}); }
 export function startTrip(request, planId) { return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'}); }
 export function tripRefusalText(error) { return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error); }
-export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+export function planSummaryText(plan, distance = `${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`) {
+  return `${plan.segments.length}개 차로 · ${distance} · 지도 v${plan.map_version}`
     + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 export function repeatTripReason({active, running, start}) {
   if (!active) return '활성 지도가 없습니다';
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   if (repeatPlaces(active.map).length < 2) return '반복 운행에는 출발 자리가 두 곳 이상 필요합니다';
   return start ? '' : '출발 자리를 고르세요';
 }
@@ -199,7 +224,7 @@ export function convoyLeaders(open, robotId) { return (open || []).filter(trip =
 export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
   const denied = operatorReason(role);
   if (denied) return denied;
-  if (running) return '이 로봇은 이미 운행 중입니다';
+  if (running) return '이 로봇에 접수된 운행이 있습니다';
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
@@ -383,7 +408,7 @@ export function trafficCardLine(traffic, robotId) {
   const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);
   if (resolver?.trigger === "wait_cycle") parts.push(`교착 · ${RESOLVER_DECISION_LABEL[resolver.decision] || RESOLVER_DECISION_LABEL.human}`);
   else if (traffic.wait_cycle?.includes(robotId)) parts.push("대기 순환 후보 · 지속 여부 확인 중");
-  if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
+  if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 접수");
   if (robot.advice?.signal) parts.push(`신호 참고 전송 · seq ${robot.advice.sent_seq}${robot.advice.accepted ? "" : ` · ${robot.advice.reason || "미수락"}`}`);
   if (robot.preview?.events?.length) parts.push(`예고: ${robot.preview.events.slice(0, 2).map((e) => `${e.at_m.toFixed(2)} m ${{left: "왼쪽 회전", right: "오른쪽 회전", straight: "교차로 직진", stop: "정지", bend: "굽이", arc: "호", crosswalk: "횡단보도", signal: "신호", authority_end: "통행권 끝"}[e.kind === "turn" ? e.params.action : e.kind] || e.kind}`).join(" · ")}`);
   return parts.join(" · ");

@@ -139,9 +139,11 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float, width_m
             library = write_library(config, pick, target["place"], work / "pinch-replan.json")
             return all(cell.act(c).get("ok") for c in ("run lift_pick", f"load {library}", "goto above_pick", "run descend_pick"))
 
+        import cell_remap_plan as rp
+
         sign = json.loads(signs_path.read_text()) if signs_path.exists() else {"along": 1.0}
         closing_off = next((v for v in (target.get("closing_offset_deg"), target.get("offset"), prm.get(params, "auto.closing_theory_deg")) if v is not None), 90.0)
-        closing = base_pick["yaw_deg"] + closing_off
+        closing = rp.live_fk_yaw(cell, config, base_pick["yaw_deg"]) + closing_off
         mount = json.loads(mount_path.read_text())["pads"] if mount_path.exists() else None
         out = check(cell, spec.get("camera", "wrist"), (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, width_mm,
                     redescend, params, sign, mount, color=finger_color)

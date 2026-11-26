@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -24,6 +25,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_lerobot_shadow as lrs  # noqa: E402
+from cell_policy_entry import (  # noqa: E402,F401
+    configured_arm_id as _configured_arm_id, open_policy_shadow,
+    resolve_arm_id as _resolve_arm_id, safe_log_url as _safe_log_url,
+)
 from cell_policy_goals import GOALS, resolve_goal_site  # noqa: E402
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
@@ -32,14 +37,16 @@ from cell_policy_shape import (  # noqa: E402,F401
     envelope, in_jaw_zone, jaw_gate_spec, jaw_zone_error, open_before_close, resample_chunk, shape_chunk,
     source_rim_z, trained_grasp_mismatch, widen, wrist_roll_warning,
 )
-from cell_policy_timing import MAX_OBSERVATION_AGE_S, park_ack_ok, run_timed  # noqa: E402
+from cell_policy_timing import MAX_OBSERVATION_AGE_S, park_ack_ok, run_timed, validate_entry_chunk  # noqa: E402
 
 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
                 max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
                 params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None,
-                paced_chunks: bool = False) -> dict:
+                paced_chunks: bool = False, mask_pick_goal: bool = False) -> dict:
+    if mask_pick_goal and (handoff is None or goal_slot is None or getattr(shadow, "goal_size", None) is None):
+        raise ValueError("masked pickup requires a goal-conditioned hybrid handoff")
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
     fps = float(library.get("fps", 30))
@@ -74,8 +81,10 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         jaw_spec = jaw_gate_spec(library, kin, params, rim_z_m=rim_z_m)
         if jaw_spec is not None and jaw_spec.get("rim_z_m") is not None:
             library = {**library, "source": {**(library.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}}
+    validate_entry_chunk(library, kin, jaw_spec)
     if jaw_spec is not None and demonstrated is not None and not sim_units:
-        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"]):
+        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"],
+                                               square=jaw_spec.get("square") is True):
             row = {"preflight": "jaw_roll", "jaw_warning": mismatch, "dry_run": dry_run}
             if not dry_run:
                 log({**row, "refused": mismatch})
@@ -94,13 +103,15 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     open_g = max(f[5] for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS)
     off = np.asarray(offset, dtype=float)
     goal = {} if goal_slot is None else {"goal": goal_slot}
+    if mask_pick_goal:
+        goal["mask_goal"] = True
 
     def live_jaw_error(measured_pose, target_pose) -> str | None:
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
         return jaw_zone_error(poses, kin, jaw_spec) if jaw_spec is not None else None
 
-    if paced_chunks and (sim_units or n_action is not None or handoff is not None):
-        raise ValueError("paced_chunks requires normalized-unit ACT without sim_units, n_action, or handoff")
+    if paced_chunks and handoff is not None:
+        raise ValueError("paced_chunks cannot be combined with handoff")
     if not paced_chunks and (getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None):
         def infer(state, frames):
             model_state = np.asarray(state) if sim_units else np.asarray(state) + off
@@ -114,7 +125,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 row["jaw_warning"] = jaw_warn
                 if not dry_run:
                     raise ValueError(jaw_warn)
-            if home_roll is not None and (warning := wrist_roll_warning(converted, home_roll)):
+            if home_roll is not None and (warning := wrist_roll_warning(actions, home_roll, roll_range=(low[4], high[4]))):
                 row["wrist_roll_warning"] = warning
                 if not dry_run:
                     raise ValueError(warning)
@@ -123,6 +134,10 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             if model_fps != runner_fps:
                 actions = resample_chunk(actions, target, runner_fps)
             frames = shape_chunk(actions, target, low, high, fastest)
+            if home_roll is not None and (warning := wrist_roll_warning(frames, home_roll, roll_range=(low[4], high[4]))):
+                row["wrist_roll_warning"] = warning
+                if not dry_run:
+                    raise ValueError(warning)
             if jaw_spec is not None and (jaw_warn := jaw_zone_error(frames, kin, jaw_spec)):
                 row["jaw_warning"] = jaw_warn
                 if not dry_run:
@@ -132,7 +147,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         return run_timed(cell, shadow, library, work, infer=infer, shape=shape, max_step=fastest,
                          n_action=n_action, max_obs_age_s=max_obs_age_s, max_chunks=max_chunks,
                          dry_run=dry_run, log=log, handoff=handoff, authorize=authorize,
-                         jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None))
+                         jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None),
+                         kin=kin, jaw_spec=jaw_spec)
 
     from cell_policy_paced import run_paced_chunks
 
@@ -140,7 +156,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                             goal=goal, sim_units=sim_units, open_g=open_g, model_closed=model_closed, closed=closed,
                             low=low, high=high, fastest=fastest, kin=kin, jaw_spec=jaw_spec,
                             resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s,
-                            pre_home=paced_chunks)
+                            pre_home=paced_chunks, n_action=n_action, home_roll=home_roll)
 
 
 def main(argv=None) -> int:
@@ -148,6 +164,8 @@ def main(argv=None) -> int:
     parser.add_argument("--config", required=True, type=Path, help="the arm's cell-auto config (io, cameras, work_dir)")
     parser.add_argument("--library", required=True, type=Path, help="the arm's reviewed chunk library")
     parser.add_argument("--mode", choices=("act", "hybrid", "taught"), default="act")
+    parser.add_argument("--mask-pick-goal", action="store_true",
+                        help="hybrid only: use a zero goal vector for an ACT checkpoint trained with masked pickup")
     parser.add_argument("--policy-root", type=Path)
     parser.add_argument("--policy-revision", help="sha256 of model.safetensors")
     parser.add_argument("--model-calibration", type=Path, help="LeRobot calibration for a normalized-unit checkpoint")
@@ -157,6 +175,10 @@ def main(argv=None) -> int:
     parser.add_argument("--max-chunks", type=int, default=3)
     parser.add_argument("--n-action", type=int, help="model steps per inference (sim-unit default: 8)")
     parser.add_argument("--max-obs-age-s", type=float, default=MAX_OBSERVATION_AGE_S)
+    parser.add_argument("--endpoint-url", help="D-1073 remote GPU ACT HTTP server base URL")
+    parser.add_argument("--token-file", type=Path, help="bearer token file for --endpoint-url")
+    parser.add_argument("--timeout-s", type=float, default=0.8, help="remote inference HTTP timeout seconds (0, 2.0]")
+    parser.add_argument("--arm-id", help="remote arm_id override (defaults to config.arm_id or profile device_id)")
     parser.add_argument("--operator", required=True, help="named person who approved this run")
     parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
     parser.add_argument("--dry-run", action="store_true")
@@ -166,13 +188,13 @@ def main(argv=None) -> int:
     parser.add_argument("--dest-site", help="with --paced-chunks: D-1057 top-camera destination zone site")
     parser.add_argument("--task-id", help="Fleet cell task id for destination zone before-frame archiving")
     parser.add_argument("--paced-chunks", action="store_true",
-                        help="use guarded step-rate-stretched chunk loop for normalized-unit full-chunk checkpoints (e.g. arm_s)")
+                        help="use guarded step-rate-stretched chunk loop for full-chunk or sim-unit ACT checkpoints")
     parser.add_argument("--source-kind", choices=("policy", "sim_optimized", "scripted_teacher"))
     args = parser.parse_args(argv)
     if not args.dry_run and not args.person_at_switch:
         parser.error("moving the arm needs --person-at-switch (D-911)")
-    if not 1 <= args.max_chunks <= 6:
-        parser.error("--max-chunks 1..6")
+    if not 1 <= args.max_chunks <= 60:
+        parser.error("--max-chunks 1..60")
     if args.n_action is not None and args.n_action < 1:
         parser.error("--n-action must be positive")
     if not 0 < args.max_obs_age_s <= 5:
@@ -181,8 +203,16 @@ def main(argv=None) -> int:
         parser.error("ACT needs --policy-root, --policy-revision and --cell-calibration")
     if args.mode != "act" and not args.goal_site:
         parser.error("hybrid and taught modes need --goal-site")
-    if args.paced_chunks and (args.mode != "act" or args.n_action is not None):
-        parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
+    if args.mask_pick_goal and args.mode != "hybrid":
+        parser.error("--mask-pick-goal requires hybrid mode")
+    if args.endpoint_url and args.mode == "taught":
+        parser.error("--endpoint-url cannot be used with taught mode")
+    if args.token_file and not args.endpoint_url:
+        parser.error("--token-file requires --endpoint-url")
+    if args.mask_pick_goal and args.endpoint_url:
+        parser.error("--mask-pick-goal cannot be used with --endpoint-url")
+    if args.paced_chunks and args.mode != "act":
+        parser.error("--paced-chunks requires act mode")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")
@@ -197,141 +227,166 @@ def main(argv=None) -> int:
             parser.error(str(error))
     else:
         source_kind = "policy" if args.mode != "taught" else "scripted_teacher"
-    shadow = None if args.mode == "taught" else lrs.LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
-    if args.paced_chunks and shadow is not None and shadow.sim_rule is not None:
-        parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
-    destination = mapped_slot = None
-    goal_slot = args.goal_slot
-    if args.goal_site is not None:
-        if shadow is not None and shadow.goal_size is None and args.mode == "act":
-            parser.error("checkpoint has no goal input")
-        if shadow is not None and shadow.goal_size is not None and shadow.goal_size != len(GOALS):
-            parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
-        try:
-            destination, mapped_slot = resolve_goal_site(args.goal_site)
-        except (ValueError, OSError) as error:
-            parser.error(str(error))
-        if goal_slot is None and shadow is not None and shadow.goal_size is not None:
-            goal_slot = mapped_slot
-        if args.mode == "hybrid" and goal_slot is not None and goal_slot != mapped_slot:
-            parser.error("hybrid ACT goal must match the taught destination")
-    if shadow is not None and shadow.goal_size is not None:
-        if goal_slot is None or not 0 <= goal_slot < shadow.goal_size:
-            parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{shadow.goal_size - 1}")
-    elif goal_slot is not None:
-        parser.error("checkpoint has no goal input")
-    cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8")) if shadow else {}
-    if shadow is not None and shadow.sim_rule is None:
-        if args.model_calibration is None:
-            parser.error("normalized-unit checkpoint requires --model-calibration")
-        offset = calibration_offset(json.loads(args.model_calibration.read_text(encoding="utf-8")), cell_cal)
-    else:
-        for name in lrs.JOINT_NAMES[:-1] if shadow else ():
-            if (cell_cal[name]["range_min"], cell_cal[name]["range_max"]) != (0, 4095):
-                parser.error(f"{name}: sim-unit checkpoint requires the trained 0..4095 body tick range")
-        offset = [0.0] * JOINTS
-
-    import cell_pipeline as cp
-    work = Path(config.get("work_dir") or args.config.parent).expanduser()
-    work.mkdir(parents=True, exist_ok=True)
-    raw_io = Path(config["io"]).expanduser()
-    cell = cp.FifoCell(raw_io if raw_io.is_absolute() else args.config.parent / raw_io, config["cameras"])
-    log_path = work / "policy-drive.jsonl"
-    run_id = f"{int(time.time())}"
-
-    def log(row):
-        with log_path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
-                                     "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
-
-    log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
-         "max_chunks": args.max_chunks, "n_action": args.n_action, "max_obs_age_s": args.max_obs_age_s,
-         "goal_slot": goal_slot, "goal_site": args.goal_site, "goal_destination": destination,
-         "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS) if shadow else None})
-    from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
-    import cell_params as prm
-    authorize = handoff = rim_z_m = None
+    if not args.dry_run and args.mode != "taught" and not args.endpoint_url:
+        for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            os.environ.setdefault(var, "2")
+        if hasattr(os, "nice"):
+            try:
+                os.nice(10)
+            except OSError:
+                pass
+    shadow = open_policy_shadow(args, config, parser, lrs)
     try:
-        config["params"] = prm.load(config.get("params_path"))["values"]
-        config.pop("_commissioning", None)
-        if not args.dry_run:
-            config["_commissioning"] = {"person_at_switch": args.person_at_switch}
-            authorize = Authorization(config)
-        library = json.loads(args.library.read_text(encoding="utf-8"))
-        source = args.site or "belt"
-        rim_z_m = source_rim_z(config, source, library)
-        if args.mode != "act":
-            validate_taught_goal(config, source, args.goal_site, destination, library)
-            if args.mode == "hybrid":
-                if "plan" not in config:
-                    config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text(encoding="utf-8"))
-                closed = closed_gripper(library)
-                if shadow.sim_rule is not None:
-                    closed = converted_closed(closed, shadow.sim_rule)
-                handoff = CellHandoff(config, source, args.library, library, closed + 1, work)
-    except (OSError, ValueError, KeyError, SystemExit) as error:
-        parser.error(str(error))
-    look = None
-    if args.catalog and args.roi and args.site:
-        import cell_auto_pick_plan
-        calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
-        catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
-        catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
-
-        def look():  # camera only, as cell_task_exec.source_clearance; a failure reads as unknown
+        destination = mapped_slot = None
+        goal_slot = args.goal_slot
+        goal_size = getattr(shadow, "goal_size", None)
+        if args.goal_site is not None:
+            if shadow is not None and goal_size is None and args.mode == "act":
+                parser.error("checkpoint has no goal input")
+            if shadow is not None and goal_size is not None and goal_size != len(GOALS):
+                parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
             try:
-                _img, _mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, args.site,
-                                                                          tuple(args.roi), catalog)
-                return {"objects": None if error else len(objects), "error": error}
-            except Exception as exc:
-                return {"objects": None, "error": str(exc)[:120]}
-    def _finish(out: dict) -> int:
-        log({"end": True, **out})
-        print(json.dumps(out))
-        return 0 if out["result"] in ("released", "chunks_done", "dry_run", "placed") and out.get("parked") is not False else 1
-    before = look() if look else None
-    if before is not None and before.get("objects") == 0 and not args.dry_run:
-        return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
-    if args.task_id:
-        config["_fleet_task"] = args.task_id
-    before_top = None
-    if args.dest_site and not args.dry_run and hasattr(cell, "frame_receipt"):
-        try:
-            before_top = cell.frame_receipt("top", max_age_s=2.0)
-        except Exception:
-            before_top = None
-    def _execute() -> dict:
-        if args.mode == "taught":
-            try:
-                res = run_taught(cell, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
-            except (OSError, ValueError, KeyError) as error:
-                res = {"result": "refused", "reason": str(error)}
+                destination, mapped_slot = resolve_goal_site(args.goal_site)
+            except (ValueError, OSError) as error:
+                parser.error(str(error))
+            if goal_slot is None and shadow is not None and goal_size is not None:
+                goal_slot = mapped_slot
+            if args.mode == "hybrid" and goal_slot is not None and goal_slot != mapped_slot:
+                parser.error("hybrid ACT goal must match the taught destination")
+        if shadow is not None and goal_size is not None:
+            if goal_slot is None or not 0 <= goal_slot < goal_size:
+                parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{goal_size - 1}")
+        elif goal_slot is not None:
+            parser.error("checkpoint has no goal input")
+        if args.mask_pick_goal and (shadow is None or goal_size is None):
+            parser.error("--mask-pick-goal requires a goal-conditioned checkpoint")
+        cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8")) if shadow else {}
+        if shadow is not None and shadow.sim_rule is None:
+            if args.model_calibration is None:
+                parser.error("normalized-unit checkpoint requires --model-calibration")
+            offset = calibration_offset(json.loads(args.model_calibration.read_text(encoding="utf-8")), cell_cal)
         else:
-            import omx_tcp
-            demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
-            res = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
-                              log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
-                              max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
-                              params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
-                              paced_chunks=args.paced_chunks)
-        if look:
-            after = look()
-            res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
-            if None not in res["source"].values():
-                res["took_one"] = res["source"]["before"] - res["source"]["after"] == 1
-        if args.dest_site and not args.dry_run and res.get("result") in ("released", "chunks_done") and res.get("parked") is True:
-            import cell_zone_verification as czv
-            sites = config.get("sites") or {}
-            dst_roi = (sites.get(args.dest_site) or sites.get(args.dest_site.rsplit("-l", 1)[0]) or {}).get("auto_roi")
-            res["zone_verification"] = czv.measure(cell, before_top, config, args.dest_site, args.site or "pinky", dst_roi)
-        return res
+            for name in lrs.JOINT_NAMES[:-1] if shadow else ():
+                if (cell_cal[name]["range_min"], cell_cal[name]["range_max"]) != (0, 4095):
+                    parser.error(f"{name}: sim-unit checkpoint requires the trained 0..4095 body tick range")
+            offset = [0.0] * JOINTS
 
-    if not args.dry_run and config.get("episodes"):
-        import cell_collect_plan
-        result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
-    else:
-        result = _execute()
-    return _finish(result)
+        import cell_pipeline as cp
+        work = Path(config.get("work_dir") or args.config.parent).expanduser()
+        work.mkdir(parents=True, exist_ok=True)
+        raw_io = Path(config["io"]).expanduser()
+        cell = cp.FifoCell(raw_io if raw_io.is_absolute() else args.config.parent / raw_io, config["cameras"])
+        log_path = work / "policy-drive.jsonl"
+        run_id = f"{int(time.time())}"
+
+        def log(row):
+            with log_path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
+                                         "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
+
+        log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "mask_pick_goal": args.mask_pick_goal,
+             "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
+             "endpoint_url": _safe_log_url(args.endpoint_url), "max_chunks": args.max_chunks, "n_action": args.n_action,
+             "max_obs_age_s": args.max_obs_age_s, "goal_slot": goal_slot, "goal_site": args.goal_site,
+             "goal_destination": destination, "goal_site_slot": mapped_slot,
+             "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None})
+        from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
+        import cell_params as prm
+        authorize = handoff = rim_z_m = None
+        try:
+            config["params"] = prm.load(config.get("params_path"))["values"]
+            config.pop("_commissioning", None)
+            if not args.dry_run:
+                config["_commissioning"] = {"person_at_switch": args.person_at_switch}
+                authorize = Authorization(config)
+            library = json.loads(args.library.read_text(encoding="utf-8"))
+            source = args.site or "belt"
+            rim_z_m = source_rim_z(config, source, library)
+            if args.mode != "act":
+                validate_taught_goal(config, source, args.goal_site, destination, library)
+                if args.mode == "hybrid":
+                    if "plan" not in config:
+                        config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text(encoding="utf-8"))
+                    closed = closed_gripper(library)
+                    if shadow.sim_rule is not None:
+                        closed = converted_closed(closed, shadow.sim_rule)
+                    handoff = CellHandoff(config, source, args.library, library, closed + 1, work)
+        except (OSError, ValueError, KeyError, SystemExit) as error:
+            parser.error(str(error))
+        look = None
+        if args.catalog and args.roi and args.site:
+            import cell_auto_pick_plan
+            calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
+            catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
+            catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
+
+            def look():  # camera only, as cell_task_exec.source_clearance; a failure reads as unknown
+                try:
+                    _img, _mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, args.site,
+                                                                              tuple(args.roi), catalog)
+                    return {"objects": None if error else len(objects), "error": error}
+                except Exception as exc:
+                    return {"objects": None, "error": str(exc)[:120]}
+        def _finish(out: dict) -> int:
+            log({"end": True, **out})
+            print(json.dumps(out))
+            return 0 if out["result"] in ("released", "chunks_done", "dry_run", "placed") and out.get("parked") is not False else 1
+        before = look() if look else None
+        if before is not None and before.get("objects") == 0 and not args.dry_run:
+            return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
+        if args.task_id:
+            config["_fleet_task"] = args.task_id
+        def _execute() -> dict:
+            import cell_route_depth
+            before_top = None
+            if args.dest_site and not args.dry_run:
+                before_top, error = cell_route_depth.policy_before(cell, config, args.site, args.dest_site)
+                if error:
+                    return {"result": "refused", "reason": error}
+            runner = cell_route_depth.motion_cell(cell, before_top)
+            if args.mode == "taught":
+                try:
+                    res = run_taught(runner, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
+                except (OSError, ValueError, KeyError) as error:
+                    res = {"result": "refused", "reason": str(error)}
+            else:
+                import omx_tcp
+                demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
+                kw = dict(offset=offset, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
+                          max_obs_age_s=args.max_obs_age_s, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
+                          rim_z_m=rim_z_m, paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal)
+                from cell_policy_preflight import preflight
+                if not args.dry_run and handoff is None and (refused := preflight(runner, shadow, args.library, work, config, log, kw)):
+                    return refused  # the same episode as a dry run refused: nothing moved
+                res = run_episode(runner, shadow, args.library, work, max_chunks=args.max_chunks, dry_run=args.dry_run,
+                                  log=log, handoff=handoff, authorize=authorize, **kw)
+            if look:
+                after = look()
+                res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
+                if None not in res["source"].values():
+                    res["took_one"] = res["source"]["before"] - res["source"]["after"] == 1
+            if args.dest_site and not args.dry_run:
+                cell_route_depth.policy_result(cell, before_top, config, args.site or "pinky", args.dest_site, res)
+            return res
+
+        import cell_bundle_emit
+
+        with cell_bundle_emit.PolicyCapture(
+            cell, config, work=work, mode=args.mode, paced_chunks=args.paced_chunks,
+            dry_run=args.dry_run, log_path=log_path,
+            site=args.site, goal_site=args.goal_site, dest_site=args.dest_site,
+        ) as capture:
+            if not args.dry_run and config.get("episodes"):
+                import cell_collect_plan
+                result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
+            else:
+                result = _execute()
+            if bid := capture.emit_if_failed(result):
+                result["failure_bundle_id"] = bid
+        return _finish(result)
+    finally:
+        if shadow is not None and hasattr(shadow, "close"):
+            shadow.close()
 
 
 if __name__ == "__main__":

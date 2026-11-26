@@ -1,6 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false, loginOptions = null;
 let actionError='',pollError='';
@@ -270,6 +271,6 @@ $('account-retry').addEventListener('click',()=>perform(async()=>{
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
   await refresh();
 }));
-setInterval(()=>{if(active&&!pending&&!document.hidden&&$('account-status').getAttribute('state')==='ready')perform(jobs,'poll');},5000);
+startVisibilityPoll(()=>perform(jobs,'poll'),5000,{shouldRun:()=>active&&!pending&&$('account-status').getAttribute('state')==='ready'});
 accountShell(false);
 perform(refresh);

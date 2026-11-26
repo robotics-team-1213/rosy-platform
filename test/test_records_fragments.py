@@ -115,6 +115,35 @@ def _bump_header(repo: Path) -> None:
 CUT = dt.datetime(2026, 11, 21, 6, tzinfo=dt.timezone.utc)
 
 
+@pytest.mark.parametrize("direct_edit", [False, True])
+def test_pull_request_records_compare_with_the_tested_merge_parent(tmp_path, monkeypatch, direct_edit):
+    repo = _repo(tmp_path)
+    event_base = _git(repo, "rev-parse", "HEAD").strip()
+    _git(repo, "switch", "-qc", "topic")
+    (repo / "topic.txt").write_text("topic\n", encoding="utf-8")
+    if direct_edit:
+        _bump_header(repo)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "topic", date="2026-11-21T07:00:00+00:00")
+    _git(repo, "switch", "-q", "main")
+    (repo / "mod" / "logs.md").write_text("# logs\n\nRecords bot update\n", encoding="utf-8")
+    _git(repo, "commit", "-qam", "records bot", date="2026-11-21T08:00:00+00:00")
+    tested_base = _git(repo, "rev-parse", "HEAD").strip()
+    _git(repo, "merge", "--no-ff", "-qm", "test merge", "topic")
+    monkeypatch.setenv("HARNESS_BASE_REF", event_base)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_REF", "refs/pull/735/merge")
+    monkeypatch.setenv("GITHUB_SHA", _git(repo, "rev-parse", "HEAD").strip())
+
+    base = rules.base_ref(repo)
+    assert base == tested_base
+    errors, _ = rules.cutover_findings(repo, base, ["mod/logs.md"], branch_name="topic",
+                                       event="pull_request", cut=CUT)
+    assert len(errors) == int(direct_edit)
+    if direct_edit:
+        assert "Version" in errors[0]
+
+
 def test_new_pr_editing_shared_lines_fails_and_grandfathered_or_bot_pass(tmp_path):
     repo = _repo(tmp_path)
     base = _pr_commit(repo, "2026-11-21T07:00:00+00:00", _bump_header)

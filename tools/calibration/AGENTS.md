@@ -1,47 +1,30 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # calibration
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
-Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values from the recording, and manage per-robot accepted calibration records. Runs on the PC, not on the robot. The store implementation is `core_common/calibration_store.py` (`contracts/foundation`); the PC mirror is `data/calibration/` (gitignored).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `run_calibration.py` | One command, protocol v1: per robot (one thread each) pair with a login code, drive the protocol through CORE teleop at 10 Hz, record on the robot over SSH (`~/rosy_rec.sh`), pull the session, analyse, write candidate records, repeat while the repeat rule fails. `--dry-run` prints the protocol and touches nothing; `--offline SESSION_DIR...` only analyses existing sessions |
-| `core_client.py` | `run_calibration`'s CORE client: plain HTTP, or with `--ca` HTTPS pinned to the robot CA on one kept-alive, locked connection (TLS-required robots) |
-| `analyze_session.py` | Fits from D-356 recordings (`session.json` + `bag/*.mcap`): wheel radius/separation, per-wheel scale, gain per speed, LiDAR mount yaw check, camera pitch/roll/height (PC grid `PC_FINE_STEPS`: roll 0.1°, height 1 mm, ~170 s per run; the robot's startup step keeps the robot grid, but since 2026-10-07 it too bands height on the fine table and clips the fine height window to the search range); across runs the mean, spread and 95 % interval; the camera record's band is max(widest run score half-band, across-run ci95), height from the runs that fitted it only. Writes `candidate.json` and `report.md` per robot and candidate records into the store mirror. Never applies anything |
-| `student_t.py` | Two-sided 95 % Student t table (1–30 dof, then 1.96) for the across-run and across-placement intervals |
-| `store_cli.py` | Operator view of the store: `list`, `show`, `accept`, `reject`, `pin` (rollback/unpin), `sync` (merge another copy). `accept` refuses implausible values with the runtime's own check and needs `--actor` |
-| `floor_paint_gate.py` | One robot's pink bay-tape gate (`floor_paint` kind) from its own front-camera frames: `measure FRAME...`, `add ROBOT FRAME...` (candidate on the PC mirror). Accept with `store_cli.py accept ROBOT floor_paint ID`, then copy or sync to the robot; `lane_keep_lines.pink_gate` reads it at the next start. 2026-11-14: geg6 H 167-179 S>=25 V>=88, y8xs H 160-179 S>=25 V>=56 (far view, remeasure up close); b8xy not yet |
-| `camera_auto.py` / `camera_capture.py` | Read-only stationary camera/LiDAR auto fit over a pinned SSH alias (the wall-edge fitter runs on the robot, robot grid steps). No drive, mode change or candidate promotion. New local evidence JSON; exit 2 for rejected fit, 0 for a recommended candidate only |
-| `camera_board.py` | Offline checkerboard pose on the PC (refuses where `/opt/rosy/current` exists). Two-image mode: candidate JSON with printed square scale, original-pixel reprojection and a view gate of 2 mm / 0.15° / 0.3° (`VIEW_*_TOL`). `--store ROBOT`: five or more `--placement` images (robot static) plus optional `--reseat` images and a measured board elevation write one `camera_profile` candidate (`method camera_board/1`, bands max(across-placement ci95, half the re-seat spread), `fit_step` zero, `systematic` = \|board − truth\| + tolerance from the required independent check `--truth-height-mm/--truth-pitch-deg/--truth-roll-deg VALUE TOL`; lane_containment adds it to each band) into the PC mirror. Accepted truth: lens height by tape or caliper from the floor to the lens centre (TOL ≥ 1 mm); pitch/roll by a digital inclinometer on the camera housing or a flat reference of the mount (TOL ≥ 0.2° plus the mount error); never the wall-edge fit or anything through the same intrinsics (`TRUTH_MIN_TOL`). A first placement the detector misses is retried with guesses from `--camera-profile` (its pitch +0/+2/+4/−2°), recorded as `first_placement_guess`. Synthetic renders (2026-10-07): the board fit still reads 0.05–0.09° pitch and 0.4–0.7 mm height off truth, depending on the rectification seed, beyond its scatter bands; an unseeded first image of an oblique 9x6 board at 320x240 may not be detected at all. Board sessions are captured on the robot by the D-379 recorder and fitted here; never applies or accepts a result |
-| `ceiling_marker_yaw.py` | D-587 5: one straight forward drive; reads raw ceiling frames through a viewer lease, projects the robot's marker like the Vision sightings (`track.marker_sightings.marker_pose`) and prints its `marker_yaw_offset_deg` for `site-cameras.yaml` (travel direction vs raw marker yaw, never odom heading). Needs no sighting, so it bootstraps a robot that has no offset yet. Runs in the Vision container (`docker exec -i ... python3 - ... < ceiling_marker_yaw.py`) or with the repo's Vision paths on `PYTHONPATH`; writes nothing. Refuses under 5 samples, 0.25 m travel, 0.02 m off line or 5 deg yaw spread |
-| `slam_map_align.py` | Offline: fit a robot SLAM map (nav2 yaml + PGM) to the Fleet site frame from `SITE=SLAM` point pairs (place name via `--site-map`, or x,y). 2D rigid, no scale; exit 3 when max residual > 0.05 m (1/3 of the 0.15 m `max_jump_m`), under 3 or collinear points, mirrored pairs, or a 180-degree alternative that fits too. Reports boundary 180-degree self-similarity. `--write OUT.yaml` rotates the grid into a new PGM (Nav2 costmap/AMCL ignore origin yaw) and never overwrites; `--seal-bundle DEST --name N` also seals via `map_bundle.py` with `grid_id` and `site_map_id`. Test `test/test_slam_map_align.py` |
-| `master_map_fuse.py` | Offline: consensus-fuse 2+ site-aligned yaw=0 Nav2 maps (`slam_map_align.py`) by verifying pairwise static-wall overlap, preserving 1-cell jitter consensus + blind spots, dropping transient single-pass obstacles, enforcing speckle/free-area health gates, and optionally sealing via `map_bundle.py`. Test `test/test_master_map_fuse.py` |
-| `urdf_nominal.py` | Evaluates the fixed-joint chain of `middleware/devices/pinky/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `middleware/devices/pinky/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
-
-## Subdirectories
-
-| Directory | Purpose |
-|-----------|---------|
-| `test/` | `test_run_calibration.py` (protocol limits, clearance guards, stop/zero behaviour, repeat rule), `test_store_cli.py` (accept plausibility, sync merge, no overwrite), `test_analyze_store.py` (NaN/inf tolerated), `test_urdf_nominal.py` (checked-in geometry matches the URDF; consumers of the nominal values), `test_ceiling_marker_yaw.py` (D-587 travel-direction offset and refusals) |
+Developer-side half of the D-47 addendum calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values, manage per-robot accepted records. Runs on the PC. Store: `core_common/calibration_store.py`; PC mirror `data/calibration/` (gitignored).
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- What actually guards robot motion: login-code pairing per robot; commands clipped to the robot's limits; a LiDAR clearance guard (a straight aborts when a return in the direction of travel is under 0.20 m, a pivot when anything is within 0.20 m); a scan not refreshed for 0.5 s (PC monotonic clock) aborts; every abort and Ctrl-C sends zero and stops the recorder it started. There is no separate "operator is watching" prompt beyond the login code, so run it only with the operator present and use `--dry-run` first.
-- A candidate is never applied here. Only `store_cli.py accept` makes a record current, and it happens on the PC mirror; the robot store receives decisions through `sync` (a sync that finds decisions on both sides refuses).
+- Guards in `run_calibration.py`: login-code pairing; commands clipped to robot limits; LiDAR clearance (a straight aborts under 0.20 m ahead, a pivot at 0.20 m anywhere); a scan stale over 0.5 s aborts; every abort and Ctrl-C sends zero and stops its recorder.
+- There is no "operator is watching" prompt beyond the login code: run it only with the operator present and use `--dry-run` first (prints the protocol, touches nothing). `--offline SESSION_DIR...` only analyses.
+- A candidate is never applied here. Only `store_cli.py accept` (needs `--actor`, refuses implausible values) makes a record current, on the PC mirror; the robot store gets decisions through `sync`, which refuses when both sides hold decisions.
 - The LiDAR yaw is never assumed: `--lidar-yaw-deg`, else the robot's accepted `lidar_mount` record, else the profile value with a warning.
-- Every geometry default comes from the URDF (`urdf_nominal.py`); calibration refines per robot. Do not add magic numbers.
-- Robot addresses and login codes go on the command line only; do not write them into files.
+- Every geometry default comes from the URDF (`urdf_nominal.py`; `--check` exits 1 on drift, D-397). Do not add magic numbers.
+- Robot addresses and login codes go on the command line only; never write them into files.
+- `camera_auto.py` and `camera_capture.py` are read-only (no drive, mode change or promotion). `camera_board.py` refuses where `/opt/rosy/current` exists and never applies or accepts.
+- `camera_board.py --store` needs an independent truth (`--truth-height-mm/--truth-pitch-deg/--truth-roll-deg VALUE TOL`; TOL ≥ 1 mm, ≥ 0.2°): tape, caliper or inclinometer, never the wall-edge fit or anything through the same intrinsics (`TRUTH_MIN_TOL`).
+- `ceiling_marker_yaw.py` (D-587 5) needs one straight forward drive and refuses under 5 samples, 0.25 m travel, 0.02 m off line or 5 deg yaw spread; it writes nothing.
+- `slam_map_align.py` exits 3 when max residual > 0.05 m, under 3 or collinear points, mirrored pairs, or a 180-degree alternative that fits; `--write` never overwrites.
+- `floor_paint_gate.py`: accept with `store_cli.py accept ROBOT floor_paint ID`, then copy or sync to the robot. Thresholds are per robot; remeasure close up.
+- `migrate_calibration.py` (moved from perception/tools, D-751) rejects existing destinations and bound records and never activates values.
+- Scripts put `contracts/foundation`, `middleware/perception` and `learning/curation/perception` on `sys.path`; candidate JSON goes through `json_safe`.
 
 ### Testing Requirements
 
@@ -50,25 +33,8 @@ python -m pytest tools/calibration/test -q
 python tools/calibration/urdf_nominal.py --check
 ```
 
-Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for CORE and SSH.
-
-### Common Patterns
-
-- Scripts put `contracts/foundation`, `middleware/perception` and `learning/curation/perception` on `sys.path` instead of installing packages.
-- Candidate and record JSON go through `json_safe` so NaN/inf do not break the store.
-
-## Dependencies
-
-### Internal
-
-- `contracts/foundation/core_common/calibration_store.py`, `middleware/perception` (`odometry_fit`, `camera_extrinsic`), `learning/curation/perception/autolabel.py`, `middleware/devices/pinky/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
-
-### External
-
-- numpy, PyYAML, `mcap`; `ssh`/`scp` and a robot reachable over the network for `run_calibration.py` (not for `--offline`)
+Needs numpy, PyYAML and `mcap`; tests inject fakes for CORE and SSH.
 
 <!-- MANUAL: -->
-
-`migrate_calibration.py` moved from perception/tools (D-751): existing destinations and bound records are rejected; source measurements are preserved and values are not activated.
 
 `fleet_map_exchange.py` (2026-11-23): operator CLI for pulling `/api/fleet/robots/{robot_id}/map/bundle`, uploading sealed `master_map_fuse.py --seal-bundle` bundles via `PUT /api/fleet/site-map/master-grid`, pushing/activating via `POST /api/fleet/robots/{robot_id}/master-map/push`, and verifying stationary `LOCALIZED` + matching `grid_id` convergence.

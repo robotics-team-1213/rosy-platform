@@ -10,7 +10,7 @@ test('drawing and candidate failures explain the next action in operator languag
   }
 });
 import assert from 'node:assert/strict';
-import {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {arrowMarks, fitView, mapEvidence, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
 import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 import {
   editEdge, editPlace,
@@ -185,14 +185,14 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
-  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
+  assert.equal(tripStatusText(trip, MAP), '운행 접수 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
   for (const [state, label] of [['DEGRADED', '위치 정확도 저하'], ['UNKNOWN', '위치 확인 불가'], ['future', 'future']]) {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
   // D-763 8: the wait shows on an open trip only; a canceled trip keeps its last stored wait
   const waiting = {...trip, wait: {reason: 'signal', waiting: true, over_bound: false}};
-  assert.match(tripStatusText(waiting, MAP), / · 대기 · 신호$/);
+  assert.match(tripStatusText(waiting, MAP), /^대기 · 신호/);
   assert.doesNotMatch(tripStatusText({...waiting, state: 'canceled'}, MAP), /대기/);
   // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
   assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
@@ -201,7 +201,7 @@ test('D-494 trip panel text and button reasons', async () => {
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
   assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
-  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇은 이미 운행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇에 접수된 운행/);
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
@@ -506,6 +506,9 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2'), {
     to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2',
   });
+  assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2_slam'), {
+    to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2', approved_slam_required: true,
+  });
   const withStarts = {
     places: [
       ...stopOnlyMap.places,
@@ -515,6 +518,23 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   };
   assert.deepEqual(repeatPlaces(withStarts).map(p => p.id), ['A', 'B']);
   assert.deepEqual(repeatTripBody(withStarts, 'A', '', ''), {to: 'A', via: ['B'], repeat: true});
+});
+
+test('site points apply only to the displayed active map identity', async () => {
+  const {sitePointsForActiveMap} = await import('/console/assets/map-editor.js');
+  const active = {map: {map_id: 'warehouse'}, version: 2, sha256: 'sha-two'};
+  const source = {map_id: 'warehouse', version: 2, sha256: 'sha-two'};
+  const sitePoints = {sources: {site_map: source}};
+
+  assert.equal(sitePointsForActiveMap(sitePoints, active, 'active'), sitePoints);
+  for (const mapSource of ['draft', 'profile']) {
+    assert.equal(sitePointsForActiveMap(sitePoints, active, mapSource), null);
+  }
+  for (const mismatch of [{map_id: 'other'}, {version: 1}, {sha256: 'sha-one'}]) {
+    assert.equal(sitePointsForActiveMap({sources: {site_map: {...source, ...mismatch}}}, active, 'active'), null);
+  }
+  assert.equal(sitePointsForActiveMap({}, active, 'active'), null);
+  assert.equal(sitePointsForActiveMap(sitePoints, null, 'active'), null);
 });
 
 test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor and planned stop overlays', async () => {
@@ -565,7 +585,10 @@ test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor
   assert.ok(texts.includes('S3_app(예정)'));
   assert.ok(texts.includes('S_OUT(예정)'));
   assert.ok(texts.includes('[수령·출구]'));
-  assert.ok(texts.includes('arm_s 180°·cell_ab -90°'));
+  assert.ok(texts.includes('S 셀 기준점(참고)'));
+  const marker = layer.children.find(c => c.attributes.class === 'sp-cell-ref');
+  assert.match(marker.children[0].textContent, /S 셀/);
+  assert.doesNotMatch(marker.children[0].textContent, /cell_ab/);
 
   renderSitePointsSummary(panelEl, bodyEl, payload);
   assert.equal(panelEl.hidden, false);
@@ -580,4 +603,97 @@ test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor
   renderSitePointsSummary(panelEl, bodyEl, null);
   assert.equal(panelEl.hidden, true);
   assert.equal(bodyEl.children.length, 0);
+});
+
+test('placeHitRadius clamps 14..18 and placeLabel/drawSitePointsOverlay deconflict dense place and overlay labels', async () => {
+  const {drawSitePointsOverlay, placeHitRadius, placeLabel} = await import('/console/assets/map-editor.js');
+
+  assert.equal(placeHitRadius(0, [[100, 100]]), 18);
+  assert.equal(placeHitRadius(0, [[100, 100], [200, 100]]), 18);
+  // Dense charge bays 11/12/13 spaced 32 px apart -> r=16 (16+16=32, no overlap)
+  const denseBays = [[200, 300], [232, 300], [264, 300]];
+  for (let i = 0; i < denseBays.length; i++) assert.equal(placeHitRadius(i, denseBays), 16);
+  // Ultra-dense (<28 px) clamps at floor 14
+  assert.equal(placeHitRadius(0, [[100, 100], [120, 100]]), 14);
+
+  const makeNode = (tag, ns = '') => ({
+    tagName: tag, namespaceURI: ns, attributes: {}, children: [], textContent: '', _parent: null,
+    setAttribute(k, v) { this.attributes[k] = String(v); },
+    append(...nodes) { for (const n of nodes) { if (n && typeof n === 'object') n._parent = this; this.children.push(n); } },
+    remove() { if (this._parent) this._parent.children = this._parent.children.filter(c => c !== this); },
+    querySelector(sel) { return sel === '#site-points-layer' ? this.children.find(c => c.attributes.id === 'site-points-layer') || null : null; },
+  });
+  const ownerDocument = {createElementNS: (ns, tag) => ({...makeNode(tag, ns), ownerDocument})};
+  const svg = {...makeNode('svg', 'http://www.w3.org/2000/svg'), ownerDocument};
+  svg.setAttribute('viewBox', '0 0 800 480');
+
+  const view = {toPx: (x, y) => [100 + x * 100, 100 - y * 100]};
+  const placed = [];
+  const densePlaces = [
+    {id: 'B11', label: '11 충전 칸', px: view.toPx(0.0, 0.0)},
+    {id: 'B12', label: '12 충전 칸', px: view.toPx(0.32, 0.0)},
+    {id: 'B13', label: '13 충전 칸', px: view.toPx(0.64, 0.0)},
+    {id: 'P6', label: '6 주차장 입구', px: view.toPx(0.615, -0.207)},
+    {id: 'S3', label: 'S3', px: view.toPx(0.745, -0.207)},
+  ];
+  for (const p of densePlaces) placed.push({x: p.px[0] - 10, y: p.px[1] - 10, width: 20, height: 20});
+  for (const p of densePlaces) {
+    const dot = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', p.px[0]); dot.setAttribute('cy', p.px[1]); dot.setAttribute('r', 9); dot.setAttribute('class', 'place');
+    svg.append(dot);
+    const pos = placeLabel(p.px[0], p.px[1], p.label, placed);
+    const txt = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', pos.x); txt.setAttribute('y', pos.y); txt.setAttribute('class', 'label');
+    if (pos.anchor !== 'start') txt.setAttribute('text-anchor', pos.anchor);
+    txt.textContent = p.label;
+    svg.append(txt);
+  }
+
+  drawSitePointsOverlay(svg, {
+    vehicle_stops: [{id: 'S3', in_active_map: true, pose: {x: 0.745, y: -0.207}, berth: {nav2_berth_ready: false}}],
+    coordinate_frames: {
+      vehicle_world: {waypoints: {
+        S3_intake: {pose: {x: 0.745, y: -0.207}, planned_approach_ref_m: {x: 0.9238, y: -0.207}},
+        J_stand_branch: {pose: {x: 0.615, y: -0.207}, planned: true},
+        S_OUT_outbound: {in_active_map: false, pose: {x: 0.614, y: 0.001}},
+      }},
+    },
+  }, view);
+
+  const boxOf = (node) => {
+    const x = Number(node.attributes.x), y = Number(node.attributes.y);
+    const anchor = node.attributes['text-anchor'] || 'start';
+    let w = 0;
+    for (const ch of node.textContent) w += ch.charCodeAt(0) > 127 ? 12 : 7.5;
+    w = Math.max(16, w);
+    const left = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+    return {text: node.textContent, x: left, y: y - 12, width: w, height: 15};
+  };
+  const layer = svg.querySelector('#site-points-layer');
+  const allTexts = [
+    ...svg.children.filter(c => c.tagName === 'text'),
+    ...layer.children.filter(c => c.tagName === 'text'),
+  ].map(boxOf);
+  assert.ok(allTexts.some(b => b.text === 'S3_app(예정)'));
+  assert.ok(allTexts.some(b => b.text === 'J_stand'));
+  assert.ok(allTexts.some(b => b.text === '[하역(존미등록)]'));
+  for (let i = 0; i < allTexts.length; i++) {
+    for (let j = i + 1; j < allTexts.length; j++) {
+      const a = allTexts[i], b = allTexts[j];
+      const overlaps = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      assert.equal(overlaps, false, `labels overlap: ${a.text} vs ${b.text}`);
+    }
+  }
+});
+
+test('the map evidence line names version, KST activation time, source and survey or its absence', () => {
+  const edge = (id, source) => ({id, polyline: [[0, 0], [1, 0]], ...(source ? {display_polyline: [[0, 0], [1, 0]], display_source: source} : {})});
+  const survey = {kind: 'survey', surveyed_at: '2026-11-26', plane: 'ceiling_north', anchors: [[0, 0], [1, 0]]};
+  const active = {version: 7, activated_at: Date.UTC(2026, 10, 26, 0, 12, 3) / 1000, map: {map_id: 'world_261026', edges: [edge('a', survey), edge('b', survey), edge('c')]}};
+  assert.deepEqual(mapEvidence(active, e => Boolean(e.display_source)), {
+    text: '지도 v7 · 활성 09:12:03 · 출처 Fleet 활성 지도 · 측량 2026-11-26 ceiling_north',
+    title: 'world_261026 · 활성 2026-11-26T00:12:03.000Z (UTC)'});
+  assert.equal(mapEvidence(active, () => false).text, '지도 v7 · 활성 09:12:03 · 출처 Fleet 활성 지도 · 측량선 없음');
+  assert.equal(mapEvidence({...active, activated_at: undefined}, () => false).text, '지도 v7 · 활성 시각 모름 · 출처 Fleet 활성 지도 · 측량선 없음');
+  assert.deepEqual(mapEvidence(null, () => true), {text: '활성 지도 없음', title: ''});
 });

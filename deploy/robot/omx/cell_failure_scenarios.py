@@ -97,6 +97,9 @@ SCENARIOS = [
     # belt read as a moved pile; a run without a chunk session said only "refused"; a park from a far pick overloaded the lift
     {"name": "camera moved: no grasp on a stale map", "camera": [True], "rounds": [], "result": "ask a person: camera_moved",
      "actions": ["ask_person"]},
+    *[{"name": cause, "camera": [{"camera_issue": cause}], "rounds": [],
+       "result": f"ask a person: {cause}", "actions": ["ask_person"]}
+      for cause in ("camera_map_binding", "camera_reference_missing", "camera_shift_unmeasured")],
     {"name": "camera bumped mid-carry: stop before the next pick", "camera": [False, True], "rounds": [(STALL, False, True)],
      "result": "ask a person: camera_moved", "actions": ["slow_down", "ask_person"]},
     {"name": "the belt runs all through the carry: not a moved pile", "belt": True,
@@ -107,6 +110,20 @@ SCENARIOS = [
      "actions": ["ask_person"]},
     {"name": "park overloaded at a far pick: a person, even when the pile moved", "rounds": [(PARK, True, True)],
      "result": "ask a person: park_contact", "actions": ["ask_person"]},
+    {"name": "policy timing late: human gate, never auto retry", "rounds": [("policy: timing_late", False, True)],
+     "result": "ask a person: policy_timing_late", "actions": ["ask_person"]},
+    {"name": "policy jaw gate: human gate, never auto retry", "rounds": [("policy: jaw_gate", False, True)],
+     "result": "ask a person: policy_jaw_gate", "actions": ["ask_person"]},
+    {"name": "policy chunk refused: human gate, never auto retry", "rounds": [("policy: chunk_refused", False, True)],
+     "result": "ask a person: policy_chunk_refused", "actions": ["ask_person"]},
+    {"name": "policy zone unverified: human gate, never auto retry", "rounds": [("policy: zone_unverified", False, True)],
+     "result": "ask a person: policy_zone_unverified", "actions": ["ask_person"]},
+    {"name": "policy stalled: human gate, never auto retry", "rounds": [("policy: stalled", False, True)],
+     "result": "ask a person: policy_stalled", "actions": ["ask_person"]},
+    {"name": "policy contact: human gate, never auto retry", "rounds": [("policy: contact", False, True)],
+     "result": "ask a person: policy_contact", "actions": ["ask_person"]},
+    {"name": "policy missing calibration: human gate, never auto retry", "rounds": [("policy: missing_calibration", False, True)],
+     "result": "ask a person: policy_missing_calibration", "actions": ["ask_person"]},
 ]
 BELT = [500, 0, 640, 200]  # the belt's rect, far from PICK_PX
 
@@ -128,7 +145,10 @@ class World:
         return img
 
     def camera(self, frame):
-        return {"max_px": 109.0} if self.picks < len(self.camera_at) and self.camera_at[self.picks] else None
+        observation = self.camera_at[self.picks] if self.picks < len(self.camera_at) else None
+        if isinstance(observation, dict):
+            return observation
+        return {"max_px": 109.0} if observation else None
 
     def pick(self):
         self.picks += 1

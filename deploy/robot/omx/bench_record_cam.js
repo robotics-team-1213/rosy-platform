@@ -70,7 +70,7 @@ function renderCamHealthHeader(st,labels,curArm){
       hdrCam.title='수신: '+(liveReq.join(', ')||'없음')+' / 미수신: '+missingReq.join(', ');
     }else{
       hdrCam.textContent='카메라 '+liveReq.length+'/'+req.length+'대';
-      hdrCam.dataset.tone='good';
+      hdrCam.dataset.tone='';
       hdrCam.title=req.join(', ');
     }
   }
@@ -96,7 +96,7 @@ function syncMissingCamPlaceholders(missingReq){
     if(grid.querySelector('.cam-box[data-cam-box="'+lbl+'"]'))continue;
     const box=document.createElement('div');box.className='cam-box cam-pip cam-missing';box.dataset.missingCam=lbl;box.tabIndex=0;
     const pill=document.createElement('span');pill.className='cam-title-pill';pill.textContent=lbl;
-    const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 미수신';
+    const rec=document.createElement('span');rec.className='cam-rec-badge missing';rec.textContent='미수신';
     const body=document.createElement('div');body.className='cam-missing-body';
     const stEl=document.createElement('strong');stEl.textContent=lbl+' 미수신';
     const spEl=document.createElement('span');spEl.textContent='⇧C 카메라 재시작';
@@ -114,14 +114,22 @@ function updateCameraRecordingMask(){
   const arm=f.arm?f.arm.value:'';
   const cfg=f.config?f.config.value:'';
   const recSet=resolveRecordingCams(arm,cfg);
+  const live=isActivelyRecording();
   for(const box of $('cam-grid').querySelectorAll('.cam-box[data-cam-box]')){
     const lbl=box.dataset.camBox;
     const isRec=!recSet||recSet.has(lbl);
     box.classList.toggle('cam-unrecorded',!isRec);
     const badge=box.querySelector('.cam-rec-badge');
     if(badge){
-      badge.textContent=isRec?'● 녹화':'미녹화';
-      badge.className='cam-rec-badge '+(isRec?'on':'off');
+      if(live){
+        badge.textContent=isRec?'● 녹화 중':'미포함';
+        badge.className='cam-rec-badge '+(isRec?'live':'off');
+        badge.title=isRec?'현재 에피소드 녹화 중':'';
+      }else{
+        badge.textContent=isRec?'녹화 대상':'미포함';
+        badge.className='cam-rec-badge '+(isRec?'armed':'off');
+        badge.title=isRec?'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)':'';
+      }
     }
   }
   const note=$('cam-note');
@@ -129,9 +137,12 @@ function updateCameraRecordingMask(){
     const recList=camLabels.filter(l=>recSet.has(l));
     const unrecList=camLabels.filter(l=>!recSet.has(l));
     const missing=[...recSet].filter(l=>!camLabels.includes(l));
-    const parts=['실시간 미리보기 — '+(arm||'선택 암')];
-    parts.push('녹화: '+(recList.length?recList.join(', '):'없음'));
-    if(unrecList.length)parts.push('미녹화: '+unrecList.join(', '));
+    const head=live
+      ?'녹화 중 — '+(arm||'선택 암')
+      :(currentBenchPhase()==='prepare'?'텔레옵 연동 (녹화 대기)':'실시간 미리보기 (녹화 대기)')+' — '+(arm||'선택 암');
+    const parts=[head];
+    parts.push((live?'녹화: ':'녹화 대상: ')+(recList.length?recList.join(', '):'없음'));
+    if(unrecList.length)parts.push('미포함: '+unrecList.join(', '));
     if(missing.length)parts.push('미수신: '+missing.join(', '));
     note.textContent=parts.join(' · ');
   }
@@ -209,7 +220,7 @@ function syncHeaderAndSlimBar(){
   record.hidden=!(stopping||ready);
   record.disabled=record.hidden||pending||(!stopping&&!statusLoaded);
   record.classList.toggle('is-recording',stopping);
-  record.querySelector('.btn-lbl').textContent=recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':'● 녹화';
+  record.querySelector('.btn-lbl').textContent=recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':ready?'● 녹화 시작':'● 녹화';
   $('hdr-finish-btn').hidden=!ready;
   $('hdr-finish-btn').disabled=!ready||pending||!statusLoaded;
   $('hdr-next-ep-btn').disabled=!recording||pending||!statusLoaded;
@@ -296,7 +307,7 @@ function syncHeaderAndSlimBar(){
 
   const ok=Boolean(statusLoaded);
   $('ftr-server').textContent=ok?'서버 정상':'연결 끊김';
-  $('ftr-server').dataset.tone=ok?'good':'crit';
+  $('ftr-server').dataset.tone=ok?'':'warn';
   const locks=st?.active_locks;
   $('ftr-lock').textContent=locks?.length?'락 '+locks.length+'건':'락 없음';
   $('ftr-lock').dataset.tone=locks?.length?'warn':'';
@@ -383,18 +394,18 @@ let camAutoHealInFlight=false;
 async function saveCameraBaselineNow(silent){
   const btn=$('save-cam-base-btn'), arm=f&&f.arm?f.arm.value:'';
   if(btn){btn.disabled=true;btn.textContent='저장 중...';}
-  if(!silent&&typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',arm||'');
+  if(!silent&&typeof setActivity==='function')setActivity('카메라 조명 기준 저장 중...','live',arm||'');
   try{
     setReqError('');
     await api('/api/camera_baseline',{arm});
     await checkCameraDrift(true);
-    if(typeof setActivity==='function')setActivity(silent?'기준 카메라 자동 갱신':'기준 카메라 저장 완료','good',arm||'');
+    if(typeof setActivity==='function')setActivity(silent?'카메라 조명 기준 자동 갱신':'카메라 조명 기준 저장 완료','good',arm||'');
   }catch(err){
     if(!silent){
       setReqError(err.message);
-      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
+      if(typeof setActivity==='function')setActivity('카메라 조명 기준 저장 실패','crit',err.message);
     }
-  }finally{if(btn){btn.disabled=false;btn.textContent='기준 카메라 저장';}}
+  }finally{if(btn){btn.disabled=false;btn.textContent='조명 기준 저장';}}
 }
 async function checkCameraDrift(skipAuto){
   if(typeof benchSessionActive==='function'&&benchSessionActive())return;
@@ -404,7 +415,7 @@ async function checkCameraDrift(skipAuto){
     if(!d||!d.cameras){clearNotice('cam-drift');return;}
     const allow=(typeof ARM_PREVIEW_CAMS!=='undefined'&&ARM_PREVIEW_CAMS[arm])?ARM_PREVIEW_CAMS[arm]:null;
     const ents=Object.entries(d.cameras).filter(([k])=>!allow||allow.has(k));
-    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='unusable_lighting');
+    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='missing'||v.status==='unusable_lighting');
     const soft=ents.filter(([,v])=>v.status==='lighting_mismatch'||v.status==='no_baseline');
     if(!hard.length&&soft.length){
       const now=Date.now();
@@ -413,7 +424,7 @@ async function checkCameraDrift(skipAuto){
         try{
           await api('/api/camera_baseline',{arm});
           clearNotice('cam-drift');
-          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명·구도 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
+          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
           return;
         }catch(_){}
         finally{camAutoHealInFlight=false;}
@@ -421,9 +432,9 @@ async function checkCameraDrift(skipAuto){
       const isNoBase=soft.every(([,v])=>v.status==='no_baseline');
       const sig='cam-soft:'+arm+':'+soft.map(([k,v])=>k+':'+v.status).join(',');
       const msg=isNoBase
-        ?('카메라 기준 미저장 ('+soft.map(([k])=>k).join(', ')+') — 현재 구도·조명이 맞으면 기준 저장을 누르세요.')
-        :('카메라 변화 감지: '+soft.map(([k,v])=>k+'('+v.status+(v.max_px!=null?' '+v.max_px+'px':'')+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 각도/조명을 맞추거나 기준 재저장하세요.');
-      setNotice('cam-drift',isNoBase?'muted':'warn',msg,{sig,action:{label:'기준 카메라 지금 저장',run:()=>saveCameraBaselineNow(false)}});
+        ?('카메라 조명 기준 미저장 ('+soft.map(([k])=>k).join(', ')+') — 조명이 맞으면 기준을 저장하세요.')
+        :('카메라 조명 변화: '+soft.map(([k,v])=>k+'('+v.status+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 조명을 맞추거나 기준을 저장하세요.');
+      setNotice('cam-drift',isNoBase?'muted':'warn',msg,{sig,action:{label:'조명 기준 저장',run:()=>saveCameraBaselineNow(false)}});
     }else if(hard.length){
       const hasStale=hard.some(([,v])=>v.status==='stale');
       const action=hasStale?{label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()}:{label:'다시 확인',run:()=>checkCameraDrift(true)};
@@ -450,7 +461,7 @@ function syncReplayUI(){
 setInterval(syncReplayUI,1000);
 setTimeout(syncReplayUI,600);
 
-const HF_STATE_MAP={idle:['대기','warn'],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
+const HF_STATE_MAP={idle:['대기',''],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
 let hfUploadInFlight=false;
 
 async function triggerHfUpload(datasetName){
@@ -499,8 +510,7 @@ function renderLeRobotPanel(st){
   const bulkBtn=$('cleanup-empty-ds-btn');
   const busyAll=hfUploadInFlight||state==='encoding'||state==='uploading';
   if(bulkBtn){
-    bulkBtn.hidden=!emptyRows.length;
-    bulkBtn.textContent='빈 데이터셋 '+emptyRows.length+'개 정리';
+    bulkBtn.hidden=!emptyRows.length;bulkBtn.textContent='빈 데이터셋 '+emptyRows.length+'개 정리';
     bulkBtn.disabled=Boolean((typeof benchSessionActive==='function'&&benchSessionActive())||busyAll);
     if(!bulkBtn.dataset.bound){
       bulkBtn.dataset.bound='1';
@@ -508,15 +518,13 @@ function renderLeRobotPanel(st){
         const curEmpty=(lastStatus&&Array.isArray(lastStatus.lerobot_datasets)?lastStatus.lerobot_datasets:[]).filter(r=>(r.episodes||0)===0);
         if(!curEmpty.length)return;
         bulkBtn.disabled=true;setReqError('');
-        let done=0, latest=null;
+        let done=0,latest=null;
         try{
           for(const row of curEmpty){latest=await api('/api/dataset/delete',{dataset:row.name||''});done++;}
-          if(latest&&latest.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=latest.lerobot_datasets;}
+          if(latest?.lerobot_datasets&&lastStatus)lastStatus.lerobot_datasets=latest.lerobot_datasets;
           if(typeof setActivity==='function')setActivity('빈 데이터셋 정리 완료','good',done+'개 삭제');
-          if(typeof pollStatus==='function')await pollStatus();
-          else if(lastStatus)renderLeRobotPanel(lastStatus);
-        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}
-        finally{bulkBtn.disabled=false;}
+          if(typeof pollStatus==='function')await pollStatus();else if(lastStatus)renderLeRobotPanel(lastStatus);
+        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}finally{bulkBtn.disabled=false;}
       });
     }
   }
@@ -559,7 +567,7 @@ function renderLeRobotPanel(st){
         try{
           const out=await api('/api/dataset/delete',{dataset:r.name||''});
           if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',r.name||'');
-          if(out&&out.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}
+          if(out?.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}
         }catch(e){setReqError(e.message||String(e));del.disabled=false;}
       });
       act.append(del);
@@ -573,22 +581,14 @@ function renderLeRobotPanel(st){
     info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'')+rTxt;
     meta.append(info);
     if(r.hf_repo_url){const a=document.createElement('a');a.href=r.hf_repo_url;a.target='_blank';a.rel='noopener';a.className='mono';a.textContent=r.hf_repo_id||'Repo';meta.append(a);}
-    li.append(top,meta);
-    if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));
-    ul.append(li);
+    li.append(top,meta);if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));ul.append(li);
   }
 }
 window.renderLeRobotPanel=renderLeRobotPanel;
-
 if($('hf-auto-upload')&&!$('hf-auto-upload').dataset.bound){
   $('hf-auto-upload').dataset.bound='1';
   $('hf-auto-upload').addEventListener('change',async()=>{
-    try{
-      const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});
-      if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}
-    }catch(err){setReqError('HF 설정 오류: '+err.message);}
+    try{const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}}catch(err){setReqError('HF 설정 오류: '+err.message);}
   });
 }
-init();
-if(typeof applyBenchPhase==='function')applyBenchPhase('setup');
-setInterval(pollArms,10000);
+init();if(typeof applyBenchPhase==='function')applyBenchPhase('setup');setInterval(pollArms,10000);

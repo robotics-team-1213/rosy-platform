@@ -233,7 +233,8 @@ class BenchRecoverMixin:
         from bench_record_auto_recover import assess_auto_recover
         auto_rec = assess_auto_recover(self, st, mh, pending, locks, dead_leases, inc_holds, baseline_needed, can_ack)
         return {"has_issues": has_any, "issues": issues, "pending_units": pending, "dead_lease_arms": dead_leases,
-                "incident_holds": inc_holds, "baseline_needed": baseline_needed, "can_ack_error": can_ack,
+                "incident_holds": inc_holds, "fleet_clear_available": bool(self._config.get("fleet_console_origin")),
+                "baseline_needed": baseline_needed, "can_ack_error": can_ack,
                 "can_restore_units": bool(pending and not self.manual.exists()), "auto_recover": auto_rec}
 
     def release_held_runner(self, body):
@@ -265,12 +266,14 @@ class BenchRecoverMixin:
         return {"ok": True, "arm": arm, "released_pid": pid, "torque_off_confirmed": torque_ok, "status": self.status()}
 
     def clear_manual_hold(self, body):
-        """Clear .bench-manual-check.json after runner exited safely, restore pending units, and return to idle."""
+        """Clear .bench-manual-check.json after runner exited safely, restore pending units, and optionally return home."""
         if not isinstance(body, dict) or body.get("confirmed") is not True:
             raise ValueError("수동 확인 완료 체크(confirmed=true)가 필요합니다")
         if recorder_running(self.procs):
             raise ValueError("record_session 또는 chunk_runner가 아직 실행 중입니다 — 먼저 팔을 받치고 SIGUSR2 해제 후 다시 시도하세요")
         import cell_arm_lease
+        mh_doc = load_json_value(self.manual, {}) if self.manual.is_file() else {}
+        mh_arm = mh_doc.get("arm") if isinstance(mh_doc, dict) else None
         force_dead = body.get("force_dead_lease") is True
         for a, letter in ARMS.items():
             rec = cell_arm_lease.status(a).get(a)
@@ -296,6 +299,10 @@ class BenchRecoverMixin:
             self.last_issue = {"kind": "recovered", "message": "수동 확인 보류 해제 및 대기 복귀", "arm": None}
         if hasattr(self, "_log_event"):
             self._log_event("bench", "good", "수동 확인 보류 해제 · 유닛 복원 및 대기 복귀 완료")
+        if body.get("return_home") is True:
+            target_arm = body.get("arm") if body.get("arm") in ARMS else (mh_arm if mh_arm in ARMS else None)
+            if target_arm in ARMS and not self.manual.exists() and not self.pending.exists():
+                return self._return_home_after_clear(target_arm, include_leader=body.get("include_leader", True) is not False)
         return self.status()
 
     def recover_baseline(self, body):

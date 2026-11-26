@@ -1,6 +1,10 @@
 // D-375 지도 자동 맞춤(차선 페인트 → homography 제안)의 순수 계산. DOM 없음 — map-fit-view.js 가 그린다.
 // 제안·수락한 맞춤은 표시 전용이다. sighting·CameraMap·목표·cmd_vel 로 넘기지 않는다.
 
+import { invert3, project } from "/common/plane-math.js";
+import { fitBox } from "./site-map-model.js";
+
+export { invert3, project };
 export const MAP_FIT_PREFIX = "rosy-map-fit:";
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
@@ -20,24 +24,6 @@ export function multiply3(a, b) {
     }
   }
   return out;
-}
-
-export function invert3(m) {
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h;
-  const B = -(d * i - f * g);
-  const C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  if (!finite(det) || Math.abs(det) < 1e-15) return null;
-  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d]
-    .map((v) => v / det);
-}
-
-// 점 하나를 옮긴다. 지평선 뒤(w≤0)는 화면에 없는 점이라 null.
-export function project(h, x, y) {
-  const w = h[6] * x + h[7] * y + h[8];
-  if (!(w > 1e-9)) return null;
-  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
 }
 
 export const scale3 = (sx, sy) => [sx, 0, 0, 0, sy, 0, 0, 0, 1];
@@ -104,6 +90,7 @@ export function normalizeMapProposal(body, meta = {}) {
         rotation: finite(raw.rotation_deg) ? raw.rotation_deg : null,
         mirrored: raw.mirrored === true,
         margin: finite(raw.orientation_margin) ? raw.orientation_margin : null,
+        lensProfile: raw.lens_profile && typeof raw.lens_profile === "object" ? raw.lens_profile : null,
       };
     }
   }
@@ -221,15 +208,10 @@ export function pickLanes(siteLanes, sourceId) {
 
 // 지도(m, y 위) → 캔버스(px, y 아래). 여백은 m. 캔버스는 maxW×maxH 안에 들어간다.
 export function topDownLayout(bounds, maxWidth = 640, maxHeight = 400, marginM = 0.1) {
-  const w = bounds.max_x - bounds.min_x + 2 * marginM;
-  const h = bounds.max_y - bounds.min_y + 2 * marginM;
-  const pxPerM = Math.min(maxWidth / w, maxHeight / h);
-  const width = Math.max(8, Math.round(w * pxPerM));
-  const height = Math.max(8, Math.round(h * pxPerM));
-  const x0 = bounds.min_x - marginM;
-  const y1 = bounds.max_y + marginM;
-  const mapToCanvas = [pxPerM, 0, -x0 * pxPerM, 0, -pxPerM, y1 * pxPerM, 0, 0, 1];
-  return { width, height, pxPerM, mapToCanvas, canvasToMap: invert3(mapToCanvas) };
+  const b = { min_x: bounds.min_x - marginM, min_y: bounds.min_y - marginM, max_x: bounds.max_x + marginM, max_y: bounds.max_y + marginM };
+  const pxPerM = Math.min(maxWidth / (b.max_x - b.min_x), maxHeight / (b.max_y - b.min_y));
+  const w = (b.max_x - b.min_x) * pxPerM, h = (b.max_y - b.min_y) * pxPerM, { matrix: mapToCanvas } = fitBox(b, w, h, 0);
+  return { width: Math.max(8, Math.round(w)), height: Math.max(8, Math.round(h)), pxPerM, mapToCanvas, canvasToMap: invert3(mapToCanvas) };
 }
 
 // D-360 경기장 뷰의 대체 경로: 경기장 사각형(field, 캔버스 px) ↔ 지도 사각형(bounds, m, y 위).
@@ -296,6 +278,8 @@ export function calibrationRequest(pending, source, laneSet, lens) {
     fit_score: Math.round(fit.score * fit.precision * 1000) / 1000,
     lens: lensBody,
     frame_seq: Number.isInteger(seq) ? seq : null,
+    ...(fit.lensProfile ? { lens_profile: fit.lensProfile } : {}),
+    method: "paint",
   };
 }
 
@@ -323,5 +307,12 @@ export function fitFromCalibration(record, frameLens) {
     map_to_image: record.map_to_image, image: record.image, frame_seq: record.frame_seq ?? null,
     map_id: record.map_id ?? null, use: record.use ?? "display-only",
   }));
-  return fit ? { ...fit, revision: typeof record.calibration_revision === "string" ? record.calibration_revision : null } : null;
+  return fit ? {
+    ...fit,
+    revision: typeof record.calibration_revision === "string" ? record.calibration_revision : null,
+    lensProfile: record.lens_profile && typeof record.lens_profile === "object" ? record.lens_profile : null,
+    frozen: Boolean(record.frozen),
+    method: typeof record.method === "string" ? record.method : "paint",
+    metrics: record.metrics && typeof record.metrics === "object" ? record.metrics : null,
+  } : null;
 }

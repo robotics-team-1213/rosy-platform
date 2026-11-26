@@ -24,6 +24,15 @@ import threading
 import time
 from typing import Any, Callable, Sequence
 
+try:
+    from act_gpu_lock import gpu_training_status
+except ImportError:
+    from learning.training.omx.act_gpu_lock import gpu_training_status
+try:
+    import act_visoff_runtime as visoff
+except ImportError:
+    from learning.training.omx import act_visoff_runtime as visoff
+
 SCHEMA = "rosy.omx-act-http.v1"
 WEIGHTS = "model.safetensors"
 CAMERA_ROLES = ("top", "side", "wrist")
@@ -151,7 +160,8 @@ class ArmEntry:
     n_action_steps: int
     chunk_size: int
     goal_size: int | None
-    predict: Callable[[dict[str, Any]], list[list[float]]]
+    predict: Callable[[dict[str, Any]], Any]
+    visoff_meta: dict[str, Any] | None = None
 
 
 def _load_lerobot_arm(
@@ -175,20 +185,28 @@ def _load_lerobot_arm(
     )
 
     def predict(obs: dict[str, Any]) -> list[list[float]]:
-        batch: dict[str, Any] = {
-            "observation.state": torch.tensor(obs["state"], dtype=torch.float32).unsqueeze(0),
-        }
-        if goal_size is not None:
-            batch[GOAL_KEY] = torch.tensor(obs["goal"], dtype=torch.float32).unsqueeze(0)
-        for role in views:
-            rgb = obs["frames_rgb"][role]
-            img = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float().unsqueeze(0) / 255.0
-            batch[f"{IMAGE_PREFIX}{role}"] = img
-
         with torch.inference_mode():
+            batch: dict[str, Any] = {
+                "observation.state": torch.tensor(obs["state"], dtype=torch.float32, device=target_device).unsqueeze(0),
+            }
+            if goal_size is not None:
+                batch[GOAL_KEY] = torch.tensor(obs["goal"], dtype=torch.float32, device=target_device).unsqueeze(0)
+            for role in views:
+                rgb = obs["frames_rgb"][role]
+                # Move uint8 to target_device before float scaling to avoid cv2/PyTorch CPU OpenMP thrashing.
+                img = (
+                    torch.from_numpy(np.ascontiguousarray(rgb))
+                    .to(target_device)
+                    .permute(2, 0, 1)
+                    .unsqueeze(0)
+                    .to(torch.float32)
+                    .div_(255.0)
+                )
+                batch[f"{IMAGE_PREFIX}{role}"] = img
+
             chunk = policy.predict_action_chunk(pre(batch))
             arr = np.asarray(post(chunk).detach().cpu().numpy(), dtype=np.float64).reshape(-1, len(JOINT_NAMES))
-        return [[float(x) for x in r] for r in arr[:n_action_steps]]
+        return [[float(x) for x in r] for r in arr]  # the whole chunk; PolicyRegistry.infer trims to n_action_steps
 
     return predict
 
@@ -196,7 +214,15 @@ def _load_lerobot_arm(
 class PolicyRegistry:
     """Thread-safe pinned multi-arm ACT inference registry."""
 
-    def __init__(self, entries: Sequence[ArmEntry]):
+    def __init__(
+        self,
+        entries: Sequence[ArmEntry],
+        *,
+        gpu_lock_file: Path | None = None,
+        jobs_dir: Path | None = None,
+        reject_when_training_busy: bool = False,
+        gpu_status_fn: Callable[[], tuple[bool, str | None]] | None = None,
+    ):
         if not entries:
             raise ValueError("PolicyRegistry requires at least one arm entry")
         self._arms: dict[str, ArmEntry] = {}
@@ -205,6 +231,12 @@ class PolicyRegistry:
                 raise ValueError(f"duplicate arm_id {entry.arm_id!r}")
             self._arms[entry.arm_id] = entry
         self.infer_lock = threading.Lock()
+        self._reject_when_training_busy = bool(reject_when_training_busy)
+        self._gpu_status_fn = (
+            gpu_status_fn
+            if gpu_status_fn is not None
+            else ((lambda: gpu_training_status(gpu_lock_file, jobs_dir)) if (gpu_lock_file is not None or jobs_dir is not None) else None)
+        )
 
     @classmethod
     def from_specs(
@@ -213,6 +245,11 @@ class PolicyRegistry:
         *,
         device: str = "cpu",
         loader: Callable[[Path, dict[str, tuple[int, int]], int, int | None, str], Any] | None = None,
+        visoff_builder: Callable[[Path, dict[str, Any], Any, int, str], Any] | None = None,
+        gpu_lock_file: Path | None = None,
+        jobs_dir: Path | None = None,
+        reject_when_training_busy: bool = False,
+        gpu_status_fn: Callable[[], tuple[bool, str | None]] | None = None,
     ) -> "PolicyRegistry":
         load_fn = loader or _load_lerobot_arm
         entries: list[ArmEntry] = []
@@ -227,12 +264,23 @@ class PolicyRegistry:
             if actual != revision:
                 raise ValueError(f"{arm_id}: {WEIGHTS} sha256 {actual} != pinned {revision}")
             views, _dim, goal_size, n_steps, chunk_sz = read_policy_spec(pdir)
+            n_steps = int(spec["n_action_steps"]) if (spec := visoff.read_visoff_spec(pdir, chunk_size=chunk_sz) or {}) and spec.get("n_action_steps") is not None else n_steps
             predict = load_fn(pdir, views, n_steps, goal_size, device)
-            entries.append(ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict))
-        return cls(entries)
+            predict, visoff_meta = visoff.visoff_entry(pdir, spec, predict, n_steps, device, loader is None, visoff_builder)
+            entries.append(ArmEntry(arm_id, pdir, revision, views, n_steps, chunk_sz, goal_size, predict, visoff_meta=visoff_meta))
+        return cls(
+            entries,
+            gpu_lock_file=gpu_lock_file,
+            jobs_dir=jobs_dir,
+            reject_when_training_busy=reject_when_training_busy,
+            gpu_status_fn=gpu_status_fn,
+        )
+
+    def _training_status(self) -> tuple[bool, str | None]:
+        return (False, None) if self._gpu_status_fn is None else self._gpu_status_fn()
 
     def health_payload(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "schema": SCHEMA,
             "ok": True,
             "arms": {
@@ -241,11 +289,16 @@ class PolicyRegistry:
                     "views": {role: [hw[0], hw[1]] for role, hw in e.views.items()},
                     "n_action_steps": e.n_action_steps,
                     "chunk_size": e.chunk_size,
-                    "goal_size": e.goal_size,
+                    "goal_size": e.goal_size, **({"visoff": e.visoff_meta} if e.visoff_meta is not None else {}),
                 }
                 for arm_id, e in self._arms.items()
             },
         }
+        if self._gpu_status_fn is not None:
+            busy, reason = self._training_status()
+            payload["gpu_training_busy"] = bool(busy)
+            payload["gpu_training_reason"] = reason
+        return payload
 
     def infer(self, req: Any) -> tuple[int, dict[str, Any]]:
         if not isinstance(req, dict):
@@ -261,6 +314,16 @@ class PolicyRegistry:
         revision = req.get("revision")
         if revision != entry.revision:
             return 409, {"ok": False, "error": f"revision mismatch: expected {entry.revision}, got {revision!r}"}
+
+        if self._reject_when_training_busy:
+            busy, reason = self._training_status()
+            if busy:
+                return 503, {
+                    "ok": False,
+                    "error": "gpu_training_busy",
+                    "reason": reason,
+                    **({"request_id": req_id} if req_id is not None else {}),
+                }
 
         state = _is_finite_floats(req.get("state"), 6)
         if state is None:
@@ -293,20 +356,26 @@ class PolicyRegistry:
             except Exception as exc:
                 return 400, {"ok": False, "error": f"invalid JPEG frame {role!r}: {type(exc).__name__}"}
 
+        fields, bad = visoff.parse_episode_fields(req)
+        if bad:
+            return 400, {"ok": False, "error": bad}
+
         t0 = time.perf_counter()
         try:
             with self.infer_lock:
-                raw_chunk = entry.predict({
+                raw_out = entry.predict({
                     "arm_id": arm_id,
                     "state": state,
                     "frames_rgb": decoded,
-                    "goal": goal,
+                    "goal": goal, **fields,
                 })
         except Exception as exc:
             return 500, {"ok": False, "error": f"inference failed: {type(exc).__name__}"}
 
+        raw_chunk, visoff_diag = visoff.visoff_output(raw_out)
         if not isinstance(raw_chunk, (list, tuple)) or not (1 <= len(raw_chunk) <= entry.chunk_size):
             return 500, {"ok": False, "error": "invalid predicted chunk length"}
+        raw_chunk = raw_chunk if req.get("full_chunk") is True else raw_chunk[:entry.n_action_steps]  # timed single-arm drops late rows
         validated: list[list[float]] = []
         for row in raw_chunk:
             vec = _is_finite_floats(row, 6)
@@ -320,7 +389,7 @@ class PolicyRegistry:
             "arm_id": arm_id,
             "revision": entry.revision,
             "chunk": validated,
-            "infer_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+            "infer_ms": round((time.perf_counter() - t0) * 1000.0, 2), **({"visoff": visoff_diag} if visoff_diag is not None else {}),
         }
 
 
@@ -482,6 +551,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--arm", action="append", default=[], metavar="ARM_ID=DIR:SHA256")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--gpu-lock-file", type=Path)
+    parser.add_argument("--jobs-dir", type=Path)
+    parser.add_argument("--reject-when-training-busy", action="store_true")
     args = parser.parse_args(argv)
 
     cfg = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
@@ -489,6 +561,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     port = int(cfg.get("port", args.port))
     device = str(cfg.get("device", args.device))
     token_file = Path(cfg["token_file"]).expanduser() if "token_file" in cfg else args.token_file
+    gpu_lock_file = Path(cfg["gpu_lock_file"]).expanduser() if "gpu_lock_file" in cfg else args.gpu_lock_file
+    jobs_dir = Path(cfg["jobs_dir"]).expanduser() if "jobs_dir" in cfg else args.jobs_dir
+    reject_busy = bool(cfg.get("reject_when_training_busy", args.reject_when_training_busy))
     arms = list(cfg.get("arms", [])) + list(args.arm)
     if not arms:
         raise SystemExit("at least one --arm spec (or config arms) is required")
@@ -504,7 +579,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         raise SystemExit("provide --token-file (or --allow-insecure-loopback on localhost)")
 
-    registry = PolicyRegistry.from_specs(arms, device=device)
+    registry = PolicyRegistry.from_specs(
+        arms,
+        device=device,
+        gpu_lock_file=gpu_lock_file,
+        jobs_dir=jobs_dir,
+        reject_when_training_busy=reject_busy,
+    )
     server = make_server(bind, port, registry, token=token)
     try:
         server.serve_forever()

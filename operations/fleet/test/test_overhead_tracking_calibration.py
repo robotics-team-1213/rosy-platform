@@ -147,3 +147,26 @@ def test_corrupt_rows_are_skipped_not_fatal(tmp_path, caplog):
     store = TrackingCalibrationStore(path)
     assert [record.source_id for record in store.all()] == ["ceiling_north"]
     assert "tampered" in caplog.text
+
+
+def test_lens_profile_freeze_and_history_persist_across_reloads(tmp_path):
+    lp = {
+        "model": "pinhole",
+        "K": [[480.0, 0.0, 320.0], [0.0, 480.0, 180.0], [0.0, 0.0, 1.0]],
+        "D": [-0.2, 0.05, 0.0, 0.0, 0.0],
+        "image_size": [640, 360],
+        "source": "measured",
+    }
+    path = tmp_path / "fleet.sqlite3"
+    store = TrackingCalibrationStore(path)
+    r1 = _record(lens_profile=lp, method="manual_points", metrics={"rms_m": 0.004})
+    r2 = _record(approved_at=1_790_000_050.0, lens_profile=lp, frozen=True)
+    store.put(r1)
+    store.put(r2)
+    reloaded = TrackingCalibrationStore(path)
+    active = reloaded.get("ceiling_north")
+    assert active is not None and active.frozen is True and active.lens_profile == lp
+    assert [h["calibration_revision"] for h in reloaded.history("ceiling_north")] == [
+        r2.calibration_revision, r1.calibration_revision]
+    reloaded.set_frozen("ceiling_north", False, principal_id="op-1", at=1_790_000_060.0)
+    assert TrackingCalibrationStore(path).get("ceiling_north").frozen is False

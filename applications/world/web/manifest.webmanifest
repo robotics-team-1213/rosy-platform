@@ -1,0 +1,13 @@
+{
+  "name": "Rosy World",
+  "short_name": "Rosy World",
+  "start_url": "./?view=factory",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "./common/brand/mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

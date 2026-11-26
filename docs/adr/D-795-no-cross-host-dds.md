@@ -43,4 +43,9 @@ WiFi·LAN에서 원본 Image나 디스커버리 트래픽이 흐르면 다른 �
 
 - `test/test_no_cross_host_dds.py`, `test/test_omx_workstation.py`, `middleware/devices/omx/adapter/test/test_camera_source.py`, `operations/fleet/test/test_host_control.py`, `test/test_host_guard.py`.
 
+### 추록 (2026-11-24): 루프백 전용 `<Peer address="127.0.0.1"/>` 및 비-멀티캐스트 허용
+
+- `cyclonedds_localhost.xml`의 `<AllowMulticast>default</AllowMulticast>`가 `lo` 인터페이스에서 루프백 멀티캐스트 발견·트래픽을 유발할 수 있으므로, `<AllowMulticast>false</AllowMulticast>`와 `<Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>32</MaxAutoParticipantIndex><Peers><Peer address="127.0.0.1"/></Peers></Discovery>` 조합을 허용한다.
+- 호스트 밖 트래픽 차단의 핵심 원칙은 변하지 않는다. `test/test_no_cross_host_dds.py`는 `127.*` 루프백 주소만 허용하고 비-루프백 피어나 빈 `<Peers>` 블록은 계속 거부한다.
+
 **References:** D-6, D-117, D-120, D-136, D-152, D-273, D-524.

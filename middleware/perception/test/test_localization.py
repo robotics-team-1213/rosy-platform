@@ -102,3 +102,174 @@ class LocalizationTests(unittest.TestCase):
         self.assertTrue(result['unique'], result)
         self.assertLess(math.dist(result['pose'][:2], truth[:2]), .03)
         self.assertLess(abs(math.atan2(math.sin(result['pose'][2]-.37), math.cos(result['pose'][2]-.37))), .03)
+
+    def test_coarse_5cm_grid_keeps_one_cell_wall_tolerance_and_rejects_intervening_walls(self):
+        point_grid = np.zeros((40, 40), dtype=np.int8)
+        point_grid[20, 20] = 100
+        point_map = MapAgreement(point_grid, .05, (0., 0.))
+        self.assertTrue(point_map.near[19:22, 19:22].all())
+        self.assertFalse(point_map.near[18, 20] or point_map.near[22, 20])
+        self.assertFalse(point_map.near[20, 18] or point_map.near[20, 22])
+        self.assertAlmostEqual(point_map._ray_margin, .10)
+
+        wall_grid = np.zeros((40, 40), dtype=np.int8)
+        wall_grid[:, 20] = 100
+        wall_map = MapAgreement(wall_grid, .05, (0., 0.))
+        angles = np.linspace(-.4, .4, 60)
+        self.assertGreater(wall_map.score((.40, 1.00, 0.), (.99 - .40) / np.cos(angles), angles), .90)
+        self.assertLess(wall_map.score((.25, 1.00, 0.), (.99 - .40) / np.cos(angles), angles), .1)
+
+        wall_grid[:, 15] = 100
+        blocked_map = MapAgreement(wall_grid, .05, (0., 0.))
+        self.assertLess(blocked_map.score((.40, 1.00, 0.), (1.02 - .40) / np.cos(angles), angles), .1)
+
+    def test_2cm_grid_keeps_legacy_tolerance_and_ray_margin(self):
+        grid = np.zeros((30, 30), dtype=np.int8)
+        grid[10, 10] = 100
+        m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
+        self.assertTrue(m.near[10, 12])
+        self.assertFalse(m.near[12, 12])
+        self.assertFalse(m.near[10, 13])
+        self.assertAlmostEqual(m._ray_margin, .06)
+        self.assertAlmostEqual(m.likelihood[10, 11], math.exp(-(.02**2) / (2 * .025**2)))
+
+    def test_robust_score_recovers_y8xs_occlusion_and_enforces_adversarial_safety_gates(self):
+        # 5x5 m closed room (2cm cells -> 250x250), robot at (1.5, 1.5, 0.0)
+        grid = np.zeros((250, 250), dtype=np.int8)
+        grid[25:225, 25] = 100
+        grid[25:225, 224] = 100
+        grid[25, 25:225] = 100
+        grid[224, 25:225] = 100
+        # Open unknown (-1) doorway on left wall covering 130..162 deg from (1.5, 1.5)
+        grid[88:139, :26] = -1
+        m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
+        truth = (1.5, 1.5, 0.0)
+        angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)
+        wall_ranges = []
+        for a in angles:
+            dx, dy = math.cos(a), math.sin(a)
+            dists = []
+            if dx > 1e-6:
+                dists.append((224 * .02 - truth[0]) / dx)
+            elif dx < -1e-6:
+                dists.append((25 * .02 - truth[0]) / dx)
+            if dy > 1e-6:
+                dists.append((224 * .02 - truth[1]) / dy)
+            elif dy < -1e-6:
+                dists.append((25 * .02 - truth[1]) / dy)
+            wall_ranges.append(min(dists) + .01)
+        wall_ranges = np.array(wall_ranges, dtype=float)
+
+        # Profile matching live y8xs: ~17% contiguous foreground cluster + ~9% unknown rays
+        y8xs_ranges = wall_ranges.copy()
+        fg_mask = (angles >= math.radians(45)) & (angles < math.radians(107))  # ~31 beams (~17%)
+        y8xs_ranges[fg_mask] = 0.55
+        unk_mask = (angles >= math.radians(130)) & (angles < math.radians(162))  # ends outside/unknown
+        y8xs_ranges[unk_mask] = 6.0  # shoots out of bounds -> unknown_open
+        b = m.explain(truth, y8xs_ranges, angles)
+        self.assertLess(m.score(truth, y8xs_ranges, angles), 0.80)
+        self.assertIsNone(b.rejected_reason)
+        self.assertGreaterEqual(b.robust_score, 0.90)
+        results, reason = m.global_results(y8xs_ranges, angles, .105, use_robust=True)
+        self.assertIsNone(reason)
+        self.assertLess(math.dist(results[0][2][:2], truth[:2]), .05)
+
+        # 1) >3% wall-piercing rejection on 2 cm grids (beams extend past wall through >=65 cells)
+        for k in (7, 15):
+            pierced = wall_ranges.copy()
+            pierced[:k] = 4.2
+            self.assertEqual(m.explain(truth, pierced, angles).rejected_reason, "wall-piercing")
+            self.assertEqual(m.robust_score(truth, pierced, angles), 0.0)
+
+        # 2) <4 hit sectors rejection
+        sparse_idx = np.arange(0, 36)  # ~72 deg arc -> <= 2 sectors
+        self.assertEqual(m.explain(truth, wall_ranges[sparse_idx], angles[sparse_idx]).rejected_reason, "sparse-sectors")
+
+        # 3) >30% foreground / low raw (<0.55) corner trap rejection
+        heavy_fg = wall_ranges.copy()
+        heavy_fg[:70] = 0.55
+        heavy_b = m.explain(truth, heavy_fg, angles)
+        self.assertIn(heavy_b.rejected_reason, ("low-raw-fit", "excess-foreground"))
+        self.assertEqual(heavy_b.robust_score, 0.0)
+
+        # 4) Isolated non-clustered short beams (<3 contiguous) are NOT discounted
+        iso = wall_ranges.copy()
+        iso[::10][:8] = 0.60  # spaced every 20 deg -> isolated singletons
+        iso_b = m.explain(truth, iso, angles)
+        self.assertEqual(iso_b.miss_foreground, 0)
+        self.assertEqual(iso_b.fg_cluster_count, 0)
+
+    def test_coarse_5cm_map_wall_piercing_boundary(self):
+        # 5x5 m closed room (5 cm cells -> 100x100), walls at indices 10..89
+        res = .05
+        grid = np.zeros((100, 100), dtype=np.int8)
+        grid[10:90, 10] = 100
+        grid[10:90, 89] = 100
+        grid[10, 10:90] = 100
+        grid[89, 10:90] = 100
+        m = MapAgreement(grid, res, (0., 0.), tolerance=.04)
+        truth = (1.5, 1.5, 0.0)
+        angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)
+        wall_ranges = np.array([
+            min(d for d in (
+                (89 * res - truth[0]) / math.cos(a) if math.cos(a) > 1e-6 else None,
+                (10 * res - truth[0]) / math.cos(a) if math.cos(a) < -1e-6 else None,
+                (89 * res - truth[1]) / math.sin(a) if math.sin(a) > 1e-6 else None,
+                (10 * res - truth[1]) / math.sin(a) if math.sin(a) < -1e-6 else None,
+            ) if d is not None) + .01
+            for a in angles
+        ], dtype=float)
+
+        for k in (7, 10, 18):  # 3.9%..10.0% localized in <=2 adjacent sectors passes on 5 cm maps (C3 stale-prop)
+            ok = wall_ranges.copy()
+            ok[:k] = 5.5
+            b = m.explain(truth, ok, angles)
+            self.assertIsNone(b.rejected_reason)
+            self.assertGreaterEqual(b.robust_score, 0.85)
+
+        # Spread-out >6% piercing across >=3 sectors is still rejected as wall-piercing
+        spread = wall_ranges.copy()
+        spread[0::14][:12] = 5.5  # 6.7% across all 8 sectors
+        b_spread = m.explain(truth, spread, angles)
+        self.assertEqual(b_spread.rejected_reason, "wall-piercing")
+        self.assertEqual(b_spread.robust_score, 0.0)
+
+        # >6% across 2 non-adjacent (opposite) sectors is still rejected
+        opp = wall_ranges.copy()
+        opp[:7] = 5.5
+        opp[90:97] = 5.5
+        b_opp = m.explain(truth, opp, angles)
+        self.assertEqual(b_opp.rejected_reason, "wall-piercing")
+        self.assertEqual(b_opp.robust_score, 0.0)
+
+        # >12% localized piercing is still rejected even in 1 sector
+        over = wall_ranges.copy()
+        over[:24] = 5.5
+        b_over = m.explain(truth, over, angles)
+        self.assertEqual(b_over.rejected_reason, "wall-piercing")
+        self.assertEqual(b_over.robust_score, 0.0)
+
+    def test_score_and_explain_ray_obstruction_modes(self):
+        # 4x4 m room (5 cm cells -> 80x80), outer walls + thin grazing wall + blocking pillar
+        grid = np.zeros((80, 80), dtype=np.int8)
+        grid[5:75, 5] = grid[5:75, 74] = grid[5, 5:75] = grid[74, 5:75] = 100
+        # Thin 1-cell grazing wall along y=40 (x=42..55) and a 3-cell wide blocking pillar around x=52..55, y=38..42
+        grid[38:43, 52:56] = 100
+        m = MapAgreement(grid, .05, (0., 0.), tolerance=.04)
+        angles = np.linspace(-math.pi, math.pi, 72, endpoint=False)
+        pose = (1.5, 2.0, 0.0)
+        # Clear scan hitting outer wall without crossing the central pillar
+        ranges = np.full(len(angles), 1.2)
+        ranges[(np.abs(angles) < .4)] = 3.0  # shoots past pillar (x=2.6..2.8) to right wall
+        b = m.explain(pose, ranges, angles)
+        self.assertGreater(b.miss_wall_pierced, 0)
+        s_pierced = m.score(pose, ranges, angles)
+        self.assertLess(s_pierced, 1.0)
+        # Open-grid beams firing outside map bounds: OOB blocks in score() (0 hit), not wall-pierced in explain()
+        open_grid = np.zeros((40, 40), dtype=np.int8)
+        m_open = MapAgreement(open_grid, .05, (0., 0.), tolerance=.04)
+        oob = np.full(len(angles), 6.0)
+        self.assertEqual(m_open.score((1.0, 1.0, 0.0), oob, angles), 0.0)
+        b_oob = m_open.explain((1.0, 1.0, 0.0), oob, angles)
+        self.assertEqual(b_oob.miss_wall_pierced, 0)
+        self.assertEqual(b_oob.miss_unknown, len(angles))

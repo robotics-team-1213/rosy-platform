@@ -96,14 +96,74 @@ def test_candidates_are_a_valid_report_and_move_the_state_to_candidates():
     assert one(out, 'state')['status']['request_id'] == 'r-1'
 
 
-def test_candidates_are_re_reported_every_two_seconds_with_a_new_stamp():
+def test_candidate_retransmission_keeps_evidence_stamp_until_rescored():
     a = core()
     candidates_ready(a, now=1.)
     assert kinds(a.tick(2.9), 'candidates') == []
     again = one(a.tick(3.), 'candidates')
-    assert again['request_id'] == 'r-1' and again['stamp'] == 3.
+    assert again['request_id'] == 'r-1' and again['stamp'] == 1.
     assert kinds(a.tick(4.), 'candidates') == []
-    assert one(a.tick(5.), 'candidates')['stamp'] == 5.
+    assert one(a.tick(5.), 'candidates')['stamp'] == 1.
+    a.on_twist(6., 0., 0.)
+    assert a.candidate_scan_due(6., 5.9)
+    assert a.on_candidate_scan(6., 5.9, [.97, .96], [(0.6, 0.1)]) == []
+    renewed = one(a.tick(7.), 'candidates')
+    assert renewed['stamp'] == 5.9 and renewed['request_id'] == 'r-1'
+    assert renewed['unmapped_objects'] == [{'x': 0.6, 'y': 0.1}]
+    assert one(a.tick(9.), 'candidates') == renewed
+
+
+def test_stationary_off_odom_relocation_retires_old_candidates_and_researches():
+    a = core(retry_s=2.)
+    candidates_ready(a, now=1.)
+    destination = (.86, -.52, math.pi)
+    ranges, angles = scan(destination, beams=640)
+    occupancy = field()
+    fits = [occupancy.robust_score(sensor_from_base((c.x, c.y, c.yaw), MOUNT), ranges, angles)
+            for c in (TRUTH, MIRROR)]
+    assert max(fits) < a.machine.min_fit
+    assert occupancy.robust_score(sensor_from_base(destination, MOUNT), ranges, angles) >= a.machine.min_fit
+    for t in (6., 7., 8.):
+        a.on_twist(t, 0., 0.)
+        assert not a.candidate_scan_due(t, t - 1.)  # delayed scans do not count
+        assert a.candidate_scan_due(t, t - .1)
+        out = a.on_candidate_scan(t, t - .1, fits, None)
+        assert kinds(out, 'inject') == []
+        assert not a.candidate_scan_due(t, t - .1)  # same scan cannot count again
+        if t < 8.:
+            assert out == [] and not a.search_due(t, ODOM)
+    status = one(out, 'state')['status']
+    assert (status['state'], status['reason'], status['request_id']) == ('SUSPECT', 'candidate_scan_mismatch', None)
+    assert kinds(a.tick(8.1), 'candidates') == []
+    assert kinds(a.on_decision(8.2, decision('r-1', 8.2)), 'inject') == []
+    assert a.search_due(8.2, ODOM)
+    a.search_started(8.2, ODOM, scan_stamp=8.1)
+    out = a.search_finished(9.1, ODOM, [PoseCandidate(*destination, .96, 'global')])
+    assert one(out, 'candidates')['request_id'] == 'r-2'
+    assert one(out, 'candidates')['stamp'] == 8.1
+    assert kinds(out, 'inject') == []
+    for t in (10., 11.2):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t - .1, [.2], None) == []
+    assert a.machine.request_id == 'r-2'
+
+
+def test_candidate_scan_disagreement_waits_for_search_backoff_and_resets_on_partial_agreement():
+    a = core()
+    candidates_ready(a, now=1.)
+    for t in (2., 3., 4., 5.):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t, [.1, .2], None) == []
+    a.on_twist(6., 0., 0.)
+    assert a.on_candidate_scan(6., 6., [.1, .95], [(0.6, 0.1)]) == []
+    assert a.machine.request_id == 'r-1'
+    report = one(a.tick(6.), 'candidates')
+    assert report['stamp'] == 1. and report['unmapped_objects'] == [{'x': .3, 'y': .1}]
+    for t in (7., 8.):
+        a.on_twist(t, 0., 0.)
+        assert a.on_candidate_scan(t, t, [.1, .2], None) == []
+    a.on_twist(9., 0., 0.)
+    assert one(a.on_candidate_scan(9., 9., [.1, .2], None), 'state')['status']['state'] == 'SUSPECT'
 
 
 def test_state_is_published_at_two_hertz_and_on_every_change():
@@ -926,3 +986,140 @@ def test_wall_tiebreak_decision_threads_evidence_and_localizes():
     assert one(done, 'result') == {
         'request_id': req_id, 'accepted': True, 'reason': None, 'state': 'LOCALIZED',
     }
+
+
+def test_stationary_empty_searches_back_off_up_to_30s_and_reset_on_move_or_request():
+    a = core()
+    assert a.search_due(0.0, ODOM)
+    # 1st empty search at t=0.0 -> empty_streak=1 -> next retry stays at base 5.0 s
+    a.search_started(0.0, ODOM)
+    a.search_finished(0.5, ODOM, [])
+    assert not a.search_due(5.4, ODOM)
+    assert a.search_due(5.5, ODOM)
+
+    # 2nd empty search -> streak=2 -> backs off to 10.0 s
+    a.search_started(5.5, ODOM)
+    a.search_finished(6.0, ODOM, [])
+    assert not a.search_due(15.9, ODOM)
+    assert a.search_due(16.0, ODOM)
+
+    # 3rd empty search -> streak=3 -> backs off to 20.0 s
+    a.search_started(16.0, ODOM)
+    a.search_finished(16.5, ODOM, [])
+    assert not a.search_due(36.4, ODOM)
+    assert a.search_due(36.5, ODOM)
+
+    # 4th empty search -> streak=4 -> capped at 30.0 s
+    a.search_started(36.5, ODOM)
+    a.search_finished(37.0, ODOM, [])
+    assert not a.search_due(66.9, ODOM)
+    assert a.search_due(67.0, ODOM)
+
+    # Moving > moved_m resets backoff back to base 5.0 s
+    moved_odom = (ODOM[0] + 0.2, ODOM[1], ODOM[2])
+    a.search_started(67.0, ODOM)
+    a.search_finished(67.5, ODOM, [])
+    assert not a.search_due(72.0, ODOM)
+    assert a.search_due(72.5, moved_odom)
+
+    # Map change or mission end resets backoff immediately
+    a.on_map_changed()
+    assert a._empty_streak == 0
+    a.on_mission(73.0, {'state': 'running'})
+    a.on_mission(74.0, {'state': 'done'})
+    assert a.search_due(74.0, ODOM)
+
+
+def test_auto_unique_locks_settled_asymmetric_candidate_and_stops_after_reject_cap():
+    a = core()
+    uniq = PoseCandidate(-0.5, 0.2, 0.0, 0.98, 'global', unique_margin=0.30)
+    assert a.search_due(1.0, ODOM)
+    a.search_started(1.0, ODOM)
+    out = a.search_finished(1.0, ODOM, [uniq])
+    inject = one(out, 'inject')
+    assert inject.source == 'unique_map' and inject.pose == (-0.5, 0.2, 0.0)
+    assert inject.xy_std == COVARIANCE['candidate'][0] and inject.yaw_std == COVARIANCE['candidate'][1]
+    assert one(out, 'state')['status']['reason'] == 'checking'
+    done = hold(a, 1.2, 4.7, fit=0.96)
+    assert one(done, 'result') == {'request_id': 'r-1', 'accepted': True, 'reason': None, 'state': 'LOCALIZED'}
+
+    # Unsettled robot (moving or stale twist) or no unique_margin must not auto-inject
+    unsettled = LocAssist(lambda: 'u-1')
+    unsettled.search_started(0.0, ODOM)
+    assert kinds(unsettled.search_finished(0.5, ODOM, [uniq]), 'inject') == []
+
+    no_margin = core()
+    no_margin.search_started(0.0, ODOM)
+    assert kinds(no_margin.search_finished(0.5, ODOM, [PoseCandidate(-0.5, 0.2, 0.0, 0.98, 'global')]), 'inject') == []
+
+    # After 2 failed checks, auto-unique pauses until robot moves or map changes
+    capped = core()
+    for t_start in (1.0, 10.0):
+        assert capped.search_due(t_start, ODOM)
+        capped.search_started(t_start, ODOM)
+        assert len(kinds(capped.search_finished(t_start, ODOM, [uniq]), 'inject')) == 1
+        hold(capped, t_start + 0.5, t_start + 1.0, fit=0.40)
+    assert capped.search_due(20.0, ODOM)
+    capped.search_started(20.0, ODOM)
+    assert kinds(capped.search_finished(20.0, ODOM, [uniq]), 'inject') == []
+    assert capped.search_due(26.0, (0.2, 0.0, 0.0))
+    capped.search_started(26.0, (0.2, 0.0, 0.0))
+    assert len(kinds(capped.search_finished(26.0, (0.2, 0.0, 0.0), [uniq]), 'inject')) == 1
+
+    # Mission starting while a search is in flight must suppress candidates and auto-inject
+    busy = core()
+    busy.search_started(0.0, ODOM)
+    busy.on_mission(0.2, {'state': 'running'})
+    assert busy.search_finished(0.5, ODOM, [uniq]) == []
+
+
+def test_fit_drop_hysteresis_gates_unmapped_objects_before_suspect():
+    a = core()
+    candidates_ready(a)
+    a.on_decision(2.0, decision('r-1', 2.0))
+    hold(a, 2.1, 5.6, fit=0.95)
+    assert a.objects_due(5.7)
+    a.on_objects(5.7, 5.7, [(0.5, 0.1)])
+    # Transient dip below drop_fit=0.70 stops reporting unmapped objects immediately.
+    a.on_fit(6.0, 0.65)
+    assert not a.objects_due(6.3)
+    assert 'unmapped_objects' not in one(a.tick(6.3), 'state')['status']
+    # Recovering above drop_fit re-enables unmapped object reporting.
+    a.on_fit(6.5, 0.72)
+    assert a.objects_due(6.8)
+
+
+def test_explicit_window_reports_global_result_without_native_auto_injection():
+    assist = LocAssist(lambda: "candidate")
+    assist.on_twist(19.0, 0.0, 0.0)
+    assist.on_twist(20.0, 0.0, 0.0)
+    assert assist.search_window_ready(20.0)
+    candidate = PoseCandidate(0.2, 0.0, 0.0, 0.98, "global", unique_margin=0.20)
+    assist.search_started(20.0, (0., 0., 0.), scan_stamp=19.9)
+
+    outputs = assist.search_finished(20.1, (0., 0., 0.), [candidate], allow_unique=False)
+
+    assert [kind for kind, _ in outputs] == ["candidates", "state"]
+    assert assist.machine.state.value == "CANDIDATES"
+    assert assist.machine.check is None and not assist.search_window_ready(20.1)
+
+
+def test_window_eligibility_waits_until_an_old_candidate_is_retired_by_native_scans():
+    a = core(retry_s=2.)
+    candidates_ready(a, now=1.)
+    destination = (.86, -.52, math.pi)
+    ranges, angles = scan(destination, beams=640)
+    occupancy = field()
+    fits = [occupancy.robust_score(sensor_from_base((c.x, c.y, c.yaw), MOUNT), ranges, angles)
+            for c in (TRUTH, MIRROR)]
+    assert max(fits) < a.machine.min_fit
+    for now in (6., 7., 8.):
+        a.on_twist(now, 0., 0.)
+        assert not a.search_window_ready(now)
+        outputs = a.on_candidate_scan(now, now - .1, fits, None)
+    status = one(outputs, "state")["status"]
+    assert status["state"] == "SUSPECT" and status["reason"] == "candidate_scan_mismatch"
+    assert a.search_window_ready(8.)
+    a.search_started(8., ODOM, scan_stamp=7.9)
+    result = a.search_finished(8.1, ODOM, [], allow_unique=False)
+    assert kinds(result, "inject") == [] and a.search_window_ready(8.1)

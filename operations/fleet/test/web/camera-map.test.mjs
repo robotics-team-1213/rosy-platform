@@ -13,21 +13,30 @@ const siteMap = { maps: [{ map_id: "map_v2_fleet" }] };
 test("new frames on the same img refresh the warped backdrop; map redraw alone reuses it", (t) => {
   const previousDocument = globalThis.document;
   let canvases = 0;
-  const context = new Proxy({}, { get: () => () => {} });
+  let offDraws = 0;
+  const noop = () => {};
+  const dstContext = new Proxy({}, { get: () => noop });
+  const offContext = new Proxy({ drawImage: () => { offDraws += 1; } },
+    { get: (target, prop) => (prop in target ? target[prop] : noop) });
   globalThis.document = { createElement: () => {
     canvases += 1;
-    return { getContext: () => context };
+    return { getContext: () => offContext };
   } };
   t.after(() => { globalThis.document = previousDocument; });
   const backdrop = createCameraBackdrop({ scope: {}, el: () => null, view: { siteMap }, draw: () => {} });
-  const draw = () => backdrop.drawTopDown(context, calibration,
+  const draw = () => backdrop.drawTopDown(dstContext, calibration,
     { min_x: 0, min_y: 0, max_x: 1, max_y: 1 }, (x, y) => ({ x, y }), 100, 100, 1, 0);
   backdrop.setCameraFrame({ ...frame, seq: 1 });
-  draw(); draw();
+  draw();
+  const firstDraws = offDraws;
+  assert.ok(firstDraws > 0);
+  draw();
   assert.equal(canvases, 1);
+  assert.equal(offDraws, firstDraws);
   backdrop.setCameraFrame({ ...frame, seq: 2 });
   draw();
-  assert.equal(canvases, 2);
+  assert.equal(canvases, 1);
+  assert.ok(offDraws > firstDraws);
 });
 
 test("camera map accepts only a fresh raw frame with matching source, map, lens and size", () => {

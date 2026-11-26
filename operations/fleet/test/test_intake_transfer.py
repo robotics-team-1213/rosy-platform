@@ -59,10 +59,11 @@ def test_only_admitted_arrived_trips_with_an_object_ref_at_the_supply_place_are_
 def test_intake_names_an_installed_participant_and_its_intake_point(rig):
     store = rig[3]
     good = {"supply_place": "SUPPLY", "instance_id": store.installation.policy.primary[1], "intake_point": "intake-A",
-            "container_tags": {"100": "CNTR-1"}}
+            "container_tags": {"100": "CNTR-1"}, "container_epcs": {"432D3100": "CNTR-1"}}
     validate_intake(good, store)
     for bad in ({**good, "instance_id": "nobody"}, {k: v for k, v in good.items() if k != "intake_point"},
-                {**good, "supply_place": ""}, {**good, "container_tags": {"x": "CNTR-1"}}, {**good, "extra": "1"}):
+                {**good, "supply_place": ""}, {**good, "container_tags": {"x": "CNTR-1"}},
+                {**good, "container_epcs": {"aabb": "CNTR-1"}}, {**good, "extra": "1"}):
         with pytest.raises(ValueError):
             validate_intake(bad, store)
     with pytest.raises(ValueError):

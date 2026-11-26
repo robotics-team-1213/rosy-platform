@@ -7,11 +7,12 @@
 // 그린다. 관측은 속이 빈 점선 고리로, CORE TF pose(채운 삼각형)와 섞지 않는다.
 
 import {
-  siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, quarterTurn,
+  siteBounds, canvasSizeFor, gridLines, GRID_STEP_M,
+  streamEvidence, roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "./site-layer.js";
+import { fitBox, mapBounds } from "/console/assets/site-map-model.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
-import { createMapOverlays } from "./map-overlays.js";
+import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
 import { createMapPolling } from "./map-polling.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -23,7 +24,7 @@ import { axisOrientation, drawMapDatum, gridCellOf } from "./map-datum.js";
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
-  if (!view.displayMode) view.displayMode = "coordinates";
+  if (!view.displayMode) view.displayMode = "overlay";
   const camera = createCameraBackdrop({ scope, el, view, draw: scheduleDraw });
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
@@ -33,43 +34,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   if (!view.layers) {
     view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
+  view.layers.storedRoutes ??= false;
   const layerOn = (key) => view.layers?.[key] !== false;
-  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
-  const toggleBar = el("map-overlay-toggles");
-  if (toggleBar) {
-    const syncToggleButtons = () => {
-      const anyOn = subKeys.some((k) => view.layers[k] !== false);
-      for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
-        const k = btn.dataset.layerToggle;
-        if (k === "all") {
-          btn.setAttribute("aria-pressed", String(anyOn));
-          btn.textContent = anyOn ? "전체 표시 켬" : "전체 표시 끔";
-        } else {
-          btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
-        }
-      }
-      const legacyTraffic = el("traffic-toggle");
-      if (legacyTraffic) {
-        legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
-        legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
-      }
-    };
-    scope.listen(toggleBar, "click", (event) => {
-      const btn = event.target.closest("[data-layer-toggle]");
-      if (!btn) return;
-      const key = btn.dataset.layerToggle;
-      if (key === "all") {
-        const nextVal = !subKeys.some(layerOn);
-        for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
-      } else {
-        view.layers[key] = !(view.layers[key] !== false);
-      }
-      syncToggleButtons();
-      draw();
-    });
-    // #traffic-toggle clicks are handled by map-polling.js; a second handler here would cancel the first.
-    syncToggleButtons();
-  }
+  bindLayerToggles({scope, el, view, layerOn, draw});
   const {
     CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, reserveBox, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
@@ -103,6 +70,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return ctx;
   }
 
+  let gridRaster = null;
   function paintGrid(grid) {
     const canvas = el("map-canvas");
     const { width, height } = grid;
@@ -112,30 +80,38 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
     const ctx = clearCanvas(canvas, width * scale, height * scale);
     ctx.imageSmoothingEnabled = false;
-    const image = ctx.createImageData(width, height);
-    // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
-    const tone = window.RosyPalette.readPalette({
-      unknown: "--raster-unknown", free: "--raster-free",
-      uncertain: "--raster-uncertain", occupied: "--raster-occupied",
-    });
-    for (let row = 0; row < height; row += 1) {
-      for (let col = 0; col < width; col += 1) {
-        const value = grid.data[row * width + col];
-        const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
-          : value >= GRID.OCCUPIED_MIN ? tone.occupied
-            : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
-        const pixel = ((height - 1 - row) * width + col) * 4;
-        image.data[pixel] = rgb[0];
-        image.data[pixel + 1] = rgb[1];
-        image.data[pixel + 2] = rgb[2];
-        image.data[pixel + 3] = 255;
+    const theme = typeof document !== "undefined" ? document.documentElement?.dataset?.theme : undefined;
+    if (!gridRaster || gridRaster.grid !== grid || gridRaster.data !== grid.data
+        || gridRaster.width !== width || gridRaster.height !== height || gridRaster.theme !== theme) {
+      const cells = document.createElement("canvas");
+      cells.width = width;
+      cells.height = height;
+      const cellCtx = cells.getContext?.("2d");
+      if (cellCtx) {
+        const image = ctx.createImageData(width, height);
+        // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
+        const tone = window.RosyPalette.readPalette({
+          unknown: "--raster-unknown", free: "--raster-free",
+          uncertain: "--raster-uncertain", occupied: "--raster-occupied",
+        });
+        for (let row = 0; row < height; row += 1) {
+          for (let col = 0; col < width; col += 1) {
+            const value = grid.data[row * width + col];
+            const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
+              : value >= GRID.OCCUPIED_MIN ? tone.occupied
+                : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
+            const pixel = ((height - 1 - row) * width + col) * 4;
+            image.data[pixel] = rgb[0];
+            image.data[pixel + 1] = rgb[1];
+            image.data[pixel + 2] = rgb[2];
+            image.data[pixel + 3] = 255;
+          }
+        }
+        cellCtx.putImageData(image, 0, 0);
       }
+      gridRaster = { grid, data: grid.data, width, height, theme, cells };
     }
-    const cells = document.createElement("canvas");
-    cells.width = width;
-    cells.height = height;
-    cells.getContext("2d").putImageData(image, 0, 0);
-    ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(gridRaster.cells, 0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
   }
 
@@ -169,7 +145,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const calibration = camera.calibration();
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
-    // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
+    // 보정을 바꾸는 것은 설치의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
@@ -183,24 +159,22 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const ctx = clearCanvas(canvas, Math.round(width * dpr), Math.round(height * dpr));
     ctx.scale(dpr, dpr);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
-    // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
-    // 돌리므로 글자는 똑바로 선다.
+    // 돌린다. 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로 돌리므로 글자는 똑바로 선다.
+    // 범위는 현장 지도와 같은 활성 지도(장소·도로·시설)이고, 활성 지도가 없을 때만 카메라 사각형이다.
     const rot = view.siteViewTurn || 0;
-    const side = rot === 90 || rot === 270;
-    const fw = side ? height : width, fh = side ? width : height;
-    const t = fitTransform(bounds, fw, fh, 32);
-    const turn = quarterTurn(rot, fw, fh);
-    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    const activeMap = view.activeSiteMap?.map;
+    const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
+    const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
+    const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
-    view.siteToWorld = (x, y) => { const p = turn.unpoint(x, y); return { x: (p.x - t.ox) / t.scale, y: (t.oy - p.y) / t.scale }; };
+    view.siteToWorld = (x, y) => { const [mx, my] = t.toMap(x, y); return { x: mx, y: my }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
-    const activeMap = view.activeSiteMap?.map;
-    const showLanes = layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
+    const showLanes = layerOn("lanes") && sameFrame;
     const polygons = layerOn("site") ? sitePolygons() : [];
     const key = JSON.stringify([activeMap?.map_id, view.activeSiteMap?.version, bounds, width, height, dpr, rot,
-      ["site", "grid", "lanes", "labels"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
+      ["site", "grid", "lanes", "labels", "storedRoutes"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
     staticLayer ??= document.createElement("canvas");
     const off = staticLayer.getContext?.("2d");
     if (off) {
@@ -350,15 +324,31 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.fillStyle = css("--ink");
       ctx.lineWidth = 2;
       ctx.font = labelFont;
-      for (const edge of activeMap.edges || []) {
-        ctx.setLineDash(edge.drive_mode === "free" ? [6, 4] : []);
+      const strokeRoad = (points) => {
         ctx.beginPath();
-        edge.polyline.forEach(([x, y], index) => {
+        points.forEach(([x, y], index) => {
           const p = toPx(x, y);
           if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
         });
         ctx.stroke();
+      };
+      const storedRoutes = [];
+      for (const edge of activeMap.edges || []) {
+        const surveyed = surveyedRoadPoints(edge);
+        ctx.setLineDash(!surveyed && edge.drive_mode === "free" ? [6, 4] : []);
+        strokeRoad(surveyed ?? roadOverlayPoints(activeMap.map_id, edge));
+        if (surveyed) {
+          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(edge);
+          if (stored) storedRoutes.push(stored);
+        }
       }
+      ctx.save();
+      ctx.strokeStyle = css("--series-secondary");
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      storedRoutes.forEach(strokeRoad);
+      ctx.restore();
+      ctx.setLineDash([]);
       // Distinct semantic place markers: C1~C3 (charging bays), S1~S5 (stations), P1~P3 / J_* (junctions)
       for (const place of activeMap.places || []) {
         const pid = String(place.id);
@@ -397,11 +387,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const guide = (ctx, toPoint) => {
     // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): keep active robots/live arms visible on
     // normal sites (<= 6 robots), while offline arm placeholders yield priority unless focused.
-    const focusedRobotId = view.focusRobot || view.selected || null;
+    const focusedRobotId = view.focusRobot || view.selected || view.focusAnchorId || null;
+    const focusIds = new Set([view.focusRobot, view.selected, view.focusAnchorId].filter(Boolean).map((id) => String(id).toLowerCase()));
     const smallFleet = (view.guide?.robots?.length || 0) <= 6;
     const chip = (c, g, x, y, text, tone) => {
       const s = String(text);
-      const isFocused = Boolean(focusedRobotId && s.includes(focusedRobotId));
+      const chipId = s.split(" · ")[0].split(" (")[0].trim().toLowerCase();
+      const isFocused = focusIds.has(chipId);
       const isOfflineArm = /^arm_[a-z]+\s*·\s*위치 모름/.test(s);
       return drawChip(c, g, x, y, text, tone, isFocused || (smallFleet && !isOfflineArm) || labelImportant(s.split(" · ")[0]));
     };
@@ -425,7 +417,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       placeList.hidden = !places.length;
       placeList.replaceChildren(...places.map(place => {
         const row = document.createElement("li");
-        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+        row.textContent = `${place.name || place.id} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
         return row;
       }));
     }
@@ -434,10 +426,18 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const drift = camera.calibration() && view.trackingDrift;
       const health = !drift && view.calibrationHealth;   // D-1006: 거부된 맞춤·범위 부족도 알린다
       calibrationStatus.hidden = !drift && !health;
-      calibrationStatus.textContent = health ? `카메라 교정 확인(${health.sourceId}) — ${health.text}`
+      const msg = health ? `카메라 교정 확인(${health.sourceId}) — ${health.text}`
         : !drift ? "" : drift.origin === "server"
         ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`
         : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`;
+      if (msg && typeof document?.createElement === "function" && typeof calibrationStatus.replaceChildren === "function") {
+        const link = document.createElement("a");
+        link.href = "/console/install#calibration";
+        link.textContent = "보정 도구 열기";
+        calibrationStatus.replaceChildren(`${msg} `, link);
+      } else {
+        calibrationStatus.textContent = msg;
+      }
     }
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
@@ -450,7 +450,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (view.siteMap) {
         drawSiteView();
         const b = siteBounds(view.siteMap, 0);
-        const virtualOnly = view.displayMode === "coordinates" && !layerOn("sightings");
+        const virtualOnly = (view.displayMode === "coordinates" || (view.displayMode === "overlay" && !camera.calibration())) && !layerOn("sightings");
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
           + (camera.calibration() && view.displayMode === "overlay"
@@ -574,7 +574,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   // 사이트 사각형·격자·교통·상황·관측 폴링은 map-polling.js가 가진다. 이 뷰를 다시 그리게 draw를 건넨다.
   const { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling } = createMapPolling({ scope, el, view,
-    auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
+    auth, call, camera, draw, scheduleDraw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
 
   return { draw, scheduleDraw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
     setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };

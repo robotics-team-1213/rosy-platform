@@ -13,6 +13,7 @@ import glob
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -114,9 +115,28 @@ def inventory(registry: dict | None, facts: dict, names: dict, ask=formats, real
     ]
 
 
-def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os.path.realpath) -> dict:
-    """{"write": {role: env}, "restart": [role], "waiting": [role], "unregistered": [node], "disabled": [role]} for the registry now."""
-    out = {"write": {}, "restart": [], "waiting": [], "unregistered": [], "disabled": []}
+def usb_model(value) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{4}", value, re.IGNORECASE):
+        return value.lower()
+    return None
+
+
+def model_mismatch(camera: dict, fact: dict) -> bool:
+    expected, observed = usb_model(camera.get("usb_id")), usb_model(fact.get("id"))
+    return bool(expected and observed and expected != observed)
+
+
+def replacement_on_port(registry: dict, role: str, node: str, facts: dict, realpath=os.path.realpath) -> dict | None:
+    """Allow an operator to replace the model at a port reserved for this role alone."""
+    registered = [c for c in registry["cameras"] if realpath(c["device"]) == node]
+    if len(registered) == 1 and registered[0]["role"] == role and model_mismatch(registered[0], facts.get(node, {})):
+        return {"node": node, "device": registered[0]["device"], "usb_id": usb_model(facts[node]["id"])}
+    return None
+
+
+def bind(registry: dict, env_dir: Path, present, facts: dict, realpath=os.path.realpath) -> dict:
+    """Plan role bindings and flag occupied ports whose USB model changed."""
+    out = {"write": {}, "restart": [], "waiting": [], "unregistered": [], "disabled": [], "mismatched": []}
     used = set()
     for camera in registry["cameras"]:
         role, path = camera["role"], env_dir / f"omx-camera-{camera['role']}.env"
@@ -128,7 +148,12 @@ def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os
         if not present(camera["device"]):
             out["waiting"].append(role)
             continue
-        used.add(realpath(camera["device"]))
+        node = realpath(camera["device"])
+        used.add(node)
+        if model_mismatch(camera, facts.get(node, {})):
+            out["mismatched"].append(role)
+            out["waiting"].append(role)
+            continue
         want = role_env(camera, registry.get("defaults", {}))
         have = (
             dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line)
@@ -138,18 +163,19 @@ def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os
         if have != want:
             out["write"][role] = want
             out["restart"].append(role)
-    out["unregistered"] = sorted(plugged_nodes - used)
+    out["unregistered"] = sorted(facts.keys() - used)
     return out
 
 
 def apply(plan: dict, env_dir: Path, units_running, run=subprocess.run) -> list:
     """Write the env files and (re)start units: a changed role, or a role whose camera is back but unit is down."""
     done = []
-    for role in plan.get("disabled", []):
-        if units_running(role):
-            unit = f"rosy-omx-camera@{role}.service"
-            run(["systemctl", "--user", "stop", unit], check=False, capture_output=True)
-            done.append(f"stopped {unit}")
+    mismatched = plan.get("mismatched", [])
+    stopped_roles = mismatched + [role for role in plan.get("disabled", []) if units_running(role)]
+    for role in stopped_roles:
+        unit = f"rosy-omx-camera@{role}.service"
+        run(["systemctl", "--user", "stop", unit], check=role in mismatched, capture_output=True)
+        done.append(f"stopped {unit}")
     for role, env in plan["write"].items():
         path = env_dir / f"omx-camera-{role}.env"
         tmp = path.with_suffix(".tmp")
@@ -193,14 +219,18 @@ def arm_hubs(env_dir: Path = ENV_DIR, realpath=os.path.realpath) -> dict:
 
 def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath, hubs=None) -> list:
     """One row per camera no present role uses."""
-    gone = [c for c in registry["cameras"] if c.get("enabled") is not False and not present(c["device"])]
+    gone = [
+        c for c in registry["cameras"]
+        if c.get("enabled") is not False
+        and (not present(c["device"]) or model_mismatch(c, facts.get(realpath(c["device"]), {})))
+    ]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]
     rows = []
     for node in free:
-        model = facts[node]["id"]
-        roles = [c["role"] for c in gone if c.get("usb_id") == model]
-        same = [n for n in free if facts[n]["id"] == model]
+        model = usb_model(facts[node]["id"])
+        roles = [c["role"] for c in gone if model and usb_model(c.get("usb_id")) == model]
+        same = [n for n in free if usb_model(facts[n]["id"]) == model]
         follow = roles[0] if len(roles) == 1 and len(same) == 1 else None
         arms = [arm for arm, h in (hubs or {}).items() if h == hub(facts[node]["usb"])]
         hub_arm = arms[0] if len(arms) == 1 else None
@@ -208,7 +238,7 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
             {
                 "node": node,
                 "device": best_name(node, names),
-                "usb_id": model,
+                "usb_id": model or facts[node]["id"],
                 "roles": roles,
                 "follow": follow,
                 "hub_arm": hub_arm,
@@ -219,16 +249,17 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
 
 
 def learn(registry: dict, facts: dict, proposals: list, present, realpath=os.path.realpath) -> list:
-    """Record each present camera's model, and move each `follow` role to its camera; the changes made."""
+    """Record missing USB models and move each `follow` role to its camera."""
     changes = []
     by_role = {c["role"]: c for c in registry["cameras"]}
     for c in registry["cameras"]:
         if c.get("enabled") is False:
             continue
         fact = facts.get(realpath(c["device"])) if present(c["device"]) else None
-        if fact and c.get("usb_id") != fact["id"]:
-            c["usb_id"] = fact["id"]
-            changes.append({"role": c["role"], "usb_id": fact["id"]})
+        model = usb_model(fact["id"]) if fact else None
+        if model and not usb_model(c.get("usb_id")):
+            c["usb_id"] = model
+            changes.append({"role": c["role"], "usb_id": model})
     for row in proposals:
         if row["follow"]:
             camera = by_role[row["follow"]]
@@ -307,7 +338,10 @@ def main(argv=None) -> int:
     if args.action == "approve":
         if not (args.node and args.role):
             raise SystemExit("approve NODE ROLE")
-        row = next((r for r in proposals if r["node"] == os.path.realpath(args.node)), None)
+        node = os.path.realpath(args.node)
+        row = next((r for r in proposals if r["node"] == node), None)
+        if row is None:
+            row = replacement_on_port(registry, args.role, node, facts)
         if row is None:
             raise SystemExit(f"{args.node}: not an unregistered plugged camera (see 'propose')")
         save(approve(registry, args.role, row), args.registry)
@@ -325,7 +359,7 @@ def main(argv=None) -> int:
     if learned:
         registry = load(args.registry)
         proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
-    plan = bind(registry, args.env_dir, os.path.exists, set(facts))
+    plan = bind(registry, args.env_dir, os.path.exists, facts)
     plan["learned"], plan["proposals"] = learned, proposals
     if learned:
         plan["manifest"] = _sync_manifest_file(registry, args.manifest)

@@ -189,7 +189,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
         panel, side = page.locator(".incident-panel"), page.locator("#incident-side")
         expect(panel).to_be_visible()
         expect(side).to_be_visible()
-        expect(side.locator(".hint")).to_be_visible()
+        expect(side.locator(":scope > .hint")).to_be_visible()
         expect(page.locator("#queues-panel")).to_be_hidden()
         expect(page.locator("#header-unread")).to_be_visible()
         page.locator("#fleet-inbox").click()
@@ -207,7 +207,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
         expect(first).to_contain_text("해소 확인")
         expect(side).to_contain_text("담당 인수: 아직 없음")
         expect(side).to_contain_text("사람 검토: 아직 없음")
-        expect(side.locator(".hint")).to_be_hidden()
+        expect(side.locator(":scope > .hint")).to_be_hidden()
         assert first.locator("form").count() == 0 and "사람 검토" not in first.inner_text()
         heading = page.locator("#incident-judgment h3")
         expect(heading).to_contain_text("rosy_01")
@@ -231,7 +231,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
         if size[0] < 1024:
             expect(seat).to_be_in_viewport()
         # A repaint keeps the seat on B and returns focus to B's control: both incidents' controls share one label.
-        side.locator("select").focus()
+        seat.locator("[data-report-key] select").focus()
         page.evaluate("""() => { window.oldSeat = document.querySelector('#incident-judgment > div');
             document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
         page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
@@ -243,9 +243,9 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
         page.wait_for_function("() => document.querySelector('#incident-judgment > div') !== window.oldSeat")
         page.clock.run_for(100)
         assert page.evaluate('window.scrollY') == 0
-        side.locator("select").select_option("obstacle")
-        side.locator("input").fill("현장 상자 확인")
-        side.locator("ui-button[type=submit]").click()
+        seat.locator("[data-report-key] select").select_option("obstacle")
+        seat.locator("[data-report-key] input").fill("현장 상자 확인")
+        seat.locator("[data-report-key] ui-button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/rosy_01/closed-new/review"
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -347,7 +347,8 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
         expect(heading).to_contain_text("rosy_01")
         if width < 1024:
             expect(seat).to_be_in_viewport()
-        controls = {name: seat.locator(selector) for name, selector in
+        opened_report = seat.locator(":scope > [data-report-key]")
+        controls = {name: opened_report.locator(selector) for name, selector in
                     (("heading", "h3"), ("cause", "select"), ("note", "input"), ("save", "ui-button[type=submit]"))}
         boxes = {}
         for name, control in controls.items():

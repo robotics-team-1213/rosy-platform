@@ -2,8 +2,16 @@
 """Replay trajectory reversal, pick-place task override, and live recording progress helpers."""
 from __future__ import annotations
 
-import json, math, re
+import json, math, re, sys
 from pathlib import Path
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bench_record_pose import (
+    _read_held_cli_pose as _read_live_norm_pose_held,
+    read_chunk_home_pose,
+    read_live_norm_pose as _read_live_norm_pose,
+)
 
 REPLAY_MODES = ("none", "swap_ab", "reverse_motion")
 _SLOT_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -137,7 +145,7 @@ def apply_task_override(tc_data: dict, override: dict) -> dict:
         if override.get("swap_pick_place") and old_orig and old_tgt:
             new_task = _swap_tokens(cur_task, old_orig, old_tgt)
         elif cur_task and new_orig and new_tgt:
-            new_task = f"{cur_task} ({new_orig} -> {new_tgt})"
+            new_task = f"Pick container from belt to {new_tgt}." if new_orig == "belt" else f"Move container from {new_orig} to {new_tgt}."
     if new_task:
         out["single_task"] = new_task
         if isinstance(out.get("record"), dict) and "single_task" in out["record"]:
@@ -203,71 +211,23 @@ def _interp_waypoints(waypoints: list[list[float]], max_step: float = 0.15) -> l
     return out
 
 
-def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None, hold=None) -> list[float] | None:
-    """Read follower current ticks via leader_home.py (torque OFF) and convert to LeRobot norm units.
-    hold() -> (lock handles, why not): the read writes torque OFF, so it runs only while this arm's session lock is held."""
-    if not python_exe or hold is None:
-        return None
-    import bench_record_guard
-    manual = Path(prep) / ".bench-manual-check.json"
-    if bench_record_guard.arm_free(arm, manual):  # held lease, incident hold or person-check marker: no read that torque-OFFs the Follower
-        return None
-    handles, busy = hold()
-    if busy:
-        return None
-    try:
-        if bench_record_guard.arm_free(arm, manual):  # again with the lock held: a hold recorded by the session that just released it
-            return None
-        return _read_live_norm_pose_held(prep, arm, python_exe)
-    finally:
-        for handle in handles:
-            handle.close()
+_REQ_CHUNKS = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
 
-
-def _read_live_norm_pose_held(prep: Path, arm: str, python_exe: str) -> list[float] | None:
-    letter = arm.split("_")[-1] if "_" in arm else arm
-    cfgs = sorted(prep.glob(f"record-config-arm-{letter}*.json"))
-    lh = Path(__file__).resolve().parent / "leader_home.py"
-    if not cfgs or not lh.is_file():
-        return None
-    import subprocess
-    import bench_record_guard
+def _has_req_chunks(path: Path) -> bool:
     try:
-        out = subprocess.run(
-            [python_exe, str(lh), "--config", str(cfgs[0]), "--arm", arm, "--read-follower-pose"],
-            capture_output=True, text=True, timeout=8,
-        )
-        if out.returncode != 0:
-            if bench_record_guard.follower_torque_on(out.stdout):  # it wrote nothing: a person supports the arm first, also after a restart
-                (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": bench_record_guard.FOLLOWER_TORQUE_ON}), encoding="utf-8")
-            return None
-        ticks = json.loads(out.stdout.strip().splitlines()[-1]).get("state")
-        if not isinstance(ticks, list) or len(ticks) != 6:
-            return None
-        cal_p = Path.home() / ".cache/huggingface/lerobot/calibration/robots/omx_follower"
-        robot_id = json.loads(cfgs[0].read_text(encoding="utf-8-sig")).get("robot", {}).get("id", "omx_follower_arm")
-        cal = json.loads((cal_p / f"{robot_id}.json").read_text(encoding="utf-8")) if (cal_p / f"{robot_id}.json").is_file() else {}
-        names = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
-        norm = []
-        for i, n in enumerate(names):
-            c = cal.get(n, {})
-            lo, hi = float(c.get("range_min", 0)), float(c.get("range_max", 4095))
-            span = max(1.0, hi - lo)
-            v = ((float(ticks[i]) - lo) / span * 100.0) if i == 5 else ((float(ticks[i]) - lo) / span * 200.0 - 100.0)
-            norm.append(round(max(-100.0, min(100.0, v)), 3))
-        return norm
-    except subprocess.TimeoutExpired:  # killed with the Follower torque-OFF write possibly half done: a person checks, also after a restart
-        (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": f"{arm} 팔로워 위치 읽기를 강제 종료했습니다 — 팔로워 토크 상태를 확인하세요"}), encoding="utf-8")
-        return None
-    except Exception:
-        return None
+        d = json.loads(path.read_text(encoding="utf-8"))
+        chunks = d.get("chunks") if isinstance(d, dict) else None
+        return isinstance(chunks, dict) and all(isinstance(chunks.get(k), list) and chunks[k] and isinstance(chunks[k][0], (list, tuple)) and len(chunks[k][0]) >= 6 for k in _REQ_CHUNKS)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def _pick_chunk_library(prep: Path, arm: str, origin: str, target_slot: str) -> Path | None:
     cdir = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}"
-    files = sorted(cdir.glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if cdir.is_dir() else []
+    files = [p for p in (sorted(cdir.glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if cdir.is_dir() else []) if _has_req_chunks(p)]
     hints = f"{origin} {target_slot}".lower()
-    tokens = (["pallet"] if ("ship" in hints or "pallet" in hints) else []) + [t for t in re.split(r"[^a-z0-9]+", hints) if len(t) >= 3]
+    extra = [tok for key, tok in (("belt", "beltend"), ("temp", "temp_plate")) if key in hints] + (["pallet"] if ("ship" in hints or "pallet" in hints) else [])
+    tokens = extra + [t for t in re.split(r"[^a-z0-9]+", hints) if len(t) >= 3]
     return next((p for tok in tokens for p in files if tok in p.name.lower()), files[0] if files else None)
 
 
@@ -282,8 +242,7 @@ def _build_arm_chunk_replay(prep: Path, arm: str, origin: str, target_slot: str,
     if lib_p is None:
         return None
     chunks = (lib := json.loads(lib_p.read_text(encoding="utf-8"))).get("chunks") or {}
-    req = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
-    if any(not chunks.get(k) for k in req):
+    if any(not chunks.get(k) for k in _REQ_CHUNKS):
         raise ValueError(f"chunk 파일({lib_p.name})에 필수 동작 단계가 없습니다")
     stack_p = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}-stack.json"
     stack = json.loads(stack_p.read_text(encoding="utf-8")) if stack_p.is_file() else {}
@@ -301,8 +260,8 @@ def _build_arm_chunk_replay(prep: Path, arm: str, origin: str, target_slot: str,
         [*chunks["release_place"][-1][:5], g_o], [*chunks["lift_place"][-1][:5], g_o], [*tpl, g_o], rise, [*home[:5], g_o],
     ]
     a_wps = [home, *[_clamp_wp(w, jmin, jmax, g_c) for w in raw_wps[1:]]]
-    motion_a = _interp_waypoints(a_wps, max_step=0.10)
-    seg_a, reset_n, seg_b = [list(motion_a[0])] * 60 + motion_a, 60, [list(motion_a[-1])] * 60 + list(reversed(motion_a))
+    motion_a = _interp_waypoints(a_wps, max_step=0.14)
+    seg_a, reset_n, seg_b = [list(motion_a[0])] * 30 + motion_a, 30, [list(motion_a[-1])] * 30 + list(reversed(motion_a))
     traj = {
         "schema": "rosy.omx-replay-trajectory.v1", "fps": 30, "frames": seg_a + [list(seg_a[-1])] * reset_n + seg_b,
         "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
@@ -342,7 +301,7 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
     belt_p, pinky_p = _surface_poses("belt"), _surface_poses("pinky")
     if belt_p and pinky_p:
         live_home = _read_live_norm_pose(prep, arm, python_exe, hold)
-        home = live_home or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
+        home = live_home or read_chunk_home_pose(prep, arm) or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
         pick_p = pinky_p if "pinky" in origin.lower() else belt_p
         place_p = belt_p if "pinky" in origin.lower() else pinky_p
         g_open, g_close = 48.0, 38.0
@@ -368,12 +327,12 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
         # Keep arm_s wrist_roll above -5.0 norm (~1990 ticks) to avoid wrist camera cable stall at ~1946 ticks.
         for wp in a_wps[1:]:
             wp[4] = max(-5.0, wp[4])
-        motion_a = _interp_waypoints(a_wps, max_step=0.06)
-        seg_a = [list(motion_a[0])] * 90 + motion_a
-        reset_n = 60
-        seg_b = [list(motion_a[-1])] * 90 + list(reversed(motion_a))
+        motion_a = _interp_waypoints(a_wps, max_step=0.14)
+        seg_a = [list(motion_a[0])] * 30 + motion_a
+        reset_n = 30
+        seg_b = [list(motion_a[-1])] * 30 + list(reversed(motion_a))
         frames = seg_a + [list(seg_a[-1])] * reset_n + seg_b
-        return {
+        traj = {
             "schema": "rosy.omx-replay-trajectory.v1",
             "fps": 30,
             "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
@@ -383,6 +342,8 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
             "ik_origin": origin,
             "ik_target": target_slot,
         }
+        validate_replay_payload(traj)
+        return traj
     if (traj := _build_arm_chunk_replay(prep, arm, origin, target_slot, python_exe, hold)) is not None:
         return traj
     raise ValueError(f"IK 표면 캘리브레이션(surface-belt/pinky.json)을 찾을 수 없습니다: {work_dir}")

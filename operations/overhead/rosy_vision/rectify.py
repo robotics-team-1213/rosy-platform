@@ -6,6 +6,7 @@ approved tracking calibration record. Both are display copies; the raw frame is 
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -20,6 +21,8 @@ PLANE_MARGIN_M = 0.15
 PLANE_PX_PER_M = 400.0
 PLANE_MAX_SIDE_PX = 1920
 PLANE_FILL_BGR = (24, 24, 24)
+_LUT_CACHE_MAX = 8
+_LUT_CACHE: OrderedDict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray]] = OrderedDict()
 
 
 @dataclass(frozen=True)
@@ -90,10 +93,47 @@ def _encode(image: np.ndarray) -> bytes:
     return encoded.tobytes()
 
 
+def _build_plane_lut(image_to_plane: np.ndarray, centre_plane: np.ndarray,
+                     width: int, height: int, out_w: int, out_h: int,
+                     lp: Mapping | None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    u, v = np.meshgrid(np.arange(out_w, dtype=np.float64), np.arange(out_h, dtype=np.float64))
+    inverse = np.linalg.inv(image_to_plane)
+    raw = inverse @ np.stack((u.ravel(), v.ravel(), np.ones(u.size, dtype=np.float64)))
+    reference_w = float((inverse @ centre_plane)[2])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        xu, yu = raw[0] / raw[2], raw[1] / raw[2]
+    if lp is not None and any(abs(float(c)) > 1e-12 for c in lp["D"]):
+        k = np.asarray(lp["K"], dtype=np.float64)
+        d = [float(c) for c in lp["D"]]
+        fx, fy, cx, cy = k[0, 0], k[1, 1], k[0, 2], k[1, 2]
+        xn, yn = (xu - cx) / fx, (yu - cy) / fy
+        if lp["model"] == "fisheye":
+            r = np.hypot(xn, yn)
+            th = np.arctan(r)
+            t2 = th * th
+            thd = th * (1.0 + d[0] * t2 + d[1] * t2 * t2 + d[2] * (t2 ** 3) + d[3] * (t2 ** 4))
+            scale = np.where(r > 1e-12, thd / np.maximum(r, 1e-12), 1.0)
+            xd, yd = xn * scale, yn * scale
+        else:
+            r2 = xn * xn + yn * yn
+            k1, k2, p1, p2 = d[0], d[1], d[2], d[3]
+            k3 = d[4] if len(d) > 4 else 0.0
+            rad = 1.0 + k1 * r2 + k2 * (r2 * r2) + k3 * (r2 * r2 * r2)
+            xd = xn * rad + 2.0 * p1 * xn * yn + p2 * (r2 + 2.0 * xn * xn)
+            yd = yn * rad + p1 * (r2 + 2.0 * yn * yn) + 2.0 * p2 * xn * yn
+        x, y = xd * fx + cx, yd * fy + cy
+    else:
+        x, y = xu, yu
+    valid = (np.isfinite(x) & np.isfinite(y) & (raw[2] * reference_w > 1e-12)
+             & (x >= 0) & (y >= 0) & (x < width - 1) & (y < height - 1)).reshape(out_h, out_w)
+    map_x = np.where(valid, x.reshape(out_h, out_w), -1.0).astype(np.float32)
+    map_y = np.where(valid, y.reshape(out_h, out_w), -1.0).astype(np.float32)
+    return map_x, map_y, valid
+
+
 def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_id: str,
                    lens) -> MapPlane | None:
-    """The D-560 map plane of ``jpeg``, or None when the record does not fit this frame
-    (no record, another source/map/lens, or an aspect off by more than 1 %)."""
+    """The D-560 map plane of ``jpeg``, or None when the record does not fit this frame."""
     image = _decode(jpeg)
     height, width = image.shape[:2]
     calibration = from_record(record, source_id=source_id, map_id=map_id,
@@ -106,58 +146,33 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
     span_x, span_y = max_x - min_x, max_y - min_y
     if not (span_x > 0 and span_y > 0):
         return None
-    # Floor to the 4 decimals the header carries, so the header is the exact scale used.
     ppm = min(PLANE_PX_PER_M, math.floor(PLANE_MAX_SIDE_PX / max(span_x, span_y) * 1e4) / 1e4)
     out_w = max(2, min(PLANE_MAX_SIDE_PX, round(span_x * ppm)))
     out_h = max(2, min(PLANE_MAX_SIDE_PX, round(span_y * ppm)))
-    # The header rectangle is exactly the image at this scale (rounding moves max_x, min_y).
     max_x, min_y = min_x + out_w / ppm, max_y - out_h / ppm
-    # Map metres to plane pixel index; OpenCV puts pixel centres on integers, the header
-    # formula uses pixel edges, hence the half pixel.
     map_to_plane = np.array([[ppm, 0.0, -min_x * ppm - 0.5],
                              [0.0, -ppm, max_y * ppm - 0.5],
                              [0.0, 0.0, 1.0]])
-    u, v = np.meshgrid(np.arange(out_w), np.arange(out_h))
-    if map_id == "world_261026":
-        from rosy_vision.world_261026_auto import (
-            auto_calibrate_and_trace_world_261026,
-            get_latest_lens_model,
-            warp_undistorted_map_plane,
-        )
-        model = get_latest_lens_model(width, height, calibration.revision, source_id=source_id)
-        if model is None:
-            seed_m2i = np.linalg.inv(np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3))
-            auto_calibrate_and_trace_world_261026(
-                image, revision=calibration.revision, source_id=source_id, seed_map_to_image=seed_m2i
-            )
-            model = get_latest_lens_model(width, height, calibration.revision, source_id=source_id)
-        if model is not None:
-            K, D, _ = model
-            image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
-            plane, valid = warp_undistorted_map_plane(
-                image, image_to_plane, out_w, out_h, K, D, fill_bgr=PLANE_FILL_BGR
-            )
-            hatch = np.where(((u + v) // 8) % 2 == 0, 24, 40).astype(np.uint8)
-            plane[~valid] = hatch[~valid, None]
-            return MapPlane(
-                jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
-                size=(out_w, out_h), revision=calibration.revision,
-                image_to_plane=tuple(float(val) for val in image_to_plane.reshape(-1)),
-                valid_mask=valid,
-            )
     image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
-    inverse = np.linalg.inv(image_to_plane)
-    raw = inverse @ np.stack((u.ravel(), v.ravel(), np.ones(u.size)))
-    # Homography scale has no sign: compare with the approved track's centre ray.
-    centre = map_to_plane @ np.array([(b[0] + b[2])/2, (b[1] + b[3])/2, 1.])
-    reference_w = (inverse @ centre)[2]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        x, y = raw[0]/raw[2], raw[1]/raw[2]
-    valid = (np.isfinite(x) & np.isfinite(y) & (raw[2] * reference_w > 1e-12)
-             & (x >= 0) & (y >= 0) & (x < width - 1) & (y < height - 1)).reshape(out_h, out_w)
-    plane = cv2.warpPerspective(image, image_to_plane, (out_w, out_h), flags=cv2.INTER_LINEAR,
-                                borderMode=cv2.BORDER_CONSTANT, borderValue=PLANE_FILL_BGR)
-    hatch = np.where(((u + v) // 8) % 2 == 0, 24, 40).astype(np.uint8)
+    centre_plane = map_to_plane @ np.array([(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, 1.0])
+    lp = calibration.lens_profile
+    lp_key = None if lp is None else (lp["model"], tuple(v for row in lp["K"] for v in row), tuple(lp["D"]))
+    cache_key = (calibration.revision, width, height, out_w, out_h, min_x, min_y, max_x, max_y, ppm,
+                 calibration.image_to_map, lp_key)
+    cached = _LUT_CACHE.get(cache_key)
+    if cached is not None:
+        _LUT_CACHE.move_to_end(cache_key)
+        map_x, map_y, valid = cached
+    else:
+        map_x, map_y, valid = _build_plane_lut(image_to_plane, centre_plane, width, height, out_w, out_h, lp)
+        _LUT_CACHE[cache_key] = (map_x, map_y, valid)
+        if len(_LUT_CACHE) > _LUT_CACHE_MAX:
+            _LUT_CACHE.popitem(last=False)
+
+    plane = cv2.remap(image, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+                      borderMode=cv2.BORDER_CONSTANT, borderValue=PLANE_FILL_BGR)
+    u_i, v_i = np.meshgrid(np.arange(out_w), np.arange(out_h))
+    hatch = np.where(((u_i + v_i) // 8) % 2 == 0, 24, 40).astype(np.uint8)
     plane[~valid] = hatch[~valid, None]
     return MapPlane(jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
                     size=(out_w, out_h), revision=calibration.revision,
@@ -178,11 +193,12 @@ def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
     ], dtype=np.float64)
     distortion = np.array([settings.k1, settings.k2, settings.p1,
                            settings.p2, settings.k3], dtype=np.float64)
-    if np.any(distortion):
-        image = cv2.undistort(image, camera_matrix, distortion)
-
     source = np.array([(x * (width - 1), y * (height - 1))
                        for x, y in settings.corners], dtype=np.float32)
+    if np.any(distortion):
+        image = cv2.undistort(image, camera_matrix, distortion)
+        source = cv2.undistortPoints(source.reshape(-1, 1, 2), camera_matrix, distortion,
+                                     P=camera_matrix).reshape(-1, 2).astype(np.float32)
     top = float(np.linalg.norm(source[1] - source[0]))
     bottom = float(np.linalg.norm(source[2] - source[3]))
     left = float(np.linalg.norm(source[3] - source[0]))

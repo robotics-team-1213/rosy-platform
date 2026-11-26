@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
+import logging
 import math
 import time
-import asyncio
-import logging
 from dataclasses import replace
 from typing import Callable
 
@@ -20,11 +21,25 @@ MAX_FUTURE_S = 0.05
 #: re-measured at this spacing, not per frame.
 FIELD_INTERVAL_S = 1.0
 #: Minimum spacing between paint registrations while orientation stays unresolved.
-PAINT_RETRY_S = 5.0
+PAINT_RETRY_S = 30.0
 #: D-564: place markers do not move; Fleet's teach freshness is 2 s.
 PLACE_MARKER_INTERVAL_S = 0.5
+QR_REREAD_IDLE_INTERVAL_S = 1.0
+QR_ACTIVE_HOLD_S = 5.0
 
 logger = logging.getLogger("rosy_vision")
+
+
+def _accepts_kwarg(fn, name: str) -> bool:
+    if fn is None:
+        return False
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+    return name in sig.parameters or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
 
 
 class VisionWorker:
@@ -66,6 +81,13 @@ class VisionWorker:
         self._paint_task: asyncio.Task | None = None
         self._last_place_at = -math.inf
         self._place_task: asyncio.Task | None = None
+        self._detector_accepts_qr_opts = (
+            _accepts_kwarg(detector, "reread_qr")
+            and _accepts_kwarg(detector, "expected_marker_ids")
+        )
+        self._tracker_accepts_image = _accepts_kwarg(getattr(tracker, "process", None), "image")
+        self._last_qr_found_at = -math.inf
+        self._last_qr_reread_at = -math.inf
         self.station = station
         if camera is None and station is None:
             raise ValueError('VISION_MEASUREMENT_PROFILE_REQUIRED')
@@ -96,8 +118,23 @@ class VisionWorker:
         if self.camera is None:
             return ()
 
-        markers = self.detector(frame.jpeg)
         camera = self._camera()
+        if self._detector_accepts_qr_opts:
+            now_mono = time.monotonic()
+            recent_qr = (now_mono - self._last_qr_found_at) <= QR_ACTIVE_HOLD_S
+            reread_qr = recent_qr or (now_mono - self._last_qr_reread_at) >= QR_REREAD_IDLE_INTERVAL_S
+            if reread_qr:
+                self._last_qr_reread_at = now_mono
+            markers = self.detector(
+                frame.jpeg,
+                reread_qr=reread_qr,
+                expected_marker_ids=frozenset(camera.robot_markers.values()),
+            )
+        else:
+            markers = self.detector(frame.jpeg)
+        if getattr(markers, "qr_ids", ()):
+            self._last_qr_found_at = time.monotonic()
+        decoded_image = getattr(markers, "image", None)
         # Installer guidance only (phone status); ids, never pixels, leave this process.
         self.ingest.report_markers(
             self.source_id,
@@ -127,7 +164,10 @@ class VisionWorker:
             if self.tracker is not None:
                 try:
                     # D-587 1: a sighting that failed to send is left for the tracker to send.
-                    await self.tracker.process(frame, markers, frozenset(sent), camera)
+                    if decoded_image is not None and self._tracker_accepts_image:
+                        await self.tracker.process(frame, markers, frozenset(sent), camera, image=decoded_image)
+                    else:
+                        await self.tracker.process(frame, markers, frozenset(sent), camera)
                 except Exception as exc:
                     # Do not log URLs, request bodies, headers, or arbitrary exception text.
                     logger.error("tracking step failed source=%s error_type=%s",

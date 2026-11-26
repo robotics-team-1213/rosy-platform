@@ -84,9 +84,13 @@ class TripAdmission:
 
     async def _guard_start(self, robot_id, token, guard):
         self._check_start_token(robot_id, token)
+        if (check := getattr(self, "station_stop_reason", None)) and (reason := check(robot_id)):
+            raise TripError(409, reason)
+        self._check_human_hold()
         if guard is not None:
             await guard()
             self._check_start_token(robot_id, token)
+            self._check_human_hold()
 
     async def hold_job(self, robot_id: str, job_id: str, operator: str, capabilities, *,
                        owner_kind='mission', trip_id=None, lease_id=None) -> dict:
@@ -200,6 +204,9 @@ class TripAdmission:
                               max_turn_deg=self.config.max_turn_deg, repeat=repeat,
                               final_place=final_place, nav2=nav2)
         if refused is not None:
+            turn_reason = getattr(caps, "junction_turn_reason", None)
+            if refused.get("reason") == "JUNCTION_TURN_UNSUPPORTED" and turn_reason:
+                refused["junction_turn_reason"] = turn_reason
             raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
         if lane and floor is not None and floor != map_id:
@@ -230,12 +237,15 @@ class TripAdmission:
     async def _admit_replan(self, live, hold: dict, principal_id: str) -> None:
         """The operator-confirmed replan path only (``confirm_replan``): the D-763 10 (c) capability checks as
         at a start, then the switch; a changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``).
-        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. This path runs no
-        ``_pose_checks``; that gap predates D-763 10 (c) and is not closed here."""
+        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. Here, only a bound Nav2 route runs
+        ``_pose_checks`` against the pinned binding."""
         active = self._store.active()
         if active is not None and active[0] == hold["map_version"]:
             await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
                                     detail=live.view["detail"], nav2=live.nav2)
+            if live.nav2_binding_scope is not None:
+                await self._pose_checks(live.view["robot_id"], active[2], hold["plan"]["segments"],
+                                        nav2=True, precision_scope=live.nav2_binding_scope)
         self._apply_replan(live, hold, principal_id)
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None,
@@ -274,7 +284,10 @@ class TripAdmission:
                 raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
                                 {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
         if start:
-            check = start_check(graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg, nav2=nav2)
+            check = start_check(
+                graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg,
+                nav2=nav2, off_lane_margin_m=self.config.nav2_off_lane_margin_m,
+            )
             if check["code"] is not None:
                 raise TripError(422, check["code"], check)
         return pose, enable
@@ -329,38 +342,113 @@ class TripAdmission:
         so a stuck clock still ends the wait; a turn still running then is stopped. The start uses CORE's default
         tolerance; the arrival alignment (``trip_station_align``) passes ``tol_deg`` and wants the sighted pose back."""
         tol = {} if tol_deg is None else {"tol_deg": tol_deg}
+        epoch = self._stop_epoch
+        cancel_gen = self._start_cancels.get(robot_id, 0)
+
+        def _stop_requested() -> bool:
+            hold = getattr(self, "human_hold_fn", None)
+            return (
+                self._stop_epoch != epoch
+                or self._start_cancels.get(robot_id, 0) != cancel_gen
+                or (callable(hold) and bool(hold()))
+            )
+
+        if _stop_requested():
+            raise TripError(409, "TRIP_START_CANCELED")
+        self._aligning.add(robot_id)
         try:
-            await self._call(self._junction.rotate_to(robot_id, delta_deg, operator_name, **tol), "TRIP_ALIGN_REFUSED")
-        except TripError as exc:  # CORE's refusal (ROTATE_CLEARANCE {nearest_m, need_m}, MOTION_BUSY, ...)
-            exc.detail.update(delta_deg=delta_deg, core=getattr(exc.__cause__, "detail", None))
-            raise
-        status: dict = {}
-        for _ in range(math.ceil(ALIGN_WAIT_S / self.config.period_s)):
-            await asyncio.sleep(self.config.period_s)
+            self._align_submitting.add(robot_id)
             try:
-                status = await self._call(self._junction.rotate_status(robot_id)) or {}
-            except Exception:  # noqa: BLE001 - an unreadable turn is stopped and refuses the start
-                status = {"state": "running", "reason": "status_unreadable"}
-                break
-            if status.get("state") != "running":
-                break
-        if status.get("state") != "done":
-            if status.get("state") == "running":
-                await self._call(self._junction.rotate_stop(robot_id))  # CORE's timeout bounds it anyway
-            raise TripError(422, "TRIP_ALIGN_ABORTED", {"delta_deg": delta_deg, "reason": status.get("reason") or
-                                                        "fleet_timeout", "final_err_deg": status.get("final_err_deg")})
-        done_at = self._clock()
-        for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
-            pose = await self.map_pose(robot_id)
-            age = getattr(pose, "anchor_age_s", None)
-            # D-989: the robot's own pose is not the independent sighting this wait is for, nor is a track
-            # anchor (its yaw is the odometry's or a motion heading, not a marker's)
-            if (age is not None and getattr(pose, "anchor_source", None) not in (AUTO_LOCATE, TRACK)
-                    and self._clock() - age > done_at):
-                return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg"),
-                        **({"pose": pose} if keep_pose else {})}
-            await asyncio.sleep(self.config.period_s)
-        raise TripError(422, "TRIP_POSE_UNTRUSTED", {"after_align": True, "delta_deg": delta_deg})
+                await self._call(self._junction.rotate_to(robot_id, delta_deg, operator_name, **tol), "TRIP_ALIGN_REFUSED")
+            except TripError as exc:  # CORE's refusal (ROTATE_CLEARANCE {nearest_m, need_m}, MOTION_BUSY, ...)
+                cause_status = getattr(exc.__cause__, "status", None)
+                if not (isinstance(cause_status, int) and 400 <= cause_status < 500):
+                    # An unkeyed DELETE cannot prove an ambiguous POST won't still arrive at CORE.
+                    self._align_outcome_unknown.add(robot_id)
+                    self._unconfirmed_align_stops.add(robot_id)
+                    try:
+                        await self._call(self._junction.rotate_stop(robot_id))
+                    except Exception:
+                        pass
+                exc.detail.update(delta_deg=delta_deg, core=getattr(exc.__cause__, "detail", None))
+                raise
+            except asyncio.CancelledError:
+                self._align_outcome_unknown.add(robot_id)
+                self._unconfirmed_align_stops.add(robot_id)
+                raise
+            except Exception:
+                self._align_outcome_unknown.add(robot_id)
+                self._unconfirmed_align_stops.add(robot_id)
+                try:
+                    await self._call(self._junction.rotate_stop(robot_id))
+                except Exception:
+                    pass
+                raise
+            finally:
+                self._align_submitting.discard(robot_id)
+            try:
+                status: dict = {}
+                if _stop_requested():
+                    status = {"state": "running", "reason": "human_stop"}
+                else:
+                    for _ in range(math.ceil(ALIGN_WAIT_S / self.config.period_s)):
+                        if _stop_requested():
+                            status = {"state": "running", "reason": "human_stop"}
+                            break
+                        await asyncio.sleep(self.config.period_s)
+                        if _stop_requested():
+                            status = {"state": "running", "reason": "human_stop"}
+                            break
+                        try:
+                            status = await self._call(self._junction.rotate_status(robot_id)) or {}
+                        except Exception:  # noqa: BLE001 - an unreadable turn is stopped and refuses the start
+                            status = {"state": "running", "reason": "status_unreadable"}
+                            break
+                        if _stop_requested():
+                            status = {"state": "running", "reason": "human_stop"}
+                            break
+                        if status.get("state") != "running":
+                            break
+                terminal_states = ("done", "aborted", "stopped", "idle", "failed", "canceled")
+                if status.get("state") != "done":
+                    already_terminal = isinstance(status, dict) and status.get("state") in terminal_states
+                    if not already_terminal:
+                        try:
+                            stop_res = await self._call(self._junction.rotate_stop(robot_id))  # CORE's timeout bounds it anyway
+                        except BaseException:
+                            self._unconfirmed_align_stops.add(robot_id)
+                            raise
+                        if isinstance(stop_res, dict) and (
+                            stop_res.get("state") in terminal_states or stop_res.get("stopped") is True
+                        ):
+                            self._unconfirmed_align_stops.discard(robot_id)
+                        else:
+                            self._unconfirmed_align_stops.add(robot_id)
+                    if status.get("reason") == "human_stop":
+                        raise TripError(409, "TRIP_START_CANCELED", {"delta_deg": delta_deg, "reason": "human_stop"})
+                    raise TripError(422, "TRIP_ALIGN_ABORTED", {"delta_deg": delta_deg, "reason": status.get("reason") or
+                                                                "fleet_timeout", "final_err_deg": status.get("final_err_deg")})
+                self._align_outcome_unknown.discard(robot_id)
+                self._unconfirmed_align_stops.discard(robot_id)
+            except asyncio.CancelledError:
+                self._unconfirmed_align_stops.add(robot_id)
+                raise
+            done_at = self._clock()
+            for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
+                if _stop_requested():
+                    raise TripError(409, "TRIP_START_CANCELED")
+                pose = await self.map_pose(robot_id)
+                age = getattr(pose, "anchor_age_s", None)
+                # D-989: the robot's own pose is not the independent sighting this wait is for, nor is a track
+                # anchor (its yaw is the odometry's or a motion heading, not a marker's)
+                if (age is not None and getattr(pose, "anchor_source", None) not in (AUTO_LOCATE, TRACK)
+                        and self._clock() - age > done_at):
+                    return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg"),
+                            **({"pose": pose} if keep_pose else {})}
+                await asyncio.sleep(self.config.period_s)
+            raise TripError(422, "TRIP_POSE_UNTRUSTED", {"after_align": True, "delta_deg": delta_deg})
+        finally:
+            self._aligning.discard(robot_id)
 
     async def camera_check(self, robot_id: str, caps=None) -> None:
         """D-601 B (plan time, lane plans): the robot's front camera, the line camera, must be live
