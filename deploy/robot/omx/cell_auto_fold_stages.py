@@ -356,7 +356,7 @@ def run_launch_command(
         command += ["--stop-generation", str(int(stop_generation))]
     if safety_fence:
         command += ["--safety-fence", str(safety_fence)]
-    env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident}
+    env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident, "ROSY_SESSION_CHUNKS": str((Path(cwd) / Path(conf["library"]).expanduser()).resolve())}
     proc = None
     for _ in range(12):  # the session that held the arm may still be ending: its lock frees within a minute
         exp_err = expiry_error(expires_at, required=req_exp, now_t=now())

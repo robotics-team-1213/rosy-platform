@@ -27,6 +27,19 @@ def _finite_stamp(val, ref_now: float) -> bool:
     return (num := _finite_num(val)) is not None and 0.0 <= num <= ref_now + 1.0
 
 
+def _gripper_loaded(status: dict | None, library: dict) -> bool:
+    health = status.get("health") if isinstance(status, dict) else None
+    if isinstance(status, dict) and status.get("holding") is True:
+        return True
+    if not isinstance(health, dict):
+        return False
+    pwm5 = (health.get("pwm") or [0] * 6)[5]
+    ma5 = abs((health.get("current_ma") or [0] * 6)[5])
+    limit_ma = min(float(library.get("hold_current_ma") or HOLD_CURRENT_LIMIT_MA), HOLD_CURRENT_LIMIT_MA)
+    st, tgt = status.get("state"), status.get("target")
+    return ma5 >= limit_ma or (pwm5 <= -60 and isinstance(st, list) and isinstance(tgt, list) and len(st) >= 6 and len(tgt) >= 6 and float(st[5]) > float(tgt[5]) + 0.5)
+
+
 def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks: int, dry_run: bool, log, goal: dict,
                      sim_units: bool, open_g: float, model_closed: float, closed: float, low, high, fastest: float,
                      kin, jaw_spec, resolved_tcp, authorize, max_obs_age_s: float = 0.6,
@@ -41,6 +54,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
     entry_ran = False
     dry_seed_state = list(entry_pose) if (dry_run and entry_pose is not None) else None
     held, released, prefix, moved, loaded_prefix, aborted, park_safe, hold_needed, safety_done = False, False, "", False, "", False, False, False, False
+    last_status: dict | None = None
 
     def _hold_and_log(*rows: dict) -> None:
         nonlocal park_safe, hold_needed, safety_done
@@ -67,6 +81,9 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         eff_prefix = cmd_prefix or loaded_prefix
         if fault or hold_needed or (authorize is not None and not eff_prefix):
             _hold_and_log(*pre_logs)
+            return False, None
+        if moved and not released and (held or _gripper_loaded(status or last_status, library)):
+            _hold_and_log(*pre_logs, {"refused": "gripper holding or loaded; holding torque instead of park"})
             return False, None
         extra_logs: tuple[dict, ...] = ()
         retreat_ok = True
@@ -118,7 +135,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         return {"result": "refused", "at": n, "reason": jaw_warn, "parked": False}
 
     def _checked_state(row: dict, n: int, *, catch_io: bool = False, hold_on_fail: bool = False) -> tuple[dict | None, list | None, dict | None]:
-        nonlocal hold_needed
+        nonlocal hold_needed, last_status, held
         prev_hold = hold_needed
         if hold_on_fail and not dry_run:
             hold_needed = True
@@ -143,7 +160,9 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
             row["jaw_warning"] = jaw_warn
             if not dry_run:
                 return None, None, _legacy_jaw_hold(row, n, jaw_warn, status)
-        hold_needed = prev_hold
+        hold_needed, last_status = prev_hold, status
+        if moved and _gripper_loaded(status, library):
+            held = True
         return status, live, None
 
     try:
@@ -347,8 +366,9 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 res_kind = "unsettled" if (ran.get("ok") and unsettled) else "refused"
                 return _fail(res_kind, n, reason, prefix, fault=True, extra={"error": reason}, pre_logs=({"command": "run policy", **_ack_status(ran)},))
             park_safe, hold_needed, ph["snapshot"] = True, False, round(time.time(), 3)
+            last_status = ran
             log({"command": "run policy", **_ack_status(ran), "phase_t": ph, **_moved_snapshot(state, ran, frames.get("top"), cell, work, n)})
-            held = held or bool(ran.get("holding"))
+            held = held or bool(ran.get("holding")) or _gripper_loaded(ran, library)
             if handoff is not None and ran.get("holding") is True:  # carry only a hold the Handoff spec measured
                 park_safe, hold_needed = False, True
                 if (facts := handoff.settled_facts(cell, log)) is not None:
