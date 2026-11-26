@@ -3,12 +3,24 @@
 # Safety-Review: trailer in its first message. 2026-11-27: two sub-agent commits missed it and were
 # rebuilt with amend / reset --soft, which the shared-checkout rules forbid. Install: tools/hooks/install.sh
 # A hook lives in the common hooks dir, so every linked worktree (worktrees.py new) runs it.
+# The hook is shared but safety_review.py is per worktree: a worktree whose base predates --commit-msg
+# (#1019) must not die here, so it warns and passes (pre-push and CI still check the trailer).
 root="$(git rev-parse --show-toplevel)"
 script="$root/tools/harness/safety_review.py"
 [ -f "$script" ] || exit 0
+if ! grep -q -e '--commit-msg' "$script"; then
+  echo "[commit-msg] this worktree's safety_review.py predates --commit-msg; Safety-Review is not checked now (pre-push and CI still check it)." >&2
+  echo "[commit-msg] fix: git merge origin/main in this worktree. Do not empty core.hooksPath or use --no-verify." >&2
+  exit 0
+fi
 for candidate in python3 python; do
   if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import yaml" >/dev/null 2>&1; then
-    exec "$candidate" "$script" --commit-msg "$1"
+    "$candidate" "$script" --commit-msg "$1"
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+      echo "[commit-msg] safety_review.py failed (exit $rc), not a missing trailer. Fix: git merge origin/main in this worktree. Do not empty core.hooksPath or use --no-verify." >&2
+    fi
+    exit "$rc"
   fi
 done
 echo "[commit-msg] no python with yaml; Safety-Review is not checked now (pre-push and CI still check it)" >&2
