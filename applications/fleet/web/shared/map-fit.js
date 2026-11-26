@@ -1,6 +1,9 @@
 // D-375 지도 자동 맞춤(차선 페인트 → homography 제안)의 순수 계산. DOM 없음 — map-fit-view.js 가 그린다.
 // 제안·수락한 맞춤은 표시 전용이다. sighting·CameraMap·목표·cmd_vel 로 넘기지 않는다.
 
+import { invert3, project } from "/common/plane-math.js";
+
+export { invert3, project };
 export const MAP_FIT_PREFIX = "rosy-map-fit:";
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
@@ -20,24 +23,6 @@ export function multiply3(a, b) {
     }
   }
   return out;
-}
-
-export function invert3(m) {
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h;
-  const B = -(d * i - f * g);
-  const C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  if (!finite(det) || Math.abs(det) < 1e-15) return null;
-  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d]
-    .map((v) => v / det);
-}
-
-// 점 하나를 옮긴다. 지평선 뒤(w≤0)는 화면에 없는 점이라 null.
-export function project(h, x, y) {
-  const w = h[6] * x + h[7] * y + h[8];
-  if (!(w > 1e-9)) return null;
-  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
 }
 
 export const scale3 = (sx, sy) => [sx, 0, 0, 0, sy, 0, 0, 0, 1];

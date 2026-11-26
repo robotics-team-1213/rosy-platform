@@ -3,8 +3,8 @@ import { drawFixtureOutlines } from "./fixture-frame.js";
 // Reads all colours and fonts exclusively from window.RosyPalette (tokens.css) so dark/light themes
 // and shared/web token contracts remain intact without inline styles or raw hex values.
 
-import { applyH, invert3x3, parallaxPixel } from "./grid-projection.js";
-export { applyH, invert3x3, parallaxPixel };
+import { invert3, project as applyH } from "/common/plane-math.js";
+import { parallaxPixel } from "./grid-projection.js";
 
 const tone = (name) => window.RosyPalette.cssColor(name);
 const font = (role = "micro", family = "mono") => window.RosyPalette.canvasFont(role, family);
@@ -126,7 +126,7 @@ export function renderTopView(canvas, state) {
 
   const siteObj = profile?.sites?.[siteName] || null;
   const map = siteObj?.map || null;
-  const invH = map?.homography ? invert3x3(map.homography) : null;
+  const invH = Array.isArray(map?.homography) ? invert3(map.homography.flat()) : null;
   const cam = profile?.camera_top || {};
   const fitZ = map?.z_view;
   const surfaceZ = siteObj?.surface_z;

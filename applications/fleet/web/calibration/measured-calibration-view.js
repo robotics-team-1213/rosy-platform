@@ -1,6 +1,7 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import { setOff } from "/common/cause-line.js";
 import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
+import { flatMatrix, invert3 } from "/console/assets/map-fit.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -13,17 +14,6 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
   map_changed:'지도 바뀜', invalid_config:'교정 기록 확인 필요', readback_stale:'적용 기록 만료'};
 
 const READING_REASON = '상태 읽는 중';
-
-function invert3x3(rows) {
-  if (!Array.isArray(rows) || rows.length !== 3) return null;
-  const m = rows.flat();
-  if (m.length !== 9 || !m.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  if (!Number.isFinite(det) || Math.abs(det) < 1e-15) return null;
-  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((v) => v / det);
-}
 
 export function createMeasuredCalibrationView({scope, root, call, visionView, auth, onPromoted = () => {}}) {
   const el = id => root.querySelector(`#measured-${id}`);
@@ -245,7 +235,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       }
       const bundle = promotableBundle();
       if (!bundle) throw new Error('현재 유효한 실측 교정 승인 기록이 필요합니다.');
-      const mapToImage = invert3x3(bundle.floor.undistorted_to_map);
+      const mapToImage = invert3(flatMatrix(bundle.floor.undistorted_to_map));
       if (!mapToImage) throw new Error('실측 평면 행렬을 뒤집을 수 없습니다.');
       const [bx0, by0, bx1, by1] = bundle.bounds_m;
       const [w, h] = bundle.lens.image_size;
