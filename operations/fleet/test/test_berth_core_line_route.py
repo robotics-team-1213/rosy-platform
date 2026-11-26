@@ -59,7 +59,7 @@ def test_selected_bay_preview_uses_its_own_spine_and_owner():
         asyncio.run(owner.target("rosy_42", rear_bay(graph, "C2")))
     assert err.value.code == "CHARGE_BAY_TARGET_NOT_TAUGHT"
 
-def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run():
+def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(monkeypatch):
     import asyncio
     from uuid import uuid4
     from datetime import datetime, timezone
@@ -110,6 +110,9 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
             from fleet.hub.hub import HubError
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
         return await Core().state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
+    async def approved(*args):
+        return await pose(), "binding"
+    monkeypatch.setattr("fleet.server.trips.rear_bay_return.read_precision_pose", approved)
     port.clearance = clear
     asyncio.run(port.step(runner, live))
     assert (park["phase"], park["reason"]) == ("waiting_for_commission", "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED")

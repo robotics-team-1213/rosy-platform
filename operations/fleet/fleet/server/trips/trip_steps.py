@@ -228,6 +228,12 @@ class TripSteps:
                 if camera:
                     await finish_camera_line(self, live)
                     arrival_confirmed = live.open
+                elif parking and live.nav2_binding_scope is None:
+                    # An ordinary approach may use the site's normal pose. Keep its owner until native standstill.
+                    from fleet.server.handoff_traffic import _fresh_stopped
+                    state = await self._call(self.named_stop_state(robot_id))
+                    arrival_confirmed = bool(live.active_route and live.active_route.get("end_index") == index
+                                             and state.get("navigation") == "ARRIVED" and _fresh_stopped(state))
                 elif self._strict_named_stop(live, index) is None:
                     arrival_confirmed = True
                 elif lane:

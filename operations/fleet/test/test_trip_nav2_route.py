@@ -283,14 +283,14 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal", "parking"])
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal", "parking", "ordinary_parking"])
 def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
 
     store = SiteMapStore(tmp_path / "site.sqlite")
     model = _south_loop_map()
-    if case == "parking":
+    if case in ("parking", "ordinary_parking"):
         import json
         layout = json.loads(model.model_dump_json(by_alias=True).replace('"S5"', '"P2"'))
         next(p for p in layout["places"] if p["id"] == "P2").update(kind="junction", yaw=None)
@@ -336,13 +336,25 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     runner.map_pose = wrong_camera_pose
     headers = {"Authorization": "Bearer op-tok"}
     body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
-    if case in ("terminal", "parking"):
+    if case in ("terminal", "parking", "ordinary_parking"):
         body.pop("start_at")
-        body.update(to="C2" if case == "parking" else "S5", via=[])
+        body.update(to="C2" if "parking" in case else "S5", via=[])
     with TestClient(app) as client:
         tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
         assert not runner.human_hold_fn()
         assert not runner.config.map_binding_required
+        if case == "ordinary_parking":
+            store.map_bindings.revoke("rosy_42", "bob")
+            strict = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+            assert strict.status_code == 409 and strict.json()["detail"]["code"] == "TRIP_POSE_UNTRUSTED"
+            async def site_pose(_):
+                return MapPose(.17, -.48, 0., "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=site[0])
+            runner.map_pose = site_pose
+            body["approved_slam_required"] = False
+            ordinary = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
+            assert ordinary.status_code == 200, ordinary.text
+            assert ordinary.json()["places"][-1] == "P2" and ordinary.json()["parking_handoff"]["bay_id"] == "C2"
+            return
         plan = client.post("/api/fleet/robots/rosy_42/trip", json=body, headers=headers)
         if case == "older_core":
             assert plan.status_code == 409 and plan.json()["detail"]["code"] == "NAV2_BOUND_ROUTE_UNSUPPORTED"

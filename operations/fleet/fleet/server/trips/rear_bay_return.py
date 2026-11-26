@@ -10,6 +10,7 @@ from core_common.protocol.native_operation import NativeOperation
 from fleet.server.channel.execution.outcomes.evidence import safe_proof
 from fleet.server.ledger.berth_parking_helpers import BAY_DOCK_SPECS
 from fleet.server.trip_ports import TripError
+from fleet.server.named_stop_map_pose import read_precision_pose
 from fleet.hub.hub import HubError
 from fleet.swarm.dispatch_guard import dispatch_guard
 
@@ -70,8 +71,9 @@ class RearBayPort:
         active = store.active()
         site = active[1].map_id, live.view["map_version"]
         fit, _reason = store.map_bindings.matching_fit(robot, snapshot, site)
-        if (active[0] != site[1] or fit is None or (store.map_bindings.active(robot) or {}).get("binding_id")
-                != live.view["detail"].get("nav2_binding_id")):
+        expected_binding = info.get("binding_id") or live.view["detail"].get("nav2_binding_id")
+        if (not expected_binding or active[0] != site[1] or fit is None
+                or (store.map_bindings.active(robot) or {}).get("binding_id") != expected_binding):
             raise TripError(409, "CHARGE_BAY_TARGET_FRAME_UNVERIFIED")
         goal = target["x"], target["y"]
         staging = goal[0] - offset * math.cos(target["yaw"]), goal[1] - offset * math.sin(target["yaw"])
@@ -93,6 +95,8 @@ class RearBayPort:
                 or self.console.clients().get(robot) is not client or runner.bay_cable_inhibited(robot)):
             raise TripError(409, "CHARGE_BAY_ADMISSION_CHANGED")
         def clear_at_wire():
+            if (store.active()[0] != site[1] or (store.map_bindings.active(robot) or {}).get("binding_id") != expected_binding):
+                raise TripError(409, "CHARGE_BAY_TARGET_FRAME_UNVERIFIED")
             if (set(self.console.robot_ids) - {robot} != other_ids or any(count for _, count in versions.values())
                     or self.console.goal_leases.peer_wire_state(other_ids) != versions
                     or runner._clock() - started > STALE_POSE_S):
@@ -117,7 +121,13 @@ class RearBayPort:
                     raise
                 info.update(phase="waiting_for_commission", reason=exc.code, next_check_at=runner._clock() + 3)
                 return
-            pose = await runner._progress_pose(live, robot)
+            required_binding = live.view["detail"].get("nav2_binding_id")
+            bound = await read_precision_pose(runner, robot, live.view["map_version"], required_binding)
+            if bound is None:
+                info.update(phase="waiting_for_commission", reason="CHARGE_BAY_TARGET_FRAME_UNVERIFIED",
+                            next_check_at=runner._clock() + 3)
+                return
+            pose, info["binding_id"] = bound
             view = await client.docking_status()
             if view.get("operation_cancel_supported") is not True:
                 info.update(phase="waiting_for_commission", reason="CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED",

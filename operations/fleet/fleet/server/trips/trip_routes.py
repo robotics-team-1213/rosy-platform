@@ -195,14 +195,14 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
         nav2 = body.drive_mode == "nav2" or parking is not None
         if parking:
-            summary.update(drive_mode="nav2", approved_slam_required=True)
+            summary.update(drive_mode="nav2")
         precision = commissioned_stop(active[2], body.to)
         if nav2 and precision is not None:
             record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
             raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
         binding_id = None
         bound_nav2 = nav2 and isinstance(body.to, str) and (body.approved_slam_required
-                                                            or runner.config.map_binding_required or parking is not None)
+                                                            or runner.config.map_binding_required)
         if precision is not None or bound_nav2:
             bound = await read_precision_pose(runner, robot_id, active[0])
             if bound is None:
