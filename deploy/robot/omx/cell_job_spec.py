@@ -45,6 +45,7 @@ from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_camera_heal import with_camera_heal  # noqa: E402,F401  (re-exported for cell_job_api)
 from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
+from cell_job_peer_health import arm_library_path
 from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
@@ -373,6 +374,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_torque_off_folded.py" and (lib := arm_library_path(workdir, checked["arm"])):
+        args += ["--library", lib.name]  # the arm's own fold poses; none in the workdir: the coarse rule, as before
     if job["script"] == "cell_media_jobs.py":
         args = ["--workdir", str(workdir), *args]
     if job["script"] in POLICY_SCRIPTS and "endpoint_url" in opt_checked:
@@ -386,11 +389,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
-            if params.get("person_at_switch") is True:
-                raise ValueError("reviewed automatic jobs cannot be combined with person_at_switch (D-911)")
             return [*prefix, "bash", "-c", PY, job["script"], *args]
-        if params.get("person_at_switch") is not True:
-            raise ValueError("a moving job needs person_at_switch: true")
+        # D-1077: the flag name stays for the scripts; cell_job_api starts this argv only after its stop proof passed (a request value is ignored)
         tail = ["--commissioning", "--person-at-switch"] if job.get("commissioning", True) else ["--person-at-switch"]
         return [*prefix, "bash", "-c", PY, job["script"], *args, *tail]
     if job["script"] == "cell_policy_drive.py" and params.get("arm") == "arm_s" and opt_checked.get("dry_run"):

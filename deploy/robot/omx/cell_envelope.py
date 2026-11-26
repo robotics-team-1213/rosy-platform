@@ -194,8 +194,10 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
             return {**out, "reason": over}
         if "_commissioning" in config and not _reviewed(config, out["task_sha256"]):  # a reviewed task takes the review path
             trial = config["_commissioning"]
-            if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}
-                    or trial["person_at_switch"] is not True):
+            import cell_stop_proof  # D-1077: a fresh passing stop proof, or the stage CLIs' own supervised flag
+
+            if not (trial == {"person_at_switch": True}
+                    or (isinstance(trial, dict) and set(trial) == {"stop_proof"} and cell_stop_proof.verify(trial["stop_proof"], local=True))):
                 return {**out, "reason": "commissioning_requires_person"}
             return {**out, "mode": "commissioning", "status": "commissioning", "allowed": True,
                     "reason": "supervised_trial"}

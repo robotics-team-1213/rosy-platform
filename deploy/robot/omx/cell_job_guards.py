@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 
 from cell_job_peer_health import (  # noqa: F401
     FOLLOWER_JOINTS,
+    arm_library_path as _arm_library_path,
     finite_float as _finite_float,
     is_stale_row as _is_stale_row,
     latest_status_row as _latest_status_row,
@@ -69,12 +70,6 @@ def authorize_principal(
         return eff, None
     if principal.role != ROLE_MACHINE:
         return eff, {"code": 403, "error_code": "FORBIDDEN_ROLE", "error": f"unsupported principal role {principal.role}"}
-    if eff.get("person_at_switch") is True:
-        return eff, {
-            "code": 403,
-            "error_code": "MACHINE_COMMISSIONING_FORBIDDEN",
-            "error": "cell-job-machine cannot assert person_at_switch or start commissioning motion",
-        }
     opt = job.get("optional") or ()
     if moves_arm_fn(job, eff) and not (bool(job.get("reviewed_only")) or ("reviewed_auto" in opt and eff.get("reviewed_auto") is True)):
         return eff, {
@@ -144,6 +139,8 @@ def check_peer_ab_folded(
     lease_path = lease_dir / f"{peer}.json"
     lease = read_json_fn(lease_path)
     peer_locked = bool(session_lock_held_fn(peer, lock_dir))
+    lib_path = _arm_library_path(workdir, peer)
+    lib = read_json_fn(lib_path) if lib_path else None  # the peer's own fold poses: no coarse judgement
     peer_lease = True if (lease is None and lease_path.is_file()) else bool(lease and cell_arm_lease.live(lease))
     live_err = None
     health_dir = motor_health_dir if motor_health_dir is not None else (Path.home() / ".local" / "state" / "rosy" / "motor-health")
@@ -152,20 +149,20 @@ def check_peer_ab_folded(
             return f"peer {peer} is active or latched"  # only a latch a gone runner left on a folded, torque-off, jaws-shut arm passes
         elif live.get("chunk") is not None or live.get("fault") or live.get("interrupt"):
             live_err = f"peer {peer} is active or latched"
-        elif _live_folded(live) is False:
+        elif _live_folded(live, lib) is False:
             live_err = f"peer {peer} is not folded at home"
-    elif (st_row := _latest_status_row(io_dir / "chunk-status.jsonl")) is not None and _live_folded(st_row) is False:
+    elif (st_row := _latest_status_row(io_dir / "chunk-status.jsonl")) is not None and _live_folded(st_row, lib) is False:
         live_err = f"peer {peer} is not folded at home"
     if live_err is not None:
         stale_live = _is_stale_row(live, live_max_age_s) if live is not None else False
         if not (not peer_locked and not peer_lease and stale_live
                 and _passive_motor_health_folded(
                     peer, health_dir, max_age_s=live_max_age_s,
-                    read_json_fn=read_json_fn, calibration_dir=calibration_dir,
+                    read_json_fn=read_json_fn, calibration_dir=calibration_dir, library=lib,
                 )):
             return live_err
     if peer_locked or peer_lease:
-        if live is None or _live_folded(live) is not True:
+        if live is None or _live_folded(live, lib) is not True:
             return f"peer {peer} has an active session or lease without confirmed folded state"
         tval = _finite_float(live.get("t"))
         if tval is None:

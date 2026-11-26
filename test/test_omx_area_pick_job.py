@@ -81,8 +81,6 @@ def test_area_xyz_pick_job_spec_guards_dry_run_and_amr_bed(tmp_path: Path) -> No
     )
     assert machine_err and machine_err["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
 
-    with pytest.raises(ValueError, match="person_at_switch"):
-        spec.build_argv(job, live_params, wd)
     with pytest.raises(ValueError, match="operator must differ from proposer"):
         spec.build_argv(job, {**live_params, "proposer": "Seriggg", "person_at_switch": True}, wd)
 

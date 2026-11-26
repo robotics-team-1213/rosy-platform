@@ -27,6 +27,7 @@ from cell_job_guards import (  # noqa: E402
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
 from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
+from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
@@ -103,11 +104,8 @@ class Runner:
         return self._incident_check_fn(arm) if self._incident_check_fn is not None else _check_arm_incident(arm)
 
     def _check_fleet_safety(self, arm: str | None) -> dict:
-        if self._fleet_safety_check_fn is not None:
-            return self._fleet_safety_check_fn(arm)
-        return check_fleet_safety_online(
-            arm, fleet_r_url=self._fleet_r_url, fleet_token_file=self._fleet_token_file, ca_file=self._ca_file
-        )
+        if self._fleet_safety_check_fn is not None: return self._fleet_safety_check_fn(arm)
+        return check_fleet_safety_online(arm, fleet_r_url=self._fleet_r_url, fleet_token_file=self._fleet_token_file, ca_file=self._ca_file)
 
     def _audit_locked(self, jid: str, run: dict, code: int) -> None:
         if run["audited"]:
@@ -120,7 +118,7 @@ class Runner:
             "principal_role": run.get("principal_role", ROLE_HUMAN),
             "principal_id": run.get("principal_id", ROLE_HUMAN),
             "proposer": run.get("proposer"),
-            "fleet_online": run.get("fleet_online", False),
+            "fleet_online": run.get("fleet_online", False), "stop_proof": run.get("stop_proof"), "person_at_switch_ignored": run.get("person_at_switch_ignored"),
             "start": run["start"],
             "end": ended,
             "exit": code,
@@ -154,8 +152,8 @@ class Runner:
 
     def _start(self, name: str, params: dict, principal: Principal | None, idempotency_key: str | None, released: set) -> dict:
         principal = principal or Principal(ROLE_HUMAN, ROLE_HUMAN)
-        if idempotency_key is not None and not IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key):
-            return {"code": 400, "error": "invalid Idempotency-Key header"}
+        ignored, params = params.get("person_at_switch"), {k: v for k, v in params.items() if k != "person_at_switch"}  # D-1077: recorded, never a claim
+        if idempotency_key is not None and not IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key): return {"code": 400, "error": "invalid Idempotency-Key header"}
         job = self.jobs.get(name)
         if job is None: return {"code": 404, "error": f"no job {name}"}
         eff_params, auth_err = authorize_principal(name, job, params, principal, moves_arm_fn=moves_arm)
@@ -224,8 +222,10 @@ class Runner:
             if held_skip:
                 raise cell_incident_release.NeedsRelease(sorted(held_skip)[0])
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
+            proof, proof_err = prove_job(self, jid, name, job, arms, eff_params, moving, ignored, principal, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)
+            if proof_err is not None: return proof_err
             log = self.out / f"{jid}.log"
-            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
+            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, {**eff_params, "person_at_switch": proof is not None}), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
@@ -240,17 +240,14 @@ class Runner:
                 "purpose": eff_params.get("purpose") or name,
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
-                "proposer": eff_params.get("proposer"), "fleet_online": fleet_online,
+                "proposer": eff_params.get("proposer"), "fleet_online": fleet_online, "stop_proof": proof, "person_at_switch_ignored": ignored,
                 "start": now, "expires_at": now + JOB_TTL_S, "depart": None, "depart_lock": threading.Lock(),
                 "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
             if moving:
                 for dirty_arm in _dirty_arms(run):
-                    write_cell_state_dirty(
-                        self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
-                        fleet_online=fleet_online, principal=principal,
-                    )
+                    write_cell_state_dirty(self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None, fleet_online=fleet_online, principal=principal)
                 self._state_gen.bump()
             if idempotency_key and idem_digest is not None:
                 self._idempotency.record(idempotency_key, idem_digest, jid, name)
@@ -258,6 +255,7 @@ class Runner:
                 def _reap(jid=jid, run=run):
                     code = run["proc"].wait()
                     depart_once(self, jid, run)
+                    auto_recover_once(self, jid, run, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)
                     with self.lock:
                         self._audit_locked(jid, run, code)
 
