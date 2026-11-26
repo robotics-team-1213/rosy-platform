@@ -189,7 +189,7 @@ def test_commit_msg_lets_a_non_safety_change_through(repo, tmp_path):
 
 def test_installed_hook_blocks_the_commit_in_a_linked_worktree_too(repo, tmp_path):
     hooks_src = Path(__file__).resolve().parents[1] / "tools"
-    (tmp_path / "tools/harness").mkdir(parents=True)
+    (tmp_path / "tools/harness").mkdir(parents=True, exist_ok=True)
     for name in ("safety_review.py", "safety_review_exempt.json"):
         shutil.copy(hooks_src / "harness" / name, tmp_path / "tools/harness" / name)
     repo("add", "-A")

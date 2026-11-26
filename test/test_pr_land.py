@@ -138,7 +138,7 @@ def test_enqueues_only_the_verified_head(monkeypatch, tmp_path):
         calls.append(cmd)
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
-        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "config"]):
+        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "config"], ["git", "log"]):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 42}]'
