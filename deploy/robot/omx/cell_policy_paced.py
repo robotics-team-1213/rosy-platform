@@ -54,7 +54,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         return {**_ack_status(reply), **({"command": reply["command"]} if "command" in reply else {})}
 
     def _no_motion_at_home(status) -> bool:  # nothing sent yet and fault-free at home: refuse without human-hold
-        return not moved and _rest_diagnosis(status, _library_home(library))["no_hold"]
+        return not moved and _rest_diagnosis(status, _library_home(library), library)["no_hold"]
 
     def _safe_park_or_hold(cmd_prefix: str = "", *, fault: bool = False, pre_logs: tuple[dict, ...] = (),
                            status: dict | None = None) -> tuple[bool, dict | None]:
@@ -103,8 +103,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         nonlocal aborted
         aborted = True
         parked_ok, park_reply = _safe_park_or_hold(cmd_prefix, fault=fault, pre_logs=pre_logs, status=status)
-        diag = _rest_diagnosis(status, _library_home(library)) if status is not None else {}
-        return {"result": res, "at": at, "reason": reason, **({k: diag[k] for k in ("off_home", "folded")} if diag else {}),
+        diag = _rest_diagnosis(status, _library_home(library), library) if status is not None else {}
+        return {"result": res, "at": at, "reason": reason, **({k: diag[k] for k in ("off_home", "folded", "fold_basis")} if diag else {}),
                 **(extra or {}), "parked": parked_ok,
                 **({"park": _park_receipt(park_reply)} if park_reply is not None else {})}
 

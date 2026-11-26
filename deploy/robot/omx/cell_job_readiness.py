@@ -87,7 +87,7 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
         age_s = round(max(0.0, now - float(live["t"])), 3)
     fault = live.get("fault") if isinstance(live, dict) else None
     hold_latched = bool(live.get("human_hold_latched")) if isinstance(live, dict) else False
-    folded = _live_folded(live) if isinstance(live, dict) else None
+    folded = _live_folded(live) if isinstance(live, dict) else None  # guards judge peers coarsely until they pass the arm's library
     stale_latch = hold_latched and _stale_latch(arm, runner, live, session_held)
     superseded = {"fault": str(fault)[:160] if fault else None, "latched_t": live.get("t")} if stale_latch else None
     if stale_latch:  # the runner that latched is gone and the arm reads torque-off, folded, jaws shut: report what is there now
@@ -98,6 +98,7 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
         "incident_held": bool(inc_reason),
         "incident_reason": str(inc_reason)[:160] if inc_reason else None,
         "folded": folded if isinstance(folded, bool) else None,
+        "fold_basis": "coarse",
         "human_hold_latched": hold_latched,
         "stale_latch_superseded": superseded,  # the left-behind latch, kept visible: its fault text and time
         "fault": str(fault)[:160] if fault else None,
