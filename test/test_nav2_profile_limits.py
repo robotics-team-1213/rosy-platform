@@ -31,21 +31,21 @@ def test_costmaps_wait_for_amcl_before_activating():
 
 
 def test_nav2_default_inflation_is_the_hardware_value():
-    """현장 기본은 0.12 m. 시뮬 월드는 worlds.yaml이 덮어쓴다."""
+    """현장 기본은 0.08 m. 시뮬 월드는 worlds.yaml이 덮어쓴다."""
     data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
     for costmap in ("local_costmap", "global_costmap"):
         layer = data[costmap][costmap]["ros__parameters"]["inflation_layer"]
         radius = layer["inflation_radius"]
-        assert radius == 0.12, f"{costmap} inflation_radius={radius}"
+        assert radius == 0.08, f"{costmap} inflation_radius={radius}"
         assert layer["cost_scaling_factor"] == 8.0, f"{costmap} cost_scaling_factor={layer['cost_scaling_factor']}"
-    assert data["global_costmap"]["global_costmap"]["ros__parameters"]["footprint_padding"] == 0.015
+    assert data["global_costmap"]["global_costmap"]["ros__parameters"]["footprint_padding"] == 0.005
 
 
 def test_factory_sim_inflation_is_wider_than_hardware_default():
     catalog = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "worlds.yaml"
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]
     factory = float(worlds["rosy_factory.world"]["inflation_radius"])
-    assert factory > 0.12
+    assert factory > 0.08
 
 
 def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
@@ -187,3 +187,17 @@ def test_slow_speed_derivation_leaves_stock_speed_unchanged():
 def test_bt_server_timeout_survives_a_slow_controller_loop():
     bt = _nav2()["bt_navigator"]["ros__parameters"]
     assert bt["default_server_timeout"] == 500
+
+
+def test_nav2_rpp_drives_forward_only_and_amcl_tracks_turns_tightly():
+    """RPP allow_reversing+use_rotate_to_heading conflicts and locks reversed paths on wrong-way starts."""
+    data = _nav2()
+    rpp = data["controller_server"]["ros__parameters"]["FollowPath"]
+    amcl = data["amcl"]["ros__parameters"]
+    assert rpp["allow_reversing"] is False
+    assert rpp["use_rotate_to_heading"] is True
+    assert 0.65 <= rpp["rotate_to_heading_min_angle"] <= 1.0
+    assert rpp["approach_velocity_scaling_dist"] <= 0.12
+    assert rpp["max_allowed_time_to_collision_up_to_carrot"] <= 0.5
+    assert amcl["update_min_d"] <= 0.05
+    assert amcl["update_min_a"] <= 0.05
