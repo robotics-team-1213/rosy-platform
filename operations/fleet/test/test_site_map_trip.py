@@ -228,6 +228,9 @@ def test_trip_returns_a_plan_records_it_and_never_drives(tmp_path):
     response = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
     assert response.status_code == 200, response.text
     body = response.json()
+    receipts = client.get("/api/fleet/trip-requests", headers=OPERATOR).json()["requests"]
+    assert receipts[0]["stage"] == "preview" and receipts[0]["to"] == "NW"
+    assert receipts[0]["plan_id"] == body["plan_id"]
     assert [s["edge_id"] for s in body["segments"]] == ["ring_s", "ring_e", "ring_n"]
     assert body["places"] == ["SE", "NE", "NW"] and body["actions"][-1]["action"] == "stop"
     assert body["map_version"] == 1 and body["length_m"] > 1.0 and body["expires_at"] > 0
@@ -302,6 +305,35 @@ def test_trip_refusals_use_the_d486_codes(tmp_path, body, code):
     response = client.post("/api/fleet/robots/rosy_60/trip", json=body, headers=OPERATOR)
     assert response.status_code == 422 and response.json()["detail"]["code"] == code
     assert store.plans()[0]["result"]["error"] == code
+    receipt = client.get("/api/fleet/trip-requests", headers=OPERATOR).json()["requests"][0]
+    assert (receipt["stage"], receipt["code"]) == ("plan_refused", code)
+
+
+def test_start_history_keeps_rejection_and_retry_on_same_plan(tmp_path, monkeypatch):
+    from fleet.server.trip_runner import TripError
+
+    client, _, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
+    plan_id = plan["plan_id"]
+
+    async def reject(*args):
+        raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {"error": "RATE_LIMITED"})
+
+    async def accept(*args):
+        return {"trip_id": plan_id}
+
+    path = f"/api/fleet/trips/{plan_id}/start"
+    runner = client.app.state.trip_runner
+    monkeypatch.setattr(runner, "start", reject)
+    assert client.post(path, headers=OPERATOR).status_code == 422
+    monkeypatch.setattr(runner, "start", accept)
+    accepted = client.post(path, headers=OPERATOR)
+    assert accepted.status_code == 200 and accepted.json() == {"trip_id": plan_id}
+    rows = client.get("/api/fleet/trip-requests", headers=OPERATOR).json()["requests"]
+    assert [r["stage"] for r in rows] == ["start_accepted", "start_refused", "preview"]
+    assert all(r["plan_id"] == plan_id and r["to"] == "NW" for r in rows)
+    assert rows[1]["detail"]["error"] == "RATE_LIMITED"
 
 
 def test_trip_start_pose_and_map_refusals_and_execution_is_not_open(tmp_path):

@@ -383,7 +383,7 @@ def install_recovery_tool_routes(app, ctx) -> None:
                 _refuse(409, sgate.get("reason") or "HOMING_STRATEGY_NOT_ELIGIBLE")
             if strategy == "finalize_home_verify":
                 result = {"arm_id": target_arm, "strategy": strategy, "action": "READY_FOR_OPERATOR_HOLD_CLEAR", "folded": True}
-            elif strategy == "auto_fold" and arm_folded_fresh(app.state, target_arm, now):
+            elif strategy == "auto_fold" and not failure.get("incident_id") and arm_folded_fresh(app.state, target_arm, now):
                 result = {"arm_id": target_arm, "strategy": strategy, "action": "ALREADY_FOLDED_READBACK"}
             else:
                 budgets[f"safe_fold_home:{strategy}"] = budgets.get(f"safe_fold_home:{strategy}", 0) + 1
@@ -397,6 +397,8 @@ def install_recovery_tool_routes(app, ctx) -> None:
                            "strategy": strategy, "expires_at": round(exp_at, 3),
                            "stop_generation": fence_gen,
                            "requested_by": principal, "caller_kind": req.caller_kind, "requested_at": round(now, 3)}
+                if failure.get("incident_id"):
+                    req_row["incident_id"] = failure["incident_id"]
                 app.state.pending_safe_home_arms[target_arm] = req_row
                 sess.update({"arm_id": target_arm, "stage": f"EXECUTING_{strategy.upper()}", "active_request_id": req.request_id,
                              "updated_at": round(now, 3)})

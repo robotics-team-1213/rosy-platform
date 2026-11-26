@@ -17,15 +17,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, urlsplit
 
-import cv2
-import numpy as np
+from review_masks import detail_preview
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, ladder_web, vlm_judge_web
 import review_classes, review_context, review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, learning_service_auth, promotion_request
-import review_static, learning_tasks_web, learning_recording_web
+import review_static, learning_tasks_web, learning_recording_web, world_experiment_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
@@ -33,24 +32,6 @@ from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
 from storage_web import StorageWeb
 from learning_control import Control, ControlConflict
-
-
-def detail_preview(store, index):
-    frame = store.get(index)
-    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
-    if photo is None or photo.shape[:2] != (frame['source']['height'], frame['source']['width']):
-        raise ValueError('source image dimensions differ')
-    light, a, b = cv2.split(cv2.cvtColor(photo, cv2.COLOR_BGR2LAB))
-    # Preserve flat areas: local sharpening must not invent texture in clipped regions.
-    blurred = cv2.GaussianBlur(light, (0, 0), 3)
-    light = cv2.addWeighted(light, 1.6, blurred, -0.6, 0)
-    curve = np.rint(255 * (np.arange(256) / 255) ** 1.5).astype(np.uint8)
-    light = cv2.LUT(light, curve)
-    enhanced = cv2.cvtColor(cv2.merge((light, a, b)), cv2.COLOR_LAB2BGR)
-    ok, data = cv2.imencode('.png', enhanced)
-    if not ok:
-        raise ValueError('preview encoding failed')
-    return data.tobytes()
 
 
 # D-478: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
@@ -162,6 +143,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if learning_service_auth.check_get(self, path, service_tokens, omx_center=omx_center):
                     return
                 if collaboration and collaboration.get(self, path, token):
+                    return
+                if world_experiment_web.get(self, path, omx_center, collaboration):
                     return
                 if storage_web.get(self, path): return
                 if learning_recording_web.get(self, path, recordings):
@@ -380,6 +363,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     omx_center_web.post(self, path, body, omx_center, learning, None)
                     return
                 if collaboration and collaboration.post(self, path, body, token):
+                    return
+                if world_experiment_web.post(self, path, body, omx_center, collaboration):
                     return
                 if storage_web.post(self, path, body): return
                 if learning_recording_web.post(self, path, body, recordings):

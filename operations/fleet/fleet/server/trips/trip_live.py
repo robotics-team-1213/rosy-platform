@@ -5,10 +5,85 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from core_common.protocol.evidence import STALE_VELOCITY_S
+from rosy.world.state.projections.map_pose_samples import parse_utc
+
 from fleet.routing.execute import arc_id, ends_at_place
 from fleet.server import trip_ports as _ports
 from fleet.server.trip_geometry import pose_view
 from fleet.server.trip_ports import OPEN, TripConfig
+
+
+def trip_wait_reason(view):
+    if view["state"] not in OPEN:
+        return None
+    hold, detail = view.get("hold") or {}, view.get("detail") or {}
+    if hold.get("reason") == "fleet_hold":
+        return "fleet_hold" if (hold.get("stop") or {}).get("confirmed") is True else "fleet_hold_unconfirmed"
+    if view["state"] == "link_wait":
+        return "link_wait"
+    if peer := detail.get("peer_wait"):
+        before_send = peer.get("stage") == "pre_dispatch_peer_check" and peer.get("dispatch_attempted") is False
+        return "peer_pre_dispatch" if before_send else "peer_clearance"
+    parking = detail.get("parking_handoff") or {}
+    if parking.get("phase") in ("waiting_for_commission", "waiting_for_clearance"):
+        return parking.get("reason") or parking["phase"]
+    return None
+
+
+def _measured_motion(robot_id, sample):
+    if sample is None:
+        return "unknown", None, None
+    state, read_start, now = sample
+    if state.get("robot_id") != robot_id or state.get("online", True) is not True:
+        return "unknown", None, None
+    velocity = state.get("velocity") or {}
+    evidence = (state.get("evidence") or {}).get("velocity") or {}
+    stamp = evidence.get("sampled_at")
+    sampled, captured = parse_utc(stamp), parse_utc(state.get("timestamp"))
+    ttl = evidence.get("stale_after_s", STALE_VELOCITY_S)
+    speeds = (velocity.get("linear"), velocity.get("angular"))
+    if (evidence.get("evidence") != "fresh" or sampled is None or captured is None
+            or type(ttl) not in (int, float) or not math.isfinite(ttl) or ttl <= 0
+            or not all(type(v) in (int, float) and math.isfinite(v) for v in speeds)
+            or not 0 <= captured - sampled <= STALE_VELOCITY_S or not 0 <= now - read_start
+            or captured - sampled + now - read_start > min(ttl, STALE_VELOCITY_S)):
+        return "unknown", None, None
+    motion = "moving" if abs(speeds[0]) > .01 or abs(speeds[1]) > .02 else "stationary"
+    return motion, stamp, read_start - (captured - sampled)
+
+
+def trip_execution(view, live=None, sample=None):
+    """Read-only command phase and independently measured base motion, scoped to this trip."""
+    detail = view.get("detail") or {}
+    peer = detail.get("peer_wait") or {}
+    parking = detail.get("parking_handoff") or {}
+    reason = trip_wait_reason(view)
+    motion, sampled_at, mono = _measured_motion(view["robot_id"], sample if view["state"] in OPEN else None)
+    if view["state"] not in OPEN:
+        phase, reason = "terminal", view.get("reason")
+    elif reason in ("fleet_hold", "fleet_hold_unconfirmed"):
+        phase = "paused"
+    elif reason == "peer_pre_dispatch":
+        phase = "pre_dispatch_wait"
+    elif reason or detail.get("goal_wait") or (view.get("wait") or {}).get("waiting"):
+        phase = "goal_wait"
+        reason = reason or detail.get("goal_wait") or view["wait"].get("reason")
+    elif parking.get("phase") == "submitting":
+        phase, reason = "received", "dock_submitting"
+    elif parking.get("phase") == "docking" and parking.get("operation"):
+        ack = live.command_ack_mono if live is not None else None
+        phase = motion if ack is not None and mono is not None and mono >= ack else "dispatched"
+        reason = "dock_accepted"
+    elif live is not None and live.command_ack_mono is not None and (
+            (live.active_route and not live.active_route.get("superseded")) or live.last_goal is not None
+            or detail.get("line_follow_started") or live.sent):
+        phase = motion if mono is not None and mono >= live.command_ack_mono else "dispatched"
+    else:
+        phase = "received"
+    return {"phase": phase, "motion": motion, "sampled_at": sampled_at, "reason": reason,
+            "command_robot_id": view["robot_id"],
+            "waiting_on": list(peer.get("waiting_on") or ()) if phase in ("paused", "pre_dispatch_wait", "goal_wait") else []}
 
 
 class LiveTrip:
@@ -18,6 +93,8 @@ class LiveTrip:
         self.view = view
         self.graph = graph
         self.request = request
+        # Read projection only. A pre-ACK wheel sample cannot prove this dispatch moved the base.
+        self.command_ack_mono: float | None = None
         #: The last instruction CORE accepted: index, action, place, seq, at.
         self.sent: Optional[dict] = None
         self.first_seq: Optional[int] = None
@@ -29,6 +106,9 @@ class LiveTrip:
         #: Active D-1009 Nav2 route span dispatched to CORE (``{"end_index", "points"}``).
         self.active_route: Optional[dict] = None
         #: Bounded Nav2 failure recovery state (alternate-path replans and cooldown retries).
+        self.road_profile_key = None
+        self.road_profile = []
+        self.road_pose = None
         self.nav2_retries: int = 0
         self.nav2_retry_at: float = -math.inf
         self.nav2_replans: int = 0
@@ -97,6 +177,7 @@ class LiveTrip:
 
     def see(self, pose) -> None:
         """Keep the map pose just read and when it was read."""
+        self.road_pose = pose
         self.view["pose"], self.pose_read_at = pose_view(pose), _ports._monotonic()
 
     @property
@@ -112,8 +193,15 @@ class LiveTrip:
         """Whether this trip drives painted lanes via CORE Nav2 ``navigation/route``."""
         return self.request.get("drive_mode") == "nav2"
 
+    @property
+    def nav2_binding_scope(self) -> tuple[int, str] | None:
+        binding_id = self.view["detail"].get("nav2_binding_id")
+        return (self.view["map_version"], binding_id) if binding_id is not None else None
+
     def segment_is_lane(self, index: int) -> bool:
-        return not self.nav2 and self.arc(index).drive_mode == "lane"
+        camera = self.view["detail"].get("camera_lane_fallback") or {}
+        driving_camera = camera.get("phase") == "running" and camera.get("index") == index
+        return (not self.nav2 or driving_camera) and self.arc(index).drive_mode == "lane"
 
     def effective_mode(self, index: int) -> str:
         return "lane" if self.segment_is_lane(index) else "free"

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import math
+from functools import wraps
+from threading import RLock
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -201,10 +203,19 @@ class DockInstance(BaseModel):
                 f"dock map '{self.map_id}' != current '{current_map}'")
 
 
+def _synchronized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return call
+
+
 class DockDatabase:
     """기종과 개체의 JSON 저장소."""
 
     def __init__(self, path: Optional[Path] = None) -> None:
+        self._lock = RLock()
         self._path = Path(path) if path is not None else None
         self._types: dict[str, DockType] = {}
         self._docks: dict[str, DockInstance] = {}
@@ -240,19 +251,50 @@ class DockDatabase:
             "dock_types": [t.model_dump() for t in self._types.values()],
             "docks": [d.model_dump() for d in self._docks.values()],
         }
-        self._path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self._path)
 
     # --- 기종 -----------------------------------------------------------------
 
+    @_synchronized
+    def commission(self, kind: DockType, dock: DockInstance, expected_map: str) -> DockInstance:
+        """Create a measured dock and its type together, leaving existing registrations intact."""
+        if not expected_map or not self.frame_key or self.frame_key() != expected_map or dock.map_id != expected_map:
+            raise DockError("MAP_FRAME_CHANGED", "map changed before registration")
+        if dock.type != kind.name:
+            raise DockError("UNKNOWN_DOCK_TYPE", "dock and type name differ")
+        previous_type = self._types.get(kind.name)
+        if previous_type is not None and previous_type != kind:
+            raise DockError("DOCK_EXISTS", "an existing type has different settings")
+        measured = dock.model_copy(update={"metadata": {**dock.metadata, "map_epoch": expected_map}})
+        previous = self._docks.get(dock.id)
+        if previous is not None:
+            if previous == measured:
+                return previous
+            raise DockError("DOCK_EXISTS", "a different dock is already registered")
+        self._types[kind.name] = kind
+        self._docks[dock.id] = measured
+        try:
+            self._save()
+        except OSError:
+            self._docks.pop(dock.id)
+            if previous_type is None:
+                self._types.pop(kind.name)
+            raise
+        return measured
+
+    @_synchronized
     def add_type(self, dock_type: DockType) -> DockType:
         self._types[dock_type.name] = dock_type
         self._save()
         return dock_type
 
+    @_synchronized
     def types(self) -> list[DockType]:
         return list(self._types.values())
 
+    @_synchronized
     def type_of(self, dock_id: str) -> DockType:
         dock = self.get(dock_id)
         dock_type = self._types.get(dock.type)
@@ -263,6 +305,7 @@ class DockDatabase:
 
     # --- 개체 -----------------------------------------------------------------
 
+    @_synchronized
     def add(self, dock: DockInstance) -> DockInstance:
         if dock.id in self._docks:
             raise DockError("DOCK_EXISTS", f"dock '{dock.id}' already exists")
@@ -281,20 +324,24 @@ class DockDatabase:
             return dock
         return dock.model_copy(update={"metadata": {**dock.metadata, "map_epoch": str(key)}})
 
+    @_synchronized
     def get(self, dock_id: str) -> DockInstance:
         dock = self._docks.get(dock_id)
         if dock is None:
             raise DockError("NOT_FOUND", f"dock '{dock_id}' not found")
         return dock
 
+    @_synchronized
     def list(self) -> list[DockInstance]:
         return list(self._docks.values())
 
+    @_synchronized
     def remove(self, dock_id: str) -> None:
         self.get(dock_id)
         del self._docks[dock_id]
         self._save()
 
+    @_synchronized
     def teach(self, dock_id: str, x: float, y: float, yaw: float,
               map_id: Optional[str]) -> DockInstance:
         """teach-by-docking — 지금 로봇이 선 자리를 도크 포즈로 기록한다.
@@ -307,6 +354,7 @@ class DockDatabase:
         self._save()
         return taught
 
+    @_synchronized
     def only(self) -> Optional[DockInstance]:
         """도크가 정확히 하나면 그것 — 1:1 배치에서 이름 없이 "그 도크"를 묻는 길.
 

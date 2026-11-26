@@ -14,6 +14,42 @@ import time
 from typing import Any, Callable
 
 
+SCHEMA = "rosy.omx-auto-fold.v1"
+CHOICE = "auto_fold.candidate"  # cell_choices name the candidates compete under
+
+
+def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float, *,
+             hardware_error_after: dict | None = None, caps_restored_after: bool | None = None) -> dict:
+    """What core_common.clearable_after_fold reads: the measured fold, home, torque after the session, the check, and
+    the incident it was taken for (Fleet refuses it for any other)."""
+    corridor = result.get("corridor") or {}
+    out = {"kind": "auto_fold", "schema": SCHEMA, "incident_id": incident_id, "taken_at": round(taken_at, 3),
+           "candidate": result.get("candidate"), "folded_state": result["state"], "home": list(home),
+           "torque_after": torque_after,
+           "corridor_clear": corridor.get("clear") if corridor else result.get("candidate") == "already_home",
+           "steps": len(result.get("steps") or [])}
+    if hardware_error_after is not None:
+        out["hardware_error_after"] = hardware_error_after
+    if caps_restored_after is not None:
+        out["caps_restored_after"] = caps_restored_after
+    return out
+
+
+def _learn(result: dict, ok: bool) -> None:
+    """Record how the tried candidate did in the arm's cell_choices file (main named it); nothing moved: nothing recorded."""
+    path, name = result.get("choices_path"), result.get("candidate")
+    if not path or name in (None, "already_home") or str(name).startswith("advisor:"):
+        return
+    try:
+        from cell_choices import Choices
+
+        choices = Choices(Path(path))
+        choices.outcome(CHOICE, name, ok, note=str(result.get("reason") or result.get("result")))
+        choices.save()
+    except (SystemExit, Exception):  # a lost learning row never changes the outcome
+        pass
+
+
 def expiry_error(expires_at: Any, *, required: bool, now_t: float) -> str | None:
     if expires_at is None:
         return "SAFE_HOME_EXPIRY_MISSING" if required else None
@@ -168,6 +204,19 @@ class FencedCell:
         return self._guard_motion(lambda: self._cell.checked(command, assessment, *args, **kwargs))
 
 
+BOUND_INCIDENT_OPTION = "--expected-incident-id"
+
+
+def bound_hold_matches(link, incident_id):
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    try:
+        current = link.hold()
+        return (current.held is True and current.reason == HOME_RECOVERY_REASON
+                and list(current.incident_ids) == [incident_id])
+    except (AttributeError, RuntimeError, ValueError, OSError):
+        return False
+
+
 def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], recover_fn: Callable[..., dict],
                  candidate_names_fn: Callable[[], list[str]], choice_key: str, schema: str) -> int:
     del candidate_names_fn, choice_key
@@ -177,6 +226,7 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
         lp.add_argument("--arm", required=True)
         lp.add_argument("--config-file", type=Path, required=True)
         lp.add_argument("--stage", choices=("full", "release_and_lift", "park_only"), default="full")
+        lp.add_argument(BOUND_INCIDENT_OPTION)
         lp.add_argument("--request-id", default=None)
         lp.add_argument("--expires-at", type=float, default=None)
         lp.add_argument("--stop-generation", type=int, default=None)
@@ -184,6 +234,7 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
         opts = lp.parse_args(args_list[1:])
         print(json.dumps(launch_fn(opts.arm, opts.config_file, stage=opts.stage,
                                    request_id=opts.request_id, expires_at=opts.expires_at,
+                                   **({"expected_incident_id": opts.expected_incident_id} if opts.expected_incident_id is not None else {}),
                                    stop_generation=opts.stop_generation, safety_fence=opts.safety_fence), default=str))
         return 0
 
@@ -200,7 +251,10 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
     ap.add_argument("--expires-at", type=float, default=None)
     ap.add_argument("--stop-generation", type=int, default=None)
     ap.add_argument("--safety-fence", default=None)
+    ap.add_argument(BOUND_INCIDENT_OPTION)
     ap.add_argument("--supervised", action="store_true")
+    ap.add_argument("--commissioning", action="store_true", help="trial the exact incident-bound cargo placement")
+    ap.add_argument("--person-at-switch", action="store_true", help="confirm a person is at the power switch for this trial")
     ap.add_argument("--unlatch-hold", action="store_true")
     ap.add_argument("--vlm-url")
     ap.add_argument("--vlm-model", default="qwen3-vl:8b-instruct")
@@ -208,6 +262,19 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
     ap.add_argument("--vlm-config", type=Path)
     ap.add_argument("--vlm-timeout", type=float, default=25.0)
     args = ap.parse_args(args_list)
+    if args.commissioning != args.person_at_switch:
+        ap.error("--commissioning and --person-at-switch require each other")
+    if args.commissioning and (not args.expected_incident_id or args.stage != "full" or args.supervised
+                               or args.unlatch_hold or not args.safety_fence or args.stop_generation is None
+                               or args.expires_at is None):
+        ap.error("placement commissioning requires a fenced, incident-bound full command")
+    if args.expected_incident_id is not None:
+        import omx_incident
+        if (args.supervised or args.expected_incident_id != os.environ.get("ROSY_RECOVERY_INCIDENT")
+                or not bound_hold_matches(omx_incident.link_for(args.arm), args.expected_incident_id)):
+            args.out.write_text(json.dumps({"result": "held", "reason": "HOME_RECOVERY_INCIDENT_MISMATCH",
+                                            "incident_id": args.expected_incident_id}))
+            return 3
     if not args.supervised and not os.environ.get("ROSY_RECOVERY_INCIDENT"):
         ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
 
@@ -222,7 +289,30 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
             return {"schema": schema, "result": "held", "reason": fence_bad,
                     "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
         with FencedCell(cell, lambda: _safety_fence_error(args)) as fenced:
+            placement = None
+            if args.expected_incident_id is not None:
+                from cell_bound_home_placement import before_bound_home
+                from cell_recovery_placement import place_nearest
+                from cell_recovery_placement_context import load_context
+                from cell_recovery_placement_journal import PlacementJournal
+                from cell_recovery_placement_live import build_backend
+                from omx_incident_fleet import incidents_dir
+                import sqlite3
+
+                kw["require_empty_gripper"] = True
+                directory = incidents_dir()
+                try:
+                    placement = before_bound_home(
+                        args, fenced, closed, kw, PlacementJournal(directory, args.arm), directory,
+                        load_context=load_context, build_backend=build_backend, place_nearest=place_nearest)
+                except (sqlite3.Error, OSError, ValueError) as exc:
+                    placement = {"result": "held", "reason": f"PLACEMENT_UNAVAILABLE: {exc}"}
+                if placement is not None and placement.get("result") != "placed":
+                    return {"schema": schema, **placement, "result": "held",
+                            "hold_ok": fenced.act("human-hold").get("ok"), "steps": placement.get("steps", [])}
             out = recover_fn(fenced, home, closed, stage=args.stage, **kw)
+            if placement is not None:
+                out["placement"] = placement
             if fenced.tripped_reason is not None:
                 if out.get("result") != "held":
                     held = cell.act("human-hold")
@@ -245,7 +335,7 @@ def run_launch_command(
     script_path: Path, arm: str, conf: dict[str, Any], *, stage: str, out: Path, cwd: Path,
     incident: str, marker: Path, expires_at: float | None, stop_generation: int | None,
     safety_fence: str | None, run: Callable[..., Any] | None, sleep: Callable[[float], Any],
-    now: Callable[[], float], require_expiry: bool = False,
+    now: Callable[[], float], require_expiry: bool = False, expected_incident_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Invoke auto-fold subprocess with lock retries; return early skip/failure payload or None once `out` exists."""
     req_exp = bool(require_expiry or (stage != "full") or (safety_fence is not None) or (stop_generation is not None))
@@ -258,6 +348,8 @@ def run_launch_command(
         "--library", conf["library"], "--site", conf["site"], "--roi", *map(str, conf["roi"]),
         "--stage", stage, "--out", str(out),
     ]
+    if expected_incident_id is not None:
+        command += [BOUND_INCIDENT_OPTION, expected_incident_id]
     if expires_at is not None:
         command += ["--expires-at", f"{float(expires_at):.3f}"]
     if stop_generation is not None:

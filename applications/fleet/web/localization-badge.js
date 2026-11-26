@@ -20,6 +20,39 @@ export function localizationUrgent(loc) {
   return Boolean(loc && loc.needs_human);
 }
 
+function nativeChecking(loc, native) {
+  return native?.state === "CANDIDATES" && native.reason === "checking" && !native.needs_human
+    && !loc?.pose_request_needs_human;
+}
+
+function freshCameraPose(guideRow) {
+  const pose = guideRow?.pose;
+  const age = pose?.last_sighting_age_s ?? (pose?.source === "sighting" ? pose.age_s : pose?.anchor_age_s);
+  return pose?.state === "LOCALIZED" && (pose.source === "sighting" || pose.anchor_source === "sighting")
+    && Number.isFinite(age) && age >= 0 && age <= FRESH_ANCHOR_S;
+}
+
+function localizationWarning(loc, native, stale) {
+  if (!localizationUrgent(loc)) return null;
+  if (stale) return { text: "CORE 위치 상태 지연", cls: "warn",
+    title: "마지막 위치 확인 요청이 남아 있습니다. 연결과 최신 CORE 상태를 확인하세요" };
+  if (native?.needs_human === true) return { text: "CORE 위치 확인 필요", cls: "crit",
+    title: native.state === "CANDIDATES" ? "위치 보조에서 CORE 후보를 확인하세요" : "위치 보조에서 CORE 상태를 확인하세요" };
+  if (loc.pose_request_needs_human) return { text: "차선 복귀 위치 확인 필요", cls: "crit",
+    title: "위치 보조에서 차선 복귀 요청을 확인하세요" };
+  return { text: "Fleet 위치 복구 지연", cls: "crit",
+    title: native?.reason === "inject_rejected"
+      ? "CORE가 위치 후보를 확정하지 못했습니다. 위치 보조에서 후보와 지도 연결을 확인하세요"
+      : "자동 위치 복구가 지연됐습니다. 위치 보조에서 CORE 상태를 확인하세요" };
+}
+
+export function localizationAttention(loc, native, guideRow, stale = false) {
+  const camera = freshCameraPose(guideRow) ? "카메라에서 로봇 확인 · " : "";
+  if (!stale && nativeChecking(loc, native)) return {severity: "warn", text: `: ${camera}CORE 위치 후보 검증 중`};
+  const warning = localizationWarning(loc, native, stale);
+  return warning ? {severity: warning.cls, text: `: ${camera}${warning.text} · ${warning.title}`} : null;
+}
+
 export function untrustedQueuedReason(who) {
   return `${who} 위치를 확인할 수 없어 대기 중 — 위치가 확정되거나 경로에서 멀어지면 자동 출발합니다`;
 }
@@ -77,8 +110,13 @@ export function sitePoseText(guideRow) {
 }
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */
-export function positionTag(loc, guideRow) {
-  if (loc?.needs_human) return localizationTag(loc);
+export function positionTag(loc, guideRow, native, stale = false) {
+  if (!stale && nativeChecking(loc, native)) return {
+    text: freshCameraPose(guideRow) ? "카메라 위치 확인 · CORE 검증 중" : "CORE 위치 후보 검증 중",
+    cls: "warn", title: "CORE가 위치 후보를 검증 중",
+  };
+  const warning = localizationWarning(loc, native, stale);
+  if (warning) return warning;
   const pose = guideRow?.pose;
   if (pose && Number.isFinite(pose.x) && Number.isFinite(pose.y)) {
     const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]

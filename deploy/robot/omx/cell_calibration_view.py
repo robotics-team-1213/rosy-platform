@@ -17,7 +17,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[3]
 for _extra in (ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):
@@ -34,26 +33,15 @@ import cell_pivot  # noqa: E402
 import cell_post_eval  # noqa: E402
 import omx_tcp  # noqa: E402
 
-try:
-    from cell_auto_evidence import bound_map_error  # noqa: E402
-except ImportError:
-    bound_map_error = None  # type: ignore[assignment]
+from cell_calibration_view_frame import (  # noqa: E402,F401
+    _camera_shift, _generation, _image_size, _read_json, bind_frame, bound_map_error,
+    is_allowed_frame_url, resolve_frame_target,
+)
 
 DEFAULT_MAP_POINTS = [
     [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
     [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
 ]
-LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
-
-
-def _read_json(path: Path | None) -> tuple[dict | None, str | None]:
-    if path is None or not str(path) or not path.is_file():
-        return None, "missing"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return (data if isinstance(data, dict) else None), (None if isinstance(data, dict) else "not-object")
-    except (OSError, ValueError) as exc:
-        return None, f"{type(exc).__name__}: {exc}"
 
 
 def load_profile_registry(registry_path: Path | None) -> list[dict[str, Any]]:
@@ -72,56 +60,6 @@ def load_profile_registry(registry_path: Path | None) -> list[dict[str, Any]]:
     return out
 
 
-def is_allowed_frame_url(url: str | None) -> bool:
-    """Only allow HTTP(S) loopback URLs unless explicitly opted in as trusted local camera endpoints."""
-    if not isinstance(url, str) or not url.strip():
-        return False
-    parts = urlsplit(url.strip())
-    return parts.scheme in {"http", "https"} and (parts.hostname or "").lower() in LOOPBACK_HOSTS
-
-
-def resolve_frame_target(entry: dict[str, Any], source: str) -> dict[str, Any]:
-    """Resolve a server-side reference file path or live frame source for `profile_id`."""
-    cfg_path = Path(entry["config_path"])
-    config, _ = _read_json(cfg_path)
-    config = config or {}
-    if source == "reference":
-        ref_str = entry.get("reference_top_path") or (config.get("preflight") or {}).get("reference_top") or ""
-        return {"kind": "file", "path": Path(ref_str) if ref_str else None}
-    if source == "live":
-        if entry.get("live_top_path"):
-            return {"kind": "file", "path": Path(entry["live_top_path"])}
-        url = entry.get("live_frame_url") or ((config.get("cameras") or {}).get("top") or {}).get("url")
-        return {"kind": "url", "url": url}
-    return {"kind": "none"}
-
-
-def _image_size(path: Path | None) -> list[int] | None:
-    if path is None or not path.is_file():
-        return None
-    try:
-        from PIL import Image
-        with Image.open(path) as img:
-            return [int(img.width), int(img.height)]
-    except Exception:
-        return None
-
-
-def _camera_shift(ref_path: Path | None, live_path: Path | None) -> dict | None:
-    if not (ref_path and ref_path.is_file() and live_path and live_path.is_file()):
-        return None
-    try:
-        import cv2
-        import cell_preflight
-        ref = cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE)
-        cur = cv2.imread(str(live_path), cv2.IMREAD_GRAYSCALE)
-        if ref is None or cur is None:
-            return None
-        return cell_preflight.camera_shift_px(ref, cur)
-    except Exception as exc:
-        return {"ok": False, "why": f"{type(exc).__name__}: {exc}"}
-
-
 def _project_point(record: dict | None, camera: dict, arm_xy: list[float] | None, target_z: float | None) -> dict:
     if not arm_xy or len(arm_xy) < 2 or not record or not record.get("homography"):
         return {"arm_m": arm_xy, "pixel_z_view": None, "pixel_surface_z": None}
@@ -133,12 +71,22 @@ def _project_point(record: dict | None, camera: dict, arm_xy: list[float] | None
         return {"arm_m": arm_xy, "pixel_z_view": None, "pixel_surface_z": None}
     px_sz = None
     fit_z = record.get("z_view")
-    if target_z is not None and fit_z is not None and camera.get("center_px") and camera.get("height_m"):
+    if target_z is not None and fit_z is not None:
         try:
-            us, vs = cal.parallax((u_zv, v_zv), float(fit_z), float(target_z), camera)
-            px_sz = [round(float(us), 2), round(float(vs), 2)]
-        except Exception:
-            px_sz = None
+            centre = (record.get("camera_in_base") or {}).get("t")
+            if centre is not None:
+                # Intersect the ray through the surface point with the plane on which H was fitted.
+                cx, cy, cz = map(float, centre)
+                if cz <= max(target_z, fit_z):
+                    raise ValueError("camera must be above both planes")
+                ratio = (cz - fit_z) / (cz - target_z)
+                us, vs = cal.to_pixel(h, (cx + (arm_xy[0] - cx) * ratio, cy + (arm_xy[1] - cy) * ratio))
+            else:
+                us, vs = cal.parallax((u_zv, v_zv), float(fit_z), float(target_z), camera)
+            if math.isfinite(us) and math.isfinite(vs):
+                px_sz = [round(float(us), 2), round(float(vs), 2)]
+        except (KeyError, ValueError, TypeError, ZeroDivisionError):
+            pass
     return {"arm_m": [float(arm_xy[0]), float(arm_xy[1])], "pixel_z_view": px_zv, "pixel_surface_z": px_sz}
 
 
@@ -168,16 +116,16 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
             "err_px": round(math.hypot(px[0] - pred_px[0], px[1] - pred_px[1]), 2),
         })
 
-    inlier_arms = [p["arm_m"] for p in inliers]
-    dropped_arms = [d["arm_m"] for d in dropped]
-    near = lambda pt, pool: any(math.hypot(pt[0] - q[0], pt[1] - q[1]) <= 5e-4 for q in pool)
+    # Jaw/FK coordinates in legacy fits do not identify individual commanded TCP visits.
+    visits = {tuple(v["point"]): v for v in record.get("planned_visits", [])}
     planned = []
     for pt in planned_pts:
-        status = "inlier" if near(pt, inlier_arms) else ("dropped" if near(pt, dropped_arms) else "missed")
+        visit = visits.get(tuple(pt), {})
         proj = _project_point(record, camera, pt, target_z)
         planned.append({
             "arm_m": [float(pt[0]), float(pt[1])],
-            "status": status,
+            "status": visit.get("status", "unmatched"),
+            "measured_tcp_m": visit.get("measured_tcp_m"), "observed_pixel": visit.get("pixel"),
             "pixel_z_view": proj["pixel_z_view"],
             "pixel_surface_z": proj["pixel_surface_z"],
         })
@@ -185,6 +133,7 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
     return {
         "homography": h,
         "is_pose": bool(record.get("camera_in_base")),
+        "camera_origin_m": (record.get("camera_in_base") or {}).get("t"),
         "z_view": record.get("z_view"),
         "coarse": bool(record.get("coarse")),
         "measured": record.get("measured") or "",
@@ -343,6 +292,13 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     ref_site = next((s for s in map_sites if s in sites_out and sites_out[s]["map"]), None)
     ref_record = cell_pivot.map_record(with_maps, ref_site) if ref_site else None
     live_info = cell_cal_eval.parse_live(live, config, plan, ref_record, now_ts=now_ts, joints_tcp_fn=cell_pivot.joints_tcp)
+    sample_time = (live or {}).get("t")
+    fresh_s = prm.get(config.get("params"), "verify.live_fresh_s")
+    if isinstance(sample_time, (int, float)) and math.isfinite(sample_time):
+        live_info["fresh_until"] = sample_time + fresh_s
+        if sample_time > (time.time() if now_ts is None else now_ts):
+            live_info["stale"] = True
+
     drift = cell_cal_monitor.summarize(config, calibration)
     lateral = cell_post_eval.lateral_summary(config, with_maps, now_ts=now_ts)
     for msg in drift.get("suggested_advisory") or ():
@@ -369,7 +325,8 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
             "center_px": camera_top.get("center_px"), "frame_size": frame_size,
             "has_reference": bool(ref_path and ref_path.is_file()),
             "has_live": bool((live_img_path and live_img_path.is_file()) or is_allowed_frame_url(entry.get("live_frame_url") or camera_top.get("url"))),
-            "shift": shift,
+            "shift": shift, "reference_sha256": calibration.get("reference_top_sha256") if not bind_err else None,
+            "generation": _generation(calibration) if not bind_err else None,
         },
         "limits": {
             "max_reach_m": (config.get("calibrate") or {}).get("max_reach_m") or limits.get("max_reach_m"),
@@ -392,8 +349,25 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
 
 def build_bundle(entries: list[dict[str, Any]], *, now_ts: float | None = None) -> dict[str, Any]:
     """Build the full profiles snapshot payload for calibration_web."""
+    profiles = [build_profile_snapshot(e, now_ts=now_ts) for e in entries]
+    by_arm = {}
+    for entry, profile in zip(entries, profiles):
+        by_arm.setdefault(profile.get("arm_id"), []).append(entry["config_path"])
+    for entry, profile in zip(entries, profiles):
+        peer = by_arm.get(profile.get("zone_peer"))
+        if peer and len(peer) == 1:
+            cfg, _ = _read_json(Path(entry["config_path"]))
+            if cfg:
+                from cell_shared_pallet import shared_pallet
+                report = shared_pallet(cfg, None, peer_path=peer[0])
+                profile["shared_pallet_surface"] = report
+                if report["status"] in ("mismatch", "near_tolerance"):
+                    offsets = ", ".join(f"{error:.1f}" for error in report["corner_error_px"])
+                    band = "정합 오차 범위에서 허용값과 겹침" if report["status"] == "near_tolerance" else "허용값 초과"
+                    profile["hygiene"].append({"level": "warning", "code": "shared_pallet_surface",
+                        "message": f"공유 선박 작업면 꼭짓점 차이 {offsets}px · {band} (허용 {report['tolerance_px']}px, 정합 P95 {report['registration_p95_residual_px']}px)"})
     return {
         "schema": "rosy.calibration-profiles-bundle.v1",
         "configured": bool(entries),
-        "profiles": [build_profile_snapshot(e, now_ts=now_ts) for e in entries],
+        "profiles": profiles,
     }

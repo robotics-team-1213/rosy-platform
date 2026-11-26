@@ -29,6 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.offline_marker import OfflineMarkerClearance
 from fleet.server.offline_pin import OfflinePinStore, mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
@@ -165,7 +166,10 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
             lambda: ((active := site_maps.active())[1].map_id, active[0]) if site_maps.active() is not None else (None, None))
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    marker_clearance = (OfflineMarkerClearance(sightings, site_maps.active, map_pose_config, tracking.calibrations.get)
+                        if sightings is not None and tracking is not None else None)
     console.set_site_pose_providers(
+        marker_clearance=marker_clearance,
         mover=partial(mover_site_pose, map_pose),
         obstacle=partial(obstacle_site_pose, map_pose),
     )
@@ -181,12 +185,14 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         if callable(getattr(localization_service, "set_site_obstacle_pose", None)):
             localization_service.set_site_obstacle_pose(partial(obstacle_site_pose, map_pose))
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
+        if callable(getattr(localization_service, "set_search_reference_reader", None)):
+            localization_service.set_search_reference_reader(map_pose.state_with_source)
     app.state.map_pose = map_pose
     if tracking is not None:
         tracking.map_pose = map_pose.arbitrated_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub, sightings=sightings,
                           policy_evidence=policy_evidence, principals=principals, require_viewer=require_viewer,
-                          read_guard=read_guard, map_pose=map_pose, station_ingress=station_ingress)
+                          read_guard=read_guard, map_pose=map_pose, station_ingress=station_ingress, marker_clearance=marker_clearance)
     install_map_pose_routes(app, service=execution_pose, read_guard=read_guard)
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=execution_pose, site_maps=site_maps,
@@ -325,8 +331,20 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     async def read_trip_navigation(robot_id, run_id):
         return await console.clients()[robot_id]._get(f"/api/v1/navigation/state?run_id={run_id}")
 
+    async def read_held_lidar(robot_id, request):
+        client = console.clients()[robot_id]
+        return await client._get(f"/api/v1/sensors/lidar/corridor?direction={request['direction']}"
+                                 f"&distance_m={request['distance_m']:.4f}")
+
+    trip_runner.read_held_lidar = read_held_lidar
+
+    from fleet.server.trip_road_speed import RoadSpeed
+    trip_runner.road_speed = RoadSpeed(map_pose, console.goal_leases.update_road_speed)
     trip_runner.navigation_readback = read_trip_navigation
     trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
+    trip_runner.halts.read_stop_state = trip_runner.named_stop_state
+    trip_runner.halts.read_navigation = lambda rid: console.clients()[rid]._get("/api/v1/navigation/state")
+    trip_runner.halts.wire_epoch = console.goal_leases.idle_wire_epoch
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
 
     from fleet.server.handoff_recovery import stopped_handoff
@@ -347,6 +365,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_relocalize_routes(
         app, service=getattr(app.state, "localization_service", None), clients=console.clients,
         read_state=map_pose.state, require_named_operator=require_named_operator,
+        read_state_receipt=map_pose.state_with_source, clock=lambda: map_pose._clock(),
         read_guard=read_guard, record_event=site_maps.record_event,
         busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
     if getattr(site_maps, "path", None) is not None:
@@ -396,6 +415,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event, cable_inhibited=cable_inhibited)
 
+    trip_runner.bay_cable_inhibited = cable_inhibited
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
     from fleet.server.auto_repark import AutoNamedCorrection
     trip_runner.auto_named_correction = AutoNamedCorrection(console, trip_runner, cable_inhibited)

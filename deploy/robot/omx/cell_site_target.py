@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -206,12 +207,43 @@ def top_slot_roi(zone_rois: dict[str, Any] | None, place: dict[str, Any]) -> tup
     return tuple(int(v) for v in roi) if roi else None
 
 
+def temp_to_ship(source, dest):
+    src, dst = (resolve_cell_ab_site(site, allow_belt_temp=False) for site in (source, dest))
+    return bool(src and dst and src["area"] in ("temp_a", "temp_b") and src["tier"] == 2
+                and dst["base_site"].startswith("ship-") and dst["tier"] == 1)
+
+
+def source_transition_matches(zone, src, dst):
+    if not temp_to_ship(src, dst):
+        return True
+
+    def record(row, key):
+        value = row.get(key) if isinstance(row, dict) else None
+        return value if isinstance(value, dict) else {}
+
+    transition = record(zone, "source_transition")
+    before = record(transition, "before")
+    binding = record(before, "binding")
+    prior, after = record(before, "source"), record(transition, "after")
+    pre, post = record(before, "receipt"), record(transition, "after_receipt")
+    hashes = [rec.get("depth_sha256") for rec in (pre, post)]
+    times = [pre.get("last_stamp"), post.get("first_stamp")]
+    return (all(isinstance(h, str) and re.fullmatch(r"[0-9a-f]{64}", h) for h in hashes)
+            and hashes[0] != hashes[1] and all(type(t) in (int, float) for t in times) and 0 < times[0] < times[1]
+            and record(binding, "source").get("site") == resolve_cell_ab_site(src)["sim_site"]
+            and record(binding, "destination").get("site") == resolve_cell_ab_site(dst)["sim_site"]
+            and prior.get("tier_ok") is True and prior.get("tier") == 2
+            and after.get("tier_ok") is True and type(after.get("tier")) is int and after["tier"] == 1)
+
+
 def cell_ab_place_verified(
     handoff: dict[str, Any], place: dict[str, Any], z_gate: dict[str, Any], tier: int,
     verification: dict[str, Any] | None = None,
 ) -> bool:
     dst_raw = str(handoff.get("dst_site") or "").strip()
     resolved = resolve_cell_ab_site(dst_raw, tier, allow_belt_temp=False)
+    if not source_transition_matches(verification, handoff.get("src_site"), resolved["sim_site"] if resolved else dst_raw):
+        return False
     dst_area = str(handoff.get("dst_area") or (resolved["area"] if resolved else "pallet")).lower()
     place_area = str(place.get("area") or place.get("area_id") or "").strip().lower()
     tier_ok = type(place.get("tier")) is int and place["tier"] == tier

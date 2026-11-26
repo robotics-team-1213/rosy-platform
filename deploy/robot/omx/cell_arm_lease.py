@@ -21,6 +21,7 @@ except ImportError:  # Windows tests: no cross-process lock
     fcntl = None
 
 SCHEMA = "rosy.omx-arm-lease.v1"
+_ANY_PID = object()
 
 
 class LeaseHeld(RuntimeError):
@@ -168,13 +169,14 @@ def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:
     return True
 
 
-def release(arm, owner=None, root=None, *, hold=False) -> bool:
+def release(arm, owner=None, root=None, *, hold=False, expected_pid=_ANY_PID) -> bool:
     """Remove the lease only when it is this owner's; a held lease only with hold=True (`release_hold`)."""
     owner = owner or default_owner()
     root = lease_root(root)
     with _locked(arm, root):
         old = _read(arm, root)
-        if not old or old.get("owner") != owner or bool(old.get("hold")) != hold:
+        if (not old or old.get("owner") != owner or bool(old.get("hold")) != hold
+                or (expected_pid is not _ANY_PID and old.get("pid") != expected_pid)):
             return False
         (root / f"{arm}.json").unlink(missing_ok=True)
         return True

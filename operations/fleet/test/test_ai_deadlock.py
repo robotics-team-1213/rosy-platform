@@ -96,7 +96,8 @@ def _routable(monkeypatch, runner):
     as the replanned route so the switch itself is under test."""
     from fleet.server import trip_replan
 
-    def hold(_active, _pose, _remaining, _request, _caps, blocked, *_args):
+    def hold(_active, _pose, _remaining, _request, _caps, blocked, *_args, nav2_off_lane_margin_m):
+        assert nav2_off_lane_margin_m == runner.config.nav2_off_lane_margin_m
         live = runner._live["b"]
         return {"reason": "replan", "map_version": live.view["map_version"], "blocked": sorted(blocked),
                 "plan": {k: live.view["plan"][k] for k in ("segments", "places", "actions")}}

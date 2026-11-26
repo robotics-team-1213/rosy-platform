@@ -10,8 +10,7 @@ const CELL_BUTTONS = {
   cell_ab: [
     {label: "1층 적재 (arm_a)", preset: "s5_tier1_arm_a"},
     {label: "2층 적재 (arm_b)", preset: "s5_tier2_arm_b"},
-    {label: "ACT 벨트 → 1행 2번 1층 (arm_a)", preset: "s5_tier1_arm_a_act_policy", requiresPresence: true},
-    {label: "ACT 벨트 → 1행 2번 1층 (arm_b)", preset: "s5_tier1_arm_b_act_policy", requiresPresence: true},
+    ...["arm_a", "arm_b"].map((a) => ({label: `ACT 벨트 → 1행 2번 1층 (${a})`, preset: `s5_tier1_${a}_act_policy`, requiresPresence: true})),
     {label: "3층 적재 (arm_a)", preset: "s5_tier3_arm_a"},
     {label: "S3→S5 연속 실행", preset: "full_s3_to_s5_pipeline"},
   ],

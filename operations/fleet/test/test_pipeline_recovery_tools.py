@@ -4,8 +4,36 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+def test_owner_telemetry_to_bound_request_to_cleared_hold(tmp_path, monkeypatch):
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=owner-s")
+    app, client = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="owner-s", role="service"))
+    arm, incident = "arm_s", "b" * 32
+    quality, tools = "/api/fleet/pipeline/cell-quality", "/api/fleet/pipeline/recovery-tools"
+    hold = {"local_held": True, "local_reason": "old", "fleet_held": True, "fleet_reason": HOME_RECOVERY_REASON,
+            "incident_ids": [incident], "unsent_outbox": 0}
+    body = {"arm_holds": {arm: hold}, "incident_bound_home": True, "incident_bound_home_arms": [arm]}
+    assert client.post(quality, json=body).status_code == 200
+    root = f"home-recovery:{arm}:{incident}"
+    ctx = next(f for f in client.get(tools).json()["active_failures"] if f["root_task_id"] == root)
+    res = client.post(tools + "/invoke", json={"tool_name": "safe_fold_home", "arguments": {"arm_id": arm},
+                      "root_task_id": root, "expected_context_sha256": ctx["context_sha256"], "request_id": "bound-r",
+                      "caller_kind": "system", "rationale": "recover the current verified hold"})
+    assert res.status_code == 200, res.json()
+    assert not client.post(quality, json={}).json()["pending_safe_home_arms"]
+    assert client.post(quality, json=body).json()["pending_safe_home_arms"][arm]["incident_id"] == incident
+    hold.update(local_held=False, fleet_held=False, incident_ids=[])
+    body["safe_home_acks"] = [{"arm_id": arm, "request_id": "bound-r", "outcome": "completed"}]
+    assert client.post(quality, json=body).json()["arm_holds"][arm]["held"]
+    body["safe_home_acks"][0]["cleared_incident_id"] = incident
+    assert not client.post(quality, json=body).json()["arm_holds"][arm]["held"]
+    assert not any(f["root_task_id"] == root for f in client.get(tools).json()["active_failures"])
 
 
 def _app(tmp_path, monkeypatch, *, role_principal=None, named_requester=True):
@@ -117,6 +145,62 @@ def test_cell_ab_act_fallback_preserves_failed_route_and_requires_presence(tmp_p
     assert (task["cell_id"], task["arm_id"], task["src_site"], task["dst_site"]) == ("cell_ab", "arm_b", "belt", "ship-h1r0-l0")
     assert task["fallback_from_task_id"] == "belt-b" and task["requires_presence_confirm"] is True
     assert task["execution_mode"] == "act_policy" and task["max_chunks"] == 2
+
+
+@pytest.mark.parametrize("arm,cell", [("arm_s", "cell_s"), ("arm_a", "cell_ab"), ("arm_b", "cell_ab")])
+def test_home_recovery_binds_only_the_current_incident(tmp_path, monkeypatch, arm, cell):
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+
+    app, client = _app(tmp_path, monkeypatch)
+    _seed_abort(app, "old-placement", cell_id=cell, arm_id=arm, folded=False)
+    iid = "a" * 32
+    hold = {"arm": arm, "held": True, "reason": HOME_RECOVERY_REASON, "incident_ids": [iid]}
+    app.state.arm_holds[arm] = hold
+    url = "/api/fleet/pipeline/recovery-tools"
+
+    def contexts():
+        return {f["root_task_id"]: f for f in client.get(url).json()["active_failures"]}
+
+    def invoke(ctx, rid):
+        return client.post(url + "/invoke", json={
+            "tool_name": "safe_fold_home", "arguments": {"arm_id": arm, "strategy": "auto_fold"},
+            "caller_kind": "llm_agent", "request_id": rid, "root_task_id": ctx["root_task_id"],
+            "expected_context_sha256": ctx["context_sha256"], "rationale": "recover open USB interruption",
+        })
+
+    root = f"home-recovery:{arm}:{iid}"
+    assert contexts()[root]["eligible_tools"]["safe_fold_home"]["reason"] == "BOUND_HOME_WORKER_UNAVAILABLE"
+    app.state.bound_home_ready_at = {arm: time.time() - 31}
+    assert invoke(contexts()[root], "stale-worker").json()["detail"]["code"] == "BOUND_HOME_WORKER_UNAVAILABLE"
+    app.state.bound_home_ready_at[arm] = time.time()
+    rows = contexts()
+    current, historical = rows[root], rows["old-placement"]
+    assert app.state.pending_safe_home_arms == {}
+    assert current["incident_id"] == iid and current["task_id"] is None
+    assert {k for k, v in current["eligible_tools"].items() if v["allowed"]} == {
+        "safe_fold_home", "inspect_failure_context", "escalate_human",
+    }
+    assert {k for k, v in current["homing_strategies"].items() if v["allowed"]} == {"auto_fold"}
+    assert invoke(historical, "old").json()["detail"]["code"] == "HOME_RECOVERY_INCIDENT_ROOT_REQUIRED"
+    hold["incident_ids"] = ["b" * 32]
+    assert invoke(current, "replaced").json()["detail"]["code"] == "UNKNOWN_FAILURE_CONTEXT"
+    for invalid in ([], [iid, "b" * 32], ["!"], iid):
+        hold["incident_ids"] = invalid
+        rows = contexts()
+        assert set(rows) == {"old-placement"}
+        assert not rows["old-placement"]["eligible_tools"]["safe_fold_home"]["allowed"]
+    hold["incident_ids"] = [iid]
+    app.state.human_detected = {cell: True}
+    assert not contexts()[root]["homing_strategies"]["auto_fold"]["allowed"]
+    app.state.human_detected = {}
+    app.state.pipeline_homing_sessions["old-placement"] = {"arm_id": arm, "stage": "HOLD_GUARD_TRIPPED"}
+    assert not contexts()[root]["eligible_tools"]["safe_fold_home"]["allowed"]
+    app.state.pipeline_homing_sessions["old-placement"]["stage"] = "CLEARED"
+    app.state.arm_live_states[arm]["folded"] = True
+    reply = invoke(contexts()[root], "current")
+    assert reply.status_code == 200, reply.text
+    pending = reply.json()["result"]["pending"]
+    assert (pending["incident_id"], pending["root_task_id"], pending["arm_id"]) == (iid, root, arm)
 
 
 def test_raw_keys_role_cas_refusal_replay_and_rollback(tmp_path, monkeypatch):

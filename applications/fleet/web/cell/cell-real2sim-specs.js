@@ -26,9 +26,7 @@ export const BED_CONFIRM_TTL_S = 120;
 // Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
 export function abortText(task) {
   if (task?.status !== 'ABORTED') return '';
-  if ([task.hardware_telemetry?.error, task.receipt?.reason].includes('PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE')) {
-    return 'ACT 실물 실행 차단 · 팔 제어기에 정책 실행 권한을 전달할 연결이 없습니다';
-  }
+  if ([task.hardware_telemetry?.error, task.receipt?.reason].includes('PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE')) return 'ACT 실물 실행 차단 · 팔 제어기에 정책 실행 권한을 전달할 연결이 없습니다';
   return task.receipt?.reason === 'REVIEW_REQUIRED'
     ? '검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다. 입회 표시를 하고 다시 실행하거나 운전 범위 검토를 등록하세요'
     : '';

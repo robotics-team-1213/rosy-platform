@@ -36,6 +36,18 @@ class FleetWorkWait(BaseModel):
     over_bound: bool | None = None
 
 
+class FleetTripExecution(BaseModel):
+    """Current dispatch phase and source-timed odometry of the commanded robot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    phase: Literal["received", "pre_dispatch_wait", "goal_wait", "dispatched", "moving", "stationary", "paused", "terminal"]
+    motion: Literal["moving", "stationary", "unknown"]
+    sampled_at: str | None = None
+    command_robot_id: str
+    reason: str | None = None
+    waiting_on: list[str]
+
+
 class FleetWorkSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -50,6 +62,7 @@ class FleetWorkSummary(BaseModel):
     #: D-763 8 (v1.237): read projection only; ledger states are unchanged. null = a status this read does not know.
     visible_state: Literal["approval_pending", "in_progress", "waiting", "intervention", "ended"] | None = None
     wait: FleetWorkWait | None = None
+    execution: FleetTripExecution | None = None
     #: D-763 7: the step-kind registry's approval for a PROPOSED row; null otherwise.
     approval: Literal["two_person", "proposer_only", "one_person"] | None = None
 

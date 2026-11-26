@@ -16,7 +16,7 @@ from fleet.stop_front import body_front_m
 from fleet.server.trip_geometry import pose_view
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import convoy_refusal
-from fleet.server.trip_live import LiveTrip
+from fleet.server.trip_live import LiveTrip, trip_execution
 from fleet.server.trip_ports import TripError
 from fleet.swarm.transport import RobotApiError
 
@@ -87,6 +87,17 @@ def _build_started_view(*, plan_id: str, robot_id: str, principal_id: str, notes
 
 class TripRunnerHelpers:
     """Read queries and robot/pose/persistence helpers mixed into ``TripRunner``."""
+
+    def execution_view(self, view):
+        # An id-only acceptance receipt has no robot or lifecycle evidence yet.
+        if not view.get("robot_id") or not view.get("state"):
+            return view
+        live = self._live.get(view["robot_id"])
+        if live is not None and live.view["trip_id"] != view["trip_id"]:
+            live = None
+        read_sample = getattr(self._poses, "cached_motion_sample", None)
+        sample = read_sample(view["robot_id"]) if read_sample and live and live.open else None
+        return {**view, "execution": trip_execution(view, live, sample)}
 
     def open_trips(self) -> list[dict]:
         return [live.view for live in self._live.values() if live.open]

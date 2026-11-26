@@ -469,7 +469,8 @@ document.addEventListener('keydown',event=> {
     event.preventDefault(); $('delete-selected').click();
   }
   // Arrow keys move between photos; number fields keep their native stepping.
-  if((event.key==='ArrowLeft'||event.key==='ArrowRight') && !['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)) {
+  if((event.key==='ArrowLeft'||event.key==='ArrowRight') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && !['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)) {
     const button=$(event.key==='ArrowLeft'?'prev-frame':'next-frame');
     if(button && !button.disabled) {event.preventDefault(); button.click();}
   }

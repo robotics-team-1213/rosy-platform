@@ -29,18 +29,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-SCHEMA = "rosy.omx-auto-fold.v1"
+from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence
 PAN_DETOURS = (5.0, -5.0, 10.0, -10.0)
 SETTLE_TOL = 3.0  # chunk_runner.SETTLE_TOL (kept here so the plan is testable without the runner)
 HOLDING_MARGIN = 4.0  # jaws stopped this far above their closing command are on something (cell_transfer.STILL_HOLDING_UNITS)
 REST_TOL = 8.0  # a hold this near home (all five body joints) ends the session instead of holding torque
-CHOICE = "auto_fold.candidate"  # cell_choices name the candidates compete under
 RISE_UNITS = 12.0  # cell_unwedge.CLEAR: release_and_rise lifts shoulder_lift this far
 
 
 def _ok_state(status) -> list | None:
     state = status.get("state") if isinstance(status, dict) else None
-    if status.get("ok") is not True or not isinstance(state, list) or len(state) < 6 \
+    if not isinstance(state, list) or status.get("ok") is not True or len(state) < 6 \
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in state[:6]):
         return None
     return list(state[:6])
@@ -78,7 +77,8 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             release_unmoved: bool = False, moved_out: list | None = None, latched_out: list | None = None,
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
-            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full") -> dict:
+            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
+            require_empty_gripper: bool = False) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
     if stage not in ("full", "release_and_lift", "park_only"):
@@ -119,16 +119,20 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     target = status.get("target") if isinstance(status, dict) and isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
     known["state"] = state
     if state is None:
-        return hold("STATE_UNREADABLE")
+        return hold("STATE_UNREADABLE", is_holding=require_empty_gripper)
+    if require_empty_gripper and _ok_state({"ok": True, "state": status.get("target")}) is None:
+        return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if latched["active"] and not allow_live_unlatch:
         return hold("LIVE_HOLD_LATCHED")
     at_home = folded(state, home)
     is_holding = bool(
         holding(state, target, closed)
         or ((latched["started"] or at_home or stage in ("park_only", "release_and_lift")) and status.get("holding"))
-        or ((at_home or stage in ("park_only", "release_and_lift"))
+        or ((require_empty_gripper or at_home or stage in ("park_only", "release_and_lift"))
             and target[5] <= closed + 1.0 and state[5] > target[5] + 2.0)
     )
+    if require_empty_gripper and (status.get("holding") is not False or is_holding):
+        return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if at_home:
         from cell_auto_fold_stages import resolve_folded_at_home
 
@@ -260,48 +264,17 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     return hold("ALL_PATHS_BLOCKED")
 
 
-def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float, *,
-             hardware_error_after: dict | None = None, caps_restored_after: bool | None = None) -> dict:
-    """What core_common.clearable_after_fold reads: the measured fold, home, torque after the session, the check, and
-    the incident it was taken for (Fleet refuses it for any other)."""
-    corridor = result.get("corridor") or {}
-    out = {"kind": "auto_fold", "schema": SCHEMA, "incident_id": incident_id, "taken_at": round(taken_at, 3),
-           "candidate": result.get("candidate"), "folded_state": result["state"], "home": list(home),
-           "torque_after": torque_after,
-           "corridor_clear": corridor.get("clear") if corridor else result.get("candidate") == "already_home",
-           "steps": len(result.get("steps") or [])}
-    if hardware_error_after is not None:
-        out["hardware_error_after"] = hardware_error_after
-    if caps_restored_after is not None:
-        out["caps_restored_after"] = caps_restored_after
-    return out
-
-
-def _learn(result: dict, ok: bool) -> None:
-    """Record how the tried candidate did in the arm's cell_choices file (main named it); nothing moved: nothing recorded."""
-    path, name = result.get("choices_path"), result.get("candidate")
-    if not path or name in (None, "already_home") or str(name).startswith("advisor:"):
-        return
-    try:
-        from cell_choices import Choices
-
-        choices = Choices(Path(path))
-        choices.outcome(CHOICE, name, ok, note=str(result.get("reason") or result.get("result")))
-        choices.save()
-    except (SystemExit, Exception):  # a lost learning row never changes the outcome
-        pass
-
-
 def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None,
            stage: str = "full", request_id: str | None = None, expires_at: float | None = None,
-           stop_generation: int | None = None, safety_fence: str | None = None, allow_multi: bool = False) -> dict:
+           stop_generation: int | None = None, safety_fence: str | None = None, allow_multi: bool = False,
+           expected_incident_id: str | None = None) -> dict:
     """omx_incident starts this after a held incident it could not clear: one try per incident. Opens the arm's session
     through its wrapper as a recovery session for that incident alone, folds (main), waits for the session's own end
     (torque OFF confirmed in session.json) and clears that incident with the evidence. Anything short leaves the hold."""
     import os
 
     from cell_auto_fold_stages import (
-        expiry_error as _expiry_error, run_launch_command as _run_launch_command, write_req_result as _write_req_result,
+        bound_hold_matches, expiry_error as _expiry_error, run_launch_command as _run_launch_command, write_req_result as _write_req_result,
     )
     import omx_incident
     import omx_incident_auto
@@ -318,7 +291,21 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
         return res
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
     link = link or omx_incident.link_for(arm)
-    ids = list(link.hold().incident_ids) if link is not None else []
+    if expected_incident_id is not None:
+        if stage != "full" or not request_id or not bound_hold_matches(link, expected_incident_id):
+            res = {"result": "skipped", "why": "HOME_RECOVERY_INCIDENT_MISMATCH"}
+            _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+            return res
+        ids = [expected_incident_id]
+    else:
+        hold = link.hold() if link is not None else None
+        if fleet_req and getattr(hold, "held", False):
+            from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+            if hold.reason == HOME_RECOVERY_REASON:
+                res = {"result": "skipped", "why": "HOME_RECOVERY_BINDING_REQUIRED"}
+                _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+                return res
+        ids = list(hold.incident_ids) if hold is not None else []
     if not ids or (not allow_multi and len(ids) != 1) or len(ids) > 3:
         res = {"result": "skipped", "why": f"{len(ids)} open incidents (one is folded at a time)"}
         _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
@@ -343,6 +330,8 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     started = now()
 
     def done(out_row: dict, candidate=None) -> dict:
+        if expected_incident_id is not None:
+            out_row["bound_incident_id"] = expected_incident_id
         _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, out_row)
         omx_incident_auto.note_event({"kind": "auto_fold", "arm": arm, "incident_id": incident, "result": out_row["result"],
                                       "why": out_row.get("why"), "candidate": candidate})
@@ -351,11 +340,13 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     early = _run_launch_command(
         Path(__file__).resolve(), arm, conf, stage=stage, out=out, cwd=cwd, incident=incident_arg, marker=marker,
         expires_at=expires_at, stop_generation=stop_generation, safety_fence=safety_fence, run=run,
-        sleep=sleep, now=now, require_expiry=fleet_req,
+        sleep=sleep, now=now, require_expiry=fleet_req, expected_incident_id=expected_incident_id,
     )
     if early is not None:
         return done(early)
     result = json.loads(out.read_text())
+    if expected_incident_id is not None and result.get("incident_id") != expected_incident_id:
+        return done({"result": "not_cleared", "why": "HOME_RECOVERY_EVIDENCE_MISMATCH"})
     cand = result.get("candidate")
     _learn(result, result.get("result") in ("folded", "risen_for_visual_verify"))
     if result.get("result") == "risen_for_visual_verify":
@@ -374,6 +365,8 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     hw_ok = {str(k): 0 for k in torque} if sess.get("hardware_faults") == {} and len(torque) >= 6 else None
     caps_ok = sess.get("caps_restored") if isinstance(sess.get("caps_restored"), bool) else None
     note = f"automatic fold (D-1048): {result.get('candidate')}, home within {SETTLE_TOL} units, torque OFF"
+    if expected_incident_id is not None and not bound_hold_matches(link, expected_incident_id):
+        return done({"result": "not_cleared", "why": "HOME_RECOVERY_INCIDENT_MISMATCH"}, cand)
     proof = None
     for inc_id in ids:
         proof = evidence(result, result["home"], torque, inc_id, now(), hardware_error_after=hw_ok, caps_restored_after=caps_ok)

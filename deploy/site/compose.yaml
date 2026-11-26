@@ -113,6 +113,11 @@ services:
       # D-1057 cell pipeline: owner principals and the cell_ab release switch; empty keeps both off.
       ROSY_FLEET_CELL_OWNERS: "${ROSY_FLEET_CELL_OWNERS:-}"
       ROSY_FLEET_CELL_AB_RELEASE_ENABLED: "${ROSY_FLEET_CELL_AB_RELEASE_ENABLED:-}"
+      ROSY_INTAKE_RFID_WORKCELL: "${ROSY_INTAKE_RFID_WORKCELL:-}"
+      ROSY_INTAKE_RFID_WINDOW_SECONDS: "${ROSY_INTAKE_RFID_WINDOW_SECONDS:-300}"
+      ROSY_INTAKE_RFID_READER_EPOCH: "${ROSY_INTAKE_RFID_READER_EPOCH:-}"
+      ROSY_PLACEMENT_CAMERA_SOURCE: "${ROSY_PLACEMENT_CAMERA_SOURCE:-}"
+      ROSY_PLACEMENT_CALIBRATION_REVISION: "${ROSY_PLACEMENT_CALIBRATION_REVISION:-}"
       # D-1060 Pinky task dispatcher: 1 enables QUEUED pinky-tasks -> Fleet trips; empty keeps off.
       ROSY_FLEET_PINKY_TASK_DISPATCH: "${ROSY_FLEET_PINKY_TASK_DISPATCH:-}"
       # Optional Rosy World 3D link (mDNS or static origin); empty keeps /console/world off.
@@ -120,6 +125,7 @@ services:
       ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-}"
       ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-}"
       ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"
+      ROSY_CALIBRATION_ORIGIN: "${ROSY_CALIBRATION_ORIGIN:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy

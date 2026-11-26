@@ -313,3 +313,13 @@ test("B-2: jumpToQueueRow opens a closed decision row once and never re-closes a
   assert.equal(renders, 1);
   assert.equal(toggle.getAttribute("aria-expanded"), "true");
 });
+
+test("a pending CORE pause proof blocks resume while cancel stays available", () => {
+  const hold = { reason: "fleet_hold", stop: { confirmed: false } };
+  const pending = replanView({ hold }, { operator: true });
+  assert.ok(pending.facts.length > 0);
+  assert.equal(pending.confirmReason, pending.facts);
+  assert.equal(pending.cancelReason, "");
+  hold.stop.confirmed = true;
+  assert.equal(replanView({ hold }, { operator: true }).confirmReason, "");
+});

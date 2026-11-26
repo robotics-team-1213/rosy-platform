@@ -58,7 +58,7 @@ from guarded_native_effort import (  # noqa: E402
     alignment_deadline, check_effort, check_hardware_errors, commit_holds, read_body_pwm,
     restart_after_pause, seed_follower_pose, stall_watch, watch_hold,
 )
-from native_policy_fence import NativePolicyFence, PolicyWriteRefused  # noqa: E402
+from native_policy_fence import PolicyWriteRefused, PolicyWriterMixin  # noqa: E402
 
 
 class GoalRejected(ValueError):
@@ -69,7 +69,7 @@ class GoalRejected(ValueError):
         self.can_send_hold = can_send_hold
 
 
-class NativeJointMotion:
+class NativeJointMotion(PolicyWriterMixin):
     stage = None
 
     def __init__(self, follower, leader, *, clock=time.monotonic, body_only=False, label="follower", monitor=None,
@@ -157,29 +157,9 @@ class NativeJointMotion:
         """Command acceleration limit: the full-arm stage's value (teleop_speed), else ACCEL_DEG_S2."""
         return STAGES[self.stage]["accel_deg_s2"] if self.stage and self.full_arm else ACCEL_DEG_S2
 
-    @classmethod
-    def for_policy(cls, follower, *, fence, clock=time.monotonic):
-        """Register guard for an exclusive native policy writer; never enroll a recorder session."""
-        if not isinstance(fence, NativePolicyFence):
-            raise ValueError("an owner-local native policy fence is required")
-        motion = cls(follower, None, teacher=True, clock=clock)
-        motion._policy_fence = fence
-        return motion
-
-    def write_goal(self, goals):
-        if self._policy_fence is None:
-            return self.follower.sync_write("Goal_Position", goals, normalize=False)
-        return self._policy_fence.write_current(self.follower.sync_write, "Goal_Position", goals, normalize=False)
-
     def _enable_seeded_torque(self):
         if self._policy_fence is not None:
-            # Vendor enable_torque loops over joints. Send one bounded group register command for the six-axis owner.
-            expected = dict.fromkeys(self.active, 1)
-            self._policy_fence.write_current(self.follower.sync_write, "Torque_Enable", expected, normalize=False)
-            torque = self.follower.sync_read("Torque_Enable", motors=list(self.active), normalize=False, num_retry=READ_RETRY)
-            if not isinstance(torque, dict) or torque != expected or any(type(v) is not int for v in torque.values()):
-                self._policy_fence.hold("seed_torque_unconfirmed")
-                raise PolicyWriteRefused("seed torque readback did not confirm all joints")
+            self._enable_policy_torque(READ_RETRY)
         elif self.body_only:
             self.follower.enable_torque(list(BODY))
         else:
@@ -212,22 +192,18 @@ class NativeJointMotion:
             self.stop_streaming()
             raise GoalRejected(str(error), can_send_hold=False) from error
         except GoalRejected:
-            if self._policy_fence is not None:
-                self._policy_fence.hold("policy_goal_rejected")
+            self._policy_hold("policy_goal_rejected")
             raise
         except BoundaryExpired:
-            if self._policy_fence is not None:
-                self._policy_fence.hold("policy_boundary_expired")
+            self._policy_hold("policy_boundary_expired")
             self.failed = True  # no new motion; torque stays ON
             raise
         except BaseException as exc:
             self.failed = True
-            if self._policy_fence is not None:
-                self._policy_fence.hold("native_guard_fault")
-                if isinstance(exc, Exception) and is_recoverable_telemetry(exc):
-                    # A lost reply can follow a successful write. Neither the achieved pose nor torque is known.
-                    self.stop_streaming()
-                    raise GoalRejected("policy device transaction unconfirmed", can_send_hold=False) from exc
+            if self._policy_hold("native_guard_fault") and isinstance(exc, Exception) and is_recoverable_telemetry(exc):
+                # A lost reply can follow a successful write. Neither the achieved pose nor torque is known.
+                self.stop_streaming()
+                raise GoalRejected("policy device transaction unconfirmed", can_send_hold=False) from exc
             try:
                 torque_off(self.follower)
             finally:

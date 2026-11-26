@@ -84,6 +84,8 @@ class TripAdmission:
 
     async def _guard_start(self, robot_id, token, guard):
         self._check_start_token(robot_id, token)
+        if (check := getattr(self, "station_stop_reason", None)) and (reason := check(robot_id)):
+            raise TripError(409, reason)
         self._check_human_hold()
         if guard is not None:
             await guard()
@@ -235,12 +237,15 @@ class TripAdmission:
     async def _admit_replan(self, live, hold: dict, principal_id: str) -> None:
         """The operator-confirmed replan path only (``confirm_replan``): the D-763 10 (c) capability checks as
         at a start, then the switch; a changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``).
-        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. This path runs no
-        ``_pose_checks``; that gap predates D-763 10 (c) and is not closed here."""
+        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. Here, only a bound Nav2 route runs
+        ``_pose_checks`` against the pinned binding."""
         active = self._store.active()
         if active is not None and active[0] == hold["map_version"]:
             await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
                                     detail=live.view["detail"], nav2=live.nav2)
+            if live.nav2_binding_scope is not None:
+                await self._pose_checks(live.view["robot_id"], active[2], hold["plan"]["segments"],
+                                        nav2=True, precision_scope=live.nav2_binding_scope)
         self._apply_replan(live, hold, principal_id)
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None,

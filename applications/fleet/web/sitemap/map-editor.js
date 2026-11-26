@@ -231,14 +231,14 @@ export function drawSitePointsOverlay(svg, sitePoints, view) {
     }
   }
 
-  // Workcell reference marker (arm_s_base 180° / cell_ab_fixture -90° separated mm frames)
+  // Only the S-cell frame supplies a world reference point.
   const hint = sitePoints.coordinate_frames?.cell_s_arm_base?.world_origin_hint_m;
   if (Array.isArray(hint) && hint.length === 2 && Number.isFinite(hint[0]) && Number.isFinite(hint[1])) {
     const [cx, cy] = view.toPx(hint[0], hint[1]);
     const refDot = svgElement('polygon', {class: 'sp-cell-ref', points: `${cx},${cy - 6} ${cx + 6},${cy} ${cx},${cy + 6} ${cx - 6},${cy}`}, layer);
-    svgElement('title', {}, refDot).textContent = 'arm_s(180°)·cell_ab(-90°) 독립 mm 원점 · vehicle_tray는 arm_s_top 호모그래피 보정(+12.85 cm 오차) 필요';
+    svgElement('title', {}, refDot).textContent = 'S 셀 팔 원점의 참고 위치';
     addMarker(cx, cy, 7);
-    pendingLabels.push({px: cx, py: cy, className: 'sp-label', text: 'arm_s 180°·cell_ab -90°', preferred: {dx: 8, dy: -6, anchor: 'start'}});
+    pendingLabels.push({px: cx, py: cy, className: 'sp-label', text: 'S 셀 기준점(참고)', preferred: {dx: 8, dy: -6, anchor: 'start'}});
   }
 
   for (const entry of pendingLabels) {
@@ -286,11 +286,17 @@ export function renderSitePointsSummary(panelEl, bodyEl, sitePoints) {
   bodyEl.replaceChildren(dl, ul);
 }
 
-export async function loadSitePointsOverlay(request, active, panelEl, bodyEl) {
-  let data = null;
-  try { data = active ? await request('/api/fleet/site-points') : null; } catch { data = null; }
-  renderSitePointsSummary(panelEl, bodyEl, data);
-  return data;
+export function sitePointsForActiveMap(sitePoints, active, mapSource) {
+  const source = sitePoints?.sources?.site_map;
+  if (mapSource !== 'active' || !source?.map_id || !Number.isInteger(source.version) || !source.sha256) return null;
+  return source.map_id === active?.map?.map_id && source.version === active.version && source.sha256 === active.sha256
+    ? sitePoints
+    : null;
+}
+
+export async function loadSitePointsOverlay(request, active) {
+  if (!active) return null;
+  try { return await request('/api/fleet/site-points'); } catch { return null; }
 }
 
 export function drawFacilities(svg, map, view) {
@@ -304,6 +310,60 @@ export function drawFacilities(svg, map, view) {
         : svgElement('circle', {...attrs, cx: points[0][0], cy: points[0][1], r: 6, class: `facility ${facility.kind}`}, svg);
     svgElement('title', {}, mark).textContent = facility.name;
   }
+}
+
+export function syncMapInspectorTargets(map, selection, drawing) {
+  const picker = $('map-inspector-target');
+  const groups = [
+    ['place', '장소', (map?.places || []).map(item => [item.id, `${item.name} · ${item.id}`])],
+    ['edge', '차로', (map?.edges || []).map(item => [item.id, `${item.id} · ${item.from} → ${item.to}`])],
+    ['crosswalk', '횡단보도', (map?.crosswalks || []).map(item => [item.id, item.id])],
+  ].filter(([, , rows]) => rows.length);
+  const signature = JSON.stringify(groups);
+  if (picker.dataset.targets !== signature) {
+    picker.replaceChildren(new Option('요소 선택', ''), ...groups.map(([kind, label, rows]) => {
+      const group = document.createElement('optgroup');
+      group.label = label;
+      group.append(...rows.map(([id, text]) => new Option(text, `${kind}:${id}`)));
+      return group;
+    }));
+    picker.dataset.targets = signature;
+  }
+  const kind = selection && Object.keys(selection)[0], value = kind ? `${kind}:${selection[kind]}` : '';
+  if (picker.value !== value) picker.value = [...picker.options].some(option => option.value === value) ? value : '';
+  setOffBy(picker, drawing ? '구역 그리기를 먼저 마치세요' : groups.length ? '' : '검사할 지도 요소가 없습니다');
+}
+
+export function renderMapInspector(selection, displayed, draft, reason) {
+  const get = (map, key, id) => id && map?.[key]?.find(item => item.id === id);
+  const place = get(draft, 'places', selection?.place), edge = get(draft, 'edges', selection?.edge);
+  const crosswalk = get(draft, 'crosswalks', selection?.crosswalk);
+  const shownPlace = get(displayed, 'places', selection?.place), shownEdge = get(displayed, 'edges', selection?.edge);
+  const shownCrosswalk = get(displayed, 'crosswalks', selection?.crosswalk);
+  $('selection').textContent = shownPlace ? `장소 ${shownPlace.id}`
+    : shownEdge ? `차로 ${shownEdge.id} · ${shownEdge.from} → ${shownEdge.to}`
+    : shownCrosswalk ? `횡단보도 ${shownCrosswalk.id} · 대기 띠 ${(shownCrosswalk.approach || []).length}개` : '선택 없음';
+  $('place-form').hidden = !place || Boolean(reason);
+  $('edge-form').hidden = !edge || Boolean(reason);
+  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
+  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안에서 검사할 장소나 차로를 고르세요'));
+  if (place) {
+    $('place-name').value = place.name;
+    $('place-kind').value = place.kind;
+    $('place-pinned').checked = Boolean(place.pinned);
+    $('place-stop').hidden = place.kind !== 'stop';
+    $('place-approach').value = place.approach_m ?? '';
+  } else if (crosswalk) {
+    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
+    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
+      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
+  } else if (edge) {
+    $('edge-direction').value = edge.direction;
+    $('edge-mode').value = edge.drive_mode;
+    $('edge-speed').value = edge.speed_cap_mps;
+    $('edge-pinned').checked = Boolean(edge.pinned);
+  }
+  return Boolean(crosswalk || place?.kind === 'stop');
 }
 
 export function createMapEditor({svg, map, view, changed, reason}) {

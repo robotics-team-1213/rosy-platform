@@ -189,16 +189,21 @@ def test_nav2_localization_refusal_records_blocker_and_dispatch_stage(blocker, d
     run(runner.start("p-ref", "bob"))
     run(runner.tick())
     view = runner.view("p-ref")
-    assert view["state"] == "failed" and view["reason"] == "TRIP_GOAL_REFUSED"
-    assert view["detail"]["goal_reason"] == "LOCALIZATION_UNTRUSTED"
-
     stored = store.trip("p-ref")
-    assert stored["detail"]["goal_admission"] == {
-        "blocked_by": blocker, "waiting_on": [blocker],
-        "dispatch_attempted": dispatched, "cancel_confirmed": dispatched,
-    }
+    if blocker == "rosy_45":
+        assert view["state"] == "running"
+        wait = stored["detail"]["peer_wait"]
+        assert wait["command_robot_id"] == "rosy_42" and wait["waiting_on"] == [blocker]
+        assert wait["stage"] == "pre_dispatch_peer_check" and not wait["dispatch_attempted"]
+    else:
+        assert view["state"] == "failed" and view["reason"] == "TRIP_GOAL_REFUSED"
+        assert view["detail"]["goal_reason"] == "LOCALIZATION_UNTRUSTED"
+        assert stored["detail"]["goal_admission"] == {
+            "blocked_by": blocker, "waiting_on": [blocker],
+            "dispatch_attempted": False, "cancel_confirmed": False,
+        }
     assert stored["detail"] == view["detail"]
-    assert bool(robot.routes) is dispatched
+    assert not robot.routes
 
 
 def test_nav2_drive_mode_refuses_precision_stop_and_skips_non_precision_binding_checks():

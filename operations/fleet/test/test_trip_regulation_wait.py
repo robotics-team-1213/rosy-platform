@@ -23,7 +23,7 @@ class _Live(SimpleNamespace):
 
 def _live(regulation=None, wait=None):
     return _Live(view={"hold": None, **({"wait": wait} if wait else {})}, junction={"regulation_wait": regulation},
-                 progress_at=0.0, best_progress=0.0, traffic=None, authority=None)
+                 progress_at=0.0, best_progress=0.0, traffic=None, authority=None, active_route=None)
 
 
 def _stalled_at(p, live, t, s=0.0):

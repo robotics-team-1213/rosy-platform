@@ -173,3 +173,78 @@ def test_a_wrong_injection_is_still_rejected(node):
     machine = run_injection(node, truth, (.56, -.52, math.pi))    # 30 cm off
     assert machine.state is LocState.SUSPECT and machine.reason == 'inject_rejected'
     assert node.core.fit < .85
+
+
+def test_unmoved_odometry_with_new_scan_geometry_retires_the_old_candidate(node):
+    from control.sensing.loc_state import LocState
+    from loc_world import MOUNT, field, scan
+
+    node.field = field()
+    clock = [BASE_S]
+    node.now = lambda: clock[0]
+    published = []
+    node.publish = published.extend
+    node.tf.set_transform_static(
+        transform(node.tf.frame_prefix + 'base_link', 'laser', 0., (MOUNT.x, MOUNT.y, MOUNT.yaw)),
+        'test',
+    )
+    node.core.on_twist(BASE_S - 1., 0., 0.)
+    node.core.search_started(BASE_S, ODOM, scan_stamp=BASE_S)
+    node.core.search_finished(BASE_S, ODOM, [PoseCandidate(-1.26, .49, -math.pi / 2, .97, 'slot:A')])
+    ranges, angles = scan((.86, -.52, math.pi), beams=640)
+    for t in (BASE_S + 6., BASE_S + 7.1, BASE_S + 8.2):
+        clock[0] = t
+        node.core.on_twist(t, 0., 0.)
+        node.on_scan(laser_scan(t - .1, ranges, angles))
+    assert node.core.machine.state is LocState.SUSPECT and node.core.machine.request_id is None
+    assert node.core.search_due(clock[0], ODOM)
+    assert all(kind != 'inject' for kind, _ in published)
+
+
+def test_window_rejects_mismatched_delayed_or_replayed_delivery(node, monkeypatch):
+    now_ns = time.monotonic_ns()
+    node.grid_id = "occupancy:0123456789ab"
+    monkeypatch.setattr(node.core, "search_window_ready", lambda now: True)
+    payload = {
+        "window": {"expected_map_grid_id": node.grid_id, "center": {"x": 0.2, "y": 0.0, "yaw": 0.0}},
+        "issued_ns": now_ns,
+    }
+
+    def send(row):
+        node.on_search_window(String(data=json.dumps(row)))
+
+    send({**payload, "issued_ns": now_ns - 2_000_000_000})
+    send({**payload, "window": {**payload["window"], "expected_map_grid_id": "occupancy:aaaaaaaaaaaa"}})
+    assert node.window is None
+    send(payload)
+    assert node.window == ((0.2, 0.0, 0.0), now_ns)
+    node.window = None
+    send(payload)
+    assert node.window is None
+
+
+def test_window_worker_preserves_global_rivals(node, monkeypatch):
+    from control import loc_assist_node
+
+    first = PoseCandidate(.1, .2, .3, .95, "global")
+    rival = PoseCandidate(.8, .9, -2.8, .94, "global")
+    global_result = [first, rival]
+    monkeypatch.setattr(loc_assist_node, "search", lambda *args, **kwargs: (global_result, [], None))
+    monkeypatch.setattr(loc_assist_node, "window_candidate",
+                        lambda *args: pytest.fail("a scoped hint tried to replace global rivals"))
+    result = loc_assist_node.search_job(node.stopping, None, node.generation, None, None, (), (), (),
+                                       .076, None, .90, ((), ()), window=(ODOM, time.monotonic_ns()))
+    assert result[0] == global_result
+
+
+def test_window_candidate_requires_a_new_fresh_scan_stamp(node, monkeypatch):
+    from sensor_msgs.msg import LaserScan
+
+    now = node.now()
+    node.scan = LaserScan()
+    node.scan.header.stamp = rclpy.time.Time(seconds=now - .1).to_msg()
+    stamp = rclpy.time.Time.from_msg(node.scan.header.stamp).nanoseconds * 1e-9
+    candidate = PoseCandidate(.2, .0, .0, .95, "window")
+    monkeypatch.setattr(node.core, "search_window_ready", lambda now: True)
+    monkeypatch.setattr(node, "scan_mount", lambda scan: pytest.fail("replayed scan tried to verify a window"))
+    assert node.confirm_window_candidate(candidate, (stamp, time.monotonic_ns()), now, node.generation) == ([], [])

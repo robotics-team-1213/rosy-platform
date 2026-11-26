@@ -251,6 +251,12 @@ class SightingService:
             "lease_s": self.lease_s,
         }
 
+    def approved_sighting_revision(self, source_id: str, map_id: str) -> str | None:
+        source = self._by_id.get(source_id)
+        if source is None or source.map_id != map_id or self.approved_revision is None:
+            return None
+        return self.approved_revision(source)
+
     def site_map(self) -> dict | None:
         """Group configured site rectangles by map id; tokens are never included."""
         maps: dict[str, dict] = {}

@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from core_api_web.api.deps import token_digest
-from core_api_web.native_policy_gateway import NativeRelay, create_app, exchange
+from core_api_web.api.peer_pairing.native_policy_gateway import NativeRelay, create_app, exchange
 
 SCOPE = "cell-task:trial-1:arm_b"
 TOKEN = "test-native-fleet-lease"

@@ -19,6 +19,41 @@ class PolicyWriteRefused(PermissionError):
     """No new register command may start. Preserve torque and hand over to the owner's HOLD path."""
 
 
+class PolicyWriterMixin:
+    """Fence-gated register writes for NativeJointMotion; a plain recorder session keeps _policy_fence None."""
+    _policy_fence = None
+
+    @classmethod
+    def for_policy(cls, follower, *, fence, clock=time.monotonic):
+        """Register guard for an exclusive native policy writer; never enroll a recorder session."""
+        if not isinstance(fence, NativePolicyFence):
+            raise ValueError("an owner-local native policy fence is required")
+        motion = cls(follower, None, teacher=True, clock=clock)
+        motion._policy_fence = fence
+        return motion
+
+    def _policy_hold(self, reason):
+        """Hold the fence for a policy writer; False (no-op) on a plain recorder session."""
+        if self._policy_fence is None:
+            return False
+        self._policy_fence.hold(reason)
+        return True
+
+    def write_goal(self, goals):
+        if self._policy_fence is None:
+            return self.follower.sync_write("Goal_Position", goals, normalize=False)
+        return self._policy_fence.write_current(self.follower.sync_write, "Goal_Position", goals, normalize=False)
+
+    def _enable_policy_torque(self, read_retry):
+        # Vendor enable_torque loops over joints. Send one bounded group register command for the six-axis owner.
+        expected = dict.fromkeys(self.active, 1)
+        self._policy_fence.write_current(self.follower.sync_write, "Torque_Enable", expected, normalize=False)
+        torque = self.follower.sync_read("Torque_Enable", motors=list(self.active), normalize=False, num_retry=read_retry)
+        if not isinstance(torque, dict) or torque != expected or any(type(v) is not int for v in torque.values()):
+            self._policy_fence.hold("seed_torque_unconfirmed")
+            raise PolicyWriteRefused("seed torque readback did not confirm all joints")
+
+
 class NativePolicyFence:
     def __init__(self, pins, journal, *, clock=time.monotonic_ns):
         if set(pins) != set(PINS) or not all(isinstance(v, str) and v.strip() == v and v for v in pins.values()):

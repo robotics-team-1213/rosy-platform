@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """An arm session that ends in trouble is measured here and reported to Fleet (D-971, 2026-11-03).
 
-arm_b's elbow latched an overload at 13:27 and the way out took an hour of reading logs, frames and registers by
-hand. The control PC now only measures, reports and keeps the device safe; Fleet owns the incident ledger, the AI PC
-explains the frames, and a named operator clears the hold in the Fleet console. record_session runs this at the end
-of every session:
+At session end the control PC reports measurements, Fleet owns the ledger, and the AI PC explains the frames.
 
 1. collect: session.json, the runner's status rows, the motor-fault records and the health log of the session;
 2. facts (measured only): latched hardware errors (decoded), torque after, folded at home or not, joint_push's
@@ -53,6 +50,7 @@ from omx_incident_fleet import (  # noqa: E402
     link_for,
     outbox,
     report_for,
+    remember_report_cargo,
     send,
     upload_evidence,
 )
@@ -108,7 +106,7 @@ def refuse_if_held(arm: str | None, link=None, allow_incident: str | None = None
     allow_incident (D-1048, cell_auto_fold's recovery session): opens only when Fleet answers that this one incident is
     the whole hold; anything else, or Fleet out of reach, refuses as before."""
     is_held, detail = _probe_hold(arm, link)
-    if is_held and allow_incident:
+    if allow_incident:
         allowed = [x.strip() for x in str(allow_incident).split(",") if x.strip()]
         try:
             answer = (link or link_for(arm)).hold()
@@ -116,6 +114,7 @@ def refuse_if_held(arm: str | None, link=None, allow_incident: str | None = None
                 return
         except Exception as exc:  # no answer: the recovery session does not open
             detail = f"{detail}; recovery refused: {type(exc).__name__}"
+        raise SystemExit(f"{arm} recovery incident no longer matches Fleet: {detail}")
     if is_held:
         raise SystemExit(f"{arm} held for a person: {detail}")
 
@@ -271,6 +270,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
+            remember_report_cargo(arm, sid, session.get("recovery_cargo") if d["hold"] else None)
             box = incidents_dir() / ("outbox" if d["hold"] else "labels")  # a label-only report never blocks a start
             box.mkdir(parents=True, exist_ok=True)
             (box / f"{arm}-{sid}.json").write_text(report.model_dump_json())
@@ -281,7 +281,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     if d["hold"] and incident["reported"]:
         incident["auto_clear"] = auto_clear(arm, f, link)
         note_auto_clear(arm, incident["auto_clear"])
-        if not incident["auto_clear"].get("cleared"):
+        if not incident["auto_clear"].get("cleared") and d.get("event_kind") != "home_recovery":
             incident["auto_fold"] = launch_auto_fold(arm)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}

@@ -364,3 +364,17 @@ async def site_goal_in_robot_frame(app, console, robot_id: str, goal: tuple) -> 
             "code": "SITE_POSE_UNKNOWN",
             "message": f"{robot_id}: Fleet cannot place this robot on the site map yet, so the goal was not sent"})
     return converted
+
+
+def _wall_clearance(x: float, y: float, walls) -> float:
+    best = math.inf
+    for wall in walls or ():
+        face = wall.get("face") if isinstance(wall, dict) else getattr(wall, "face", None)
+        if not face or len(face) < 2:
+            continue
+        for a, b in zip(face, face[1:]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            l2 = dx * dx + dy * dy
+            t = 0.0 if l2 == 0.0 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
+            best = min(best, math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy)))
+    return best

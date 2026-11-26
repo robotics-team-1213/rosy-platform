@@ -405,3 +405,36 @@ def test_depth_reference_with_factory_and_subzone_3d_alignment():
     hm = np.full((480, 640), 30.0, float)  # 30 mm above pallet when pallet_surface_mm=0.0
     aligned_obs = csz.observe_subzones_2d(height_map_mm=hm, col=2, row=1, tier=1)
     assert all(s["top_depth_z_mm"] == pytest.approx(30.0, abs=0.5) for s in aligned_obs["subzones"])
+
+@pytest.mark.parametrize("remove,ok", [(False, True), (True, False)])
+def test_factory_depth_ratio_counts_native_rays_and_retains_missing_rays(remove, ok):
+    factory = {
+        "K": [[619., 0., 320.], [0., 619., 240.], [0., 0., 1.]],
+        "depth": {"K": [[388., 0., 320.], [0., 388., 240.], [0., 0., 1.]]},
+        "depth_to_colour": {"R": np.eye(3).tolist(), "t_m": [0., 0., 0.]},
+    }
+    depth = np.full((480, 640), 600, np.uint16)
+    if remove:
+        depth[200:280:2, 280:360] = 0
+    ref = slots.depth_reference(depth, None, [280, 200, 360, 280], [[60, 200, 120, 260]], 1,
+                                floor_depth_mm=[600.], factory=factory)
+    support = ref["native_ray_support"]["slot"]
+    assert support["expected"] == 48**2
+    assert ref["ok"] is ok
+    assert ref["valid_depth_ratio"] == pytest.approx(0.5 if remove else 1.0, abs=0.02)
+
+
+def test_factory_support_rejects_edge_rays_that_move_out_of_patch():
+    import cell_depth_pose as pose
+    import cell_shared_markers as markers
+
+    k = [[100., 0., 50.], [0., 100., 50.], [0., 0., 1.]]
+    factory = {"K": k, "depth": {"K": k}, "depth_to_colour": {"R": np.eye(3).tolist(), "t_m": [0.05, 0., 0.]}}
+    depth = np.full((100, 100), 500, np.uint16)
+    # The foreground projects 10 pixels farther right. It hides some expected
+    # floor rays and brings other foreground samples into the ROI.
+    depth[:, 40:50] = 250
+    grid = 500 - markers.depth_in_colour(depth, factory, (100, 100))
+    plane = {"normal": [0., 0., -1.], "height_mm": 500.}
+    seen, total = pose.patch_ray_coverage(depth, grid, (50, 40, 70, 60), 0., plane, factory)
+    assert (seen, total) == (200, 400)

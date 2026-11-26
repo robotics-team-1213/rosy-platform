@@ -82,6 +82,9 @@ class TripProgress:
         if not isinstance(target, str):
             return None
         place = live.graph.places.get(target)
+        if (live.nav2_binding_scope is not None and not live.repeat and place is not None
+                and (place.kind in {"stop", "charge"} or live.view["detail"].get("parking_handoff"))):
+            return place
         if (place is not None and place.kind == "stop"
                 and (place.precision_stop is not None
                      or (not live.nav2 and self.config.map_binding_required))):  # the last segment of a trip to this stop
@@ -89,7 +92,8 @@ class TripProgress:
         return None
 
     async def _progress_pose(self, live: LiveTrip, robot_id: str):
-        binding_id = live.view["detail"].get("precision_binding_id")
+        detail = live.view["detail"]
+        binding_id = detail.get("precision_binding_id") or detail.get("nav2_binding_id")
         if binding_id is None:
             return await self.map_pose(robot_id)
         pose = await precision_map_pose(self, robot_id, (live.view["map_version"], binding_id))
@@ -153,10 +157,10 @@ class TripProgress:
         if moved and (live.view.get("wait") or {}).get("reason") not in (None, "link_wait"):
             live.view.pop("wait")  # D-763 8: only progress ends a regulation episode, not a reason change
         if (live.progress_at is None or moved
-                or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
-                or self._waiting(live, now)
-                or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
-                or (live.authority or {}).get("state") == "HOLDING"):  # nor at the authority's end
+                or live.view["hold"] is not None or (not (live.active_route or {}).get("wait_prefix")
+                    and (live.junction.get("state") in MANOEUVRE or self._waiting(live, now)
+                         or (live.traffic or {}).get("waiting_for")  # A downstream wait may coexist with a moving prefix.
+                         or (live.authority or {}).get("state") == "HOLDING"))):
             live.best_progress = max(live.best_progress, progress)
             live.progress_at = now
             return False

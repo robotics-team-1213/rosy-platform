@@ -66,6 +66,36 @@ def test_platform_parts_registers_all_d1073_safety_review_paths():
     assert expected <= review
 
 
+def test_named_transfer_refused_before_session_wrappers_and_direct_cli(tmp_path, monkeypatch, capsys):
+    import cell_two_arm_policy_cli as cli
+    from cell_two_arm_verification import transfer_refusal
+
+    wd = _make_workdir(tmp_path)
+    runner = api.Runner(wd, lock_dir=wd, lease_dir=tmp_path / "leases")
+    params = _base_two_arm_params(task_a="tmp-a-1-l1->ship-h1r0-l0",
+                                 task_b="tmp-b-2-l1->ship-h1r2-l0", person_at_switch=True)
+    monkeypatch.setattr(api.subprocess, "Popen", lambda *a, **kw: pytest.fail("launched arm session"))
+    response = runner.start("cell_two_arm_policy", params)
+    assert response["code"] == 400
+    refused = json.loads(response["error"])
+    assert refused["motion_commands"] == 0
+    assert refused["verification"]["arm_a"]["source"] == "tmp-a-1-l1"
+    assert refused["verification"]["arm_b"]["destination"] == "ship-h1r2-l0"
+    assert all(row["verified"] is False and row["reason"] for row in refused["verification"].values())
+    argv = []
+    for key, val in params.items():
+        if key != "person_at_switch":
+            argv.extend(["--" + key.replace("_","-"), str(val)])
+    assert cli.main([*argv, "--commissioning", "--person-at-switch"]) == 1
+    assert json.loads(capsys.readouterr().out)["verification"] == refused["verification"]
+    assert api.build_argv(api.JOBS["cell_two_arm_policy"], {**params, "person_at_switch": False, "dry_run": True}, wd)[0] == "bash"
+    tasks = {"a": {"src": " tmp-a-1-l1 ", "dst": "ship-h1r0-l0", "tier": 2},
+             "b": {"src": "belt", "dst": "temp_b:r1-s1-t1"}}
+    assert transfer_refusal(tasks, dry_run=False)["verification"]["arm_b"]["reason"] == "paired run did not start"
+    tasks["a"]["src"] = "tmp-a-1"
+    assert transfer_refusal(tasks, dry_run=False) is None
+
+
 def test_cell_two_arm_policy_argv_and_fail_closed_validation(tmp_path):
     wd = _make_workdir(tmp_path)
     job = api.JOBS["cell_two_arm_policy"]

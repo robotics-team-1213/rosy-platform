@@ -164,6 +164,7 @@ class TripCaps:
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
     junction_turn_reason: Optional[str] = None
+    bound_route: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -188,6 +189,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 turn_reason = None
             line = capabilities.get("line_follow")
             camera = line.get("camera") if isinstance(line, dict) else None
+            navigation = capabilities.get("navigation")
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
                             junction_pivot=item.get("junction_pivot") is True, lane_bend_next_line=item.get("lane_bend_next_line") is True,
@@ -203,7 +205,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             lane_instruction_stamp=item.get("lane_instruction_stamp") is True,
                             **{k: item[k] is True for k in ("lane_crosswalk_gate", "lane_junction_signal") if k in item},
                             line_camera=camera if isinstance(camera, dict) else None,
-                            junction_turn_reason=turn_reason)
+                            junction_turn_reason=turn_reason,
+                            bound_route=isinstance(navigation, dict) and navigation.get("bound_route") is True)
     return None
 
 

@@ -73,19 +73,21 @@
     <a class="ui-rail-item" href="/console?view=work" data-action-icon="list">작업</a>
     <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
     <a class="ui-rail-item" href="/console/site-map" aria-current="page" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·정비">설치·정비</a>
   </nav>
 <!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="현장 지도 작업">
     <a class="ui-subnav-item" href="#map-heading">지도 보기</a>
+    <span class="ui-subnav-head">작성</span>
     <a class="ui-subnav-item" href="#survey-heading">지도 만들기</a>
     <a class="ui-subnav-item" href="#profile-heading">지도 설정</a>
     <a class="ui-subnav-item" href="#camera-draft-heading">카메라로 초안 만들기</a>
+    <a class="ui-subnav-item" href="#edit-heading">초안 편집</a>
+    <a class="ui-subnav-item" href="#teach-heading">지도 가르치기</a>
+    <span class="ui-subnav-head">검증</span>
     <a class="ui-subnav-item" href="#trip-heading">경로 미리보기</a>
     <a class="ui-subnav-item" href="#run-heading">운행 확인</a>
-    <a class="ui-subnav-item" href="#edit-heading">초안 편집</a>
     <a class="ui-subnav-item" href="#reality-heading">지도-실제 대조</a>
-    <a class="ui-subnav-item" href="#teach-heading">지도 가르치기</a>
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
@@ -115,7 +117,10 @@
       <!-- 선택 검사 칸 — 지도에서 고른 요소의 속성과 초안 반영·저장·활성화. -->
       <aside class="map-inspector" aria-label="선택 검사">
         <h3 class="ui-section-heading">선택 검사</h3>
-        <ui-text id="selection">선택 없음</ui-text>
+        <label>지도에서 검사할 요소<select id="map-inspector-target" class="ui-field" disabled>
+          <option value="">요소 선택</option>
+        </select></label>
+        <ui-text id="selection" role="status">선택 없음</ui-text>
         <div id="place-form" class="form" hidden>
           <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
           <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
@@ -157,12 +162,14 @@
         <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
       </aside>
       </div>
-      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 지도 위 장소나 차로를 누르면 선택 검사에서 고칩니다.
+      <ui-text id="map-legend" hidden>점은 주소입니다. 차로를 누르면 선택 검사에서 저장된 주행 경로와 통행 방향을 확인할 수 있습니다.
         <details class="hint-more"><summary class="ui-disclosure-row">기호 안내</summary>
           <dl class="legend-terms">
             <dt>점선 면</dt><dd>횡단보도</dd>
             <dt>색 면</dt><dd>횡단보도 대기 띠</dd>
             <dt>색 원</dt><dd>로봇 — 점선 고리는 위치 불확실성, 막대는 방향</dd>
+            <dt>영상 기준선</dt><dd>분홍 충전선의 중심과 상단 동쪽 차선 양쪽 경계의 중점을 표시합니다.</dd>
+            <dt>저장 경로</dt><dd>영상 기준선이 없는 회전부와 선택한 주행 경로는 점선으로 표시합니다.</dd>
             <dt>색 선</dt><dd>운행 경로 — 실선은 차선 주행, 점선은 좌표 주행</dd>
           </dl>
         </details></ui-text>

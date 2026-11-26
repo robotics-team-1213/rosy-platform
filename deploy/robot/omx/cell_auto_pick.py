@@ -16,6 +16,8 @@ from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
 )
 import cell_executor  # noqa: E402
 import cell_release_evidence  # noqa: E402
+import cell_route_depth  # noqa: E402
+import cell_recovery_cargo  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
@@ -206,6 +208,7 @@ def _run_auto_core(
             row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])
             if dry_run:
                 return {**out, "result": "planned"}
+            source_tier = cell_recovery_cargo.source_base_tier(cell, config, target, source, calibration, catalog, roi)
             before_frame, frame_record, evidence_error = cell_auto_evidence.pre_motion_frame(
                 cell, config, calibration, catalog, source, roi, box_centre(o), o["object"],
                 dest_site, droi, place_xy, bias_data, source_frame,
@@ -223,7 +226,9 @@ def _run_auto_core(
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
-            gate = Gate(guarded, config, calibration, sequence=sequence)
+            gate = Gate(cell_route_depth.motion_cell(guarded, before_frame), config, calibration, sequence=sequence)
+            gate.on_grasp = lambda status: cell_recovery_cargo.record_grasp(
+                config, catalog, target, source, dest_site, status, calibration=calibration, source_tier=source_tier)
             cap["gate"] = gate
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
@@ -292,6 +297,7 @@ def _run_auto_core(
                     guarded, config, calibration, dest_site, place_xy, droi, catalog, bias_data, o["object"],
                     before_frame, work / "frames" / f"{capture_id}-after.jpg", source, box_centre(o), roi,
                 )
+                cell_zone_verification.record(row, tried, guarded, before_frame, config, dest_site, source, droi)
                 cd.emit(
                     "verify",
                     dict(tried["verify"]),
@@ -300,17 +306,18 @@ def _run_auto_core(
                     "measurement",
                     f"placement seen on the {tried['verify']['basis']}",
                 )
-                tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"], calibration=calibration)
+                route_ok = not (before_frame or {}).get("route_depth") or tried["zone_verification"].get("verified") is True
+                if route_ok:
+                    tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"], calibration=calibration)
                 cell_executor.outcome(choices, tried["execution"], choice,
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
                 tried["verify"]["release"] = cell_release_evidence.from_steps(moved["steps"], config.get("io"))  # observation only
-                cell_zone_verification.record(row, tried, guarded, before_frame, config, dest_site, source, droi)
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )
                 if pending.exists():
-                    if tried["verify"].get("inside"):
+                    if route_ok and tried["verify"].get("inside"):
                         pending.replace(cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
                     else:
                         pending.unlink()

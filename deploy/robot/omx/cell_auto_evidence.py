@@ -181,9 +181,17 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
     """Bind pick and free destination to the same advancing, persisted JPEG."""
     frame_receipt = getattr(cell, "frame_receipt", None)
     try:
-        before = frame_receipt("top", previous=source_frame)
+        import cell_route_check
+        import cell_route_depth
+        named = cell_route_check.temp_to_ship(source, dest_site)
+        if named:
+            before, error = cell_route_depth.capture_before(cell, config, source, dest_site, source_frame)
+            if error:
+                return None, None, error
+        else:
+            before = frame_receipt("top", previous=source_frame)
         frame = save_frame_receipt(path, before)
-        if cell_zone_verification.zone_check_enabled(config):  # D-1057: before frame of the zone check
+        if not named and cell_zone_verification.zone_check_enabled(config):
             before["before_side"] = cell_zone_verification.before_side(cell, config)
     except (OSError, ValueError, KeyError, TypeError):
         return None, None, "fresh camera frame unavailable"
@@ -204,4 +212,4 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
                                       seen["raw_m"][1] - by / 1000), place_xy)
                     <= config.get("verify_tol_mm", 10.0) for seen in current_dest):
         return before, frame, "destination unavailable or occupied"
-    return before, frame, None
+    return before, frame, cell_route_depth.before_error(before)

@@ -233,7 +233,8 @@ body {
 .cal-sw-grid { background: var(--series-primary); }
 .cal-sw-inlier { background: var(--status-good); }
 .cal-sw-drop { background: var(--status-crit); }
-.cal-sw-miss { background: var(--status-warn); }
+.cal-sw-warn { background: var(--status-warn); }
+.cal-sw-plan { background: transparent; border: 1px dashed var(--ink-quiet); border-radius: 50%; }
 .cal-sw-bias { background: var(--series-secondary); }
 .cal-sw-site { background: var(--ink); }
 .cal-sw-reach { background: var(--series-secondary); }
@@ -348,6 +349,27 @@ body {
 }
 
 @container (width < 64rem) {
+  .ui-app-shell > ui-topbar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+    position: static;
+  }
+  .ui-app-shell > ui-topbar > :is(ui-brand, .cal-tabs) {
+    box-sizing: border-box;
+    flex: 0 0 100%;
+  }
+  .ui-app-shell > ui-topbar ui-brand a {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .ui-app-shell > ui-topbar > [data-spacer] {
+    display: none;
+  }
+  .cal-tabs > ui-button {
+    flex: 1 1 0;
+  }
+
   .cal-stage,
   .cal-lower {
     grid-template-columns: minmax(0, 1fr);
