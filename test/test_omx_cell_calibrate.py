@@ -328,7 +328,7 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
         def act(self, command):
             self.cmds.append(command)
             if command.startswith("load"):
-                self.next = next(p for p in points if f"remap-{sorted(points, key=lambda q: math.hypot(*q)).index(p)}." in command)
+                self.next = next(p for p in points if f"remap-{cc.rp.visit_order(points).index(p)}." in command)
             if command == "goto above_pick":
                 if self.next == [0.30, 0.30]:
                     return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag",
@@ -382,7 +382,7 @@ def test_a_remap_recovers_when_its_first_marks_flip_and_reports_what_it_dropped(
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     flipped, gates = {points[1]}, []
 
     class Cell:
@@ -416,7 +416,7 @@ def test_too_few_marks_that_agree_stop_the_remap_with_no_map(tmp_path, monkeypat
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -441,7 +441,7 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -471,7 +471,7 @@ def test_remap_parks_before_reference_and_ignores_moving_belt(tmp_path, monkeypa
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class Cell:
         def __init__(self):
@@ -513,7 +513,7 @@ def _tcp_remap(tmp_path, monkeypatch, shows, pairs):
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
     monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
     jaw = {"ref": -0.5, "other": 0.5}
 
@@ -570,7 +570,7 @@ def test_a_tcp_remap_does_not_gate_mark_jaws_on_unlabelled_jaw_predictions(tmp_p
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
     monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
     jaw = {"ref": -0.5, "other": 0.5}
     shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
@@ -1052,7 +1052,7 @@ def test_remap_persists_observations_for_offline_replay_on_scene_moved_and_tcp_m
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class MovedCell:
         def __init__(self):
@@ -1109,7 +1109,7 @@ def test_replay_observations_fail_closed_and_cli_check_offline_only(tmp_path, mo
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
 
     class BoxCell:
         def __init__(self):
@@ -1426,7 +1426,7 @@ def test_remap_uses_measured_fk_and_reruns_jaw_labelling_after_outlier_drop(tmp_
     # Live state has true FK position shifted (+3 mm, -2 mm) and yaw=15 deg (different from planned 0 deg)
     true_yaw = 15.0
     monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: (s[0] + 0.003, s[1] - 0.002, s[2], true_yaw) if len(s) == 6 else tuple(s[:4]))
-    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    points = cc.rp.visit_order(GRID)
     o = (0.054 * math.cos(math.radians(true_yaw + 79.0)), 0.054 * math.sin(math.radians(true_yaw + 79.0)))
     shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
     pairs = {0, 3, 6}
