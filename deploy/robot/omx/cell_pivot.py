@@ -150,6 +150,15 @@ def _save_mark_try(keep_dir: Path, idx: int, closed, now, mask, all_blobs: list,
     (keep_dir / f"try-{idx:02d}.json").write_text(json.dumps(info))
 
 
+def _jaws_open_at(cell, value: float) -> bool:
+    """The jaws already stand at `value` (within the grip_to tolerance); False when the state cannot be read."""
+    try:
+        state = cell.act("state").get("state") if cell is not None else None
+        return bool(state) and len(state) > 5 and abs(float(state[5]) - value) < 1.5
+    except (AttributeError, OSError, RuntimeError, ValueError, TypeError):
+        return False
+
+
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None,
               keep=None, report: dict | None = None, jaws: dict | None = None):
     """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
@@ -169,14 +178,18 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             report["reason"] = reason
         return None
 
+    arrived_open = settled_frame(cell, sleep, clock, params=p) if _jaws_open_at(cell, mark_open(config)) else None
     for idx in range(max_marks):
         if not cp.grip_to(cell, closed_to):
             return fail("grip_to failed")
         closed = settled_frame(cell, sleep, clock, params=p)
+        if arrived_open is not None:  # 2026-11-26: hovers arrive open; a jaw move is ~4.7 s at the 10 deg/s guard
+            now, arrived_open = arrived_open, None
         # the mark's own opening: a pick's (53.84 vs 50.5 closed) left no blob and every hover look saw nothing (10-29)
-        if not cp.grip_to(cell, mark_open(config)):
+        elif not cp.grip_to(cell, mark_open(config)):
             return fail("grip_to failed")
-        now = settled_frame(cell, sleep, clock, params=p)
+        else:
+            now = settled_frame(cell, sleep, clock, params=p)
         explicit_colour = mark_cfg.get("colour")
         detect = partial(cell_jaw_side.marks, jaws=jaws) if jaws is not None else jaw_centres if mark_cfg.get("centre") else jaw_blobs
         if explicit_colour is not None:
