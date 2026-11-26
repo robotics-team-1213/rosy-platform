@@ -58,6 +58,8 @@ LIVE_PATHS = {
     "/data/mujoco-top.jpg", "/data/field-live.jpg", "/data/isaac-view.json",
     "/data/factory-live.json",
 }
+# SIM observation files the browser polls; the server adds age_ms/fresh_for_ms on its own clock.
+SIM_OBSERVATION_PATHS = frozenset({"/data/isaac-live.json", "/data/pinky-sim.json"})
 
 
 def _data_path(data_dir: Path, relative: str) -> Path:
@@ -188,6 +190,16 @@ class WorldHandler(SimpleHTTPRequestHandler):
                 return self.json_reply(200, controller.status())
             self.send_error(404)
             return None
+        if parts.path in SIM_OBSERVATION_PATHS:
+            sample = _read_json_strict(self._bundle() / "data" / posixpath.basename(parts.path))
+            if sample is None:
+                self.send_error(404)
+                return None
+            observed_at = sample.get("observed_at_ms")
+            if type(observed_at) is int:
+                age_ms = time.time_ns() // 1_000_000 - observed_at
+                sample = {**sample, "age_ms": age_ms, "fresh_for_ms": max(0, LIVE_FRESH_MS - abs(age_ms))}
+            return self.json_reply(200, sample)
         if parts.path == "/healthz":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
