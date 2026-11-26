@@ -1,5 +1,6 @@
 // Real-to-Sim <-> Sim-to-Real closed-loop pipeline view for the Cell workspace (D-947, D-1012).
 import { setOff, setOffBy } from "/common/cause-line.js";
+import {confirmIrreversible} from '/common/ui.js';
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {
   REAL2SIM_PATH,
@@ -31,7 +32,7 @@ export * from './cell-real2sim-specs.js';
 
 // namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
 export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null,
-  freshJointArmIds = () => []}) {
+  freshJointArmIds = () => [], confirm = confirmIrreversible}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -56,6 +57,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     state,
     cellFrames,
     namedReason,
+    confirm,
     bump: () => ++generation,
     gen: () => generation,
     selectInspectorTarget: (...args) => selectInspectorTarget(...args),

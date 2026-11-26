@@ -47,9 +47,19 @@ export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named 
     cancelReason: lock || (trip ? "" : "열린 운행이 없습니다") };
 }
 
-export function createTripReplan({ scope, view, call, log, isOperator, namedReason = () => "", openCard = () => {} }) {
+export function createTripReplan({ scope, view, call, log, isOperator, namedReason = () => "", openCard = () => {}, confirmedAction = null }) {
   const busy = new Set(), results = new Map();  // by trip id
   const fill = createDecisionSlotFiller({ focusAttr: "replan" });
+
+  function confirmMove(trip, verb, label, done, event) {
+    if (!confirmedAction) return send(trip, verb, done);
+    return confirmedAction.run({
+      message: `${trip.robot_id} · ${label}을(를) 실행할까요?`,
+      opener: event?.currentTarget,
+      eligible: () => !view.stateUnavailable && isOperator() && !namedReason() && !busy.has(trip.trip_id),
+      request: () => send(trip, verb, done),
+    });
+  }
 
   async function send(trip, verb, done) {
     if (busy.has(trip.trip_id)) return;
@@ -88,7 +98,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
         lines: [spec.facts],
         groupLabel: `${trip.robot_id} 바뀐 경로 확인`,
         buttons: [
-          { label: confirmLabel, primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: () => send(trip, verb, confirmDone) },
+          { label: confirmLabel, primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: (event) => confirmMove(trip, verb, confirmLabel, confirmDone, event) },
           { label: "운행 취소", reason: spec.cancelReason, dataset: { replan: "cancel" }, onClick: () => send(trip, "cancel", "운행을 취소했습니다") },
         ],
         result,
@@ -104,7 +114,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
         lines: spec.lines,
         groupLabel: `${robotId} 교착 조치`,
         buttons: [
-          { label: "바뀐 경로로 계속", primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다") },
+          { label: "바뀐 경로로 계속", primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: (event) => confirmMove(trip, "confirm-replan", "바뀐 경로로 계속", "바뀐 경로로 계속합니다", event) },
           { label: "운행 취소", reason: spec.cancelReason, dataset: { replan: "cancel" }, onClick: () => send(trip, "cancel", "운행을 취소했습니다") },
           { label: "로봇 카드 열기", reason: "", dataset: { replan: "card" }, onClick: () => {
             openCard(robotId);

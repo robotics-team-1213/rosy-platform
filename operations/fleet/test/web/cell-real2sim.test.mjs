@@ -370,14 +370,18 @@ test("inspector mounts before frame bind, preserves matrix and draft choices, an
     const getEl = id => (els[id] ??= Object.assign(mkNode('DIV'), { rootConnected: true }));
     const boundStates = [];
     const requests = [];
+    let confirmAllow = false;
+    const confirmCalls = [];
     const pipeline = createReal2SimPipeline({
       request: async (path, opts) => {
-        requests.push({path, body: opts?.body ? JSON.parse(opts.body) : null});
+        requests.push({path, headers: opts?.headers || {}, body: opts?.body ? JSON.parse(opts.body) : null});
         if (opts?.method === 'POST') return {task: {task_id: 't-new'}};
         return {tasks: [], cameras: [], summary: {}};
       },
       $: getEl,
       isOperator: () => true,
+      namedReason: () => '',
+      confirm: async (opts) => { confirmCalls.push(opts); return confirmAllow; },
       cellFrames: {
         bind(img) { boundStates.push(img.isConnected); },
         setPaused() {},
@@ -394,9 +398,15 @@ test("inspector mounts before frame bind, preserves matrix and draft choices, an
     tierSelect.value = '3';
     tierSelect.listeners.change[0]();
     await dispatchBtn.listeners.click[0]();
+    assert.equal(confirmCalls.length, 1);
+    assert.equal(requests.some(r => r.path === CELL_TASKS_PATH && r.body), false, 'canceled confirm never posts');
+    confirmAllow = true;
+    await dispatchBtn.listeners.click[0]();
     assert.equal(els['cell-camera-matrix'].children[0], firstChild);
     const post = requests.find(r => r.path === CELL_TASKS_PATH && r.body);
     assert.equal(post.body.tier, 3);
+    assert.equal(post.body.propose, false);
+    assert.ok(post.headers['Idempotency-Key']);
     assert.equal('robot_id' in post.body, false);
     assert.equal(els['omx-right-inspector'].children[4].children[0].children[1].children.find(o => o.value === '3').selected, true);
   } finally {

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
-const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
+const model = new URL('../../../../applications/fleet/web/cell/charge-bays-model.js', import.meta.url);
 const frames = new URL('../../../../applications/fleet/web/shared/cell-frames.js', import.meta.url);
 const causeLine = new URL('../../../../shared/web/cause-line.js', import.meta.url);
 const controlDom = new URL('../../../../shared/web/control-dom.js', import.meta.url);
@@ -277,4 +277,102 @@ test('the arm hold control opens the shared alert-drawer row and never posts a c
   assert.equal(armIncidentRowKey('arm_s', obs), null, 'no open incident: no drawer row');
   assert.equal(armIncidentRowKey('cell_s', null), null);
   assert.doesNotMatch(code, /arm-holds\/clear/, 'the console card leaves clearing to the drawer and the cell page');
+});
+
+test('onQuickDispatch and preset dispatch require confirm, Idempotency-Key, propose=false, and namedReason while stops stay 1-click', async () => {
+  const mkNode = (tag = 'DIV') => {
+    const el = {
+      tagName: String(tag).toUpperCase(), dataset: {}, style: {}, attributes: {}, listeners: {}, children: [],
+      hidden: false, value: '', textContent: '', className: '', open: false, selected: false,
+      get firstElementChild() { return el.children[0] || null; },
+      get childElementCount() { return el.children.length; },
+      classList: {add() {}, remove() {}, toggle() {}, contains: () => false},
+      append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.parentNode = el; el.children.push(n); } },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      addEventListener(type, cb) { (el.listeners[type] ??= []).push(cb); },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] ?? null; },
+      hasAttribute(k) { return k in el.attributes; },
+      removeAttribute(k) { delete el.attributes[k]; },
+      querySelector: () => null, querySelectorAll: () => [],
+    };
+    return el;
+  };
+  const prevDoc = globalThis.document;
+  globalThis.document = {createElement: mkNode, hidden: false, querySelectorAll: () => []};
+  try {
+    const els = {};
+    const posts = [];
+    const confirms = [];
+    let allowConfirm = false;
+    let reason = '이름 있는 운영자 로그인이 필요합니다';
+    const view = createChargeBaysView({
+      scope: {capture: () => ({check() {}, signal: null}), listen() {}, onDispose() {}},
+      el: id => (els[id] ??= mkNode('DIV')),
+      auth: {locked: false},
+      namedReason: () => reason,
+      confirmedAction: {
+        run: async ({message, opener, eligible, request}) => {
+          confirms.push({message, opener, eligible: eligible()});
+          if (allowConfirm && eligible()) await request();
+        },
+      },
+      call: async (path, opts) => {
+        if (opts?.method === 'POST') {
+          posts.push({path, headers: opts.headers || {}, body: JSON.parse(opts.body)});
+          return {ok: true, stop_confirmed: true, unconfirmed_pinky_stops: []};
+        }
+        return {
+          ...plan,
+          omx_cells: {
+            cell_s: {gate: {phase: 'IDLE', robot_id: 'rosy_46'}},
+            cell_ab: {gate: {phase: 'IDLE', robot_id: null}},
+          },
+        };
+      },
+    });
+    const findButtons = (node, pred, out = []) => {
+      for (const c of node.children || []) {
+        if ((c.tagName === 'BUTTON' || c.tagName === 'UI-BUTTON') && pred(c)) out.push(c);
+        findButtons(c, pred, out);
+      }
+      return out;
+    };
+    await view.refresh();
+    const lockedRun = findButtons(els['omx-right-inspector'], b => b.textContent.includes('맞춤 실행'))[0];
+    assert.equal(lockedRun.getAttribute('reason'), '이름 있는 운영자 로그인이 필요합니다');
+    await lockedRun.listeners.click[0]();
+    assert.equal(confirms.length, 0);
+    assert.equal(posts.length, 0);
+
+    // Emergency stops remain 1-click even while dispatch buttons are locked for unnamed operators
+    const visionBtn = findButtons(els['omx-right-inspector'], b => b.textContent.includes('비전 안전 비상정지'))[0];
+    await visionBtn.listeners.click[0]();
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].path, '/api/fleet/pipeline/vision-auto-check');
+
+    reason = '';
+    await view.refresh();
+    const runBtn = findButtons(els['omx-right-inspector'], b => b.textContent.includes('맞춤 실행'))[0];
+    const presetBtn = findButtons(els['omx-right-inspector'], b => b.textContent.includes('S3 셔틀 (Pinky→Belt)'))[0];
+    assert.equal(runBtn.hasAttribute('disabled'), false);
+    await runBtn.listeners.click[0]();
+    await presetBtn.listeners.click[0]();
+    assert.equal(confirms.length, 2);
+    assert.equal(posts.length, 1, 'canceled confirms do not POST');
+
+    allowConfirm = true;
+    await runBtn.listeners.click[0]();
+    await presetBtn.listeners.click[0]();
+    assert.equal(posts.length, 3);
+    assert.equal(posts[1].path, '/api/fleet/pipeline/cell-tasks');
+    assert.equal(posts[1].body.propose, false);
+    assert.ok(posts[1].headers['Idempotency-Key']);
+    assert.equal(posts[2].path, '/api/fleet/pipeline/cell-tasks');
+    assert.equal(posts[2].body.preset, 's3_shuttle');
+    assert.equal(posts[2].body.propose, false);
+    assert.ok(posts[2].headers['Idempotency-Key']);
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });
