@@ -31,7 +31,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                      sim_units: bool, open_g: float, model_closed: float, closed: float, low, high, fastest: float,
                      kin, jaw_spec, resolved_tcp, authorize, max_obs_age_s: float = 0.6,
                      pre_home: bool = False, n_action: int | None = None,
-                     home_roll: float | None = None, handoff=None) -> dict:
+                     home_roll: float | None = None, handoff=None, state_gate=None) -> dict:
     """Guarded step-rate-stretched chunk loop for full-chunk ACT checkpoints (e.g. arm_s); with `handoff` (hybrid)
     a settled chunk whose measured hold passes the timed path's Handoff check goes to the reviewed taught carry."""
     from cell_policy_shape import in_jaw_zone, jaw_zone_error, open_before_close, shape_chunk, wrist_roll_warning
@@ -153,6 +153,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                             or _max_diff(status["state"], home_pose, 5) > PRE_SETTLE_TOL):
                         msg = "START_POSE_OFF_HOME: arm off home; run home stage first"
                         return _fail("refused", n, msg, fault=True, pre_logs=({**row, "refused": msg},))
+                if state_gate is not None and (why := state_gate.roll_error(status["state"])):  # before entry: other roll branch
+                    return _fail("refused", n, why, fault=True, pre_logs=({**row, "refused": why},))
                 if entry_frames is not None:
                     hold_needed = True
                     _ran_e, entry_prefix, entry_err = _run_entry_chunk(
@@ -180,6 +182,10 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                     live_poses = [list(dry_seed_state)]
                 else:
                     state = np.asarray(status["state"], dtype=float)
+                if state_gate is not None and (n > 0 or entry_ran or dry_seed_state is not None):  # entry end on: state must be trained
+                    if why := state_gate.verdict(state.tolist(), after_entry=n == 0):
+                        return _fail("refused", n, why, pre_logs=({**row, "refused": why},))
+                    row["state_q_warning"] = state_gate.warnings(state.tolist())
                 frames, oldest_stamp, state_now = {}, None, time.time()
                 if "t" in status:
                     if _finite_stamp(status["t"], state_now):
