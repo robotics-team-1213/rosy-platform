@@ -50,6 +50,10 @@ CANONICAL_START_V1 = {
             "sim_rad": [0.02513, -1.95407, 1.66819, 1.62106, 1.42, 0.137],
         },
     },
+    "wait_pose": {
+        "home": "idle_park",
+        "side": "idle_park with shoulder_pan turned a quarter turn toward the belt end and the wrist_roll that turns the camera holder away from the middle (tools/sim/omx_two_arm_sites.wait_pose derives it from idle_park)",
+    },
     "canonical_start": {
         "arm_a": {
             "norm": [4.0, -55.0, 46.5, 49.0, 40.0],
@@ -100,8 +104,8 @@ CANONICAL_START_V1 = {
                 "wrist_roll": {"val": 40.0, "low_margin": 73.32, "high_margin": 5.2, "holder_safe_band": [36.0, 63.0]},
                 "gripper_units": {"val": 55.78, "low_margin": 6.98, "high_margin": 0.8},
             },
-            "data_gate_home_max_j234_rad": 0.239,
-            "data_gate_with_2deg_jitter_max_rad": 0.274,
+            "data_gate_home_max_j234_rad": 0.226,  # canonical_start vs idle_park, joints 2-4 (data_gate.HOME reads idle_park)
+            "data_gate_with_2deg_jitter_max_rad": 0.261,
             "data_gate_limit_rad": DATA_GATE_HOME_LIMIT_RAD,
         },
     },

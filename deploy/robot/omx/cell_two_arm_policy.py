@@ -134,9 +134,10 @@ def run_two_arm_policy(
     max_chunks: int = 8, dry_run: bool = False, max_obs_age_s: float = MAX_OBSERVATION_AGE_S,
     authorizers: Mapping[str, Callable[..., dict[str, Any]]] | None = None,
     fold_context: Mapping[str, Any] | None = None,
+    state_gates: Mapping[str, Any] | None = None,
     log: Callable[[dict[str, Any]], Any] = lambda _row: None,
 ) -> dict[str, Any]:
-    """Run supervised concurrent per-arm 6-DoF remote policy loops guarded per chunk."""
+    """Supervised concurrent per-arm 6-DoF remote policy loops guarded per chunk; state_gates (StateGate per arm) stop an untrained measured state via the error path."""
     if set(cells) != set(ARMS) or set(shadows) != set(ARMS) or set(libraries) != set(ARMS):
         raise ValueError("cells, shadows, and libraries must specify keys 'a' and 'b'")
     if max_chunks < 1 or not math.isfinite(max_obs_age_s) or max_obs_age_s <= 0.0:
@@ -206,7 +207,7 @@ def run_two_arm_policy(
             offset = list(offsets[arm]) if offsets and offsets.get(arm) is not None else [0.0] * 6
             demo_rng = demo_ranges.get(arm) if demo_ranges else None
             goal = goals.get(arm) if goals else None
-            jaw_spec = jaw_specs.get(arm) if jaw_specs else None
+            jaw_spec, state_gate = (jaw_specs or {}).get(arm), (state_gates or {}).get(arm)
             arm_kin = kins.get(arm) if kins else None
             need_mid = bool(plan["need_mid"][arm])
             sim_rule = getattr(shadow, "sim_rule", None)
@@ -233,6 +234,7 @@ def run_two_arm_policy(
                 try:
                     st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
                     guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
+                    q_warn = state_gate.admit(vec) if state_gate is not None else []  # before every chunk: raises into the error path
                     frames, obs_mono = _capture_frames(
                         cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s,
                         state_mono=st_mono, prev_receipts=prev_receipts,
@@ -296,7 +298,7 @@ def run_two_arm_policy(
                     chunks_done += 1
                     emit({
                         "arm": arm, "chunk_index": idx, "event": "dry_run_admitted", "admitted": admitted,
-                        "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None),
+                        "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None), **({"state_q_warning": q_warn} if q_warn else {}),
                         **({"wrist_roll_warning": roll_warn} if roll_warn else {}),
                     })
                     continue
@@ -344,7 +346,7 @@ def run_two_arm_policy(
                 chunks_done += 1
                 emit({
                     "arm": arm, "chunk_index": idx, "event": "chunk_done", "admitted": admitted,
-                    "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None),
+                    "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None), **({"state_q_warning": q_warn} if q_warn else {}),
                     **({"wrist_roll_warning": roll_warn} if roll_warn else {}),
                 })
                 ever_held = ever_held or final_holding

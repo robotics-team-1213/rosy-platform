@@ -36,6 +36,15 @@ finally:
             sys.path.remove(_p)
 
 
+REAL_ARM_STATE_GATE = cli_mod._arm_state_gate
+
+
+@pytest.fixture(autouse=True)
+def _no_start_gate_in_older_cli_tests(monkeypatch):
+    """The CLI tests below predate the start gate and carry no checkpoint folders; the gate's own tests restore the real function."""
+    monkeypatch.setattr(cli_mod, "_arm_state_gate", lambda *_a: None)
+
+
 class PlanarKin:
     """Deterministic 3D link_points stub exercised through REAL swept_volume + coordination."""
 
@@ -559,7 +568,7 @@ def test_cli_d911_d1024_gates_and_dry_run_receipt(tmp_path, monkeypatch, capsys)
         srv_obj.server_close()
 
 
-def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tmp_path, monkeypatch):
+def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tmp_path, monkeypatch, capsys):
     import math as _m
     sys.path.insert(0, str(OMX))
     try:
@@ -811,7 +820,7 @@ def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tm
         monkeypatch.setattr(cli_mod, "TwoArmChunkGuard", lambda k, r, t, **kw: seen_tips.append(t) or orig_guard_cls(k, r, t, **kw))
         monkeypatch.setattr(cli_mod, "run_two_arm_policy", lambda *_a, **_kw: {"result": "chunks_done", "task_id": "T1_CONCURRENT_ZONE_SPLIT"})
 
-        rc_live = cli_mod.main([
+        live_args = [
             "--config-a", str(cli_dir / "cfg_a.json"), "--config-b", str(cli_dir / "cfg_b.json"),
             "--endpoint-url", url_goal, "--revision-a", revs_goal["arm_a"], "--revision-b", revs_goal["arm_b"],
             "--library-a", str(cli_dir / "lib.json"), "--library-b", str(cli_dir / "lib.json"),
@@ -821,8 +830,18 @@ def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tm
             "--model-cal-b", str(cli_dir / "jcal.json"), "--cell-cal-b", str(cli_dir / "jcal.json"),
             "--work-dir", str(cli_dir / "out"), "--max-chunks", "1",
             "--proposer", "alice", "--operator", "bob", "--commissioning", "--person-at-switch",
-        ])
+        ]
+        # Live without a checkpoint folder cannot judge the start state: refused before the runner is built (start gate, 2026-11-26).
+        monkeypatch.setattr(cli_mod, "_arm_state_gate", REAL_ARM_STATE_GATE)
+        assert cli_mod.main(live_args) == 1
+        assert "--policy-root-a is required" in capsys.readouterr().out
+        gate_roots, passed_gates = [], {}
+        monkeypatch.setattr(cli_mod, "build_gate", lambda root, *_a: gate_roots.append(Path(root).name) or f"gate-{Path(root).name}")
+        monkeypatch.setattr(cli_mod.cell_policy_shape, "demonstrated_range", lambda *_a: None)
+        monkeypatch.setattr(cli_mod, "run_two_arm_policy", lambda *_a, **kw: passed_gates.update(kw["state_gates"]) or {"result": "chunks_done", "task_id": "T1_CONCURRENT_ZONE_SPLIT"})
+        rc_live = cli_mod.main([*live_args, "--policy-root-a", str(cli_dir / "ckpt_a"), "--policy-root-b", str(cli_dir / "ckpt_b")])
         assert rc_live == 0
+        assert gate_roots == ["ckpt_a", "ckpt_b"] and passed_gates == {"a": "gate-ckpt_a", "b": "gate-ckpt_b"}  # each arm: its own checkpoint
         assert seen_tips[0] == {"a": 0.0, "b": 0.0}
         assert len(seen_auth_cfg) == 2 and str(seen_auth_cfg[0]["operating_envelope_path"]).endswith("env_rev.json")
         assert seen_auth_cfg[0]["_commissioning"] == {"person_at_switch": True}
