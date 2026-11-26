@@ -328,7 +328,7 @@ async function renderEpisodeReviewPanel(host,dsName){
   const busy=(typeof benchSessionActive==='function'&&benchSessionActive());
 
   let h='<div class="ep-review-box">';
-  h+='<div class="ep-review-head"><div class="mono" style="font-size:.78rem"><b>'+esc(dsName)+'</b> · '+eps.length+'회 · 합격 '+(sum.good||0)+' · 불량 '+(sum.bad||0)+' · 미평가 '+(sum.unrated||0)+'</div>';
+  h+='<div class="ep-review-head"><div class="mono" style="font-size:.8rem"><b>'+esc(dsName)+'</b> · '+eps.length+'회 · 합격 '+(sum.good||0)+' · 불량 '+(sum.bad||0)+' · 미평가 '+(sum.unrated||0)+'</div>';
   h+='<div class="ep-review-bulk">';
   if(badIndices.length)h+='<button type="button" class="btn-tool btn-xs" data-tone="warn" data-ep-del-bad="1"'+(busy?' disabled':'')+'>불량 '+badIndices.length+'개 일괄 삭제</button>';
   h+='<button type="button" class="btn-tool btn-xs" data-ds-dnt="'+(data.do_not_train?'0':'1')+'"'+(busy?' disabled':'')+'>'+(data.do_not_train?'학습제외 해제':'학습제외(DO_NOT_TRAIN)')+'</button>';

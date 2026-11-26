@@ -426,7 +426,7 @@ def test_carry_height_clears_containers_standing_on_temp_plates():
 
 
 def test_belt_pick_approach_height_is_independent_of_target_tier(data):
-    """Belt pick approach stays at belt pick clearance regardless of the target ship tier; non-belt and wait_pose='home' keep carry_z."""
+    """Belt pick approach stays at belt pick clearance regardless of the target ship tier or wait_pose; non-belt picks keep carry_z."""
     lay = sites.Layout(preset="v24-20261114")
     here, by_arm = {}, {"arm_a": [], "arm_b": []}
     expected_z = lay.hold_z("belt") + lay.box[2] + tasks.CARRY_CLEAR
@@ -444,10 +444,17 @@ def test_belt_pick_approach_height_is_independent_of_target_tier(data):
     assert len(by_arm["arm_b"]) == 6 and len(set(by_arm["arm_b"])) == 1
 
     home_lay = sites.Layout(preset="v24-20261114", wait_pose="home")
-    home_here = {"bar-8": "ship-h1r0-l2"}
-    home_step = {"id": "s9", "container": "bar-9", "to": "ship-h1r2-l2", "arm": "arm_a", **{"from": "belt"}}
-    home_wps = tasks.waypoints(home_lay, home_step, home_here)
-    assert home_wps[0][2] == pytest.approx(tasks.carry_z(home_lay, home_here, home_step["from"], home_step["to"]))
+    full_h1 = {f"h1-{r}-{l}": f"ship-h1r{r}-l{l}" for r in range(3) for l in range(3)}
+    for arm_name, other_name in (("arm_a", "arm_b"), ("arm_b", "arm_a")):
+        home_step = {"id": "s_h2", "container": "bar-9", "to": "ship-h2r1-l0", "arm": arm_name, **{"from": "belt"}}
+        home_wps = tasks.waypoints(home_lay, home_step, full_h1)
+        assert home_wps[0][2] == pytest.approx(expected_z)
+        arm, other = home_lay.sim_arms[arm_name], home_lay.sim_arms[other_name]
+        ok, q_app, _, note = tasks.solve_chain(arm, home_wps, arm.home, roll_floor=home_lay.roll_floor)
+        assert ok, note
+        qs = list(teacher.Teacher.move_g(arm.wait, np.append(q_app[:5], 1.0), 2.5, j1_lead=True))
+        assert tasks.link_clearance(home_lay, arm, qs, full_h1) >= tasks.LINK_MARGIN
+        assert tasks.clearance(arm, other.wait, qs, other) >= 2 * tasks.ARM_RADIUS + tasks.ARM_MARGIN
 
     rehandle = tasks.get_task(lay, "rehandle", data)
     r_here, found_non_belt = dict(rehandle["start"]), False

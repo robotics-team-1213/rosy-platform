@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 12px 미만 글자 전부 12px 이상
 - 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 결정 반영(녹화 중지 표기, 자동 복구 우선, 녹화 시작 중립, 공용 값 일치 시험, 좁은 폭 표시)
 - 2026-11-26 · uncommitted · Calibration 화면 신선도를 서버 예산으로, 옛 지도는 점선·흐림과 문구로
 - 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
 - 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
-- 2026-11-23 · uncommitted · PC SSH 워치독 서명 갱신

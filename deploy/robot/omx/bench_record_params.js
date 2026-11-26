@@ -309,7 +309,7 @@ function renderCapsSummary(){
     const v=Math.max(0,Math.min(2000,Number(inp.value)||0));
     const h=Math.max(6,Math.round((v/2000)*46));
     const col=v>=1000?'#ffc53d':'#58a6ff';
-    html+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div style="width:100%;max-width:34px;height:'+h+'px;background:'+col+';border-radius:4px 4px 0 0"></div><span class="mono" style="font-size:.7rem;color:var(--ink-q)">M'+inp.dataset.mid+'</span></div>';
+    html+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div style="width:100%;max-width:34px;height:'+h+'px;background:'+col+';border-radius:4px 4px 0 0"></div><span class="mono" style="font-size:.8rem;color:var(--ink-q)">M'+inp.dataset.mid+'</span></div>';
   }
   wrap.innerHTML=html+'</div>';
 }

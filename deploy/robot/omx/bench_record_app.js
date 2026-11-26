@@ -414,7 +414,7 @@ function renderTaskListbox(){
     btn.disabled=Boolean(disabled);
     const top=document.createElement('div');top.className='task-opt-top';
     const sp1=document.createElement('span');sp1.className='mono';sp1.style.fontWeight='700';sp1.textContent=title;
-    const sp2=document.createElement('span');sp2.className='quiet';sp2.style.fontSize='.78rem';sp2.textContent=disabled?'검증 실패':(f.task.value===val?'선택됨':'');
+    const sp2=document.createElement('span');sp2.className='quiet';sp2.style.fontSize='.8rem';sp2.textContent=disabled?'검증 실패':(f.task.value===val?'선택됨':'');
     top.append(sp1,sp2);
     btn.append(top);
     if(sub){
