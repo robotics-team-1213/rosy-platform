@@ -62,14 +62,14 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
         assert "paint-test" in tag, tag
         page.select_option("#map-display-mode", "overlay")
         # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
-        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
+        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitBox pad 32, 화면 회전 없음, 활성 지도 없음).
         pixel = page.evaluate("""async () => {
-          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const { fitBox } = await import('/console/assets/site-map-model.js');
           const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
           const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
-          const p = project(t, 0.25, 0.75);
-          return [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data];
+          const t = fitBox({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          const [px, py] = t.toPx(0.25, 0.75);
+          return [...g.getImageData(Math.round(px * dpr), Math.round(py * dpr), 1, 1).data];
         }""")
         assert pixel[0] > 150 and pixel[1] < 100, pixel
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"

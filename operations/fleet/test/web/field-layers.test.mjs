@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   LAYER_DEFAULTS, parseLayers, normalizeProposal, quadAspect, configuredSize, aspectMismatch,
-  parseFieldSize, homography, applyHomography, rectifiedLayout,
+  parseFieldSize, homography, rectifiedLayout,
 } from "../../../../applications/fleet/web/calibration/field-layers.js";
+import { project as applyHomography } from "../../../../shared/web/plane-math.js";
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
 
