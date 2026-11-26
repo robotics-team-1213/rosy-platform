@@ -42,6 +42,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
+from cell_site_job_spec import SITE_JOBS  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
@@ -247,7 +248,7 @@ JOBS = {
             "dry_run": _bool,
         },
     },
-    **MEDIA_JOBS, **AREA_JOBS,
+    **MEDIA_JOBS, **AREA_JOBS, **SITE_JOBS,
 }
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
@@ -346,7 +347,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--replace", "replace")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
