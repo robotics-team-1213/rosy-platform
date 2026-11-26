@@ -8,6 +8,7 @@ from uuid import UUID
 from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.server import traffic
+from fleet.server.console_view import trip_caps
 from fleet.site_map import MAX_POINTS, _point_segment, _polyline_polygon_gap
 
 
@@ -49,6 +50,19 @@ def _point(state):
     if not all(type(value) in (int, float) and math.isfinite(value) for value in xy):
         raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_POSE_UNVERIFIED")
     return xy
+
+
+#: The nominal base's tray corner sweeps this radius in an in-place turn (docking model, panel B 2026-11-21); the body
+#: circle alone (0.0826) leaves the tray out. Fleet must not import the CORE docking model, so the value is kept here.
+TRAY_TURN_RADIUS_M = 0.144
+
+
+def _body(console, robot):
+    """Nominal body of the robot's advertised kind from the kept capability read, or None (unknown)."""
+    display = getattr(console, "_capability_display", None)
+    caps = display._kept(robot, console.clients().get(robot)) if display is not None else None
+    trip = trip_caps(caps) if caps else None
+    return nominal_body_for(trip.kind) if trip is not None else None
 
 
 def _fresh_stopped(state):
@@ -156,6 +170,16 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
         position = peer_fit.apply(_point(state))
         if not _geometry_point(position):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_POSE_UNVERIFIED")
-        clearance = console._clearance_m + fit.max + peer_fit.max + traffic.SAMPLE_STEP_M / 2 + (correction_padding or 0.0)
-        if any(_point_segment(position, a, b) < clearance for a, b in zip(path, path[1:])):
+        error = fit.max + peer_fit.max + (correction_padding or 0.0)
+        bodies = _body(console, mover), _body(console, robot)
+        if None in bodies:  # unknown geometry keeps the general traffic clearance
+            lane = turn = console._clearance_m + error + traffic.SAMPLE_STEP_M / 2
+        else:
+            # The peer passed the stopped/bound checks above, so it is a fixed body: the mover's swept half width
+            # along the path and its tray-inclusive turn radius at the turning points must clear it. Bays are
+            # 0.226 m apart, so the lane term leaves ~1 cm: CORE keeps the body inside its lane and stops on LiDAR.
+            lane = bodies[0].half_width_m + bodies[1].rotation_radius_m + error
+            turn = sum(max(body.rotation_radius_m, TRAY_TURN_RADIUS_M) for body in bodies) + error  # either tray may face the other
+        if (any(_point_segment(position, a, b) < lane for a, b in zip(path, path[1:]))
+                or any(math.dist(position, point) < turn for point in path[:-1])):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")
