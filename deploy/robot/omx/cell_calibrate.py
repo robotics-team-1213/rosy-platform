@@ -279,7 +279,7 @@ def main(argv=None):
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0
-    remap_config, z_info = (config, None) if "remap" not in todo else rp.remap_view(config, top_frame, args.obstacle_mm, depth_capture)
+    remap_config, z_info = (config, None) if "remap" not in todo else rp.remap_view(config, top_frame, args.obstacle_mm, depth_capture, depth_config=rp.regions_now(config, found, top_frame))
     depth_bad = f"obstacle not measured: {z_info['depth_error']}; fix the D435 or pass --obstacle-mm" if z_info and z_info.get("depth_error") else None
     refused = depth_bad or (rp.refusal(rp.plan(remap_config, points)) if "remap" in todo else None)  # before any move: one bad point refuses the run
     if refused:
