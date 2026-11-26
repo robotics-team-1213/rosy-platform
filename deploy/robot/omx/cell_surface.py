@@ -249,10 +249,12 @@ def main(argv=None):
     binding = probe_binding(config, args.site, tcp_x_m)
     out = dict(touch(cell, path, tcp_x_m=tcp_x_m, repeat=args.repeat), site=args.site, xy=[x, y],
                contact_binding=binding, measured=time.strftime("%Y-%m-%d %H:%M"))
+    out["sets_surface_z"] = out["result"] == "touched"  # the receipt cell_site_register reads as Z evidence
     (work / f"surface-{args.site}.json").write_text(json.dumps(out, indent=1))
     if args.write and out["result"] == "touched":
         site["surface_z"] = out["surface_z"]
-        args.config.write_text(json.dumps(config, indent=1))
+        import cell_config_io
+        cell_config_io.write_config(args.config, config, indent=1)
     print(json.dumps({k: v for k, v in out.items() if k != "steps"}))
     return 0 if out["result"] == "touched" else 1
 

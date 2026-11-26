@@ -126,6 +126,14 @@ def test_auto_pick_stops_before_any_camera_or_arm_step(tmp_path, monkeypatch, sr
     assert dry["result"] == "held: reached preflight"  # a dry run commands no arm, so measuring plans may look at the slot
 
 
+def test_taught_goal_checks_goal_site_and_destination_and_source(tmp_path):
+    import cell_policy_handoff as ph
+    cfg = _unverified_config(tmp_path)
+    for goal, dest, src in (("pallet", "ship-h1r0-l0", "belt"), ("ship-h1r0-l0", "pallet", "belt"), ("pallet", "pallet", "ship-h1r0")):
+        with pytest.raises(ValueError, match="SITE_NOT_MEASURED"):
+            ph.validate_taught_goal(cfg, src, goal, dest, {})
+
+
 def test_return_held_task_runner_and_taught_goal_refuse_too(tmp_path):
     import cell_policy_handoff as ph
     import cell_return_held as rh
@@ -164,9 +172,96 @@ def test_register_then_unverified_refused_then_both_measurements_open(cell, tmp_
     assert sites_of(cfg)["ship-h1r0"]["status"] == "measured"
     reg.promote(cfg, "arm_a", "tmp-a-1", z_evidence=write(tmp_path / "z2.json", z_receipt(cfg, "tmp-a-1", z=-0.0042)))
     reg.promote(cfg, "arm_a", "tmp-a-1", post_eval=write(tmp_path / "xy3.json", xy_report(cfg, "tmp-a-1", resid=9.9)))
-    assert pairs(sites_of(cfg)) == [None] * 6
+    assert pairs(sites_of(cfg))[:2] == [None, None]  # tier 1 only; tiers 2 and 3 need a tier step
+    assert all(r == "SITE_NOT_MEASURED" for r in pairs(sites_of(cfg))[2:4])
     with pytest.raises(reg.RegisterError, match="already measured"):
         reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=tmp_path / "xy2.json")
+
+
+def tier_receipt(cfg, layer, step=None, site="ship-h1r0"):
+    e = sites_of(cfg)[site]
+    name = f"{site}-l{layer}"
+    z = e["surface_z"] + layer * (e["tier_step_m"] if step is None else step)
+    return {**z_receipt(cfg, site, z=z), "site": name, "contact_binding": {"arm": "arm_a", "site": name, "place": list(e["place"]), "yaw_deg": e["yaw_deg"]}}
+
+
+def measured_slot(cell, tmp_path, site="ship-h1r0", fields=SHIP):
+    cfg = registered(cell, site, fields)
+    reg.promote(cfg, "arm_a", site, z_evidence=write(tmp_path / "z.json", z_receipt(cfg, site, z=fields["surface_z"] - 0.001)))
+    reg.promote(cfg, "arm_a", site, post_eval=write(tmp_path / "xy.json", xy_report(cfg, site)))
+    assert sites_of(cfg)[site]["status"] == "measured"
+    return cfg
+
+
+def test_measured_slot_closes_when_place_yaw_height_or_step_change_afterwards(cell, tmp_path):
+    cfg = measured_slot(cell, tmp_path)
+    assert refusal(sites_of(cfg), "belt", "ship-h1r0-l0", 1) is None
+    for key, value in (("surface_z", -0.0123), ("place", [0.13, 0.03]), ("yaw_deg", 5.0), ("tier_step_m", 0.04)):  # calibrate, hand edit
+        sites = sites_of(cfg)
+        sites["ship-h1r0"][key] = value
+        assert refusal(sites, "belt", "ship-h1r0-l0", 1) == "SITE_NOT_MEASURED", key
+        assert cst.unmeasured_refusal(sites, "ship-h1r0") == "SITE_NOT_MEASURED"
+    sites = sites_of(cfg)
+    sites["ship-h1r0"]["measured_z"]["digest"] = "0" * 16
+    assert cst.unmeasured_refusal(sites, "ship-h1r0") == "SITE_NOT_MEASURED"
+    del sites["ship-h1r0"]["measured_xy"]  # status says measured, the evidence is gone
+    assert cst.unmeasured_refusal(sites, "ship-h1r0-l0") == "SITE_NOT_MEASURED"
+
+
+def test_layers_one_and_two_open_only_with_a_measured_tier_step(cell, tmp_path):
+    cfg = measured_slot(cell, tmp_path)
+    sites = sites_of(cfg)
+    assert cst.unmeasured_refusal(sites, "ship-h1r0", "ship-h1r0-l0") is None
+    tiered = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
+    assert cst.unmeasured_refusal(tiered, "ship-h1r0-l0") is None
+    assert cst.unmeasured_refusal(tiered, "ship-h1r0-l1") == cst.unmeasured_refusal(sites, "ship-h1r0-l2") == "SITE_NOT_MEASURED"
+    assert [refusal(sites, "belt", f"ship-h1r0-l{t - 1}", t) for t in (1, 2, 3)] == [None, "SITE_NOT_MEASURED", "SITE_NOT_MEASURED"]
+    with pytest.raises(reg.RegisterError, match="gives a step"):  # 8 mm off the registered 32.4 mm
+        reg.promote(cfg, "arm_a", "ship-h1r0", tier_evidence=write(tmp_path / "t.json", tier_receipt(cfg, 1, step=SHIP["tier_step_m"] + 0.008)))
+    with pytest.raises(reg.RegisterError, match="must be a touch of"):
+        reg.promote(cfg, "arm_a", "ship-h1r0", tier_evidence=write(tmp_path / "t.json", z_receipt(cfg)))
+    e = reg.promote(cfg, "arm_a", "ship-h1r0", tier_evidence=write(tmp_path / "t.json", tier_receipt(cfg, 2)))  # allowed after measured
+    assert e["status"] == "measured" and e["measured_tier_step"]["layer"] == 2
+    sites = sites_of(cfg)
+    tiered = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
+    assert cst.unmeasured_refusal(tiered, "ship-h1r0-l1", "ship-h1r0-l2") is None
+    assert [refusal(sites, "belt", f"ship-h1r0-l{t - 1}", t) for t in (1, 2, 3)] == [None] * 3
+    sites["ship-h1r0"]["surface_z"] += 0.002  # a later height change closes the tiers too
+    assert cst.unmeasured_refusal(sites, "ship-h1r0-l1") == "SITE_NOT_MEASURED"
+
+
+def test_evidence_records_job_id_and_sha(cell, tmp_path):
+    cfg = registered(cell)
+    logs = tmp_path / "cell-job-api"
+    logs.mkdir()
+    log = logs / "20261126-101500-abc123.log"
+    log.write_text(json.dumps(xy_report(cfg)), encoding="utf-8")
+    rec = reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=log)["measured_xy"]
+    assert rec["job_id"] == "20261126-101500-abc123" and len(rec["sha256"]) == 64
+    assert reg.promote(cfg, "arm_a", "ship-h1r0", z_evidence=write(tmp_path / "z.json", z_receipt(cfg)))["measured_z"]["job_id"] is None
+
+
+def test_config_io_rewrite_keeps_evidence_of_a_promote_made_meanwhile(cell, tmp_path):
+    import cell_config_io as cio
+    cfg = registered(cell)
+    stale = json.loads(cfg.read_text())  # what calibrate read at its start, before the promote below
+    reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=write(tmp_path / "xy.json", xy_report(cfg)))
+    stale["sites"]["ship-h1r0"]["surface_z"] = -0.0091  # calibrate's surface step
+    stale["sites"]["pallet"]["note"] = "regions moved"
+    reg.register(cfg, "arm_a", "tmp-a-1", evidence=cell[1], **TMP)  # registered after calibrate started
+    stale2 = {k: v for k, v in stale.items()}
+    cio.write_config(cfg, stale2, indent=1)
+    now = sites_of(cfg)
+    assert now["ship-h1r0"]["surface_z"] == -0.0091 and "measured_xy" in now["ship-h1r0"] and now["pallet"]["note"] == "regions moved"
+    assert now["tmp-a-1"]["status"] == "unverified"
+    assert cst.unmeasured_refusal(now, "ship-h1r0") == "SITE_NOT_MEASURED"  # the new height has no measurement yet
+
+
+def test_config_io_is_the_writer_calibrate_and_surface_use():
+    root = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"
+    for name in ("cell_calibrate.py", "cell_surface.py", "cell_site_register.py"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert "cell_config_io" in text and "cfg_tmp" not in text and "args.config.write_text" not in text, name
 
 
 def test_both_evidences_in_one_call_and_nothing_to_promote(cell, tmp_path):
@@ -397,3 +492,31 @@ def test_site_jobs_do_not_move_the_arm_need_distinct_actors_and_refuse_symlinks(
         return
     with pytest.raises(ValueError, match="symlink"):
         spec.build_argv(j, {**params, key: "link.json"}, tmp_path)
+
+
+def test_site_surface_job_measures_a_registered_slot_under_the_existing_surface_guards(tmp_path):
+    (tmp_path / "cell-arm-a-stack.json").write_text("{}", encoding="utf-8")
+    j = spec.JOBS["site_surface"]
+    params = {"arm": "arm_a", "config": "cell-arm-a-stack.json", "site": "ship-h1r0", "surface_clear": True}
+    assert j["moving"] and j["camera"] and spec.moves_arm(j, params)
+    with pytest.raises(ValueError, match="person_at_switch"):  # the D-911 guard of the other surface job still applies
+        spec.build_argv(j, params, tmp_path)
+    argv = spec.build_argv(j, {**params, "person_at_switch": True}, tmp_path)
+    assert argv[-2:] == ["--commissioning", "--person-at-switch"]
+    assert argv[argv.index("--remeasure-surface") + 1] == "ship-h1r0" and "--surface-clear" in argv and "--only" in argv
+    with pytest.raises(ValueError, match="surface_clear"):
+        spec.build_argv(j, {**params, "surface_clear": False, "person_at_switch": True}, tmp_path)
+    with pytest.raises(ValueError, match="missing param"):
+        spec.build_argv(j, {k: v for k, v in params.items() if k != "surface_clear"}, tmp_path)
+
+
+def test_the_order_z_then_xy_is_written_where_operators_read(cell, tmp_path):
+    root = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"
+    for name in ("AGENTS.md", "cell_site_register.py", "cell_site_job_spec.py"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert "site_surface" in text and ("Z first" in text or "then Z" in text or "site_register -> site_surface" in text), name
+    # XY first, then Z: the Z promotion changes surface_z, so the XY report no longer describes the entry and measured is not reached
+    cfg = registered(cell)
+    reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=write(tmp_path / "xy.json", xy_report(cfg)))
+    assert reg.promote(cfg, "arm_a", "ship-h1r0", z_evidence=write(tmp_path / "z.json", z_receipt(cfg)))["status"] == "unverified"
+    assert reg.promote(cfg, "arm_a", "ship-h1r0", post_eval=write(tmp_path / "xy2.json", xy_report(cfg)))["status"] == "measured"

@@ -387,9 +387,8 @@ def main(argv=None):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
     if config_dirty:
-        cfg_tmp = args.config.with_suffix(".tmp")
-        cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
-        cfg_tmp.replace(args.config)
+        import cell_config_io  # one lock and one writer for every config rewrite (also keeps a registered slot's evidence)
+        cell_config_io.write_config(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1)
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

@@ -171,7 +171,7 @@ def _has_place_surface(entry: Any) -> bool:
     )
 
 
-REGISTER_KEYS = ("status", "provenance", "history", "measured_xy", "measured_z")  # cell_site_register's; tier copies must not carry them
+REGISTER_KEYS = ("status", "provenance", "history", "measured_xy", "measured_z", "measured_tier_step")  # cell_site_register's; tier copies must not carry them
 LEGACY_NAMES = frozenset({"pallet", "belt", "beltend", "temp_plate_a", "temp_plate_b", "stand", "plate_b", "strip_b", "col1", "stack", "pinky"})
 
 
@@ -180,13 +180,36 @@ def _unmeasured(entry: Any) -> bool:
     return isinstance(entry, dict) and "status" in entry and entry["status"] != "measured"
 
 
+_TIER_NAME = re.compile(r"(.+)-l([0-2])")
+
+
+def _slot(sites: dict[str, Any], name: Any) -> tuple[Any, int]:
+    """(the base entry that carries the evidence, tier layer 0..2) of a site name, a -lN tier copy or a name only the map knows."""
+    entry = sites.get(name) if isinstance(name, str) else None
+    if isinstance(entry, dict):
+        return (sites.get(entry["tier_of"]), int(entry.get("layer") or 0)) if entry.get("tier_of") else (entry, 0)
+    m = _TIER_NAME.fullmatch(name) if isinstance(name, str) else None
+    return (sites.get(m.group(1)), int(m.group(2))) if m else (None, 0)
+
+
+def _closed(base: Any, layer: int) -> bool:
+    """A registered slot is open only while its measurements still describe its current place, yaw, height and tier step;
+    layers 1 and 2 also need a measured tier step. Entries without status are legacy; a bare status 'measured' without evidence keys is a hand entry."""
+    if not isinstance(base, dict) or "status" not in base:
+        return False
+    if base["status"] != "measured":
+        return True
+    if not any(k in base for k in ("provenance", "measured_xy", "measured_z")):
+        return False
+    digest = site_digest(base)
+    need = ("measured_xy", "measured_z") + (("measured_tier_step",) if layer > 0 else ())
+    return not all(isinstance(base.get(k), dict) and base[k].get("digest") == digest for k in need)
+
+
 def unmeasured_refusal(sites: dict[str, Any], *names: Any) -> str | None:
-    """The one shared answer for every motion path: SITE_NOT_MEASURED if a named site (or the base of a -lN tier copy) is not measured."""
-    for name in names:
-        entry = sites.get(name) if isinstance(name, str) else None
-        if _unmeasured(entry) or (isinstance(entry, dict) and _unmeasured(sites.get(entry.get("tier_of")))):
-            return "SITE_NOT_MEASURED"
-    return None
+    """The one shared answer for every motion path: SITE_NOT_MEASURED if a named site (or the base of a -lN tier copy) is not measured,
+    or was measured for other values than it holds now (calibrate rewrote the height, a hand edit), or is a tier above 1 without a tier step."""
+    return "SITE_NOT_MEASURED" if any(_closed(*_slot(sites, n)) for n in names) else None
 
 
 def designated_slot_arms(name: Any) -> tuple[str, ...]:
@@ -198,9 +221,10 @@ def designated_slot_arms(name: Any) -> tuple[str, ...]:
 
 
 def site_digest(entry: dict[str, Any]) -> str:
-    """Short digest of what a measurement is about: place, yaw and surface height."""
+    """Short digest of what a measurement is about: place, yaw, surface height and tier step."""
     try:
-        key = [[round(float(v), 6) for v in entry["place"]], round(float(entry.get("yaw_deg", 0.0)), 6), round(float(entry["surface_z"]), 6)]
+        key = [[round(float(v), 6) for v in entry["place"]], round(float(entry.get("yaw_deg", 0.0)), 6), round(float(entry["surface_z"]), 6),
+               round(float(entry.get("tier_step_m", 0.0)), 6)]
     except (KeyError, TypeError, ValueError):
         return "invalid"
     return hashlib.sha256(json.dumps(key).encode()).hexdigest()[:16]

@@ -166,7 +166,7 @@ def validate_taught_goal(config, source, goal_site, destination, library):
     goal = next((name for name in names if name in sites), None)
     if goal is None or source not in sites:
         raise ValueError("source and destination must exist in the arm's configured sites")
-    if unmeasured_refusal(sites, goal, source):
+    if unmeasured_refusal(sites, goal_site, destination, source):
         raise ValueError("SITE_NOT_MEASURED: a registered slot needs XY and Z measurements before the arm goes there")
     effective = {**config, "sites": sites}
     pick, place = (library["source"][k] for k in ("pick", "place"))

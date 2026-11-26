@@ -6,6 +6,12 @@ import re
 from cell_job_validators import FILE, NAME, _actor, _bool, _match, _num, _workdir_rel_path, resolve_under_workdir
 
 
+def _true(v):
+    if v is not True:
+        raise ValueError("must be true: the fixed support and the arm path are visibly clear")
+    return v
+
+
 def check_site_files(job: dict, values: dict, workdir) -> None:
     """Evidence files the job reads must be real files inside the workdir; symlinks are refused (resolve_under_workdir)."""
     for name in job.get("workdir_files", ()):
@@ -38,7 +44,15 @@ SITE_JOBS = {
             "operator": _actor, "proposer": _actor,
         },
         # XY from a cell_post_eval report or job log, Z from a surface touch receipt; the tool needs at least one, measured needs both
-        "workdir_files": ("post_eval", "z_evidence"),
-        "optional": {"post_eval": _workdir_rel_path, "z_evidence": _workdir_rel_path, "dry_run": _bool},
+        "workdir_files": ("post_eval", "z_evidence", "tier_evidence"),
+        "optional": {"post_eval": _workdir_rel_path, "z_evidence": _workdir_rel_path, "tier_evidence": _workdir_rel_path, "dry_run": _bool},
+    },
+    # Z evidence for a registered (unverified) slot: touches at its registered place with the existing remeasure guards (fixed designated
+    # slot, camera alignment and bound map, fresh empty gripper); moving, so person_at_switch and D-911 commissioning stay required.
+    # Order for a new slot: site_register -> site_surface -> site_promote(z_evidence=surface-<site>.json) -> post_eval -> site_promote(post_eval=).
+    "site_surface": {
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
+        "argv": ["--config", "{config}", "auto", "--only", "surface", "--remeasure-surface", "{site}", "--surface-clear"],
+        "params": {"arm": _match(re.compile(r"arm_a|arm_b")), "config": _match(FILE), "site": _match(NAME), "surface_clear": _true},
     },
 }
