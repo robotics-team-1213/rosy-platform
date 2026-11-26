@@ -170,6 +170,11 @@ def _has_place_surface(entry: Any) -> bool:
     )
 
 
+def _unmeasured(entry: Any) -> bool:
+    """A site written by cell_site_register stays refused until a passing post_eval marks it measured; entries without status are legacy."""
+    return isinstance(entry, dict) and "status" in entry and entry["status"] != "measured"
+
+
 def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any) -> str | None:
     if dst in ("temp_plate_a", "temp_plate_b") and not _has_place_surface(cfg_sites.get(dst)):
         return "SITE_NOT_CALIBRATED"
@@ -180,6 +185,8 @@ def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any
         d_ok = _has_place_surface(cfg_sites.get(d["sim_site"])) or _has_place_surface(cfg_sites.get(d["base_site"]))
         if not d_ok:
             return "STAND_NOT_CALIBRATED" if d["area"] == "stand" else "SITE_NOT_CALIBRATED"
+        if _unmeasured(cfg_sites.get(d["sim_site"])) or _unmeasured(cfg_sites.get(d["base_site"])):
+            return "SITE_NOT_MEASURED"
     s = resolve_cell_ab_site(src, None, allow_belt_temp=True, allow_pallet_src=True)
     if s is None and (is_canonical_37site(src) or src in STAND_ALIASES):
         return "STAND_NOT_CALIBRATED" if src in STAND_ALIASES or src.startswith("stand:") else "SITE_NOT_CALIBRATED"
@@ -188,6 +195,8 @@ def calibration_refusal(cfg_sites: dict[str, Any], src: str, dst: str, tier: Any
         s_ok = isinstance(exact, dict) or (isinstance(base, dict) and "surface_z" in base)
         if not s_ok:
             return "STAND_NOT_CALIBRATED" if s["area"] == "stand" else "SITE_NOT_CALIBRATED"
+        if _unmeasured(exact) or (not isinstance(exact, dict) and _unmeasured(base)):
+            return "SITE_NOT_MEASURED"
     return None
 
 

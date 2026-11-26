@@ -71,7 +71,7 @@ Without a visual cargo label, Fleet can carry the RFID identity across one exclu
 
 ### v1.473 Task-specific cell plan refusal codes (Fleet)
 
-A physically aborted step reports its own persisted and sanitized error as tasks[].last_refusal.code with op=complete, and the plan exposes the code in hold_reason. The proposal retains the requested slot. A service proposal and a dry run do not establish calibration. SITE_NOT_CALIBRATED and STAND_NOT_CALIBRATED are emitted only from the cell's actual local calibration check. The service also preserves typed structural, configuration, interlock and hardware refusals. Unrecognized hardware diagnostic text yields MEASURED_PLACEMENT_MISSING.
+A physically aborted step reports its own persisted and sanitized error as tasks[].last_refusal.code with op=complete, and the plan exposes the code in hold_reason. The proposal retains the requested slot. A service proposal and a dry run do not establish calibration. SITE_NOT_CALIBRATED, SITE_NOT_MEASURED and STAND_NOT_CALIBRATED are emitted only from the cell's actual local calibration check; SITE_NOT_MEASURED means a designated slot registered by cell_site_register is still unverified (no passing post_eval). The service also preserves typed structural, configuration, interlock and hardware refusals. Unrecognized hardware diagnostic text yields MEASURED_PLACEMENT_MISSING.
 
 ### v1.472 Operator trip request history (Fleet)
 
