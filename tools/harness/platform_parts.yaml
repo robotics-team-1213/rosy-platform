@@ -1575,8 +1575,8 @@ safety_anchors:
   - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
   - {symbol: fleet.server.estop_fanout.stop_robots}  # E-stop delivery to every robot (console helper)
   - {symbol: fleet.server.traffic_arbitration.TrafficArbitration}  # moved from console.py: yield/hold/cancel (FleetConsole mixin)
-  - {symbol: fleet.server.traffic_arbitration_helpers.guarded_road_send}  # fence the route before CORE submission
-  - {symbol: fleet.server.traffic_arbitration_helpers.peer_proof}  # read the evidence behind peer clearance
+  - {symbol: fleet.server.traffic_arbitration_helpers.guarded_road_send, public: true}  # fence the route before CORE submission
+  - {symbol: fleet.server.traffic_arbitration_helpers.peer_proof, public: true}  # read the evidence behind peer clearance
   - {symbol: fleet.server.traffic_arbitration_helpers.run_snapshot_traffic}  # traffic_arbitration helper: snapshot release and localization hold
   - {symbol: fleet.server.formation_control.FormationControl}  # moved from console.py: formation session (FleetConsole mixin)
   - {symbol: fleet.server.estop_fanout.deliver}  # one robot's E-stop with short re-sends (console helper)

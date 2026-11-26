@@ -216,7 +216,7 @@ def test_peer_moving_into_route_during_lease_preparation_stops_wire_dispatch(pat
     reply = run(guarded_road_send(console, "rosy_42", [{"x": 0.4, "y": 0}], (0.4, 0),
                                   console.goal_leases.stop_token("rosy_42"),
                                   lambda _: ("site", [(0, 0), (0.4, 0)]), send,
-                                  grid_from=lambda _: None, untrusted="UNTRUSTED"))
+                                  grid_from=lambda _: None))
     assert reply["waiting_on"] == ["rosy_45"] and not reply["dispatch_attempted"]
 
 
