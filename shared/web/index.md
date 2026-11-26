@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · 3×3 평면 투영 사본 4벌을 plane-math.js 하나로
 - 2026-11-26 · uncommitted · World 2D 지도가 Fleet 지도 규칙을 따름
 - 2026-11-21 · uncommitted · Robot 3D assets: vendored three.js, OMX and Pinky meshes, asset boundary (slice S3 of #378)
 - 2026-11-21 · uncommitted · Pure skill, sample-data and localization state parts (slice 4 of #378)
 - 2026-11-21 · uncommitted · pattern list and dedupe gates with baselines counted on main (slice S1 of #378)
-- 2026-11-21 · uncommitted · Foundation: shared stylesheets for choice controls, dock and alert popup (slice F11 of #378)

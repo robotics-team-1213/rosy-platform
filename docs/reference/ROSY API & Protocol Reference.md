@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.485
+**Version:** v1.486
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.486 현장 지도 도로 측량 표시선 (Fleet)
+
+`GET /api/fleet/site-map/active`: edges may carry `display_polyline` + `display_source` (kind `survey`, `surveyed_at`, `plane`, `anchors`, `stored_until?`, `note?`), a display-only measured line. Fleet adds it on read from its floor-survey table when map id, ends and `from`/`to` match; the stored body and `sha256` are unchanged, and a draft that carries the pair saves it. Routing, snapping and editing keep `polyline`. Consumers: Fleet 관제 지도(`map/map-view.js`), 현장 지도(`sitemap/site-map.js`) and their evidence line. Absent: no survey line is drawn and the evidence line says `측량선 없음`. (v1.486)
 
 ### v1.485 Native OMX policy lease ingress (CORE)
 
@@ -5172,6 +5176,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.486 | 2026-11-26 | [Fleet] Additive: rosy.site_map/1 edge display_polyline + display_source (survey), GET /api/fleet/site-map/active 가 측량표에서 덧붙임 |
 | v1.485 | 2026-11-26 | [CORE] Native OMX policy lease ingress |
 | v1.484 | 2026-11-26 | [Fleet] OMX native policy target status |
 | v1.483 | 2026-11-26 | [CORE] Read-only straight LiDAR corridor observation |
