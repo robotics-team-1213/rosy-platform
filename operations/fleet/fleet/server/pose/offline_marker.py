@@ -12,8 +12,11 @@ from fleet.localization.relative_search_prior import MAX_FRAME_AGE_S, pose3
 
 # D-587 bounds sticker location, height/parallax and the calibrated floor fit at this site.
 MARKER_ERROR_M = 0.10
-#: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle.
+#: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle,
+#: seen at least STATIC_MIN_FRAMES times with no gap above STATIC_MAX_GAP_S.
 STATIC_HOLD_S = 2.0
+STATIC_MAX_GAP_S = 0.6
+STATIC_MIN_FRAMES = 5
 _LOG = logging.getLogger("fleet.console")
 
 
@@ -44,15 +47,16 @@ class OfflineMarkerClearance:
             self.frames.pop(key, None)
             self.still.pop(key, None)
             return
-        point, run = pose3(row), self.still.get(key)
-        stamp, revision = row["captured_at"], row.get("calibration_revision")
-        if (point is None or run is None or run["version"] != active[0] or run["revision"] != revision
-                or math.dist(run["xy"], point[:2]) > STILL_PATH_M
-                or not 0 < stamp - run["last"] <= self.config.sighting_lease_s):
-            self.still[key] = {"version": active[0], "revision": revision, "xy": point[:2] if point else (math.nan,) * 2,
-                               "since": stamp, "last": stamp}
+        point, run, stamp = pose3(row), self.still.get(key), row["captured_at"]
+        basis = (active[0], row.get("calibration_revision"), row.get("calibration_source"),
+                 row.get("processor_revision"))
+        if point is None:
+            self.still.pop(key, None)
+        elif (run is None or run["basis"] != basis or not math.dist(run["xy"], point[:2]) <= STILL_PATH_M
+                or not 0 < stamp - run["last"] <= STATIC_MAX_GAP_S):
+            self.still[key] = {"basis": basis, "xy": point[:2], "since": stamp, "last": stamp, "count": 1}
         else:
-            run["last"] = stamp
+            run["last"], run["count"] = stamp, run["count"] + 1
         prior = self.frames.get(key, ())
         recent = [item for item in prior if item[0] == active[0]
                   and 0 < row["captured_at"] - item[1]["captured_at"] <= self.config.sighting_lease_s]
@@ -119,7 +123,8 @@ class OfflineMarkerClearance:
                         or row["seq"] == prior["seq"] or math.dist(previous[:2], point[:2]) > STILL_PATH_M):
                     return self._decision(rid, "peer_marker_moved_or_changed", False)
             run = self.still.get((rid, source.source_id)) or {}
-            still_s = row["captured_at"] - run["since"] if run.get("last") == row["captured_at"] else 0.0
+            still_s = (row["captured_at"] - run["since"]
+                       if run.get("last") == row["captured_at"] and run["count"] >= STATIC_MIN_FRAMES else 0.0)
             # Fleet cannot command a disconnected peer, so a marker held still is a parked obstacle and
             # frame age adds no travel; a moving marker keeps the speed allowance and the moved check above.
             margin = MARKER_ERROR_M + (0.0 if still_s >= STATIC_HOLD_S else self.config.max_speed_mps * age)

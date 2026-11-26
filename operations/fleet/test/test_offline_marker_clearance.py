@@ -104,9 +104,21 @@ def test_parked_disconnected_peer_is_a_static_obstacle_after_the_hold(rig):
     assert obs["uncertainty_m"] == pytest.approx(.1) and obs["still_s"] >= 2.0
 
 
-@pytest.mark.parametrize("problem", ["young", "moved"])
+@pytest.mark.parametrize("problem", ["young", "moved", "gap", "new_map", "processor"])
 def test_disconnected_peer_keeps_the_speed_allowance_until_it_has_stayed_still(rig, problem):
-    if problem == "moved":
+    # Same spot as the parked case: only the stillness run decides between the two outcomes.
+    if problem in ("gap", "new_map", "processor"):
+        _hold_still(rig, .3, 2.5, .05)
+        rig.now[0] += .5
+        if problem == "gap":
+            rig.now[0] += .3          # .85 s since the last sighting: the run restarts
+        elif problem == "new_map":
+            rig.version[0] += 1
+            rig.see(y=.3, age=.4, seq=20)
+        else:
+            rig.clear.still[(RID, "north")]["basis"] = ("other",)
+        rig.see(y=.3, age=.2, seq=21)
+    elif problem == "moved":
         _hold_still(rig, .3, 2.5, .05)
         rig.now[0] += .5
         rig.see(y=.33, age=.05, seq=20)
