@@ -29,7 +29,7 @@ from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery, start_check  # noqa: F401
 from fleet.server.trip_geometry import pose_view  # noqa: F401
-from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed
+from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed, pause_proof_args
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, convoy_refusal, stop_points  # noqa: F401
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
@@ -113,6 +113,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self._start_cancels: dict[str, int] = {}
         self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
+        self.road_vision_demand = None
         self.charge_goal_ready = None  # Explicit charge-only native-readiness dependency.
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
@@ -332,6 +333,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 halted = await self.halts.halt_robot(
                     robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
                     handoff_pending=bool(detail.get("named_stop_handoff_pending")),
+                    **pause_proof_args(trip),
                 )
                 detail.update(halted)
                 if halted.get("stop_sent") and "error" not in halted:
@@ -503,6 +505,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
         observe(self._live.values(), self._inflight, self.traffic, self._store, self._routing, self.config, self._clock())
+        if self.road_vision_demand is not None:
+            self.road_vision_demand.period(self)
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -552,4 +556,5 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         camera = live.view["detail"].get("camera_lane_fallback")
         return await self.halts.halt_robot(
             live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
-            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")))
+            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")),
+            **pause_proof_args(live.view))
