@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# D-430 section 5 at commit time: a commit that changes a safety-tagged path must carry a
+# Safety-Review: trailer in its first message. 2026-11-27: two sub-agent commits missed it and were
+# rebuilt with amend / reset --soft, which the shared-checkout rules forbid. Install: tools/hooks/install.sh
+# A hook lives in the common hooks dir, so every linked worktree (worktrees.py new) runs it.
+root="$(git rev-parse --show-toplevel)"
+script="$root/tools/harness/safety_review.py"
+[ -f "$script" ] || exit 0
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import yaml" >/dev/null 2>&1; then
+    exec "$candidate" "$script" --commit-msg "$1"
+  fi
+done
+echo "[commit-msg] no python with yaml; Safety-Review is not checked now (pre-push and CI still check it)" >&2
+exit 0

@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
@@ -163,3 +164,48 @@ def test_only_a_successful_absent_manifest_lookup_returns_empty(repo):
     assert safety_review._manifest(missing) == {}
     with pytest.raises(subprocess.CalledProcessError):
         safety_review._manifest("f" * 40)
+
+
+def _msg(tmp_path, text):
+    path = tmp_path / "MSG"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+def test_commit_msg_refuses_a_staged_safety_change_without_the_trailer(repo, tmp_path, capsys):
+    (tmp_path / "guard/g.py").write_text("g = 2\n", encoding="utf-8")
+    repo("add", "guard/g.py")
+    assert safety_review.commit_msg(_msg(tmp_path, "edit guard\n")) == 1
+    assert "Safety-Review: <reviewer/lane> <evidence>" in capsys.readouterr().err
+    assert safety_review.commit_msg(_msg(tmp_path, "edit guard\n\n# Safety-Review: x\n")) == 1  # a comment line is not a trailer
+    assert safety_review.commit_msg(_msg(tmp_path, f"edit guard\n\n{TRAILER}\n")) == 0
+
+
+def test_commit_msg_lets_a_non_safety_change_through(repo, tmp_path):
+    (tmp_path / "pkg/x.py").write_text("a = 3\n", encoding="utf-8")
+    repo("add", "pkg/x.py")
+    assert safety_review.commit_msg(_msg(tmp_path, "edit x\n")) == 0
+
+
+def test_installed_hook_blocks_the_commit_in_a_linked_worktree_too(repo, tmp_path):
+    hooks_src = Path(__file__).resolve().parents[1] / "tools"
+    (tmp_path / "tools/harness").mkdir(parents=True, exist_ok=True)
+    for name in ("safety_review.py", "safety_review_exempt.json"):
+        shutil.copy(hooks_src / "harness" / name, tmp_path / "tools/harness" / name)
+    repo("add", "-A")
+    repo("commit", "-q", "--no-verify", "-m", "tools")
+    hook = tmp_path / ".git/hooks/commit-msg"
+    hook.write_bytes((hooks_src / "hooks/commit-msg").read_bytes().replace(b"\r\n", b"\n"))
+    hook.chmod(0o755)
+    linked = tmp_path.parent / (tmp_path.name + "-linked")
+    repo("worktree", "add", "-q", "-b", "linked", str(linked))
+
+    def commit(*extra):
+        (linked / "guard/g.py").write_text("g = 9\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(linked), "add", "guard/g.py"], check=True)
+        return subprocess.run(["git", "-C", str(linked), "commit", "-q", "-m", "edit guard", *extra],
+                              capture_output=True, text=True)
+
+    refused = commit()
+    assert refused.returncode == 1 and "Safety-Review:" in refused.stderr
+    assert commit("-m", TRAILER).returncode == 0
