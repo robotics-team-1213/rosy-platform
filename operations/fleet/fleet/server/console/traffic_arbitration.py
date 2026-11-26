@@ -199,6 +199,9 @@ class TrafficArbitration:
 
     def _verdict(self, robot_id: str) -> str:
         """Trust only an explicit LOCALIZED map snapshot."""
+        marker_clearance = getattr(self, "_site_marker_clearance", None)
+        if marker_clearance is not None and robot_id in marker_clearance.offline:
+            return trust.UNTRUSTED
         return trust.classify(self._seen.get(robot_id))
 
     def _map_mismatch(self, mover: str, robot_id: str) -> bool:

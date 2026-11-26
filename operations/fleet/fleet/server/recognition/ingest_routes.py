@@ -130,7 +130,7 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
 
 def install_ingest_routes(app, *, console, console_token, hub, sightings,
                           policy_evidence, principals, require_viewer, read_guard,
-                          map_pose=None, station_ingress=None) -> None:
+                          map_pose=None, station_ingress=None, marker_clearance=None) -> None:
     if station_ingress is not None:
         from fleet.server.station_ingress_routes import install_station_ingress_routes
         station_ingress.assert_isolated(console, console_token, principals)
@@ -158,6 +158,8 @@ def install_ingest_routes(app, *, console, console_token, hub, sightings,
                                     detail={"code": exc.code, "message": str(exc)}) from exc
             if map_pose is not None:   # D-494 3: only an accepted sighting anchors the map pose
                 map_pose.observe_sighting(row)
+            if marker_clearance is not None:
+                marker_clearance.observe(row)
             return row
 
         @app.get("/api/fleet/sightings", dependencies=read_guard, tags=["sightings"])
