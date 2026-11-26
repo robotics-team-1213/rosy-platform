@@ -20,7 +20,7 @@ from threading import RLock
 import time
 from typing import Any, Callable, Optional, Protocol
 
-from core_features.command.manager import ZERO, Twist, CommandManager
+from core_features.command.manager import ZERO, Twist, RoadSpeedTwist, CommandManager
 from core_features.command._execution_fence import CONTEXT_CHANGED
 from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, MotionKind,
                                    PortCapabilities, PortDecision, PortState)
@@ -252,10 +252,9 @@ def _cmd_vel_cycle(command, power, send, readiness, warn, *, trial_guard,
         return
     submission_error = None
     def write():
-        authority = getattr(out, "road_speed_authority", None)
-        if authority is None:
+        if not isinstance(out, RoadSpeedTwist):
             return port.submit(guarded)
-        return authority.submit(
+        return out.road_speed_authority.submit(
             guarded.payload.linear_mps, guarded.payload.angular_radps, lambda: port.submit(guarded),
             lambda: PortDecision(False, "hold", "road_speed_authority_changed"))
 

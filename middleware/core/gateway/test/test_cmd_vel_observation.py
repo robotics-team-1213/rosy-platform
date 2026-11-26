@@ -167,8 +167,7 @@ def test_a_tightened_road_grant_blocks_an_already_selected_velocity_at_the_write
     import time
     from core_features.navigation.road_speed import RoadSpeedAuthority
     authority = RoadSpeedAuthority()
-    selected = cycle.Twist(.04, -.1)
-    selected.road_speed_authority = authority
+    selected = cycle.RoadSpeedTwist(.04, -.1, authority)
     stamp = time.time() - .1
     authority.update(stamp, stamp + 1.5, .05, 5.)
     def prewrite():

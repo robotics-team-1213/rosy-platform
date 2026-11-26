@@ -31,6 +31,11 @@ class Twist:
     angular: float = 0.0
 
 
+@dataclass
+class RoadSpeedTwist(Twist):
+    road_speed_authority: object = None
+
+
 @dataclass(frozen=True)
 class _AutonomousInput:
     linear: float
@@ -468,9 +473,9 @@ class CommandManager:
             return ZERO
         if candidate is not None and candidate.speed_authority is not None:
             output = candidate.speed_authority.apply(*output, time.monotonic())
-        result = Twist(*output)
-        if candidate is not None and candidate.speed_authority is not None:
-            result.road_speed_authority = candidate.speed_authority
+            result = RoadSpeedTwist(*output, candidate.speed_authority)
+        else:
+            result = Twist(*output)
         # D-400: judged after cmd_vel reached the wheels (announce_pending) so the
         # policy's cost never delays the output. Single slot: one candidate per cycle.
         self._pending_shadow = (command_id, source, linear, angular, now,
