@@ -6,7 +6,6 @@ Geometry only (D-947). Joint values are radians; the real arm's normalised units
 import json
 import math
 from pathlib import Path
-import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -16,6 +15,7 @@ URDF = ROOT / "learning/envs/isaac/assets/omx_f_palletizing_description/urdf/omx
 CELL_EXAMPLE = ROOT / "deploy/robot/omx/sim/ladder-cell.example.json"  # plan.home and plan.limits: the same numbers as cell_profile.yaml
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 REAL_HOME_GAP_M = .012  # closed-jaw floor matching cell_act_inputs.sim_gripper and omx_cell_sim.real_q
+REAL_HOME_GRIPPER_RAD = 0.13675807934711404  # palletizing_gripper.angle_for_gap_clipped(REAL_HOME_GAP_M) for v2.1 jaw
 _REG_EYE6 = 1e-4 * np.eye(6)  # ik's damped-least-squares regulariser, built once
 _CHAIN_CACHE = {}  # (resolved path, mtime_ns, size) -> (chain, tcp): every Arm() shares one URDF parse
 _PLAN_VALUES_CACHE = {}  # same-key cache for the cell file's plan block
@@ -63,11 +63,7 @@ def home_gripper_rad(kind="open"):
     if kind == "open":
         return 1.0
     if kind == "real":
-        isaac = str(ROOT / "learning/envs/isaac")
-        if isaac not in sys.path:
-            sys.path.insert(0, isaac)
-        import palletizing_gripper as jaw
-        return float(jaw.angle_for_gap_clipped(REAL_HOME_GAP_M))
+        return REAL_HOME_GRIPPER_RAD
     raise ValueError(f"unknown home_gripper {kind!r}: expected 'open' or 'real'")
 
 
