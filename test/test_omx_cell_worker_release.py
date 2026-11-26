@@ -85,7 +85,8 @@ def test_tools_env_derives_omx_and_pythonpath_from_tools_root(tmp_path):
                          text=True, check=True, env={**os.environ, "TOOLS_ROOT": "/rel", "ROSY_OMX_EXTRA_SITE": "",
                                                      "PYTHONPATH": "/before"}).stdout.splitlines()
     assert out[0] == "/rel/deploy/robot/omx"
-    assert out[1] == ("/rel/contracts/foundation:/rel/operations/overhead:/rel/middleware/devices/omx/adapter:"
+    # contracts/learning/src: cell_policy_drive -> cell_collect_plan imports rosy.contracts.learning (2026-11-26 S crash)
+    assert out[1] == ("/rel/contracts/foundation:/rel/contracts/learning/src:/rel/operations/overhead:/rel/middleware/devices/omx/adapter:"
                       "/rel/deploy/robot/omx:/before")
     env = {k: v for k, v in os.environ.items() if k != "TOOLS_ROOT"}  # unset: the release holding the file
     probe = subprocess.run([bash, "-c", f'. "{script}"; [ -f "$TOOLS_ROOT/deploy/robot/omx/session-wrappers/tools-env.sh" ] && echo ok'],
