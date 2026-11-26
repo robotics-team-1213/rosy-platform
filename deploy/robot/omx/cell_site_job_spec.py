@@ -3,7 +3,14 @@ from __future__ import annotations
 
 import re
 
-from cell_job_validators import FILE, NAME, _actor, _bool, _match, _num, _workdir_rel_path
+from cell_job_validators import FILE, NAME, _actor, _bool, _match, _num, _workdir_rel_path, resolve_under_workdir
+
+
+def check_site_files(job: dict, values: dict, workdir) -> None:
+    """Evidence files the job reads must be real files inside the workdir; symlinks are refused (resolve_under_workdir)."""
+    for name in job.get("workdir_files", ()):
+        if name in values and not resolve_under_workdir(workdir, values[name]).is_file():
+            raise ValueError(f"{name}: no such file in the workdir")
 
 SITE_JOBS = {
     # The arm never moves, so no person_at_switch; operator and proposer are required and must differ (D-1024).
@@ -19,16 +26,19 @@ SITE_JOBS = {
             "tier_step_m": _num(0.01, 0.1), "map_from": _match(NAME), "source": _match(re.compile(r"cad|depth|probe")),
             "evidence": _workdir_rel_path, "operator": _actor, "proposer": _actor,
         },
+        "workdir_files": ("evidence",),
         "optional": {"replace": _bool, "dry_run": _bool},
     },
     "site_promote": {
         "script": "cell_site_register.py",
-        "argv": ["promote", "--arm", "{arm}", "--config", "{config}", "--site", "{site}", "--post-eval", "{post_eval}",
+        "argv": ["promote", "--arm", "{arm}", "--config", "{config}", "--site", "{site}",
                  "--operator", "{operator}", "--proposer", "{proposer}"],
         "params": {
             "arm": _match(re.compile(r"arm_a|arm_b")), "config": _match(FILE), "site": _match(NAME),
-            "post_eval": _workdir_rel_path, "operator": _actor, "proposer": _actor,
+            "operator": _actor, "proposer": _actor,
         },
-        "optional": {"dry_run": _bool},
+        # XY from a cell_post_eval report or job log, Z from a surface touch receipt; the tool needs at least one, measured needs both
+        "workdir_files": ("post_eval", "z_evidence"),
+        "optional": {"post_eval": _workdir_rel_path, "z_evidence": _workdir_rel_path, "dry_run": _bool},
     },
 }

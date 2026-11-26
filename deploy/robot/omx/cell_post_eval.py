@@ -17,6 +17,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, cell_route_visit, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
+from cell_site_target import site_digest  # noqa: E402
 from cell_post_eval_summary import _visit_common_shift, lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
 
 SCHEMA = "rosy.omx-post-eval.v1"
@@ -344,7 +345,10 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
             except ValueError as exc:
                 escalated.append(f"bias_refused:{row['site']}:{exc}")
     lateral = lateral_summary(config, calibration)
-    return {"schema": SCHEMA, "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": rows,
+    sites = config.get("sites") or {}
+    digests = {r["site"]: site_digest(sites[r["site"]]) for r in rows if isinstance(sites.get(r["site"]), dict) and "place" in sites[r["site"]] and "surface_z" in sites[r["site"]]}
+    return {"schema": SCHEMA, "arm": config.get("arm_id") or config.get("arm"), "site_digest": digests,  # what a later promote binds the report to
+            "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": rows,
             "applied": applied, "escalated": list(dict.fromkeys(escalated)), "drift": drift, "rigid_drift": rigid,
             "lateral_xy": lateral, "verdict": "escalate" if escalated else lateral["verdict"]}
 
