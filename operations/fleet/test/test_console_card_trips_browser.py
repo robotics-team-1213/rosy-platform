@@ -653,7 +653,8 @@ def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):
         page.goto(site + "/console?view=work&show=new")
         page.clock.run_for(2500)
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
+        assert screens.locator('a[aria-current="page"]').count() == 0
+        assert page.locator("#console-screen").inner_text() == "새 작업"
         page.locator("#work-new-move").click()
         page.locator("#work-move-robot").select_option("rosy_02")
         form = page.locator("#work-move .card-trip")

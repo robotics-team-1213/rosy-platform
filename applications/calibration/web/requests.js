@@ -5,12 +5,20 @@ const $ = (id) => document.getElementById(id);
 const KIND = { measure: "측정", check: "확인" };
 const VERDICT = { pass: "통과", fail: "실패", neither: "어느 쪽도 아님" };
 
+export function requestHash() {
+  const id = location.hash.slice(1);
+  if (id === "main-content" || /^route-arm_[abs]$/.test(id)) return "";
+  return id === "request=main-content" ? "main-content" : id;
+}
+
+const requestLink = (id) => id === "main-content" ? "#request=main-content" : "#" + id;
+
 export function initRequests({ onSessionChanged } = {}) {
   let account = null;
   let canOperate = false;
   let loggingOut = false;
-  const requestHash = () => /^#route-arm_[abs]$/.test(location.hash) ? "" : location.hash.slice(1);
   let selected = requestHash();
+  let detailGeneration = 0;
 
   const text = (tag, value, className) => {
     const node = document.createElement(tag);
@@ -40,7 +48,7 @@ export function initRequests({ onSessionChanged } = {}) {
     $("empty").hidden = rows.length > 0;
     for (const row of rows) {
       const link = document.createElement("a");
-      link.href = "#" + row.id;
+      link.href = requestLink(row.id);
       if (row.id === selected) link.setAttribute("aria-current", "page");
       link.append(text("span", row.question));
       const done = row.status === "answered" ? `답함 · ${VERDICT[row.verdict] || row.verdict}` : "답 기다리는 중";
@@ -171,14 +179,18 @@ export function initRequests({ onSessionChanged } = {}) {
   }
 
   async function show(id) {
+    const generation = ++detailGeneration;
+    $("detail").hidden = true;
     try {
-      renderDetail(await api("/" + encodeURIComponent(id)));
+      const detail = await api("/" + encodeURIComponent(id));
+      if (generation !== detailGeneration) return;
+      renderDetail(detail);
       for (const link of document.querySelectorAll("#list a")) {
-        if (link.hash === "#" + id) link.setAttribute("aria-current", "page");
+        if (link.hash === requestLink(id)) link.setAttribute("aria-current", "page");
         else link.removeAttribute("aria-current");
       }
     } catch (error) {
-      say(error.message, "error");
+      if (generation === detailGeneration) say(error.message, "error");
     }
   }
 
@@ -191,6 +203,7 @@ export function initRequests({ onSessionChanged } = {}) {
       if (!selected && body.requests[0]) selected = body.requests[0].id;
       if (selected) await show(selected);
     } catch (error) {
+      detailGeneration++;
       $("detail").hidden = true;
       renderList([]);
       say(
@@ -245,8 +258,13 @@ export function initRequests({ onSessionChanged } = {}) {
     if (!loggingOut) session.restore();
   }, 10000);
   window.addEventListener("hashchange", () => {
+    if (location.hash === "#main-content") return;
     selected = requestHash();
     if (selected) show(selected);
+    else {
+      detailGeneration++;
+      $("detail").hidden = true;
+    }
   });
 
   return { session, refresh };

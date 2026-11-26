@@ -48,18 +48,28 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     page.locator('[data-login=submit]').click()
     expect(page).to_have_url(origin + target)
     expect(page.locator('#user-role')).to_have_text('운영자')
-    for view, shows in [('work', ['', 'pending', 'done', 'new']),
-                        ('records', ['', 'open', 'closed', 'facts', 'log'])]:
-        page.locator(f'.doc-tabs a[href="/console?view={view}"]').click()
-        for show in shows:
-            path = f'/console?view={view}' + (f'&show={show}' if show else '')
-            link = page.locator(f'.ui-subnav a[href="{path}"]')
-            link.click()
-            expect(page).to_have_url(origin + path)
-            expect(page.locator(f'.ui-subnav[data-area={view}]')).to_be_visible()
-            expect(page.locator(f'.ui-subnav a[href="{path}"]')).to_have_attribute('aria-current', 'page')
-            if view == 'work':
-                expect(page.locator('#work-new' if show == 'new' else '#work-overview')).to_be_visible()
+    work_tab = page.locator('.doc-tabs a[href="/console?view=work"]')
+    work_tab.click()
+    filters = page.locator('#work-status-filter')
+    for show in ['', 'pending', 'done']:
+        path = '/console?view=work' + (f'&show={show}' if show else '')
+        link = filters.locator(f'a[href="{path}"]')
+        link.click()
+        expect(page).to_have_url(origin + path)
+        expect(link).to_have_attribute('aria-current', 'true')
+        expect(page.locator('#work-overview')).to_be_visible()
+    page.locator('#work-create').click()
+    expect(page).to_have_url(origin + target)
+    expect(work_tab).to_have_attribute('aria-current', 'page')
+    expect(page.locator('#work-new')).to_be_visible()
+    page.locator('.doc-tabs a[href="/console?view=records"]').click()
+    records = page.locator('.ui-subnav[data-area=records]')
+    for show in ['', 'open', 'closed', 'facts', 'log']:
+        path = '/console?view=records' + (f'&show={show}' if show else '')
+        link = records.locator(f'a[href="{path}"]')
+        link.click()
+        expect(page).to_have_url(origin + path)
+        expect(link).to_have_attribute('aria-current', 'page')
     for path in ['/console', '/console/site-map', '/console/install']:
         page.locator(f'.doc-tabs a[href="{path}"]').click()
         expect(page).to_have_url(origin + path)
@@ -69,7 +79,7 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
         expect(page.locator('.ui-subnav[data-area=records]')).to_be_hidden()
         expect(page.locator('[aria-labelledby=map-heading]')).to_be_visible()
     page.locator('.doc-tabs a[href="/console?view=work"]').click()
-    page.locator(f'.ui-subnav a[href="{target}"]').click()
+    page.locator('#work-create').click()
     expect(page.locator('#user-role')).to_have_text('운영자')
     page.locator('#topbar-more').click()
     with page.expect_popup() as opened:

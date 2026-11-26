@@ -473,7 +473,8 @@ canvas.addEventListener('blur',()=>{if(stroke?.id===null)cancel();});
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){event.preventDefault();cancel();}else if(event.key==='Escape'&&polygon.length){event.preventDefault();polygon=[];paint();enable();}else if(event.key==='Escape'&&seeds.length){event.preventDefault();clearSamples();}
    if(event.code==='KeyZ'&&(event.ctrlKey||event.metaKey)&&!event.shiftKey&&!event.isComposing&&!event.target?.matches?.('input, textarea, select, [contenteditable]')&&!event.repeat&&!$('pixel-undo').disabled){event.preventDefault();$('pixel-undo').click();return;}
   // Arrow keys move between photos; number fields keep their native stepping.
-  if((event.key==='ArrowLeft'||event.key==='ArrowRight')&&!['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)){
+  if((event.key==='ArrowLeft'||event.key==='ArrowRight')&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey
+     &&!event.isComposing&&!event.defaultPrevented&&!['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)){
     const button=$(event.key==='ArrowLeft'?'pixel-prev':'pixel-next');
     if(button&&!button.disabled){event.preventDefault();button.click();}
   }

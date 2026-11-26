@@ -5,7 +5,12 @@
   const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
   if (!areaNav) return;
   areaNav.hidden = false;
-  const show = [...areaNav.querySelectorAll("a")].some(link => link.href.endsWith(`show=${area.get("show")}`)) ? area.get("show") : null;
+  const requested = area.get("show");
+  const workLabel = area.get("view") === "work" && new Map([
+    ["pending", "승인 대기"], ["done", "끝난 작업"], ["new", "새 작업"],
+  ]).get(requested);
+  const hasScreen = [...areaNav.querySelectorAll("a")].some(link => new URL(link.href).searchParams.get("show") === requested);
+  const show = hasScreen || (requested === "new" && workLabel) ? requested : null;
   for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
     const to = new URL(link.href).searchParams;
     if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === show)) link.setAttribute("aria-current", "page");
@@ -16,7 +21,7 @@
   const currentArea = [...document.querySelectorAll(".doc-tabs a")].find(link => link.getAttribute("aria-current") === "page");
   const currentScreen = document.querySelector('.ui-subnav a[aria-current="page"]') ?? currentArea;
   screenLabel.hidden = false;
-  screenLabel.textContent = (currentScreen?.textContent ?? "").trim();
+  screenLabel.textContent = workLabel || (currentScreen?.textContent ?? "").trim();
   // console.js clears it once the panels are in place; the timer shows the page if console.js never runs.
   document.documentElement.dataset.areaPending = "";
   setTimeout(() => delete document.documentElement.dataset.areaPending, 2000);
