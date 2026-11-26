@@ -1426,6 +1426,7 @@ safety_modules:
   - operations/fleet/fleet/server/console/traffic_arbitration_helpers.py  # D-766 traffic_arbitration.py split: state remember, snapshot traffic release, localization holds
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/peer_motion_wire.py  # peer motion generations used by rear-dock wire admission
   - operations/fleet/fleet/server/named_stop_motion.py  # D-1051 named-stop custody claim and repark alignment
   - operations/fleet/fleet/swarm/motion_ingress.py  # D-1051 which robot calls start or sustain motion
   - operations/fleet/fleet/server/tether_watch.py
