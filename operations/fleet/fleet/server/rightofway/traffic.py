@@ -14,10 +14,9 @@ from __future__ import annotations
 import math
 from typing import Iterable, Optional, Sequence
 
-#: 두 경로가 이보다 가까이 스치면 같은 자리를 두고 다툰다고 본다. pinky 풋프린트가
-#: 0.12 m 이고 서로 비켜서려면 대략 두 대 폭 + 여유가 필요하다. 1.4 m 통로에서 이 값이면
-#: 마주 오는 경로만 걸리고, 넓은 방에서 스쳐 지나가는 경로는 걸리지 않는다.
-DEFAULT_CLEARANCE_M = 0.7
+#: 두 경로가 이보다 가까이 스치면 같은 자리를 두고 다툰다고 본다. pinky 반폭 ~0.06 m
+#: 기준으로 실제 교행·겹침 구간만 잡고 불필요한 장거리 보류를 줄인다.
+DEFAULT_CLEARANCE_M = 0.19
 
 #: 경로는 5 cm 간격의 조밀한 폴리라인이다. 전부 비교하면 O(n*m) 이 수천 x 수천이 된다.
 #: 20 cm 간격이면 충돌 판정에 충분하고 비교량은 1/16 로 줄어든다.
@@ -71,12 +70,7 @@ def closest_approach(a: Sequence[Point], b: Sequence[Point]) -> Optional[float]:
     """두 경로가 가장 가까워지는 거리. 한쪽이라도 비면 `None`."""
     if not a or not b:
         return None
-    thin_a, thin_b = thin(a), thin(b)
-    best = math.inf
-    for point in thin_a:
-        for other in thin_b:
-            best = min(best, math.dist(point, other))
-    return best
+    return polyline_distance(thin(a), thin(b))
 
 
 def routes_conflict(a: Sequence[Point], b: Sequence[Point],

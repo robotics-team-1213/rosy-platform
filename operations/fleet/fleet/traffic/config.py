@@ -4,8 +4,8 @@ import math
 import sys
 from pathlib import Path
 
-DEFAULT_SITE_KEEP_OUT_M = 0.32
-MIN_SITE_KEEP_OUT_M = 0.28
+DEFAULT_SITE_KEEP_OUT_M = 0.18
+MIN_SITE_KEEP_OUT_M = 0.16
 
 
 def _traffic_zones(args) -> dict:
@@ -75,7 +75,7 @@ def _traffic_signal_advice(args) -> bool:
 
 
 def _traffic_site_keep_out_m(args) -> float:
-    """Site-frame obstacle keep-out radius in metres (``fleet.traffic.site_keep_out_m``, default 0.32, >= 0.28)."""
+    """Site-frame obstacle keep-out radius in metres (``fleet.traffic.site_keep_out_m``, default 0.18, >= 0.16)."""
     import yaml
 
     try:
