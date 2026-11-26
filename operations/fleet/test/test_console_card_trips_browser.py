@@ -491,25 +491,26 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
         browser.close()
 
 
-def test_a_failed_trip_cancel_still_stops_lane_driving(site):  # noqa: F811
-    """Review 1: if the trip cancel fails, the fallback also turns lane driving OFF (Fleet's trip guard then
-    ends the open trip), not only the goal cancel."""
+def test_unconfirmed_trip_cancel_keeps_retry_scoped_to_the_trip(site):
+    """A transport failure leaves ownership ambiguous, even with lane tracking active."""
+    from playwright.sync_api import expect
 
     lead = _robot("rosy_01")
     lead["state"]["line_follow"] = {"mode": "CAMERA_LINE", "state": "TRACKING"}
-    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [lead, LANE, _robot("rosy_03"), OFFLINE]}}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [lead, LANE, OFFLINE]}}
+    path = "/api/fleet/trips/t-1/cancel"
     posts = []
-    answers = {"/api/fleet/trips/t-1/cancel": (503, {"detail": "busy"}),
-               "/api/fleet/robots/rosy_01/cancel": (200, {"ok": True}),
-               "/api/fleet/robots/rosy_01/line-follow": (200, {"result": {"state": "OFF"}})}
+    answers = {path: (503, {"detail": "busy"})}
     browser, page, errors = _open(None, site, api, posts, answers)
     try:
-        card = _card(page, "rosy_01")
-        card.locator('ui-button[data-cancel-scope="trip"]').click()
-        _settle(page, posts, "/api/fleet/robots/rosy_01/line-follow")
-        assert ("/api/fleet/trips/t-1/cancel", None) in posts
-        assert ("/api/fleet/robots/rosy_01/cancel", None) in posts
-        assert ("/api/fleet/robots/rosy_01/line-follow", '{"mode":"OFF"}') in posts
+        page.route("**/api/fleet/trips/t-1", lambda route: route.fulfill(json=LEAD))
+        cancel = _card(page, "rosy_01").locator('ui-button[data-cancel-scope="trip"]')
+        cancel.click()
+        expect(page.locator("#log")).to_contain_text("운행 취소 미확인")
+        answers[path] = (200, {**LEAD, "state": "canceled", "detail": {"stop_sent": True}})
+        cancel.click()
+        expect(page.locator("#log")).to_contain_text("기체 정지 명령 수락")
+        assert posts == [(path, None), (path, None)]
         assert not errors
     finally:
         browser.close()
