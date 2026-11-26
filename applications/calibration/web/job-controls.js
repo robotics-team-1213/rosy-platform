@@ -1,5 +1,5 @@
 import { setOff } from "/common/cause-line.js";
-import { postEvalFollowUp, postEvalRequest } from "./status-logic.js";
+import { checkFollowUp, postEvalFollowUp, postEvalRequest } from "./status-logic.js";
 
 const $ = id => document.getElementById(id);
 const moving = new Set(["remap", "pivot-near", "surface", "post-eval"]);
@@ -39,7 +39,7 @@ function showJob(id) {
       const label = {running: "실행 중", done: "종료", failed: "실패", interrupted: "중단 · 완료 여부 미확인"}[job.status] || job.status;
       $("jobProgress").textContent = [owner, id, label, job.error].filter(Boolean).join(" · ");
       $("jobOutput").textContent = [job.error, job.result && JSON.stringify(job.result, null, 2), job.log_tail].filter(Boolean).join("\n");
-      showFollowUp(job.step === "post-eval" ? postEvalFollowUp(job.result) : null);
+      showFollowUp(job.step === "post-eval" ? postEvalFollowUp(job.result) : job.step === "check" ? checkFollowUp(job.result) : null);
       if (job.status !== "running") return;
     } catch (err) {
       if (selected !== id || arm !== owner) return;
@@ -58,7 +58,8 @@ function showFollowUp(follow) {
   box.hidden = !follow;
   if (!follow) return;
   const p = document.createElement("p");
-  p.textContent = follow.saved ? `편차 보정값 ${follow.saved}개를 저장했습니다. 저장한 좌표는 다시 검증하세요.` : "저장한 편차 보정값은 없습니다.";
+  p.textContent = follow.saved === undefined ? "점검이 권하는 다음 작업입니다." : follow.saved
+    ? `편차 보정값 ${follow.saved}개를 저장했습니다. 저장한 좌표는 다시 검증하세요.` : "저장한 편차 보정값은 없습니다.";
   box.appendChild(p);
   for (const next of follow.steps) {
     const button = document.createElement("ui-button");

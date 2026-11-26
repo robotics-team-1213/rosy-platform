@@ -139,6 +139,40 @@ def test_operator_starts_job_and_recovers_its_result_after_reload(screen):
             browser.close()
 
 
+def test_a_check_offers_a_pivot_for_each_uncovered_working_point(screen):
+    """After a remap the bias is empty; the check names where to measure, one click from the form (2026-11-26)."""
+    import json as _json
+
+    from playwright.sync_api import expect, sync_playwright
+
+    url, account, calls, jobs, _ = screen
+    account.callback = url + "/api/account/callback"
+    account.apps = lambda cookie: []
+    spawn = jobs.spawn
+
+    def check(argv, cwd, env, log):
+        proc = spawn(argv, cwd, env, log)
+        log.write_text(_json.dumps({"check": {"bias_coverage_gaps": [{"site": "floor", "suggested_pivot": [0.1, -0.2]}]},
+                                    "todo": []}) + "\n", encoding="utf-8")
+        return proc
+
+    jobs.spawn = check
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, 390, 844, url=url)
+        try:
+            page.context.add_cookies([{"name": web.SESSION_COOKIE, "value": "valid", "url": url}])
+            page.goto(url + "/?arm=arm_b")
+            page.locator("#jobStep").select_option("check")
+            page.locator("#jobStart").click()
+            expect(page.locator("#jobFollow")).to_contain_text("점검이 권하는 다음 작업", timeout=10000)
+            page.locator("#jobFollow ui-button").click()
+            expect(page.locator("#jobStep")).to_have_value("pivot-near")
+            expect(page.locator("#jobTargets")).to_have_value("floor:0.1,-0.2")
+            assert len(calls["spawn"]) == 1  # filling the form starts nothing
+        finally:
+            browser.close()
+
+
 def test_a_post_eval_saves_and_offers_the_escalated_step(screen):
     """2026-11-26 user: a visit saves what it measured, and the named next step is one click from the form."""
     import json as _json
