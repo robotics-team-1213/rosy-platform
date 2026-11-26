@@ -7,6 +7,58 @@ from test_calibration_jobs_api import cell, screen, web  # noqa: F401
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1")
 
 
+def test_arm_route_panels_show_only_the_requested_slots_and_preserve_both_results(screen):
+    from playwright.sync_api import expect, sync_playwright
+
+    url, account, calls, jobs, _ = screen
+    account.callback = url + "/api/account/callback"
+    account.apps = lambda cookie: []
+    pairs = {"arm_a": ["tmp-a-1-l1", "ship-h1r0-l0"], "arm_b": ["tmp-b-2-l1", "ship-h1r2-l0"]}
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, 1200, 800, url=url)
+        try:
+            page.context.add_cookies([{"name": web.SESSION_COOKIE, "value": "valid", "url": url}])
+            arms = {arm: {"sites": {}, "route_sites": pair} for arm, pair in pairs.items()}
+            arms["arm_s"] = {"sites": {"pinky": {"place_xy_m": [0.2, 0.03], "surface_z": 0.01}}}
+            page.route("**/api/calibration/status", lambda r: r.fulfill(json={"arms": arms}))
+            sent = []
+
+            def handle(route):
+                if route.request.method == "GET":
+                    return route.fulfill(json={"jobs": []})
+                body = route.request.post_data_json
+                sent.append(body)
+                arm = body["arm"]
+                if arm == "arm_s":
+                    return route.fulfill(status=202, json={"id": "s-check", "arm": arm, "step": "check", "status": "done",
+                        "result": {"check": {"camera_shift": {"ok": True}}, "todo": []}})
+                route.fulfill(status=202, json={"id": arm + "-test", "arm": arm, "step": "check", "route": pairs[arm],
+                    "route_config": arm + ".json", "status": "done", "result": {"todo": ["remap"] if arm == "arm_a" else [],
+                        "check": {"route": {"calibration_evidence": {"sites": {"source": {"top_roi": [1, 2, 3, 4]},
+                            "destination": {}}, "reference_current": arm == "arm_b", "next_machine_action": "measure_named_xy"}}}}})
+
+            page.route("**/api/calibration/jobs", handle)
+            page.goto(url + "/?arm=arm_b")
+            supply = page.locator("#routePanels article").filter(has_text="S팔 경로 점검")
+            expect(supply).to_contain_text("pinky → belt")
+            supply.get_by_text("경로 사전 점검", exact=True).click()
+            expect(supply).to_contain_text("카메라 · 기준 영상 확인")
+            assert sent.pop() == {"arm": "arm_s", "step": "check", "targets": ["pinky:0.2,0.03"]}
+            for arm, name in (("arm_a", "A"), ("arm_b", "B")):
+                panel = page.locator("#routePanels article").filter(has_text=name + "팔 경로 점검")
+                expect(panel.get_by_label("출발칸")).to_have_value(pairs[arm][0])
+                expect(panel.get_by_label("도착칸")).to_have_value(pairs[arm][1])
+                panel.get_by_text("경로 사전 점검", exact=True).click()
+                expect(panel).to_contain_text("칸 중심 XY 실측")
+                expect(panel).to_contain_text(arm + "-test")
+            expect(page.locator("#routePanels article").nth(1)).to_contain_text("카메라 XY 맵 재측정 필요")
+            expect(page.locator("#routePanels article").last).not_to_contain_text("카메라 XY 맵 재측정 필요")
+            assert sent == [{"arm": arm, "step": "check", "route": pair} for arm, pair in pairs.items()]
+            assert not calls["spawn"]
+        finally:
+            browser.close()
+
+
 def test_operator_starts_job_and_recovers_its_result_after_reload(screen):
     from playwright.sync_api import expect, sync_playwright
 

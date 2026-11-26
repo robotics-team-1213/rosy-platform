@@ -2,3 +2,8 @@
 #jobForm textarea, #jobForm select { max-width: 100%; min-width: 0; }
 #jobDetail, #jobForm { min-width: 0; }
 #jobOutput { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
+.cal-route-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--space-3); }
+.cal-route-panels[hidden] { display: none; }
+.cal-route-panels select { width: 100%; }
+.cal-route-panels ul { padding-inline-start: var(--space-5); }
+.cal-route-panels pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
