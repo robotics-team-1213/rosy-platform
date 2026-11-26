@@ -395,3 +395,43 @@ def test_paced_retreat_log_oserror_does_not_corrupt_safety_done(tmp_path):
     # _hold_and_log ran AFTER try/except, so best-effort redundant hold should only run once if safety_done wasn't set
     assert "human-hold" in cell.commands and not any(c.endswith("park") for c in cell.commands)
 
+
+def test_partial_target_act_grasp_sets_holding_and_paced_abort_holds_instead_of_parking(tmp_path):
+    from chunk_runner_settle import check_chunk_settled
+
+    runner = _dummy_runner(holding=False, target_grip=52.8)
+    runner.chunk = "policy"
+    runner.library = {"fps": 30, "gripper_closed": 48.8, "chunks": {"home": [[0.0] * 6]}}
+    runner.fps, runner.over_ticks, runner.damped_ticks = 30, 0, 0
+    runner.last_grip, runner.last_body, runner.settle_since = 54.04, [20.78, 5.15, 3.0, 43.59, -29.18], 0.0
+    runner.read_health = lambda: {"pwm": [15, -258, -168, 20, -23, -101], "current_ma": [0, 0, 0, 0, 0, 110]}
+    runner.report = lambda **kw: reported.append(kw)
+    reported = []
+    check_chunk_settled(runner, [20.78, 5.15, 3.0, 43.59, -29.18, 54.04], 0.5, 1.0, lambda _n, d: d)
+    assert runner.holding is True and reported[0]["holding"] is True and reported[0]["gripper_current_ma"] == 110
+
+    cell = _RetreatCell(run_replies=[{"ok": True, "settled": True, "holding": False, "state": [38.8, -10.0, 2.0, 55.0, -14.0, 54.0],
+                                      "target": [38.8, -10.0, 2.0, 55.0, -14.0, 52.8], "health": {"pwm": [0, 0, 0, 0, 0, -101], "current_ma": [0, 0, 0, 0, 0, 110]}}])
+    # Chunk 1 fails shaping/envelope after Chunk 0 picked with closing PWM -101 and lag -> must human-hold, NEVER retreat/park
+    res = drive.run_episode(
+        cell, _PacedSeqPolicy([[[38.8, -10.0, 2.0, 55.0, -14.0, 52.8]] * 16, [[99.0, -10.0, 2.0, 55.0, -14.0, 52.8]] * 16]),
+        _write_lib(tmp_path), tmp_path, offset=[0.0] * 6, max_chunks=2, dry_run=False, log=lambda _r: None,
+        kin=_FakeKin(), paced_chunks=True, n_action=4,
+    )
+    assert res["result"] == "refused" and res["parked"] is False and cell.commands[-1] == "human-hold"
+    assert not any(c.endswith("park") for c in cell.commands)
+
+
+def test_stop_fold_preserves_partial_target_held_gripper_instead_of_squeezing_closed():
+    from chunk_runner_commands import dispatch_runner_command
+
+    runner = _dummy_runner(holding=True, target_grip=52.8)
+    runner.chunk, runner.fps = None, 30
+    runner.params = {}
+    runner.operating_context = {"scope": "hardware"}
+    runner.robot = SimpleNamespace(motion=SimpleNamespace(held=set()))
+    runner.present = lambda: [20.4, 12.6, 6.6, 30.8, -29.0, 54.0]
+    runner.library = {"fps": 30, "gripper_closed": 48.8, "chunks": {"home": [[0.8, -62.2, 53.1, 51.6, 45.2, 48.8]]}}
+    assert dispatch_runner_command(runner, "stop fold") is True
+    assert runner.queue and all(f[5] == pytest.approx(52.8) for f in runner.queue)
+

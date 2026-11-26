@@ -89,3 +89,46 @@ def test_upkeep_never_reads_or_writes_another_arms_board(cell):
     row = cuc.check_registers("arm_b", str(ports["arm_a"]), Bus(), True, Path("."), "s")
     assert row["status"] == "fail" and "arm_a's board" in row["detail"]
     assert cuc.check_pose("arm_b", str(ports["arm_a"]), Bus(), {"chunks": {"home": [[0] * 6]}})["status"] == "fail"
+
+
+def test_safe_home_unlinks_stale_out_sets_session_chunks_and_refuses_held_lease(cell, monkeypatch):
+    tmp_path, ports = cell
+    args = args_for(tmp_path, ports["arm_b"])
+    out_file = Path(args.out)
+    stale = {"result": "held", "reason": "ALL_PATHS_BLOCKED"}
+
+    # 1. Held lease refuses before probing hardware or launching wrapper
+    out_file.write_text(json.dumps(stale))
+    read_calls, run_calls = [], []
+    rc, res = csh.run_safe_home(
+        args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {"arm_b": {"hold": "runner HOLD", "owner": "api", "pid": 99}},
+        read_fn=lambda d: read_calls.append(d) or [], run_fn=lambda *a, **k: run_calls.append((a, k)) or SimpleNamespace(returncode=0),
+    )
+    assert (rc, res["result"], res["hold"]) == (2, "refused_lease_held", "runner HOLD")
+    assert read_calls == [] and run_calls == [] and json.loads(out_file.read_text())["result"] == "refused_lease_held"
+
+    # 2. Pre-start wrapper failure (exit 2 without writing out.json) never leaks stale ALL_PATHS_BLOCKED and propagates ROSY_SESSION_CHUNKS
+    for live_mode in (False, True):
+        out_file.write_text(json.dumps(stale))
+        envs = []
+        rc, res = csh.run_safe_home(
+            args, live_fn=lambda _c, m=live_mode: m, lease_status_fn=lambda _a: {}, read_fn=lambda _d: [{"id": 11, "hardware_error": 0}],
+            status_fn=lambda _a: {"incident_ids": []}, run_fn=lambda *a, **k: envs.append(k.get("env")) or SimpleNamespace(returncode=2),
+        )
+        assert rc == 2 and res["result"] != "held" and res.get("reason") != "ALL_PATHS_BLOCKED"
+        assert json.loads(out_file.read_text())["result"] == res["result"]
+        if not live_mode:
+            assert envs[0]["ROSY_SESSION_CHUNKS"] == str(args.library.resolve())
+
+    # 3. Paused observer is released if status_fn or wrapper fails before session start
+    released = []
+    import register_probe as rp
+    import omx_incident_reassess as oir
+    monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: True)
+    monkeypatch.setattr(rp, "open_readonly_port", lambda _d: SimpleNamespace(__enter__=lambda s: s, __exit__=lambda *a: None))
+    monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: [{"id": 11, "hardware_error": 0}])
+    monkeypatch.setattr(csh, "_release_observer", lambda arm: released.append(arm))
+    with pytest.raises(RuntimeError):
+        csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+                          status_fn=lambda _a: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert released == ["arm_b"]

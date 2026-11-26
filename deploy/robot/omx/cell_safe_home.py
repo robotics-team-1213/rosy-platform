@@ -90,7 +90,7 @@ def _release_observer(arm: str) -> None:
         pass
 
 
-def _check_hw_clean(arm: str, device: str | None, *, read_fn=None) -> tuple[bool, list[dict], str | None]:
+def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=None) -> tuple[bool, list[dict], str | None]:
     if read_fn is None and (not device or not Path(device).exists()):
         return False, [{"error": "follower device unresolved or missing"}], "refused_hw_probe_unavailable"
     import register_probe
@@ -101,6 +101,8 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None) -> tuple[bool
             import omx_incident_reassess
 
             stopped_obs = omx_incident_reassess.pause_observer_if_sole_holder(arm, device)
+            if stopped_out is not None:
+                stopped_out.append(stopped_obs)
         if read_fn is not None:
             rows = read_fn(device)
         else:
@@ -109,6 +111,8 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None) -> tuple[bool
     except Exception as exc:  # noqa: BLE001
         if stopped_obs:
             _release_observer(arm)
+            if stopped_out is not None:
+                stopped_out.clear()
         msg = str(exc)
         reason = "refused_hw_error" if ("hardware alert" in msg or ("ping failed" in msg and ", 128)" in msg)) else "refused_hw_probe_unavailable"
         return False, [{"error": f"{type(exc).__name__}: {msg}"[:200]}], reason
@@ -116,6 +120,8 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None) -> tuple[bool
     if bad:
         if stopped_obs:
             _release_observer(arm)
+            if stopped_out is not None:
+                stopped_out.clear()
         return False, bad, "refused_hw_error"
     return True, [], None
 
@@ -128,7 +134,8 @@ def _write_out(path: Path, payload: dict) -> None:
 
 
 def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=None, token_fn=None,
-                  live_fn=None, wait_sess_fn=None, now=time.time, sleep=time.sleep) -> tuple[int, dict]:
+                  live_fn=None, wait_sess_fn=None, lease_status_fn=None, now=time.time, sleep=time.sleep) -> tuple[int, dict]:
+    import cell_arm_lease
     import cell_auto_fold as af
     from cell_job_spec import SESSION
     from cell_recovery_plan import wait_session_json
@@ -137,52 +144,84 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
 
     cfg_path = Path(args.config).expanduser()
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    out_path = Path(args.out)
     fold_cmd = [
         sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"),
         "--supervised", "--arm", args.arm, "--config", str(args.config), "--library", str(args.library),
-        "--site", args.site, "--roi", *map(str, args.roi), "--out", str(args.out),
+        "--site", args.site, "--roi", *map(str, args.roi), "--out", str(out_path),
     ]
+    def _read_out(proc, default_result: str, extra: dict | None = None) -> dict:
+        if out_path.is_file():
+            try:
+                return json.loads(out_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        payload = {"result": default_result, "reason": f"process exited {proc.returncode} before writing safe_home output",
+                   "arm": args.arm, "returncode": proc.returncode, **(extra or {})}
+        _write_out(out_path, payload)
+        return payload
+
     device, device_refusal = _resolve_device(args.arm, cfg_path, cfg, args.device)
     if device_refusal:  # before any fold: the fold and its session would command the same wrong board
         res = {"result": device_refusal, "arm": args.arm, "device": device}
-        _write_out(Path(args.out), res)
+        _write_out(out_path, res)
         return 2, res
+    out_path.unlink(missing_ok=True)
     is_live = (live_fn or _live_hold_active)(cfg)
     if is_live:
         proc = (run_fn or subprocess.run)([*fold_cmd, "--unlatch-hold"], timeout=3600)
-        out = json.loads(Path(args.out).read_text(encoding="utf-8")) if Path(args.out).is_file() else {}
+        out = _read_out(proc, "failed", {"mode": "live_hold_unlatch"})
         return proc.returncode, {**out, "mode": "live_hold_unlatch"}
 
-    hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn)
+    lease_fn = lease_status_fn if lease_status_fn is not None else (cell_arm_lease.status if read_fn is None else None)
+    if lease_fn is not None:
+        rec = (lease_fn(args.arm) or {}).get(args.arm)
+        if rec and rec.get("hold"):
+            res = {"result": "refused_lease_held", "arm": args.arm, "owner": rec.get("owner"),
+                   "hold": rec.get("hold"), "pid": rec.get("pid")}
+            _write_out(out_path, res)
+            return 2, res
+
+    stopped_obs: list[bool] = []
+    hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn, stopped_out=stopped_obs)
     if not hw_ok:
         res = {"result": refuse_reason or "refused_hw_error", "arm": args.arm, "device": device, "bad_motors": bad}
-        _write_out(Path(args.out), res)
+        _write_out(out_path, res)
         return 2, res
 
-    st = (status_fn or omx_incident.status)(args.arm)
-    ids = list(st.get("incident_ids") or [])
-    if len(ids) > args.max_incidents:
-        if read_fn is None:
+    def _release_if_paused() -> None:
+        if stopped_obs and stopped_obs[0]:
             _release_observer(args.arm)
-        res = {"result": "refused_too_many_incidents", "arm": args.arm, "incident_ids": ids}
-        _write_out(Path(args.out), res)
-        return 2, res
+            stopped_obs.clear()
 
-    wrapper = SESSION.get(args.arm)
-    if not wrapper:
-        if read_fn is None:
-            _release_observer(args.arm)
-        res = {"result": "refused_no_wrapper", "arm": args.arm}
-        _write_out(Path(args.out), res)
-        return 2, res
-    env = dict(os.environ)
-    if ids:
-        env["ROSY_RECOVERY_INCIDENT"] = ",".join(ids)
-    started = now()
-    proc = (run_fn or subprocess.run)([wrapper, *fold_cmd], env=env, timeout=3600)
-    out = json.loads(Path(args.out).read_text(encoding="utf-8")) if Path(args.out).is_file() else {"result": "failed"}
-    if proc.returncode != 0 or out.get("result") != "folded":
-        return (proc.returncode or 3), out
+    try:
+        st = (status_fn or omx_incident.status)(args.arm)
+        ids = list(st.get("incident_ids") or [])
+        if len(ids) > args.max_incidents:
+            _release_if_paused()
+            res = {"result": "refused_too_many_incidents", "arm": args.arm, "incident_ids": ids}
+            _write_out(out_path, res)
+            return 2, res
+
+        wrapper = SESSION.get(args.arm)
+        if not wrapper:
+            _release_if_paused()
+            res = {"result": "refused_no_wrapper", "arm": args.arm}
+            _write_out(out_path, res)
+            return 2, res
+        env = dict(os.environ)
+        env["ROSY_SESSION_CHUNKS"] = str(Path(args.library).expanduser().resolve())
+        if ids:
+            env["ROSY_RECOVERY_INCIDENT"] = ",".join(ids)
+        started = now()
+        proc = (run_fn or subprocess.run)([wrapper, *fold_cmd], env=env, timeout=3600)
+        out = _read_out(proc, "session_start_failed")
+        if proc.returncode != 0 or out.get("result") != "folded":
+            _release_if_paused()
+            return (proc.returncode or 3), out
+    except BaseException:
+        _release_if_paused()
+        raise
 
     cleared_ids, clear_errors = [], {}
     if ids and not args.no_clear:
