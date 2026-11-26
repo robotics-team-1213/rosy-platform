@@ -116,34 +116,21 @@ export function roadOverlayPoints(mapId, edge) {
   return points;
 }
 
-// world_261026, ceiling_north floor plane, 2026-11-26 (400 px/m).
-// C1 follows the visible pink stripe. The upper lane is halfway between two white stripes.
-// No centreline is painted through the U-turn; only its straight approach was measured.
-const floorSurvey = {
-  bay_1: {from: "P1", to: "C1", anchors: [[-0.43002, 0.04266], [-0.41816, 0.47]],
-    points: [[-0.4222, 0.0433], [-0.4386, 0.4400]]},
-  upper_east: {from: "S3", to: "J_in", anchors: [[0.745, -0.207], [0.31418, -0.25008]],
-    points: [[0.745, -0.25008], [0.31418, -0.25008]]},
-  loop_right: {from: "S5", to: "S3", anchors: [[0.89822, -0.48152], [0.745, -0.207]],
-    points: [[0.9238, -0.25008], [0.745, -0.25008]]},
-};
-
-export function surveyedRoadPoints(map, edge) {
-  if (map?.map_id !== "world_261026" || !Object.hasOwn(floorSurvey, edge.id)) return null;
-  const survey = floorSurvey[edge.id];
-  if (edge.from !== survey.from || edge.to !== survey.to || edge.polyline.length < 2) return null;
-  const ends = [edge.polyline[0], edge.polyline.at(-1)];
-  // A relocated edge needs a new field comparison. Allow only coordinate rounding (1 mm).
-  const sameAnchors = ends.every(([x, y], i) =>
-    Math.hypot(x - survey.anchors[i][0], y - survey.anchors[i][1]) <= 0.001);
-  return sameAnchors ? survey.points : null;
+// 2026-11-26: the measured line comes from the server's map record (display_polyline + display_source,
+// a floor survey). A relocated edge needs a new survey, so only coordinate rounding (1 mm) is allowed.
+const near = ([x, y], [u, v]) => Math.hypot(x - u, y - v) <= 0.001;
+export function surveyedRoadPoints(edge) {
+  const line = edge.display_polyline, anchors = edge.display_source?.anchors;
+  if (edge.display_source?.kind !== "survey" || !(line?.length >= 2) || anchors?.length !== 2 || edge.polyline.length < 2) return null;
+  return near(edge.polyline[0], anchors[0]) && near(edge.polyline.at(-1), anchors[1]) ? line : null;
 }
 
-export function unmeasuredRoadPoints(map, edge) {
-  if (edge.id !== "loop_right") return null;
-  const survey = surveyedRoadPoints(map, edge);
-  if (!survey) return null;
-  const approachY = edge.polyline.at(-1)[1];
-  const tangent = edge.polyline.findIndex(([x, y]) => Math.hypot(x - survey[0][0], y - approachY) <= 0.001);
+// The stored line up to display_source.stored_until stays drawn as not surveyed (an unpainted U-turn).
+export function unmeasuredRoadPoints(edge) {
+  const until = edge.display_source?.stored_until;
+  if (!until || !surveyedRoadPoints(edge)) return null;
+  const tangent = edge.polyline.findIndex((point) => near(point, until));
   return tangent > 0 ? edge.polyline.slice(0, tangent + 1) : edge.polyline;
 }
+
+export const surveyText = (source) => `측량 ${source.surveyed_at} · ${source.plane}${source.note ? ` · ${source.note}` : ""}`;

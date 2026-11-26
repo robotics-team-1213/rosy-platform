@@ -5,6 +5,7 @@ import re
 import pytest
 
 from browser_harness import browser_tests_enabled, open_token_access
+from fleet.site_map import with_floor_surveys
 from test_site_map_browser import page_site, show_screen
 
 
@@ -37,7 +38,8 @@ def test_world_road_overlay_separates_surveyed_paint_and_stored_maneuver(page_si
             ]
         ],
     }
-    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": map_body}))
+    # The survey line comes from the server's map record (2026-11-26), not a console constant.
+    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": with_floor_surveys(map_body)}))
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
@@ -50,7 +52,10 @@ def test_world_road_overlay_separates_surveyed_paint_and_stored_maneuver(page_si
         expect(paint).to_have_class(re.compile(r"\bsurveyed\b"))
         expect(paint).to_have_css("stroke-dasharray", "none")
         assert len(paint.get_attribute("points").split()) == 2
-    expect(upper.locator("title")).to_have_text("upper_east · 영상에서 읽은 차선 양쪽 경계의 중점")
+    expect(upper.locator("title")).to_have_text("upper_east · 측량 2026-11-26 · ceiling_north · 영상에서 읽은 차선 양쪽 경계의 중점")
+    evidence = page.locator("#map-evidence")
+    expect(evidence).to_have_text(re.compile(rf"^지도 v{active['version']} · 활성 \d\d:\d\d:\d\d · 출처 Fleet 활성 지도 · 측량 2026-11-26 ceiling_north$"))
+    expect(evidence).to_have_attribute("title", re.compile(r"^world_261026 · 활성 .+Z \(UTC\)$"))
     expect(svg.locator(".arrow")).to_have_count(0)
 
     prefix = svg.locator('[data-road-prefix="loop_right"]')
@@ -71,7 +76,22 @@ def test_world_road_overlay_separates_surveyed_paint_and_stored_maneuver(page_si
     page.locator("#map-source").select_option("draft")
     expect(loop).to_have_attribute("points", " ".join(actual))
     expect(svg.locator(".surveyed, .stored-road")).to_have_count(0)
+    expect(evidence).to_have_text(re.compile(r"^초안 표시 · 기준 지도 v"))
     assert store.active_view() == active
+
+
+def test_without_a_served_survey_no_survey_line_is_drawn_and_the_evidence_line_says_so(page_site):
+    from playwright.sync_api import expect
+
+    page, store, _ = page_site
+    active = store.active_view()
+    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(json={**active, "map": {**active["map"], "map_id": "world_261026"}}))
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator("#site-map-svg [data-edge]").first).to_be_attached()
+    expect(page.locator("#site-map-svg .surveyed")).to_have_count(0)
+    expect(page.locator("#map-evidence")).to_have_text(re.compile(rf"^지도 v{active['version']} · .* · 측량선 없음$"))
 
 
 def test_site_points_summary_follows_the_displayed_map_source(page_site):

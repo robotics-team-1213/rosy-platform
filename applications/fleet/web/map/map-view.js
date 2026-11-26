@@ -334,11 +334,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       };
       const storedRoutes = [];
       for (const edge of activeMap.edges || []) {
-        const surveyed = surveyedRoadPoints(activeMap, edge);
+        const surveyed = surveyedRoadPoints(edge);
         ctx.setLineDash(!surveyed && edge.drive_mode === "free" ? [6, 4] : []);
         strokeRoad(surveyed ?? roadOverlayPoints(activeMap.map_id, edge));
         if (surveyed) {
-          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(activeMap, edge);
+          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(edge);
           if (stored) storedRoutes.push(stored);
         }
       }

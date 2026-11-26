@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   classifySightings, siteBounds, canvasSizeFor, gridLines,
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, mapUpTurn,
-  roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
+  roadOverlayPoints, surveyedRoadPoints, surveyText, unmeasuredRoadPoints,
 } from "../../../../applications/fleet/web/map/site-layer.js";
 import { fitBox, viewTurnOf } from "../../../../applications/fleet/web/shared/site-map-model.js";
 import { project as projectHomography } from "../../../../shared/web/plane-math.js";
@@ -20,26 +20,32 @@ test("world_261026 charging bay overlays draw straight, leaving source geometry 
   }
 });
 
+// What GET /api/fleet/site-map/active serves for world_261026 (fleet.site_map.with_floor_surveys, test_site_map_survey.py).
+const surveyed = (edge, line, anchors, extra = {}) => ({...edge, display_polyline: line,
+  display_source: {kind: "survey", surveyed_at: "2026-11-26", plane: "ceiling_north", anchors, stored_until: null, ...extra}});
+
 test("C1 floor stripe ends on observed paint independently of the charging pose", () => {
-  const map = {map_id: "world_261026"};
   const polyline = [[-0.43002, 0.04266], [-0.4354, 0.3294], [-0.41816, 0.47]];
-  const edge = {id: "bay_1", from: "P1", to: "C1", polyline};
-  assert.deepEqual(surveyedRoadPoints(map, edge), [[-0.4222, 0.0433], [-0.4386, 0.44]]);
-  assert.equal(surveyedRoadPoints({map_id: "other"}, edge), null);
-  assert.equal(surveyedRoadPoints(map, {...edge, to: "C2"}), null);
-  assert.equal(surveyedRoadPoints(map, {...edge, polyline: [polyline[0], [-0.42, 0.48]]}), null);
-  assert.equal(unmeasuredRoadPoints(map, edge), null);
+  const plain = {id: "bay_1", from: "P1", to: "C1", polyline};
+  const edge = surveyed(plain, [[-0.4222, 0.0433], [-0.4386, 0.44]], [polyline[0], polyline[2]], {note: "영상의 분홍 충전선 중심"});
+  assert.deepEqual(surveyedRoadPoints(edge), [[-0.4222, 0.0433], [-0.4386, 0.44]]);
+  assert.equal(surveyedRoadPoints(plain), null); // no server field: no survey line
+  assert.equal(surveyedRoadPoints({...edge, display_source: {...edge.display_source, kind: "guess"}}), null);
+  assert.equal(surveyedRoadPoints({...edge, polyline: [polyline[0], [-0.42, 0.48]]}), null); // moved 10 mm
+  assert.equal(unmeasuredRoadPoints(edge), null);
+  assert.equal(surveyText(edge.display_source), "측량 2026-11-26 · ceiling_north · 영상의 분홍 충전선 중심");
 });
 
 test("upper floor midpoint meets the turn approach on one straight line; stored S3 maneuver stays available", () => {
-  const map = {map_id: "world_261026"};
   const s3 = [0.745, -0.207], tangent = [0.9238, -0.207], s5 = [0.89822, -0.48152];
-  const upper = {id: "upper_east", from: "S3", to: "J_in", polyline: [s3, [0.31418, -0.25008]]};
-  const turn = {id: "loop_right", from: "S5", to: "S3", polyline: [s5, [1.0593, -0.3424], tangent, s3]};
-  const approach = surveyedRoadPoints(map, turn), lane = surveyedRoadPoints(map, upper);
+  const upper = surveyed({id: "upper_east", from: "S3", to: "J_in", polyline: [s3, [0.31418, -0.25008]]},
+    [[0.745, -0.25008], [0.31418, -0.25008]], [s3, [0.31418, -0.25008]]);
+  const turn = surveyed({id: "loop_right", from: "S5", to: "S3", polyline: [s5, [1.0593, -0.3424], tangent, s3]},
+    [[0.9238, -0.25008], [0.745, -0.25008]], [s5, s3], {stored_until: tangent});
+  const approach = surveyedRoadPoints(turn), lane = surveyedRoadPoints(upper);
   assert.deepEqual(approach.at(-1), lane[0]);
   assert.ok([...approach, ...lane].every(([, y]) => y === -0.25008));
-  assert.deepEqual(unmeasuredRoadPoints(map, turn), turn.polyline.slice(0, 3));
+  assert.deepEqual(unmeasuredRoadPoints(turn), turn.polyline.slice(0, 3));
   assert.deepEqual(turn.polyline.at(-1), s3);
 });
 

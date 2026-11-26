@@ -1,11 +1,10 @@
 import { updateSelectedTrip } from "/console/assets/trip-receipts.js";
 // 현장 지도 폴링(D-798 3.2, map-view.js에서 나눔): 사이트 사각형·활성 지도·교정, 점유 격자, 교통 표,
 // 로봇 상황(guide), 카메라 관측. 주기는 셸(console.js)이 쥐고, 그리기는 map-view.js의 draw가 한다.
-import { classifySightings } from "./site-layer.js";
-import { viewTurnOf } from "/console/assets/site-map-model.js";
+import { classifySightings, surveyedRoadPoints } from "./site-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
-import { trafficClock } from "/console/assets/site-map-model.js";
+import { mapEvidence, trafficClock, viewTurnOf } from "/console/assets/site-map-model.js";
 
 const guideSummarySig = (guide, unavailable) => JSON.stringify([
   Boolean(unavailable),
@@ -58,6 +57,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
     } catch (error) { if (error.name === "AbortError") throw error; camera.setCalibrations([]); }
   }
 
+  // 2026-11-26: a new active map version shows on the map's evidence line (map-evidence), never silently.
+  function showActiveMap(active) {
+    view.activeSiteMap = active;
+    view.siteViewTurn = viewTurnOf(active?.map);
+    const line = el("map-evidence"), evidence = mapEvidence(active, surveyedRoadPoints);
+    if (line && line.textContent !== evidence.text) Object.assign(line, { textContent: evidence.text, title: evidence.title });
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     if (!life.current()) return;
@@ -69,12 +76,11 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
       if (Date.now() - calibrationsAt > 30000) {
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
         try {
-          view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
-          view.siteViewTurn = viewTurnOf(view.activeSiteMap?.map);
+          showActiveMap(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
           life.check();
         } catch (error) {
           if (error.name === "AbortError") return;
-          if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
+          if (error.status === 404 || error.status === 409) showActiveMap(null); // no active map; else keep the last turn
         }
         // The first site draw must use the active map turn; drawing at 0° then turning to 90°
         // makes the whole map jump while the camera and robot map requests are still pending.
@@ -153,8 +159,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
       view.endedTrips = trips.trips || [];
       life.check();
       if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
-        view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
-        view.siteViewTurn = viewTurnOf(view.activeSiteMap?.map);
+        showActiveMap(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
         life.check();
         await refreshCalibrations(life);
       }

@@ -72,6 +72,16 @@ export function fitBox(b, width, height, pad = 24, turn = 0) {
   };
 }
 
+// 2026-11-26 지도 근거 줄: 지도 vN · 활성 HH:MM:SS(KST) · 출처 · 측량 근거. UTC 원문은 title. drawn(edge): 그 측량선을 그렸는가.
+export function mapEvidence(active, drawn) {
+  if (!active?.map) return {text: '활성 지도 없음', title: ''};
+  const at = new Date(active.activated_at * 1000), known = Number.isFinite(at.getTime());
+  const surveys = new Set((active.map.edges || []).filter(drawn).map(({display_source: s}) => `측량 ${s.surveyed_at} ${s.plane}`));
+  const time = known ? at.toLocaleTimeString('en-GB', {timeZone: 'Asia/Seoul', hourCycle: 'h23'}) : '시각 모름';
+  return {text: `지도 v${active.version} · 활성 ${time} · 출처 Fleet 활성 지도 · ${[...surveys].join(' · ') || '측량선 없음'}`,
+    title: `${active.map.map_id}${known ? ` · 활성 ${at.toISOString()} (UTC)` : ''}`};
+}
+
 export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   return fitBox(mapBounds(map, discs), width, height, pad, turn);
 }

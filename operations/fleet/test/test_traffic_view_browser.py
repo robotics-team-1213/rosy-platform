@@ -22,6 +22,7 @@ from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
+from fleet.site_map import with_floor_surveys
 from fleet.swarm.robots import RobotEndpoint
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
@@ -278,7 +279,7 @@ def test_console_canvas_shows_stored_route_only_when_requested(site, monkeypatch
               "drive_mode": "lane", "width_m": .2, "speed_cap_mps": .02, "polyline": points}
              for eid, start, end, points in [("bay_1", "P1", "C1", bay), ("loop_right", "S5", "S3", loop)]]
     map_body = {**ACTIVE["map"], "map_id": "world_261026", "places": places, "edges": edges}
-    monkeypatch.setitem(API, "/api/fleet/site-map/active", {**ACTIVE, "map": map_body})
+    monkeypatch.setitem(API, "/api/fleet/site-map/active", {**ACTIVE, "map": with_floor_surveys(map_body)})
     survey = {**API["/api/fleet/site-map"]["maps"][0], "map_id": "world_261026",
               "bounds_m": {"min_x": -.6, "max_x": 1.2, "min_y": -.7, "max_y": .6},
               "polygon_m": [[-.6, -.7], [1.2, -.7], [1.2, .6], [-.6, .6]]}
@@ -290,6 +291,7 @@ def test_console_canvas_shows_stored_route_only_when_requested(site, monkeypatch
         try:
             page.clock.run_for(1500)
             page.locator("#map-options > summary").click()
+            expect(page.locator("#map-evidence")).to_contain_text("측량 2026-11-26 ceiling_north")
             routes = page.get_by_role("button", name="저장 경로", exact=True)
             lanes = page.get_by_role("button", name="도로·장소", exact=True)
             expect(routes).to_have_attribute("aria-pressed", "false")
