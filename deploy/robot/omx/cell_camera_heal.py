@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -52,19 +53,41 @@ def _dead_roles(cameras: dict, io) -> list[str]:
     return dead
 
 
-def heal(targets, io=None) -> list[dict]:
-    """targets: [(arm or None, cell config path)]. Returns the upkeep rows, one per config."""
+HEAL_BUDGET_S = 300.0  # shortcut: checked between steps, not inside one (each step has its own timeouts)
+
+
+def _arm_configs(targets) -> dict:
+    """arm -> cell config path, from the arm named in the target or the config's own arm_id."""
+    found = {}
+    for arm, config in targets:
+        try:
+            arm = arm or json.loads(Path(config).read_text(encoding="utf-8")).get("arm_id")
+        except (OSError, ValueError):
+            continue
+        if arm:
+            found.setdefault(arm, config)
+    return found
+
+
+def heal(targets, io=None, *, budget_s=HEAL_BUDGET_S, clock=time.monotonic) -> list[dict]:
+    """targets: [(arm or None, cell config path)]. Returns the upkeep rows, one per config; a config reached after
+    the time budget is spent comes back as a failed row without touching anything."""
     from cell_upkeep import Io
     from cell_upkeep_checks import bus_owner, check_cameras
 
     io = io or Io()
-    rows = []
+    rows, deadline, configs = [], clock() + budget_s, _arm_configs(targets)
+    at_rest = lambda role: arm_at_rest(role, configs)
     for arm, config in targets:
+        if clock() > deadline:
+            rows.append({"check": "cameras", "status": "fail", "arm": arm, "config": str(config),
+                         "detail": f"camera preflight ran past its {budget_s:.0f} s budget before this config"})
+            continue
         cameras = json.loads(Path(config).read_text(encoding="utf-8")).get("cameras") or {}
         owner = bus_owner(arm, io) if arm else None
         found, _top = check_cameras(arm or "cell", cameras, io, fix=True, bus_free=owner is None)
         if any(r.get("status") == "fail" for r in found) and owner is None:
-            notes = [hub_cycle(role, io) for role in _dead_roles(cameras, io)]
+            notes = [hub_cycle(role, io, at_rest=at_rest) for role in _dead_roles(cameras, io)]
             if notes:
                 found, _top = check_cameras(arm or "cell", cameras, io, fix=False, bus_free=False)
                 found = [{**r, "escalation": notes} for r in found]
@@ -73,8 +96,8 @@ def heal(targets, io=None) -> list[dict]:
 
 
 ARMS = ("arm_a", "arm_b", "arm_s")
-SUDO_CYCLE = ("import sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; import cell_usb_recovery as u; "
-              "print(u.hub_port_power_and_reset(Path(sys.argv[2]), int(sys.argv[3]), off_s=3.0))")
+# Root-owned, self-contained (it must not import from the user-writable release tree); see install-hub-cycle.sh.
+HUB_CYCLE_HELPER = "/usr/local/sbin/rosy-omx-hub-cycle"
 
 
 def _usb(path: Path) -> Path:
@@ -162,9 +185,32 @@ def camera_hub_port(device: str, role: str | None = None, *, leaf_finder=None, b
 
 
 def _cycle_hub_port(upstream: Path, port: int) -> None:
-    node = f"/dev/bus/usb/{int((upstream / 'busnum').read_text()):03d}/{int((upstream / 'devnum').read_text()):03d}"
-    subprocess.run(["sudo", "-n", "/usr/bin/python3", "-c", SUDO_CYCLE, str(Path(__file__).resolve().parent), node, str(port)],
+    subprocess.run(["sudo", "-n", HUB_CYCLE_HELPER, upstream.name, str(port)],
                    check=True, capture_output=True, text=True, timeout=30)
+
+
+def arm_at_rest(role: str, configs: dict | None = None, *, reassess=None) -> str | None:
+    """Refusal text unless the camera's own arm stands folded with every motor torque OFF, read twice under its arm
+    lock (omx_incident_reassess, no camera views: this camera is the dead one). The hub also feeds that arm's OpenRB, so
+    a board reset must not be able to drop a loaded or unfolded arm. A camera of no arm shares its hub with no board."""
+    match = re.fullmatch(r"(arm_[a-z])_.+", role)
+    if not match:
+        return None
+    arm = match.group(1)
+    config = (configs or {}).get(arm)
+    if not config:
+        return f"{arm} is not confirmed folded with torque OFF: no cell config for it among the targets"
+    if reassess is None:
+        from omx_incident_reassess import reassess
+    try:
+        block = reassess(arm, config, held=False, with_frames=False)
+    except (SystemExit, Exception) as exc:  # SystemExit: lease or session held, no board, no calibration
+        return f"{arm} is not confirmed folded with torque OFF: {exc}"
+    if any(block["torque_after"].values()):
+        return f"{arm} has a motor with torque ON"
+    if not (block["folded"] and block["stable"]):
+        return f"{arm} is not folded and still (max home error {block['max_home_err']})"
+    return None
 
 
 def _cell_lock():
@@ -174,7 +220,7 @@ def _cell_lock():
     return session_lock()
 
 
-def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None, cell_lock=_cell_lock) -> str:
+def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None, cell_lock=_cell_lock, at_rest=None) -> str:
     """Escalation after the leaf re-authorisation failed (2026-11-26: arm_b wrist UVC -71 came back only after its
     hub port was power-cycled). The hub also feeds an OpenRB, so it runs only while no arm session exists and every
     arm lock is free: without a session the observer keeps torque OFF, so a board reset moves nothing. The whole-cell
@@ -188,13 +234,18 @@ def hub_cycle(role: str, io, *, find=None, cycle=_cycle_hub_port, sleep=None, ce
     owners = list(io.sessions()) + [f"{arm} lock held" for arm in ARMS if not io.lock_free(arm)]
     if owners:  # shortcut: any session blocks, even on another hub; map board serials to arms when this bites
         return f"hub cycle for {role} skipped: an arm session is live ({owners[0][:80]})"
+    try:  # read-only: what the port feeds, and whether that arm stands folded with torque OFF (needs its arm lock)
+        upstream, port, hub = find(device) if find else camera_hub_port(device, role)
+    except (OSError, ValueError) as exc:
+        return f"hub cycle for {role} failed: {exc}"
+    if refusal := (at_rest or arm_at_rest)(role):  # shortcut: checked just before the cell lock; a session in between holds it shared
+        return f"hub cycle for {role} refused: {refusal}"
     try:  # checked above, held from here: a session that started since holds the cell lock shared, so this fails
         held = cell_lock()
     except SystemExit as exc:
         return f"hub cycle for {role} skipped: {exc}"
     try:
         try:
-            upstream, port, hub = find(device) if find else camera_hub_port(device, role)
             cycle(upstream, port)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             return f"hub cycle for {role} failed: {exc}"
@@ -224,7 +275,10 @@ def main(argv=None, *, heal_fn=heal, exec_fn=os.execvp) -> int:
     if not command:
         print("REFUSED: no job command after '--'")
         return 2
-    rows = heal_fn(args.target)
+    try:
+        rows = heal_fn(args.target)
+    except Exception as exc:  # the refusal JSON must exist whatever broke
+        rows = [{"check": "cameras", "status": "fail", "detail": f"camera preflight crashed: {exc!r}"}]
     print(json.dumps({"camera_preflight": rows}), flush=True)
     failed = [r for r in rows if r.get("status") == "fail"]
     if failed:

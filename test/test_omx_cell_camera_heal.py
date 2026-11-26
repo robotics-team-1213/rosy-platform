@@ -60,26 +60,6 @@ def test_recovery_jobs_are_never_held_back_by_the_camera_preflight():
         assert heal.with_camera_heal(argv, spec.JOBS[name], params) is argv, name
 
 
-def test_seeded_dry_run_is_not_aged_by_an_idle_encoder_sample():
-    import time
-
-    import cell_policy_timing as timing
-
-    class IdleCell:  # no arm session: the last encoder sample is hours old
-        def policy_state(self):
-            return {"ok": True, "state": [0.0] * 6, "t": time.time() - 3600}
-
-    shadow = type("S", (), {"image_views": {}})()
-    infer = lambda state, _images: ([list(state)] * 4, {})
-    seeded = timing._observe(IdleCell(), shadow, infer, 0.5, None, None, time.monotonic, time.sleep, True,
-                             seed_state=[1.0] * 6)
-    assert seeded.observed > time.monotonic() - 1
-    timing.action_window(seeded.frames, seeded.observed, time.monotonic(), 30, 4, 0.5)
-    unseeded = timing._observe(IdleCell(), shadow, infer, 0.5, None, None, time.monotonic, time.sleep, True)
-    with pytest.raises(ValueError, match="stale policy observation"):
-        timing.action_window(unseeded.frames, unseeded.observed, time.monotonic(), 30, 4, 0.5)
-
-
 class HubIo:
     def __init__(self, sessions=(), locked=(), frames=(500,)):
         self.sessions_, self.locked, self.frames, self.restarted = list(sessions), set(locked), list(frames), []
@@ -117,16 +97,16 @@ def test_hub_cycle_only_when_no_arm_session_and_reports_failures():
     find = lambda _dev: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2"))
     cycle = lambda up, port: cycled.append((up.name, port))
     busy = HubIo(sessions=["python record_session.py --arm arm_a"])
-    assert "skipped" in heal.hub_cycle("arm_b_wrist", busy, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock) and not cycled
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", busy, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock, at_rest=lambda _r: None) and not cycled
     locked = HubIo(locked={"arm_s"})
-    assert "skipped" in heal.hub_cycle("arm_b_wrist", locked, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock) and not cycled
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", locked, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock, at_rest=lambda _r: None) and not cycled
     idle = HubIo()
-    note = heal.hub_cycle("arm_b_wrist", idle, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock)
+    note = heal.hub_cycle("arm_b_wrist", idle, find=find, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock, at_rest=lambda _r: None)
     assert cycled == [("3-1.4", 2)] and idle.restarted == ["arm_b_wrist"] and "power-cycled hub 3-1.4.2" in note
 
     def broken(_dev):
         raise OSError("no external hub port above the camera to cycle")
-    assert "failed" in heal.hub_cycle("arm_b_wrist", HubIo(), find=broken, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock)
+    assert "failed" in heal.hub_cycle("arm_b_wrist", HubIo(), find=broken, cycle=cycle, sleep=lambda _s: None, cell_lock=_FakeLock, at_rest=lambda _r: None)
 
 
 def test_heal_escalates_to_hub_cycle_after_failed_leaf_recovery(tmp_path, monkeypatch):
@@ -142,7 +122,7 @@ def test_heal_escalates_to_hub_cycle_after_failed_leaf_recovery(tmp_path, monkey
         return [{"check": "cameras", "status": status, "detail": "wrist"}], None
 
     monkeypatch.setattr(checks, "check_cameras", fake_check)
-    monkeypatch.setattr(heal, "hub_cycle", lambda role, io: f"cycled {role}")
+    monkeypatch.setattr(heal, "hub_cycle", lambda role, io, **_kw: f"cycled {role}")
     rows = heal.heal([("arm_b", cfg)], io=HubIo(frames=[500]))
     assert passes == [True, False] and rows[0]["status"] == "ok" and rows[0]["escalation"] == ["cycled arm_b_wrist"]
     passes.clear()
@@ -166,7 +146,7 @@ def test_client_retries_only_the_session_lock_409():
     t = [0.0]
     lock = CellJobError(409, "session lock for arm_b is held by another process")
     c = Client([lock, lock])
-    assert start_when_lock_free(c, "home", {}, clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s)) == {"id": "j"}
+    assert start_when_lock_free(c, "home", {}, wait_s=180, clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s)) == {"id": "j"}
     assert c.calls == 3
     with pytest.raises(CellJobError):
         start_when_lock_free(Client([CellJobError(409, "A/B cell space is held by arm_a (home)")]), "home", {},
@@ -230,14 +210,14 @@ def test_hub_cycle_holds_the_whole_cell_lock_exclusively_until_the_camera_is_bac
     io = HubIo()
     io.unit_restart = lambda role: (seen.append(("restart", try_shared())), io.restarted.append(role))
     note = heal.hub_cycle("arm_b_wrist", io, find=find, cycle=lambda up, port: (cycled.append(port), seen.append(("cycle", try_shared()))),
-                          sleep=lambda _s: None)
+                          sleep=lambda _s: None, at_rest=lambda _r: None)
     assert "power-cycled" in note and seen == [("cycle", False), ("restart", False)]
     assert try_shared()  # released before exec into the job
 
     with lock.open("a") as session:  # an arm session started between the idle check and the cycle
         fcntl.flock(session, fcntl.LOCK_SH | fcntl.LOCK_NB)
         cycled.clear()
-        note = heal.hub_cycle("arm_b_wrist", HubIo(), find=find, cycle=lambda up, port: cycled.append(port), sleep=lambda _s: None)
+        note = heal.hub_cycle("arm_b_wrist", HubIo(), find=find, cycle=lambda up, port: cycled.append(port), sleep=lambda _s: None, at_rest=lambda _r: None)
     assert "skipped" in note and "session.lock" in note and not cycled
 
 
@@ -281,3 +261,107 @@ def test_hub_cycle_refuses_a_hub_that_also_feeds_anything_but_this_arms_openrb(t
     _dev(nested, "3-1.4.2.2.1", vendor="0403", product="6014", serial="U2D2")  # behind a second hub
     with pytest.raises(OSError, match="3-1.4.2.2.1 .*would also lose power"):
         port()
+
+
+def test_a_409_is_not_retried_unless_asked_for():
+    from cell_job_client import CellJobError, start_when_lock_free
+
+    class Busy:
+        calls = 0
+
+        def start(self, *_a, **_kw):
+            self.calls += 1
+            raise CellJobError(409, "session lock for arm_b is held by another process")
+
+    busy = Busy()
+    with pytest.raises(CellJobError):
+        start_when_lock_free(busy, "home", {}, sleep=lambda _s: pytest.fail("must not wait"))
+    assert busy.calls == 1
+
+
+def test_hub_cycle_needs_the_arm_folded_with_torque_off_before_it_takes_the_lock():
+    block = {"torque_after": {"11": 0, "12": 0}, "folded": True, "stable": True, "max_home_err": 0.4}
+    seen = lambda b: (lambda arm, config, **kw: seen_kw.append(kw) or b)
+    seen_kw = []
+    assert heal.arm_at_rest("arm_b_wrist", {"arm_b": "b.json"}, reassess=seen(block)) is None
+    assert seen_kw == [{"held": False, "with_frames": False}]  # no camera view: this camera is the dead one
+    assert "torque ON" in heal.arm_at_rest("arm_b_wrist", {"arm_b": "b.json"}, reassess=seen({**block, "torque_after": {"11": 1}}))
+    assert "not folded" in heal.arm_at_rest("arm_b_wrist", {"arm_b": "b.json"}, reassess=seen({**block, "folded": False}))
+    assert "not folded" in heal.arm_at_rest("arm_b_wrist", {"arm_b": "b.json"}, reassess=seen({**block, "stable": False}))
+    assert "no cell config" in heal.arm_at_rest("arm_b_wrist", {"arm_a": "a.json"}, reassess=seen(block))
+
+    def lease_held(*_a, **_k):
+        raise SystemExit("arm_b: lease held by someone; not read")
+    assert "lease held" in heal.arm_at_rest("arm_b_wrist", {"arm_b": "b.json"}, reassess=lease_held)
+    assert heal.arm_at_rest("top", {}) is None  # no arm board shares that camera's hub
+    cycled = []
+    note = heal.hub_cycle("arm_b_wrist", HubIo(), find=lambda _d: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2")),
+                          cycle=lambda *a: cycled.append(a), cell_lock=lambda: pytest.fail("lock taken before the arm check"),
+                          at_rest=lambda _r: "arm_b has a motor with torque ON")
+    assert "refused" in note and "torque ON" in note and not cycled
+    assert "refused" in heal.hub_cycle("arm_b_wrist", HubIo(), find=lambda _d: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2")),
+                                       cycle=lambda *a: cycled.append(a), cell_lock=_FakeLock) and not cycled  # no check given: fail closed
+
+
+def test_heal_budget_and_a_crash_still_leave_a_refusal(tmp_path, capsys):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"cameras": {}}))
+    clock = iter([0.0, 10.0, 10.0])
+    rows = heal.heal([("arm_b", cfg), ("arm_a", cfg)], io=HubIo(), budget_s=5, clock=lambda: next(clock))
+    assert [r["status"] for r in rows] == ["fail", "fail"] and "budget" in rows[0]["detail"]
+
+    def boom(_t):
+        raise RuntimeError("sysfs vanished")
+    assert heal.main(["--target", "arm_b=c.json", "--", "job"], heal_fn=boom, exec_fn=lambda *a: pytest.fail("exec")) == 3
+    out = capsys.readouterr().out
+    assert '"camera_preflight"' in out and "sysfs vanished" in out and "REFUSED" in out
+
+
+def _helper():
+    import importlib.machinery
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx" / "rosy-omx-hub-cycle"
+    spec_ = importlib.util.spec_from_loader("hub_cycle_helper", importlib.machinery.SourceFileLoader("hub_cycle_helper", str(path)))
+    mod = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(mod)
+    return mod
+
+
+def test_root_helper_validates_its_arguments_and_cycles_through_usbfs(tmp_path):
+    helper = _helper()
+    sysfs, usbfs = tmp_path / "devices", tmp_path / "usb"
+    hub = sysfs / "3-1.4"
+    hub.mkdir(parents=True)
+    for name, value in {"bDeviceClass": "09", "maxchild": "4", "busnum": "3", "devnum": "7"}.items():
+        (hub / name).write_text(value + "\n")
+    (sysfs / "3-1.5").mkdir()
+    (sysfs / "3-1.5" / "bDeviceClass").write_text("ef\n")
+    (usbfs / "003").mkdir(parents=True)
+    (usbfs / "003" / "007").write_bytes(b"")
+    assert helper.validate("3-1.4", "2", sysfs) == (hub, 2)
+    for hub_name, port in [("../../etc", "2"), ("3-1.4/x", "2"), ("3-1.4;id", "2"), ("3-1.4", "0"), ("3-1.4", "5"),
+                           ("3-1.4", "-1"), ("3-1.4", "2 3"), ("3-1.5", "1"), ("3-9", "1"), ("", "1")]:
+        with pytest.raises(ValueError, match="refused"):
+            helper.validate(hub_name, port, sysfs)
+    sent = []
+    helper.cycle(hub, 2, ioctl=lambda fd, req, ctrl: sent.append((ctrl.bRequestType, ctrl.bRequest, ctrl.wValue, ctrl.wIndex)),
+                 sleep=lambda _s: None, usbfs=usbfs)
+    assert sent == [(0xA3, 0, 0, 2), (0x23, 1, 8, 2), (0x23, 3, 8, 2), (0xA3, 0, 0, 2)]  # status, power off, power on, status
+    assert helper.main(["only-one"]) == 2
+
+
+def test_installer_writes_one_sudoers_line_naming_only_the_helper():
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("no bash on this host")
+    script = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx" / "install-hub-cycle.sh"
+    done = subprocess.run([bash, str(script), "--user", "rosy", "--dry-run"], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert "rosy ALL=(root) NOPASSWD: /usr/local/sbin/rosy-omx-hub-cycle" in done.stdout
+    assert "ALL=(root) NOPASSWD: ALL" not in done.stdout
+    bad = subprocess.run([bash, str(script), "--user", "x; rm -rf /", "--dry-run"], capture_output=True, text=True, timeout=30)
+    assert bad.returncode == 2

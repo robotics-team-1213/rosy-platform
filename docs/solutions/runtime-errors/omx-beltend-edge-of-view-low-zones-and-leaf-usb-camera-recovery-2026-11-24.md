@@ -57,5 +57,5 @@ applies_when: "diagnosing OMX finger-room edge refusals, post-remap low_zones IK
 - **증상:** `arm_b_wrist`(3-1.4.2.1)가 16:30부터 JPEG 손상, 17:19 감시 재시작 뒤 UVC probe `-71`. 리프 재인가 1회는 잠시 회복했고 2회째는 `can't set config #1, error -71`. 같은 허브(3-1.4.2)의 arm_b OpenRB도 세션 시작 `read pwm_limit: comm -3001`.
 - **해결:** 세 팔 세션이 없고 arm_b가 접힘·토크 OFF일 때 `cell_usb_recovery.hub_port_power_and_reset`로 허브 3-1.4의 포트 2를 3초 끊었다. 카메라와 OpenRB가 재열거됐고 프레임 6/6, 이후 60초 `-71` 0건.
 - **복구 뒤 확인:** 세션 래퍼는 세션 시작에 실패하면 `rosy-omx-observer@<arm>`을 되살리지 않는다. 손으로 `systemctl --user start` 했다.
-- **재발 방지:** `cell_camera_heal.py`(PR #917)가 카메라 작업 시작 전에 upkeep 복구를 돌리고, 실패하면 같은 허브 포트 재투입으로 올린다. record_session이 하나라도 있거나 팔 잠금이 하나라도 잡혀 있으면 하지 않는다. 루트 허브 포트는 건드리지 않는다.
+- **재발 방지:** `cell_camera_heal.py`(PR #917)가 카메라 작업 시작 전에 upkeep 복구를 돌리고, 실패하면 같은 허브 포트 재투입으로 올린다. record_session이 하나라도 있거나 팔 잠금이 하나라도 잡혀 있으면 하지 않는다. 루트 허브 포트는 건드리지 않는다. 독립 리뷰 뒤 추가된 조건: 카메라가 `-71`로 by-id를 잃어도 sysfs 리프로 허브를 찾고, 허브 아래에 카메라와 같은 팔의 OpenRB 외 장치가 있으면 거부하며, 그 팔이 접힘·토크 OFF(2회 읽기)가 아니면 거부하고, 재투입 동안 `session.lock`을 배타로 잡는다. root 권한은 `python3` 전체가 아니라 고정 헬퍼 `rosy-omx-hub-cycle`(`install-hub-cycle.sh`)에만 준다. 실기 전 허브 아래 장치 목록과 세 팔 접힘·토크 OFF 1회 확인은 사람이 한다.
 - **원인:** 미확인. 손목 케이블 접촉 불량이면 손목 회전 뒤 재발할 수 있으니 home 직후 손목 프레임을 확인한다.

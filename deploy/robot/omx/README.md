@@ -1617,6 +1617,23 @@ sudo udevadm control --reload-rules
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
 
+## 카메라 복구용 허브 포트 재투입 헬퍼 (PR #917)
+
+`cell_camera_heal.py`가 리프 재인가로 안 풀린 카메라를 허브 포트 전원 재투입으로 올릴 때 쓰는 root 소유 헬퍼다.
+셀 운영 계정에는 `python3` 전체가 아니라 이 헬퍼 하나만 `sudo -n`으로 허용한다. 헬퍼는 인자 두 개
+(`<허브 이름> <포트>`)만 받는다. 허브 이름은 `3-1.4` 꼴 sysfs 이름이어야 하고 `/sys/bus/usb/devices`에서 허브
+(`bDeviceClass 09`)여야 하며, 포트는 `1..maxchild`여야 한다. 릴리스 트리(사용자가 쓸 수 있는 곳)에서는 아무것도 import하지 않는다.
+관리자가 셀 PC마다 한 번 설치한다(실기 PC에는 사람이 현장에서 설치하며, 에이전트는 설치하지 않는다).
+
+```bash
+sudo deploy/robot/omx/install-hub-cycle.sh --user <셀 로그인> --dry-run
+sudo deploy/robot/omx/install-hub-cycle.sh --user <셀 로그인>
+sudo -l -U <셀 로그인> | grep rosy-omx-hub-cycle
+```
+
+헬퍼가 바뀌면 다시 실행한다(설치본은 릴리스 전환을 따라가지 않는다). 재투입 전에 코드가 확인하는 것: 이 카메라가 달린 허브
+아래에 이 팔의 OpenRB 외 다른 장치가 없을 것, 그 팔이 접힘이고 모든 모터 토크 OFF일 것, 팔 세션·잠금이 없을 것.
+
 ## 셀 목표 슬롯 설정 (D-1057)
 
 셀 A/B의 배치 판정(`cell_zone_verification`)은 목적지 사이트의 슬롯을 설정에서 읽는다. 설정에 없으면 측정하지 않고
