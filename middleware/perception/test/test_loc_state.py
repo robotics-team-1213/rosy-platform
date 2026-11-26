@@ -269,3 +269,12 @@ def test_localized_tolerates_transient_fit_drop_until_drop_fit_and_hold_window()
     assert m.observe_fit(13.4, .65).state is LocState.LOCALIZED
     step = m.observe_fit(13.5, .65)
     assert (step.state, step.reason) == (LocState.SUSPECT, "fit_drop")
+
+
+def test_offer_clears_stale_suspect_reason():
+    m = machine()
+    m.offer([TRUE, MIRROR], 0.)
+    m.retire_candidates("candidate_scan_mismatch")
+    assert (m.state, m.reason) == (LocState.SUSPECT, "candidate_scan_mismatch")
+    step = m.offer([TRUE], 1.0)
+    assert (step.state, m.request_id, m.reason) == (LocState.CANDIDATES, "r1-2", None)
