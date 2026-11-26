@@ -8,6 +8,8 @@ import pytest
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.server.trip_ports import TripConfig
 from fleet.site_map import SiteMap
 from fleet.swarm.robots import RobotEndpoint
@@ -29,7 +31,9 @@ def test_preview_measures_from_site_pose_before_snapping(tmp_path, xy):
     robot = RouteFakeRobot("rosy_42")
     console = FleetConsole([RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t")], [robot])
     users = {sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"}}
-    app = create_app(console, site_maps=store, site_users=users, trip_config=TripConfig(map_binding_required=False))
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"])
+    app = create_app(console, task_service=tasks, site_maps=store, site_users=users,
+                     trip_config=TripConfig(map_binding_required=False))
 
     async def pose(_):
         return MapPose(*xy, -math.pi / 2, "LOCALIZED", "sighting", 0., 0., anchor_age_s=0., map_id=model.map_id)
