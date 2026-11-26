@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.483
+**Version:** v1.485
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.485 Native OMX policy lease ingress (CORE)
+
+A dedicated Fleet machine principal can read /api/v1/arm/lease-status and POST /api/v1/arm/lease-challenge for a native B target before lease delivery. A native grant includes the approved task scope and a one-use challenge pinned to the device session. HOLD confirmation requires an explicit response from the motor writer. Standard simulated targets retain their existing lease schema.
+
+### v1.484 OMX native policy target status (Fleet)
+
+GET /api/fleet/policy-approvals/targets/{workcell_id}/status verifies the TLS transport and native owner session separately. A fresh hardware_readback can report encoder positions, torque and motor errors during an exclusive B-arm commissioning session. The ready field indicates policy admission. This read-only operation neither opens an approval nor issues an arm command.
 
 ### v1.483 Read-only straight LiDAR corridor observation (CORE)
 
@@ -5164,6 +5172,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.485 | 2026-11-26 | [CORE] Native OMX policy lease ingress |
+| v1.484 | 2026-11-26 | [Fleet] OMX native policy target status |
 | v1.483 | 2026-11-26 | [CORE] Read-only straight LiDAR corridor observation |
 | v1.482 | 2026-11-26 | [Fleet] 주차 대기 위치의 CORE 도킹 사전 진단 |
 | v1.481 | 2026-11-26 | [Fleet] Fleet 운행 명령과 기체 이동 관측 |

@@ -32,7 +32,7 @@ function renderRecentJobs(rows) {
     tdStep.textContent = JOB_STEP_LABEL[j.step] || j.step || "-";
     const tdResult = document.createElement("td");
     const [label, level] = JOB_RESULT[j.status] || [j.status || "-", ""];
-    tdResult.textContent = label;
+    tdResult.textContent = j.error ? `${label} · ${j.error}` : label;
     if (level) tdResult.setAttribute("data-level", level);
     const tdWhen = document.createElement("td");
     tdWhen.textContent = j.ended || j.started ? new Date(j.ended || j.started).toLocaleString("ko-KR") : "-";

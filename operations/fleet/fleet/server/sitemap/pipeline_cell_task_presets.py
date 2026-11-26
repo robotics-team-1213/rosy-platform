@@ -16,4 +16,5 @@ def cell_task_presets():
         "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
         "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
         "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
-    }
+    } | {f"s5_tier1_{a}_act_policy": {"preset": f"s5_tier1_{a}_act_policy", "label": f"S5 ACT 적재 ({a} · 벨트 → 1행 2번 1층)", "cell_id": "cell_ab", "arm_id": a,
+                                        "src_site": "belt", "dst_site": "yard:r1-s2-t1", "tier": 1, "execution_mode": "act_policy", "max_chunks": 4} for a in ("arm_a", "arm_b")}

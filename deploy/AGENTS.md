@@ -50,7 +50,7 @@ under `src/`; this folder is not a shared device-control library.
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - CORE is internet-facing and unprivileged. Do not add `nmcli`, `reboot`, or docker-compose control inside `core`.
 - Pinky Pro runtime: `robot/pinky_pro/native/rosy-runtime.target` starts CORE and no-motion I/O. Motor drive needs commissioned device mode and an explicit drive flag; navigation remains separately approved and mutually exclusive with I/O.
 - Compose services remain test/development compatibility only; do not install Docker in a D-161 product image.
