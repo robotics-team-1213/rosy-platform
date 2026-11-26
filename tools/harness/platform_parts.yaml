@@ -1426,6 +1426,7 @@ safety_modules:
   - operations/fleet/fleet/server/console/traffic_arbitration_helpers.py  # D-766 traffic_arbitration.py split: state remember, snapshot traffic release, localization holds
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/road_route_lease.py  # Same route/lease owner after extracting scoped speed grants
   - operations/fleet/fleet/server/named_stop_motion.py  # D-1051 named-stop custody claim and repark alignment
   - operations/fleet/fleet/swarm/motion_ingress.py  # D-1051 which robot calls start or sustain motion
   - operations/fleet/fleet/server/tether_watch.py
@@ -1775,6 +1776,8 @@ safety_anchors:
   - {symbol: fleet.server.berth_parking_helpers._pin_robot_on_fleet, public: true}
   - {symbol: fleet.server.task_dispatch_helpers.compute_road_plan}  # refuses without measured site and robot poses
   - {symbol: fleet.server.task_dispatch_helpers.standalone_named_stop_allowed, public: true}  # D-1051 free two-way guard
+  - {symbol: fleet.server.road_route_lease.RoadRouteLeases}  # Native road route speed ownership
+  - {symbol: fleet.server.road_route_lease.RoadSpeedRefused, public: true}  # Read-only refusal code
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.goal_lease.NavigationStopped, public: true}  # D-1051 the stop a correction route reports
   - {symbol: fleet.server.goal_lease.CustodyReleaseRefused, public: true}  # named-stop custody release refusal

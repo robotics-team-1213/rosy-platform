@@ -135,6 +135,51 @@ def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
         raise _dock_error(exc)
 
 
+class CommissionDock(BaseModel):
+    dock: DockRequest
+    dock_type: DockTypeRequest
+    robot_id: str
+    map_grid_id: str = Field(min_length=1)
+    map_generation: int = Field(ge=0, strict=True)
+    map_id: str = Field(min_length=1)
+
+
+@docking_router.post("/commission")
+def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """Register a stationary measurement in its exact native grid with create-only semantics."""
+    def register():
+        snapshot = svc.state.snapshot()
+        if (snapshot.robot_id != body.robot_id or snapshot.map_id != body.map_id
+                or snapshot.map_grid_id != body.map_grid_id or snapshot.map_generation != body.map_generation):
+            raise ApiError("MAP_FRAME_CHANGED", 409, "robot identity or SLAM frame changed before registration")
+        if (snapshot.pose_frame != "map" or snapshot.localization is None or snapshot.localization.state != "LOCALIZED"
+                or snapshot.mode != "IDLE" or snapshot.navigation not in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
+                or snapshot.line_follow.mode != "OFF" or svc.docking.active
+                or any(k not in snapshot.evidence or snapshot.evidence[k].evidence != "fresh" for k in ("pose", "velocity"))
+                or snapshot.velocity.linear != 0 or snapshot.velocity.angular != 0):
+            raise ApiError("STATIONARY_REQUIRED", 409, "fresh native localization and standstill are required")
+        token = svc.nav.claim_precision()
+        if token is None:
+            raise ApiError("STATIONARY_REQUIRED", 409, "native navigation is active or admitting a goal")
+        try:
+            dock = DockInstance(**body.dock.model_dump())
+            dock.metadata.update(commissioned_grid_id=body.map_grid_id, commissioned_map_generation=body.map_generation)
+            return svc.docking.database.commission(DockType(**body.dock_type.model_dump()), dock, body.map_id).model_dump()
+        finally:
+            svc.nav.release_precision(token)
+
+    try:
+        with svc.state.map_grid_gate, localized_start(svc):
+            owner = svc.docking.native_owner()
+            if owner["owner_run_id"] is not None:
+                raise ApiError("STATIONARY_REQUIRED", 409, "native docking owns a run")
+            return svc.docking.bind_station(register, expected_boot_id=UUID(owner["boot_id"]),
+                                            expected_owner_generation=owner["owner_generation"])
+    except DockError as exc:
+        raise _dock_error(exc)
+
+
 @docking_router.delete("/docks/{dock_id}")
 def delete_dock(dock_id: str, _: AuthContext = Depends(admin),
                 svc: CoreServicesLike = Depends(get_services)):

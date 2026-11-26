@@ -67,6 +67,9 @@ def observe_twist(self, commit) -> bool:
     if not self._lock.acquire(blocking=False):
         return False
     try:
-        return not self.handoff_output_blocked() and commit()
+        if self.handoff_output_blocked():
+            return False
+        authority = self._route.speed_authority if self._route is not None else None
+        return commit(authority)
     finally:
         self._lock.release()
