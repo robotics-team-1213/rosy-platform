@@ -200,7 +200,7 @@ async function pollCameras(){
         const lbl=box.dataset.camBox;
         const info=st[lbl];
         const pill=box.querySelector('.cam-title-pill');
-        if(pill)pill.textContent=lbl+' ('+(info?.fresh===false?'지연':(info?.quality?.condition||'정상'))+')';
+        if(pill)pill.textContent=lbl+' ('+(info?.fresh===false?'지연':(info?.quality?.condition||'최신'))+')';
       }
       if(curArm!==lastCamArm)syncPrimaryCamForArm(curArm);
     }
@@ -223,7 +223,7 @@ async function pollStatus(){
   }catch(err){
     if(seq!==latestStatusSeq)return;
     const inActive=benchSessionActive();
-    setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive,sig:'conn-error:'+(err.message||'net'),action:{label:'지금 다시 조회',run:()=>pollStatus()}});
+    setNotice('conn-error','warn','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive,sig:'conn-error:'+(err.message||'net'),action:{label:'지금 다시 조회',run:()=>pollStatus()}});
     if(!inActive){
       statusLoaded=false;
     }

@@ -1,24 +1,22 @@
 # Perception evaluation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-12
 
-`road_replay.py`, `road_replay_inputs.py`, and `road_replay_metrics.py` evaluate existing recording inputs using the unchanged replay and metric contracts. Curation owns input conversion; registry owns the shared artifact/provenance store; training owns trainer jobs. D-637 moves the existing evaluation implementation while preserving bare imports, input lineage, class meanings and signatures. Evaluation does not activate a learned model or publish final commands.
+Read repository [AGENTS.md](../../../AGENTS.md), D-637 and D-665 before editing source boundaries.
 
-`intake_evaluation.py` owns fixed-set model scoring and `intake_eval_gate.py` owns its pure quality judgments. Registry's `intake.py` re-exports the established scoring API and retains admission/publication; moving these functions changes neither stored metrics nor verdict thresholds.
+## Working In This Directory
 
-`road_fitness.py` (D-665/D-667) consumes full road labels, shared observation input-validity checks and perception anchor-based region geometry. `evaluate_frame` scores separate independent road/region truth masks, preserving valid/unknown truth counts even when the region abstains. Its reports are always diagnostic/HOLD until independent lineage, conditions/coverage, thresholds and device evidence are supplied. It is not a command, an approval gate or an operational consumer.
+- Curation owns input conversion; registry owns the shared store; training owns trainer jobs. D-637 moved evaluation here preserving bare imports, lineage, class meanings and signatures. Evaluation never activates a learned model or publishes final commands.
+- `intake_evaluation.py` owns fixed-set scoring, `intake_eval_gate.py` its pure judgments; registry's `intake.py` re-exports them and keeps admission/publication. Metrics and thresholds are unchanged by the move.
+- `road_fitness.py` (D-665/D-667): `evaluate_frame` scores independent road/region truth masks, keeping valid/unknown counts when the region abstains. Reports are diagnostic/HOLD until independent lineage, coverage, thresholds and device evidence exist; never a command or approval gate.
+- `summarize_frames` pools pixel counts per domain and condition; never average frame IoUs or merge real/simulation. Abstention and unknown-only truth stay separate; boundary distances are pixels on four-neighbour-known contours.
+- `evaluate_model_frame` reuses an opened LaneSegModel; truth and anchors start on the original camera grid. Known truth outside the prediction ROI is excluded, not unknown. The replay caller binds model files, dataset lineage, human authority and calibration; this adapter admits nothing.
+- `judgment_acceptance.py` (D-662): named independent labels, frozen hashes/splits, denominators and pre-reviewed limits are required; missing evidence stays HOLD. PASS_OFFLINE_ONLY is never FIELD or provider activation.
+- `road_fitness_replay.py` (D-666) runs offline via `rosy_ml fitness`; it refuses mutable versions, missing approvals, source/image overlap and changed artifacts. Reports stay HOLD; no intake/delivery/watcher admission. D-667: observation types live in `core_common.observation`.
+- D-670: `LaneSegModel.infer_road_surface` serves truth-free observations; truth is validated before resize. A missing anchor image-reference abstains the region only. No operational transport here.
+- `road_observation_replay.py` (D-673, `rosy_ml observe`) writes a new HOLD file and verifies SHA256 and masks on readback; replay clock is not live latency evidence.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 
-`summarize_frames` pools pixel counts within each real/simulation domain and named condition; it never averages frame IoUs or merges domains. Prediction abstention and unknown-only truth remain separate. Boundary distances are image pixels on contours whose four neighbours are known; missing contours and excluded boundary counts remain explicit. This diagnostic summary is not a dataset loader or an independent acceptance receipt.
+## Testing Requirements
 
-`evaluate_model_frame` reuses an opened LaneSegModel and its preprocessing; independent binary truth and anchor pixels start on the original camera grid. Labels/truth/anchors share the resized full-frame grid and predicted crop rows. Known truth outside the prediction ROI is recorded as excluded rather than unknown truth, and full-grid coverage retains those exclusions. Model files, dataset lineage, human authority and physical calibration must still be bound by the replay caller; this per-frame adapter does not admit a model or verify those artifacts.
-
-Use `learning/evaluation/perception/test`, the legacy shared `test/learning/perception` suite and `operations/world/test` through the remote committed-HEAD runner and known-failure comparator. Read repository [AGENTS.md](../../../AGENTS.md), D-637 and D-665 before editing source boundaries. See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md).
-
-`judgment_acceptance.py` owns the first Pinky line-stop/re-observation offline checker (D-662). Named independent labels, frozen hashes/splits, denominators and pre-reviewed limits are required; missing acceptance evidence stays HOLD. PASS_OFFLINE_ONLY is never FIELD or provider activation. Curation's incident feedback remains candidate evidence.
-
-`road_fitness_replay.py` (D-666) binds paired immutable human-mask eval sets, model preprocessing/files, separately stored observations and declared training sources. `rosy_ml fitness` runs offline before robot configuration. It refuses mutable versions, missing exact approvals, source/image overlap and changed artifacts. Completed reports remain HOLD; no intake/delivery/watcher admission occurs. D-667 keeps observation types/validity in `core_common.observation`, with World compatibility imports.
-
-D-670 shares `LaneSegModel.infer_road_surface` with truth-free internal observations. Original truth is validated before resize; ROI exclusions and real/simulation separation remain unchanged. Missing anchor image-reference abstains the region without invalidating an otherwise valid road image. No operational observation transport is implemented by this library boundary.
-
-`road_observation_replay.py` (D-673) implements `rosy_ml observe` using a content-addressed image/snapshot input folder and pinned model manifest. It writes a new HOLD diagnostic file and verifies its SHA256 and masks on readback. It does not consume truth, select destinations or implement device transport; the replay clock is not live latency evidence.
+Run `learning/evaluation/perception/test`, `test/learning/perception` and `operations/world/test` through the remote committed-HEAD runner and known-failure comparator.

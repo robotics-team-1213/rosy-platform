@@ -179,10 +179,10 @@ export function rememberTrackingPoses(tracking) {
 // Display resolution is a centimetre; it is not a measured accuracy claim.
 export function positionRows(tracking) {
   return [...tracking.robots.map(row => ({ name: row.robotId, x: row.camera.x.toFixed(2),
-    y: row.camera.y.toFixed(2), basis: row.measured ? "마커 관측" : "무마커 추론" })),
+    y: row.camera.y.toFixed(2), basis: row.measured ? "마커 관측" : "무마커 추정" })),
   ...tracking.unknown.map((row, index) => ({
     name: row.markerId === undefined ? `미확인 ${index + 1}` : `ArUco ${row.markerId}`, x: row.x.toFixed(2),
-    y: row.y.toFixed(2), basis: row.markerId === undefined ? "무마커 추론 · 이름 미확정" : "마커 관측 · 미등록" }))];
+    y: row.y.toFixed(2), basis: row.markerId === undefined ? "무마커 추정 · 이름 미확정" : "마커 관측 · 미등록" }))];
 }
 
 export function displayLeaseMs(body, elapsedMs = 0) {

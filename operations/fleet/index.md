@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · 측량 도로선을 지도 기록 필드로 서버가 냄
 - 2026-11-22 · uncommitted · feat(fleet): Pinky 작업 Fleet trip 배차 및 start_guard·취소 정합성 (D-1060)
 - 2026-11-21 · uncommitted · Refuse double-encoded text at the site map write boundary
 - 2026-11-21 · uncommitted · records bot folds a late-merged log shard at its dated position, not at the end
 - 2026-11-21 · uncommitted · Keep controls steady during the measured-calibration refresh
-- 2026-11-21 · uncommitted · Header E-stop stays live for a signed-in viewer (D-1043)

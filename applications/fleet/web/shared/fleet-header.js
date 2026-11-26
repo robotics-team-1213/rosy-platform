@@ -1,4 +1,4 @@
-// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
+// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·현장 지도·Cell carry the same <ui-topbar>
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import { setOffBy } from "/common/cause-line.js";
@@ -188,7 +188,7 @@ export function showFleet(fleet, robots = null) {
   patchAttr(pill, "status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
 }
 
-// Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
+// Pages without their own state poll (설치, 현장 지도, Cell) read Fleet every 5 s for the site name
 // and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, scope = null, interval = scope ? (fn, ms) => scope.interval(fn, ms) : setInterval,
   listen = scope ? (target, type, fn) => scope.listen(target, type, fn) : (target, type, fn) => target?.addEventListener?.(type, fn)} = {}) {

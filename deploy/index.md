@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
+- 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
 - 2026-11-23 · uncommitted · PC SSH 워치독 서명 갱신
 - 2026-11-21 · uncommitted · fix(omx): observer handoff keeps the reservation, the group watch and the unit topic check
 - 2026-11-21 · uncommitted · Site Fleet passes D-1057 cell pipeline env
-- 2026-11-21 · uncommitted · omx-devices 릴리스가 cell worker 가져오기 닫힘을 모두 담음
-- 2026-11-21 · uncommitted · OMX hybrid handoff Round 2

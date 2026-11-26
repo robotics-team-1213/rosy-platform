@@ -26,7 +26,7 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 
 | Directory | Purpose |
 |-----------|---------|
-| `learned/` | D-356 learned lane backend, shadow only: `manifest.py` (model manifest contract, sha256 and shape checks), `lane_mask.py` (segmentation logits to lane evidence), `runner.py` (ONNX runner, keep-previous hot swap), `shadow.py` (`perception/learned/shadow` payload, no command fields). `onnxruntime` is imported lazily; it is not in the device image yet (see `learned/AGENTS.md`) |
+| `learned/` | D-356 learned lane backend, shadow only: `manifest.py`, `lane_mask.py`, `runner.py` (ONNX, keep-previous hot swap), `shadow.py` (no command fields). `onnxruntime` imported lazily, not in the device image yet (see `learned/AGENTS.md`) |
 
 ## For AI Agents
 
@@ -36,7 +36,8 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 - Do not import `core` or emit a twist.
 - This folder is the P1a perception evidence size unit; package imports remain `control.sensing.perception` until a separately reviewed package move.
 - `learned/` is its own size unit inside it (P1a plan addendum 2026-10-10); its lines do not count toward this folder's verdict.
-- The learned backend (`learned/`) is shadow-only (D-356): it publishes `perception/learned/shadow` and never feeds control. Model weights never live in `src/`; they arrive through `learning/registry/perception/deliver.py`. It returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
+- `learned/` is shadow-only (D-356): publishes `perception/learned/shadow`, never feeds control. Stays behind `perception.backend=rule` until the D-205 replay gate passes; returns `perception/evidence`.
+- Model weights never live in `src/`; they arrive through `learning/registry/perception/deliver.py`.
 
 ### Testing Requirements
 

@@ -39,6 +39,7 @@ export function consolePlanSummaryText(plan) {
 const finite = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const candidatesOf = (locPayload) => (Array.isArray(locPayload?.candidates?.candidates) ? locPayload.candidates.candidates : []);
 
+export const candidateHeadingLabel = (yaw) => (Number.isFinite(yaw) ? `방향 ${Math.round(yaw * 180 / Math.PI)}°` : "방향 미확인");
 function baseGate({ robot, isOperator, operatorReason = "", namedReason, stateUnavailable }) {
   if (stateUnavailable) return "Fleet 상태를 확인할 수 없습니다.";
   if (!robot?.online) return "로봇이 오프라인입니다.";

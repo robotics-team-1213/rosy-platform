@@ -1,4 +1,5 @@
 // Markerless start reference geometry. Never used for goals, identity or localization.
+import { project } from "/console/assets/map-fit.js";
 
 // D-540 5: a click on the install top-down picture (canvas, object-fit: contain) becomes a map
 // pose only inside the drawn picture and inside the track bounds; the letterbox, the layout's
@@ -10,9 +11,8 @@ export function picturePose(rect, size, canvasToMap, bounds, clientX, clientY) {
   const px = (clientX - rect.left - (rect.width - size.width * scale) / 2) / scale;
   const py = (clientY - rect.top - (rect.height - size.height * scale) / 2) / scale;
   if (!(px >= 0 && py >= 0 && px < size.width && py < size.height)) return null;
-  const h = canvasToMap, w = h[6] * px + h[7] * py + h[8];
-  const x = (h[0] * px + h[1] * py + h[2]) / w, y = (h[3] * px + h[4] * py + h[5]) / w;
-  if (!(w > 1e-9) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const [x, y] = project(canvasToMap, px, py) || [];
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return x >= bounds.min_x && x <= bounds.max_x && y >= bounds.min_y && y <= bounds.max_y ? { x, y } : null;
 }
 

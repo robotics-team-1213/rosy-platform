@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111113">
-  <title>Rosy Fleet — 설치·보정</title>
+  <title>Rosy Fleet — 설치</title>
   <link rel="icon" type="image/svg+xml" href="/common/brand/platform.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -87,7 +87,7 @@
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다(부품은 app-shell.css). -->
-  <div class="ui-pathbar"><h1>설치·보정</h1><strong id="install-screen">장비 찾기</strong></div>
+  <div class="ui-pathbar"><h1>설치</h1><strong id="install-screen">장비 찾기</strong></div>
   <!-- D-975 설치 노선 — 역마다 서버 근거로만 완료를 그린다. 역은 install-line.js가 채운다. -->
   <ol id="install-line" class="ui-stage-track" data-line="fleet" aria-label="설치 진행"></ol>
 
@@ -376,7 +376,7 @@
               <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
             </div>
             <ui-actions>
-              <ui-button id="measured-approve" kind="primary" type="button" disabled>실측 교정 승인 저장</ui-button>
+              <ui-button id="measured-approve" kind="primary" type="button" disabled>보정 승인 저장</ui-button>
               <ui-button id="measured-revoke" kind="quiet" type="button" disabled>승인 철회</ui-button>
             </ui-actions>
           </section>
@@ -389,7 +389,7 @@
               <ui-button id="measured-refresh" kind="quiet" type="button" disabled>교정 상태 확인</ui-button>
             </ui-actions>
             <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
-            <img id="measured-image" alt="실측 교정 지도 미리보기" hidden>
+            <img id="measured-image" alt="보정 지도 미리보기" hidden>
           </section>
           <section class="measured-group" aria-labelledby="measured-tracking-heading">
             <h4 id="measured-tracking-heading">추적 보정</h4>

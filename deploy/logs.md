@@ -5088,3 +5088,19 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. AI PC 외 장비의 수용은 별도다.
 - 결정: 없음
 - 교훈: 현장에서 systemd가 모르는 `ConditionPathIsExecutable=` 지시어를 무시했다. 실행 파일 조건을 `ConditionFileIsExecutable`로 고치고, 현장 문제의 원인을 systemd 파서 회귀로 고정했다.
+
+## 2026-11-26 · uncommitted · omx_hotfix deploy --link omx-bench-current restarts an idle bench
+
+- 변경: tools/remote/omx_hotfix.py: after a bench link switch, read /api/arms on the cell; idle with no arm locked -> systemctl --user restart rosy-omx-bench-record.service and print is-active; busy or unreadable -> print 'bench restart held' and exit 3 (deploy stands). BENCH_RECORD_GUIDE.md section 3 drops the manual restart step.
+- 증거: 2026-11-26: link switched 04:57 but the service kept old code from 03:59; test/test_omx_hotfix.py idle/busy/read-failure/cell-link cases
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
+
+- 변경: 연결 끊김은 warn·정상과 대기는 색 없음, 미확인 배지 초기 톤 제거, 보류 카드 경보를 원인 줄로 옮김, 자동 복구 보류는 warn 알림·홈 복귀 실패 중복 오류 제거, 빠른 조치 버튼은 같으면 유지해 초점 보존, 신선도 문구(조명 판정 지연·조명 정보 없음·최신·브라우저 수신·원인 미확인), CSS 작은 글자 .8rem
+- 증거: 원격 pytest test_omx_bench_*.py·test_omx_camera_input_preflight.py, 로그 D:/DevTemp/ui-map-panel-1126/bench-ui/
+- gate 변화: 없음
+- 결정: 두 패널 2라운드 합의 6항목(안전 버튼 동작·문구 불변)
+- 교훈: 없음
