@@ -379,8 +379,10 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
     """D-540 1: one `운행 취소` per card, quiet, no confirm: the open trip if there is one, else the goal plus
     lane driving that is on. A stopped trip opens its card with the lease end reason (D-541 7)."""
 
+    from playwright.sync_api import expect
+
     posts = []
-    answers = {"/api/fleet/trips/t-1/cancel": (200, {**LEAD, "state": "canceled"}),
+    answers = {"/api/fleet/trips/t-1/cancel": (200, {**LEAD, "state": "canceled", "detail": {"stop_sent": False}}),
                "/api/fleet/robots/rosy_02/cancel": (200, {"ok": True}),
                "/api/fleet/robots/rosy_02/line-follow": (200, {"result": {"state": "OFF"}})}
     browser, page, errors = _open(None, site, API, posts, answers)
@@ -399,6 +401,7 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
         assert stop.get_attribute("kind") == "quiet" and stop.inner_text().strip() == "운행 취소"
         stop.click()
         _settle(page, posts, "/api/fleet/trips/t-1/cancel")
+        expect(page.locator("#log")).to_contain_text("운행 취소 · 기체 정지 응답 미확인 · t-1")
         assert ("/api/fleet/trips/t-1/cancel", None) in posts
         assert not any(path == "/api/fleet/robots/rosy_01/cancel" for path, _ in posts)
 

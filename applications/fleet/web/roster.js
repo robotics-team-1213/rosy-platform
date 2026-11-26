@@ -510,11 +510,17 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     try {
       if (stop.trip) {
         try {
-          await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+          const receipt = await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
           life.check();
+          if (receipt?.trip_id !== stop.trip || receipt?.robot_id !== robot.robot_id || receipt.state !== "canceled") {
+            log(`${robot.robot_id} 운행 취소 결과 확인 필요 · ${stop.trip}`, "bad");
+            return;
+          }
           view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+          view.endedTrips = [receipt, ...(view.endedTrips || []).filter((row) => row.trip_id !== stop.trip)];
           render();
-          log(`${robot.robot_id} 운행 취소`, "good");
+          const acknowledged = receipt.detail?.stop_sent === true && !receipt.detail.error;
+          log(`${robot.robot_id} 운행 취소 · ${acknowledged ? "기체 정지 명령 수락" : "기체 정지 응답 미확인"} · ${stop.trip}`, acknowledged ? "good" : "bad");
           return;
         } catch (err) {
           if (err.name === "AbortError") return;
