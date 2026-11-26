@@ -32,7 +32,7 @@ from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
 )
-from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm  # noqa: E402,F401
+from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm, with_camera_heal  # noqa: E402,F401
 
 try:
     import fcntl
@@ -230,7 +230,7 @@ class Runner:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
                 proc = subprocess.Popen(
-                    argv, cwd=self.workdir, stdout=fh, stderr=subprocess.STDOUT,
+                    with_camera_heal(argv, job, eff_params), cwd=self.workdir, stdout=fh, stderr=subprocess.STDOUT,
                     stdin=subprocess.DEVNULL, start_new_session=True, env=env,
                 )
             now = time.time()

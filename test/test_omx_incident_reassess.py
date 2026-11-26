@@ -216,6 +216,18 @@ def test_held_read_requires_a_calibrated_gripper(cell):
     assert cell["read"] == []
 
 
+def test_without_frames_the_arm_is_read_and_no_camera_view_is_fetched(cell):
+    """The camera heal reads the arm while its camera is the dead one."""
+    def no_fetch(view):
+        raise AssertionError(f"fetched {view}")
+    rows = iter([motors(), motors()])
+    block = ra.reassess("arm_b", cell["configs"]["arm_b"], held=False, with_frames=False, fetch=no_fetch,
+                        read=lambda d: next(rows), lease_root=cell["leases"], by_id=cell["by_id"],
+                        calibration_dir=cell["cal"], now=tick(), sleep=lambda s: None)
+    assert block["frames"] == [] and block["folded"] is True and block["stable"] is True
+    assert set(block["torque_after"].values()) == {0}
+
+
 def test_signed_per_joint_error_and_a_creeping_arm_is_not_stable(cell):
     sag = run(cell, motors([2063, 773, 3134, 3104 + 100, 2972, 2002]))  # wrist_flex raw +100 = +4.9 units over home
     assert sag["home_err"]["wrist_flex"] > 4 and sag["home_err"]["wrist_flex"] == sag["first_home_err"]["wrist_flex"]

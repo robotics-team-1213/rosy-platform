@@ -170,7 +170,10 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
         position = peer_fit.apply(_point(state))
         if not _geometry_point(position):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_POSE_UNVERIFIED")
-        error = fit.max + peer_fit.max + (correction_padding or 0.0)
+        # Robots bound to the same grid by the same transform share its error: their relative distance does not.
+        shared = ((fit.yaw, fit.tx, fit.ty) == (peer_fit.yaw, peer_fit.tx, peer_fit.ty)
+                  and mover_state.get("map_grid_id") is not None and mover_state.get("map_grid_id") == state.get("map_grid_id"))
+        error = (0.0 if shared else fit.max + peer_fit.max) + (correction_padding or 0.0)
         bodies = _body(console, mover), _body(console, robot)
         if None in bodies:  # unknown geometry keeps the general traffic clearance
             lane = turn = console._clearance_m + error + traffic.SAMPLE_STEP_M / 2

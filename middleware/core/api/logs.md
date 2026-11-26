@@ -765,7 +765,6 @@
 - 증거: 관련 테스트 94개 통과, known_failures 0 NEW.
 - gate 변화: 없음.
 
-
 ## 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
 - 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
 - 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
@@ -1404,3 +1403,11 @@
 - 변경: 기존 센서 상세 응답의 sample_age_s를 단조 시계로 계산한다. 토픽 표본이 있는 센서 목록과 시간 필드의 형식을 보존한다.
 - 증거: 센서 목록·상세·시간 역행 회귀 시험을 CORE API로 확인한다.
 - gate 변화: SOURCE 수정.
+
+## 2026-11-23 · uncommitted · Pinky repark admission and measured completion
+
+- 변경: Pinky 미세 재정차는 요청 시점의 주행권을 각 구간과 주행 갱신 때 확인하고 최종 위치를 측정해야 완료된다.
+- 증거: test_motion_repark에서 주행권 만료와 교체, 측정 소실과 회복, 정차 오차 경계를 검사한다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

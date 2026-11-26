@@ -263,6 +263,71 @@ def registered(tmp_path, monkeypatch):
             delattr(bridge_pkg, sub)
 
 
+@pytest.fixture
+def stamped_odom(registered, monkeypatch):
+    node, bridge, mission = registered.node, registered.bridge, registered.services.loc_mission
+    ns = types.SimpleNamespace
+    clock = ns(now=100.0)
+    monkeypatch.setattr(node, "get_clock", lambda: ns(now=lambda: ns(nanoseconds=round(clock.now * 1e9))))
+    monkeypatch.setattr(bridge._mirror, "odometry", lambda _msg: None)
+    mission.bind_clock(lambda: clock.now)
+    mission.publish = None
+    zero = ns(x=0.0, y=0.0, z=0.0)
+
+    def receive(source_time, frame="odom", x=0.0):
+        sec, nanosec = divmod(round(source_time * 1e9), 1_000_000_000)
+        pose = ns(position=ns(x=x, y=0.0, z=0.0), orientation=ns(x=0.0, y=0.0, z=0.0, w=1.0))
+        bridge._on_odom(ns(header=ns(stamp=ns(sec=sec, nanosec=nanosec), frame_id=frame),
+                           child_frame_id="base_footprint", pose=ns(pose=pose),
+                           twist=ns(twist=ns(linear=zero, angular=zero))))
+
+    return clock, receive
+
+
+@pytest.mark.parametrize("fault", ["duplicate", "stale", "future", "frame", "delayed"])
+def test_localization_mission_does_not_refresh_from_invalid_odom(registered, stamped_odom, fault):
+    clock, receive = stamped_odom
+    mission = registered.services.loc_mission
+    stale = mission.config.sensor_stale_s
+    receive(clock.now)
+    assert mission.odom_pose() == (0.0, 0.0, 0.0)
+    clock.now += stale / 2
+    now = clock.now
+    stamp = {"duplicate": 100.0, "stale": now - stale * 2, "future": now + 1,
+             "frame": now, "delayed": now - stale * 0.4}[fault]
+    receive(stamp, frame="map" if fault == "frame" else "odom")
+    clock.now += stale * 0.75
+    assert mission.odom_pose() is None
+    receive(clock.now)
+    assert mission.odom_pose() == (0.0, 0.0, 0.0)
+
+
+@pytest.mark.parametrize("reset", ["jump", "clock_rollback", "sample_gap"])
+def test_repark_never_combines_ros_odometry_across_epochs(registered, stamped_odom, reset):
+    from test_localization_mission import _scan, _state
+
+    clock, receive = stamped_odom
+    services = registered.services
+    mission = services.loc_mission
+    services.localization.on_state(_state("LOCALIZED"))
+    receive(clock.now)
+    mission.observe_scan(_scan(services))
+    mission.repark.start(0.07, 0.0)
+    if reset == "clock_rollback":
+        clock.now = 10.0
+    else:
+        clock.now += mission.config.sensor_stale_s * 1.25 if reset == "sample_gap" else 0.05
+    position = 1.0 if reset == "jump" else 0.0
+    receive(clock.now, x=position)
+    mission.observe_scan(_scan(services))
+    mission.tick()
+    result = mission.repark.status()
+    assert result["state"] == "aborted" and result["reason"] == "odometry_stale"
+    assert "moved_robot_dxdy_m" not in result
+    assert mission.odom_pose() == (position, 0.0, 0.0)
+    assert mission.repark.start(0.07, 0.0)["state"] == "running"
+
+
 #: Period in seconds, in registration order. `1/50` is D-2's sole `cmd_vel`
 #: publisher; `1/10` is `state.rate_hz` from `rosy_default.yaml`.
 EXPECTED_TIMERS = [
