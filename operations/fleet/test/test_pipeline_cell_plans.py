@@ -369,6 +369,7 @@ def test_cancel_cell_plan_and_refusal_visibility_and_pydantic_contracts(monkeypa
     ("SITE_NOT_MEASURED", None, "SITE_NOT_MEASURED"),
     ("POLICY_STATE_OUT_OF_RANGE", None, "POLICY_STATE_OUT_OF_RANGE"),
     ("POLICY_START_POSE_MISMATCH", None, "POLICY_START_POSE_MISMATCH"),
+    ("POLICY_STATE_STATS_MISSING", None, "POLICY_STATE_STATS_MISSING"),
     ("MEASURED_PLACEMENT_MISSING", "STAND_NOT_CALIBRATED", "STAND_NOT_CALIBRATED"),
     ("internal operator diagnostic", "/devices/private/tty:error", "MEASURED_PLACEMENT_MISSING"),
 ])

@@ -182,8 +182,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                     live_poses = [list(dry_seed_state)]
                 else:
                     state = np.asarray(status["state"], dtype=float)
-                if state_gate is not None and (n > 0 or entry_ran or dry_seed_state is not None):  # entry end on: state must be trained
-                    if why := state_gate.verdict(state.tolist(), after_entry=n == 0):
+                if state_gate is not None:  # entry end on (or the first chunk of a library without entry): state must be trained
+                    if why := state_gate.verdict(state.tolist(), after_entry=n == 0 and entry_frames is not None):
                         return _fail("refused", n, why, pre_logs=({**row, "refused": why},))
                     row["state_q_warning"] = state_gate.warnings(state.tolist())
                 frames, oldest_stamp, state_now = {}, None, time.time()

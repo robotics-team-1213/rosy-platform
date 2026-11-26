@@ -224,7 +224,7 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                 state = {"state": prediction.state, "ok": True} if dry_run else cell.act("state")
                 if not state.get("ok") or state.get("fault"):
                     raise ValueError("policy start state unavailable")
-                if state_gate is not None and (n > 0 or (dry_run and entry_pose is not None)) and (why := state_gate.verdict(state["state"], after_entry=n == 0)):
+                if state_gate is not None and (n > 0 or entry_pose is None or dry_run) and (why := state_gate.verdict(state["state"], after_entry=n == 0 and entry_pose is not None)):
                     return stopped(n, why, row, state)
                 if n == 0 and entry_ran and not dry_run and not _entry_ready(state, entry_pose):
                     return stopped(n, "POST_ENTRY_STATE_MISMATCH: arm not at entry pose before chunk 0", row, state)

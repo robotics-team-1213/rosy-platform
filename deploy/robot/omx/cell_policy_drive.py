@@ -290,7 +290,7 @@ def main(argv=None) -> int:
              "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None})
         from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
         import cell_params as prm
-        authorize = handoff = rim_z_m = state_gate = None
+        authorize = handoff = rim_z_m = None
         try:
             config["params"] = prm.load(config.get("params_path"))["values"]
             config.pop("_commissioning", None)
@@ -300,9 +300,6 @@ def main(argv=None) -> int:
             library = json.loads(args.library.read_text(encoding="utf-8"))
             source = args.site or "belt"
             rim_z_m = source_rim_z(config, source, library)
-            if args.mode != "taught":  # 2026-11-26: refuse a library or state the checkpoint was not trained on
-                from cell_policy_start_gate import build_gate
-                state_gate = build_gate(args.policy_root, library, shadow, offset, (config.get("params") or {}).get("policy_state_margin"))
             if args.mode != "act":
                 validate_taught_goal(config, source, args.goal_site, destination, library)
                 if args.mode == "hybrid":
@@ -352,6 +349,11 @@ def main(argv=None) -> int:
                     res = {"result": "refused", "reason": str(error)}
             else:
                 import omx_tcp
+                from cell_policy_start_gate import build_gate
+                try:  # the usual refusal output, not parser.error: a library or checkpoint the policy was not trained for moves nothing
+                    state_gate = build_gate(args.policy_root, library, shadow, offset, (config.get("params") or {}).get("policy.state_margin_frac"))
+                except ValueError as error:
+                    return {"result": "refused", "at": 0, "reason": str(error), "parked": False}
                 demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
                 kw = dict(offset=offset, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
                           max_obs_age_s=args.max_obs_age_s, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),

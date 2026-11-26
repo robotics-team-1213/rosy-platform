@@ -8,6 +8,7 @@ retreat/park/hold path. Folded poses before the entry chunk are not gated (excep
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -17,21 +18,38 @@ from cell_lerobot_shadow import JOINT_NAMES
 
 MARGIN_RAD, MARGIN_UNITS = 0.05, 1.6  # slack past the trained min/max; 1.6 units = 0.05 rad (200 units per turn)
 ROLL = JOINT_NAMES.index("wrist_roll")
-RANGE_CODE, START_CODE = "POLICY_STATE_OUT_OF_RANGE", "POLICY_START_POSE_MISMATCH"
+RANGE_CODE, START_CODE, STATS_CODE = "POLICY_STATE_OUT_OF_RANGE", "POLICY_START_POSE_MISMATCH", "POLICY_STATE_STATS_MISSING"
 
 
 def read_state_range(policy_root) -> dict[str, np.ndarray]:
-    """observation.state min/max (and q01/q99 when present) from the checkpoint's normalizer statistics."""
-    files = sorted(Path(policy_root).glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))
-    if not files:
-        raise ValueError(f"{START_CODE}: checkpoint has no normalizer statistics, so no state range to gate on")
-    from safetensors.numpy import load_file
+    """observation.state min/max (and q01/q99 when present) from the normalizer file policy_preprocessor.json names, else the
+    policy_preprocessor_step_*_normalizer_processor.safetensors beside it (all 17 installed cell checkpoints, 2026-11-26)."""
+    root = Path(policy_root)
 
-    stats = load_file(str(files[0]))
-    out = {k: np.asarray(stats[f"observation.state.{k}"], dtype=float) for k in ("min", "max", "q01", "q99")
-           if f"observation.state.{k}" in stats}
+    def missing(why: str) -> ValueError:
+        return ValueError(f"{STATS_CODE}: {root} {why}; put the checkpoint's normalizer file (policy_preprocessor_step_N_normalizer_processor.safetensors, "
+                          "as named in policy_preprocessor.json) in that folder, or re-export the checkpoint with it")
+
+    names: list[str] = []
+    try:
+        steps = json.loads((root / "policy_preprocessor.json").read_text(encoding="utf-8"))["steps"]
+        names = [s["state_file"] for s in steps if s.get("registry_name") == "normalizer_processor" and isinstance(s.get("state_file"), str)]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    path = next((root / n for n in names if Path(n).name == n and (root / n).is_file()), None)
+    path = path or next(iter(sorted(root.glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))), None)
+    if path is None:
+        raise missing("has no normalizer statistics file")
+    try:
+        from safetensors.numpy import load_file
+
+        stats = load_file(str(path))
+        out = {k: np.asarray(stats[f"observation.state.{k}"], dtype=float) for k in ("min", "max", "q01", "q99")
+               if f"observation.state.{k}" in stats}
+    except Exception as error:  # unreadable file, missing library: the gate cannot judge, so it refuses
+        raise missing(f"{path.name} cannot be read ({type(error).__name__})") from error
     if not {"min", "max"} <= set(out) or any(v.shape != (len(JOINT_NAMES),) for v in out.values()):
-        raise ValueError(f"{START_CODE}: checkpoint state statistics need 6-joint min and max")
+        raise missing(f"{path.name} has no 6-joint observation.state min and max")
     return out
 
 
@@ -60,7 +78,7 @@ class StateGate:
         self.stats, self.arm_id, self.sim_rule = stats, arm_id, sim_rule
         self.offset = np.zeros(len(JOINT_NAMES)) if offset is None else np.asarray(offset, dtype=float)
         default = MARGIN_RAD if sim_rule is not None else MARGIN_UNITS
-        self.margin = default if margin is None else min(float(margin), default)  # configuration may only tighten
+        self.margin = default * (1.0 if margin is None else min(float(margin), 1.0))  # policy.state_margin_frac: the schema allows 0..1, only tighter
         self.canon = canonical_start(arm_id) if sim_rule is not None else None
 
     def model_state(self, state) -> np.ndarray:

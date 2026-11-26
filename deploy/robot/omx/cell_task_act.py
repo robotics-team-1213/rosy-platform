@@ -105,6 +105,12 @@ def _check_ab_policy(handoff: dict, arm_id: str, prep_dir: Path, cfg: Path,
         views, _, size = lrs.read_features(json.loads((root / "config.json").read_text(encoding="utf-8")))
         if size != len(GOALS) or lrs.read_sim_rule(root / lrs.UNITS, cfg_data) is None:
             return refused("ACT_POLICY_MODEL_BINDING_MISMATCH")
+        from cell_policy_start_gate import read_state_range
+
+        try:
+            read_state_range(root)
+        except ValueError:
+            return refused("POLICY_STATE_STATS_MISSING")  # the exact Fleet refusal code (HARDWARE_REFUSALS)
         cameras = cfg_data.get("cameras")
         if not isinstance(cameras, dict) or not all(cameras.get(view) for view in views):
             return refused("ACT_POLICY_CAMERA_MISSING")
