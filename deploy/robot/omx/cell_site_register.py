@@ -257,7 +257,7 @@ def promote(config, arm, site, *, post_eval=None, z_evidence=None, tier_evidence
                 del entry[key]
         entry["status"] = "measured" if "measured_xy" in entry and "measured_z" in entry else "unverified"
         if not dry_run:
-            atomic_write(config, _dump(cfg), sha)
+            cell_config_io.atomic_write(config, cell_config_io.dump(cfg), sha)
         return entry
 
 

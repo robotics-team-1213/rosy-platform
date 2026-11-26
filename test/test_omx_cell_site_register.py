@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
 import cell_job_spec as spec  # noqa: E402
+import cell_config_io  # noqa: E402
 import cell_place_fit  # noqa: E402
 import cell_site_register as reg  # noqa: E402
 import cell_site_target as cst  # noqa: E402
@@ -99,7 +100,7 @@ def test_shared_gate_follows_tier_of_and_with_tiers_does_not_copy_status():
     tiered = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
     assert "status" not in tiered["ship-h1r0-l1"] and "provenance" not in tiered["ship-h1r0-l1"]
     assert cst.unmeasured_refusal(tiered, "ship-h1r0-l1") == "SITE_NOT_MEASURED" and cst.unmeasured_refusal(tiered, "belt", "nowhere") is None
-    sites["ship-h1r0"]["status"] = "measured"  # promotion is seen by every tier at once
+    sites["ship-h1r0"] = dict(SHIP, status="measured")  # a hand entry without evidence keys; promotion is seen by every tier at once
     assert cst.unmeasured_refusal(cell_place_fit.with_tiers({"sites": sites})[0]["sites"], "ship-h1r0-l2") is None
 
 
@@ -118,7 +119,7 @@ def test_auto_pick_stops_before_any_camera_or_arm_step(tmp_path, monkeypatch, sr
     assert out["result"] == "refused" and out["error"] == "SITE_NOT_MEASURED" and cell.method_calls == []
     monkeypatch.setattr(ap.cell_auto_evidence, "map_pose_preflight", lambda *a, **k: "reached preflight")
     cfg = _unverified_config(tmp_path)
-    cfg["sites"]["ship-h1r0"]["status"] = "measured"
+    cfg["sites"]["ship-h1r0"] = dict(SHIP, status="measured")
     assert ap._run_auto_core(cell, cfg, {}, tmp_path / "cal.json", [], None, src, dst, tmp_path, None,
                              False, None, print, None, None, None, {})["result"] == "held: reached preflight"
     dry = ap._run_auto_core(cell, _unverified_config(tmp_path), {}, tmp_path / "cal.json", [], None, src, dst, tmp_path, None,
@@ -266,7 +267,7 @@ def test_config_io_is_the_writer_calibrate_and_surface_use():
 
 def test_both_evidences_in_one_call_and_nothing_to_promote(cell, tmp_path):
     cfg = registered(cell)
-    with pytest.raises(reg.RegisterError, match="needs --post-eval"):
+    with pytest.raises(reg.RegisterError, match="needs --z-evidence"):
         reg.promote(cfg, "arm_a", "ship-h1r0")
     z = write(tmp_path / "z.json", z_receipt(cfg))
     after_z = dict(sites_of(cfg)["ship-h1r0"], surface_z=-0.0071)
@@ -395,7 +396,7 @@ def test_write_is_atomic_keeps_mode_prunes_backups_and_follows_symlink(cell, tmp
     assert len(baks) == 1 and "ship-h1r0" not in json.loads(baks[0].read_text())["sites"]
     for name in ("ship-h1r1", "ship-h1r2", "ship-h2r0", "ship-h2r1", "ship-h2r2"):
         reg.register(cfg, "arm_a", name, evidence=ev, **SHIP)
-    assert len(list(tmp_path.glob("cell-arm-a-stack.json.bak-*"))) == reg.KEEP_BACKUPS
+    assert len(list(tmp_path.glob("cell-arm-a-stack.json.bak-*"))) == cell_config_io.KEEP_BACKUPS
     before = cfg.read_bytes()
     monkeypatch.setattr(os, "replace", lambda *a: (_ for _ in ()).throw(OSError("boom")))
     with pytest.raises(OSError):
@@ -426,7 +427,7 @@ def test_write_refuses_when_another_writer_changed_the_file(cell):
 def test_config_lock_blocks_a_second_writer(cell, monkeypatch):
     fcntl = pytest.importorskip("fcntl")
     cfg, ev = cell
-    monkeypatch.setattr(reg, "LOCK_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(cell_config_io, "LOCK_TIMEOUT_S", 0.2)
     with open(str(cfg) + ".lock", "a") as holder:
         fcntl.flock(holder, fcntl.LOCK_EX)
         with pytest.raises(reg.RegisterError, match="locked by another writer"):
@@ -495,7 +496,7 @@ def test_site_jobs_do_not_move_the_arm_need_distinct_actors_and_refuse_symlinks(
 
 
 def test_site_surface_job_measures_a_registered_slot_under_the_existing_surface_guards(tmp_path):
-    (tmp_path / "cell-arm-a-stack.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "cell-arm-a-stack.json").write_text('{"sites": {}}', encoding="utf-8")
     j = spec.JOBS["site_surface"]
     params = {"arm": "arm_a", "config": "cell-arm-a-stack.json", "site": "ship-h1r0", "surface_clear": True}
     assert j["moving"] and j["camera"] and spec.moves_arm(j, params)
