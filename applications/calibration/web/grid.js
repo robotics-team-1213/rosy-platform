@@ -126,7 +126,7 @@ export function renderTopView(canvas, state) {
 
   const siteObj = profile?.sites?.[siteName] || null;
   const map = siteObj?.map || null;
-  const invH = Array.isArray(map?.homography) ? invert3(map.homography.flat()) : null;
+  const invH = map?.homography ? invert3(map.homography) : null;
   const cam = profile?.camera_top || {};
   const fitZ = map?.z_view;
   const surfaceZ = siteObj?.surface_z;

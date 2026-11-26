@@ -1,7 +1,7 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import { setOff } from "/common/cause-line.js";
 import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
-import { flatMatrix, invert3 } from "/console/assets/map-fit.js";
+import { invert3 as invert3x3 } from "/console/assets/map-fit.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -235,7 +235,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       }
       const bundle = promotableBundle();
       if (!bundle) throw new Error('현재 유효한 실측 교정 승인 기록이 필요합니다.');
-      const mapToImage = invert3(flatMatrix(bundle.floor.undistorted_to_map));
+      const mapToImage = invert3x3(bundle.floor.undistorted_to_map);
       if (!mapToImage) throw new Error('실측 평면 행렬을 뒤집을 수 없습니다.');
       const [bx0, by0, bx1, by1] = bundle.bounds_m;
       const [w, h] = bundle.lens.image_size;

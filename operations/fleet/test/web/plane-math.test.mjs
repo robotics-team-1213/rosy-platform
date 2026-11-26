@@ -91,6 +91,8 @@ test("differences the copies had are settled by the strictest rule", () => {
   assert.equal(invert3(["1", 0, 0, 0, 1, 0, 0, 0, 1]), null);
   assert.equal(invert3([1, 0, 0, 0, 1, 0, 0, 0, Number.NaN]), null);
   assert.equal(invert3(null), null);
-  assert.equal(invert3(mapFit.flatMatrix([[1, 2], [3, 4], [5, 6]])), null);
-  assert.deepEqual(invert3(mapFit.flatMatrix(rows(CASES[2]))), invert3(CASES[2]));
+  assert.equal(invert3([[1, 2], [3, 4], [5, 6]]), null);
+  assert.equal(invert3([[1, 0, 0], [0, 1, 0], [0, 0]]), null);
+  // Calibration records keep 3 rows of 3 (homography, undistorted_to_map): the same inverse as the flat form.
+  assert.deepEqual(invert3(rows(CASES[2])), invert3(CASES[2]));
 });
