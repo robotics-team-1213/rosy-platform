@@ -30,7 +30,7 @@ C++ I2C ADC node (`sensor_adc`). Channels 0–2 IR, 3 ultrasonic, 4 battery. Pub
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Default I2C `/dev/i2c-1`, address `0x08`.
 - Parameters `rate_active` / `rate_idle` / `rate_standby` (20 / 5 / 2 Hz). Until a valid `power/mode` arrives, keep the startup rate.
 - wiringPi I2C is a Pi-only dependency.

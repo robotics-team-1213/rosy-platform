@@ -60,7 +60,7 @@ def test_remap_mismatch_preserves_existing_generation(tmp_path, monkeypatch, cap
     import cv2
     ref = tmp_path / "ref.jpg"
     cv2.imwrite(str(ref), img)
-    config = {"arm_id": "arm_a", "plan_path": str(plan), "cameras": {}, "sites": {"pallet": {}},
+    config = {"arm_id": "arm_a", "plan_path": str(plan), "cameras": {}, "sites": {"pallet": {}}, "coarse": {"z_view": 0.11},
               "work_dir": str(tmp_path), "io": str(tmp_path), "calibration_path": str(cal),
               "preflight": {"reference_top": str(ref)}}
     path.write_text(json.dumps(config))
@@ -76,6 +76,6 @@ def test_remap_mismatch_preserves_existing_generation(tmp_path, monkeypatch, cap
     monkeypatch.setattr(cc, "map_agrees", lambda *_: True)
     monkeypatch.setattr(cc, "move_regions", lambda *_: None)
     monkeypatch.setattr(cell_shared_pallet, "shared_pallet", lambda *a, **kw: {"status": "mismatch"})
-    assert cc.main(["--config", str(path), "auto", "--only", "remap", "--commissioning", "--person-at-switch"]) == 2
+    assert cc.main(["--config", str(path), "auto", "--only", "remap", "--obstacle-mm", "10", "--commissioning", "--person-at-switch"]) == 2
     assert "shared pallet work surfaces disagree" in capsys.readouterr().out
     assert all(p.read_bytes() == content for p, content in files.items())

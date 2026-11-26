@@ -15,8 +15,83 @@ import math
 from pathlib import Path
 
 import cell_pipeline_io as cio
+import cell_remap_depth as rd
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
+REMAP_CLEAR_MM = 35.0
+
+
+def _target_map_sites(config: dict) -> list[str]:
+    sites = config.get("calibrate", {}).get("map_sites") or ["floor", "pinky", "belt"]
+    configured = config.get("sites") or {}
+    return [s for s in sites if s in configured]
+
+
+def site_obstacle_mm(config: dict, depth, colour) -> dict:
+    """Measure depth against every mapped site's configured ROI."""
+    sites = config.get("calibrate", {}).get("map_sites") or _target_map_sites(config)
+    return rd.site_obstacle_mm(config.get("sites") or {}, sites, depth, colour)
+
+
+def resolve_z_view(config: dict, *, obstacle_mm: float | None = None, clear_mm: float = REMAP_CLEAR_MM) -> tuple[dict, dict]:
+    """Raise coarse.z_view (never lower) to clear `obstacle_mm` by `clear_mm` above the table plane."""
+    base_z = float(config["coarse"]["z_view"])
+    info = {"base_z_view": base_z, "z_view": base_z, "obstacle_mm": obstacle_mm, "clear_mm": float(clear_mm), "raised": False}
+    if obstacle_mm is None or isinstance(obstacle_mm, bool) or not math.isfinite(float(obstacle_mm)) or float(obstacle_mm) <= 0.0:
+        return config, info
+    obs = float(obstacle_mm)
+    target_sites = set(_target_map_sites(config))
+    configured = config.get("sites") or {}
+    surface_zs = [
+        float(site["surface_z"])
+        for name, site in configured.items()
+        if (not target_sites or name in target_sites)
+        and isinstance(site, dict)
+        and isinstance(site.get("surface_z"), (int, float))
+        and not isinstance(site.get("surface_z"), bool)
+        and math.isfinite(float(site["surface_z"]))
+    ]
+    table_zs = [z for z in surface_zs if -0.025 <= z <= 0.0]
+    table_z = max(table_zs) if table_zs else 0.0
+    req_z = round(table_z + (obs + float(clear_mm)) / 1000.0, 4)
+    eff_z = max(base_z, req_z)
+    raised = eff_z > base_z + 1e-6
+    info.update({"z_view": eff_z, "obstacle_mm": round(obs, 1), "required_z_view": req_z, "table_z_m": round(table_z, 4), "raised": raised})
+    if not raised:
+        return config, info
+    eff_cfg = {**config, "coarse": {**config["coarse"], "z_view": eff_z}}
+    return eff_cfg, info
+
+
+def plan_only(config: dict, points: list, obstacle_mm: float | None = None) -> dict:
+    """What `--plan-only` prints: every point's IK row, the refusal, the reach note, the plan leverage and the z_view record."""
+    import cell_map_fit
+
+    view, info = resolve_z_view(config, obstacle_mm=obstacle_mm) if obstacle_mm is not None else (config, None)
+    rows = plan(view, points)
+    return {"plan_only": rows, "refused": refusal(rows), "reach": reach_note(view),
+            "leverage": cell_map_fit.plan_leverage(points, view.get("sites") or {}), **({"z_view": info} if info else {})}
+
+
+def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_capture=None) -> tuple[dict, dict]:
+    """The config a remap moves with, and its z_view record: `obstacle_mm` when given, else what the D435 sees above the map sites.
+
+    Invalid depth or coverage at a remap site is recorded as `depth_error` and leaves the configured z_view;
+    cell_calibrate refuses a remap on it before any move unless `--obstacle-mm` was given."""
+    extra: dict = {}
+    if obstacle_mm is None and depth_capture is not None:
+        import cell_cal_eval
+
+        if cell_cal_eval.top_has_depth(config):
+            try:
+                meta = site_obstacle_mm(config, depth_capture(), colour)  # raises without a frame or with a loose alignment
+                obstacle_mm = meta["obstacle_mm"]
+                extra.update(sites_mm=meta["sites_mm"], edge_px=meta["edge_px"], plane_nz=meta.get("plane_nz"))
+            except (OSError, RuntimeError, ValueError) as exc:
+                extra["depth_error"] = str(exc)
+    view, info = resolve_z_view(config, obstacle_mm=obstacle_mm)
+    return view, {**info, **extra}
+
 MAP_POINTS = [
     [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
     [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],

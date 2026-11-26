@@ -34,7 +34,7 @@ Pinky Pro robot composition (D-196). Config only: the HWA-001 profile and CAP-00
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Change `profile.yaml` and `capabilities.yaml` together: the advertised navigation limits are the profile's (HWA-003). `docking.supported` is `true` for Pinky Pro since 2026-11-18 (D-1042 6, one-press pink-line bay docking) — keep the capability checks.
 - Development Compose mode variants remain deploy-owned. Device-mode CORE requires this installed package's binding and canonical typed configuration; see `docs/deployment/deployment-tools.md` for coordinated updates and migration.
 - Update the release-owned binding under source review when static configuration changes. Do not regenerate it from installed files; source/installed product-startup tests must reject stale digests.
