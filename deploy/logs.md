@@ -5120,3 +5120,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음
 - 결정: 2026-11-26 UI 지도 패널 bench-r2 결정 1~4(사용자 나머지 처리 지시)
 - 교훈: 없음
+
+## 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 12px 미만 글자 전부 12px 이상
+
+- 변경: bench_record css·html·js의 rem 글자(루트 15px)와 SVG 글자를 .8rem/12 이상으로, 보이는 모든 글자 12px 하한 시험 추가
+- 증거: test_omx_bench_narrow_browser.py 390·320 보이는 모든 글자 12px 단언, 변이 1회 적발
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
