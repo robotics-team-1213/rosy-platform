@@ -141,8 +141,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 )
                 if not at_home:
                     if home and runner.target is not None and present is not None and not held and not hard_fault and getattr(runner, "_release_until", None) is None:
-                        transit = parse_transit(runner.library)
-                        grip_park = runner.target[5] if (not runner.holding or runner.target[5] > (closed_g := library_gripper_closed(runner.library))) else closed_g
+                        transit, closed_g = parse_transit(runner.library), library_gripper_closed(runner.library)
+                        grip_park = runner.target[5] if (not runner.holding or (not runner.library.get("holding") and runner.target[5] > closed_g)) else closed_g
                         frames = park_path(list(present[:5]) + [runner.target[5]], home[-1], grip_park, runner.fps, transit,
                                            library_transit_speed(runner.library))
                         halt_policy_gate(runner)
@@ -292,7 +292,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
             home = runner.library["chunks"].get("home")
             if not home:
                 raise ValueError("park needs a home chunk in the library")
-            path = park_path(runner.target, home[-1], runner.target[5] if runner.holding and runner.target[5] > (closed := library_gripper_closed(runner.library)) else closed, runner.fps, parse_transit(runner.library), library_transit_speed(runner.library))
+            path = park_path(runner.target, home[-1], library_gripper_closed(runner.library), runner.fps, parse_transit(runner.library), library_transit_speed(runner.library))
             if not _arm_release(runner, path):
                 return True
             halt_policy_gate(runner)

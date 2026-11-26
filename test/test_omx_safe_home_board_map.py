@@ -121,11 +121,12 @@ def test_safe_home_unlinks_stale_out_sets_session_chunks_and_refuses_held_lease(
             assert envs[0]["ROSY_SESSION_CHUNKS"] == str(args.library.resolve())
 
     # 3. Paused observer is released if status_fn or wrapper fails before session start
+    from contextlib import nullcontext
     released = []
     import register_probe as rp
     import omx_incident_reassess as oir
     monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: True)
-    monkeypatch.setattr(rp, "open_readonly_port", lambda _d: SimpleNamespace(__enter__=lambda s: s, __exit__=lambda *a: None))
+    monkeypatch.setattr(rp, "open_readonly_port", lambda _d: nullcontext())
     monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: [{"id": 11, "hardware_error": 0}])
     monkeypatch.setattr(csh, "_release_observer", lambda arm: released.append(arm))
     with pytest.raises(RuntimeError):
