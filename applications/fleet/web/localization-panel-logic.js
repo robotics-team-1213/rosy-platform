@@ -26,7 +26,10 @@ export function consoleTripStartReason(input) {
 }
 
 export function consolePlanSummaryText(plan) {
-  const summary = planSummaryText(plan), frame = plan.nav2_preflight;
+  const parking = plan.parking_handoff;
+  const road = planSummaryText(plan);
+  const summary = parking ? `${road} · ${parking.staging_place_id} 정차 후 ${parking.bay_id} 후진 주차` : road;
+  const frame = plan.nav2_preflight;
   if (!frame) return summary;
   return !frame.binding_required && frame.binding_status !== "MATCHED"
     ? `${summary} · Nav2 · 승인 지도 결속 미확인 (현장 설정상 선택)` : `${summary} · Nav2`;

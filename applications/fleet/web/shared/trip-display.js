@@ -175,6 +175,11 @@ export function tripEndText(trip) {
 }
 
 export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
+  const parking = trip?.detail?.parking_handoff;
+  if (parking?.phase === "waiting_for_commission")
+    return `${parking.staging_place_id} 대기 · ${parking.bay_id} 도킹 보정 필요 (${parking.reason})`;
+  if (parking?.phase === "waiting_for_clearance") return `${parking.staging_place_id} 대기 · ${parking.bay_id} 진입 확인 (${parking.reason})`;
+  if (parking?.phase === "docking" || parking?.phase === "submitting") return `${parking.bay_id} 후진 주차 중`;
   const peer = trip?.detail?.peer_wait;
   if (peer) return `통행 대기 · 명령 대상 ${trip.robot_id} · 안전거리 확인 대상 ${peer.waiting_on.join(', ')} · 자동 재확인 중`;
   return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';

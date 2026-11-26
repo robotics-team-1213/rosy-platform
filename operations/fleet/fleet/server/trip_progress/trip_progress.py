@@ -83,7 +83,7 @@ class TripProgress:
             return None
         place = live.graph.places.get(target)
         if (live.nav2_binding_scope is not None and not live.repeat and place is not None
-                and place.kind in {"stop", "charge"}):
+                and (place.kind in {"stop", "charge"} or live.view["detail"].get("parking_handoff"))):
             return place
         if (place is not None and place.kind == "stop"
                 and (place.precision_stop is not None
