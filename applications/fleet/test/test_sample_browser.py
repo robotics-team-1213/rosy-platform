@@ -265,3 +265,63 @@ def test_cookie_login_stays_usable_when_camera_pairing_needs_named_token(sample_
             expect(page.locator('#camera-peer-requests')).to_contain_text('샘플 카메라')
         finally:
             browser.close()
+
+
+# Records the canvas text the map ruler draws (metres, X/Y cells) as CSS-px boxes; a resize or clear restarts a canvas.
+RULER_LABELS = r"""(() => {
+  const byCanvas = new Map(); let seq = 0;
+  const drop = (canvas) => byCanvas.delete(canvas);
+  for (const key of ['width', 'height']) {
+    const size = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, key);
+    Object.defineProperty(HTMLCanvasElement.prototype, key, {...size, set(v) { drop(this); size.set.call(this, v); }});
+  }
+  const clear = CanvasRenderingContext2D.prototype.clearRect;
+  CanvasRenderingContext2D.prototype.clearRect = function (...args) { drop(this.canvas); return clear.apply(this, args); };
+  const fill = CanvasRenderingContext2D.prototype.fillText;
+  CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...rest) {
+    const s = String(text);
+    if (/^(?:[XY]-?\d+|-?\d+(?:\.\d+)?)$/.test(s)) {
+      const m = this.getTransform(), t = this.measureText(s), r = window.devicePixelRatio || 1;
+      const a = m.transformPoint({x: x - t.actualBoundingBoxLeft, y: y - t.actualBoundingBoxAscent});
+      const b = m.transformPoint({x: x + t.actualBoundingBoxRight, y: y + t.actualBoundingBoxDescent});
+      if (!byCanvas.has(this.canvas)) byCanvas.set(this.canvas, []);
+      byCanvas.get(this.canvas).seq = ++seq;
+      byCanvas.get(this.canvas).push({text: s, left: a.x / r, top: a.y / r, right: b.x / r, bottom: b.y / r});
+    }
+    return fill.call(this, text, x, y, ...rest);
+  };
+  window.rulerLabels = () => [...byCanvas.values()].filter((rows) => rows.length).sort((a, b) => b.seq - a.seq)[0] || [];
+})();"""
+
+
+@pytest.mark.parametrize('viewport', [(1366, 900), (390, 844)])
+def test_control_map_ruler_labels_stay_apart_inside_the_map(sample_site, viewport):
+    """PR #925 fits the map to the active map; ruler labels outside that view piled up on the canvas edges."""
+    from playwright.sync_api import sync_playwright
+    _, origin = sample_site
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(viewport={'width': viewport[0], 'height': viewport[1]})
+            context.add_init_script(RULER_LABELS)
+            assert context.request.post(origin + '/api/fleet/auth/login', headers={'Origin': origin},
+                data={'login': 'sample', 'password': 'CHANGE_ME'}).status == 204
+            page = context.new_page()
+            page.goto(origin + '/console')
+            page.locator('#map-canvas').scroll_into_view_if_needed()
+            page.wait_for_timeout(2500)
+            seen = page.evaluate('''() => {
+              const c = document.getElementById('map-canvas').getBoundingClientRect();
+              const a = document.getElementById('map-axis-badge').getBoundingClientRect();
+              return {width: c.width, height: c.height, labels: rulerLabels(),
+                      badge: {left: a.left - c.left, top: a.top - c.top, right: a.right - c.left, bottom: a.bottom - c.top}};
+            }''')
+        finally:
+            browser.close()
+    labels = seen['labels']
+    hit = lambda a, b: a['left'] < b['right'] and b['left'] < a['right'] and a['top'] < b['bottom'] and b['top'] < a['bottom']
+    assert {item['text'][0] for item in labels} >= {'X', 'Y'}, labels
+    assert [item['text'] for item in labels if not (0 <= item['left'] and item['right'] <= seen['width']
+            and 0 <= item['top'] and item['bottom'] <= seen['height'])] == []
+    assert [item['text'] for item in labels if hit(item, seen['badge'])] == []
+    assert [(a['text'], b['text']) for i, a in enumerate(labels) for b in labels[i + 1:] if hit(a, b)] == []

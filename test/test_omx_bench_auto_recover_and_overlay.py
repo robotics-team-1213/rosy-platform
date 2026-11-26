@@ -689,3 +689,13 @@ def test_home_session_extras_and_replay_corridor_preflight(tmp_path, monkeypatch
     with pytest.raises(ValueError, match="차단"):
         bench.pipeline_generate_replay({"source_type": "ik_planner", "arm": "arm_b", "origin": "belt", "target_slot": "ship-h1r0-l0"})
 
+
+def test_foundation_path_points_at_the_release_contracts(monkeypatch):
+    """The cell release keeps contracts/foundation beside deploy/; a full checkout's sys.path hid a wrong parent index (11-26)."""
+    import sys
+    import bench_record_auto_recover as bra
+
+    expected = ROOT / "contracts" / "foundation"
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if Path(p).resolve() != expected.resolve()])
+    bra._ensure_foundation_path()
+    assert str(expected.resolve()) in [str(Path(p).resolve()) for p in sys.path]

@@ -53,8 +53,8 @@ CHOICES = dict(
     temp_bridge="v7",        # "v7": temp_slot_bridge_a/b 3-prong alignment bridges on PR33_C02_BASE (Confluence 23232928/23233175); "none"
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     preset=None,             # a named bundle of choices, PRESETS (explicit choices win)
-    wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
-                             # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+    wait_pose="side",        # "side" = turned to belt end (D-983); "home" = folded real-cell home
+    home_gripper="open")     # "open": legacy 1.0 rad; "real": closed real-cell home (12 mm floor, ~0.137 rad)
 OUTBOUND_STAND_SPEC = dict(board_edge_x_m=0.155, intake_past_edge_m=0.059, rail_z_m=0.0709, yaw_deg=90.0, top_roi_px=(410, 30, 570, 125))  # 2 stacked r05 plates on floor (no cradle): z_pfloor=23.0 mm, chute exit=45.5 mm, T2 rail_z=70.9 mm
 BERTH_V16_SPEC = dict(
     berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block
@@ -92,8 +92,8 @@ PRESETS = {"v24-20261114": dict(berth_kit="v24-docks", top_camera="2026-11-14", 
                                 ship_pose="photo-20261114", arm_bases="docks-photo", belt_pose="photo-20261114")}
 # preset "v24-20261124": 11-23/24 scene without the ship house visual or cx_house collision mesh (matches live cell camera views; keeps docks-photo 189.8 mm).
 PRESETS["v24-20261124"] = dict(PRESETS["v24-20261114"], ship_house=False)
-# preset "v24-20261114-cad194" (11-14 evening): the same frame and parts, base plates set from the planned 194 mm between the two OMX-AI base plates (user, later that night: the real cell differs, see docks-photo)
-# (inner edge to inner edge: the 130 mm hull with its ~32 mm side docks fits only so; as a centre distance the plates would overlap the ship).
+PRESETS["v24-20261126-real-home"] = dict(PRESETS["v24-20261124"], wait_pose="home", home_gripper="real")
+# preset "v24-20261114-cad194" (11-14 evening): planned 194 mm inner gap (inner edge to edge; real cell differs, see docks-photo).
 PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194", ship_house=False)
 # preset "v24-20261114-cad190" (DL-52, 11-14 night): the same, inner gap fixed at 190 mm (the low end of the docks' 190-200 range); cad-190 stays a named preset, not the omx_loop default (the physical cell is 194 mm until the v25 docks are printed).
 PRESETS["v24-20261114-cad190"] = dict(PRESETS["v24-20261114"], arm_bases="cad-190")
@@ -398,7 +398,7 @@ class Layout:
                     raise ValueError(f"snapshot {c['cell_snapshot']}: no arm_bases for {name}")
                 xy, yaw_rad = tuple(ab["xy"]), math.radians(ab["yaw_deg"])
             for table, tcp in ((self.arms, c["tcp_x_" + name[-5:]]), (self.sim_arms, c["sim_tcp_x_m"])):
-                table[name] = arm = kin.Arm(name, (*xy, z), yaw_rad, tcp_x=tcp)
+                table[name] = arm = kin.Arm(name, (*xy, z), yaw_rad, tcp_x=tcp, home_gripper=c["home_gripper"])
                 arm.wait = wait_pose(arm, c["wait_pose"])
         belt_top = self.table_z - .055 if c["belt_height"] == "ruler" else f["pickup_center_m"][2] - .015
         self.belt_top = belt_top

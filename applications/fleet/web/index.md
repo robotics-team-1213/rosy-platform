@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-26 · uncommitted · Fleet console part2 browser tests follow in-place roster cards and the viewer E-stop
 - 2026-11-26 · uncommitted · 지도 근거 줄: 지도 vN · 활성 시각 · 출처 · 측량
 - 2026-11-26 · uncommitted · 관제·현장 지도·보정 맞춤을 fitBox 하나로
 - 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
 - 2026-11-14 · uncommitted · 관제 현장 지도 출발은 기체 자기 지도면 차로 운행으로
-- 2026-11-13 · uncommitted · 콘솔 브라우저 계약 복구 (main red)

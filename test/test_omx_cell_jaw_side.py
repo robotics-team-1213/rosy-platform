@@ -84,6 +84,34 @@ def test_both_jaws_seen_keep_the_two_jaw_pair_and_one_pair_side_off_a_jaw_does_n
     assert all(m[2] < 600 for m in js.marks(closed, opened, None, False, jaws()))
 
 
+def test_jaws_that_arrive_open_give_the_first_open_frame_and_save_two_jaw_moves(monkeypatch):
+    """2026-11-26 arm_a remap: four jaw moves of ~4.7 s per point; the hover arrives with the jaws open."""
+    grips = []
+    monkeypatch.setitem(sys.modules, "cell_pipeline",
+                        types.SimpleNamespace(grip_to=lambda cell, value: grips.append(value) or True))
+    closed, opened = frames(OTHER)
+    seq = iter([opened, closed, closed, opened])  # arrival (open), try 1 closed, try 2 closed, try 2 open
+    monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **k: next(seq))
+
+    class Cell:
+        def act(self, command):
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 61.6]}
+
+    config = {"plan": {"grip_open": 62.0}}
+    assert cell_pivot.mark_jaws(Cell(), config, lambda s: None) == pytest.approx(OTHER, abs=1)
+    closed_to = cell_pivot.prm.get(None, "pivot.grip_closed")
+    assert grips == [closed_to, closed_to, 62.0]  # the second close finds the jaws already closed
+
+    class Shut(Cell):
+        def act(self, command):
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 50.9]}
+
+    grips.clear()
+    seq = iter([closed, opened] * 6)
+    assert cell_pivot.mark_jaws(Shut(), config, lambda s: None) == pytest.approx(OTHER, abs=1)
+    assert grips == [closed_to, 62.0, closed_to, 62.0]  # not open on arrival: the old close-open tries
+
+
 def test_mark_jaws_without_jaws_keeps_the_old_path_and_with_jaws_returns_the_reference(monkeypatch):
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(grip_to=lambda cell, value: True))
     closed, opened = frames(OTHER)

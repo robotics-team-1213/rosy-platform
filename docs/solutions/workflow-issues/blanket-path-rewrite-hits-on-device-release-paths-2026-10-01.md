@@ -14,6 +14,7 @@ symptoms:
 root_cause: missing_validation
 resolution_type: code_fix
 severity: critical
+last_updated: 2026-11-26
 tags: [folder-move, release-layout, image-build, payload-release, first-boot, contract-tests, d-225]
 ---
 
@@ -45,3 +46,11 @@ A separate change broke the builds at the same time: 8bde27d9 installed `share/w
 - Code that runs installed must not compute checkout-relative paths at import time with fixed `parents[N]`.
 
 Related: [folder-move-widens-path-scoped-contract-tests](folder-move-widens-path-scoped-contract-tests-2026-09-25.md), [installed-layout-import-passes-repo-tests](installed-layout-import-passes-repo-tests-2026-09-22.md).
+
+## Recurrence: OMX bench auto-recover (2026-11-26)
+
+The same miscount happened outside the Pinky image. `deploy/robot/omx/bench_record_auto_recover.py` looked for `contracts/foundation` at `HERE.parents[3]`. `HERE` is `deploy/robot/omx`, so `parents[2]` is the release root, and on the cell PC `parents[3]` was `~/rosy-test`. The import of `core_common` failed closed, so no hold was cleared by mistake. But Fleet incident holds could not be judged automatically, and the field bench page showed '자동 복구 보류: No module named core_common'.
+
+Tests ran from a full checkout whose `sys.path` already held `contracts/foundation`, so the wrong index never mattered there. It was found by rendering the live page. PR #955 fixed the index. Its test first removes the target from `sys.path`, then checks that the helper adds the release's own `contracts/foundation`. The test was committed and seen to fail before the fix.
+
+For a path helper that walks up from `__file__`, a test must remove the expected entry from `sys.path` first. Otherwise the checkout supplies the path and the test passes whatever index the code uses.
