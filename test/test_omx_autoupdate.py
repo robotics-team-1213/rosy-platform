@@ -31,6 +31,7 @@ class FakeHost:
         self.smoke_ok = {}
         self.archived, self.envs_built = [], []
         self.restarts, self.healthy = [], True
+        self.restore_ok, self.last_failed = True, False
         self.stopped = set()
 
     def remote_head(self):
@@ -82,7 +83,10 @@ class FakeHost:
 
     def restart(self, units):
         self.restarts.append(list(units))
-        return self.healthy or not units
+        # unhealthy: the new release's units fail; the restart back on the previous release works unless restore_ok is False
+        ok = self.healthy or not units or (self.last_failed and self.restore_ok)
+        self.last_failed = not ok
+        return ok
 
     def follower_torque_off(self, release, python):
         assert self.held, "the idle check runs while the session lock is held"
@@ -1135,3 +1139,62 @@ def test_deferred_prepared_release_skips_github_checks_and_handles_rate_limit(tm
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_env_token_456")
     h_env = autohost.Host({"github_token_file": str(tmp_path / "missing.token")})
     assert h_env._github_headers()["Authorization"] == "Bearer ghp_env_token_456"
+
+
+def test_a_restart_that_fails_after_a_rollback_is_reported_not_ignored(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **SERVICE)
+    u.run()
+    host.head, host.healthy, host.restore_ok = "b" * 40, False, False
+    assert u.run() == "rolled_back_restart_failed"
+    assert current(tmp_path) == str(Path("releases") / ("a" * 12))
+    assert '"restart_failed"' in capsys.readouterr().out
+
+
+def test_a_manual_rollback_whose_units_do_not_come_back_says_so(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **SERVICE)
+    u.run()
+    host.head = "b" * 40
+    assert u.run() == "switched"
+    host.healthy = False
+    assert u.rollback() == "rollback_restart_failed"
+    assert u.state()["current"] == "a" * 12
+    assert '"restart_failed"' in capsys.readouterr().out
+
+
+def test_always_restart_units_come_back_even_when_they_died(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    fake = tmp_path / "bin" / "systemctl"
+    fake.write_text("#!/bin/sh\nexit 3\n")  # every unit inactive: the job API died on the new tree
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    api, obs = "rosy-omx-cell-job-api.service", "rosy-omx-observer@arm_b.service"
+    cfg = {"restart_running_only": True, "always_restart": [api]}
+    assert m.Host(cfg).running([obs, api]) == [api]  # the hand-stopped observer stays stopped
+    assert m.Host(cfg).running([obs]) == [api]
+    assert m.Host({"always_restart": [api]}).running([obs]) == [obs, api]
+
+
+def test_a_deferred_switch_logs_how_long_it_has_waited(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host)
+    u.run()
+    host.head, host.in_use = "b" * 40, True
+    assert u.run() == "deferred"
+    state = u.state()
+    assert state["deferred"]["release"] == "b" * 12
+    state["deferred"]["since"] -= 3600
+    u.save(state)
+    assert u.run() == "deferred"
+    rows = [__import__("json").loads(line) for line in capsys.readouterr().out.splitlines()]
+    waits = [r["deferred_s"] for r in rows if r.get("step") == "deferred"]
+    assert waits[0] == 0 and waits[-1] >= 3600 and rows[-1]["reason"] == "device_in_use"
+    host.in_use = False
+    assert u.run() == "switched" and "deferred" not in u.state()
+
+
+def test_the_devices_example_always_restarts_the_job_api():
+    example = Path(__file__).parents[1] / "deploy/robot/omx/omx-devices-autoupdate.json.example"
+    cfg = __import__("json").loads(example.read_text())
+    assert "rosy-omx-cell-job-api.service" in cfg["always_restart"]

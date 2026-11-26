@@ -165,7 +165,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const rot = view.siteViewTurn || 0;
     const activeMap = view.activeSiteMap?.map;
     const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
-    const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
+    const fit = sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, t = fitBox(fit, width, height, 32, rot), stage = el("map-stage"), shape = (fit.max_x - fit.min_x > fit.max_y - fit.min_y) === !(rot % 180) ? "wide" : "tall";
+    if (stage && stage.dataset.mapShape !== shape) { stage.dataset.mapShape = shape; scheduleDraw(); }  // 천장 분할: 가로형 지도는 위아래로(device-watch.css). shortcut: 격자 보기는 값을 갱신하지 않음, 격자 분할이 어색하면 거기서도 잡는다
     // 눈금자는 여백 없는 사이트 사각형 중 보이는 칸(여백 32, 위 칩 띠 40 안쪽)만 — 밖 눈금은 몰려 겹치고, 여백은 분할 칸에서 그림과 떨어뜨린다.
     const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32), { max, min } = Math, site = siteBounds(view.siteMap, 0);
     const ruler = { min_x: max(site.min_x, min(ax, bx)), max_x: min(site.max_x, max(ax, bx)), min_y: max(site.min_y, min(ay, by)), max_y: min(site.max_y, max(ay, by)) };
@@ -210,7 +211,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
-    guide(ctx, toPx);
+    guide(ctx, toPx, reserveBox);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
@@ -381,7 +382,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const traffic = (ctx, toPoint, pxPerM) =>
     drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
-  const guide = (ctx, toPoint) => {
+  const guide = (ctx, toPoint, reserve) => {
     // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): keep active robots/live arms visible on
     // normal sites (<= 6 robots), while offline arm placeholders yield priority unless focused.
     const focusedRobotId = view.focusRobot || view.selected || view.focusAnchorId || null;
@@ -394,7 +395,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const isOfflineArm = /^arm_[a-z]+\s*·\s*위치 모름/.test(s);
       return drawChip(c, g, x, y, text, tone, isFocused || (smallFleet && !isOfflineArm) || labelImportant(s.split(" · ")[0]));
     };
-    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses"), focusedRobotId, view });
+    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses"), focusedRobotId, view, reserve });
 
     drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
   };

@@ -67,6 +67,8 @@ JOBS = {
     "incident_status": {
         "script": "omx_incident.py", "argv": ["status", "--arm", "{arm}"], "params": {"arm": _match(ARM)},
     },
+    "torque_off_folded": {"script": "cell_torque_off_folded.py", "argv": ["--arm", "{arm}", "--config", "{config}"],  # torque OFF only when folded, then baseline caps
+                          "params": {"arm": _match(ARM), "config": _safe_path}},
     "calibrate_check": {
         "script": "cell_calibrate.py", "camera": True,
         "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)}, "optional": {"targets": _targets, "route": _route},

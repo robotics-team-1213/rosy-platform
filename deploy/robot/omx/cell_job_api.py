@@ -225,7 +225,7 @@ class Runner:
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
-            env = session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params)
+            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
