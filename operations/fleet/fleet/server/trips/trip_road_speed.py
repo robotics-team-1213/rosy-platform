@@ -6,6 +6,7 @@ import math
 
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
 from fleet.server.platoon_geometry import PlatoonGeometry
+from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_ports import TripError
 from fleet.speed_table import speed_table
 
@@ -101,5 +102,7 @@ class RoadSpeed:
                 raise TripError(409, "ROAD_SPEED_ACK_UNCONFIRMED")
         except Exception as exc:
             detail.update(state="unconfirmed", error=getattr(exc, "code", type(exc).__name__))
+            if isinstance(exc, RoadSpeedRefused):
+                raise TripError(409, exc.code) from exc
             raise
         detail["state"] = "acknowledged"

@@ -12,6 +12,7 @@ from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
+from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_start_checks import crosswalks_on, signals_on, start_check
@@ -501,6 +502,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         else:
             fx, fy, fyaw, _ = robot_pts[-1]
             reply = await runner._call(runner._goal(robot_id, fx, fy, fyaw)) or {}
+    except RoadSpeedRefused as exc:
+        raise TripError(409, exc.code) from exc
     except RobotApiError as exc:
         if exc.code == "NAVIGATION_ACTIVE":
             live.view["detail"]["goal_wait"] = exc.message

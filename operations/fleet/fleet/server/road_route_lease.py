@@ -1,8 +1,13 @@
 """Road route dispatch and scoped speed updates sharing the console goal lease table."""
 from typing import Optional
 
-from fleet.server.trip_ports import TripError
 from fleet.swarm.navigation_transport import goal_lease_supported
+
+
+class RoadSpeedRefused(RuntimeError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 
 class RoadRouteLeases:
@@ -13,7 +18,7 @@ class RoadRouteLeases:
         """Send one D-1009 pass/stop route under the goal lease."""
         if road_speed_controlled and not (goal_lease_supported(caps) and
                 ((caps or {}).get("navigation") or {}).get("route_speed_authority") is True):
-            raise TripError(409, "ROAD_SPEED_AUTHORITY_UNAVAILABLE")
+            raise RoadSpeedRefused("ROAD_SPEED_AUTHORITY_UNAVAILABLE")
 
         async def send(options):
             if road_speed_controlled:
@@ -29,5 +34,5 @@ class RoadRouteLeases:
         lease = self.get(robot_id)
         if (not lease or lease.get("source") != "trip" or lease.get("correlation_id") != correlation_id
                 or not lease.get("road_speed_controlled")):
-            raise TripError(409, "ROAD_SPEED_OWNER_CHANGED")
+            raise RoadSpeedRefused("ROAD_SPEED_OWNER_CHANGED")
         return await self._clients[robot_id].navigation_goal_lease(correlation_id, lease["ttl_s"], speed_grant=grant)
