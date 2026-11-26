@@ -119,6 +119,12 @@ class StateGate:
             return why
         return f"{RANGE_CODE}: {why}" if (why := self._outside(state, range(len(JOINT_NAMES)))) else None
 
+    def admit(self, state) -> list[str]:
+        """No-entry paths (two-arm): the q01..q99 warnings of a trained state; ValueError with the refusal text otherwise."""
+        if why := self.verdict(state, after_entry=False):
+            raise ValueError(why)
+        return self.warnings(state)
+
     def warnings(self, state) -> list[str]:
         """Joints inside min/max but outside the trained q01..q99 (logged only)."""
         if "q01" not in self.stats or "q99" not in self.stats:

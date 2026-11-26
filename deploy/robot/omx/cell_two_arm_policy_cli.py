@@ -17,6 +17,7 @@ import cell_params
 import cell_pipeline_io
 import cell_pivot
 from cell_policy_entry import dry_no_runner_fallback
+from cell_policy_start_gate import build_gate
 import cell_policy_handoff
 import cell_policy_shape
 import cell_remote_policy
@@ -107,6 +108,15 @@ def _build_jaw_spec(
     if spec is not None and tcp_x_m is not None:
         spec = {**spec, "tcp_x_m": float(tcp_x_m)}
     return spec
+
+
+def _arm_state_gate(arm: str, root: Path | None, dry_run: bool, lib: Mapping[str, Any], shadow: Any, offset: Sequence[float], cfg: Mapping[str, Any]) -> Any:
+    """The arm's start gate from its checkpoint folder. Live without the folder cannot judge a state, so it refuses; a dry run skips."""
+    if root is None:
+        if dry_run:
+            return None
+        raise ValueError(f"arm {arm}: --policy-root-{arm} is required to read the checkpoint state range (POLICY_STATE_STATS_MISSING)")
+    return build_gate(root, dict(lib), shadow, offset, (cfg.get("params") or {}).get("policy.state_margin_frac"))
 
 
 class _PassiveDryRunCell:
@@ -274,6 +284,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             jaw_specs[arm] = _build_jaw_spec(arm, configs[arm], libs[arm], kins[arm], tasks[arm])
 
+        state_gates: dict[str, Any] = {}
+        for arm, root in (("a", args.policy_root_a), ("b", args.policy_root_b)):  # each arm against its own checkpoint's trained state range
+            try:
+                if gate := _arm_state_gate(arm, root, args.dry_run, libs[arm], shadows[arm], offsets[arm], configs[arm]):
+                    state_gates[arm] = gate
+            except ValueError as error:  # the usual refusal output: nothing moved
+                print(json.dumps({"result": "refused", "reason": str(error)}))
+                return 1
+
         guard = TwoArmChunkGuard(kins, rigid_map, tips, margin_m=args.margin_m, min_z_m=args.min_z_m)
         authorizers = (
             {arm: cell_policy_handoff.Authorization(cfg) for arm, cfg in configs.items()}
@@ -284,6 +303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cells, shadows, libs, guard, tasks["a"], tasks["b"], work_dir,
             offsets=offsets, demo_ranges=demo_ranges, goals=goals, jaw_specs=jaw_specs, kins=kins,
             max_chunks=args.max_chunks, dry_run=args.dry_run, authorizers=authorizers,
+            state_gates=state_gates,
             fold_context={"kin": kins, "rigids": rigid_map, "tips": tips, "margin_m": args.margin_m},
         )
         receipt["proposer"] = args.proposer.strip()
