@@ -40,8 +40,12 @@ a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outl
 #site-map-svg.has-plane .edge { stroke: var(--series-primary); }
 #site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
 #site-map-svg .edge.free { stroke-dasharray: 8 6; }
+#site-map-svg .edge.surveyed { stroke-dasharray: none; }
+#site-map-svg .stored-road { fill: none; stroke: var(--series-secondary); stroke-width: 3px; stroke-dasharray: 5 4; pointer-events: none; }
+#site-map-svg .stored-road[data-road-prefix] { cursor: pointer; pointer-events: stroke; }
 #site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
 #site-map-svg .arrow { fill: var(--ink-quiet); pointer-events: none; }
+#site-map-svg .stored-road-arrow { fill: var(--series-secondary); }
 #site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
 #site-map-svg .place.start { fill: var(--series-secondary); }
 #site-map-svg .start-heading { fill: var(--series-secondary); stroke: var(--ink); stroke-width: 1px; pointer-events: none; }

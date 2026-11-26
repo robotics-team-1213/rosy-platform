@@ -9,6 +9,7 @@ import math
 import os
 import time
 from fastapi import HTTPException, Request
+from fleet.server.pipeline.bound_home_receipt import sync_home_receipts, verified_hold_reason
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
@@ -88,7 +89,7 @@ def install_cameras_routes(app, ctx) -> None:
     async def ingest_cell_quality(request: Request):
         body = await request.json()
         from fleet.server.pipeline_recovery_policy import (
-            ARM_CELL, CAM_CELL, cell_quality_key_allowed, cell_quality_recovery_sync,
+            ARM_CELL, CAM_CELL, cell_quality_key_allowed,
         )
 
         cams = body.get("cameras")
@@ -100,7 +101,7 @@ def install_cameras_routes(app, ctx) -> None:
         holds = body.get("arm_holds")
         if isinstance(holds, dict):
             for arm_id in ("arm_s", "arm_a", "arm_b"):
-                if isinstance(holds.get(arm_id), dict):
+                if isinstance(holds.get(arm_id), dict) and cell_quality_key_allowed(app, request, ARM_CELL[arm_id]):
                     h = holds[arm_id]
                     new_held = bool(h.get("local_held") or h.get("fleet_held") or h.get("held"))
                     if arm_id in app.state.pending_clear_arms:
@@ -113,7 +114,7 @@ def install_cameras_routes(app, ctx) -> None:
                     app.state.arm_holds[arm_id] = {
                         "arm": arm_id,
                         "held": new_held,
-                        "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
+                        "reason": verified_hold_reason(h),
                         "incident_ids": list(h.get("incident_ids") or []),
                     }
                     if new_held and not prev_held and gov is not None:
@@ -166,9 +167,7 @@ def install_cameras_routes(app, ctx) -> None:
         human_hold = bool(_is_human_detected() or fence_held or any(
             (s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values()
         ))
-        pending_home_out = cell_quality_recovery_sync(
-            app, request, body, human_hold=human_hold, save_fn=_save_ledger, now=time.time(),
-        )
+        pending_home_out = sync_home_receipts(app, request, body, human_hold, _save_ledger, time.time())
         pending = dict(app.state.pending_clear_arms)
         return {
             "ok": True,

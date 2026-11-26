@@ -4,7 +4,42 @@ import assert from "node:assert/strict";
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
+  roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "../../../../applications/fleet/web/map/site-layer.js";
+
+test("world_261026 charging bay overlays draw straight, leaving source geometry intact", () => {
+  const polyline = [[-0.43002, 0.04266], [-0.4354, 0.3294], [-0.41816, 0.47]];
+  for (const bay of [1, 2, 3]) {
+    const edge = {id: `bay_${bay}`, from: `P${bay}`, to: `C${bay}`, polyline};
+    assert.deepEqual(roadOverlayPoints("world_261026", edge), [polyline[0], polyline[2]]);
+    assert.equal(roadOverlayPoints("other_site", edge), polyline);
+    assert.equal(roadOverlayPoints("world_261026", {...edge, id: "ring"}), polyline);
+    assert.equal(polyline.length, 3);
+  }
+});
+
+test("C1 floor stripe ends on observed paint independently of the charging pose", () => {
+  const map = {map_id: "world_261026"};
+  const polyline = [[-0.43002, 0.04266], [-0.4354, 0.3294], [-0.41816, 0.47]];
+  const edge = {id: "bay_1", from: "P1", to: "C1", polyline};
+  assert.deepEqual(surveyedRoadPoints(map, edge), [[-0.4222, 0.0433], [-0.4386, 0.44]]);
+  assert.equal(surveyedRoadPoints({map_id: "other"}, edge), null);
+  assert.equal(surveyedRoadPoints(map, {...edge, to: "C2"}), null);
+  assert.equal(surveyedRoadPoints(map, {...edge, polyline: [polyline[0], [-0.42, 0.48]]}), null);
+  assert.equal(unmeasuredRoadPoints(map, edge), null);
+});
+
+test("upper floor midpoint meets the turn approach on one straight line; stored S3 maneuver stays available", () => {
+  const map = {map_id: "world_261026"};
+  const s3 = [0.745, -0.207], tangent = [0.9238, -0.207], s5 = [0.89822, -0.48152];
+  const upper = {id: "upper_east", from: "S3", to: "J_in", polyline: [s3, [0.31418, -0.25008]]};
+  const turn = {id: "loop_right", from: "S5", to: "S3", polyline: [s5, [1.0593, -0.3424], tangent, s3]};
+  const approach = surveyedRoadPoints(map, turn), lane = surveyedRoadPoints(map, upper);
+  assert.deepEqual(approach.at(-1), lane[0]);
+  assert.ok([...approach, ...lane].every(([, y]) => y === -0.25008));
+  assert.deepEqual(unmeasuredRoadPoints(map, turn), turn.polyline.slice(0, 3));
+  assert.deepEqual(turn.polyline.at(-1), s3);
+});
 
 const row = (changes) => ({
   robot_id: "rosy-pinky-8kcn", x: 1, y: 0.5, yaw: 0, captured_at: 10, age_ms: 200,

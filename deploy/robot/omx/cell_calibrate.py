@@ -16,47 +16,23 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
+import cell_diagnose
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
+from cell_remap_plan import MAP_POINTS  # noqa: E402
+from cell_depth import capture_top_depth_z16 as depth_capture  # noqa: E402
 
-MAP_POINTS = [
-    [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
-    [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
-]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
-
-
-def depth_capture():
-    """A fresh top D435 Z16 frame (None on a failed capture); the depth-verify step's only depth source."""
-    import cell_depth
-
-    return cell_depth.capture_top_depth_z16()
-
-
-_REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
-
-
-def _load_ref_gray(path: Path):
-    import cv2
-
-    try:
-        st = path.stat()
-    except OSError:
-        return None
-    key = str(path)
-    cached = _REF_GRAY_CACHE.get(key)
-    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
-        return cached[2]
-    img = cv2.imread(key, cv2.IMREAD_GRAYSCALE)
-    if img is not None:
-        _REF_GRAY_CACHE[key] = (st.st_mtime_ns, st.st_size, img)
-    return img
 
 
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order."""
+    bootstrap = check.get("initial_commissioning") and check.get("missing_map")
+    if check.get("camera_issue") not in (None, "camera_moved") and not bootstrap:
+        return ["review-camera-reference"]
     if check.get("camera_moved") or check.get("missing_map"):
         steps = ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
     else:
@@ -94,11 +70,13 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
             frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
         out["camera_shift"] = shift
-        out["camera_moved"] = (bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
-                               or not shift["ok"] or shift["max_px"] > prm.get(params, "calibrate.max_shift_px"))
     else:
-        out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
+        out["initial_commissioning"] = (calibration.get("sites") == {} and set(calibration) <= {"schema", "sites"}
+                                       and calibration.get("schema") in (None, cal.SCHEMA)
+                                       and not (config.get("preflight") or {}).get("reference_sha256")
+                                       and not (ref_path and (ref_path.exists() or ref_path.is_symlink())))
+    out.update(cell_diagnose.camera_reference(out, prm.get(params, "calibrate.max_shift_px")))
     try:
         bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
         for site, xy in targets:
@@ -150,24 +128,6 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     return out
 
 
-def map_sites(config: dict) -> list:
-    """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt."""
-    return config.get("calibrate", {}).get("map_sites") or [
-        s for s in ("floor", "pinky", "belt") if s in config["sites"]
-    ]
-
-
-def _map_write_sites(config: dict) -> list:
-    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
-    sites = list(map_sites(config))
-    seen = set(sites)
-    for name, site in (config.get("sites") or {}).items():
-        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
-            sites.append(name)
-            seen.add(name)
-    return sites
-
-
 def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=None) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped.
 
@@ -179,6 +139,8 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
+    motion = rp.scoped(config)
+    visits = []
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
     if not fold(cell).get("ok"):
@@ -188,7 +150,7 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
-            lib = cp.write_library(rp.scoped(config), view, view, work / f"remap-{i}.json")
+            lib = cp.write_library(motion, view, view, work / f"remap-{i}.json")
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
@@ -199,20 +161,12 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
                 failed = command
                 break
         if failed:
-            if at_stop is not None:  # evidence never stands between a stop and the fold: a stuck camera's
-                import threading      # frame() could hold the arm in contact for ~60 s, so it gets AT_STOP_S
-
-                def grab():
-                    try:
-                        at_stop(status.get("state"), status)
-                    except BaseException:
-                        pass
-                grabber = threading.Thread(target=grab, daemon=True)
-                grabber.start()
-                grabber.join(timeout=AT_STOP_S)
-            if not fold(cell).get("ok"):
-                raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
-            log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
+            try:
+                rp.record_stop(status, failed, [x, y], speed=motion["plan"].get("transit_speed", 0.85),
+                               log=log, at_stop=at_stop, timeout=AT_STOP_S)
+            finally:
+                if not fold(cell).get("ok"):
+                    raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             break
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
@@ -224,10 +178,14 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
             keep=frames / f"{i:02d}", report=report,
         )
         row = {"point": [x, y], "mark": mark, "near": near}
+        visit = {"point": [x, y], "status": "observed" if mark is not None else "missed", "pixel": mark}
+        visits.append(visit)
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
         if mark:
-            fk_x, fk_y, _, fk_yaw = rp.measured_tcp_yaw(cell, config, lib, (x, y))
+            fk_x, fk_y, fk_z, fk_yaw = rp.measured_tcp_yaw(cell, config, lib, (x, y))
+            if fk_z is not None:
+                visit["measured_tcp_m"] = [fk_x, fk_y, fk_z]
             if tcp_marks and fk_yaw is None:
                 row["why"], mark = "no planned FK yaw for the jaw labelling", None
             elif tcp_marks:
@@ -242,23 +200,34 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    return rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+    record = rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+    return {**record, "planned_visits": visits}
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("step", choices=["check", "auto"])
+    ap.add_argument("--route", nargs=2, metavar=("SOURCE", "DEST"), help="check named A/B depth inputs")
+    ap.add_argument("--cad-image-evidence", type=Path, help="read an offline CAD observation file for --route")
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
+    ap.add_argument("--remeasure-surface", metavar="SITE", help="repeat a registered surface measurement, even with a saved height")
+    ap.add_argument("--surface-clear", action="store_true", help="the named fixed support and the arm path are visibly clear")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
     ap.add_argument("--replay-frames", type=Path, help="check: replay a saved remap-frames dir offline; opens no port or camera and writes no calibration")
-    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
-                    "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
-                    "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"],
+                    help="auto: run only the reviewed step kinds")
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
+    if args.cad_image_evidence is not None and not args.route:
+        ap.error("--cad-image-evidence requires check --route")
+    if args.remeasure_surface is not None and (args.step != "auto" or args.only != ["surface"]
+            or not args.surface_clear or args.plan_only or args.replay_frames or args.targets or args.verify):
+        ap.error("--remeasure-surface requires auto --only surface --surface-clear")
+    if args.route and (args.step != "check" or args.plan_only or args.replay_frames):
+        ap.error("--route requires a live read-only check")
     import cv2
     import cell_pipeline as cp
 
@@ -267,13 +236,9 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
-        import cell_map_fit
-
-        rows = rp.plan(config, points)
-        refused = rp.refusal(rows)
-        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
-        return 2 if refused else 0
+        report = rp.plan_report(config, points)
+        print(json.dumps(report), flush=True)
+        return 2 if report["refused"] else 0
     if args.replay_frames is not None:
         if args.step != "check":
             raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
@@ -286,9 +251,26 @@ def main(argv=None):
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     work = Path(config["work_dir"]).expanduser() / "calibrate"
-    work.mkdir(parents=True, exist_ok=True)
-    found = check(config, calibration, targets, cell.frame("top"), config["params"])
+    if args.step != "check":
+        work.mkdir(parents=True, exist_ok=True)
+    from cell_shared_pallet import fixture_check_frame, shared_pallet
+    frame, fixture_report = fixture_check_frame(cell, config, calibration, args.step, args.config)
+    found = check(config, calibration, targets, frame, config["params"])
+    found.update(fixture_report)
+    if args.step == "check":
+        from cell_route_calibration import include_route_report
+        include_route_report(config, calibration, found, args, ap)
     todo = stale(found)
+    if args.remeasure_surface is not None:
+        import cell_surface
+        refused = cell_surface.surface_selection_error(config, calibration, found, args.remeasure_surface)
+        if refused:
+            print(json.dumps({"held": refused, "site": args.remeasure_surface}), flush=True)
+            return 2
+        todo = [f"surface {args.remeasure_surface}"]
+    if todo == ["review-camera-reference"]:
+        print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)
+        return 0 if args.step == "check" else 2
     if args.verify:
         for vstep in ("post-eval", "depth-verify"):
             if vstep not in todo:
@@ -302,7 +284,7 @@ def main(argv=None):
     if refused:
         print(json.dumps({"refused": refused, "todo": todo}), flush=True)
         return 2
-    if not (args.commissioning and args.person_at_switch):
+    if todo != ["depth-verify"] and not (args.commissioning and args.person_at_switch):
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}), flush=True)
         return 2
     done, config_dirty = [], False
@@ -329,6 +311,13 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
                 config_dirty = True
+            if config.get("arm_id") in ("arm_a", "arm_b") and "map_binding_error" in found and found["map_binding_error"] is None:
+                comparison = shared_pallet(config, calibration, candidate_frame=current)
+                if comparison["status"] == "mismatch":
+                    done.append({"remap": record["loo_error_mm"], "refused": "shared pallet work surfaces disagree",
+                                 "shared_pallet_surface": comparison})
+                    print(json.dumps({"done": done}), flush=True)
+                    return 2  # the geometry, map, reference and bias on disk still belong to the previous generation
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
@@ -366,7 +355,13 @@ def main(argv=None):
         elif step.startswith("surface"):
             import cell_surface
 
-            res = cell_surface.run_surface_step(cell, config, step, work)
+            if args.remeasure_surface is not None:
+                res = cell_surface.remeasure_surface(cell, config, calibration, step, work)
+                if res.get(step) != "touched":
+                    print(json.dumps({"held": res}), flush=True)
+                    return 2
+            else:
+                res = cell_surface.run_surface_step(cell, config, step, work)
             done.append(res)
             if res.get(step) == "touched":
                 config_dirty = True

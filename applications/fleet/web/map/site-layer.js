@@ -156,3 +156,44 @@ export function mapUpTurn(record) {
   const up = Math.atan2(c[1] - a[1], c[0] - a[0]) * 180 / Math.PI; // map +y on the raw picture, clockwise
   return ((Math.round((-90 - up) / 90) * 90) % 360 + 360) % 360;
 }
+// The physical charging lead-ins are straight (D-1013). Preserve stored geometry for routing and editing.
+export function roadOverlayPoints(mapId, edge) {
+  const bay = /^bay_([123])$/.exec(edge.id)?.[1];
+  const points = edge.polyline;
+  if (mapId === "world_261026" && bay && edge.from === `P${bay}` && edge.to === `C${bay}` && points.length > 2) {
+    return [points[0], points.at(-1)];
+  }
+  return points;
+}
+
+// world_261026, ceiling_north floor plane, 2026-11-26 (400 px/m).
+// C1 follows the visible pink stripe. The upper lane is halfway between two white stripes.
+// No centreline is painted through the U-turn; only its straight approach was measured.
+const floorSurvey = {
+  bay_1: {from: "P1", to: "C1", anchors: [[-0.43002, 0.04266], [-0.41816, 0.47]],
+    points: [[-0.4222, 0.0433], [-0.4386, 0.4400]]},
+  upper_east: {from: "S3", to: "J_in", anchors: [[0.745, -0.207], [0.31418, -0.25008]],
+    points: [[0.745, -0.25008], [0.31418, -0.25008]]},
+  loop_right: {from: "S5", to: "S3", anchors: [[0.89822, -0.48152], [0.745, -0.207]],
+    points: [[0.9238, -0.25008], [0.745, -0.25008]]},
+};
+
+export function surveyedRoadPoints(map, edge) {
+  if (map?.map_id !== "world_261026" || !Object.hasOwn(floorSurvey, edge.id)) return null;
+  const survey = floorSurvey[edge.id];
+  if (edge.from !== survey.from || edge.to !== survey.to || edge.polyline.length < 2) return null;
+  const ends = [edge.polyline[0], edge.polyline.at(-1)];
+  // A relocated edge needs a new field comparison. Allow only coordinate rounding (1 mm).
+  const sameAnchors = ends.every(([x, y], i) =>
+    Math.hypot(x - survey.anchors[i][0], y - survey.anchors[i][1]) <= 0.001);
+  return sameAnchors ? survey.points : null;
+}
+
+export function unmeasuredRoadPoints(map, edge) {
+  if (edge.id !== "loop_right") return null;
+  const survey = surveyedRoadPoints(map, edge);
+  if (!survey) return null;
+  const approachY = edge.polyline.at(-1)[1];
+  const tangent = edge.polyline.findIndex(([x, y]) => Math.hypot(x - survey[0][0], y - approachY) <= 0.001);
+  return tangent > 0 ? edge.polyline.slice(0, tangent + 1) : edge.polyline;
+}

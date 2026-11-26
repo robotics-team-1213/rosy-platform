@@ -122,6 +122,7 @@ def resolve_site_policy(
             "release": getattr(s, "release", "external"),
             "hold_s": getattr(s, "hold_s", None) or getattr(s, "duration_s", None),
             "timeout_s": getattr(s, "timeout_s", None),
+            "on_timeout": getattr(s, "on_timeout", None),
         }
         for s in (getattr(site_rules, "stops", None) or ())
         if getattr(s, "place", None)
@@ -139,6 +140,7 @@ def resolve_site_policy(
                 "site_rule_role": r_meta.get("site_rule_role"),
                 "release": r_meta.get("release", "external"),
                 "hold_s": float(r_meta.get("hold_s") or default_hold),
+                **({k: r_meta[k] for k in ("timeout_s", "on_timeout")} if r_meta.get("timeout_s") else {}),
             }
     caps = {
         "charge_bay": 0.10,

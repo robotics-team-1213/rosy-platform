@@ -1,30 +1,18 @@
 import { isOperator } from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
-import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
+import { capabilityReason, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill, robotMapPose } from "./localization-badge.js";
 import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { planPolylines, planSummaryText, planTrip, startTrip, tripPoseReason, tripRefusalText, tripStartReason } from "/console/assets/site-map-model.js";
+import { canvasWorld, distToSegment, flattenPlanPoints, planMetrics } from "/console/assets/trip-geometry.js";
+import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
 import { renderHoverCard } from "./map-hover-card.js";
 
-function flattenPlanPoints(map, plan) {
-  if (!map?.edges || !Array.isArray(plan?.segments)) return null;
-  const out = [];
-  for (const poly of planPolylines(map, plan)) {
-    for (const pt of poly) {
-      const last = out[out.length - 1];
-      if (!last || Math.hypot(pt[0] - last[0], pt[1] - last[1]) >= 1e-6) out.push(pt);
-    }
-  }
-  return out.length >= 2 ? out : null;
+function tripDispatchRefusal(error) {
+  return junctionTurnRefusalText(error) || tripRefusalText(error);
 }
-
-const planMetrics = (plan) => ({
-  ...(Array.isArray(plan.places) ? { places: plan.places } : {}),
-  ...(Number.isFinite(plan.length_m) ? { length_m: plan.length_m } : {}),
-  ...(Number.isFinite(plan.eta_s) ? { eta_s: plan.eta_s } : {}),
-});
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {},
@@ -85,13 +73,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const siteMapObj = view.activeSiteMap?.map, localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
     const initialPts = localRoad?.points?.length >= 2 ? localRoad.points : (curPose ? [[curPose.x, curPose.y], [point.x, point.y]] : [[point.x, point.y]]);
     const initialLen = typeof localRoad?.length_m === "number" ? localRoad.length_m : (curPose ? Math.hypot(point.x - curPose.x, point.y - curPose.y) : 0);
+    view.activeRoadPlan = null;
     view.selectedGoal = {
       robotId, x: point.x, y: point.y, yaw, placeId: placeId || null, where, points: initialPts,
       label: placeLabel || `좌표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`,
       places: localRoad?.places || (placeId ? [placeId] : []), length_m: initialLen, eta_s: initialLen / 0.15,
-      status: "SELECTED", statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
+      status: "SELECTED", statusText: "목적지 선택 · 출발 전", at: Date.now(),
     };
-    view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
     const stationArmMap = { S2: "arm_a", S3: "arm_s", S5: "arm_b" };
     const linkedArm = placeId ? stationArmMap[String(placeId).toUpperCase()] : null;
     if (linkedArm) view.focusAnchorId = linkedArm;
@@ -142,15 +130,16 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         const body = preferNav2 ? { to: tripTarget, drive_mode: "nav2" } : { to: tripTarget };
         try { prePlanned = await planTrip(call, robotId, body); } catch (err) {
           if (!preferNav2 && canNav2 && (err?.code === "TRIP_LANE_CAMERA_UNAVAILABLE" || err?.code === "TRIP_MODE_UNSUPPORTED")) {
+            log(`${robotId} → ${where} 차선 경로 계산 거절 · ${tripDispatchRefusal(err)} · Nav2 경로 계산 요청`, "bad");
             prePlanned = await planTrip(call, robotId, { to: tripTarget, drive_mode: "nav2" });
           } else throw err;
         }
         life.check();
       } catch (err) {
         if (err?.name === "AbortError" || seq !== goalPlanSeq) return;
-        const refusal = tripRefusalText(err);
+        const refusal = tripDispatchRefusal(err);
         setGoal({ status: "BLOCKED", statusText: refusal });
-        log(`${robotId} 차로 주행 거절 — ${refusal}`, "bad");
+        log(`${robotId} → ${where} 경로 계획 거절 · ${refusal} · ${err.code || "UNKNOWN"}`, "bad");
         return;
       }
       if (seq !== goalPlanSeq || view.selected !== robotId || !onFrame()) return;
@@ -158,7 +147,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const running = (view.trafficTrips || []).some((row) => row.robot_id === robotId);
       const startBlocked = tripStartReason({ role: isOperator(auth.role) ? "operator" : "viewer", plan: prePlanned, active: view.activeSiteMap, running });
       if (startBlocked) {
-        setGoal({ points: serverPoints, ...planMetrics(prePlanned), status: "BLOCKED", statusText: startBlocked });
+        setGoal({ points: serverPoints, ...planMetrics(prePlanned), planId: prePlanned.plan_id, status: "BLOCKED", statusText: startBlocked });
         log(`${robotId} 출발 보류 · ${startBlocked}`, "bad");
         return;
       }
@@ -193,10 +182,11 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     try {
       if (viaTrip) {
         started = true;
-        await startTrip(call, prePlanned.plan_id);
+        setGoal({ status: "STARTING", statusText: "Fleet 출발 접수 확인 중" });
+        const trip = await startTrip(call, prePlanned.plan_id);
         owner.check();
-        setGoal({ status: "DISPATCHED", statusText: "차로 주행 시작" });
-        log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(prePlanned.plan_id).slice(0, 8)})`, "good");
+        setGoal({ status: "ACCEPTED", tripId: trip?.trip_id, statusText: "Fleet 접수 · 기체 실행 확인 중" });
+        log(`${robotId} → ${where} 차로 운행 접수 (계획 ${String(prePlanned.plan_id).slice(0, 8)})`, "warn");
         refreshGuide();
         return;
       }
@@ -207,29 +197,41 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       owner.check();
       const task = result && result.task ? result.task : null;
       if (task && task.status === "QUEUED") {
+        if (seq === goalPlanSeq) setGoal({status: "QUEUED", statusText: "Fleet 배차 대기"});
         view.pendingTasks[robotId] = task;
         const why = task.reason || result.reason || "READY", blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
         log(`${robotId} task ${task.task_id} QUEUED · ${task.queue_position ? `#${task.queue_position}` : "순번 대기"} · ${why}${blockedBy} · 취소 가능`, "good");
         return;
       }
       if (task && task.status === "UNKNOWN") {
+        if (seq === goalPlanSeq) setGoal({status: "UNCONFIRMED", statusText: "CORE 접수 결과 확인 필요"});
         view.pendingTasks[robotId] = task;
         log(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "bad");
         return;
       }
       if (task && task.status !== "ACCEPTED") {
+        if (seq === goalPlanSeq) setGoal({status: "BLOCKED", statusText: task.reason || task.status});
         log(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
         return;
       }
       if (task) delete view.pendingTasks[robotId];
       const receipt = task ? task.receipt : result;
+      if (seq === goalPlanSeq) setGoal(receipt?.queued
+        ? {status: "QUEUED", statusText: "Fleet 배차 대기"}
+        : {status: "DISPATCHED", statusText: "목표 접수"});
       if (receipt && receipt.queued) log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
       else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad");
+      if (err.name !== "AbortError") {
+        const reason = viaTrip ? tripDispatchRefusal(err) : err.message;
+        const rejected = err.status >= 400 && err.status < 500;
+        if (seq === goalPlanSeq) setGoal({ status: rejected ? "BLOCKED" : "UNCONFIRMED",
+          statusText: `${rejected ? "출발 거절" : "출발 접수 확인 불가"} · ${reason}` });
+        log(`${robotId} → ${where} · ${rejected ? "출발 거절" : "출발 접수 확인 불가"} · ${reason} · ${prePlanned?.plan_id || err.code || ""}`, "bad");
+      }
     }
-      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad"),
+      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripDispatchRefusal(err) : err.message}`, "bad"),
     });
     if (viaTrip && !started && seq === goalPlanSeq && view.selectedGoal?.planId === prePlanned?.plan_id) {
       setGoal({ statusText: "서버 경로 미리보기 (출발 취소)" });
@@ -307,26 +309,6 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
 
   // D-593 운영자 핀: 누른 점 = 위치, 끈 방향 = 로봇 앞(3 px 미만이면 지금 지도 자세의 방향, 없으면 0).
   let pinStart = null;
-  function canvasWorld(event) {
-    const rect = el("map-canvas").getBoundingClientRect();
-    if (!view.map) {
-      const world = view.siteToWorld?.(event.clientX - rect.left, event.clientY - rect.top);
-      return world ? { ...world, px: event.clientX, py: event.clientY } : null;
-    }
-    const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
-    const offX = (rect.width - view.map.width * scale) / 2, offY = (rect.height - view.map.height * scale) / 2;
-    const col = (event.clientX - rect.left - offX) / scale, rowFromTop = (event.clientY - rect.top - offY) / scale;
-    if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) return null;
-    const row = view.map.height - rowFromTop;
-    return { x: view.map.origin.x + col * view.map.resolution, y: view.map.origin.y + row * view.map.resolution,
-      px: event.clientX, py: event.clientY };
-  }
-  function distToSegment(px, py, x0, y0, x1, y1) {
-    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
-    const t = len2 > 1e-12 ? Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / len2)) : 0;
-    return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
-  }
-
   function clearMapHover() {
     if (!view.pointerWorld && !view.hoverWorld && !view.hoverEntity) return;
     view.pointerWorld = view.hoverWorld = view.hoverEntity = null;
@@ -337,7 +319,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   }
 
   pageScope.listen(el("map-canvas"), "pointermove", (event) => {
-    const world = (view.map || view.siteMap) && canvasWorld(event);
+    const world = (view.map || view.siteMap) && canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
     if (!world) { clearMapHover(); return; }
     const { x, y } = world;
     view.pointerWorld = { x, y };
@@ -370,10 +352,10 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   });
   pageScope.listen(el("map-canvas"), "pointerleave", clearMapHover);
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-    if (view.pinning && (view.map || view.siteMap)) pinStart = canvasWorld(event);
+    if (view.pinning && (view.map || view.siteMap)) pinStart = canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
   });
   pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
-    const life = pageScope.capture(), start = pinStart, end = canvasWorld(event), robotId = view.pinning;
+    const life = pageScope.capture(), start = pinStart, end = canvasWorld(event, view, el("map-canvas").getBoundingClientRect()), robotId = view.pinning;
     pinStart = null;
     if (!robotId || !start) return;
     suppressClickUntil = Date.now() + 250;
@@ -404,7 +386,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const life = pageScope.capture(); life.check();
     if (view.pinning || Date.now() < suppressClickUntil) { suppressClickUntil = 0; return; }
     if (!view.map && view.siteMap) {
-      const world = canvasWorld(event);
+      const world = canvasWorld(event, view, el("map-canvas").getBoundingClientRect());
       if (!world) return;
       const pickFocus = (id, msg) => { view.focusAnchorId = id; selection?.set?.(id, { source: "map" }); log(msg, "good"); render(); };
       for (const r of view.guide?.robots || []) {

@@ -5,20 +5,23 @@
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
-import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
+import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripNav2Body, tripRefusalText, tripPoseReason} from "/console/assets/site-map-model.js";
+import {consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason} from "/console/assets/localization-panel-logic.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
+import { chooseConvoyLeader, estopText, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { setOffBy } from "/common/cause-line.js";
 import { patchText } from "/common/control-dom.js";
 import { endedTripText, openTrip, primaryButton, quietButton } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
 
+import {selectedTripText} from "/console/assets/trip-receipts.js";
 export { endedTripText, openTrip };
 
 /** D-517 10 card line: lap, waits, resolver for an open trip; else why the last trip ended (D-541 7). */
 export function cardTripLine(view, robotId) {
-  return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId) || endedTripText(view, robotId);
+  return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId)
+    || selectedTripText(view, robotId) || endedTripText(view, robotId);
 }
 
 /** Default ``drive_mode`` for ``운행…``: prefer ``nav2`` when the robot has ``free`` without ``junction_turn``. */
@@ -79,7 +82,8 @@ function line(className, text) {
 export function createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason = () => "" }) {
   let form = null;  // { robotId, to, start, plan, busy, note }: one form open at a time
   const tripGate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
-  const ready = (robot) => tripGate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
+  const ready = (robot) => tripGate(robot) || (form?.driveMode === "nav2_slam" ? ""
+    : view.guideUnavailable ? "현장 지도 위치 확인 불가"
     : tripPoseReason(view.guide, robot?.robot_id, view.activeSiteMap, robotMapPose(robot)));
   const places = () => view.activeSiteMap?.map?.places || [];
   function checkReady(robotId) {
@@ -106,11 +110,11 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       const trip = await work();
       life.check();
       view.trafficTrips = [...(view.trafficTrips || []).filter((row) => row.robot_id !== robotId), trip];
-      log(`${robotId} ${done}`, "good");
+      log(`${robotId} ${done} · Fleet 접수 · 기체 실행 확인 중 (${trip.trip_id})`, "warn");
       if (holder === form) form = null;
     } catch (err) {
       if (err.name === "AbortError") return;
-      holder.note = `운행 거절 · ${tripRefusalText(err)}`;
+      holder.note = `운행 거절 · ${junctionTurnRefusalText(err) || tripRefusalText(err)}`;
       log(`${robotId} ${holder.note}`, "bad");
     } finally {
       if (life.current()) { holder.busy = false; render(); }
@@ -166,8 +170,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
 
     const canNav2 = (robot.capabilities?.controls?.items || []).some(
       (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
-    if (!canNav2 && mine.driveMode === "nav2") mine.driveMode = "";
-    const driveModeBody = () => (mine.driveMode === "nav2" ? { drive_mode: "nav2" } : {});
+    const driveModeBody = () => tripNav2Body(mine.driveMode);
 
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
     // drops the previewed plan from the buttons on screen now.
@@ -180,7 +183,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     });
     mine.to = placeOptions(to.select, places(), mine.to);
     const preview = quietButton("경로 보기");
-    setOffBy(preview, lock || (running ? "이 로봇은 이미 운행 중입니다" : mine.to ? "" : "목적지를 고르세요"));
+    setOffBy(preview, lock || (running ? "이 로봇에는 진행 중인 배차가 있습니다" : mine.to ? "" : "목적지를 고르세요"));
     preview.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       mine.busy = true;
@@ -205,7 +208,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setOffBy(go, lock || tripStartReason({ role: "operator", plan: mine.plan, active, running }));
     go.addEventListener("click", scope.guard(() => {
       const plan = mine.plan;
-      if (plan) send(id, mine, () => checkedStart(id, plan), "운행을 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "운행 요청");
     }));
     const once = document.createElement("div");
     once.className = "robot-actions";
@@ -222,7 +225,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     repeat.addEventListener("click", scope.guard(() => send(id, mine, async () => {
       const plan = await planTrip(call, id, repeatTripBody(active?.map, mine.start, "", mine.driveMode));
       return checkedStart(id, plan);
-    }, `반복 운행을 시작했습니다 · ${mine.start}`)));
+    }, `반복 운행 요청 · ${mine.start}`)));
     const laps = document.createElement("div");
     laps.className = "robot-actions";
     laps.append(repeat);
@@ -259,7 +262,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setOffBy(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
     lapGo.addEventListener("click", scope.guard(() => {
       const plan = mine.lapPlan;
-      if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴를 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴 요청");
     }));
     const lapActions = document.createElement("div");
     lapActions.className = "robot-actions";
@@ -269,12 +272,12 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     lapSummary.setAttribute("role", "status");
 
     box.append(kind.wrap);
-    if (canNav2) {
+    if (canNav2 || mine.driveMode) {
       const modePick = pick("주행 방식", (value) => {
         mine.driveMode = value; mine.plan = null; mine.lapPlan = null; render();
       });
       modePick.select.dataset.tripDriveMode = id;
-      for (const [value, name] of [["", "기본 (지도 설정)"], ["nav2", "Nav2 (도로 추종)"]]) {
+      for (const [value, name] of [["", "기본 (지도 설정)"], ["nav2", "Nav2 (도로 추종)"], ["nav2_slam", "Nav2 (승인 SLAM 위치)"]]) {
         const option = document.createElement("option"); option.value = value; option.textContent = name;
         modePick.select.append(option);
       }
@@ -343,7 +346,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       send(id, convoy, async () => {
         const plan = await planTrip(call, id, repeatTripBody(view.activeSiteMap?.map, start, leader));
         return checkedStart(id, plan);
-      }, `대열 반복 운행을 시작했습니다 · ${leader} 뒤 · ${start}`);
+      }, `대열 반복 운행 요청 · ${leader} 뒤 · ${start}`);
     });
   }
 

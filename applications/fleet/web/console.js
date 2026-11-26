@@ -186,7 +186,9 @@ const whenDrive = (fn) => () => ((view.stateLoaded || unitScope() !== null)
 const whenDiscovery = (fn) => () => ((view.stateLoaded || unitScope() !== null)
   ? ((owns("drive") || owns("enrollment")) ? fn() : undefined)
   : waitForScope().then(() => (!auth.locked && (owns("drive") || owns("enrollment")) ? fn() : undefined)));
+import {installTripReceiptHistory} from "/console/assets/trip-receipts.js";
 const log = inbox.log;
+installTripReceiptHistory(el, call);
 
 const fleetApi = createFleetClient({ credential: () => auth.token });
 // D-741 3 — any answer keeps the link word live. Only the state poll may call it down: Fleet answers

@@ -32,6 +32,22 @@ class WallMapSync:
             self._built = (key, self._build(active[1].map_id, active[0], [w.face for w in active[1].walls]))
         return self._built[1]
 
+    def proves_loaded(self, state: Mapping, active_map: str) -> bool:
+        try:
+            artifact = self.artifact()
+        except ValueError:
+            return False
+        if (artifact is None or artifact.get("grid_id") is None
+                or artifact["map_id"] != active_map or state.get("map_grid_id") != artifact["grid_id"]):
+            return False
+        fallback = state.get("slam_fallback")
+        if not isinstance(fallback, Mapping) or fallback.get("phase") != "WAITING_LOCALIZATION":
+            return state.get("map_id") == active_map
+        staged = fallback.get("wall_map")
+        return (fallback.get("fallback_active") is True
+                and isinstance(staged, Mapping) and all(staged.get(key) == artifact[key]
+                                                       for key in ("map_id", "version", "sha256")))
+
     async def sync(self, states: Mapping[str, dict]) -> None:
         wanted = [rid for rid, state in states.items() if isinstance(state.get("slam_fallback"), dict)]
         if not wanted:

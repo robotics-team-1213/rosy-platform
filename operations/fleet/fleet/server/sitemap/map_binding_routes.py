@@ -29,10 +29,18 @@ Pair = dict  # {"site": [x, y], "robot": [x, y]}; checked by the store
 MAX_MAP_BUNDLE_CELLS = 4096 * 4096
 
 
+class BindingFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    site_map_id: str = Field(min_length=1)
+    site_map_version: int = Field(strict=True, ge=1)
+    robot_grid_id: str = Field(min_length=1)
+
+
 class ApproveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pairs: list[Pair] = Field(min_length=3, max_length=32)
     holdout: list[Pair] = Field(min_length=1, max_length=32)
+    expected_frame: BindingFrame | None = None
 
 
 class ProposeRequest(BaseModel):
@@ -162,10 +170,16 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
     @app.post("/api/fleet/robots/{robot_id}/map-binding", tags=["map-binding"])
     async def map_binding_approve(robot_id: str, body: ApproveRequest,
                                   principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        state = await state_of(robot_id)
         site = _site(site_maps)
         if site is None:
             raise site_map_error(409, "SITE_MAP_NOT_ACTIVE", "activate a site map first")
-        state = await state_of(robot_id)  # one read: the grid bound is the grid these pairs were measured on
+        expected = body.expected_frame
+        if expected is not None:
+            if site != (expected.site_map_id, expected.site_map_version):
+                raise site_map_error(409, "MAP_BINDING_SITE_CHANGED", "samples belong to a different site map revision")
+            if state.get("map_grid_id") != expected.robot_grid_id:
+                raise site_map_error(409, "MAP_BINDING_GRID_CHANGED", "samples belong to a different robot grid")
         try:
             return bindings.approve(robot_id, state, site, body.pairs, body.holdout, principal.principal_id)
         except BindingError as exc:

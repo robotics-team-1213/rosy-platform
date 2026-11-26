@@ -14,8 +14,7 @@ const POLL_MS = 2000;
 function quietButton(label, { workRead = false } = {}) {
   const btn = document.createElement("ui-button");
   btn.setAttribute("kind", "quiet");
-  btn.type = "button";
-  btn.textContent = label;
+  Object.assign(btn, { type: "button", textContent: label });
   if (workRead) btn.dataset.workRead = "";
   return btn;
 }
@@ -27,8 +26,7 @@ export function createLocalizationPanel({
   const root = node("div", "", "ui-control-stack");
   const kvHost = document.createElement("div");
   const candRow = node("div", "", "ui-control-stack");
-  const candSelect = document.createElement("select");
-  candSelect.className = "ui-field";
+  const candSelect = Object.assign(document.createElement("select"), { className: "ui-field" });
   candSelect.dataset.workRead = "";
   candSelect.setAttribute("aria-label", "확정할 위치 후보 선택");
   candRow.append(candSelect);
@@ -79,20 +77,15 @@ export function createLocalizationPanel({
       entry.loc = loc;
       entry.binding = binding;
       if (ident?.robots) entry.track = ident.robots.find((row) => row.robot_id === id) || null;
-      entry.fetchedAtMs = Date.now();
-      entry.retryAtMs = 0;
-      entry.error = "";
+      Object.assign(entry, { fetchedAtMs: Date.now(), retryAtMs: 0, error: "" });
     } catch (err) {
       if (err?.name !== "AbortError") {
         entry.loc = null;
         entry.fetchedAtMs = Date.now();
-        if (err?.status === 429 && err.code === "RATE_LIMITED") {
-          const wait = Math.min(60, Math.max(1, err.retryAfterS || 1));
-          entry.retryAtMs = entry.fetchedAtMs + wait * 1000;
-          entry.error = `기체 후보 조회가 제한되었습니다. ${Math.ceil(wait)}초 뒤 다시 확인합니다.`;
-        } else {
-          entry.error = err?.message || "위치 세부 상태를 불러오지 못했습니다.";
-        }
+        const wait = err?.status === 429 && err.code === "RATE_LIMITED" ? Math.min(60, Math.max(1, err.retryAfterS || 1)) : 0;
+        entry.retryAtMs = wait && entry.fetchedAtMs + wait * 1000;
+        entry.error = wait ? `기체 후보 조회가 제한되었습니다. ${Math.ceil(wait)}초 뒤 다시 확인합니다.`
+          : err?.message || "위치 세부 상태를 불러오지 못했습니다.";
       }
     } finally {
       entry.inFlight = false;
@@ -187,10 +180,8 @@ export function createLocalizationPanel({
   refreshBtn.addEventListener("click", scope.guard(() => { if (activeId) void refresh(activeId, { force: true }); }));
 
   onAction(confirmBtn, (id) => {
-    const entry = stateFor(id);
-    const idx = entry.candIdx;
-    const candidate = entry.loc?.candidates?.candidates?.[idx];
-    const pose = candidate && { x: candidate.x, y: candidate.y, yaw: candidate.yaw };
+    const idx = stateFor(id).candIdx, { x, y, yaw } = stateFor(id).loc?.candidates?.candidates?.[idx] || {};
+    const pose = x === undefined ? null : { x, y, yaw };
     return {
       kind: "loc-confirm",
       message: `${id}의 후보 ${idx + 1} 위치와 ${candidateHeadingLabel(pose?.yaw)}를 기체에서 검증할까요?`,
@@ -213,8 +204,7 @@ export function createLocalizationPanel({
   }));
 
   sampleBtn.addEventListener("click", scope.guard(async () => {
-    const id = activeId;
-    const robotSnapshot = lastRobot;
+    const id = activeId, robotSnapshot = lastRobot;
     if (!id || !robotSnapshot) return;
     const life = scope.capture();
     try {
@@ -225,9 +215,8 @@ export function createLocalizationPanel({
       stateFor(id).track = trackRow;
       const buf = samplesFor(id);
       const res = captureBindingSample({ robot: robotSnapshot, trackRow, existingSamples: buf.samples, existingGridId: buf.gridId });
-      if (!res.ok) {
-        log(`${id} 결속점 채집 보류 · ${res.reason}`, "bad");
-      } else {
+      if (!res.ok) log(`${id} 결속점 채집 보류 · ${res.reason}`, "bad");
+      else {
         buf.gridId = res.gridId;
         buf.samples = res.samples;
         log(`${id} 결속점 ${buf.samples.length}번 채집 완료 (폭 ${res.spanM.toFixed(2)} m)`, "good");
@@ -282,8 +271,7 @@ export function createLocalizationPanel({
     clear() {
       activeId = null;
       lastRobot = null;
-      lastKvSig = "";
-      lastCandSig = "";
+      lastKvSig = lastCandSig = "";
       renderDom(null, kvHost);
     },
   };

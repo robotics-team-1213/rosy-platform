@@ -37,13 +37,13 @@ HOST_ENV = "OMX_HOTFIX_HOST"
 # <tree>/contracts/foundation on PYTHONPATH like the omx_autoupdate tree
 # rosy_vision: omx_incident's Fleet link imports the observation bridge, which needs it (D-971); without it every
 # session's incident stayed local ("No module named 'rosy_vision'", 2026-11-04)
-# applications/calibration: the Calibration screen (D-1004) runs on this PC beside the cell's request store and cameras
+# applications/calibration + shared/web: the Calibration screen (D-1004) serves /common/ assets from the shared manifest
 # tools/sim/cell_site_map.py + shared/web/cell-site-map.json: cell_policy_drive validates goal slots against the canonical site map
 # learning/envs/isaac/palletizing_gripper.py + omx_f_palletizing_description: cell_act_inputs converts sim_rad/sim_jaw checkpoints
 # contracts/learning/src: cell_collect_plan & cell_policy_drive validate and seal collection plans (rosy.contracts.learning)
 PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation", "contracts/learning/src",
          "operations/overhead/rosy_vision", "applications/calibration", "tools/sim/cell_site_map.py",
-         "shared/web/cell-site-map.json", "learning/envs/isaac/palletizing_gripper.py",
+         "shared/web", "learning/envs/isaac/palletizing_gripper.py",
          "learning/envs/isaac/assets/omx_f_palletizing_description")
 LINK = "omx-tools-current"  # the cell tools only; a bench page deploys with --link omx-bench-current
 LINK_NAME = re.compile(r"omx-[a-z0-9-]+-current")

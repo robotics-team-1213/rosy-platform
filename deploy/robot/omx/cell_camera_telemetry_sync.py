@@ -13,10 +13,12 @@ frames through Vision preview leases only.
 """
 from __future__ import annotations
 
-import hashlib, inspect, json, math, os, ssl, threading, time
+import hashlib, inspect, json, math, os, re, ssl, threading, time
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+
+from cell_safe_home_receipts import _bound_home_arms, _home_result_ack, _read_ack_map, _write_ack_map_atomic
 
 DEFAULT_PREP_DIR = Path("/home/robttt/rosy-test/omx-record-prep-20261019")
 CAMERA_KEYS: tuple[str, ...] = ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist")
@@ -188,26 +190,6 @@ def _collect_auto_events(prep_dir: Path) -> list[dict[str, Any]]:
     return [dict(r) for r in _cached(("events", *sig), lambda p=path: _tail_json_lines(p, AUTO_EVENT_TAIL))]
 
 
-def _read_ack_map(ack_file: Path) -> dict[str, dict[str, Any]]:
-    if not ack_file.is_file():
-        return {}
-    raw = json.loads(ack_file.read_text(encoding="utf-8"))
-    if isinstance(raw, dict):
-        return {str(k): v for k, v in raw.items() if isinstance(v, dict)}
-    return {}
-
-
-def _write_ack_map_atomic(ack_file: Path, ack_map: dict[str, dict[str, Any]]) -> None:
-    if not ack_map:
-        if ack_file.exists():
-            ack_file.unlink()
-        return
-    ack_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = ack_file.with_name(f"{ack_file.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(ack_map), encoding="utf-8")
-    os.replace(tmp, ack_file)
-
-
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR, urlopen_fn: Any = urlopen,
                         *, ca_file: str | Path | None = None, tls_verified: bool | None = None,
                         allow_safe_home: bool = False, launch_auto_fold_fn: Any = None) -> dict[str, Any]:
@@ -221,6 +203,13 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
         ctx = _ssl_context(ca_file, verified, is_https)
         state_json = _fetch_local_state_json(urlopen_fn)
         ack_map = _read_ack_map(ack_file)
+        bound_arms = _bound_home_arms(launch_auto_fold_fn) if allow_safe_home and is_https and verified else []
+        for rid, rec in ack_map.items():
+            if rec.get("incident_id") and rec.get("outcome") in ("in_flight", "started"):
+                # The motion can finish after the Fleet request's admission window expires.
+                result = _home_result_ack(prep_dir, rec.get("arm_id"), rid, rec["incident_id"])
+                if result:
+                    ack_map[rid] = result
         cams_quality: dict[str, Any] = {}
         for cam in CAMERA_KEYS:
             entry = state_json.get(cam) or (state_json.get("cameras") or {}).get(cam)
@@ -239,7 +228,8 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
         payload = {
             "schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds,
             "arm_states": _collect_live_arm_states(prep_dir), "arm_models": _collect_arm_models(prep_dir),
-            "auto_events": _collect_auto_events(prep_dir),
+            "auto_events": _collect_auto_events(prep_dir), "incident_bound_home": bool(bound_arms),
+            "incident_bound_home_arms": bound_arms,
             **({"safe_home_acks": list(ack_map.values())} if ack_map else {}),
         }
         qreq = Request(f"{base}/api/fleet/pipeline/cell-quality", data=json.dumps(payload).encode("utf-8"),
@@ -292,26 +282,28 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                 if not isinstance(spec, dict) or not spec.get("request_id"):
                     continue
                 req_id = str(spec["request_id"])
-                req_res_file = prep_dir / "incidents" / f"auto-fold-req-{req_id}.result.json"
-                if not req_res_file.is_file():
-                    try:
-                        import omx_incident_fleet  # type: ignore
-                        alt_res = Path(omx_incident_fleet.INCIDENTS) / f"auto-fold-req-{req_id}.result.json"
-                        if alt_res.is_file():
-                            req_res_file = alt_res
-                    except Exception:
-                        pass
-                if req_res_file.is_file():
-                    try:
-                        res_obj = json.loads(req_res_file.read_text(encoding="utf-8"))
-                        next_acks[req_id] = {
-                            "arm_id": str(arm_id), "request_id": req_id,
-                            "outcome": str(res_obj.get("outcome") or "completed"),
-                            **({"detail": res_obj.get("detail")} if res_obj.get("detail") else {}),
-                        }
+                root = spec.get("root_task_id")
+                bound = isinstance(root, str) and root.startswith("home-recovery:")
+                incident_id = root.rsplit(":", 1)[-1] if bound else None
+                local = arm_holds.get(arm_id) or {}
+                if not bound and local.get("fleet_held") is True:
+                    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+                    if local.get("fleet_reason") == HOME_RECOVERY_REASON:
+                        next_acks[req_id] = {"arm_id": arm_id, "request_id": req_id, "outcome": "skipped",
+                                             "detail": "HOME_RECOVERY_BINDING_REQUIRED"}
                         continue
-                    except Exception:
-                        pass
+                if bound or "incident_id" in spec:
+                    if (arm_id not in bound_arms or not incident_id or not re.fullmatch("[0-9a-f]{32}", incident_id)
+                            or root != f"home-recovery:{arm_id}:{incident_id}"
+                            or spec.get("arm_id") != arm_id or spec.get("incident_id", incident_id) != incident_id
+                            or spec.get("strategy") != "auto_fold"):
+                        next_acks[req_id] = {"arm_id": arm_id, "request_id": req_id, "outcome": "skipped",
+                                             "detail": "HOME_RECOVERY_BINDING_INVALID"}
+                        continue
+                result_ack = _home_result_ack(prep_dir, arm_id, req_id, incident_id)
+                if result_ack:
+                    next_acks[req_id] = result_ack
+                    continue
                 if req_id in next_acks or spec.get("started"):
                     continue
                 exp = spec.get("expires_at")
@@ -337,7 +329,8 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                     next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
                                          "outcome": "skipped", "detail": "SAFE_HOME_EXPIRED"}
                     continue
-                next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id, "outcome": "in_flight"}
+                binding = {"incident_id": incident_id} if bound else {}
+                next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id, "outcome": "in_flight", **binding}
                 _write_ack_map_atomic(ack_file, next_acks)
                 strategy = str(spec.get("strategy") or "auto_fold")
                 stage = "release_and_lift" if strategy == "release_and_lift" else ("park_only" if strategy == "guarded_slow_park" else "full")
@@ -352,6 +345,7 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                         kw = {k: v for k, v in {
                             "stage": stage, "request_id": req_id, "expires_at": exp,
                             "stop_generation": spec.get("stop_generation"), "safety_fence": str(fence_file),
+                            **({"expected_incident_id": incident_id} if bound else {}),
                         }.items() if has_varkw or k in params}
                         res = fold_fn(str(arm_id), **kw)
                     else:
@@ -360,7 +354,7 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                     explicit = res.get("outcome") if isinstance(res, dict) else None
                     next_acks[req_id] = {
                         "arm_id": str(arm_id), "request_id": req_id,
-                        "outcome": str(explicit) if explicit else ("started" if started else "skipped"),
+                        "outcome": str(explicit) if explicit else ("started" if started else "skipped"), **binding,
                         **({"detail": str((res or {}).get("why") or (res or {}).get("reason") or "not_started")[:120]} if not started else {}),
                     }
                 except Exception as exc:
@@ -368,6 +362,12 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                         "arm_id": str(arm_id), "request_id": req_id, "outcome": "failed", "detail": str(exc)[:120],
                     }
         _write_ack_map_atomic(ack_file, next_acks)
+        if bound_arms and fence_valid and qout["human_hold"] is False:
+            from cell_bound_home_request import request_current_homes
+            try:
+                request_current_homes(base, token, ctx, urlopen_fn, bound_arms, arm_holds, pending_home)
+            except (OSError, ValueError, KeyError) as exc:
+                qout["bound_home_request_error"] = type(exc).__name__
         return qout
     except Exception:
         try:

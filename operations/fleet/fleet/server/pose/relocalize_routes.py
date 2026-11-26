@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from typing import Callable, Mapping, Optional
 
 from fastapi import Depends, HTTPException
@@ -68,7 +69,8 @@ def _match(report, body: ConfirmRequest) -> Optional[int]:
 def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
                               read_state: Callable[[str], object],
                               require_named_operator, read_guard, record_event,
-                              busy: Callable[[str], bool] = lambda robot_id: False) -> None:
+                              busy: Callable[[str], bool] = lambda robot_id: False,
+                              read_state_receipt=None, clock=time.monotonic) -> None:
     """`service` is the LocalizationService (None: this Fleet runs without it)."""
 
     def refuse(status: int, code: str, message: str, **extra) -> HTTPException:
@@ -128,16 +130,22 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
             raise refuse(503, "LOCALIZATION_DISABLED", "this Fleet runs without the localization service")
         if robot_id not in clients():
             raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+        started = clock()
         try:
-            state = await asyncio.wait_for(read_state(robot_id), CALL_TIMEOUT_S)
+            if read_state_receipt is None:
+                state = await asyncio.wait_for(read_state(robot_id), CALL_TIMEOUT_S)
+            else:
+                receipt = await asyncio.wait_for(read_state_receipt(robot_id), CALL_TIMEOUT_S)
+                state, started = receipt.state, receipt.started_mono
         except Exception:
             state = None
         status = trust.status_of(state)
         report = await _candidates(robot_id, report_rate_limit=True)
+        ladder = trust.ladder_for_state(state, service.view(robot_id), state_age_s=clock() - started)
         return {"robot_id": robot_id,
                 "localization": None if status is None else status.model_dump(mode="json"),
                 "candidates": None if report is None else report.model_dump(mode="json"),
-                "ladder": service.view(robot_id), **service.motion_view(robot_id)}
+                "ladder": ladder, **service.motion_view(robot_id)}
 
     @app.post("/api/fleet/robots/{robot_id}/localization/confirm", tags=["fleet"])
     async def robot_localization_confirm(robot_id: str, body: ConfirmRequest,

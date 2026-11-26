@@ -145,6 +145,17 @@ VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 
 
 class TestNewApi:
+    def test_lidar_corridor_is_viewer_read_only_and_input_bounded(self, client):
+        tc, _ = client
+        url = "/api/v1/sensors/lidar/corridor"
+        params = {"direction": "forward", "distance_m": .03}
+        assert tc.get(url, params=params).status_code == 401
+        res = tc.get(url, params=params, headers=VIEWER)
+        assert res.status_code == 200
+        assert res.json()["status"] == "unknown" and res.json()["reason"] == "scan_missing"
+        assert tc.get(url, params={**params, "distance_m": .031}, headers=VIEWER).status_code == 400
+        assert tc.post(url, json=params, headers=VIEWER).status_code == 405
+
     def test_sensors_endpoints(self, client):
         tc, svc = client
         svc.state.set_sensor("lidar", {"num_ranges": 10})

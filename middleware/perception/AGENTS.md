@@ -45,6 +45,7 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 
 | Unit | Responsibility |
 |------|----------------|
+| `localization` | Existing ROS localization adapters and LocAssist candidate/scan policy (`CONTROL_ROOTS`); installed as `control.*` |
 | `drive/tracking/wander` | `PACKAGE_DIRS` `control.wander`: the wander node's senses, judge, motion and navigator |
 | `drive/planning/grid` | `PACKAGE_DIRS` `control.planning`: map check, point to go, best route, zigzag coverage |
 | `perception/sensors/sensing` | `PACKAGE_DIRS` `control.sensing`: raw sensor data to robot-frame geometry |

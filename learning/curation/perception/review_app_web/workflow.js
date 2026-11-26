@@ -116,7 +116,9 @@ function render(){
       const item=node('li',null,'ui-stage'),tab=node('button',key==='record'?'녹화':key==='review'?'검수':key==='results'?'결과':label);
       item.setAttribute('role','presentation');tab.id='workflow-tab-'+key;tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-controls','workflow-'+key);
       tab.onclick=()=>showStage(key,true);
-      tab.onkeydown=event=>{const offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:null;
+      tab.onkeydown=event=>{
+        if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+        const offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:null;
         const next=event.key==='Home'?0:event.key==='End'?stages.length-1:offset===null?null:(index+offset+stages.length)%stages.length;
         if(next!==null){event.preventDefault();showStage(stages[next][0],true,true);}};
       item.append(tab);return item;

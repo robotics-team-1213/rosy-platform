@@ -1,7 +1,7 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText } from "/common/control-dom.js";
-import {tripWaitText} from "/console/assets/trip-display.js";
+import {tripExecutionText, tripWaitText} from "/console/assets/trip-display.js";
 import {owns, relays, unitScope} from "/console/assets/unit-scope.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
@@ -12,7 +12,7 @@ const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", 
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
   CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료",
-  started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+  started: "운행 요청 접수", running: "운행 요청 처리 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
 const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 있는 운영자가 승인", proposer_only: "제안한 사람이 승인", one_person: "한 사람 · 이름 있는 운영자"};
 // D-763 8 — 서버가 준 보이는 상태(읽기 투영). 원장 상태는 상세의 「상태」 그대로다.
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
@@ -25,7 +25,8 @@ const approvable = row => (row.source === "mission" || row.source === "cell_job"
 export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 const idTail = v => String(v ?? "").split("-").pop().slice(0, 8);
 const shortStamp = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : ""; };
-export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status),
+const tripWait = row => ["started", "running", "link_wait"].includes(row.status) ? tripExecutionText(row) || tripWaitText(row) : "";
+export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWait(row) || visible[row.visible_state] || workStatus(row.status),
   ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
 export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
 export const requestsPause = status => status === 403;
@@ -65,6 +66,29 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     textContent: "만들 수 있는 작업을 확인하고 있습니다."});
   el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
+  const kindFilter = el("work-filter"), statusFilter = el("work-status-filter");
+  let restoreKey = active ? history.state?.fleetWork?.selection : null;
+  if (active) {
+    const kind = history.state?.fleetWork?.kind;
+    if ([...kindFilter.options].some(option => option.value === kind)) kindFilter.value = kind;
+    for (const link of statusFilter.querySelectorAll("a")) {
+      if (new URL(link.href).searchParams.get("show") === (shown ? query.get("show") : null)) {
+        link.setAttribute("aria-current", "true");
+      }
+      scope.listen(link, "click", event => {
+        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        if (link.hasAttribute("aria-current")) { event.preventDefault(); return; }
+        if (kindFilter.value === "all" && !selected) return;
+        // Keep the existing login-return URLs; each status entry owns its filter and selection.
+        event.preventDefault();
+        history.pushState({fleetWork: {kind: kindFilter.value, selection: selected}}, "", link.href);
+        location.reload();
+      });
+    }
+  }
+  function rememberSelection() {
+    history.replaceState({...history.state, fleetWork: {kind: kindFilter.value, selection: selected}}, "");
+  }
   const anchor = el("work-integrations-anchor");
   el("work-integrations").open = query.has("arm_transfer") || query.has("trip_proposal");
   const units = createControlUnitView({scope, call, anchor, active, approveReason, principal});
@@ -156,7 +180,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       ["담당 장치", row.device_id],
       ["작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음"],
       ["실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔"],
-      ["상태", workStatus(row.status)],
+      ["상태", tripWait(row) || workStatus(row.status)],
       ...(row.approval ? [["승인 조건", approvals[row.approval] || "승인 조건 확인 필요"]] : []),
       ...(autoText ? [["자동 승인", autoText]] : []),
       ["최근 원장 갱신", formatWorkTime(row.updated_at)],
@@ -178,6 +202,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   }
   async function select(row) {
     selected = workKey(row); refusal = ""; paint(); showDetail(row);
+    rememberSelection();
     const version = ++detailVersion, life = scope.capture();
     patchText(el("work-evidence"), "결과 근거 조회 중");
     try {
@@ -185,17 +210,17 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       const result = await call(`/api/fleet/${path}/${encodeURIComponent(row.source_id)}`);
       life.check();
       if (version !== detailVersion) return;
-      const current = result.task || result.mission || result.job || {...result, status: result.state};
+      const current = result.task || result.mission || result.job || {...result, status: result.state, wait: result.wait || null};
       showDetail({...row, ...current, source: row.source, source_id: row.source_id, device_id: row.device_id});
       const count = result.history?.length || 0;
-      patchText(el("work-evidence"), `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`);
+      patchText(el("work-evidence"), `${tripWait(current) || workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`);
     } catch (error) {
       if (!life.current() || version !== detailVersion) return;
       patchText(el("work-evidence"), error.status === 404 ? "이 작업의 상세를 조회할 수 없습니다." : "결과 근거를 확인할 수 없습니다.");
     }
   }
   function paint() {
-    const filter = el("work-filter").value;
+    const filter = kindFilter.value;
     const selection = rows.find(row => workKey(row) === selected);
     if (selection && filter !== "all" && selection.source !== filter) {
       selected = null; detailVersion++; clear();
@@ -276,13 +301,30 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정",
         result.cell_jobs_available ? "팔레트 적재 작업 원장" : "팔레트 적재 작업 원장 미설정", "운행 기록"].join(" · "));
       const current = rows.find(row => workKey(row) === selected);
-      if (selected && !current) { selected = null; detailVersion++; clear(); patchText(el("work-evidence"), "선택한 작업이 현재 조회 범위에 없습니다."); }
+      if (selected && !current) {
+        selected = null;
+        detailVersion++;
+        clear();
+        rememberSelection();
+        patchText(el("work-evidence"), "선택한 작업이 현재 조회 범위에 없습니다.");
+      }
       if (current) showDetail(current);
       paint();
+      if (restoreKey) {
+        const row = rows.find(candidate => workKey(candidate) === restoreKey
+          && (kindFilter.value === "all" || candidate.source === kindFilter.value));
+        restoreKey = null;
+        if (row) await select(row);
+        else rememberSelection();
+      }
       await refreshRequests(life);
       await channelRequestView.refresh();
     } catch (error) {
-      if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.", true);
+      if (!life.current()) return;
+      const denied = error.status === 401 || error.status === 403;
+      restoreKey = denied ? null : selected ?? restoreKey;
+      reset(denied ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.", true);
+      if (denied && active) rememberSelection();
     } finally { inFlight = false; }
   }
   async function refreshRequests(life) {
@@ -319,7 +361,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       clearRequests(requestsNotice(error.status));
     }
   }
-  scope.listen(el("work-filter"), "change", paint);
+  scope.listen(kindFilter, "change", () => { paint(); rememberSelection(); });
   scope.listen(el("work-refresh"), "click", refresh);
   scope.listen(admit, "click", approve);
   return {active, refresh, reset};

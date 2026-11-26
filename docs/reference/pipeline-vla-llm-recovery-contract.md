@@ -14,6 +14,15 @@
 
 ## 2. 상황 판단형 단계적 호밍 상태 머신 (`safe_fold_home` + `record_visual_checkpoint`)
 
+USB 단절 후 홈 복구가 필요한 팔은 `home-recovery:<arm>:<incident_id>`로 조회한다.
+셀 소유 워커는 검증된 연결과 활성 `auto-fold.json`이 있는 팔만 보고하고, 현재 보류 ID로 `safe_fold_home`을 요청한다.
+워커가 준비되지 않았으면 `BOUND_HOME_WORKER_UNAVAILABLE`로 대기한다. 현장 수용 전의 `.pending` 파일은 활성 설정에 포함하지 않는다.
+셀은 요청 ID·팔·보류 ID가 일치하는지 확인한다. 사이트 Fleet은 복구 완료 응답과 셀의 보류 해제 조회가 일치할 때 해당 기록의 보류를 해제한다.
+
+USB 복구 때 물체를 쥐고 있으면 셀은 중단된 세션의 파지 기록을 확인하고 `runner.idle_park_s`가 지난 뒤 배치한다. Fleet 작업은 지정한 위치와 단을 유지한다. 별도 배정이 없는 운반은 실측된 고정 적치면 중 현재 자세에서 접근과 하강을 합친 이동 거리가 가장 짧은 빈자리를 선택한다. 팔이 가려 빈자리를 확인할 수 없는 후보는 제외한다.
+
+셀은 이동 전에 배치 시도를 기록한다. 물체가 지지면에 놓일 높이에 도달하고 집게가 열린 뒤, 팔이 물러난 새 영상에서 지정 영역에 물체가 하나 늘었는지 확인한다. 같은 제어 세션에서 빈 집게까지 확인하면 홈으로 복귀한다. 배치 도중 통신이 끊기면 미확인 기록을 유지해 재시작 시 중복 배치나 홈 이동을 막는다.
+
 실제 셀 사고 복구(`release_and_lift -> 카메라 시각 검증 -> guarded_slow_park -> 홈 접힘 시각+관절 검증`)와 자동 폴드(`auto_fold`)를 **D-1048 `cell_auto_fold.py` 세션 래퍼(`with-session-arm-*.sh`, `ROSY_RECOVERY_INCIDENT`, `cell_corridor.check`, `cell_space.reserve`) 안에서만** 선택 실행한다(`park` 는 `chunk_runner` 의 검토된 라이브러리 `transit_speed` 로만 이동하며 코리더 검사도 동일 속도를 사용한다):
 
 1. **경로 A (`already_home` / `finalize_home_verify`):** 이미 홈 공차 이내 + `AFTER_PARK_VISUAL_FOLDED` 확인 시 운영자 `POST /arm-holds/clear` 준비 판독만 반환(뻗은 팔 토크 해제 절대 금지).

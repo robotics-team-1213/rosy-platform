@@ -4,6 +4,7 @@ import { initLiveFeeds, isLayoutSha } from "./live-feeds.js";
 import { activeSiteMap } from "./active-site-map.js";
 
 const byId = (id) => document.getElementById(id);
+if (["/world/", "/world/index.html"].includes(location.pathname)) byId("world-experiments-link").hidden = false;
 const status = (id, state, text) => {
   const element = byId(id);
   if (element.getAttribute("state") !== state) element.setAttribute("state", state);
@@ -75,14 +76,28 @@ function recordingData(recording) {
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const viewParam = new URLSearchParams(location.search).get("view");
 const directRun = viewParam === "run";
+const navigationType = performance.getEntriesByType("navigation")[0]?.type;
+const returning = navigationType === "back_forward" || navigationType === "reload";
+const recordingEntry = history.state?.worldRecordingEntry ?? "world-recording-" + crypto.getRandomValues(new Uint32Array(3)).join("-");
+let recordingReturn = null;
+try {
+  history.replaceState({...history.state, worldRecordingEntry: recordingEntry}, "");
+  if (returning) recordingReturn = JSON.parse(sessionStorage.getItem(recordingEntry));
+} catch { /* Playback still works when browser storage is unavailable. */ }
+const previousTabId = returning ? history.state?.worldSelectedTab : null;
+const previousTab = tabs.find(tab => tab.id === previousTabId && !tab.hidden);
 const directFactory = viewParam === "factory";
 const directR08 = viewParam === "r08";
 let cellLoad;
 let factoryTab;
-let userPickedTab = false;
+let userPickedTab = Boolean(previousTab || recordingReturn);
 let liveFeeds;
 let syncActiveMapPoll;
 function activate(tab) {
+  if (tab.id !== "tab-rec") {
+    try { sessionStorage.removeItem(recordingEntry); }
+    catch { /* The browser can disable storage for offline bundles. */ }
+  }
   for (const item of tabs) {
     item.setAttribute("aria-selected", String(item === tab));
     item.tabIndex = item === tab ? 0 : -1;
@@ -105,9 +120,15 @@ function activate(tab) {
 }
 await customElements.whenDefined("ui-button");
 if (directFactory) byId("tab-factory").hidden = false;
-activate(directRun ? byId("tab-rec") : directFactory ? byId("tab-factory") : byId("tab-map"));
+activate(previousTab ?? (directRun || recordingReturn ? byId("tab-rec") : directFactory ? byId("tab-factory") : byId("tab-map")));
+function selectTab(tab) {
+  userPickedTab = true;
+  try { history.replaceState({...history.state, worldSelectedTab: tab.id}, ""); }
+  catch { /* The tab remains usable when history cannot be updated. */ }
+  activate(tab);
+}
 tabs.forEach((tab) => {
-  tab.addEventListener("click", () => { userPickedTab = true; activate(tab); });
+  tab.addEventListener("click", () => selectTab(tab));
   tab.addEventListener("keydown", (event) => {
     const visibleTabs = tabs.filter((item) => !item.hidden);
     const cur = visibleTabs.indexOf(tab);
@@ -119,9 +140,8 @@ tabs.forEach((tab) => {
     };
     if (!Object.hasOwn(keys, event.key)) return;
     event.preventDefault();
-    userPickedTab = true;
     const next = visibleTabs[keys[event.key]];
-    activate(next);
+    selectTab(next);
     next.focus();
   });
 });
@@ -369,12 +389,12 @@ cadButton.addEventListener("click", () => {
 factoryTab = initFactoryTab({
   manifestRead, readDesignSource, showCad, equipmentUrl, CAD_PATH, REGISTRATION_PATH,
 });
-if (directFactory) void factoryTab.activate();
+if (!byId("panel-factory").hidden) void factoryTab.activate();
 manifestRead
   .then((manifest) => {
     if (manifest?.factory_timeline?.bundle_path) {
       byId("tab-factory").hidden = false;
-      if (!viewParam && !userPickedTab) activate(byId("tab-factory"));
+      if (!userPickedTab && (!viewParam || previousTabId === "tab-factory")) activate(byId("tab-factory"));
     }
     cadButton.hidden = manifest?.site_cad?.bundle_path !== CAD_PATH;
     if (directR08 && !cadButton.hidden && !choseMapMode) cadButton.click();
@@ -567,7 +587,9 @@ liveFeeds = initLiveFeeds({
   recordingData,
   manifestRead,
   mapPromise,
-  directRun,
+  autoplayRecording: directRun && !returning,
+  recordingReturn,
+  recordingEntry,
   getMode: () => mode,
   getCadView: () => cadView,
   getArchiveLayout: () => archiveLayout,

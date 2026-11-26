@@ -164,6 +164,19 @@ test('focusArm opens the incident details, focuses the card and refuses unknown 
   assert.equal(env.observations.focusArm(''), false);
 });
 
+test('home recovery keeps the hold and detail row without raising a physical incident alert', async t => {
+  const recovery = {...heldIncident, event_kind: 'home_recovery'};
+  const env = setup(t, body([arm({incidents: [recovery]})]));
+  await env.observations.refresh();
+  const card = env.root.querySelector('[data-arm-source="arm_a"]');
+  const details = card.children.find(child => child.children[0]?.textContent.includes('홈 복구 대기'));
+  assert.equal(card.dataset.armHeld, 'true');
+  assert.equal(card.dataset.incidentHeld, 'false');
+  assert.equal(details.open, true);
+  assert.match(details.children[1].children[0].children[0].textContent, /홈 복구 대기/);
+  assert.deepEqual(env.summaries.at(-1).map(row => [row.severity, row.detail]), [['warn', '홈 복구 대기']]);
+});
+
 test('clear() emits an empty summary at once', async t => {
   const env = setup(t, body([arm({incidents: [heldIncident]})]));
   await env.observations.refresh();

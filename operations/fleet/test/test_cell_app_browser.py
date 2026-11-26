@@ -108,6 +108,7 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page, _, _ = browser_site
     real2sim = {"snapshots": [], "active": {"id": "browser-r2s"}, "physics_candidates": [], "sysid_summary": {}, "stages": []}
     cell_tasks = {
+        "calibration_origin": "https://cal.test",
         "tasks": [{
             "task_id": "cell-s-waiting", "arm_id": "arm_s", "cell_id": "cell_s", "status": "QUEUED", "robot_id": "rosy_42",
             "last_refusal": {"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "missing": ["pose", "bed_ready"]},
@@ -119,6 +120,7 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     }
 
     seen = set()
+    preset_posts = []
     relay_hits = []
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -129,6 +131,9 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
 
     def serve_cell_tasks(route):
         seen.add("cell-tasks")
+        if route.request.method == "POST":
+            preset_posts.append(route.request.post_data_json["preset"])
+            return route.fulfill(json={"task": {"task_id": "fake-task"}})
         route.fulfill(json=cell_tasks)
 
     page.route("**/api/fleet/cell-app/real2sim-pipeline**", serve_real2sim)
@@ -142,6 +147,10 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
     show_screen(page, "real2sim-heading")
+
+    for arm in ("arm_s", "arm_a", "arm_b"):
+        link = page.get_by_role("link", name=f"{arm} 보정", exact=True)
+        expect(link).to_have_attribute("href", f"https://cal.test/?arm={arm}")
 
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
@@ -174,6 +183,21 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(0)
     expect(page.locator("#omx-right-inspector").get_by_label("적재 층")).to_have_count(1)
     expect(page.locator("#omx-right-inspector").get_by_label("복구 위치")).to_have_count(1)
+    matrix = page.locator("#cell-camera-matrix")
+    expect(matrix.locator("..").locator("summary")).to_have_text("셀·도킹 카메라")
+    matrix_card = matrix.locator("article").filter(has_text="S5 상단(top)")
+    matrix_zoom = matrix_card.get_by_role("button", name="S5 상단(top) 크게 보기")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "false")
+    expect(matrix_zoom.locator("svg")).to_be_visible()
+    matrix_zoom.press("Enter")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "true")
+    expect(page.locator('#omx-right-inspector [data-inspect-target="cell_ab"]')).to_have_attribute("aria-selected", "true")
+    matrix_card.get_by_role("button", name="S3→S5 연속 실행").press("Enter")
+    expect(page.locator("#cell-tasks-status")).to_contain_text("fake-task")
+    assert preset_posts == ["full_s3_to_s5_pipeline"]
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "true")
+    matrix_zoom.press("Escape")
+    expect(matrix_zoom).to_have_attribute("aria-pressed", "false")
     assert not relay_hits, relay_hits
 
 
@@ -227,10 +251,22 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page.locator('.ui-subnav a[href="#recipe-heading"]').click()
     expect(page.locator(f"#{field}")).to_be_hidden()
     expect(page.locator("#recipe-id")).to_be_visible()
-    page.locator(f'.ui-subnav a[href="#{heading}"]').click()
+    expect(page.locator("#recipe-heading")).to_be_focused()
+    step = page.locator(f'.ui-subnav a[href="#{heading}"]')
+    step.press("Enter")
     expect(page.locator(f"#{field}")).to_be_visible()
-    expect(page.locator(f'.ui-subnav a[href="#{heading}"]')).to_have_attribute("aria-current", "step")
-    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).not_to_have_attribute("aria-current", "page")
+    expect(step).to_have_attribute("aria-current", "step")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+    step.press("Enter")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+
+    page.go_back()
+    expect(page.locator("#recipe-heading")).to_be_visible()
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.go_forward()
+    expect(page.locator(f"#{field}")).to_be_visible()
+    expect(step).to_have_attribute("aria-current", "step")
+    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_count(0)
 
 
 def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):

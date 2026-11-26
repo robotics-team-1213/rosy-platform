@@ -18,6 +18,7 @@ def get(handler, path):
              '/learning-ui.js': 'learning-ui.js',
              '/learning-poll.js': 'learning-poll.js',
              '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
+             '/learning/world': 'world-experiments.html', '/world-experiments.js': 'world-experiments.js',
              '/learning/workspaces': 'workspaces.html', '/workspaces.js': 'workspaces.js'}
     name = path.removeprefix('/common/')
     if path in {'/file-picker.css', '/file-picker.js'}:

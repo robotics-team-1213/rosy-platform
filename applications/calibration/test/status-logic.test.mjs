@@ -6,7 +6,29 @@ const {
   classifyHold,
   classifyFrameBinding,
   classifyDrift,
+  linkedArm,
+  profileForArm,
+  postEvalRequest,
 } = await import("../web/status-logic.js");
+
+test("only a supervised eligible site can submit post-eval, with its name alone", () => {
+  const sites = {"tmp-b-2": {can_post_eval: true, place: [0.1,0.2]}, pallet: {can_post_eval: false}};
+  assert.deepEqual(postEvalRequest("arm_b", sites, "tmp-b-2", true), {
+    arm: "arm_b", step: "post-eval", site: "tmp-b-2", person_at_switch: true,
+  });
+  assert.equal(postEvalRequest("arm_b", sites, "tmp-b-2", false), null);
+  for (const site of ["pallet", "ship-h1r2", "toString", "pallet:0.1,0.2"])
+    assert.equal(postEvalRequest("arm_b", sites, site, true), null);
+});
+
+test("arm links select the requested robot and survive profile ordering or missing profiles", () => {
+  const profiles = [{id: "first", arm_id: "arm_s"}, {id: "ab-camera", arm_id: "arm_b"}];
+  assert.equal(profileForArm(profiles, linkedArm("?arm=arm_b"), null).id, "ab-camera");
+  assert.equal(profileForArm(profiles, linkedArm("?arm=arm_a"), "first"), null);
+  assert.equal(profileForArm(profiles, null, "ab-camera").id, "ab-camera");
+  assert.equal(linkedArm("?arm=arm_b&arm=arm_a"), null);
+  assert.equal(linkedArm("?arm=other"), null);
+});
 
 test("classifyHold never reports HOLD CLEAR when hold evidence is missing, null, partial, or errored", () => {
   for (const blank of [undefined, null, {}, { local_held: null, fleet_held: null, incident_ids: [] }]) {

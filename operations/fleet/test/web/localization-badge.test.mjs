@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
-  localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
+  localizationAttention, localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
 } = await import("../../../../applications/fleet/web/localization-badge.js");
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
@@ -45,6 +45,37 @@ test("an UNKNOWN CORE pose can show a separate Fleet MapPose", () => {
   assert.equal(localizationTag(legacy, { pose: { x: 1, y: 2, state: "DEGRADED" } }).cls, "warn");
   assert.equal(localizationTag(legacy, { pose: null }).text, "위치 모름");
   assert.equal(localizationTag(row(), { pose: { state: "DEGRADED" } }).text, "위치 확정");  // D-395 robot: its own
+});
+
+test("fresh camera and an automatic CORE check are shown without a manual positioning demand", () => {
+  const pending = { state: "CANDIDATES", reason: "checking", needs_human: false };
+  const escalated = row({ state: "CANDIDATES", trusted: false, needs_human: true, label: "위치 확인 필요" });
+  const camera = { pose: { state: "LOCALIZED", source: "bridged", anchor_source: "sighting", last_sighting_age_s: .4 } };
+  assert.match(positionTag(escalated, camera, pending).text, /카메라.*CORE 검증 중/);
+  assert.equal(localizationAttention(escalated, pending, camera).severity, "warn");
+  assert.equal(localizationAttention({ ...escalated, pose_request_needs_human: true }, pending, camera).severity, "crit");
+  assert.equal(localizationAttention(escalated, { ...pending, needs_human: true }, camera).severity, "crit");
+  assert.doesNotMatch(localizationAttention(escalated, pending, {
+    pose: { ...camera.pose, last_sighting_age_s: 10 },
+  }).text, /카메라/);
+});
+
+test("a Fleet timeout identifies the rejected CORE candidate and distinguishes native and stale warnings", () => {
+  const loc = row({ state: "CANDIDATES", pose_frame: "map", trusted: false, needs_human: true, label: "위치 확인 필요" });
+  const native = { state: "CANDIDATES", reason: "inject_rejected", needs_human: false, request_id: "205050-2" };
+  const guide = { pose: { state: "LOCALIZED", source: "bridged", anchor_source: "sighting", last_sighting_age_s: .4 } };
+  assert.equal(positionTag(loc, guide, native).text, "Fleet 위치 복구 지연");
+  assert.equal(positionTag(loc, guide, native).cls, "crit");
+  assert.match(localizationAttention(loc, native, guide).text, /CORE가 위치 후보를 확정하지 못했습니다/);
+  assert.match(localizationAttention(loc, native, guide).text, /위치 보조에서 후보와 지도 연결을 확인/);
+  assert.equal(positionTag(loc, guide, { ...native, needs_human: true }).text, "CORE 위치 확인 필요");
+  const laneReturn = { ...loc, pose_request_needs_human: true };
+  assert.equal(positionTag(laneReturn, guide, { ...native, reason: "checking" }).text, "차선 복귀 위치 확인 필요");
+  assert.equal(localizationAttention(laneReturn, native, guide).severity, "crit");
+  assert.equal(positionTag(loc, guide, null, true).text, "CORE 위치 상태 지연");
+  assert.equal(localizationAttention(loc, null, guide, true).severity, "warn");
+  assert.doesNotMatch(localizationAttention(loc, null, guide, true).text, /후보 확인|위치를 직접 지정/);
+  assert.equal(localizationAttention(null, null, null, true), null);
 });
 
 test("a mission held behind an untrusted robot says why", () => {
@@ -106,14 +137,8 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
   assert.equal(positionTag(legacy, undefined).cls, "warn");
   assert.equal(positionTag(null, undefined), null);
   // A person must decide: still critical.
-  const blocked = row({ state: "CANDIDATES", pose_frame: "odom", needs_human: true, trusted: false, label: "위치 확인 필요" });
-  const camera = positionTag(blocked, guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" }));
-  assert.equal(camera.cls, "crit");
-  assert.equal(camera.text, "현장 위치 확인 · 기체 지도 위치 미확정");
-  assert.match(camera.title, /Fleet 지도 위치: 확정 · 카메라/);
-  assert.match(camera.title, /CANDIDATES · odom/);
-  assert.equal(positionTag(blocked, guide({ x: 1, y: 1, state: "DEGRADED", source: "bridged" })).text, "기체 지도 위치 미확정");
-  assert.equal(positionTag(blocked, null).text, "기체 지도 위치 미확정");
+  assert.equal(positionTag(row({ needs_human: true, trusted: false, label: "위치 확인 필요" }),
+    guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" })).cls, "crit");
 });
 
 test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {

@@ -142,9 +142,9 @@ class Runner:
         """Apply one judge command; False means stop."""
         return dispatch_runner_command(self, line)
 
-    def hold(self, present, reason, *, human=False) -> None:
+    def hold(self, present, reason, *, human=False, strain_sample=None) -> None:
         """Stop where the arm is with torque on (the lag closes) and keep the way back for `retreat`."""
-        hold_runner(self, present, reason, human=human, empty_margin=EMPTY_MARGIN)
+        hold_runner(self, present, reason, human=human, empty_margin=EMPTY_MARGIN, strain_sample=strain_sample)
 
     def strained(self, sent, present):
         return runner_strain.strained(self, sent, present)
@@ -314,6 +314,10 @@ class Runner:
                     present,
                     f"contact in {self.chunk or 'jog'}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}"
                     f" (lags: {others})",
+                    strain_sample={"joint": motor, "lag_units": float(lag),
+                                   "pwm": None if pwm is None else int(pwm),
+                                   "pwm_limit": None if limit is None else int(limit),
+                                   "sent": float(sent[f"{motor}.pos"]), "present": float(present[MOTORS.index(motor)])},
                 )
                 return
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))

@@ -1,5 +1,9 @@
 // Pure monitoring & D-1022 command-readiness logic for Pinky localization in the Fleet robot panel.
 
+import { tripPreviewSummary } from "/console/assets/trip-preview-summary.js";
+import { tripStartReason } from "/console/assets/site-map-model.js";
+import { tripErrorText } from "/console/assets/trip-display.js";
+
 const MIN_CONFIRM_FIT = 0.85;
 export const MIN_BINDING_SAMPLES = 4;
 export const MIN_BINDING_SPAN_M = 1.0;
@@ -15,12 +19,27 @@ const BINDING_REASONS = {
   MAP_BINDING_SITE_CHANGED: "현장 지도 변경됨 · 재결속 필요",
 };
 
+export function consoleTripStartReason(input) {
+  const common = tripStartReason(input), code = input.plan?.nav2_preflight?.code;
+  if (common || !code) return common;
+  return code === "ROBOT_POSE_UNTRUSTED" ? "로봇 CORE의 지도 위치가 확정되어야 Nav2로 출발할 수 있습니다"
+    : (BINDING_REASONS[code] || tripErrorText(code));
+}
+
+export function consolePlanSummaryText(plan) {
+  const parking = plan.parking_handoff;
+  const road = tripPreviewSummary(plan);
+  const summary = parking ? `${road} · ${parking.staging_place_id} 정차 후 ${parking.bay_id} 후진 주차` : road;
+  const frame = plan.nav2_preflight;
+  if (!frame) return summary;
+  return !frame.binding_required && frame.binding_status !== "MATCHED"
+    ? `${summary} · Nav2 · 승인 지도 결속 미확인 (현장 설정상 선택)` : `${summary} · Nav2`;
+}
+
 const finite = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const candidatesOf = (locPayload) => (Array.isArray(locPayload?.candidates?.candidates) ? locPayload.candidates.candidates : []);
 
-export function candidateHeadingLabel(yaw) {
-  return Number.isFinite(yaw) ? `방향 ${Math.round(yaw * 180 / Math.PI)}°` : "방향 미확인";
-}
+export const candidateHeadingLabel = (yaw) => (Number.isFinite(yaw) ? `방향 ${Math.round(yaw * 180 / Math.PI)}°` : "방향 미확인");
 
 function baseGate({ robot, isOperator, operatorReason = "", namedReason, stateUnavailable }) {
   if (stateUnavailable) return "Fleet 상태를 확인할 수 없습니다.";

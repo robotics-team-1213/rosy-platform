@@ -8,10 +8,10 @@
 
 import {
   siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, quarterTurn,
+  streamEvidence, quarterTurn, roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "./site-layer.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
-import { createMapOverlays } from "./map-overlays.js";
+import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
 import { createMapPolling } from "./map-polling.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -33,43 +33,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   if (!view.layers) {
     view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
+  view.layers.storedRoutes ??= false;
   const layerOn = (key) => view.layers?.[key] !== false;
-  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
-  const toggleBar = el("map-overlay-toggles");
-  if (toggleBar) {
-    const syncToggleButtons = () => {
-      const anyOn = subKeys.some((k) => view.layers[k] !== false);
-      for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
-        const k = btn.dataset.layerToggle;
-        if (k === "all") {
-          btn.setAttribute("aria-pressed", String(anyOn));
-          btn.textContent = anyOn ? "전체 표시 켬" : "전체 표시 끔";
-        } else {
-          btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
-        }
-      }
-      const legacyTraffic = el("traffic-toggle");
-      if (legacyTraffic) {
-        legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
-        legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
-      }
-    };
-    scope.listen(toggleBar, "click", (event) => {
-      const btn = event.target.closest("[data-layer-toggle]");
-      if (!btn) return;
-      const key = btn.dataset.layerToggle;
-      if (key === "all") {
-        const nextVal = !subKeys.some(layerOn);
-        for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
-      } else {
-        view.layers[key] = !(view.layers[key] !== false);
-      }
-      syncToggleButtons();
-      draw();
-    });
-    // #traffic-toggle clicks are handled by map-polling.js; a second handler here would cancel the first.
-    syncToggleButtons();
-  }
+  bindLayerToggles({scope, el, view, layerOn, draw});
   const {
     CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, reserveBox, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
@@ -209,7 +175,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const showLanes = layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
     const polygons = layerOn("site") ? sitePolygons() : [];
     const key = JSON.stringify([activeMap?.map_id, view.activeSiteMap?.version, bounds, width, height, dpr, rot,
-      ["site", "grid", "lanes", "labels"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
+      ["site", "grid", "lanes", "labels", "storedRoutes"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
     staticLayer ??= document.createElement("canvas");
     const off = staticLayer.getContext?.("2d");
     if (off) {
@@ -359,15 +325,31 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.fillStyle = css("--ink");
       ctx.lineWidth = 2;
       ctx.font = labelFont;
-      for (const edge of activeMap.edges || []) {
-        ctx.setLineDash(edge.drive_mode === "free" ? [6, 4] : []);
+      const strokeRoad = (points) => {
         ctx.beginPath();
-        edge.polyline.forEach(([x, y], index) => {
+        points.forEach(([x, y], index) => {
           const p = toPx(x, y);
           if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
         });
         ctx.stroke();
+      };
+      const storedRoutes = [];
+      for (const edge of activeMap.edges || []) {
+        const surveyed = surveyedRoadPoints(activeMap, edge);
+        ctx.setLineDash(!surveyed && edge.drive_mode === "free" ? [6, 4] : []);
+        strokeRoad(surveyed ?? roadOverlayPoints(activeMap.map_id, edge));
+        if (surveyed) {
+          const stored = layerOn("storedRoutes") ? edge.polyline : unmeasuredRoadPoints(activeMap, edge);
+          if (stored) storedRoutes.push(stored);
+        }
       }
+      ctx.save();
+      ctx.strokeStyle = css("--series-secondary");
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      storedRoutes.forEach(strokeRoad);
+      ctx.restore();
+      ctx.setLineDash([]);
       // Distinct semantic place markers: C1~C3 (charging bays), S1~S5 (stations), P1~P3 / J_* (junctions)
       for (const place of activeMap.places || []) {
         const pid = String(place.id);

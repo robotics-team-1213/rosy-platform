@@ -90,3 +90,27 @@ export function classifyDrift(profile) {
   }
   return { verdict: "unknown", alarmed, detail: "", drift };
 }
+export function linkedArm(search) {
+  const arms = new URLSearchParams(search).getAll("arm");
+  return arms.length === 1 && ["arm_a", "arm_b", "arm_s"].includes(arms[0]) ? arms[0] : null;
+}
+
+export function profileForArm(profiles, arm, selected) {
+  if (arm) return profiles.find(p => (p.arm_id || p.id) === arm) || null;
+  return profiles.find(p => p.id === selected) || profiles[0] || null;
+}
+
+export function defaultSiteForProfile(profile) {
+  if (!profile?.sites) return null;
+  for (const s of profile.map_sites || []) {
+    if (profile.sites[s]?.map) return s;
+  }
+  for (const [k, v] of Object.entries(profile.sites)) {
+    if (!v.extra && v.map) return k;
+  }
+  return Object.keys(profile.sites)[0] || null;
+}
+export function postEvalRequest(arm, sites, site, attended) {
+  if (attended !== true || !Object.hasOwn(sites || {}, site) || sites[site]?.can_post_eval !== true) return null;
+  return {arm, step: "post-eval", site, person_at_switch: true};
+}
