@@ -1224,6 +1224,9 @@ def test_map_from_site_is_synced_on_remap_and_stale_copy_flagged_in_check(tmp_pa
     monkeypatch.setattr(cc.rp, "refusal", lambda *a, **kw: None)
     monkeypatch.setitem(sys.modules, "cell_hooks", types.SimpleNamespace(stills=lambda *a, **kw: types.SimpleNamespace(close=lambda: None)))
 
+    # the remap measures the obstacle with the D435 first and refuses without a frame: give it a clean, empty one
+    monkeypatch.setattr(cc, "depth_capture", lambda: np.zeros((4, 4), np.uint16))
+    monkeypatch.setattr(cc.rp, "site_obstacle_mm", lambda c, d, f: {"obstacle_mm": 0.0, "sites_mm": {}, "edge_px": 1.0, "plane_nz": 0.98})
     assert cc.main(["--config", str(cfg_path), "auto", "--only", "remap", "regions", "--commissioning", "--person-at-switch"]) == 0
     saved = json.loads(cal_path.read_text(encoding="utf-8"))
     assert saved["sites"]["floor"]["homography"] == h_new

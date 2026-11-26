@@ -14,6 +14,7 @@ NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S
 FOLDED_ROLL_LIFT = (10.0, -10.0)  # wrist camera clearance lift before rotating wrist_roll when folded
+FOLDED_UNFOLD_ELBOW = 43.0  # open elbow_flex first from folded home so jaws lift outward/upward clear of base tab
 # Rise lag logs (10/26-27): 2 units/s (3.6 deg/s) keeps lag under the 5-unit strain limit across arm loads.
 RISE_SPEED = 2.0
 # Above closed + this threshold jaws are open (empty; box holds 51.6-54.1 vs open_max 56): rise before closing.
@@ -36,6 +37,9 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
             start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0) else TRANSIT
     rise_first = start[5] > grip_transit + OPEN_JAW_MARGIN
     waypoints = [list(start)] + ([] if rise_first else [list(start[:5]) + [grip_transit]])
+    unfold = start[1] <= -50.0 and start[2] > FOLDED_UNFOLD_ELBOW + 0.5 and transit.get(2, start[2]) < FOLDED_UNFOLD_ELBOW
+    if unfold:
+        waypoints.append(waypoints[-1][:2] + [FOLDED_UNFOLD_ELBOW] + waypoints[-1][3:])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
     if rise_first:
         waypoints.append(list(waypoints[-1][:5]) + [grip_transit])
@@ -46,6 +50,8 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     waypoints.extend([list(goal[:5]) + [grip_transit], list(goal[:6])])
     # Eased flow capped at RISE_SPEED, corners blended up to 0.6 s; open jaws skip blend before closing at transit.
     blend = [False, False, not rise_first, not skip_turn, False] + ([] if skip_turn else [False])
+    if unfold:
+        blend.insert(1 if rise_first else 2, False)  # the unfold waypoint (index 1, 2 after the grip close) is passed at rest
     return flow(waypoints, fps, speed * PARK_SPEED, blend=blend, blend_s=0.6, rise_speed=RISE_SPEED)
 
 
