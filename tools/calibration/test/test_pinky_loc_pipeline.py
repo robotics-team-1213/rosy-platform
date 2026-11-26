@@ -114,6 +114,10 @@ def test_judge_pairs_happy_path_and_all_eight_error_codes():
         plp.judge_pairs(_make_pairs(ROBOT_PTS[:3]), bad_hold)
     assert exc.value.code == "HOLDOUT"
 
+    with pytest.raises(plp.PipelineError) as exc:
+        plp.judge_pairs(_make_pairs(ROBOT_PTS[:3]), _make_pairs(ROBOT_PTS[:1]))
+    assert exc.value.code == "BAD_POINTS"
+
 
 class _FakeFleet:
     def __init__(self):

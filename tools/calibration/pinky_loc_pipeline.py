@@ -82,6 +82,8 @@ def judge_pairs(pairs: Sequence[Mapping[str, Sequence[float]]], holdout: Sequenc
     robot = [(float(p["robot"][0]), float(p["robot"][1])) for p in pairs]
     site = [(float(p["site"][0]), float(p["site"][1])) for p in pairs]
     hold_pairs = [((float(p["robot"][0]), float(p["robot"][1])), (float(p["site"][0]), float(p["site"][1]))) for p in holdout]
+    if set(robot + site) & {point for pair in hold_pairs for point in pair}:
+        raise PipelineError("BAD_POINTS", "a holdout point repeats a fit point; measure it separately")
     yaw, tx, ty, residuals = _fit_rigid(robot, site)
     max_res = max(residuals)
     if max_res > max_residual:
