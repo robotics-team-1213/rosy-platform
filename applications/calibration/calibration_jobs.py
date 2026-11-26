@@ -333,7 +333,8 @@ class Jobs:
             if point is None:
                 return 422, {"error": "이 팔에 중심 좌표가 등록된 지점을 선택하세요."}
             targets = [f"{name}:{point[0]},{point[1]}"]
-            argv = [self.python, self.engine("cell_post_eval.py"), "--config", str(config_path), "--targets", *targets]
+            # 2026-11-26 user: a visit that measured drift saves its bounded visit bias (the engine's --apply rules)
+            argv = [self.python, self.engine("cell_post_eval.py"), "--config", str(config_path), "--targets", *targets, "--apply"]
         elif "site" in body or step == "surface":
             name = body.get("site")
             site = (config.get("sites") or {}).get(name) if isinstance(name, str) else None

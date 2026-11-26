@@ -45,8 +45,8 @@
 
 1. 검증할 팔과 필수 좌표 `site:x,y` 목록을 정한다. 각 좌표는 팔 기준 미터로 기록한다.
 2. 맵을 다시 맞출 때는 감독하에 `remap`을 실행한다. `check`의 `camera_moved`와 `missing_map`을 확인한다. 카메라 이동이 감지되거나 맵이 빠지면 해당 맵을 쓰는 좌표의 방문을 보류한다.
-3. [셀 작업 클라이언트](../../deploy/robot/omx/cell_job_client.py)의 `run post_eval --params-json … --wait`로 좌표를 하나씩 관측한다. 요청에 `arm`, `config`, `site`, `x`, `y`를 넣는다. 매 동작 전 스위치 옆 감독자를 확인한다. 운영자 인증으로 `person_at_switch: true`와 `apply: false`를 보낸다. 맵이나 보정값이 바뀌면 영향을 받은 좌표를 다시 관측한다.
-4. 필수 좌표별 작업 ID와 `structured_result.results`를 모은다. 각 결과의 `site`와 `point_m`을 대상 목록과 대조한다. `map_sha`가 같은 설정의 현재 맵 지문과 일치하는지 확인한다. `status: pass`를 확인한다. 맵 지문, 잔차 `residual_mag_mm`, 측정 불확도 `sigma_mm`를 기록한다. 확인을 마치지 못한 좌표는 수용을 보류한다. [구역별 XY 요약](../../deploy/robot/omx/cell_post_eval_summary.py)은 최근 기록을 구역별로 모으며 관측이 없는 구역을 건너뛴다.
+3. [셀 작업 클라이언트](../../deploy/robot/omx/cell_job_client.py)의 `run post_eval --params-json … --wait`로 좌표를 하나씩 관측한다. 요청에 `arm`, `config`, `site`, `x`, `y`를 넣는다. 매 동작 전 스위치 옆 감독자를 확인한다. 운영자 인증으로 `person_at_switch: true`와 `apply: true`를 보낸다(2026-11-26 사용자 결정: 허용 오차를 넘은 받아들인 관측은 `visit` 편차 보정값으로 저장, 이전 값은 `calibration-history/`에 보관). Calibration 화면의 「등록된 칸의 XY 위치 검증」도 저장하며, 결과의 `escalated`(`remap`, `pivot-near site:x,y`)는 「다음 작업 채우기」로 양식에 채운다. 맵이나 보정값이 바뀌면(`applied`가 있으면) 영향을 받은 좌표를 다시 관측한다.
+4. 필수 좌표별 작업 ID와 `structured_result.results`를 모은다. 각 결과의 `site`와 `point_m`을 대상 목록과 대조한다. `map_sha`가 같은 설정의 현재 맵 지문과 일치하는지 확인한다. `status: pass`를 확인한다. 맵 지문, 잔차 `residual_mag_mm`, 측정 불확도 `sigma_mm`를 기록한다. 확인을 마치지 못한 좌표는 수용을 보류한다. `applied`가 있는 실행은 수용 증거가 아니며, 저장 뒤 다시 관측한 `pass`만 수용한다. [구역별 XY 요약](../../deploy/robot/omx/cell_post_eval_summary.py)은 최근 기록을 구역별로 모으며 관측이 없는 구역을 건너뛴다.
 5. `post_eval`은 빈 집게의 XY 잔차를 확인한다. 현장 평균 오차는 [D-951의 수용 기준](../../docs/adr/D-951-rosy-calibration-application.md#consequences)에 따라 별도로 실측한다. 적층 높이는 [측면 Z 수용 절차](#측면-적층-z-기준-설치와-수용)를 따른다.
 
 ## ChArUco 렌즈 보정

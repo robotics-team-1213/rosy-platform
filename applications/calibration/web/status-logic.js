@@ -141,3 +141,15 @@ export function mapEvidenceInput(digest, observedMs, source) {
     source: source === "reference" ? "기준 영상" : "실시간 카메라",
   };
 }
+
+// What a post-eval visit saved and the follow-up steps the engine named (escalated): "remap" or "pivot-near site:x,y".
+export function postEvalFollowUp(result) {
+  if (!result || typeof result !== "object") return null;
+  const saved = Array.isArray(result.applied) ? result.applied.length : 0;
+  const steps = [];
+  for (const item of Array.isArray(result.escalated) ? result.escalated : []) {
+    if (item === "remap") steps.push({ step: "remap" });
+    else if (typeof item === "string" && item.startsWith("pivot-near ")) steps.push({ step: "pivot-near", target: item.slice(11) });
+  }
+  return saved || steps.length ? { saved, steps } : null;
+}
