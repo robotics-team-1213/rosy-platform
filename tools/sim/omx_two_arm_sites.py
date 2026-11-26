@@ -369,6 +369,7 @@ class Layout:
         self.deck_z = ship_plate.top_z(f)
         self.arms, self.sim_arms, self.plates = {}, {}, {}
         self.roll_floor = float(kin.norm_to_rad(c["roll_floor_norm"]))
+        if c["arm_bases"] == "measured-194" and c["ship_pose"] != "assumed": c["arm_bases"] = "cad-194"  # same 194 gap, x follows the measured hull (fixed .091 fits only the assumed stern)
         if c["arm_bases"] in DOCKS:  # the bases hang on the ship: a measured ship pose is needed before the arms are placed (set again below, the same values)
             if c["ship_pose"] == "photo-20261110":
                 c["ship_stern_x_m"], c["ship_centre_y_m"] = SHIP_PHOTO_1110["stern_x_m"], SHIP_PHOTO_1110["centre_y_m"]
