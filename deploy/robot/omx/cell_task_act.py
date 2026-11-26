@@ -1,7 +1,8 @@
-"""Read-only ACT task preflight for `cell_task_exec.py`.
+"""ACT task planning for `cell_task_exec.py`: every check that needs no arm session, then the drive plan or a refusal.
 
-Fleet validates physical task bindings. The deployed FIFO owner has no D-793/D-1024
-execution lease watchdog. A supervised handoff alone cannot start it.
+Fleet validates physical task bindings. A supervised handoff alone cannot start a learned policy: the run goes through
+`cell_task_act_run`, which pushes the runner a renewed 1 s lease (D-1024 3, `chunk_runner_lease`) and moves nothing
+unless the runner armed it (`PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE`). Presence stays required here (D-911).
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ def _fail(
     error: str,
     *,
     directive_id: Any = None,
+    extra_stop: dict | None = None,
 ) -> dict[str, Any]:
     fclass = cell_diagnose.classify_failure(f"policy: {error}")["cause"]
     out = {
@@ -36,7 +38,7 @@ def _fail(
         "requires_named_approval": True,
         "motion_issued": False,
         "inference_performed": False,
-        "stop_event": {"command": "stop", "ok": False, "folded": False},
+        "stop_event": {"command": "stop", "ok": False, "folded": False, **(extra_stop or {})},
     }
     if directive_id is not None:
         out["stage_result"] = {
@@ -116,19 +118,25 @@ def _check_ab_policy(handoff: dict, arm_id: str, prep_dir: Path, cfg: Path,
             return refused("ACT_POLICY_CAMERA_MISSING")
     except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError):
         return refused("ACT_POLICY_MODEL_BINDING_MISMATCH")
-    # The FIFO owner has no policy-window/lease watchdog. Presence and the handoff lease cannot authorize it.
-    result = refused("PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE")
-    result["stage_result"]["policy_request"] = {
-        "weights_sha256": revision, "goal_site": target["site_id"], "goal_slot": slot, "destination": goal,
-    }
-    return result
+    raw_lib = str(policy_cfg.get("library") or "").strip()  # never the Cell S library by default: A and B name their own
+    try:
+        library = (prep_dir / raw_lib).resolve()
+        if not raw_lib or not library.is_relative_to(prep_dir.resolve()) or not library.is_file():
+            return refused("ACT_POLICY_LIBRARY_MISSING")
+    except (OSError, RuntimeError, ValueError):
+        return refused("ACT_POLICY_LIBRARY_MISSING")
+    request = {"weights_sha256": revision, "goal_site": target["site_id"], "goal_slot": slot, "destination": goal}
+    return {"plan": {
+        "library": library, "roi": roi, "src_site": source, "dst": target["sim_site"], "dst_site": target["area"],
+        "goal_site": target["site_id"], "max_chunks": max_chunks, "tid": task_id, "policy_request": request,
+    }}
 
 
-def preflight_act_policy_task(
+def plan_act_policy_task(
     handoff: dict[str, Any], *, arm_id: str, prep_dir: Path, wrapper: Path, cfg: Path,
     default_roi: tuple[int, int, int, int],
 ) -> dict[str, Any]:
-    """Check an ACT handoff and describe the blocker before any owner or motion command."""
+    """Check an ACT handoff before any owner or motion command: a refusal dict, or {"plan": ...} for `cell_task_act_run`."""
     task_id = handoff.get("task_id")
     cell_id = str(handoff.get("cell_id") or "cell_s").strip()
     cell_ab = cell_id == "cell_ab" and arm_id in ("arm_a", "arm_b")
@@ -186,4 +194,7 @@ def preflight_act_policy_task(
     roi = sites[src_site].get("auto_roi") or default_roi
     if not isinstance(roi, (list, tuple)) or len(roi) != 4 or any(type(v) is not int for v in roi):
         return _fail(arm_id, "ACT_POLICY_CONFIG_MISSING")
-    return _fail(arm_id, "PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE", directive_id=task_id)
+    return {"plan": {
+        "library": library, "roi": list(roi), "src_site": src_site, "dst": dst, "dst_site": dst_site,
+        "goal_site": None, "max_chunks": raw_chunks, "tid": tid, "policy_request": None,
+    }}
