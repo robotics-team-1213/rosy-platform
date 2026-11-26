@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+
+globalThis.crypto ??= webcrypto;
 
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
