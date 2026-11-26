@@ -166,6 +166,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const activeMap = view.activeSiteMap?.map;
     const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
     const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
+    // 눈금자는 격자 범위 중 보이는 칸(여백 32, 위 좌표 칩 띠 40 안쪽)만 — 밖 눈금은 가장자리로 몰려 겹친다.
+    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32);
+    const ruler = {min_x: Math.max(bounds.min_x, Math.min(ax, bx)), max_x: Math.min(bounds.max_x, Math.max(ax, bx)),
+      min_y: Math.max(bounds.min_y, Math.min(ay, by)), max_y: Math.min(bounds.max_y, Math.max(ay, by))};
     const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
     view.siteToWorld = (x, y) => { const [mx, my] = t.toMap(x, y); return { x: mx, y: my }; };
@@ -181,12 +185,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (off) {
       if (staticKey !== key) {
         clearCanvas(staticLayer, canvas.width, canvas.height).scale(dpr, dpr);
-        drawStaticSite(off, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
+        drawStaticSite(off, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null, ruler);
         staticKey = key;
       }
       ctx.drawImage(staticLayer, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width / dpr, canvas.height / dpr);
     } else {
-      drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
+      drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null, ruler);
     }
     drawPointerCell(ctx, toPx, bounds);
     if (showLanes) {
@@ -299,7 +303,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.restore();
   }
 
-  function drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, activeMap) {
+  function drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, activeMap, ruler) {
     drawMetreGrid(ctx, toPx, bounds, cameraOn);
     const labelFont = font("micro");
     ctx.save();
@@ -376,7 +380,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.restore();
     }
     drawCrosswalks(ctx, toPx, 1.5);
-    if (layerOn("grid")) drawMapDatum(ctx, toPx, bounds, {css, dpr});
+    if (layerOn("grid")) drawMapDatum(ctx, toPx, ruler, {css, dpr});
   }
 
   const traffic = (ctx, toPoint, pxPerM) =>
