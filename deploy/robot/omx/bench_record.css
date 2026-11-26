@@ -453,3 +453,10 @@ input.ep-note-inp{min-height:26px;padding:2px 7px;font-size:.75rem}
 .cam-goal-overlay{position:absolute;pointer-events:none;z-index:2}
 .cam-overlay-toggle{position:absolute;bottom:8px;left:8px;z-index:4;min-height:26px;padding:2px 8px;border-radius:999px;border:1px solid var(--bd);background:rgba(17,17,19,.86);color:var(--ink);font-size:.72rem;font-weight:700}
 .cam-overlay-toggle[aria-pressed="true"]{border-color:var(--pri);color:#cfe4ff}
+.side-alignment-views{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:12px 0}
+.side-alignment-views figure{min-width:0;margin:0}
+.side-alignment-views figure>div{position:relative}
+.side-alignment-views img{width:100%;display:block}
+.side-alignment-views img[hidden]{display:none}
+.side-alignment-point{position:absolute;width:12px;height:12px;border:2px solid #69eaff;border-radius:50%;box-shadow:0 0 0 1px #121820;transform:translate(-50%,-50%);pointer-events:none}
+.side-alignment-point.observed{width:5px;height:5px;border:0;background:#ffd65a}

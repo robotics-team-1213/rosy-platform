@@ -52,9 +52,60 @@ def test_camera_baseline_and_drift_check(tmp_path, monkeypatch):
     res = bench.check_camera_drift('arm_a')
     assert res['cameras']['top']['status'] == 'lighting_mismatch'
     assert res['cameras']['side']['status'] == 'no_baseline'
+    assert res['cameras']['arm_a_wrist']['status'] == 'missing'
     with pytest.raises(ValueError):
         bench.save_camera_baseline({'arm': '../../evil', 'at_bench': True})
     assert bench.check_camera_drift('../../evil')['arm'] == 'default'
+
+
+def test_side_reference_is_explicit_and_separate_from_lighting(tmp_path, monkeypatch):
+    import hashlib
+    import io
+    import threading
+    import urllib.request
+    import bench_camera_alignment as alignment
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    jpeg = b'confirmed side frame'
+    receipt = {'jpeg_bytes': jpeg, 'jpeg_sha256': hashlib.sha256(jpeg).hexdigest(),
+               'source_seq': 7, 'source_stamp': time.time(), 'camera': 'side'}
+    bench._side_references = [receipt]
+    with pytest.raises(ValueError):
+        alignment.save_confirmed(bench, {})
+    with pytest.raises(ValueError):
+        alignment.save_confirmed(bench, {'confirmed': True, 'sha256': 'unseen'})
+    server = bench_record.make_server(bench, 0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        base = f'http://127.0.0.1:{server.server_port}'
+        request = urllib.request.Request(base + '/api/camera_alignment',
+                                         json.dumps({'confirmed': True, 'sha256': receipt['jpeg_sha256']}).encode(),
+                                         {'X-Bench': '1', 'Content-Type': 'application/json'})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            assert json.load(response)['source_stamp'] == receipt['source_stamp']
+        with urllib.request.urlopen(base + '/api/camera_alignment/reference.jpg', timeout=5) as response:
+            assert response.headers['Content-Type'] == 'image/jpeg'
+            assert response.read() == jpeg
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+    monkeypatch.setattr('bench_record_ops.urllib.request.urlopen', lambda *_a, **_kw: io.BytesIO(b'{}'))
+    bench.save_camera_baseline({'arm': 'arm_a'})
+    assert alignment.reference_image(bench.prep) == jpeg
+    assert alignment.check(bench.prep)['status'] == 'manual_comparison'
+
+
+def test_side_alignment_reports_signed_shift_and_requires_fixed_markers():
+    from bench_camera_alignment import compare_markers
+
+    ref = {7: [[10, 20], [12, 20], [12, 22], [10, 22]], 8: [[20, 40], [22, 40], [22, 42], [20, 42]]}
+    moved = {key: [[x + 3, y - 12] for x, y in corners] for key, corners in ref.items()}
+    assert compare_markers(ref, ref, (7, 8), 6)['status'] == 'aligned'
+    result = compare_markers(ref, moved, (7, 8), 6)
+    assert (result['status'], result['dx_px'], result['dy_px']) == ('moved', 3, -12)
+    assert compare_markers(ref, {7: moved[7]}, (7, 8), 6)['status'] == 'markers_missing'
 
 
 def test_replay_teacher_mode_in_choices_and_start(tmp_path, monkeypatch):
