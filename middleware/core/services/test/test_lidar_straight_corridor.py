@@ -60,7 +60,7 @@ def test_refuses_missing_partial_shifted_or_expired_geometry(corridor):
     assert assess()["reason"] == "scan_missing"
 
 
-@pytest.mark.parametrize("value", [None, float("nan"), 0., 9.])
+@pytest.mark.parametrize("value", [None, float("nan"), 0., 9., 10**400])
 def test_missing_or_out_of_spec_return_is_unknown(corridor, value):
     scan, _, assess = corridor
     scan["ranges"][0] = value

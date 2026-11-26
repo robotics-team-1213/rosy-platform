@@ -1,11 +1,13 @@
 """Read-only straight-travel observation at the native LiDAR scan plane."""
 import math
+import sys
 
 from core_common.robot_body import SWEEP_PAD_M
 
 
 def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    # Comparing before conversion also rejects integers outside the sensor float range.
+    return type(value) in (int, float) and -sys.float_info.max <= value <= sys.float_info.max
 
 
 def assess_straight_corridor(sample, config, tray, robot_id, direction, distance_m, now):
