@@ -9,6 +9,7 @@ const {
   linkedArm,
   profileForArm,
   postEvalRequest,
+  postEvalFollowUp,
   freshLiveTcp,
   kstStamp,
   mapEvidenceInput,
@@ -149,4 +150,12 @@ test("the map evidence line uses the shared rule with map SHA, observation time 
   // Missing parts are said, never invented.
   assert.deepEqual(mapEvidence(mapEvidenceInput(null, null, "reference"), now),
     {text: "지도 v? · 관측 확인되지 않음 · 기준 영상", title: ""});
+});
+
+test("a post-eval result names what it saved and the follow-up steps it escalated", () => {
+  assert.deepEqual(postEvalFollowUp({ applied: [{}, {}], escalated: ["pivot-near belt:0.135,0.105", "remap", "bias_refused:belt:x"] }), {
+    saved: 2, steps: [{ step: "pivot-near", target: "belt:0.135,0.105" }, { step: "remap" }],
+  });
+  assert.equal(postEvalFollowUp({ applied: [], escalated: [] }), null);
+  assert.equal(postEvalFollowUp(null), null);
 });

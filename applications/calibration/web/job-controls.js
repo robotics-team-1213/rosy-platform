@@ -1,5 +1,5 @@
 import { setOff } from "/common/cause-line.js";
-import { postEvalRequest } from "./status-logic.js";
+import { postEvalFollowUp, postEvalRequest } from "./status-logic.js";
 
 const $ = id => document.getElementById(id);
 const moving = new Set(["remap", "pivot-near", "surface", "post-eval"]);
@@ -24,6 +24,7 @@ function showJob(id) {
   selected = id;
   $("jobDetail").hidden = !id;
   $("jobOutput").textContent = "";
+  showFollowUp(null);
   if (!id) return;
   const owner = arm;
   $("jobProgress").textContent = id + " · 조회 중";
@@ -38,6 +39,7 @@ function showJob(id) {
       const label = {running: "실행 중", done: "종료", failed: "실패", interrupted: "중단 · 완료 여부 미확인"}[job.status] || job.status;
       $("jobProgress").textContent = [owner, id, label, job.error].filter(Boolean).join(" · ");
       $("jobOutput").textContent = [job.error, job.result && JSON.stringify(job.result, null, 2), job.log_tail].filter(Boolean).join("\n");
+      showFollowUp(job.step === "post-eval" ? postEvalFollowUp(job.result) : null);
       if (job.status !== "running") return;
     } catch (err) {
       if (selected !== id || arm !== owner) return;
@@ -46,6 +48,29 @@ function showJob(id) {
     timer = setTimeout(poll, 2500);
   }
   poll();
+}
+
+const STEP_TEXT = { remap: "카메라 XY 맵 재측정", "pivot-near": "지정 좌표 주변 XY 편차 측정" };
+
+function showFollowUp(follow) {
+  const box = $("jobFollow");
+  box.replaceChildren();
+  box.hidden = !follow;
+  if (!follow) return;
+  const p = document.createElement("p");
+  p.textContent = follow.saved ? `편차 보정값 ${follow.saved}개를 저장했습니다. 저장한 좌표는 다시 검증하세요.` : "저장한 편차 보정값은 없습니다.";
+  box.appendChild(p);
+  for (const next of follow.steps) {
+    const button = document.createElement("ui-button");
+    button.setAttribute("kind", "quiet");
+    button.textContent = `다음 작업 채우기: ${STEP_TEXT[next.step]}${next.target ? " · " + next.target : ""}`;
+    button.addEventListener("click", () => {
+      $("jobStep").value = next.step;
+      if (next.target) $("jobTargets").value = next.target;
+      resetApproval();  // the form is filled; the operator still confirms the switch and starts it
+    });
+    box.appendChild(button);
+  }
 }
 
 function fields() {
