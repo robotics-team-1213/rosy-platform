@@ -359,9 +359,6 @@ class PolicyRegistry:
         fields, bad = visoff.parse_episode_fields(req)
         if bad:
             return 400, {"ok": False, "error": bad}
-        full_chunk = req.get("full_chunk", False)
-        if not isinstance(full_chunk, bool):
-            return 400, {"ok": False, "error": "full_chunk must be a boolean"}
 
         t0 = time.perf_counter()
         try:
@@ -378,10 +375,7 @@ class PolicyRegistry:
         raw_chunk, visoff_diag = visoff.visoff_output(raw_out)
         if not isinstance(raw_chunk, (list, tuple)) or not (1 <= len(raw_chunk) <= entry.chunk_size):
             return 500, {"ok": False, "error": "invalid predicted chunk length"}
-        # A timed single-arm client drops rows its observation age already passed (cell_policy_timing.action_window),
-        # so it asks for the whole chunk; the two-arm client plays every row it gets and keeps n_action_steps.
-        if not full_chunk:
-            raw_chunk = raw_chunk[:entry.n_action_steps]
+        raw_chunk = raw_chunk if req.get("full_chunk") is True else raw_chunk[:entry.n_action_steps]  # timed single-arm drops late rows
         validated: list[list[float]] = []
         for row in raw_chunk:
             vec = _is_finite_floats(row, 6)

@@ -597,4 +597,4 @@ def test_infer_trims_to_n_action_steps_unless_full_chunk_requested(tmp_path):
     assert code == 200 and len(body["chunk"]) == 3
     code, body = reg.infer({**req, "full_chunk": True})
     assert code == 200 and len(body["chunk"]) == 6 and body["chunk"][5][0] == pytest.approx(0.5)
-    assert reg.infer({**req, "full_chunk": "yes"})[0] == 400
+    assert len(reg.infer({**req, "full_chunk": "yes"})[1]["chunk"]) == 3  # anything but true keeps the trimmed chunk
