@@ -1,4 +1,4 @@
-﻿"""Locate visible portions of the cool-plastic A tray inside a registered image ROI."""
+"""Locate visible portions of the cool-plastic A tray inside a registered image ROI."""
 import cv2
 import numpy as np
 

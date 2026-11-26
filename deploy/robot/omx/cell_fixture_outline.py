@@ -1,4 +1,4 @@
-﻿"""Observe the S5 ship and fan tray in the registered top frame (pixels, then arm-plane estimates)."""
+"""Observe the S5 ship and fan tray in the registered top frame (pixels, then arm-plane estimates)."""
 from functools import lru_cache
 import itertools
 import json

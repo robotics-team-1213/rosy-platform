@@ -1,4 +1,4 @@
-﻿"""Fixture registration compares only matching physical work surfaces, independently of the robot frame."""
+"""Fixture registration compares only matching physical work surfaces, independently of the robot frame."""
 from pathlib import Path
 import json
 import sys

@@ -1,4 +1,4 @@
-﻿from hashlib import sha256
+from hashlib import sha256
 import json
 from pathlib import Path
 import sys

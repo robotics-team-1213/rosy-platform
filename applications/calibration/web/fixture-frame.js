@@ -1,4 +1,4 @@
-﻿export async function readFixtureFrame(response) {
+export async function readFixtureFrame(response) {
   if (!(response.headers.get("Content-Type") || "").startsWith("application/json")) {
     return {image: await createImageBitmap(await response.blob()), observation: null};
   }
