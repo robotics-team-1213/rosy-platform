@@ -23,6 +23,7 @@ import cell_policy_shape
 import cell_remote_policy
 import cell_robot_profile
 import cell_two_arm
+from cell_two_arm_entry import run_two_arm_entry
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, config_site_key
 from cell_two_arm_policy import run_two_arm_policy
 from cell_two_arm_verification import transfer_refusal
@@ -130,6 +131,10 @@ class _PassiveDryRunCell:
         if command == "state":
             return {"ok": True, "state": list(self._pose), "holding": False, "t": time.time(), "passive_source": "library_home"}
         return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses {command!r}"}
+
+    def seed(self, pose: Sequence[float]) -> None:
+        """A dry run's stand-in for the arm having taken the entry chunk."""
+        self._pose = [float(x) for x in pose]
 
     def checked(self, command: str, assessment: Mapping[str, Any], timeout: float | None = None) -> dict[str, Any]:
         return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses checked {command!r}"}
@@ -299,6 +304,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not args.dry_run
             else None
         )
+        entry = run_two_arm_entry(
+            cells, libs, guard, work_dir / "entry", authorizers=authorizers, jaw_specs=jaw_specs, kins=kins,
+            state_gates=state_gates, dry_run=args.dry_run,
+        )
+        if entry["result"] in ("refused", "fault"):  # nothing but entry commands went out: no policy chunk
+            receipt = {"schema": "rosy.omx-two-arm-policy-run.v1", "result": entry["result"], "stopped_reason": entry["reason"], "entry": entry}
+            (work_dir / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            print(json.dumps({"result": entry["result"], "reason": entry["reason"], "receipt": str(work_dir / "receipt.json")}))
+            return 1
+        for arm in passive_arms:
+            if entry["arms"].get(arm, {}).get("entry_end"):
+                cells[arm].seed(entry["arms"][arm]["entry_end"])
         receipt = run_two_arm_policy(
             cells, shadows, libs, guard, tasks["a"], tasks["b"], work_dir,
             offsets=offsets, demo_ranges=demo_ranges, goals=goals, jaw_specs=jaw_specs, kins=kins,
@@ -306,6 +323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_gates=state_gates,
             fold_context={"kin": kins, "rigids": rigid_map, "tips": tips, "margin_m": args.margin_m},
         )
+        receipt["entry"] = entry
         receipt["proposer"] = args.proposer.strip()
         receipt["operator"] = args.operator.strip()
         if passive_arms:
