@@ -130,6 +130,7 @@ def _prepare(c):
             digest.update(raw)
     if "sha256:" + digest.hexdigest() != current["digest"]:
         raise ValueError("OS archive digest differs from its accepted Actions artifact")
+    prepare.require_free_space(base, prepare.default_cache())  # before an attempt is counted or extracted
     attempt = state.get("os_attempt", 0) + 1
     if attempt > 3:
         raise ValueError("OS preparation interrupted three times; preserved attempts require review")
