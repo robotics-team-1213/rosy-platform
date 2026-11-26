@@ -60,7 +60,7 @@ def test_remap_mismatch_preserves_existing_generation(tmp_path, monkeypatch, cap
     import cv2
     ref = tmp_path / "ref.jpg"
     cv2.imwrite(str(ref), img)
-    config = {"arm_id": "arm_a", "plan_path": str(plan), "cameras": {}, "sites": {"pallet": {}},
+    config = {"arm_id": "arm_a", "plan_path": str(plan), "cameras": {}, "sites": {"pallet": {}}, "coarse": {"z_view": 0.11},
               "work_dir": str(tmp_path), "io": str(tmp_path), "calibration_path": str(cal),
               "preflight": {"reference_top": str(ref)}}
     path.write_text(json.dumps(config))

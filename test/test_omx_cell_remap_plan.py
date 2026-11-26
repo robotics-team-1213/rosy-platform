@@ -199,7 +199,8 @@ def test_plan_only_with_obstacle_mm_refuses_when_raised_z_view_exceeds_arm_b_win
 
 def test_live_route_check_returns_before_remap_admission(tmp_path, monkeypatch, capsys):
     import cell_pipeline
-    import cell_route_check
+    import cell_route_calibration
+    import cell_shared_pallet
 
     cfg = arm_a()
     cfg.update(plan_path=str(FIX / "plan.json"), calibration_path=str(tmp_path / "cal.json"),
@@ -219,7 +220,9 @@ def test_live_route_check_returns_before_remap_admission(tmp_path, monkeypatch, 
 
     route = {"source": "temp-a", "destination": "ship-h1"}
     monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *a, **k: ReadOnlyCell())
-    monkeypatch.setattr(cell_route_check, "route_check", lambda c, s, d: {"source": s, "destination": d})
+    monkeypatch.setattr(cell_shared_pallet, "fixture_check_frame", lambda cell, *a: (cell.frame("top"), {}))
+    monkeypatch.setattr(cell_route_calibration, "include_route_report",
+                        lambda config, calibration, found, args, ap: found.update(route={"source": args.route[0], "destination": args.route[1]}))
     monkeypatch.setattr(cc, "check", lambda *a, **k: {})
     monkeypatch.setattr(cc, "stale", lambda found: ["remap"])
     monkeypatch.setattr(cc.rp, "remap_view", forbidden)
