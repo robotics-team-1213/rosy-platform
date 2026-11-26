@@ -345,7 +345,9 @@ class Host:
 
     def follower_idle_reason(self, release: Path, python: Path) -> str | None:
         if observers := self.cfg.get("observers"):
-            return next((r for o in observers if (r := self._observer_defer_reason(o)) is not None), None)
+            # An unplugged board cannot hold torque, so its stale observer must not block the other arms (2026-11-27).
+            present = [o for o in observers if not o.get("device") or os.path.exists(o["device"])]
+            return next((r for o in present if (r := self._observer_defer_reason(o)) is not None), None)
         code = (
             "import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
             f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
