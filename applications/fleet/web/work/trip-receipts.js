@@ -66,3 +66,13 @@ export function installTripReceiptHistory(el, call) {
   panel.addEventListener("toggle", () => { if (panel.open) refresh(); else ++seq; });
   el("trip-receipt-refresh").addEventListener("click", refresh);
 }
+
+export async function cancelTripReceipt(call, tripId, life) {
+  try {
+    return await call(`/api/fleet/trips/${encodeURIComponent(tripId)}/cancel`, {method: "POST"});
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    life.check();
+    return call(`/api/fleet/trips/${encodeURIComponent(tripId)}`);
+  }
+}

@@ -1,3 +1,4 @@
+import {cancelTripReceipt} from "/console/assets/trip-receipts.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { node, patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
@@ -516,15 +517,22 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     try {
       if (stop.trip) {
         try {
-          await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+          const receipt = await cancelTripReceipt(call, stop.trip, life);
           life.check();
+          if (receipt?.trip_id !== stop.trip || receipt?.robot_id !== robot.robot_id || receipt.state !== "canceled") {
+            log(`${robot.robot_id} 운행 취소 미확인 · 다시 취소하세요 · ${stop.trip}`, "bad");
+            return;
+          }
           view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+          view.endedTrips = [receipt, ...(view.endedTrips || []).filter((row) => row.trip_id !== stop.trip)];
           render();
-          log(`${robot.robot_id} 운행 취소`, "good");
+          const acknowledged = receipt.detail?.stop_sent === true && !receipt.detail.error;
+          log(`${robot.robot_id} 운행 취소 · ${acknowledged ? "기체 정지 명령 수락" : "기체 정지 응답 미확인"} · ${stop.trip}`, acknowledged ? "good" : "bad");
           return;
         } catch (err) {
           if (err.name === "AbortError") return;
-          log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
+          log(`${robot.robot_id} 운행 취소 미확인 · ${stop.trip} · ${err.message}`, "bad");
+          return;
         }
       }
       const pending = view.pendingTasks[robot.robot_id];
