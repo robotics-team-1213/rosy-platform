@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -59,14 +60,15 @@ def test_selected_bay_preview_uses_its_own_spine_and_owner():
         asyncio.run(owner.target("rosy_42", rear_bay(graph, "C2")))
     assert err.value.code == "CHARGE_BAY_TARGET_NOT_TAUGHT"
 
-def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(monkeypatch):
+@pytest.mark.parametrize(("staging", "bay", "dock"), [("P2", "C2", "bay_c2"), ("P3", "C3", "bay_c3")])
+def test_stationary_staging_starts_only_its_taught_bay_and_waits_for_exact_docked_run(monkeypatch, staging, bay, dock):
     import asyncio
     from uuid import uuid4
     from datetime import datetime, timezone
     from fleet.server.rear_bay_return import RearBayPort, rear_bay
     from tools.sim.bay_departure_sim import build_world_261026_site_map
     _, graph, _ = build_world_261026_site_map()
-    sx, sy = graph.place_xy("P2")
+    sx, sy = graph.place_xy(staging)
     boot, run = str(uuid4()), str(uuid4())
     scoped = False
     blocked = True
@@ -78,7 +80,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
         async def _get(self, path):
             if path.endswith("/types"):
                 return {"types": [{"name": "pink", "approach": "line", "staging_offset_m": .32}]}
-            return {"docks": [{"id": "bay_c2", "type": "pink", "map_id": "map42", "x": 1., "y": 2., "yaw": 0.}]}
+            return {"docks": [{"id": dock, "type": "pink", "map_id": "map42", "x": 1., "y": 2., "yaw": 0.}]}
         async def state(self):
             return {"map_id": "map42", "map_grid_id": "grid42", "velocity": {"linear": 0., "angular": 0.},
                     "navigation": "ARRIVED", "line_follow": {"mode": "OFF"}}
@@ -89,7 +91,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
             if run_id is None:
                 return {"owner": owner, "operation_cancel_supported": scoped}
             assert run_id == run
-            return {"lookup": "FOUND", "owner": owner, "state": "DOCKED", "dock_id": "bay_c2",
+            return {"lookup": "FOUND", "owner": owner, "state": "DOCKED", "dock_id": dock,
                     "operation": dict(op, phase="TERMINAL", result="SUCCEEDED"),
                     "quiescence": {**owner, "requested_run_id": run, "admitting": False, "pending_submission": False,
                         "actuating_callback": False, "lease_active": False, "transport_generation": 1,
@@ -99,7 +101,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
     runner = SimpleNamespace(_progress_pose=pose, config=SimpleNamespace(arrive_free_m=.15),
                              _check_human_hold=lambda: None, _graph_for=lambda _: graph, _save=lambda _: None,
                              _clock=lambda: clock[0])
-    park = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
+    park = dict(rear_bay(graph, bay), phase="staging_confirmed")
     live = SimpleNamespace(open=True, graph=graph, view={"robot_id":"rosy_42", "state":"running", "trip_id":"plan-id",
                            "map_version":394, "detail":{"parking_handoff": park}})
     client = Core()
@@ -109,7 +111,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
         if blocked:
             from fleet.hub.hub import HubError
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_STATE_UNVERIFIED")
-        return await Core().state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
+        return await Core().state(), ("map42", [(sx, sy), graph.place_xy(bay)]), lambda: None
     async def approved(*args):
         return await pose(), "binding"
     monkeypatch.setattr("fleet.server.rear_bay_return.read_precision_pose", approved)
@@ -123,7 +125,7 @@ def test_stationary_p2_starts_only_taught_bay_c2_and_waits_for_exact_docked_run(
     blocked = False
     clock[0] += 2
     asyncio.run(port.step(runner, live))
-    assert calls == [("/api/v1/docking/dock", {"dock": "bay_c2", "correlation_id": "plan-id",
+    assert calls == [("/api/v1/docking/dock", {"dock": dock, "correlation_id": "plan-id",
                      "expected_boot_id": boot, "expected_owner_generation": 8})]
     assert park["phase"] == "docking" and live.view["state"] == "running"
     asyncio.run(port.step(runner, live))
