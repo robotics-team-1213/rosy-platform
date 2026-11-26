@@ -37,6 +37,7 @@
                  "deploy/robot/omx/rosy-omx-devices-autoupdate.timer",
                  "deploy/robot/omx/rosy-omx-cameras-bind.service", "deploy/robot/omx/rosy-omx-cameras-bind.timer"],
   "restart_running_only": true,
+  "always_restart": ["rosy-omx-cell-job-api.service"],
   "sequential": true,
   "settle": 20,
   "require_verified_commit": false,

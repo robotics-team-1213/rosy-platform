@@ -124,6 +124,18 @@ def _clear_ephemeral_mirror(mirror: Path) -> None:
     shutil.rmtree(mirror, ignore_errors=True)
 
 
+def _release_paths(paths: list[str]) -> list[str]:
+    out = list(paths)
+    if "deploy/robot/omx" in out and "contracts/learning/src" not in out:
+        out.append("contracts/learning/src")
+    return out
+
+
+def _incomplete_release(release: Path, paths: list[str]) -> bool:
+    """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
+    return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
+
+
 class Host:
     """Everything that touches git, GitHub, processes and devices; replaced by fakes in tests."""
 
@@ -193,15 +205,18 @@ class Host:
 
     def running(self, units) -> list:
         """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by
-        hand (an observer stopped for the real owner) stays stopped."""
+        hand (an observer stopped for the real owner) stays stopped. `always_restart` units come back every time:
+        2026-11-26 the job API died on a new tree and a rollback of active units only left it down."""
+        always = self.cfg.get("always_restart", [])
+        extra = [u for u in always if u not in units]
         if not self.cfg.get("restart_running_only"):
-            return list(units)
+            return list(units) + extra
         sp = _sp()
         return [
             u
             for u in units
-            if sp.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0
-        ]
+            if u in always or sp.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0
+        ] + extra
 
     def restart(self, units) -> bool:
         """Restart the service units and report whether all are still active after `settle` seconds."""
