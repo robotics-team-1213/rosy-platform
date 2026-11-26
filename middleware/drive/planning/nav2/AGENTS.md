@@ -35,7 +35,7 @@ Nav2 and SLAM Toolbox launch/config/maps for real robot and Gazebo. ament_cmake.
 
 ### Working In This Directory
 
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - D-3: the web UI is `core` FastAPI at `/api/v1/*`. The Flask original is gone.
 - Nav2 velocity_smoother output must be remappable to `nav_cmd_vel` so CommandManager owns `cmd_vel`.
 - Launch files compose. TF/param policy lives in `navigation.*`, not under `launch/`.

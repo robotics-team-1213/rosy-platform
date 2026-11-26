@@ -61,7 +61,7 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 ## For AI Agents
 
 ### Working In This Directory
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.
 - Treat this directory as part of ROSY Platform. The original checkout is archived for provenance; no runtime, build, or test may require it.
 - Preserve pure-logic behavior and its tests before changing ROS wiring. The target runtime must not activate this package's legacy final `/cmd_vel` publisher beside `core`.
 - Keep new **decision logic in its actual source holder** (`../drive/`, `sensors/sensing/`, `front_camera/perception/`, `calibration/`, `localization/`, `graph_health/`, `snapshots/`, `sensors/line_observation/`, or `front_camera/object_observation/`). Decision modules stay ROS-free; dedicated adapters in the same functional holder may import ROS (D-747). Preserve the existing `control.*` identities; do not duplicate algorithms in compatibility entries.
