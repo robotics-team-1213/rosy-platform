@@ -1296,7 +1296,9 @@ def test_ceiling_split_keeps_ruler_on_the_site_edge_and_names_below_the_axis_chi
         page.wait_for_function("() => document.querySelector('#map-stage').dataset.watch === 'pip'"
                                " && !document.querySelector('#map-birdseye').hidden"
                                " && (window.__mapChips || []).some((c) => c.text.startsWith('rosy_46'))", timeout=20000)
-        page.wait_for_timeout(600)  # one more draw at the split canvas size
+        page.wait_for_function("() => { const w = document.querySelector('#map-canvas').getBoundingClientRect().width;"
+                               " const n = rulerNumbers(); return n.length && n.every((r) => r.right <= w); }",
+                               timeout=10000)  # the next poll redraws at the split canvas size
         seen = page.evaluate("""async () => {
           const { fitBox } = await import('/console/assets/site-map-model.js');
           const c = document.querySelector('#map-canvas').getBoundingClientRect();
