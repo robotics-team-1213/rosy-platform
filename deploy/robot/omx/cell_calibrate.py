@@ -147,7 +147,7 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
         raise SystemExit("remap: initial park failed")
     before = cell.frame("top")
     cv2.imwrite(str(frames / "before.jpg"), before)
-    for i, (x, y) in enumerate(rp.visit_order(points)):
+    for i, (x, y) in enumerate(rp.remap_order(config, points)):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
             lib = cp.write_library(motion, view, view, work / f"remap-{i}.json")

@@ -5,18 +5,63 @@ from __future__ import annotations
 import math
 
 
-def visit_order(points: list) -> list:
-    """The point nearest the base first, then always the nearest point not yet visited.
+JOINTS = ("shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos")
+
+
+def direct_move(start: list, goal: list) -> bool:
+    """chunk_library.transit_path's test for a straight move instead of the raised transit (kept equal by
+    test_direct_move_matches_transit_path)."""
+    return (start[1] >= -35.0 and goal[1] >= -35.0 and abs(start[0] - goal[0]) <= 15.0
+            and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0 and abs(start[4] - goal[4]) <= 45.0)
+
+
+def visit_indices(points: list, hovers: list | None = None, budget: int = 200_000) -> list:
+    """Indices into `points`: the point nearest the base first, then always the nearest one not yet visited.
 
     2026-11-26 arm_a: ordered by distance from the base alone, 6 of 18 moves crossed the grid (80-105 s each at
-    remap_transit_speed 0.2) and took half of the 19 min remap."""
-    left = sorted(points, key=lambda q: math.hypot(*q))
-    order = left[:1]
-    del left[:1]
+    remap_transit_speed 0.2) and took half of the 19 min remap. With `hovers` (each point's planned above_pick joints,
+    JOINTS order) the same first point starts the order with the fewest moves transit_path sends through the raised
+    transit pose (an 87 s close-rise-turn-descend-open on arm_a that afternoon); the search stops after `budget` nodes."""
+    if not points:
+        return []
+    left = sorted(range(len(points)), key=lambda i: math.hypot(*points[i]))
+    order = [left.pop(0)]
     while left:  # by position, so a repeated point is visited as often as it is listed
-        here = order[-1]
-        order.append(left.pop(min(range(len(left)), key=lambda i: math.hypot(left[i][0] - here[0], left[i][1] - here[1]))))
-    return order
+        here = points[order[-1]]
+        order.append(left.pop(min(range(len(left)), key=lambda k: math.dist(points[left[k]], here))))
+    if hovers is None or len(hovers) != len(points) or any(h is None for h in hovers):
+        return order
+    near = [[direct_move(a, b) for b in hovers] for a in hovers]
+    best, nodes = [sum(not near[a][b] for a, b in zip(order, order[1:])), order], [0]
+
+    def walk(seq: list, rest: list, transits: int) -> None:
+        if transits >= best[0] or nodes[0] >= budget:
+            return
+        nodes[0] += 1
+        if not rest:
+            best[:] = [transits, list(seq)]
+            return
+        here = seq[-1]
+        for j in sorted(rest, key=lambda j: (not near[here][j], math.dist(points[here], points[j]))):
+            walk(seq + [j], [k for k in rest if k != j], transits + (not near[here][j]))
+
+    walk(order[:1], order[1:], 0)
+    return best[1]
+
+
+def visit_order(points: list, hovers: list | None = None) -> list:
+    """`points` in visit_indices order."""
+    return [points[i] for i in visit_indices(points, hovers)]
+
+
+def remap_order(config: dict, points: list) -> list:
+    """The remap's points ordered from each one's planned hover; the plain nearest chain when no plan can be made."""
+    import cell_remap_plan as rp
+
+    try:
+        return [row["point"] for row in rp.plan(config, points)]
+    except (ImportError, KeyError, TypeError, ValueError, SystemExit):
+        return visit_order(points)
 
 
 def scene_ignore(config: dict) -> list:
