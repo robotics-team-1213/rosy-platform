@@ -10,6 +10,7 @@ import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { capabilityReason, estopText, motionCommandReason } from "./motion-readiness.js";
+import { measuredMotion, motionLabel } from "/console/assets/measured-motion.js";
 import { staleAgeS } from "./state-age.js";
 import { createBatteryMeter, patchBatteryMeter } from "/console/assets/cockpit-telemetry.js";
 import { createQueues } from "./queues.js";
@@ -83,6 +84,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const yawText = pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—";
     const moreOpen = expandedMoreIds.has(robot.robot_id);
     const nav = navTag(state, robot.robot_id, now);
+    const motion = motionLabel(measuredMotion(robot, view, now));
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, now) !== null;
@@ -109,6 +111,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const cached = workspaceCards.get(robot.robot_id);
     if (cached && cached.sig === sig) {
       const query = selector => cached.article.querySelector(selector);
+      patchText(query("[data-measured-motion]"), motion);
       patchText(query('[data-fact="last-seen"]'), lastSeenText(robot, now));
       patchText(query('[data-fact="pose"] strong'), poseText);
       patchText(query('[data-fact="pose"] .fact-detail'), sitePose);
@@ -169,6 +172,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     } else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     if (laneOn) modeTag.dataset.lineFollow = lane.mode;
     head.appendChild(modeTag);
+    const motionTag = inlineIfCalm(tag(motion, ""), "");
+    motionTag.dataset.measuredMotion = "";
+    head.appendChild(motionTag);
     if (!view.stateUnavailable && robot.online) {
       const powerMode = state.power?.mode;
       if (powerMode) {
@@ -213,7 +219,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     const navCls = blocked ? "crit" : robot.queued ? "warn" : nav.cls;
     head.appendChild(inlineIfCalm(tag(
-      view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : nav.text,
+      view.stateUnavailable ? "—" : robot.yielding ? "양보 요청" : robot.queued ? "출발 대기" : nav.text,
       navCls), navCls));
     const formation = view.stateUnavailable ? null : view.formation;
     const role = formation?.active ? (formation.leader === robot.robot_id ? "대형 리더"
@@ -371,7 +377,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
     setOffBy(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
+        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "기존 배차 있음" : ""));
     pin.addEventListener("click", scope.guard(() => {
       view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
       if (view.pinning) {

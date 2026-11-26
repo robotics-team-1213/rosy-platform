@@ -37,10 +37,36 @@ def _cancel_ack(receipt) -> bool:
     )
 
 
+def pre_dispatch_wait(trip: dict) -> bool:
+    detail = trip.get("detail") or {}
+    peer = detail.get("peer_wait") or {}
+    return (detail.get("drive_mode") == "nav2" and peer.get("stage") == "pre_dispatch_peer_check"
+            and peer.get("command_robot_id") == trip["robot_id"] and peer.get("dispatch_attempted") is False
+            and isinstance(peer.get("waiting_on"), list) and peer.get("blocked_by") in peer["waiting_on"]
+            and not any(detail.get(k) for k in ("nav2_route", "last_peer_wait", "named_stop_handoff_pending",
+                                                "camera_lane_fallback")))
+
+
+def idle_cancel_owner(receipt, received_at):
+    if (not isinstance(receipt, dict) or receipt.get("navigation") != "IDLE"
+            or receipt.get("operation", False) is not None or "error" in receipt
+            or any(receipt.get(k) is False for k in ("ok", "stop_sent", "cancel_confirmed"))):
+        return None
+    observed = parse_utc(receipt.get("idle_observed_at"))
+    if observed is None or abs(received_at - observed) >= STALE_POSE_S:
+        return None
+    owner = receipt.get("idle_owner") or {}
+    if (isinstance(owner, dict) and isinstance(owner.get("boot_id"), str) and owner["boot_id"] and owner.get("owner_run_id", False) is None
+            and all(type(owner.get(k)) is int and owner[k] >= 0 for k in ("owner_generation", "transport_generation",
+                                                                         "mode_epoch", "dock_owner_generation"))):
+        return owner, max(received_at, observed)
+    return None
+
+
 def pause_proof_args(trip: dict) -> dict:
     hold = trip.get("hold") or {}
     if hold.get("reason") == "fleet_hold" and (hold.get("stop") is not None or trip.get("drive_mode") in {"free", "nav2"}):
-        return {"pause_after": hold.get("at", 0)}
+        return {"pause_after": hold.get("at", 0), **({"peer_idle": True} if pre_dispatch_wait(trip) else {})}
     return {}
 
 
@@ -52,7 +78,7 @@ class TripHalts:
         self.dock_stop = None
         self.reconcile_handoff = None
         self.pending_handoffs = {}
-        self.read_stop_state = None
+        self.read_stop_state = self.read_navigation = self.wire_epoch = None
         self.gave_up = []
         self.restarted = store.trips(states=OPEN, limit=1000)  # ``run_restart`` stops each (retried until it takes)
         for trip in self.restarted:
@@ -124,7 +150,7 @@ class TripHalts:
         trip["detail"] = resolved
         self.pending_handoffs.pop(robot_id, None)
 
-    async def measured_stop(self, robot_id: str, after: float) -> dict | None:
+    async def measured_stop(self, robot_id: str, after: float, *, idle_only=False) -> dict | None:
         """Read CORE directly. A cached idle before this stop cannot prove quiescence."""
         if self.read_stop_state is None:
             return None
@@ -140,12 +166,29 @@ class TripHalts:
                 or (state.get("line_follow") or {}).get("mode") != "OFF"
                 or state.get("navigation") not in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 or state.get("mode") not in {"IDLE", "NAVIGATION"}
+                or idle_only and (state["mode"] != "IDLE" or state["navigation"] != "IDLE")
                 or any(type(vel.get(k)) not in (float, int) or vel[k] != 0.0 for k in ("linear", "angular"))):
             return None
         return {"sampled_at": sample["sampled_at"], "navigation": state["navigation"],
                 "goal": None, "velocity": {"linear": 0.0, "angular": 0.0}}
 
-    async def halt_robot(self, robot_id: str, lane: bool, place: str | None, *, handoff_pending=False, pause_after=None) -> dict:
+    def idle_wire(self, robot):
+        return self.wire_epoch(robot) if self.wire_epoch else None
+
+    async def measured_idle_stop(self, robot, after, owner, wire):
+        if wire is None or self.idle_wire(robot) != wire or self.read_navigation is None:
+            return None
+        proof = await self.measured_stop(robot, after, idle_only=True)
+        if proof is None:
+            return None
+        nav = await self._call(self.read_navigation(robot))
+        if (isinstance(nav, dict) and nav.get("navigation") == "IDLE" and nav.get("idle_owner") == owner
+                and self.idle_wire(robot) == wire):
+            return {**proof, "basis": "pre_dispatch_idle", "idle_owner": owner}
+        return None
+
+    async def halt_robot(self, robot_id: str, lane: bool, place: str | None, *, handoff_pending=False,
+                         pause_after=None, peer_idle=False) -> dict:
         """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel."""
         errors = []
 
@@ -162,9 +205,21 @@ class TripHalts:
                 await attempt(self._junction.send_junction(robot_id, STOP, place, 0.0, self._config.junction_expires_s))
             sent = {"stop_sent": await attempt(self._junction.hold(robot_id))}
         else:
+            idle_proof = None
             try:
+                wire = self.idle_wire(robot_id) if peer_idle and not handoff_pending and pause_after is not None else None
                 cancel_res = await self._call(self._cancel_goal(robot_id))
+                after_cancel = self._clock() if wire is not None else None
                 canceled = _cancel_ack(cancel_res)
+                if not canceled and wire is not None and (observed := idle_cancel_owner(cancel_res, after_cancel)):
+                    owner, after_cancel = observed
+                    for delay in (0., .15, .25):
+                        if delay:
+                            await asyncio.sleep(delay)
+                        idle_proof = await self.measured_idle_stop(robot_id, after_cancel, owner, wire)
+                        if idle_proof:
+                            canceled = True
+                            break
                 if not canceled:
                     err = (
                         cancel_res.get("error")
@@ -179,7 +234,7 @@ class TripHalts:
                 # A lost handoff reply leaves either Nav2 or the lane controller holding the wheels.
                 held = await attempt(self._junction.hold(robot_id))
                 canceled = canceled and held
-            if canceled and pause_after is not None:
+            if canceled and pause_after is not None and not idle_proof:
                 try:
                     canceled = await self.measured_stop(robot_id, pause_after) is not None
                     if not canceled:
@@ -187,7 +242,7 @@ class TripHalts:
                 except Exception as exc:
                     canceled = False
                     errors.append(error_code(exc))
-            sent = {"stop_sent": canceled}
+            sent = {"stop_sent": canceled, **({"pause_proof": idle_proof} if canceled and idle_proof else {})}
             try:
                 self._release_queue(robot_id)
             except Exception as exc:  # the stop above is what matters

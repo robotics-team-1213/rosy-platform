@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -347,14 +348,39 @@ def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(op
     return {"renewed": True, "correlation_id": body.correlation_id, "ttl_s": body.ttl_s}
 
 
+def _navigation_readback(svc, run_id=None):
+    result = svc.nav.native_readback(run_id)
+    idle = result.pop("idle_owner", None)
+    if idle is None:
+        return result
+    mode_epoch = svc.modes.epoch
+    dock = svc.docking.native_owner(wait=False)
+    mission = getattr(svc, "loc_mission", None)
+    station = getattr(svc, "station_docking", None)
+    if (not dock or dock["owner_run_id"] is not None or svc.docking.active or svc.modes.mode is not Mode.IDLE
+            or svc.command.manual_active or svc.line_follow.active or svc.swarm.active or svc.modes.motion_reserved
+            or svc.calibration.current() is not None or (mission is not None and mission.owns_wheels)
+            or (station is not None and station.session is not None) or mode_epoch != svc.modes.epoch
+            or dock != svc.docking.native_owner(wait=False)):
+        return result
+    result["idle_owner"] = {**idle, "mode_epoch": mode_epoch, "dock_owner_generation": dock["owner_generation"]}
+    return result
+
+
 @navigation_router.post("/navigation/cancel")
 def navigation_cancel(auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     receipt = []
     svc.nav.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
     stop_ends_trip_lease(svc, auth)
-    return {"navigation": svc.nav.nav_state.value,
-            "operation": receipt[0].model_dump(mode="json") if receipt else None}
+    result = {"navigation": svc.nav.nav_state.value,
+              "operation": receipt[0].model_dump(mode="json") if receipt else None}
+    if not receipt and result["navigation"] == "IDLE":
+        idle = _navigation_readback(svc).get("idle_owner")
+        if idle:
+            result["idle_owner"] = idle
+            result["idle_observed_at"] = datetime.now(timezone.utc).isoformat()
+    return result
 
 
 @navigation_router.post("/navigation/cancel-scoped")
@@ -405,7 +431,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
                      run_id: UUID | None = None):
     readiness = svc.readiness.snapshot()
     return {
-        **svc.nav.native_readback(run_id),
+        **_navigation_readback(svc, run_id),
         "navigation": svc.nav.nav_state.value,
         "route": svc.nav.route_status(),
         "mapping_active": svc.nav.mapping_active,

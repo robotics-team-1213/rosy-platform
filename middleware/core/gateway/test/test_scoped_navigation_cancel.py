@@ -110,3 +110,34 @@ def test_successful_old_cancel_cannot_halt_a_replacement_run_or_trip_lease(navig
     assert services.nav.native.current.phase != "TERMINAL"
     assert services.trip_lease.current()["lease_id"] == "replacement-lease"
     assert response.json()["navigation"] == services.nav.nav_state.value
+
+
+@pytest.mark.parametrize("race", ["vacant", "missing", "pending", "callback", "changed", "precision", "lease",
+                                  "dock_submitting", "manual", "line", "calibration", "mapping"])
+def test_idle_cancel_receipt_requires_stable_vacant_transport(navigation, race, monkeypatch):
+    client, services, executor = navigation
+    states = iter([(2, False, False), (3, False, False)])
+    if race != "missing":
+        executor.native_transport_snapshot = lambda: (next(states) if race == "changed"
+                                                      else (2, race == "pending", race == "callback"))
+    if race == "dock_submitting":
+        monkeypatch.setattr(services.docking, "native_owner", lambda **_: None)  # busy admission lock
+    if race == "manual":
+        monkeypatch.setattr(type(services.command), "manual_active", property(lambda _: True))
+    if race == "line":
+        monkeypatch.setattr(type(services.line_follow), "active", property(lambda _: True))
+    if race == "calibration":
+        services.calibration.start(kind="camera", label="SIM", ttl_s=30, owner_id="human", owner_role="operator")
+    if race == "mapping":
+        services.nav.mapping_active = True
+    if race == "precision":
+        assert services.nav.claim_precision() is not None
+    if race == "lease":
+        services.nav._lease = object()
+    result = client.post("/api/v1/navigation/cancel", headers=OPERATOR).json()
+    assert result["navigation"] == "IDLE" and result["operation"] is None
+    if race == "vacant":
+        owner = client.get("/api/v1/navigation/state", headers=OPERATOR).json()["idle_owner"]
+        assert owner == result["idle_owner"] and owner["owner_run_id"] is None and owner["transport_generation"] == 2
+    else:
+        assert "idle_owner" not in result
