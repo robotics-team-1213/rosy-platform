@@ -20,69 +20,20 @@ from cell_policy_timing import (
     step_count as _step_count, valid_state as _valid_state, validate_entry_chunk as _validate_entry_chunk,
 )
 
-HOLD_CURRENT_LIMIT_MA = 140.0
+from cell_policy_pre_home import HOLD_CURRENT_LIMIT_MA, pre_settle_home as _pre_settle_home
 
 
 def _finite_stamp(val, ref_now: float) -> bool:
     return (num := _finite_num(val)) is not None and 0.0 <= num <= ref_now + 1.0
 
 
-def _pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_spec,
-                     *, sleep=time.sleep) -> tuple[dict | None, dict | None]:
-    """Fail-closed verification that the arm starts stationary at home with a confirmed empty gripper."""
-    from cell_policy_shape import jaw_zone_error
-
-    hold_sent = False
-
-    def _refuse(cur: dict, reason: str, *, base: dict = row, result: str = "refused", **extra):
-        nonlocal hold_sent
-        rows = [{**base, "refused": reason, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
-        rows.append({"command": "human-hold", **_ack_status(_send_hold(cell, log=log))})
-        hold_sent = True
-        for r in rows:
-            log(r)
-        return None, {"result": result, "at": 0, "reason": reason, "parked": False}
-
-    try:
-        if not _empty_gripper_ok(status, HOLD_CURRENT_LIMIT_MA, now=time.time()):
-            return _refuse(status, "START_POSE_OFF_HOME: unconfirmed empty gripper",
-                           result="fault" if status.get("fault") else "refused")
-        home_frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
-        home = _pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None
-        if home is None:
-            return _refuse({}, "START_POSE_OFF_HOME: library missing home")
-        if (off_home := _max_diff([float(v) for v in status["state"]], home, 5)) > PRE_SETTLE_TOL:
-            return _refuse(status, "START_POSE_OFF_HOME: arm off home; run home stage first", off_home=round(off_home, 3))
-        s2, p2 = _stationary_idle(cell, status, home, check_home_target=True, max_off_home=PRE_SETTLE_TOL, sleep=sleep)
-        if not isinstance(s2, dict) or not _empty_gripper_ok(s2, HOLD_CURRENT_LIMIT_MA, now=time.time()):
-            return _refuse(s2, "START_POSE_OFF_HOME: unconfirmed empty gripper",
-                           result="fault" if isinstance(s2, dict) and s2.get("fault") else "refused")
-        if p2 is None:
-            return _refuse(s2, "START_POSE_OFF_HOME",
-                           result="fault" if isinstance(s2, dict) and s2.get("fault") else "refused")
-        live_poses = [p2, *([s2["target"]] if s2.get("target") is not None else [])]
-        if jaw_spec is not None and (jaw_warn := jaw_zone_error(live_poses, kin, jaw_spec)):
-            return _refuse(s2, jaw_warn, jaw_warning=jaw_warn)
-        return s2, None
-    except BaseException as exc:
-        hold_row = _best_effort_hold(cell, log=log) if not hold_sent else None
-        if not isinstance(exc, Exception) or (not hold_sent and hold_row is None):
-            raise
-        for entry in ({**row, "refused": "START_POSE_OFF_HOME", "error": str(exc)[:200] or type(exc).__name__},
-                      *([hold_row] if hold_row else ())):
-            try:
-                log(entry)
-            except Exception:
-                pass
-        return None, {"result": "refused", "at": 0, "reason": "START_POSE_OFF_HOME", "parked": False}
-
-
 def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks: int, dry_run: bool, log, goal: dict,
                      sim_units: bool, open_g: float, model_closed: float, closed: float, low, high, fastest: float,
                      kin, jaw_spec, resolved_tcp, authorize, max_obs_age_s: float = 0.6,
                      pre_home: bool = False, n_action: int | None = None,
-                     home_roll: float | None = None) -> dict:
-    """Guarded step-rate-stretched chunk loop for full-chunk ACT checkpoints (e.g. arm_s)."""
+                     home_roll: float | None = None, handoff=None) -> dict:
+    """Guarded step-rate-stretched chunk loop for full-chunk ACT checkpoints (e.g. arm_s); with `handoff` (hybrid)
+    a settled chunk whose measured hold passes the timed path's Handoff check goes to the reviewed taught carry."""
     from cell_policy_shape import in_jaw_zone, jaw_zone_error, open_before_close, shape_chunk, wrist_roll_warning
 
     entry_frames = _validate_entry_chunk(library, kin, jaw_spec)
@@ -379,17 +330,25 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
             park_safe, hold_needed = True, False
             log({"command": "run policy", **_ack_status(ran), **_moved_snapshot(state, ran, frames.get("top"), cell, work, n)})
             held = held or bool(ran.get("holding"))
+            if handoff is not None and ran.get("holding") is True:  # carry only a hold the Handoff spec measured
+                park_safe, hold_needed = False, True
+                if (facts := handoff.settled_facts(cell, log)) is not None:
+                    return handoff.carry(cell, {"handoff": facts}, authorize, log)
+                park_safe, hold_needed = True, False
             if released := (held and frames_cell[-1][5] > closed + 10.0):
                 break
         if dry_run:
             return {"result": "dry_run", "chunks": max_chunks}
+        if handoff is not None and held and not released:  # an unverified grasp is neither carried nor parked
+            _hold_and_log({"chunk": max_chunks, "refused": (why := "ACT ended before a verified handoff")})
+            return {"result": "refused", "at": max_chunks, "reason": why, "held": True, "parked": False}
         parked_ok, park_reply = _safe_park_or_hold(prefix)
         return {"result": "released" if released else "chunks_done", "held": held, "parked": parked_ok,
                 **({"park": _park_receipt(park_reply)} if park_reply is not None else {})}
     except BaseException as exc:
         if not dry_run and (moved or hold_needed or not isinstance(exc, Exception)) and not safety_done:
             try:
-                if isinstance(exc, Exception) and park_safe and not hold_needed:
+                if isinstance(exc, Exception) and park_safe and not hold_needed and not (handoff is not None and held):
                     _safe_park_or_hold(loaded_prefix)
                 else:
                     safety_done = _best_effort_hold(cell, log=log) is not None
