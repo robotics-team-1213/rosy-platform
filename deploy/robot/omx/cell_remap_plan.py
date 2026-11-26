@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cell_pipeline_io as cio
 import cell_remap_depth as rd
+from cell_remap_order import fit_naming_stop, scene_ignore, visit_order  # noqa: F401 - cell_calibrate reads them here
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
 REMAP_CLEAR_MM = 35.0
@@ -154,10 +155,10 @@ def reach_note(config: dict) -> str:
 
 
 def plan(config: dict, points: list) -> list:
-    """One row per point, nearest first: the above_pick joints, and the error that would refuse it."""
+    """One row per point in visit order: the above_pick joints, and the error that would refuse it."""
     rows, cfg = [], scoped(config)
     limit = config.get("calibrate", {}).get("max_reach_m")
-    for x, y in sorted(points, key=lambda q: math.hypot(*q)):
+    for x, y in visit_order(points):
         target, row = view(config, x, y), {"point": [x, y]}
         try:
             library = cio.plan_library(cfg, target, target, check=False)
@@ -352,9 +353,7 @@ def replay_observations(frames_dir: Path, config: dict, *, log=print) -> dict:
     before, after = cv2.imread(str(before_path)), cv2.imread(str(after_path))
     if before is None or after is None:
         raise SystemExit(f"replay: unreadable before/after images in {frames}")
-    moved = cell_scene_guard.scene_moved(
-        before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())],
-    )
+    moved = cell_scene_guard.scene_moved(before, after, ignore=scene_ignore(config))
     if moved:
         raise SystemExit(f"replay: the scene changed during it, no map saved: {moved}; views in {frames}")
     marks = []

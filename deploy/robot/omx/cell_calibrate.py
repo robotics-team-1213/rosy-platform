@@ -140,14 +140,14 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
     motion = rp.scoped(config)
-    visits = []
+    visits, stop = [], None
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
     if not fold(cell).get("ok"):
         raise SystemExit("remap: initial park failed")
     before = cell.frame("top")
     cv2.imwrite(str(frames / "before.jpg"), before)
-    for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
+    for i, (x, y) in enumerate(rp.visit_order(points)):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
             lib = cp.write_library(motion, view, view, work / f"remap-{i}.json")
@@ -167,6 +167,7 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
             finally:
                 if not fold(cell).get("ok"):
                     raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
+            stop = f"remap stopped at {failed} for {[x, y]}: {status.get('error') or 'refused'}"
             break
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
@@ -196,11 +197,11 @@ def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=No
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
-    moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
+    moved = cell_scene_guard.scene_moved(before, after, ignore=rp.scene_ignore(config))
     rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
-        raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    record = rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
+        raise SystemExit(f"{stop + '; ' if stop else ''}remap: the scene changed during it, no map saved: {moved}; views in {frames}")
+    record = rp.fit_naming_stop(stop, config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
     return {**record, "planned_visits": visits}
 
 

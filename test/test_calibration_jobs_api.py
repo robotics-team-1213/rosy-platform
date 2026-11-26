@@ -209,6 +209,30 @@ def test_job_runs_engine_and_records_result(screen):
     assert jobs.lease().status().get("arm_b") is None  # released
 
 
+def test_a_failed_job_carries_the_engine_exit_message(cell, monkeypatch):
+    """2026-11-26: a failed remap showed only "실패"; its reason was the log's last, non-JSON line."""
+    jobs = jobs_mod.Jobs(cell)
+    finishers = []
+    monkeypatch.setattr(jobs_mod.threading.Thread, "start", lambda thread: finishers.append(thread))
+
+    def spawn(argv, cwd, env, log):
+        log.write_text('{"point": [0.11, 0.04], "stopped": "goto above_pick"}\n{"jaw_labels": null}\n'
+                       'remap stopped at goto above_pick for [0.11, 0.04]: contact; remap: only 0 marks agree of 0\n',
+                       encoding="utf-8")
+        proc = FakeProc.__new__(FakeProc)
+        proc.code = 1
+        return proc
+
+    jobs.spawn = spawn
+    status, job = jobs.start({"arm": "arm_b", "step": "check"}, "Kim", "acct-1")
+    assert status == 202
+    for thread in finishers:
+        thread.run()
+    one = jobs.job(job["id"])
+    assert one["status"] == "failed" and one["error"].startswith("remap stopped at goto above_pick")
+    assert one["result"] == {"jaw_labels": None}
+
+
 def test_late_same_account_finish_leaves_new_job_lease(cell, monkeypatch):
     jobs = jobs_mod.Jobs(cell)
     lease = jobs.lease()

@@ -36,8 +36,8 @@ function showJob(id) {
       displayJobs(jobs);
       fields();
       const label = {running: "실행 중", done: "종료", failed: "실패", interrupted: "중단 · 완료 여부 미확인"}[job.status] || job.status;
-      $("jobProgress").textContent = `${owner} · ${id} · ${label}`;
-      $("jobOutput").textContent = [job.result && JSON.stringify(job.result, null, 2), job.log_tail].filter(Boolean).join("\n");
+      $("jobProgress").textContent = [owner, id, label, job.error].filter(Boolean).join(" · ");
+      $("jobOutput").textContent = [job.error, job.result && JSON.stringify(job.result, null, 2), job.log_tail].filter(Boolean).join("\n");
       if (job.status !== "running") return;
     } catch (err) {
       if (selected !== id || arm !== owner) return;

@@ -12,6 +12,13 @@ from fleet.localization.relative_search_prior import MAX_FRAME_AGE_S, pose3
 
 # D-587 bounds sticker location, height/parallax and the calibrated floor fit at this site.
 MARKER_ERROR_M = 0.10
+#: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle,
+#: seen at least STATIC_MIN_FRAMES times with no gap above STATIC_MAX_GAP_S.
+STATIC_HOLD_S = 2.0
+STATIC_MAX_GAP_S = 0.6
+STATIC_MIN_FRAMES = 5
+#: A disconnected peer unseen this long by every covering camera that still reports other markers is off the track.
+ABSENT_S = 5.0
 _LOG = logging.getLogger("fleet.console")
 
 
@@ -22,6 +29,10 @@ class OfflineMarkerClearance:
         self.wall, self.clock = wall, clock
         self.offline = {}
         self.frames = {}
+        self.still = {}
+        self.source_seen = {}
+        self.source_live_since = {}
+        self.robot_seen = {}
         self.last_decision = {}
 
     def link(self, row):
@@ -39,7 +50,24 @@ class OfflineMarkerClearance:
         key = rid, source_id
         if active is None or row.get("map_id") != active[1].map_id:
             self.frames.pop(key, None)
+            self.still.pop(key, None)
             return
+        point, run, stamp = pose3(row), self.still.get(key), row["captured_at"]
+        previous = self.source_seen.get(source_id)
+        if previous is None or not 0 <= stamp - previous <= self.config.sighting_lease_s:
+            if previous is None or stamp > previous:
+                self.source_live_since[source_id] = stamp       # camera stream (re)started: absence counts from here
+        self.source_seen[source_id] = max(stamp, previous if previous is not None else stamp)
+        self.robot_seen[key] = max(stamp, self.robot_seen.get(key, stamp))
+        basis = (active[0], row.get("calibration_revision"), row.get("calibration_source"),
+                 row.get("processor_revision"))
+        if point is None:
+            self.still.pop(key, None)
+        elif (run is None or run["basis"] != basis or not math.dist(run["xy"], point[:2]) <= STILL_PATH_M
+                or not 0 < stamp - run["last"] <= STATIC_MAX_GAP_S):
+            self.still[key] = {"basis": basis, "xy": point[:2], "since": stamp, "last": stamp, "count": 1}
+        else:
+            run["last"], run["count"] = stamp, run["count"] + 1
         prior = self.frames.get(key, ())
         recent = [item for item in prior if item[0] == active[0]
                   and 0 < row["captured_at"] - item[1]["captured_at"] <= self.config.sighting_lease_s]
@@ -55,6 +83,21 @@ class OfflineMarkerClearance:
         if previous is None or previous["reason"] != reason:
             _LOG.info("offline peer clearance robot=%s reason=%s %s", rid, reason, facts)
         return value
+
+    def _absent_s(self, rid, map_id, now):
+        """Seconds the marker has been missing from every live covering camera, or None when not proven."""
+        lease, covering = self.config.sighting_lease_s, []
+        for source in self.sightings.sources:
+            if source.map_id != map_id or rid not in source.robot_ids or type(dict(source.robot_markers).get(rid)) is not int:
+                continue
+            seen = self.source_seen.get(source.source_id)
+            if seen is None or not 0 <= now - seen <= lease:
+                return None
+            last = max(self.robot_seen.get((rid, source.source_id), -math.inf), self.source_live_since[source.source_id])
+            covering.append(now - last)
+        if not covering or min(covering) < ABSENT_S:
+            return None
+        return min(covering)
 
     def clear(self, console, rid, site_route, keep_out, independent):
         last_loss = self.offline.get(rid)
@@ -85,7 +128,14 @@ class OfflineMarkerClearance:
             age = now - row["captured_at"]
             revision = row.get("calibration_revision")
             point = pose3(row)
-            if (not 0 <= age <= min(MAX_FRAME_AGE_S, self.config.sighting_lease_s) or point is None
+            run = self.still.get((rid, source.source_id)) or {}
+            still_s = (row["captured_at"] - run["since"]
+                       if run.get("last") == row["captured_at"] and run["count"] >= STATIC_MIN_FRAMES else 0.0)
+            parked = still_s >= STATIC_HOLD_S
+            # Camera latency (~0.25 s) plus frame period (~0.35 s) exceeds MAX_FRAME_AGE_S; a parked
+            # marker adds no travel with age, so it stays usable for the whole sighting lease.
+            max_age = self.config.sighting_lease_s if parked else min(MAX_FRAME_AGE_S, self.config.sighting_lease_s)
+            if (not 0 <= age <= max_age or point is None
                     or not revision or row.get("calibration_source") != "approved_record"
                     or row.get("quality") is not None and row["quality"] < self.config.min_quality
                     or self.sightings.approved_sighting_revision(source.source_id, site_route[0]) != revision):
@@ -105,11 +155,19 @@ class OfflineMarkerClearance:
                         or prior.get("processor_revision") != row.get("processor_revision")
                         or row["seq"] == prior["seq"] or math.dist(previous[:2], point[:2]) > STILL_PATH_M):
                     return self._decision(rid, "peer_marker_moved_or_changed", False)
-            margin = MARKER_ERROR_M + self.config.max_speed_mps * age
+            # Fleet cannot command a disconnected peer, so a marker held still is a parked obstacle and
+            # frame age adds no travel; a moving marker keeps the speed allowance and the moved check above.
+            margin = MARKER_ERROR_M + (0.0 if parked else self.config.max_speed_mps * age)
             samples.append((point[:2], margin, {"source_id": source.source_id, "enrolled_marker_id": marker_id,
                                                  "calibration_revision": revision, "seq": row["seq"],
-                                                 "captured_at": row["captured_at"], "age_s": age}))
+                                                 "captured_at": row["captured_at"], "age_s": age,
+                                                 "still_s": still_s}))
         if not samples:
+            absent_s = self._absent_s(rid, site_route[0], now)
+            if absent_s is not None and independent is None:
+                # A powered-off robot taken off the floor must not stall the site: every covering camera is
+                # live (it reports other markers) and none has seen this marker for ABSENT_S.
+                return self._decision(rid, "peer_absent_from_track", True, absent_s=absent_s)
             return self._decision(rid, "approved_marker_unavailable", False if independent is None else None)
         if independent is not None:
             if independent[0] != site_route[0]:
