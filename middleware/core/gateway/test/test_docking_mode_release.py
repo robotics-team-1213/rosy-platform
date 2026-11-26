@@ -239,3 +239,19 @@ def test_the_bridge_staging_drive_tells_navigation_before_sending():
               if isinstance(node, ast.FunctionDef) and node.name == "navigate_to")
     calls = [ast.unparse(node.func) for node in ast.walk(fn) if isinstance(node, ast.Call)]
     assert calls.index("self._svc.nav.external_goal_sent") < calls.index("self._send_goal")
+
+
+def test_scoped_cancel_preserves_a_different_or_newer_dock_run(core_client):
+    from uuid import uuid4
+    client, services = docking_robot(core_client)
+    owner = services.docking.native.owner()
+    body = {"run_id":owner["owner_run_id"], "expected_boot_id":owner["boot_id"],
+            "expected_owner_generation":owner["owner_generation"]}
+    path = "/api/v1/docking/cancel-operation"
+    for changed in ({"run_id":str(uuid4())}, {"expected_boot_id":str(uuid4())},
+                    {"expected_owner_generation":owner["owner_generation"]+1}):
+        assert client.post(path, json=body | changed, headers={"Authorization": "Bearer rosy-dev-admin"}).status_code == 409
+        assert services.docking.state is DockState.DOCKING
+    result = client.post(path, json=body, headers={"Authorization": "Bearer rosy-dev-admin"})
+    assert result.status_code == 200 and result.json()["operation"]["result"] == "CANCELED"
+    assert services.docking.state is DockState.UNDOCKED

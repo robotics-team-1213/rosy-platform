@@ -29,6 +29,7 @@ from typing import Callable, Optional
 
 from fleet.server.named_stop_motion import (NamedStopMotion, _is_unreachable, current_repark_alignment,
                                              verify_release_proof)
+from fleet.server.peer_motion_wire import PeerMotionWire
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
@@ -53,7 +54,7 @@ class NavigationStopped(RuntimeError):
     """A changed stop token invalidated this navigation continuation."""
 
 
-class GoalLeases(dict):
+class GoalLeases(PeerMotionWire, dict):
     def __init__(self, ttl_s: float, clients: dict, clock: Callable[[], float] = time.monotonic,
                  yielding: Callable[[str], bool] = lambda _robot_id: False) -> None:
         super().__init__()
@@ -84,7 +85,7 @@ class GoalLeases(dict):
         self._uncertain_motion: set[str] = set()
 
     @contextmanager
-    def motion_wire(self, robot_id, method, path, body):
+    def _check_motion_wire(self, robot_id, method, path, body):
         if method.upper() == "POST" and path in PREPARED_GOALS:
             permit = _prepared_wire.get()
             if permit is None or permit[0] is not self or permit[1:] != (robot_id, (body or {}).get("plan_id")):

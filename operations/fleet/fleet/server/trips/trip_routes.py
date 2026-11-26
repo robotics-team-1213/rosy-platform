@@ -170,6 +170,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
+        from fleet.server.trips.rear_bay_return import rear_bay
+        try:
+            parking = rear_bay(active[2], body.to) if not body.repeat else None
+        except TripError as exc:
+            record({"error": exc.code, "detail": exc.detail})
+            raise _refuse(exc.code, exc.detail, exc.status) from exc
+        if parking and (body.via or body.blocked_edges or body.extra_cost or body.speed_cap is not None
+                        or body.arrive_yaw is not None or body.convoy):
+            record({"error": "CHARGE_RETURN_CUSTOM_ROUTE_UNSUPPORTED"})
+            raise _refuse("CHARGE_RETURN_CUSTOM_ROUTE_UNSUPPORTED")
         known_edges = {arc.edge_id for arc in active[2].arcs.values()}
         for edge in (*body.blocked_edges, *body.extra_cost):
             if edge not in known_edges:
@@ -183,14 +193,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # The trip loop's own map pose first (D-494 3, D-593 1): a motor-mode robot reports no
         # localization, so its Rosy Cam MapPose is its only map pose. A robot-reported LOCALIZED
         # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
-        nav2 = body.drive_mode == "nav2"
+        nav2 = body.drive_mode == "nav2" or parking is not None
+        if parking:
+            summary.update(drive_mode="nav2", approved_slam_required=True)
         precision = commissioned_stop(active[2], body.to)
         if nav2 and precision is not None:
             record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
             raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
         binding_id = None
         bound_nav2 = nav2 and isinstance(body.to, str) and (body.approved_slam_required
-                                                            or runner.config.map_binding_required)
+                                                            or runner.config.map_binding_required or parking is not None)
         if precision is not None or bound_nav2:
             bound = await read_precision_pose(runner, robot_id, active[0])
             if bound is None:
@@ -228,6 +240,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 record({"error": "TRIP_START_PLACE_MISMATCH", "detail": detail})
                 raise _refuse("TRIP_START_PLACE_MISMATCH", detail)
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
+        if parking:
+            goal = parking["staging_place_id"]
+
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
@@ -261,6 +276,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         plan_data = plan_body(plan)
+        if parking:
+            plan_data["parking_handoff"] = parking
         if bound_nav2:
             plan_data["nav2_binding_id"] = binding_id
         elif binding_id is not None:
@@ -320,6 +337,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                                           "binding_status": "MATCHED" if fit is not None else binding_status}
         return response
 
+    from fleet.server.trips.rear_bay_return import RearBayPort
+    runner.rear_bay_port = RearBayPort(console, (*runner.halts.restarted, *runner.halts.gave_up))
+    runner.halts.dock_stop = runner.rear_bay_port.halt
     app.state.trip_plan = plan
 
     def trip_error(exc: TripError) -> HTTPException:

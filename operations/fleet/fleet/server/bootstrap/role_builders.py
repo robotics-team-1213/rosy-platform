@@ -399,6 +399,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event, cable_inhibited=cable_inhibited)
 
+    trip_runner.bay_cable_inhibited = cable_inhibited
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
     from fleet.server.auto_repark import AutoNamedCorrection
     trip_runner.auto_named_correction = AutoNamedCorrection(console, trip_runner, cable_inhibited)

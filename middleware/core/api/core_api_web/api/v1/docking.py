@@ -98,6 +98,7 @@ def docking_status(_: AuthContext = Depends(viewer),
     """상태 조회는 capability 로 막지 않는다 — 막으면 대시보드가 "도킹 없음"
     조차 표시할 수 없다."""
     body = svc.docking.status().model_dump()
+    body["operation_cancel_supported"] = True
     body["supported"] = svc.capability.supports("docking.supported")
     body.update(svc.docking.native_readback(run_id))
     return body
@@ -201,6 +202,24 @@ def docking_undock(auth: AuthContext = Depends(operator),
         raise _dock_error(exc)
     return {**svc.docking.status().model_dump(),
             "operation": receipt[0].model_dump(mode="json")}
+
+
+class DockOperationCancel(BaseModel):
+    run_id: UUID
+    expected_boot_id: UUID
+    expected_owner_generation: int = Field(ge=0, strict=True)
+
+
+@docking_router.post("/cancel-operation")
+def cancel_dock_operation(body: DockOperationCancel, _: AuthContext = Depends(operator),
+                          svc: CoreServicesLike = Depends(get_services)):
+    TaskKind.DOCK.require(svc.capability)
+    try:
+        svc.docking.cancel_operation(run_id=body.run_id, boot_id=body.expected_boot_id,
+                                     owner_generation=body.expected_owner_generation)
+    except DockError as exc:
+        raise _dock_error(exc)
+    return svc.docking.native_readback(body.run_id)
 
 
 @docking_router.post("/cancel")

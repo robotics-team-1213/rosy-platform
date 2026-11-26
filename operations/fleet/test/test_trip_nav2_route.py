@@ -283,13 +283,23 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal"])
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal", "parking"])
 def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
 
     store = SiteMapStore(tmp_path / "site.sqlite")
-    store.import_if_empty(_south_loop_map(), source="test")
+    model = _south_loop_map()
+    if case == "parking":
+        import json
+        layout = json.loads(model.model_dump_json(by_alias=True).replace('"S5"', '"P2"'))
+        next(p for p in layout["places"] if p["id"] == "P2").update(kind="junction", yaw=None)
+        layout["places"].append({"id": "C2", "name": "C2", "x": .91, "y": -.68, "kind": "charge",
+                                 "yaw": math.pi/2})
+        layout["edges"].append({"id":"bay2", "from":"P2", "to":"C2", "direction":"two_way",
+                                "drive_mode":"lane", "width_m":.2, "speed_cap_mps":.1, "polyline":[[.91,-.48],[.91,-.68]]})
+        model = SiteMap.model_validate(layout)
+    store.import_if_empty(model, source="test")
     robot = RouteFakeRobot("rosy_42")
     robot.power_health_value = fresh_power_health()
     robot.bound_route_supported = case != "older_core"
@@ -326,9 +336,9 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     runner.map_pose = wrong_camera_pose
     headers = {"Authorization": "Bearer op-tok"}
     body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
-    if case == "terminal":
+    if case in ("terminal", "parking"):
         body.pop("start_at")
-        body.update(to="S5", via=[])
+        body.update(to="C2" if case == "parking" else "S5", via=[])
     with TestClient(app) as client:
         tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
         assert not runner.human_hold_fn()
@@ -368,7 +378,10 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
         assert not read_legacy_pose
 
-        if case == "terminal":
+        if case in ("terminal", "parking"):
+            if case == "parking":
+                assert plan.json()["parking_handoff"]["bay_id"] == "C2"
+                assert plan.json()["places"][-1] == "P2"
             op = live.view["detail"]["named_stop_operation"]
             assert op["correlation_id"] == robot.routes[-1][1]
             native_x, native_y = fit.inverse((.88, -.48))
@@ -389,6 +402,16 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
             read_core()
             client.portal.call(runner.tick)
             done = runner.view(plan_id)
+            if case == "parking":
+                assert done["state"] == "running" and done["detail"]["parking_handoff"]["phase"] == "staging_confirmed"
+                async def empty_docks(_path):
+                    return {"docks": []}
+                robot._get = empty_docks
+                client.portal.call(runner.tick)
+                parked = runner.view(plan_id)
+                assert parked["state"] == "running"
+                assert parked["detail"]["parking_handoff"]["phase"] == "waiting_for_commission"
+                return
             assert done["state"] == "arrived" and done["detail"]["named_stop_completion"]["operation"] == terminal
             return
 

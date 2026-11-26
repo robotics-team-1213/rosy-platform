@@ -361,6 +361,21 @@ class DockingManager(DockingPhasesMixin):
             finally:
                 self._release_mode_when_done()
 
+    def cancel_operation(self, *, run_id, boot_id, owner_generation):
+        """Only cancel the native docking operation observed by the caller."""
+        with self._lock:
+            try:
+                self.native.expect(boot_id, owner_generation)
+            except ValueError as exc:
+                raise DockError("OWNER_GENERATION_CHANGED", str(exc)) from exc
+            current = self.native.current
+            if current is None or current.run_id != run_id or current.kind != "dock":
+                raise DockError("OWNER_GENERATION_CHANGED", "dock run changed")
+            try:
+                self._cancel_locked()
+            finally:
+                self._release_mode_when_done()
+
     def _cancel_locked(self, *, receipt_sink=None) -> None:
         if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
             return

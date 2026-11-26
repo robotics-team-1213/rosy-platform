@@ -59,6 +59,18 @@ class TripSteps:
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
         arrival_confirmed = False
+        parking = live.view["detail"].get("parking_handoff")
+        if parking and parking["phase"] != "approaching":
+            try:
+                await self._call(self.rear_bay_port.step(self, live))
+            except (TripError, RobotApiError, HubError, OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+                if parking["phase"] == "waiting_for_clearance" and live.open:
+                    self._save(live)
+                    return
+                await self._stop(live, "stopped", _code(exc))
+                return
+            self._save(live)
+            return
         if self._precision_terminal_mismatch(live):
             return await self._stop(live, "failed", "TRIP_GOAL_REFUSED",
                                     {"goal_reason": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
@@ -248,6 +260,10 @@ class TripSteps:
                     self._save(live)
                 return  # waiting for a fresh sighting, or ended STATION_ALIGN_*
             live.view["detail"].pop("named_stop_handoff_pending", None)
+            if parking:
+                parking["phase"] = "staging_confirmed"
+                self._save(live)
+                return
             live.view["state"] = "arrived"
             if lane and not camera and (live.sent or {}).get("action") == STOP:
                 self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
