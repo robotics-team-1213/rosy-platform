@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1077 | 입회 요구를 실행 직전 측정하는 정지 능력 증명으로 바꾼다 (D-911·D-1024·D-793 보충). [전문](../adr/D-1077-stop-capability-proof-replaces-presence.md) | Accepted (2026-11-27, 사용자 지시 "입회 요구는 최대한 걷어내고 기록은 유지, 병목 자체를 없애라"; 패널 판정 A·E, `presence-removal-panel-1127/verdict.md`). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1076 | 셀 자리 이름은 `rosy.cell-site-map.v1` 하나로 고정하고, 컨테이너 인식은 Rosy가 `top` 카메라로 처리해 자리별 결과로 Harbor에 넘긴다. [전문](../adr/D-1076-cell-site-names-fixed-and-rosy-container-recognition-to-harbor.md) | Proposed (2026-11-23, 사용자 결정 「rosy가 처리해서 넘기는 걸로」 · 「자리 이름도 다 정해졌잖아 저걸로 픽스」). 승인: 관제·Fleet 장원종, 비전 윤영민, OMX 김승용·서정민, Harbor 담당. 구현·실물 수용은 별도다. |
 | D-1075 | ROSY World 오프라인 시연과 Isaac 상태 관측. [전문](../adr/D-1075-rosy-world-offline-demo-and-isaac-observation.md) | Accepted (2026-11-23, 사용자 결정). RTX 4080·RAM 32GB 현장 수용과 Isaac Live 채택은 별도로 판정한다. |
 | D-1072 | OMX AI 실패 폴백 제어·풍부한 컨텍스트 번들 및 에이전트 Tool·HTTP 파이프라인. [전문](../adr/D-1072-omx-ai-failure-fallback-context-and-agent-tool-pipeline.md) | Proposed (2026-11-23, 4인 병렬 패널 합의; 코드 구현·D-430 독립 안전 리뷰·현장 수용은 [구현 계획](../plans/2026-11-23-omx-ai-failure-fallback-and-agent-pipeline.md) TODO 슬라이스별 진행). |
