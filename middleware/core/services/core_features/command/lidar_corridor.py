@@ -58,7 +58,11 @@ def assess_straight_corridor(sample, config, tray, robot_id, direction, distance
     near = min(edge, math.sqrt(radius*radius-width*width)) - sign*mount
     half = max(width, tray[2]) + SWEEP_PAD_M
     far = max(edge, tray[0] if sign > 0 else tray[1]) - sign*mount + distance_m + SWEEP_PAD_M
-    if near <= 0 or low > near:
+    # A short minimum range is also fully covered when its entire disk is
+    # inside the known chassis rectangle and rotation circle. At the rounded
+    # rear corners the axial projection alone underestimates that distance.
+    inscribed = min(front - mount, mount - rear, width, radius - abs(mount))
+    if near <= 0 or low > max(near, inscribed):
         return result("blind_range")
     sector = math.atan2(half, near) + abs(step)
     reach = math.hypot(far, half)

@@ -75,3 +75,14 @@ def test_unknown_body_mask_stamps_and_negative_distance(corridor):
     assert assess()["reason"] == "body_unknown"
     robot.body_stop_known = False
     assert assess()["reason"] == "body_unknown"
+
+
+def test_near_blind_disk_entirely_inside_pinky_chassis(corridor):
+    scan, robot, assess = corridor
+    robot.body_lidar_x_m = -.017  # Pinky URDF, centreline mounting
+    scan["range_min"] = .05
+    assert assess("reverse")["status"] == "observed_clear"
+    scan["ranges"][360] = None
+    assert assess("reverse")["reason"] == "unobserved_sector"
+    scan["range_min"] = .061
+    assert assess("reverse")["reason"] == "blind_range"
