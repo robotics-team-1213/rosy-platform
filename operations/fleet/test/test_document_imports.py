@@ -92,6 +92,7 @@ OWN = {
         "calm-power.js",
         "cell-cockpit-stage.js",
         "cell-context-panel.js",
+        "cell-job-panel.js",  # ARM-CELL run/recover of arms A/B through the Fleet cell job proxy
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "robot-video.js",  # D-801: the robot card's front camera reuses the console video tiles

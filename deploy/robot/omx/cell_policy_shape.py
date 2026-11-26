@@ -114,6 +114,7 @@ def finite_float(raw) -> float | None:
 
 
 from cell_policy_entry import trained_grasp_mismatch, wrist_roll_warning  # noqa: E402,F401
+from cell_policy_pre_home import trim_backtrack_prefix  # noqa: E402,F401
 
 
 def _params_rim_z(params) -> float | None:
@@ -374,7 +375,7 @@ def jaw_zone_error(frames, kin, spec: dict | None, *, force_all: bool = False) -
     return None
 
 
-def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
+def shape_chunk(chunk, start, low, high, fastest: float, *, trim_backtrack: bool = False) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`."""
     arr = np.asarray(chunk, dtype=float)
     if arr.ndim != 2 or arr.shape[1] != JOINTS or not np.isfinite(arr).all():
@@ -384,6 +385,8 @@ def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     if len(outside):
         i, j = outside[0]
         raise ValueError(f"frame {i} {lrs.JOINT_NAMES[j]}={arr[i, j]:.1f} outside reviewed {lo[j]:.1f}..{hi[j]:.1f}")
+    if trim_backtrack:
+        arr = trim_backtrack_prefix(arr, start, tol=MARGIN, joints=JOINTS)
     path = np.vstack([np.asarray(start, dtype=float)[None, :], arr])
     out = []
     for a, b in zip(path[:-1], path[1:]):

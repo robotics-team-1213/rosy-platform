@@ -26,7 +26,7 @@ from cell_job_guards import (  # noqa: E402
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
-from cell_job_depart import depart_once, with_depart  # noqa: E402
+from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
 from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 import cell_incident_release  # noqa: E402
@@ -159,7 +159,7 @@ class Runner:
         eff_params, auth_err = authorize_principal(name, job, params, principal, moves_arm_fn=moves_arm)
         if auth_err is not None: return auth_err
         try:
-            argv = build_argv(job, eff_params, self.workdir)
+            eff_params = fill_depart_dest(name, eff_params, self.workdir); argv = build_argv(job, eff_params, self.workdir)
         except (ValueError, OSError, RuntimeError) as exc:  # RuntimeError: Path.resolve() on a symlink loop (3.12)
             return {"code": 400, "error": str(exc)}
         arms = job_arms(job, eff_params)

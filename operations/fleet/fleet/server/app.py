@@ -315,6 +315,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.trip_requester_guards = (require_operator, require_named_operator)
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)
+    from fleet.server.cell_job_proxy_routes import install_cell_job_proxy_routes
+    install_cell_job_proxy_routes(app, require_viewer=require_viewer, require_named_operator=require_named_operator)
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
         if (lan_camera_proxy and request.headers.get("X-Rosy-Lan-Camera") == "1"

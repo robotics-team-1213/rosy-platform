@@ -284,8 +284,20 @@ def session_name() -> str:
     return os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
 
 
-def build_body(summary: str, self_review: str) -> str:
+def safety_lines(cwd: Path, base: str) -> list[str]:
+    """The `Safety-Review:` lines of the branch's own commits. The queue's merge commit is checked too (a file
+    that main and the branch both changed shows in it), and its message comes from the PR body (#991 failed there)."""
+    seen: list[str] = []
+    for line in _run(["git", "log", "--no-merges", "--format=%B", f"{base}..HEAD"], cwd).splitlines():
+        if re.match(r"Safety-Review:[ \t]*\S", line) and line.strip() not in seen:
+            seen.append(line.strip())
+    return seen
+
+
+def build_body(summary: str, self_review: str, safety: list[str] = ()) -> str:
     lines = [summary.strip() or "PR landing via Merge Queue (D-1052)."]
+    if safety:
+        lines += ["", *safety]
     if self_review.strip():
         lines += ["", f"Overlap-Review: self ({self_review.strip()})"]
     lines += ["", f"Session: {session_name()}"]
@@ -332,7 +344,10 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
     if os.environ.get("ROSY_STEP_BACK") != "off" and not _run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main"], cwd, check=False):
         raise SystemExit("[pr-land] refs/remotes/origin/main is missing; run 'git fetch origin main' (the size check needs its merge base)")
-    preflight(cwd, base, build_body(args.body, args.self_review))
+    safety = safety_lines(cwd, base)
+    if safety:
+        print(f"[pr-land] safety-tagged branch: {len(safety)} Safety-Review line(s) go into the PR body for the queue's merge commit")
+    preflight(cwd, base, build_body(args.body, args.self_review, safety))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
         import pr_evidence  # lazy: pr_evidence imports pr_land
@@ -342,7 +357,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     verify_lab_evidence(cwd, head, lab_needed)
 
     title = args.title or _run(["git", "log", "-1", "--format=%s", "HEAD"], cwd)
-    body = build_body(args.body, args.self_review)
+    body = build_body(args.body, args.self_review, safety)
     if args.dry_run:
         if refused:
             print(f"{refused} (a real run would stop here)")
@@ -362,7 +377,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:
         pr = str(existing[0]["number"])
-        if args.self_review or args.body:  # the Size-Exception / Replaces lines checked above must reach the PR
+        if args.self_review or args.body or safety:  # the Size-Exception / Replaces lines checked above must reach the PR
             _run(["gh", "pr", "edit", pr, "--body", body], cwd)
     else:
         url = _run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body], cwd)

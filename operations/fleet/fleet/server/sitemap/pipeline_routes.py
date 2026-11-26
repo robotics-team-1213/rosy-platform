@@ -19,7 +19,7 @@ from .pipeline_task_input import finite_json_value
 
 
 def _storage_dir() -> Path:
-    var_lib = Path("/var/lib/rosy")
+    var_lib = Path(os.environ.get("ROSY_VAR_LIB") or "/var/lib/rosy")  # a dev sim names its own: /tmp reads as a ledger fault
     if var_lib.is_dir() and os.access(var_lib, os.W_OK):
         d = var_lib / "pipeline"
         d.mkdir(parents=True, exist_ok=True)
@@ -546,7 +546,7 @@ def install_pipeline_routes(
                 return ("DISPATCH_REARM_REQUIRED", {k: ctrl.get(k) for k in keys}) if known else ("HUMAN_HOLD", {})
         return None
 
-
+    app.state.pipeline_hold_state_fn = _hold_state
     app.state.pipeline_human_hold_fn = _human_hold_active = lambda: _hold_state() is not None  # noqa: E731
     if (tr := getattr(app.state, "trip_runner", None)) is not None:
         tr.human_hold_fn = _human_hold_active
