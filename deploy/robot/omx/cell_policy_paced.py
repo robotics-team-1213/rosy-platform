@@ -301,10 +301,15 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                         if pre_home or entry_ran:
                             home_frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
                             start_ref = entry_pose if entry_ran else (_pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None)
-                            auth_chk = _check_idle_sample(auth_status, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL) if start_ref is not None else None
-                            auth_pose = auth_chk[0] if auth_chk is not None else None
-                            if (start_ref is None or auth_pose is None or _max_diff(auth_pose, start_ref, 5) > PRE_SETTLE_TOL
-                                    or not _live_idle_ok(cell, auth_pose, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL)):
+                            for _ in range(20):  # up to ~2 s: the jaws were still opening 0.3 units when entry reported settled (2026-11-26)
+                                auth_pose = (auth_chk := _check_idle_sample(auth_status, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL) if start_ref is not None else None) and auth_chk[0]
+                                settled = not (start_ref is None or not auth_pose or _max_diff(auth_pose, start_ref, 5) > PRE_SETTLE_TOL)
+                                if not settled or (auth_status.get("jitter") or {}).get("shaking"): break  # noqa: E701  off pose or shaking: refuse now
+                                if (settled := _live_idle_ok(cell, auth_pose, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL)) or not entry_ran: break  # noqa: E701
+                                time.sleep(0.1)
+                                auth_status, auth_poses, auth_fail = _checked_state(row, n, catch_io=True, hold_on_fail=True)
+                                if auth_fail is not None: return auth_fail  # noqa: E701
+                            if not settled or (auth_status.get("jitter") or {}).get("shaking"):
                                 reason = "START_POSE_OFF_HOME: arm not stationary at home before dispatch"
                                 aborted = True
                                 _hold_and_log({**row, "refused": reason, **_ack_status(auth_status)})
