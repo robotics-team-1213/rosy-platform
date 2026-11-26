@@ -44,6 +44,7 @@ from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
+from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
 AB_ARMS = {"arm_a", "arm_b"}
@@ -250,6 +251,7 @@ JOBS = {
     },
     **MEDIA_JOBS, **AREA_JOBS, **SITE_JOBS,
 }
+JOBS["cell_policy_run"] = policy_run_job(JOBS["cell_policy_drive"])
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
     if job.get("arms"):
@@ -300,7 +302,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
             raise ValueError("non-loopback endpoint_url requires token_file")
         validate_dual_routes(checked["task_a"], checked["task_b"], moving=moves_arm(job, params))
-    if job["script"] == "cell_policy_drive.py":
+    if job["script"] in POLICY_SCRIPTS:
         mode = opt_checked.get("mode", "act")
         if opt_checked.get("paced_chunks") and mode not in ("act", "hybrid"):
             raise ValueError("paced_chunks requires mode='act' or 'hybrid'")
@@ -370,7 +372,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
     if job["script"] == "cell_media_jobs.py":
         args = ["--workdir", str(workdir), *args]
-    if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
+    if job["script"] in POLICY_SCRIPTS and "endpoint_url" in opt_checked:
         args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):
         arm_list = list(job_arms(job, params))
