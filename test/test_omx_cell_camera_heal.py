@@ -69,6 +69,71 @@ def test_seeded_dry_run_is_not_aged_by_an_idle_encoder_sample():
         timing.action_window(unseeded.frames, unseeded.observed, time.monotonic(), 30, 4, 0.5)
 
 
+class HubIo:
+    def __init__(self, sessions=(), locked=(), frames=(500,)):
+        self.sessions_, self.locked, self.frames, self.restarted = list(sessions), set(locked), list(frames), []
+
+    def device(self, role):
+        return f"/dev/v4l/by-id/rosy-{role}"
+
+    def sessions(self):
+        return self.sessions_
+
+    def lock_free(self, arm):
+        return arm not in self.locked
+
+    def unit_restart(self, role):
+        self.restarted.append(role)
+
+    def labels(self):
+        return {"arm_b_wrist": "/arm_b_wrist_camera/image_raw"}
+
+    def roles(self):
+        return {"/arm_b_wrist_camera/image_raw": "arm_b_wrist"}
+
+    def fetch(self, _url):
+        code = self.frames.pop(0) if len(self.frames) > 1 else self.frames[0]
+        return code, (b"\xff\xd8" if code == 200 else b"")
+
+
+def test_hub_cycle_only_when_no_arm_session_and_reports_failures():
+    cycled = []
+    find = lambda _dev: (Path("/sys/3-1.4"), 2, Path("/sys/3-1.4.2"))
+    cycle = lambda up, port: cycled.append((up.name, port))
+    busy = HubIo(sessions=["python record_session.py --arm arm_a"])
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", busy, find=find, cycle=cycle, sleep=lambda _s: None) and not cycled
+    locked = HubIo(locked={"arm_s"})
+    assert "skipped" in heal.hub_cycle("arm_b_wrist", locked, find=find, cycle=cycle, sleep=lambda _s: None) and not cycled
+    idle = HubIo()
+    note = heal.hub_cycle("arm_b_wrist", idle, find=find, cycle=cycle, sleep=lambda _s: None)
+    assert cycled == [("3-1.4", 2)] and idle.restarted == ["arm_b_wrist"] and "power-cycled hub 3-1.4.2" in note
+
+    def broken(_dev):
+        raise OSError("no external hub port above the camera to cycle")
+    assert "failed" in heal.hub_cycle("arm_b_wrist", HubIo(), find=broken, cycle=cycle, sleep=lambda _s: None)
+
+
+def test_heal_escalates_to_hub_cycle_after_failed_leaf_recovery(tmp_path, monkeypatch):
+    import cell_upkeep_checks as checks
+
+    cfg = tmp_path / "cell-b.json"
+    cfg.write_text(json.dumps({"cameras": {"wrist": {"url": "http://127.0.0.1:8767/frame/arm_b_wrist.jpg"}}}))
+    passes = []
+
+    def fake_check(arm, cams, io, fix, bus_free):
+        passes.append(fix)
+        status = "fail" if fix else "ok"
+        return [{"check": "cameras", "status": status, "detail": "wrist"}], None
+
+    monkeypatch.setattr(checks, "check_cameras", fake_check)
+    monkeypatch.setattr(heal, "hub_cycle", lambda role, io: f"cycled {role}")
+    rows = heal.heal([("arm_b", cfg)], io=HubIo(frames=[500]))
+    assert passes == [True, False] and rows[0]["status"] == "ok" and rows[0]["escalation"] == ["cycled arm_b_wrist"]
+    passes.clear()
+    rows = heal.heal([("arm_b", cfg)], io=HubIo(locked={"arm_b"}, frames=[500]))
+    assert passes == [True] and rows[0]["status"] == "fail" and "escalation" not in rows[0]
+
+
 def test_client_retries_only_the_session_lock_409():
     from cell_job_client import CellJobError, start_when_lock_free
 
