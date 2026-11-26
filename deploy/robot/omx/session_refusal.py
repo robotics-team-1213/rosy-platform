@@ -72,6 +72,35 @@ def lock_holder(arm: str, lock_dir=None) -> dict | None:
     return None
 
 
+HOLD_KEYS = ("fault", "hold", "human_hold_latched", "contact", "torque_enabled", "hardware_error")
+
+
+def state_flags(*paths) -> list[str]:
+    """Safety flags set in the files the session itself writes (live.json, motor-health snapshot), read directly: a log
+    line may not mention them. Any key in HOLD_KEYS with a truthy value, at any depth, or a health status of fault."""
+    found = []
+
+    def walk(node, where):
+        if isinstance(node, dict):
+            for key, val in node.items():
+                if key in HOLD_KEYS and val not in (None, False, 0, "", [], {}):
+                    found.append(f"{where}:{key}")
+                elif key == "status" and val == "fault":
+                    found.append(f"{where}:status=fault")
+                else:
+                    walk(val, where)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, where)
+
+    for path in paths:
+        try:
+            walk(json.loads(Path(path).read_text(encoding="utf-8")), Path(path).name)
+        except (OSError, ValueError, TypeError):
+            continue
+    return found
+
+
 def classify(hint: str, lines: list[str], bg_alive: bool = False) -> tuple[str, int | None]:
     """(code, comm code). A safety state wins over every transient reading."""
     text = "\n".join(lines)
@@ -101,12 +130,16 @@ def decide(code: str, attempt: int, elapsed_s: float) -> float | None:
 
 
 def refusal(arm: str, hint: str, message: str, *, status=None, n0: int = 0, log=None, bg_alive: bool = False,
-            attempt: int = 1, t0: float | None = None, now: float | None = None, lock_dir=None) -> tuple[dict, float | None]:
+            attempt: int = 1, t0: float | None = None, now: float | None = None, lock_dir=None,
+            state_files=()) -> tuple[dict, float | None]:
     now = time.time() if now is None else now
     lines = evidence(status, n0, log) if status and hint != "lock_held" else []  # a held lock says nothing about older status rows
     code, comm = classify(hint, lines, bg_alive)
     elapsed = round(now - t0, 1) if t0 else 0.0
     wait = decide(code, attempt, elapsed)
+    if wait is not None and (flags := state_flags(*state_files)):  # never start another session on a held, faulted or torque-on arm
+        code, wait = "safety_state", None
+        lines = [f"session state file reports {', '.join(flags)}", *lines]
     row = {"result": "retry" if wait is not None else "refused", "stage": "session", "arm": arm, "code": code,
            "reason": f"{message} [{code}]" + (f" comm {comm}" if comm is not None else ""), "attempt": attempt,
            "elapsed_s": elapsed, "evidence": lines[-3:]}
@@ -130,9 +163,10 @@ def main(argv=None, *, sleep=time.sleep) -> int:
     ap.add_argument("--bg-alive", default="0")
     ap.add_argument("--attempt", type=int, default=1)
     ap.add_argument("--t0", type=float)
+    ap.add_argument("--state-file", action="append", default=[], help="live.json or motor-health snapshot to read before any retry")
     args = ap.parse_args(argv)
     row, wait = refusal(args.arm, args.code, args.message, status=args.status, n0=args.n0, log=args.log,
-                        bg_alive=args.bg_alive == "1", attempt=args.attempt, t0=args.t0)
+                        bg_alive=args.bg_alive == "1", attempt=args.attempt, t0=args.t0, state_files=args.state_file)
     print(json.dumps(row, default=str), flush=True)
     if wait is None:
         return 0

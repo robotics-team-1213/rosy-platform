@@ -137,13 +137,13 @@ def verify_job_outcome(
             res_val = summary.get("result")
             if job_name == "auto_pick" and res_val != "placed":
                 failure_reasons.append(f"auto_pick result={res_val!r}")
-            elif job_name == "cell_policy_drive" and res_val not in ("released", "chunks_done", "placed"):
+            elif job_name in ("cell_policy_drive", "cell_policy_run") and res_val not in ("released", "chunks_done", "placed"):
                 failure_reasons.append(f"policy_drive result={res_val!r}")
             elif res_val is not None and str(res_val).startswith(("stopped", "held", "refused", "aborted", "fault")):
                 failure_reasons.append(f"non-success result={res_val!r}")
             if summary.get("parked") is False:
                 failure_reasons.append("parked=False")
-            if job_name in ("auto_pick", "cell_policy_drive"):
+            if job_name in ("auto_pick", "cell_policy_drive", "cell_policy_run"):
                 if summary.get("took_one") is not True:
                     failure_reasons.append(f"took_one={summary.get('took_one')!r}")
             elif job_name != "home" and summary.get("took_one") is False:

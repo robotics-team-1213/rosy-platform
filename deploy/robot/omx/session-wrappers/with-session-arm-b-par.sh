@@ -6,7 +6,7 @@ cd ~/rosy-test/omx-record-prep-20261019; . "$here/tools-env.sh"  # the release's
 export ROSY_SESSION_T0=${ROSY_SESSION_T0:-$(date +%s)}; attempt=${ROSY_SESSION_ATTEMPT:-1}; wrapper_args=("$@")  # a retry re-runs this wrapper; T0 keeps the total wait
 refuse() {  # $1 code hint, $2 the old REFUSED line: keep the line, add a JSON reason line, and try again only for a transient cause (session_refusal.py)
   echo "$2"
-  out=$(~/rosy-omx/current-env/bin/python "$OMX/session_refusal.py" --arm arm_b --code "$1" --message "$2" --status chunk-io-b/chunk-status.jsonl --n0 "${n0:-0}" --log "${slog:-}" --bg-alive "${bg_alive:-0}" --attempt "$attempt" --t0 "$ROSY_SESSION_T0" 2>/dev/null); rc=$?
+  out=$(~/rosy-omx/current-env/bin/python "$OMX/session_refusal.py" --arm arm_b --code "$1" --message "$2" --status chunk-io-b/chunk-status.jsonl --n0 "${n0:-0}" --log "${slog:-}" --bg-alive "${bg_alive:-0}" --attempt "$attempt" --t0 "$ROSY_SESSION_T0" --state-file chunk-io-b/live.json --state-file "${ROSY_OMX_MONITOR_STATE:-motor-health-current.json}" 2>/dev/null); rc=$?
   [ -n "$out" ] && echo "$out"
   if [ "$rc" -eq 10 ]; then ROSY_SESSION_ATTEMPT=$((attempt+1)) exec bash "$here/$(basename "${BASH_SOURCE[0]}")" "${wrapper_args[@]}"; fi
 }

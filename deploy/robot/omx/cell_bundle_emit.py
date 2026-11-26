@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit `rosy.omx-failure-context.v1` bundles for non-placed `cell_auto_pick` and `cell_policy_drive` exits (D-1072)."""
+"""Emit `rosy.omx-failure-context.v1` bundles for non-placed `cell_auto_pick`, `cell_policy_drive` and `cell_policy_run` (which calls the drive) exits (D-1072)."""
 from __future__ import annotations
 
 import json

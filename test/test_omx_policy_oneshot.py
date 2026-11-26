@@ -299,3 +299,68 @@ def test_wrapper_keeps_the_refused_line_adds_the_reason_and_retries_only_when_to
     assert result.stdout.count("REFUSED: the arm session did not start") == 3  # asked to retry twice, then refused
     assert result.stdout.strip().splitlines()[-1] == '{"result": "refused", "reason": "why"}'
     assert (tmp_path / "attempts").read_text().split() == ["1", "2", "3"]  # each try knows its number
+
+
+def test_state_files_block_a_retry_even_when_the_log_shows_a_transient_cause(tmp_path):
+    live = tmp_path / "live.json"
+    health = tmp_path / "motor-health-current.json"
+    live.write_text(json.dumps({"t": 1, "state": HOME, "fault": None, "hold": False, "human_hold_latched": False}))
+    health.write_text(json.dumps({"status": "ok", "motors": [{"joint": "gripper", "torque_enabled": False}]}))
+    clean = [str(live), str(health)]
+    assert refusal.state_flags(*clean) == [] and refusal.state_flags(str(tmp_path / "missing.json"), "/") == []
+    row, wait = refusal.refusal("arm_b", "lock_held", "REFUSED: lock", state_files=clean, lock_dir=tmp_path)
+    assert wait == 5.0 and row["result"] == "retry"
+    for name, path, body, flag in (
+            ("fault", live, {"fault": "joint at 80 % of its cap"}, "live.json:fault"),
+            ("hold", live, {"hold": True}, "live.json:hold"),
+            ("latched", live, {"human_hold_latched": True}, "live.json:human_hold_latched"),
+            ("torque", health, {"motors": [{"joint": "gripper", "torque_enabled": True}]}, "motor-health-current.json:torque_enabled"),
+            ("hw", health, {"motors": [{"hardware_error": 4}]}, "motor-health-current.json:hardware_error"),
+            ("status", health, {"status": "fault"}, "motor-health-current.json:status=fault")):
+        path.write_text(json.dumps(body))
+        row, wait = refusal.refusal("arm_b", "start_failed", "REFUSED: x", state_files=clean, lock_dir=tmp_path)
+        assert wait is None and row["result"] == "refused" and row["code"] == "safety_state", name  # no log line needed
+        assert flag in row["reason"] or any(flag in e for e in row["evidence"]), name
+        path.write_text(json.dumps({}))
+    path = tmp_path / "status.jsonl"
+    path.write_text(json.dumps({"command": "start", "ok": False, "error": "comm -3001"}) + "\n")
+    row, wait = refusal.refusal("arm_b", "start_failed", "REFUSED: x", status=str(path), state_files=clean)
+    assert row["code"] == "motor_comm" and wait == 3.0  # comm timeout with clean state files still gets its one retry
+
+
+@pytest.mark.skipif(os.name != "posix" or not shutil.which("bash"), reason="field wrappers use bash")
+def test_wrapper_with_the_real_refusal_helper_does_not_retry_on_a_held_arm(tmp_path):
+    prep = tmp_path / "rosy-test/omx-record-prep-20261019"
+    (prep / "chunk-io-b").mkdir(parents=True)
+    (prep / "chunk-io-b/chunk-status.jsonl").write_text("")
+    (prep / "chunk-io-b/live.json").write_text(json.dumps({"t": 1, "state": HOME, "human_hold_latched": True}))
+    env_file = tmp_path / ".config/rosy/omx-observation-bridge.env"
+    env_file.parent.mkdir(parents=True)
+    env_file.touch()
+    bin_dir = tmp_path / "rosy-omx/current-env/bin"
+    bin_dir.mkdir(parents=True)
+    fake = {"systemctl": 'test "$2" = stop',
+            "python": ('case "$1" in\n  */record_session.py) echo "error: comm -3001" >&2; exit 1 ;;\n'
+                       f'  */session_refusal.py) exec {sys.executable} "$@" ;;\n  *) exit 99 ;;\nesac')}
+    for name, script in fake.items():
+        exe = bin_dir / name
+        exe.write_text(f"#!/bin/sh\n{script}\n")
+        exe.chmod(0o755)
+    env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    result = subprocess.run(["bash", "./with-session-arm-b-par.sh", "touch", str(tmp_path / "moved")], cwd=OMX / "session-wrappers",
+                            env=env, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 2 and not (tmp_path / "moved").exists()
+    assert result.stdout.count("REFUSED: the arm session did not start") == 1  # one attempt, no second session
+    last = json.loads(result.stdout.strip().splitlines()[-1])
+    assert last["result"] == "refused" and last["code"] == "safety_state" and "live.json:human_hold_latched" in last["reason"] + " ".join(last["evidence"])
+
+
+def test_the_run_job_is_judged_like_the_drive_by_the_outcome_fence(monkeypatch):
+    import cell_vlm_facts
+    import cell_vlm_fence
+
+    monkeypatch.setattr(cell_vlm_facts, "query_incident", lambda *a, **k: {"held": False})
+    for job in ("cell_policy_drive", "cell_policy_run"):
+        bad = {"exit": 0, "structured_result": {"result": "stopped_x", "parked": True, "took_one": True}}
+        _status, detail = cell_vlm_fence.verify_job_outcome(None, job, "arm_b", bad, collect_facts=False)
+        assert any("policy_drive result" in r for r in detail.get("failure_reasons", [])) or "policy_drive result" in json.dumps(detail), job
