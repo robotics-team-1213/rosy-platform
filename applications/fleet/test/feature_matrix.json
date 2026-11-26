@@ -3249,11 +3249,19 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
-          "expression": "/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel",
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/trips/{trip_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/trips/{trip_id}"
           ]
         },
         {

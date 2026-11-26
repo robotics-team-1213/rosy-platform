@@ -68,12 +68,11 @@ export function installTripReceiptHistory(el, call) {
 }
 
 export async function cancelTripReceipt(call, tripId, life) {
-  const path = `/api/fleet/trips/${encodeURIComponent(tripId)}`;
   try {
-    return await call(`${path}/cancel`, {method: "POST"});
+    return await call(`/api/fleet/trips/${encodeURIComponent(tripId)}/cancel`, {method: "POST"});
   } catch (err) {
     if (err.name === "AbortError") throw err;
     life.check();
-    return call(path);
+    return call(`/api/fleet/trips/${encodeURIComponent(tripId)}`);
   }
 }
