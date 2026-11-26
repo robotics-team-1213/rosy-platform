@@ -3,9 +3,13 @@
 The policy grasps the box on the belt and the handoff lifts from the measured hold, so only a source with a fixed
 pick is compared with the library's pick; destination and tier are always checked.
 """
+import sys
+from pathlib import Path
+
 import pytest
 
-import cell_policy_handoff as ph
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
+import cell_policy_handoff as ph  # noqa: E402
 
 SHIP = {"place": [0.1254, 0.0191], "surface_z": -0.004, "yaw_deg": 0.0, "tier_step_m": 0.0345, "map_from": "pallet",
         "stacks": True, "status": "measured"}
