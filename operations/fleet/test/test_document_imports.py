@@ -132,6 +132,7 @@ OWN = {
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",
         "zone-blueprint-model.js",
+        "zone-blueprint-geometry.js",
         "zone-blueprint-2d.js",
         "zone-blueprint-3d.js",
     },
