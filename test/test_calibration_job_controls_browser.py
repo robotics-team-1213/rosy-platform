@@ -139,6 +139,44 @@ def test_operator_starts_job_and_recovers_its_result_after_reload(screen):
             browser.close()
 
 
+def test_a_post_eval_saves_and_offers_the_escalated_step(screen):
+    """2026-11-26 user: a visit saves what it measured, and the named next step is one click from the form."""
+    import json as _json
+
+    from playwright.sync_api import expect, sync_playwright
+
+    url, account, calls, jobs, _ = screen
+    account.callback = url + "/api/account/callback"
+    account.apps = lambda cookie: []
+    spawn = jobs.spawn
+
+    def post_eval(argv, cwd, env, log):
+        proc = spawn(argv, cwd, env, log)
+        log.write_text(_json.dumps({"verdict": "drift", "applied": [{"site": "floor"}],
+                                    "escalated": ["pivot-near floor:0.1,-0.2"]}) + "\n", encoding="utf-8")
+        return proc
+
+    jobs.spawn = post_eval
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, 390, 844, url=url)
+        try:
+            page.context.add_cookies([{"name": web.SESSION_COOKIE, "value": "valid", "url": url}])
+            page.goto(url + "/?arm=arm_b")
+            page.locator("#jobStep").select_option("post-eval")
+            page.locator("#jobVisitSite").select_option("floor")
+            page.locator("#jobSwitch").check()
+            page.locator("#jobStart").click()
+            expect(page.locator("#jobFollow")).to_contain_text("편차 보정값 1개를 저장했습니다", timeout=10000)
+            assert "--apply" in calls["spawn"][0][0]
+            page.locator("#jobFollow ui-button").click()
+            expect(page.locator("#jobStep")).to_have_value("pivot-near")
+            expect(page.locator("#jobTargets")).to_have_value("floor:0.1,-0.2")
+            expect(page.locator("#jobSwitch")).not_to_be_checked()
+            assert len(calls["spawn"]) == 1  # filling the form starts nothing
+        finally:
+            browser.close()
+
+
 def test_named_surface_requires_fresh_switch_and_clear_sweep_acknowledgement(screen):
     from playwright.sync_api import expect, sync_playwright
 
