@@ -1,7 +1,8 @@
 import { setOff } from "/common/cause-line.js";
+import { postEvalRequest } from "./status-logic.js";
 
 const $ = id => document.getElementById(id);
-const moving = new Set(["remap", "pivot-near", "surface"]);
+const moving = new Set(["remap", "pivot-near", "surface", "post-eval"]);
 let arms = {}, active = null, arm = "", operator = false, sending = false;
 let jobs = [], selected = null, timer = null, wired = false;
 let displayJobs = () => {};
@@ -52,6 +53,8 @@ function fields() {
   $("jobTargetsLabel").hidden = step !== "pivot-near";
   $("jobRemapNote").hidden = step !== "remap";
   $("jobSurfaceLabel").hidden = step !== "surface";
+  $("jobVisitLabel").hidden = step !== "post-eval";
+  $("jobVisitSite").required = step === "post-eval";
   $("jobSwitchLabel").hidden = !moving.has(step);
   $("jobSwitchText").textContent = step === "surface" && $("jobSurface").value
     ? `${arm}의 고정된 ${$("jobSurface").value} 측정 지점과 팔 이동 경로에 물체와 사람이 없음을 확인했고, 전원 스위치 옆에 있습니다.`
@@ -61,9 +64,11 @@ function fields() {
   $("jobSwitch").required = moving.has(step);
   $("jobForm").hidden = !operator || !Object.keys(arms).length;
   const busy = jobs.some(job => job.arm === arm && job.status === "running");
-  const reason = !arm ? "등록된 팔을 선택하세요." : sending ? "작업을 요청하고 있습니다." : busy ? "이 팔에서 작업이 실행 중입니다." : "";
+  const missingVisit = step === "post-eval" && arms[arm]?.sites?.[$("jobVisitSite").value]?.can_post_eval !== true;
+  const reason = !arm ? "등록된 팔을 선택하세요." : sending ? "작업을 요청하고 있습니다." : busy ? "이 팔에서 작업이 실행 중입니다."
+    : missingVisit ? "팔 기준 XY가 등록된 칸을 선택하세요." : "";
   setOff($("jobStart"), !!reason, reason, "jobActionNote");
-  const note = notices.get(arm) || "";
+  const note = notices.get(arm) || reason;
   if ($("jobActionNote").textContent !== note) $("jobActionNote").textContent = note;
 }
 
@@ -77,6 +82,13 @@ function selectArm(next) {
   const rows = arms[arm]?.sites || {};
   const sites = Object.keys(rows);
   const measured = sites.filter(name => rows[name].can_remeasure_surface === true);
+  const visitSites = sites.filter(name => rows[name]?.can_post_eval === true);
+  const visit = changed ? "" : $("jobVisitSite").value;
+  $("jobVisitSite").replaceChildren(new Option(visitSites.length ? "검증할 칸 선택" : "XY 검증 가능한 칸 없음", ""),
+    ...visitSites.map(name => new Option(name, name)));
+  $("jobVisitSite").disabled = !visitSites.length;
+  if (visitSites.includes(visit)) $("jobVisitSite").value = visit;
+  if (visit !== $("jobVisitSite").value) $("jobSwitch").checked = false;
   const surface = changed ? "" : $("jobSurface").value;
   $("jobSurface").replaceChildren(new Option(measured.length ? "측정할 고정 지점 선택" : "등록된 고정 측정 지점 없음", ""),
     ...measured.map(s => new Option(s, s)));
@@ -132,6 +144,7 @@ function wire() {
   $("jobArm").addEventListener("change", () => selectArm($("jobArm").value));
   $("jobStep").addEventListener("change", resetApproval);
   $("jobSurface").addEventListener("change", resetApproval);
+  $("jobVisitSite").addEventListener("change", resetApproval);
   $("jobTargets").addEventListener("input", resetApproval);
   $("jobForm").addEventListener("submit", submit);
 }
@@ -145,7 +158,11 @@ function resetApproval() {
 async function submit(event) {
   event.preventDefault();
   if (!operator || sending || $("jobStart").disabled || !Object.hasOwn(arms, arm)) return;
-  const owner = arm, step = $("jobStep").value, payload = {arm, step};
+  const owner = arm, step = $("jobStep").value;
+  const payload = step === "post-eval"
+    ? postEvalRequest(arm, arms[arm].sites, $("jobVisitSite").value, $("jobSwitch").checked)
+    : {arm, step};
+  if (!payload) return;
   if (moving.has(step)) {
     if (!$("jobSwitch").checked) return;
     payload.person_at_switch = true;

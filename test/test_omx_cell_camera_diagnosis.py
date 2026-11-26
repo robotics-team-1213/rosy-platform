@@ -14,6 +14,34 @@ import cell_post_eval
 import cell_upkeep_checks
 
 
+@pytest.mark.parametrize("explicit_route", [False, True])
+def test_cad_sidecar_only_enters_named_route_check(tmp_path, monkeypatch, capsys, explicit_route):
+    import cell_route_calibration
+
+    config = {"plan_path": str(tmp_path/"plan.json"), "work_dir": str(tmp_path),
+              "calibration_path": str(tmp_path/"map.json"), "io": str(tmp_path),
+              "cameras": {}, "cad_image_evidence_path": "cad.json"}
+    route = ["tmp-b-2-l1", "ship-h1r2-l0"]
+    if not explicit_route:
+        config["preflight"] = {"check_route": route}
+    profile = tmp_path/"cell.json"
+    profile.write_text(json.dumps(config))
+    (tmp_path/"plan.json").write_text("{}")
+    (tmp_path/"map.json").write_text('{"sites":{}}')
+    (tmp_path/"cad.json").write_text('{"sites":{"forged":{}},"cad_image_observations":{"tmp-b-2":{}}}')
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *args: SimpleNamespace(frame=lambda name: None))
+    monkeypatch.setattr(cell_calibrate, "check", lambda *args: {})
+    monkeypatch.setattr(cell_calibrate, "stale", lambda found: [])
+    monkeypatch.setattr(cell_route_calibration, "route_calibration_report", lambda cfg, cal, *args: cal)
+    argv = ["--config", str(profile), "check"]
+    assert cell_calibrate.main(argv + (["--route", *route] if explicit_route else [])) == 0
+    assert json.loads(capsys.readouterr().out)["check"]["route"] == {
+        "sites": {}, "cad_image_observations": {"tmp-b-2": {}}}
+    assert json.loads((tmp_path/"map.json").read_text()) == {"sites": {}}
+    with pytest.raises(SystemExit):
+        cell_calibrate.main(["--config", str(profile), "auto", "--cad-image-evidence", "cad.json"])
+
+
 @pytest.mark.parametrize(("evidence", "refusal", "issue"), [
     ({"camera_shift": {"ok": True, "max_px": 18.0}}, True, "camera_moved"),
     ({"camera_shift": {"ok": True, "max_px": 2.5},

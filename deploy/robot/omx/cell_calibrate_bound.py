@@ -233,3 +233,21 @@ def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, 
         os.fsync(stream.fileno())
     ref_tmp.replace(ref_path)
     cal_tmp.replace(cal_path)
+
+
+def map_sites(config: dict) -> list:
+    """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt."""
+    return config.get("calibrate", {}).get("map_sites") or [
+        s for s in ("floor", "pinky", "belt") if s in config["sites"]
+    ]
+
+
+def _map_write_sites(config: dict) -> list:
+    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
+    sites = list(map_sites(config))
+    seen = set(sites)
+    for name, site in (config.get("sites") or {}).items():
+        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
+            sites.append(name)
+            seen.add(name)
+    return sites

@@ -110,3 +110,7 @@ export function defaultSiteForProfile(profile) {
   }
   return Object.keys(profile.sites)[0] || null;
 }
+export function postEvalRequest(arm, sites, site, attended) {
+  if (attended !== true || !Object.hasOwn(sites || {}, site) || sites[site]?.can_post_eval !== true) return null;
+  return {arm, step: "post-eval", site, person_at_switch: true};
+}
