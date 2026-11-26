@@ -210,22 +210,27 @@ def move_regions(config: dict, reference, current) -> dict:
     return config
 
 
-def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, config: dict, image) -> None:
-    """Publish a remap and its actual JPEG bytes so an interrupted pair always fails the reader binding."""
+def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, config: dict, image, raw: bytes | None = None) -> None:
+    """Publish a remap and its actual JPEG bytes so an interrupted pair always fails the reader binding.
+
+    raw: the bound JPEG bytes to keep as they are (no re-encode) when only the binding changes."""
     import cv2
+    import cell_map_followers
 
     ref_path.parent.mkdir(parents=True, exist_ok=True)
     ref_tmp = ref_path.with_name(ref_path.stem + ".pending" + ref_path.suffix)
-    if not cv2.imwrite(str(ref_tmp), image):
+    if raw is not None:
+        ref_tmp.write_bytes(raw)
+    elif not cv2.imwrite(str(ref_tmp), image):
         raise OSError("map reference JPEG write failed")
     raw = ref_tmp.read_bytes()
     if not raw:
         raise OSError("map reference JPEG is empty")
     calibration["reference_top_sha256"] = hashlib.sha256(raw).hexdigest()
     calibration["reference_map_sha"] = cell_attempts.digest(calibration["sites"])
-    calibration["reference_geometry_sha"] = cell_attempts.digest({
-        name: {key: site.get(key) for key in ("auto_roi", "surface_px", "map_from")}
-        for name, site in config["sites"].items() if not site.get("tier_of")})
+    geometry = cell_map_followers.site_geometry(config)
+    calibration["reference_geometry_sha"] = cell_attempts.digest(geometry)
+    calibration["reference_geometry_sites"] = cell_map_followers.site_digests(geometry, calibration["reference_geometry_sha"])
     import cell_cal_history
 
     cell_cal_history.keep([cal_path, ref_path, Path(cal_path).with_suffix(".bias.json")], "map")
