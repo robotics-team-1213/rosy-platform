@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.481
+**Version:** v1.482
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.482 주차 대기 위치의 CORE 도킹 사전 진단 (Fleet)
+
+GET `/api/fleet/robots/{robot_id}/bays/{bay_id}/dock-prerequisites` reads the selected CORE dock and docking owner. It returns the robot and bay IDs, dock ID, receipt time `checked_at` (Unix seconds), and per-check error codes for `target`, `scoped_cancel` and `owner`. Null means the individual read succeeded. A parking plan whose origin is within staging tolerance carries this observation as `parking_handoff.plan_prerequisites` in its stored receipt. Wire admission independently rechecks the target, owner, staging and traffic.
 
 ### v1.481 Fleet 운행 명령과 기체 이동 관측 (Fleet)
 
@@ -5148,6 +5152,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.482 | 2026-11-26 | [Fleet] 주차 대기 위치의 CORE 도킹 사전 진단 |
 | v1.481 | 2026-11-26 | [Fleet] Fleet 운행 명령과 기체 이동 관측 |
 | v1.480 | 2026-11-26 | [Fleet] Repeat cancellation returns the named trip receipt |
 | v1.479 | 2026-11-26 | [CORE] Idle navigation ownership proof |
