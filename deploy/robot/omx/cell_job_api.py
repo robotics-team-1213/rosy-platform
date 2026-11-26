@@ -27,6 +27,7 @@ from cell_job_guards import (  # noqa: E402
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
+import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
@@ -38,11 +39,9 @@ try:
 except ImportError:  # Windows unit tests
     fcntl = None
 
-JOB_TTL_S = 900.0
-LIVE_MAX_AGE_S = 15.0
+JOB_TTL_S, LIVE_MAX_AGE_S = 900.0, 15.0
 _REAL_POPEN = subprocess.Popen
-_check_arm_incident = check_arm_incident_hold
-_check_depth_lock_held = is_depth_lock_held
+_check_arm_incident, _check_depth_lock_held = check_arm_incident_hold, is_depth_lock_held
 
 
 def _flock_held(lock_path: Path, mode: int) -> bool:
@@ -171,6 +170,7 @@ class Runner:
         arm = arms[0] if len(arms) == 1 else ("arm_ab" if target_arms == AB_ARMS else None)
         moving = moves_arm(job, eff_params)
         idem_digest = IdempotencyStore.payload_sha256(name, eff_params) if idempotency_key else None
+        cell_incident_release.before_refusal(arms, self._check_incident, enabled=moving and not job.get("recovery_home") and self._incident_check_fn is None)
         with self.lock:
             for old_jid, r in self.runs.items():
                 if (code := r["proc"].poll()) is not None:
