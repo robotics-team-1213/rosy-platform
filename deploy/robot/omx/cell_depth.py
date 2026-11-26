@@ -1,5 +1,4 @@
 """Heights in the cell from the top depth camera, in the colour view's pixels: no ruler, no touch.
-
 2026-11-01: a person's ruler, closed-jaw touches and hand-picked depth boxes all failed to give the belt's height.
 The touches stopped at the planning floor, and a 16 g container slid away from the jaws without a contact. So the
 heights come from the depth image instead:
@@ -8,7 +7,6 @@ heights come from the depth image instead:
   colour image's edges lie closest to the height steps (`align_edges`). The object mask alone (`align`) slides
   along a row of objects standing in one line, as the cell's did on 2026-11-01;
 - an arm's FK zero is the top of the plate it stands on, read in a ring around its base.
-
 The D435 runs without its SDK here (USB 3.0, v4l2 Z16); its intrinsics are nominal (`FOCAL_PX`).
 
     python cell_depth.py --depth d.raw --colour c.jpg --px 345,80 --px 330,320   # read only
@@ -212,22 +210,24 @@ def _ransac(pts, tol_mm: float, tries: int, rng):
 
 
 def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0, share: float = 0.25):
-    """(unit normal toward the camera, offset): the cell's table, refitted on its points. The view also holds a lower
-    surface about 60 mm under the table, sometimes larger than it: of the two largest parallel planes the higher one is
-    the table when it holds `share` of the larger's points (2026-11-01: the pallet read 75 mm in one frame, 10 in the
-    next, as the plane flipped between them)."""
+    """Fit the table plane, preferring a higher parallel surface with `share` of the larger plane's points."""
     h, w = depth.shape
     ys, xs = np.nonzero(depth > 0)
     ys, xs = ys[::7], xs[::7]
     z = depth[ys, xs].astype(float)
     pts = np.column_stack(((xs - w / 2) * (z / FOCAL_PX), (ys - h / 2) * (z / FOCAL_PX), z))
     rng = np.random.default_rng(seed)
-    (n, a), k = _ransac(pts, tol_mm, tries, rng)
+    primary, k = _ransac(pts, tol_mm, tries, rng) if len(pts) >= 3 else (None, -1)
+    if primary is None:
+        raise ValueError("the D435 frame has no usable table plane")
+    n, a = primary
     rest = pts[np.abs(pts @ n - float(a @ n)) >= tol_mm]
     if len(rest) >= 3:
-        (n2, a2), k2 = _ransac(rest, tol_mm, tries, rng)
-        if k2 >= share * k and (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
-            n, a = n2, a2
+        secondary, k2 = _ransac(rest, tol_mm, tries, rng)
+        if secondary is not None and k2 >= share * k:
+            n2, a2 = secondary
+            if (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
+                n, a = n2, a2
     near = pts[np.abs(pts @ n - float(a @ n)) < tol_mm]
     _, _, vt = np.linalg.svd(np.c_[near, np.ones(len(near))], full_matrices=False)
     normal, offset = vt[-1][:3], vt[-1][3]
