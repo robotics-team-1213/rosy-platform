@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.475
+**Version:** v1.476
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.476 Leased speed ceilings for Nav2 road routes (CORE)
+
+CORE advertises navigation.route_speed_authority. Authenticated route and bound-route requests may opt into road_speed_controlled with an owned goal lease. The route starts with zero wheel authority. The sending token renews its precise correlation ID with speed_grant containing issued_at and expires_at in Unix seconds and a nonnegative limit_mps. CORE rejects stale, future, unordered and over-two-second grants. Ordinary lease renewals do not extend the speed grant. The device caps forward and reverse translation while preserving curvature, and expired or zero grants hold rotation as well.
+
+Fleet requests this authority for Nav2 trips with an approved binding, a required binding, or active site rules. It includes every mapped stripe in the reachable distance, respects the active maximum speed and minimum following distance, and records the limit, reason, owner and expiry in trip detail. The speed grant expires within 1.5 seconds of the oldest relevant pose. A moving trip with a stale peer pose holds on the ring. The Nav2 local controller and the existing traffic blocks, obstacle checks and safety limits remain in force.
 
 ### v1.475 Stationary rear dock registration (CORE)
 
@@ -5118,6 +5124,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.476 | 2026-11-26 | [CORE] Leased speed ceilings for Nav2 road routes |
 | v1.475 | 2026-11-26 | [CORE] Stationary rear dock registration |
 | v1.474 | 2026-11-26 | [Fleet] RFID intake receipt and observed inbound placement |
 | v1.473 | 2026-11-26 | [Fleet] Task-specific cell plan refusal codes |
