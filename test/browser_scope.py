@@ -117,7 +117,11 @@ COMMISSIONING = ["test/test_omx_commissioning_view.py"]
 MONITORING = ["test/test_monitoring_browser.py"]
 RECOVERY = ["test/test_network_recovery_browser.py"]
 WORLD = ["test/test_world_live_ui_browser.py"]
-CALIBRATION = ["test/test_calibration_header_browser.py", "test/test_calibration_job_controls_browser.py"]
+CALIBRATION = [
+    "test/test_calibration_frame_browser.py",
+    "test/test_calibration_header_browser.py",
+    "test/test_calibration_job_controls_browser.py",
+]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD + CALIBRATION
 
 SERVER = "operations/fleet/fleet/server/"
