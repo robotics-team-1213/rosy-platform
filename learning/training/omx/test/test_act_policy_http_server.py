@@ -315,7 +315,7 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
 
     pred = srv._load_lerobot_arm(tmp_path, {"top": (24, 32)}, 2, None, "cpu")
     out = pred({"state": [0.0] * 6, "frames_rgb": {"top": np.zeros((24, 32, 3), dtype=np.uint8)}, "goal": None})
-    assert len(out) == 2 and len(out[0]) == 6
+    assert len(out) == 4 and len(out[0]) == 6  # the whole chunk; PolicyRegistry.infer trims unless full_chunk
     assert seen["cfg_device"] == "cpu" and seen["to_device"] == "cpu" and seen["eval"] is True
     assert seen["pre_over"] == {"device_processor": {"device": "cpu"}}
     assert seen["post_over"] == {"device_processor": {"device": "cpu"}}
