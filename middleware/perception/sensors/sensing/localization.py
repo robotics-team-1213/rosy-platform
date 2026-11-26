@@ -199,7 +199,7 @@ class MapAgreement:
         hit &= ~self._obstructed_rays(sensor_pose[:2], ranges, cos_a, sin_a, oob_blocks=True)
         return float(np.mean(hit))
 
-    def explain(self, sensor_pose, ranges, angles, *, min_cluster_beams: int = 3) -> "AgreementBreakdown":
+    def explain(self, sensor_pose, ranges, angles, *, min_cluster_beams: int = 3, localized: bool = False) -> "AgreementBreakdown":
         """Classify beams into hit, wall-pierced, clustered foreground occlusion, and unknown/open."""
         ranges, angles = valid_beams(ranges, angles)
         total = int(len(ranges))
@@ -232,10 +232,10 @@ class MapAgreement:
         localized_pierce = len(pierce_sectors) <= 1 or (
             len(pierce_sectors) == 2 and (max(pierce_sectors) - min(pierce_sectors)) in (1, 7)
         )
-        # Allow up to 12% wall-piercing on >=5cm maps only when full 360° enclosure holds and
-        # piercing is confined to <=2 adjacent 45° sectors (single stale/unmapped bay prop).
+        # Allow up to 12% wall-piercing on >=5cm maps (or while already LOCALIZED on 2cm maps) when
+        # full 360° enclosure holds and piercing is confined to <=2 adjacent 45° sectors.
         effective_max_pierce = (
-            0.12 if (self._max_pierce_ratio >= 0.06 and sectors_hit >= 7
+            0.12 if ((localized or self._max_pierce_ratio >= 0.06) and sectors_hit >= 7
                      and raw_score >= 0.65 and localized_pierce)
             else self._max_pierce_ratio
         )
@@ -263,9 +263,9 @@ class MapAgreement:
             rejected_reason=reason,
         )
 
-    def robust_score(self, sensor_pose, ranges, angles) -> float:
+    def robust_score(self, sensor_pose, ranges, angles, *, localized: bool = False) -> float:
         """Occlusion-robust wall agreement score; 0.0 when safety gates reject."""
-        return self.explain(sensor_pose, ranges, angles).robust_score
+        return self.explain(sensor_pose, ranges, angles, localized=localized).robust_score
 
     def _qualities(self, poses, ranges, angles):
         a = poses[:, 2, None] + angles[None, :]

@@ -120,6 +120,7 @@ class LocAssistNode(Node):
                               hold_s=self.p('hold_s'), min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'),
                               max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
         self._last_settled_scan_s = -math.inf
+        self._last_fit_drop_log_s = -math.inf
         self.verification_trace = None
         self.field = self.clear = self.scan = None
         self.generation = 0
@@ -248,10 +249,20 @@ class LocAssistNode(Node):
         tr = tf.transform.translation
         sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
-        scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
-        breakdown = (self.field.explain(sensor, ranges, angles)
-                     if trace is not None and hasattr(self.field, 'explain') else None)
-        fit = scorer(sensor, ranges, angles) if breakdown is None else breakdown.robust_score
+        use_localized = bool(machine.autonomy_allowed)
+        if (trace is not None or use_localized) and hasattr(self.field, 'explain'):
+            breakdown = (self.field.explain(sensor, ranges, angles, localized=True) if use_localized
+                         else self.field.explain(sensor, ranges, angles))
+            fit = breakdown.robust_score
+            if use_localized and fit < self.core.machine.drop_fit and now - self._last_fit_drop_log_s >= 1.0:
+                self._last_fit_drop_log_s = now
+                self.get_logger().warning(
+                    f'localization fit drop fit={fit:.3f} reason={breakdown.rejected_reason} raw={breakdown.raw_score:.3f} '
+                    f'pierce={breakdown.miss_wall_pierced} fg={breakdown.miss_foreground} pose=({sensor[0]:.3f},{sensor[1]:.3f},{sensor[2]:.2f})')
+        else:
+            breakdown = None
+            scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
+            fit = scorer(sensor, ranges, angles)
         if trace is not None:
             trace.fit(stamp.nanoseconds * 1e-9, now, sensor, msg.header.frame_id, fit, breakdown)
         self._last_settled_scan_s = now
