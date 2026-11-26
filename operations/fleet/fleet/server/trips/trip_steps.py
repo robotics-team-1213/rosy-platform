@@ -227,7 +227,8 @@ class TripSteps:
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:
                 await self._step_free(live, index, pose)
-            if last and live.open and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
+            if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)
                     arrival_confirmed = live.open
