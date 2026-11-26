@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.486
+**Version:** v1.487
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.487 Localization candidate reads retain CORE backoff (Fleet)
+
+GET /api/fleet/robots/{robot_id}/localization relays CORE candidate channel RATE_LIMITED as HTTP 429, including Retry-After and detail.retry_after_s when provided. A successful response with candidates null still means that no candidate report was available.
 
 ### v1.486 현장 지도 도로 측량 표시선 (Fleet)
 
@@ -5176,6 +5180,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.487 | 2026-11-26 | [Fleet] Localization candidate reads retain CORE backoff |
 | v1.486 | 2026-11-26 | [Fleet] Additive: rosy.site_map/1 edge display_polyline + display_source (survey), GET /api/fleet/site-map/active 가 측량표에서 덧붙임 |
 | v1.485 | 2026-11-26 | [CORE] Native OMX policy lease ingress |
 | v1.484 | 2026-11-26 | [Fleet] OMX native policy target status |
