@@ -389,6 +389,7 @@ def open_policy_shadow(args, config: dict, parser: argparse.ArgumentParser, lrs_
                     args.endpoint_url, arm_id, args.policy_revision, token=token,
                     timeout_s=args.timeout_s, policy_root=args.policy_root, config=config,
                 )
+                shadow.full_chunk = not getattr(args, "paced_chunks", False)  # timed playback drops late rows itself
             except (ValueError, RemotePolicyError, OSError, SystemExit) as error:
                 parser.error(str(error))
         else:
