@@ -412,8 +412,9 @@ class Jobs:
             text = ""
         record.update(exit_code=code, ended=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       result=last_json(text), status="done" if code == 0 else "failed")
-        if code != 0:
-            record["error"] = failure_line(text)
+        if code != 0:  # a refusal before any move is the last JSON line ({"refused": ...}), not the wrapper's "session up"
+            result = record.get("result") if isinstance(record.get("result"), dict) else {}
+            record["error"] = str(result.get("refused") or result.get("held") or "")[:500] or failure_line(text)
         self.write(record)
         try:
             self.lease().release(record["arm"], owner, expected_pid=proc.pid)

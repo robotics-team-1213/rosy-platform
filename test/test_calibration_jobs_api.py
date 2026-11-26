@@ -245,6 +245,25 @@ def test_a_failed_job_carries_the_engine_exit_message(cell, monkeypatch):
     assert one["result"] == {"jaw_labels": None}
 
 
+def test_a_refusal_before_any_move_is_the_job_error(cell, monkeypatch):
+    """2026-11-27: a remap refused on depth coverage showed "session up" as its error."""
+    jobs = jobs_mod.Jobs(cell)
+    finishers = []
+    monkeypatch.setattr(jobs_mod.threading.Thread, "start", lambda thread: finishers.append(thread))
+
+    def spawn(argv, cwd, env, log):
+        log.write_text('session up\n{"refused": "obstacle not measured: pallet", "todo": ["remap"]}\n', encoding="utf-8")
+        proc = FakeProc.__new__(FakeProc)
+        proc.code = 2
+        return proc
+
+    jobs.spawn = spawn
+    status, job = jobs.start({"arm": "arm_b", "step": "check"}, "Kim", "acct-1")
+    for thread in finishers:
+        thread.run()
+    assert jobs.job(job["id"])["error"] == "obstacle not measured: pallet"
+
+
 def test_late_same_account_finish_leaves_new_job_lease(cell, monkeypatch):
     jobs = jobs_mod.Jobs(cell)
     lease = jobs.lease()
