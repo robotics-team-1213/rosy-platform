@@ -1481,6 +1481,8 @@ def test_live_local_cpu_act_sets_nice_and_thread_env(tmp_path, monkeypatch):
     monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: Cell())
     monkeypatch.setattr(cell_policy_handoff, "Authorization", lambda _cfg: None)
     monkeypatch.setattr(drive, "run_episode", lambda *a, **kw: {"result": "chunks_done", "parked": True, "chunks": 1})
+    import cell_policy_preflight
+    monkeypatch.setattr(cell_policy_preflight, "preflight", lambda *a, **kw: None)  # this test is about nice/threads
 
     common = ["--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
               "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--goal-slot", "4",
