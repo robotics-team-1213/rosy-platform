@@ -5,6 +5,8 @@ import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 // and shared/web token contracts remain intact without inline styles or raw hex values.
 
 import { invert3, project as applyH } from "/common/plane-math.js";
+import { mapEvidence } from "/common/map-rules.js";
+import { mapEvidenceInput } from "./status-logic.js";
 import { parallaxPixel } from "./grid-projection.js";
 
 const tone = (name) => window.RosyPalette.cssColor(name);
@@ -573,4 +575,10 @@ export function renderArmGrid(canvas, state) {
   }
 
   return { hitTargets, toWorld, toCanvas };
+}
+
+/** Element props for the evidence line under the camera map: the shared /common/map-rules.js line. */
+export function evidenceProps(digest, observedMs, source) {
+  const { text, title } = mapEvidence(mapEvidenceInput(digest, observedMs, source));
+  return { textContent: text, title };
 }

@@ -3,10 +3,10 @@ export { addDtDd };
 import "/common/ui.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { readFixtureFrame, fixtureSummary } from "./fixture-frame.js";
-import { renderTopView, renderArmGrid } from "./grid.js";
+import { renderTopView, renderArmGrid, evidenceProps } from "./grid.js";
 import { initRequests, requestHash } from "./requests.js";
 import { loadJobStatus, setJobArm, setJobOperator } from "./job-status.js";
-import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm, freshLiveTcp, mapEvidence } from "./status-logic.js";
+import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift, defaultSiteForProfile, linkedArm, profileForArm, freshLiveTcp } from "./status-logic.js";
 export const $ = (id) => document.getElementById(id);
 const state = {
   bundle: null,
@@ -434,7 +434,7 @@ function renderCanvases() {
   bindTag.textContent = verified ? tagged : "정합 미확인 · 오버레이 숨김";
   bindTag.title = verified ? [tagged, shiftText].filter(Boolean).join(" · ") : (shiftText || fb.title);
 
-  Object.assign($("topEvidence"), mapEvidence(siteObj?.map?.digest, frame.image ? frame.observedAt : null, source));
+  Object.assign($("topEvidence"), evidenceProps(siteObj?.map?.digest, frame.image ? frame.observedAt : null, source));
   const fixtures = verified && source === "live" ? frame.observation?.fixtures : null;
   const fixtureDetails = $("fixtureDetails");
   fixtureDetails.hidden = !fixtures || !Object.keys(fixtures).length;
