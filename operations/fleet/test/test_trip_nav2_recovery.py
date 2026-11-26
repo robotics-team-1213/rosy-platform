@@ -358,11 +358,11 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path, lost):
         assert len(robot.routes) == 2
 
 
-@pytest.mark.parametrize("reason", ["ROUTE_CONFLICT", "YIELDING"])
+@pytest.mark.parametrize("reason", ["ROUTE_CONFLICT", "YIELDING", "LOCALIZATION_UNTRUSTED"])
 def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untrusted(reason):
     robot = RouteFakeRobot("rosy_42")
     clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
-    runner.autonomous_robots = frozenset({"rosy_42"})
+    runner.autonomous_robots = frozenset() if reason == "LOCALIZATION_UNTRUSTED" else frozenset({"rosy_42"})
     pose["v"] = MapPose(0.5, -0.23, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
     ver = store.active()[0]
     plan = plan_body(plan_trip(graph, PlanRequest(
@@ -376,7 +376,8 @@ def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untr
 
     async def route_fn(_rid, pts):
         attempts.append(pts)
-        return {"accepted": False, "queued": False, "reason": reason}
+        return {"accepted": False, "queued": False, "reason": reason, "blocked_by": "rosy_45",
+                "waiting_on": ["rosy_45"], "dispatch_attempted": False}
 
     runner._route = route_fn
     run(runner.start("p-cf", "bob"))
@@ -386,18 +387,22 @@ def test_nav2_autonomous_backs_off_on_transient_refusal_and_fails_closed_on_untr
     live = runner._live["rosy_42"]
     assert live.active_route is None
     assert live.nav2_retry_at == clock() + NAV2_TRANSIENT_RETRY_S
+    assert view["detail"]["peer_wait"]["waiting_on"] == ["rosy_45"]
 
     clock.advance(0.5)
     run(runner.tick())
     assert len(attempts) == 1
 
     # Once the cooldown expires, the cleared route can be dispatched.
-    clock.advance(NAV2_TRANSIENT_RETRY_S - 0.5)
+    clock.advance(runner.config.stall_s + NAV2_TRANSIENT_RETRY_S)
+    live.progress_at = clock() - runner.config.stall_s - 1
     runner._route = orig_route
     run(runner.tick())
     view = runner.view("p-cf")
     assert view["state"] == "running" and runner._live["rosy_42"].active_route is not None
     assert "goal_wait" not in view["detail"]
+    assert "peer_wait" not in view["detail"]
+    assert view["detail"]["last_peer_wait"]["cleared_at"] >= view["detail"]["last_peer_wait"]["since"]
     assert live.nav2_retry_at == -math.inf
 
     # Non-transient LOCALIZATION_UNTRUSTED still fails closed as TRIP_GOAL_REFUSED.

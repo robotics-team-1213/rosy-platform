@@ -366,7 +366,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
 
     @app.get("/api/fleet/trip-requests", dependencies=read_guard, tags=["fleet"])
     def trip_request_history() -> dict:
-        return {"requests": site_maps.trip_request_history()}
+        rows = site_maps.trip_request_history()
+        for row in rows:
+            if row["stage"] == "start_accepted":
+                trip = runner.view(row["plan_id"])
+                if trip and trip["robot_id"] == row["robot_id"]:
+                    detail = trip.get("detail") or {}
+                    row["outcome"] = {"robot_id": trip["robot_id"], "state": trip["state"],
+                                      "reason": trip.get("reason"), "detail": {k: detail[k] for k in
+                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait") if k in detail}}
+        return {"requests": rows}
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
     async def fleet_trip_cancel(trip_id: str,  # D-540 9: a stop stays open

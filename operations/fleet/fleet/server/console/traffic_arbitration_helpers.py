@@ -223,3 +223,60 @@ async def hold_robots_for_localization(console, mover: str, *, trust_mod) -> lis
         await console.formation_stop()
         held.append("formation")
     return held
+
+
+def peer_proof(self, peers):
+    provider = getattr(self, "_site_marker_clearance", None)
+    if provider is None:
+        return {}
+    return {"peer_evidence": {rid: sample for rid in peers if (sample := provider.evidence(rid))}}
+
+
+async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from):
+    from fleet.swarm.dispatch_guard import dispatch_guard
+
+    await self._observe()
+    grid = grid_from(await self.map()) if len(self._order) > 1 else None
+
+    class PeerWait(Exception):
+        pass
+
+    def check():
+        self.goal_leases.check_stop(robot_id, stop)
+        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid)
+        if wait is not None:
+            raise PeerWait(wait)
+
+    try:
+        check()
+        with dispatch_guard(check, paths={"/api/v1/navigation/route", "/api/v1/navigation/bound-route"}):
+            return await send()
+    except PeerWait as exc:
+        return exc.args[0]
+
+
+def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
+
+    here = self._pose_of(robot_id)
+    if here is None or self._verdict(robot_id) != "trusted":
+        return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
+                "command_robot_id": robot_id, "blocked_by": robot_id, "waiting_on": [robot_id],
+                "dispatch_attempted": False, "cancel_confirmed": False}
+    route = [here] + [(p["x"], p["y"]) for p in route_points]
+    site_route = site_route_of(route)
+    peers = [rid for rid in self._order if rid != robot_id
+             and self._untrusted_blocks(rid, route, site_route=site_route)]
+    reason = "LOCALIZATION_UNTRUSTED"
+    if not peers:
+        blocker, conflict = self._claim_blocker(robot_id, route, site_route=site_route)
+        if blocker is not None:
+            peers = [blocker]
+            reason = "ROUTE_CONFLICT" if conflict else "MAP_FRAME_MISMATCH"
+        elif len(self._order) > 1:
+            peers = self._standing_in_the_way(robot_id, route, grid, goal, site_route=site_route)
+            reason = "YIELDING"
+    if peers:
+        return {"accepted": False, "queued": False, "reason": reason, **peer_proof(self, peers),
+                "command_robot_id": robot_id, "blocked_by": peers[0], "waiting_on": peers,
+                "stage": "pre_dispatch_peer_check", "site_route_map": site_route[0] if site_route else None,
+                "dispatch_attempted": False, "cancel_confirmed": False}
