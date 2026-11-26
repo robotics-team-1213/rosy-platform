@@ -35,7 +35,7 @@ def _home_failure_guidance(arm: str, err: str) -> str:
 
 
 def _ensure_foundation_path() -> None:
-    extra = HERE.parents[3] / "contracts" / "foundation"
+    extra = HERE.parents[2] / "contracts" / "foundation"  # HERE is deploy/robot/omx; parents[2] is the release root
     if extra.is_dir() and str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 
