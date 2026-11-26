@@ -17,7 +17,7 @@ async def observe_states(console) -> None:
     results = await asyncio.gather(
         *(_read(console, rid) for rid in order), return_exceptions=True)
     console._remember([
-        {"robot_id": rid, "state": None if isinstance(r, BaseException) else r}
+        {"robot_id": rid, "online": not isinstance(r, BaseException), "state": None if isinstance(r, BaseException) else r}
         for rid, r in zip(order, results) if rid in console._clients])
 
 

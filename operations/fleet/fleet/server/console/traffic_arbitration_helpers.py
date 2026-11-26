@@ -15,6 +15,9 @@ def remember_traffic_states(console, robots: Sequence[dict], *, trust_mod) -> No
     for row in robots:
         if row["robot_id"] not in console._clients:
             continue
+        marker_clearance = getattr(console, "_site_marker_clearance", None)
+        if marker_clearance is not None:
+            marker_clearance.link(row)
         state = row.get("state") or {}
         if state:
             robot_id = row["robot_id"]
@@ -177,9 +180,14 @@ def site_frame_clear(console, other_id: str, site_route: Optional[tuple[str, lis
                      keep_out_m: float, *, trust_mod) -> Optional[bool]:
     """Whether `other_id` is measured clear of `site_route` on the same active site map (None = unproven)."""
     provider = getattr(console, "_site_obstacle_pose", None)
+    marker_clearance = getattr(console, "_site_marker_clearance", None)
     if site_route is None or provider is None:
-        return None
+        return marker_clearance.clear(console, other_id, None, keep_out_m, None) if marker_clearance is not None else None
     other = provider(other_id)
+    if marker_clearance is not None:
+        result = marker_clearance.clear(console, other_id, site_route, keep_out_m, other)
+        if result is not None:
+            return result
     if other is None or other[0] != site_route[0]:
         return None
     return not trust_mod.blocks(site_route[1], (other[1], other[2]), keep_out_m=keep_out_m)
