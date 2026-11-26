@@ -46,9 +46,11 @@ def test_real2sim_sim_stops_on_a_refused_map_unless_told(monkeypatch):
     started = []
     monkeypatch.setattr(r2s, "sim", lambda *a, **k: started.append(a) or {})
     with pytest.raises(SystemExit, match="contradicts itself"):
-        r2s.main(["sim", snapshot, "--sha", "x", "--out", "unused", "--choice", "top_camera=2026-11-10"])  # its own camera moved: Layout refuses that already
+        r2s.main(["sim", snapshot, "--sha", "x", "--out", "unused", "--choice", "top_camera=2026-11-10", "--choice", "arm_bases=photo-20261114"])  # 11-14 bases on the 11-10 ship: bridge v7 170 mm
     assert not started
-    assert r2s.main(["sim", snapshot, "--sha", "x", "--out", "unused", "--choice", "top_camera=2026-11-10", "--unverified-ok"]) == 0 and len(started) == 1
+    assert r2s.main(["sim", snapshot, "--sha", "x", "--out", "unused", "--choice", "top_camera=2026-11-10", "--choice", "arm_bases=photo-20261114",
+                     "--unverified-ok"]) == 0 and len(started) == 1
+    assert r2s.main(["sim", snapshot, "--sha", "x", "--out", "unused", "--choice", "top_camera=2026-11-10"]) == 0  # default 194 bases follow the measured ship
 
 
 def test_bases_hung_on_the_measured_ship_agree_with_the_bridge_in_an_older_snapshot():
