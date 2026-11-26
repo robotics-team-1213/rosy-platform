@@ -199,7 +199,7 @@ def run_console(args: argparse.Namespace) -> None:
                              if vision_preview_secret_env else None)
     if vision_preview_secret_env and not vision_preview_secret:
         sys.exit("vision preview secret environment variable is required")
-    calibration_drift_watch = None
+    calibration_drift_watch = road_vision_demand = None
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_identity_config, load_sighting_sources
@@ -233,6 +233,12 @@ def run_console(args: argparse.Namespace) -> None:
         drift_provider = None
         vision_url = getattr(args, "vision_url", None)
         drift_interval_s = getattr(args, "calibration_drift_interval_s", DEFAULT_INTERVAL_S)
+        if vision_url and vision_preview_secret:
+            from core_common.protocol.vision_preview import VisionLeaseSigner
+            from fleet.server.road_vision_demand import RoadVisionDemand
+            reader = VisionMapProposalReader(base_url=vision_url, signer=VisionLeaseSigner(vision_preview_secret),
+                                             principal_id="fleet-road-tracking", timeout_s=3.)
+            road_vision_demand = RoadVisionDemand(reader, sighting_service)
         if vision_url and drift_interval_s:
             # The watch reads Vision's existing D-375 map-proposal endpoint with a preview
             # lease signed here; without the secret it could not talk to Vision at all.
@@ -371,7 +377,7 @@ def run_console(args: argparse.Namespace) -> None:
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
-                     vision_sources=vision_sources,
+                     vision_sources=vision_sources, road_vision_demand=road_vision_demand,
                      lan_camera_proxy=getattr(args, "lan_camera_proxy", False),
                      enrollment=enrollment, robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,

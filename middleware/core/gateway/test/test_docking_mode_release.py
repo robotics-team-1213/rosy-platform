@@ -255,3 +255,35 @@ def test_scoped_cancel_preserves_a_different_or_newer_dock_run(core_client):
     result = client.post(path, json=body, headers={"Authorization": "Bearer rosy-dev-admin"})
     assert result.status_code == 200 and result.json()["operation"]["result"] == "CANCELED"
     assert services.docking.state is DockState.UNDOCKED
+
+
+def test_commission_requires_stationary_native_owners_and_exact_grid(core_client, monkeypatch):
+    from types import SimpleNamespace as NS
+    from test_docking_mode_ownership import ADMIN, OPERATOR
+    client, svc = core_client(config_overrides=sim_overrides())
+    observed = NS(robot_id="rosy_42", map_id="map42", map_grid_id="grid42", map_generation=5,
+                  pose_frame="map", localization=NS(state="LOCALIZED"), mode="IDLE", navigation="IDLE",
+                  line_follow=NS(mode="OFF"), evidence={k:NS(evidence="fresh") for k in ("pose", "velocity")},
+                  velocity=NS(linear=0., angular=0.))
+    monkeypatch.setattr(svc.state, "snapshot", lambda: observed)
+    monkeypatch.setattr(svc.docking.database, "frame_key", lambda:"map42")
+    body = {"robot_id":"rosy_42","map_id":"map42","map_grid_id":"grid42","map_generation":5,
+            "dock_type":{"name":"station_line","detector":"camera_line","approach":"line"},
+            "dock":{"id":"bay_c2","type":"station_line","map_id":"map42","x":0., "y":0., "yaw":0.}}
+    path = "/api/v1/docking/commission"
+    assert client.post(path, json=body, headers=OPERATOR).status_code == 403
+    for key, value in (("map_generation", 6), ("map_grid_id","other"), ("mode","MANUAL"), ("navigation","PLANNING"),
+                       ("velocity", NS(linear=.01, angular=0.)), ("evidence",{})):
+        with monkeypatch.context() as m:
+            m.setattr(observed,key,value)
+            assert client.post(path, json=body, headers=ADMIN).status_code == 409
+    lease = svc.nav.claim_precision()
+    assert lease is not None
+    try:
+        assert client.post(path, json=body, headers=ADMIN).status_code == 409
+    finally:
+        svc.nav.release_precision(lease)
+    assert not any(d.id=="bay_c2" for d in svc.docking.database.list())
+    response = client.post(path, json=body, headers=ADMIN)
+    assert response.status_code == 200, response.text
+    assert response.json()["metadata"]["commissioned_map_generation"] == 5
