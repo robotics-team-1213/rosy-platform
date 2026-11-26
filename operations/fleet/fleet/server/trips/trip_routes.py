@@ -142,6 +142,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         runner.human_hold_fn = lambda: bool(
             callable(getattr(app.state, "pipeline_human_hold_fn", None)) and app.state.pipeline_human_hold_fn()
         )
+        # the reason must follow the hold: without it a closed dispatch latch reads as HUMAN_HOLD
+        runner.hold_state_fn = lambda: (getattr(app.state, "pipeline_hold_state_fn", None) or (lambda: None))()
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
@@ -264,6 +266,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
                               stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
+                              ignore_arrive_heading=nav2,
                               nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0,
                               # Rear-bay staging within the trip's arrive radius is reached: CORE docks from there.
                               # A shorter Nav2 goal ends before its first lease renewal, and snapping onto the exit
@@ -300,7 +303,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 await runner.camera_check(robot_id, caps)
             except TripError as exc:
                 record({"error": exc.code, "detail": exc.detail})
-                raise _refuse(exc.code, exc.detail) from exc
+                raise _refuse(exc.code, exc.detail, status=exc.status) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         plan_data["start_check"] = start_check(
             active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2,

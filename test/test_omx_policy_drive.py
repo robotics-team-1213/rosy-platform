@@ -330,12 +330,6 @@ def test_refused_load_parks(tmp_path):
     assert result["result"] == "refused" and cell.commands[-1] == "park" and "run policy" not in cell.commands
 
 
-def test_moving_needs_person_at_switch():
-    with pytest.raises(SystemExit):
-        drive.main(["--config", "c", "--library", "l", "--policy-root", "p", "--policy-revision", "r",
-                    "--model-calibration", "m", "--cell-calibration", "c", "--operator", "x"])
-
-
 def test_demonstrated_range_widens_only_where_a_person_went(tmp_path):
     low, high, _ = drive.envelope(LIB)
     wl, wh = drive.widen(low, high, [0, -58, 30, 40, -2, 46], [20, -20, 51, 50, 48, 60])
@@ -1159,16 +1153,18 @@ def test_paced_pre_home_settles_sagged_start_or_fails_closed(tmp_path, monkeypat
                                max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
     assert r_home["result"] == "chunks_done" and not any("presettle" in e for e in c_home.events) and c_home.events.count("park") == 1
 
-    # Sagged and extended off-home starts — even with `presettle` chunk and verified authorize — fail closed with confirmed HOLD (run home stage first).
+    # Off-home starts fail closed (run home stage first): a folded rest (11-26 sagged pose) ends with no HOLD, neither home nor folded keeps it.
     seen_auth = []
-    for lp, pose in ((lib_path, sagged_pose), (ev_lib_path, sagged_pose), (ev_lib_path, [0, -58, 65.0, 50, -5, 49])):
+    for lp, pose, hold in ((lib_path, sagged_pose, False), (ev_lib_path, sagged_pose, False),
+                           (ev_lib_path, [0, -58, 65.0, 50, -5, 49], False), (ev_lib_path, [0, -20, 50, 50, -5, 49], True)):
         c_off = PreHomeCell(pose)
         r_off = drive.run_episode(
             c_off, Policy([chunk]), lp, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append,
             authorize=lambda *_a, **_kw: seen_auth.append(_a), paced_chunks=True,
         )
         assert r_off["result"] == "refused" and r_off["parked"] is False and "run home stage first" in r_off["reason"]
-        assert c_off.events == ["state", "human-hold"] and not seen_auth
+        assert c_off.events == (["state", "human-hold"] if hold else ["state"]) and not seen_auth
+        assert r_off["hold_kept"] is hold and r_off["reason_code"] == "START_POSE_OFF_HOME" and r_off["off_home"] > 0
 
     # Real Authorization passes check_home=False through to cell_envelope.assess.
     import cell_envelope
@@ -1182,21 +1178,22 @@ def test_paced_pre_home_settles_sagged_start_or_fails_closed(tmp_path, monkeypat
         handoff.Authorization({"calibration_path": str(cal_path)})(LIB, {"state": sagged_pose}, ("park",), check_home=False)
     assert assess_calls[-1]["check_home"] is False
 
-    # Missing home, non-stationary drift, holding True/None, high gripper current, and post-check fault ALL send confirmed human-hold before capture.
+    # Missing home, non-stationary drift, and post-check fault send confirmed human-hold before capture; holding True/None and high gripper
+    # current at home (no fault, no command sent) refuse without a hold so the session is returned at once.
     no_home_lib = tmp_path / "no-home.json"
     no_home_lib.write_text(json.dumps({**LIB, "chunks": {"reach": LIB["chunks"]["reach"]}}))
     r_no_home = drive.run_episode(c_nh := PreHomeCell(good_pose), Policy([chunk]), no_home_lib, tmp_path,
                                   offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
     assert r_no_home["result"] == "refused" and "missing home" in r_no_home["reason"] and c_nh.events == ["state", "human-hold"]
 
-    for kw in (
-        {"second_state": [0, -58, 51.35, 50, -5, 49]},
-        {"holding": True}, {"holding": None}, {"current_ma": 150}, {"post_fault": "motor_err"},
+    for kw, hold in (
+        ({"second_state": [0, -58, 51.35, 50, -5, 49]}, True), ({"holding": True}, False), ({"holding": None}, False),
+        ({"current_ma": 150}, False), ({"post_fault": "motor_err"}, True),
     ):
         c_hh = PreHomeCell(good_pose, **kw)
         r_hh = drive.run_episode(c_hh, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
                                  max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
-        assert r_hh["result"] in ("refused", "fault") and c_hh.events[-1] == "human-hold"
+        assert r_hh["result"] in ("refused", "fault") and (c_hh.events[-1] == "human-hold") is hold
         assert not any("load " in e or "run policy" in e or e.startswith("frame:") for e in c_hh.events)
 
     # Dry run skips start-home verification and HOLD.
@@ -1215,7 +1212,7 @@ def test_paced_pre_home_settles_sagged_start_or_fails_closed(tmp_path, monkeypat
     c_jaw = PreHomeCell(bad_jaw_home)
     r_jaw = drive.run_episode(c_jaw, Policy([chunk]), jaw_lib, tmp_path, offset=[0] * 6,
                               max_chunks=1, dry_run=False, log=[].append, kin=FakeKin(), paced_chunks=True)
-    assert r_jaw["result"] == "refused" and "jaw" in r_jaw["reason"] and c_jaw.events == ["state", "human-hold"]
+    assert r_jaw["result"] == "refused" and "jaw" in r_jaw["reason"] and c_jaw.events == ["state"]  # at (bad) home, no command: no hold
 
 
 def test_paced_stops_on_unsettled_chunk_and_invalid_stamps(tmp_path):
@@ -1493,5 +1490,7 @@ def test_live_local_cpu_act_sets_nice_and_thread_env(tmp_path, monkeypatch):
               "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--goal-slot", "4",
               "--operator", "op_b", "--paced-chunks", "--max-chunks", "1"]
     assert drive.main([*common, "--dry-run"]) == 0 and nice_calls == []
+    import cell_stop_proof
+    monkeypatch.setattr(cell_stop_proof, "session_proof", lambda *a, **kw: {"ok": True, "code": None, "reason": None})
     assert drive.main([*common, "--person-at-switch"]) == 0 and nice_calls == [10]
     assert all(os.environ[v] == "2" for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"))

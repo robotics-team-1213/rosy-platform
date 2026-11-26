@@ -31,20 +31,21 @@ def test_costmaps_wait_for_amcl_before_activating():
 
 
 def test_nav2_default_inflation_is_the_hardware_value():
-    """현장 기본은 0.15 m. 시뮬 월드는 worlds.yaml이 덮어쓴다."""
+    """현장 기본은 0.12 m. 시뮬 월드는 worlds.yaml이 덮어쓴다."""
     data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
     for costmap in ("local_costmap", "global_costmap"):
-        radius = data[costmap][costmap]["ros__parameters"]["inflation_layer"][
-            "inflation_radius"
-        ]
-        assert radius == 0.15, f"{costmap} inflation_radius={radius}"
+        layer = data[costmap][costmap]["ros__parameters"]["inflation_layer"]
+        radius = layer["inflation_radius"]
+        assert radius == 0.12, f"{costmap} inflation_radius={radius}"
+        assert layer["cost_scaling_factor"] == 8.0, f"{costmap} cost_scaling_factor={layer['cost_scaling_factor']}"
+    assert data["global_costmap"]["global_costmap"]["ros__parameters"]["footprint_padding"] == 0.015
 
 
 def test_factory_sim_inflation_is_wider_than_hardware_default():
     catalog = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "worlds.yaml"
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]
     factory = float(worlds["rosy_factory.world"]["inflation_radius"])
-    assert factory > 0.15
+    assert factory > 0.12
 
 
 def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
@@ -52,10 +53,12 @@ def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
     data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
     controller = data["controller_server"]["ros__parameters"]
     tolerance = controller["general_goal_checker"]["xy_goal_tolerance"]
-    lookahead = controller["FollowPath"]["min_lookahead_dist"]
-    assert tolerance == 0.10
+    rpp = controller["FollowPath"]
+    lookahead = rpp["min_lookahead_dist"]
+    assert tolerance == 0.08
     assert tolerance < lookahead
-    assert tolerance < 0.20
+    assert lookahead < 0.12
+    assert rpp["use_regulated_linear_velocity_scaling"] is True
 
 
 def test_global_planner_is_smac_and_rejects_unknown():

@@ -10,7 +10,7 @@ the same `load` plan_check, start-gap check, speed/strain/jitter guards and hold
 - the model's LeRobot calibration and the cell's may differ by a homing offset (11-18: wrist_roll 957 ticks = 46.7
   units); `calibration_offset` maps cell state into model units and the action back.
 Timed ACT uses a single read-only inference worker and hands off to a taught carry in hybrid mode.
-Needs --person-at-switch (D-911) and a named operator. --dry-run replays timing without submitting motion."""
+Needs a named operator and a stop-capability proof measured at start (D-1077; --person-at-switch is ignored). --dry-run replays timing without submitting motion."""
 from __future__ import annotations
 
 import argparse
@@ -25,6 +25,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_lerobot_shadow as lrs  # noqa: E402
+import cell_policy_lease  # noqa: E402
 from cell_policy_entry import (  # noqa: E402,F401
     configured_arm_id as _configured_arm_id, open_policy_shadow,
     resolve_arm_id as _resolve_arm_id, safe_log_url as _safe_log_url,
@@ -178,7 +179,8 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout-s", type=float, default=0.8, help="remote inference HTTP timeout seconds (0, 2.0]")
     parser.add_argument("--arm-id", help="remote arm_id override (defaults to config.arm_id or profile device_id)")
     parser.add_argument("--operator", required=True, help="named person who approved this run")
-    parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
+    parser.add_argument("--person-at-switch", action="store_true", help="D-1077: ignored and logged; the stop proof replaces it")
+    parser.add_argument("--policy-lease", action="store_true", help="D-1024 3: push the runner a renewed lease; no armed runner, no motion")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--catalog", type=Path, help="with --roi and --site: count the source's objects before and after")
     parser.add_argument("--roi", type=int, nargs=4)
@@ -189,14 +191,9 @@ def main(argv=None) -> int:
                         help="use guarded step-rate-stretched chunk loop for full-chunk or sim-unit ACT checkpoints")
     parser.add_argument("--source-kind", choices=("policy", "sim_optimized", "scripted_teacher"))
     args = parser.parse_args(argv)
-    if not args.dry_run and not args.person_at_switch:
-        parser.error("moving the arm needs --person-at-switch (D-911)")
-    if not 1 <= args.max_chunks <= 60:
-        parser.error("--max-chunks 1..60")
-    if args.n_action is not None and args.n_action < 1:
-        parser.error("--n-action must be positive")
-    if not 0 < args.max_obs_age_s <= 5:
-        parser.error("--max-obs-age-s must be in (0, 5]")
+    if not 1 <= args.max_chunks <= 60: parser.error("--max-chunks 1..60")
+    if args.n_action is not None and args.n_action < 1: parser.error("--n-action must be positive")
+    if not 0 < args.max_obs_age_s <= 5: parser.error("--max-obs-age-s must be in (0, 5]")
     if args.mode != "taught" and not all((args.policy_root, args.policy_revision, args.cell_calibration)):
         parser.error("ACT needs --policy-root, --policy-revision and --cell-calibration")
     if args.mode != "act" and not args.goal_site:
@@ -205,12 +202,9 @@ def main(argv=None) -> int:
         parser.error("--mask-pick-goal requires hybrid mode")
     if args.endpoint_url and args.mode == "taught":
         parser.error("--endpoint-url cannot be used with taught mode")
-    if args.token_file and not args.endpoint_url:
-        parser.error("--token-file requires --endpoint-url")
-    if args.mask_pick_goal and args.endpoint_url:
-        parser.error("--mask-pick-goal cannot be used with --endpoint-url")
-    if args.paced_chunks and args.mode == "taught":
-        parser.error("--paced-chunks requires act or hybrid mode")
+    if args.token_file and not args.endpoint_url: parser.error("--token-file requires --endpoint-url")
+    if args.mask_pick_goal and args.endpoint_url: parser.error("--mask-pick-goal cannot be used with --endpoint-url")
+    if args.paced_chunks and args.mode == "taught": parser.error("--paced-chunks requires act or hybrid mode")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")
@@ -234,6 +228,7 @@ def main(argv=None) -> int:
             except OSError:
                 pass
     shadow = open_policy_shadow(args, config, parser, lrs)
+    lease = None
     try:
         destination = mapped_slot = None
         goal_slot = args.goal_slot
@@ -283,19 +278,22 @@ def main(argv=None) -> int:
                                          "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
         log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "mask_pick_goal": args.mask_pick_goal,
-             "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
+             "dry_run": args.dry_run, "person_at_switch_ignored": args.person_at_switch,
              "endpoint_url": _safe_log_url(args.endpoint_url), "max_chunks": args.max_chunks, "n_action": args.n_action,
              "max_obs_age_s": args.max_obs_age_s, "goal_slot": goal_slot, "goal_site": args.goal_site,
              "goal_destination": destination, "goal_site_slot": mapped_slot,
              "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None})
         from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
-        import cell_params as prm
+        import cell_params as prm, cell_stop_proof as stop_proof
         authorize = handoff = rim_z_m = None
         try:
             config["params"] = prm.load(config.get("params_path"))["values"]
             config.pop("_commissioning", None)
             if not args.dry_run:
-                config["_commissioning"] = {"person_at_switch": args.person_at_switch}
+                proof = stop_proof.session_proof(cell, run_id, args.arm_id or str(config.get("arm_id") or "arm"))
+                log({"stop_proof": proof})
+                if not proof["ok"]: raise SystemExit(f"no stop-capability proof ({proof['code']}): {proof['reason']}")
+                config["_commissioning"] = {"stop_proof": proof}
                 authorize = Authorization(config)
             library = json.loads(args.library.read_text(encoding="utf-8"))
             source = args.site or "belt"
@@ -342,6 +340,8 @@ def main(argv=None) -> int:
                 if error:
                     return {"result": "refused", "reason": error}
             runner = cell_route_depth.motion_cell(cell, before_top)
+            if lease and (why := lease.start()):  # the runner never armed this episode's lease: nothing moved
+                return {"result": "refused", "at": 0, "reason": why, "parked": False}
             if args.mode == "taught":
                 try:
                     res = run_taught(runner, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
@@ -373,6 +373,7 @@ def main(argv=None) -> int:
             return res
 
         import cell_bundle_emit
+        lease = cell_policy_lease.LeaseFeed.from_args(args, config, cell) if not args.dry_run else None
 
         with cell_bundle_emit.PolicyCapture(
             cell, config, work=work, mode=args.mode, paced_chunks=args.paced_chunks,
@@ -388,6 +389,8 @@ def main(argv=None) -> int:
                 result["failure_bundle_id"] = bid
         return _finish(result)
     finally:
+        if lease:
+            lease.stop()
         if shadow is not None and hasattr(shadow, "close"):
             shadow.close()
 

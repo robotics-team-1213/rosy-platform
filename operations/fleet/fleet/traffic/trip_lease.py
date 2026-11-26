@@ -125,7 +125,7 @@ class TripLease:
         try:
             answer = await self._put(robot_id, self._body(lease["lease_id"], live.view))
         except RobotApiError as exc:
-            if exc.status >= 500:
+            if exc.status >= 500 or exc.status == 429:
                 return  # CORE did not judge it; the ttl rule decides
             ended = (exc.detail or {}).get("ended") or {}
             await self.lose(live, ended.get("reason") or ("leased" if exc.code == "TRIP_LEASED" else exc.code),

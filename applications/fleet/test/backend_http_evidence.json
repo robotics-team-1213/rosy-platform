@@ -2257,6 +2257,46 @@
         "test_start_history_keeps_rejection_and_retry_on_same_plan"
       ],
       "source_revision": "a7afd28a69595ebdcf3b1155726dbcb73f244f52"
+    },
+    "GET:/api/fleet/cells/{cell}/jobs/options": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_proxy_routes.py",
+        "test_options_show_models_without_paths"
+      ],
+      "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+    },
+    "GET:/api/fleet/cells/{cell}/jobs/readiness": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_proxy_routes.py",
+        "test_viewer_reads_but_cannot_start"
+      ],
+      "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+    },
+    "GET:/api/fleet/cells/{cell}/jobs/queue": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_proxy_routes.py",
+        "test_viewer_reads_but_cannot_start"
+      ],
+      "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+    },
+    "GET:/api/fleet/cells/{cell}/jobs/{job_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_proxy_routes.py",
+        "test_viewer_reads_but_cannot_start"
+      ],
+      "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+    },
+    "POST:/api/fleet/cells/{cell}/jobs/{job}": {
+      "status": 202,
+      "test": [
+        "operations/fleet/test/test_cell_job_proxy_routes.py",
+        "test_policy_drive_carries_the_named_operator_and_fleet_side_files"
+      ],
+      "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
     }
   }
 }

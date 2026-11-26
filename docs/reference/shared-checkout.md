@@ -146,6 +146,7 @@ flowchart TD
    - 공유 인덱스에 동료가 이미 올려 둔 경로가 있으면, 파일이 전부 자신 것일 때만 `git commit --only <자신의 경로>`를 쓴다. `--only`는 작업 트리 내용을 기록하기 때문이다. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash`는 쓰지 않는다. 그 사이 HEAD가 동료의 커밋이 될 수 있다. `git commit -- <공유 파일>`도 쓰지 않는다. 작업 트리 전체를 가져가 동료의 행이 들어간다.
    - 이어 쓰는 파일 `docs/reference/ROSY ADR Log.md`와 `docs/logs.md`에 동료의 미커밋 행이 있을 수 있다. 자신의 행만 `git apply --cached --unidiff-zero my-row.patch`로 올리고, `git diff --cached -- <file>`이 자신의 행만 보여 주면 끝이다. 브랜치 이름을 적는 문서는 `git branch`가 출력한 이름을 그대로 쓴다.
    - 자신이 쓰지 않은 경로는 그대로 둔다. stash, revert, checkout, restore, reset, clean, amend, 삭제로 치우지 않는다. 루트의 추적되지 않은 `list.txt`는 로컬 메모라 커밋하지 않는다. 머지나 체크아웃이 그 파일 때문에 거절되면 파일을 그대로 두고 거절 문구를 사용자에게 알린다.
+   - **Safety-Review는 커밋 시점에 막는다.** `tools/hooks/install.sh`가 넣는 `commit-msg` 훅이 스테이징한 파일이 safety 경로이면 첫 메시지에 `Safety-Review: <검토자/레인> <증거>` 줄이 없을 때 커밋을 거절한다(`git commit -m "<제목>" -m "Safety-Review: ..."`). 훅은 공용 `.git/hooks`에 있어 `worktrees.py new` 워크트리에도 적용된다. 나중에 amend·`reset --soft`로 넣지 않는다. `pr_land`는 브랜치 커밋의 `Safety-Review:` 줄을 PR 본문에 옮겨 큐의 병합 커밋(두 쪽이 같은 파일을 바꾸면 병합 커밋도 검사 대상, #991)이 같은 줄을 갖게 한다.
 3. **계약을 읽고 고친다.** 제품 파일을 고치기 전에 [README 「핵심 계약」](../../README.md#핵심-계약)과
    `AGENTS.md`의 Working In This Directory를 읽는다. 외부 API, 모드, 프로토콜
    필드는 그 문서가 가리키는 SRS, API reference, ADR에 있는 것만 쓴다. 읽기가

@@ -15,11 +15,13 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from cell_act_verdict import FOLD_FRESH_S, FOLD_TOLERANCE, fold_readback, measured_fold, plan_home  # noqa: F401 (moved: the job API needs them without omx_adapter)
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
 import cell_site_target
 from cell_route_check import pick_site
-from cell_task_act import preflight_act_policy_task
+from cell_task_act import plan_act_policy_task
+from cell_task_act_run import execute_act_policy_task
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 _DEFAULT_URLOPEN = urlopen
@@ -121,7 +123,6 @@ def classify_poll_error(exc: Exception, token_file: str | Path) -> dict[str, Any
 
 
 # D-1057. Same tolerance as chunk_runner_guards.SETTLE_TOL, which the transfer gate uses to accept a park as home.
-FOLD_TOLERANCE = 3.0
 ZONE_BASIS = "predefined_side_and_top_target_zones"
 TOP_ONLY_BASIS = "top_camera_only_target_zone"  # cell S only (D-1057, user decision 2026-11-20): it has no side camera
 
@@ -148,38 +149,6 @@ def _last_attempt(parsed: dict[str, Any]) -> dict[str, Any]:
     return last if isinstance(last, dict) else {}
 
 
-def fold_readback(attempt: dict[str, Any], home: Any) -> dict[str, Any]:
-    """Measured fold: the final transfer step is a settled park whose joint readback is within FOLD_TOLERANCE of home.
-
-    The readback comes from the owner's park step (`state`, `settled`, `ok`), never from the placement result.
-    `t` is the runner's monotonic clock, so it is carried as-is and not used as a wall time.
-    """
-    steps = (attempt.get("transfer") or {}).get("steps") if isinstance(attempt.get("transfer"), dict) else None
-    park = steps[-1] if isinstance(steps, list) and steps and isinstance(steps[-1], dict) else {}
-    state = park.get("state")
-    # Body joints only (the first five), as cell_recovery.at_home does; the jaw is the sixth and does not count.
-    numbers = (isinstance(state, list) and isinstance(home, list) and len(state) >= 5 and len(home) >= 5
-               and all(type(v) in (int, float) and math.isfinite(v) for v in state[:5] + home[:5]))
-    folded = bool(park.get("command") == "park" and park.get("ok") is True and park.get("settled") is True
-                  and not park.get("fault") and numbers
-                  and all(abs(p - h) <= FOLD_TOLERANCE for p, h in zip(state[:5], home[:5])))
-    return {"folded": folded, "command": park.get("command"), "state": state if numbers else None,
-            "home": home if numbers else None, "tolerance": FOLD_TOLERANCE, "runner_t": park.get("t")}
-
-
-def plan_home(cfg_data: dict[str, Any]) -> Any:
-    """The fold-home pose the runtime uses: `home` of the grasp plan file named by the config's `plan_path`.
-
-    `cell_auto_setup.load_config` loads that file into `config["plan"]`; the config JSON itself never carries it.
-    None when the file is unreadable or has no `home` (then nothing counts as folded).
-    """
-    try:
-        plan = json.loads(Path(str(cfg_data.get("plan_path") or "")).expanduser().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return plan.get("home") if isinstance(plan, dict) else None
-
-
 def tools_root() -> Path:
     """The release the worker runs from (its unit sets TOOLS_ROOT): the arm session wrappers and their tools come from it,
     not from the prep folder or the hand-switched omx-tools-current link (2026-11-21: one release for worker and arm)."""
@@ -197,22 +166,6 @@ def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[
     wrapper, cfg, cat, roi, default_src = specs[arm_id]
     wrappers = tools_root() / "deploy/robot/omx/session-wrappers"  # the cell configs and catalogs stay prep-folder data
     return wrappers / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
-
-
-FOLD_FRESH_S = 60.0  # the measured fold must come from this session's last park, not an old status line
-
-
-def measured_fold(arm_id: str, prep_dir: Path, now: float | None = None) -> dict[str, Any]:
-    """The arm's last runner state from chunk-status (the telemetry reader): folded only when that state says so and is
-    fresh. 2026-11-19 panel: `folded` used to copy `placed`, so a Pinky could be released with the arm over its bed."""
-    import time as _time
-
-    from cell_camera_telemetry_sync import _collect_live_arm_states
-
-    live = _collect_live_arm_states(prep_dir).get(arm_id) or {}
-    now = _time.time() if now is None else now
-    fresh = isinstance(live.get("updated_at"), (int, float)) and now - live["updated_at"] <= FOLD_FRESH_S
-    return {"folded": bool(live.get("folded")) and fresh, "state": live.get("joints_deg"), "fresh": fresh}
 
 
 ZONE_TOL_M = 0.02  # the vehicle re-parks only past this (its repark lands within ~2 mm on 11-19)
@@ -264,8 +217,12 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         if handoff.get("displaced_to") not in (None, ""):
             return {"arm": arm_id, "error": "UNCALIBRATED_DISPLACED_SITE",
                     "stop_event": {"command": "stop", "ok": False, "folded": False}}
-        return preflight_act_policy_task(handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper,
-                                         cfg=cfg, default_roi=default_roi)
+        planned = plan_act_policy_task(handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper, cfg=cfg, default_roi=default_roi)
+        return planned if "plan" not in planned else execute_act_policy_task(
+            handoff, planned["plan"], arm_id=arm_id, wrapper=wrapper, cfg=cfg, cat=cat, prep_dir=prep_dir,
+            lease_owner=f"{WORKER_LEASE_PREFIX}{os.getpid()}", tools_root_fn=tools_root, run_fn=subprocess.run,
+            last_json_fn=last_json_object, measured_fold_fn=measured_fold, fold_readback_fn=fold_readback, plan_home_fn=plan_home,
+            write_context_fn=write_context, timeout_exc=subprocess.TimeoutExpired, source_clearance_fn=source_clearance)
     if not wrapper.is_file() or not cfg.is_file():
         return {"arm": arm_id, "error": "CELL_CONFIG_OR_WRAPPER_MISSING",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}

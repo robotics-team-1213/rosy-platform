@@ -14,6 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" 
 import cell_job_api as api  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
+    monkeypatch.setattr(api, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
+
+
 def _make_workdir(tmp_path: Path) -> Path:
     for name in ("cell-a.json", "cell-b.json", "cell-s.json", "catalog-live.json", "chunks-s.json"):
         (tmp_path / name).write_text("{}", encoding="utf-8")
@@ -132,8 +138,7 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--paced-chunks" in hybrid_paced and hybrid_paced[hybrid_paced.index("--mode") + 1] == "hybrid"
     live = {**base_policy, "dry_run": False}
     assert api.build_argv(api.JOBS["cell_policy_drive"], live, wd)[0] == "./with-session-arm-s-live.sh"
-    with pytest.raises(ValueError, match="person_at_switch"):
-        api.build_argv(api.JOBS["cell_policy_drive"], {**live, "person_at_switch": False}, wd)
+    assert api.build_argv(api.JOBS["cell_policy_drive"], {**live, "person_at_switch": False}, wd)[-1] == "--person-at-switch"  # D-1077: ignored here, the runner's proof gates
 
     job = api.JOBS["cell_policy_drive"]
     with_goal = {**base_policy, "goal_site": "yard:r3-s2-t1"}
@@ -266,12 +271,6 @@ def test_home_job_argv_requires_person_and_session(tmp_path):
     assert "--stage" in argv and "home" in argv
     assert "--commissioning" in argv and "--person-at-switch" in argv
     assert "--operator" not in argv and "--proposer" not in argv
-    with pytest.raises(ValueError, match="person_at_switch"):
-        api.build_argv(
-            api.JOBS["home"],
-            {"arm": "arm_b", "config": "cell-b.json", "library": "chunks-a.json", "operating_profile": "profile-b.json"},
-            wd,
-        )
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(
             api.JOBS["home"],
@@ -611,8 +610,6 @@ def test_surface_job_argv_requires_person_at_switch(tmp_path):
     assert "cell_calibrate.py" in argv
     assert argv[argv.index("--only") + 1] == "surface"
     assert "--commissioning" in argv and "--person-at-switch" in argv
-    with pytest.raises(ValueError, match="person_at_switch"):
-        api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": False}, wd)
     (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"place": [0.1, 0.2]}}}), encoding="utf-8")
     with pytest.raises(ValueError, match="R cell-task -> cell_task_worker -> Gate"):
         api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
@@ -713,8 +710,6 @@ def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, mo
     argv_apply = api.build_argv(api.JOBS["post_eval"], {**base, "apply": True}, wd)
     assert "--apply" in argv_apply
 
-    with pytest.raises(ValueError, match="person_at_switch"):
-        api.build_argv(api.JOBS["post_eval"], {**base, "person_at_switch": False}, wd)
 
     popen = Mock()
     monkeypatch.setattr(api.subprocess, "Popen", popen)
@@ -963,3 +958,21 @@ def test_runner_answers_400_when_the_release_path_cannot_be_resolved(tmp_path, m
     res = api.Runner(wd, lock_dir=wd).start("cell_policy_drive", {"dry_run": True})
     assert res["code"] == 400 and "symlink loop" in res["error"]
     popen.assert_not_called()
+
+
+def test_remap_obstacle_mm_validation_and_argv(tmp_path):
+    wd = _make_workdir(tmp_path)
+    argv = api.build_argv(
+        api.JOBS["remap"],
+        {"arm": "arm_a", "config": "cell-a.json", "obstacle_mm": 80, "person_at_switch": True},
+        wd,
+    )
+    idx = argv.index("--obstacle-mm")
+    assert argv[idx + 1] == "80"
+    for bad in (0, -5, 250, True, "80"):
+        with pytest.raises(ValueError):
+            api.build_argv(
+                api.JOBS["remap"],
+                {"arm": "arm_a", "config": "cell-a.json", "obstacle_mm": bad, "person_at_switch": True},
+                wd,
+            )

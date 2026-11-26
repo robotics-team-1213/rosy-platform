@@ -90,8 +90,11 @@ export function createZoneBlueprintInspector({ scope, call, log } = {}) {
   const detailWrap = mk("aside", "zb-detail-wrap");
   const detailTitle = mk("h3", "", "선택 구역 상세");
   const detailDl = mk("dl", "zb-detail");
-  const statusNote = mk("p", "hint zb-status-note", "열면 최신 YAML·사이트 좌표를 불러옵니다.");
-  detailWrap.append(detailTitle, detailDl, statusNote);
+  const checkTitle = mk("h3", "", "지도 검사");
+  const checkList = mk("ul", "zb-check-list");
+  checkList.setAttribute("aria-label", "겹침과 여유 확인");
+  const statusNote = mk("p", "hint zb-status-note", "열면 최신 YAML·활성 지도를 불러옵니다.");
+  detailWrap.append(detailTitle, detailDl, checkTitle, checkList, statusNote);
   body.append(listEl, stageEl, detailWrap);
   panel.append(head, tabs, body);
   document.body.append(panel);
@@ -126,7 +129,8 @@ export function createZoneBlueprintInspector({ scope, call, log } = {}) {
 
     listEl.replaceChildren(...visibleItems.map((item) => {
       const li = mk("li");
-      const btn = uiBtn(`${item.label}\n${item.subtitle}`, "quiet", {
+      const flagged = item.footprintId ? model.conflictsOf(item.footprintId).length : 0;
+      const btn = uiBtn(`${item.label}\n${item.subtitle}${flagged ? `\n겹침·여유 확인 ${flagged}건` : ""}`, "quiet", {
         "data-selected": String(item.id === selectedId),
       });
       btn.className = "zb-list-btn";
@@ -138,6 +142,14 @@ export function createZoneBlueprintInspector({ scope, call, log } = {}) {
     const selectedItem = model.items.find((item) => item.id === selectedId) || null;
     const rows = formatZoneDetailRows(selectedItem, model);
     detailDl.replaceChildren(...rows.flatMap((row) => [mk("dt", "", row.term), mk("dd", "", row.value)]));
+    const selectedFootprint = selectedItem?.footprintId || null;
+    const ordered = [...model.conflicts].sort((a, b) =>
+      Number(b.ids.includes(selectedFootprint)) - Number(a.ids.includes(selectedFootprint)));
+    checkList.replaceChildren(...(ordered.length ? ordered : [{ kind: "ok", text: "겹침 없음" }]).map((entry) => {
+      const li = mk("li", entry.kind === "overlap" ? "zb-check-crit" : entry.kind === "near" || entry.kind === "stale_yaml" ? "zb-check-warn" : "");
+      li.textContent = entry.text;
+      return li;
+    }));
 
     if (mode === "3d") {
       view2d?.dispose?.();
@@ -157,16 +169,19 @@ export function createZoneBlueprintInspector({ scope, call, log } = {}) {
     statusTag.setAttribute("status", "neutral");
     statusTag.textContent = "불러오는 중";
     const opts = life ? { signal: life.signal } : {};
-    const [spRes, szRes, ctRes] = await Promise.allSettled([
+    const [spRes, szRes, ctRes, smRes] = await Promise.allSettled([
       call("/api/fleet/site-points", opts),
       call("/api/fleet/pipeline/station-zones", opts),
       call("/api/fleet/pipeline/cell-tasks", opts),
+      call("/api/fleet/site-map/active", opts),
     ]);
     if (panel.hidden) return;
     const sitePoints = spRes.status === "fulfilled" ? spRes.value : null;
     const stationZones = szRes.status === "fulfilled" ? szRes.value : null;
     const cellTasks = ctRes.status === "fulfilled" ? ctRes.value : null;
-    model = buildZoneBlueprintModel({ sitePoints, stationZones, cellTasks });
+    // Without an active map (404/409) the zones are still listed; only the lanes are missing.
+    const siteMap = smRes.status === "fulfilled" ? smRes.value : null;
+    model = buildZoneBlueprintModel({ sitePoints, stationZones, cellTasks, siteMap });
 
     if (!sitePoints && !stationZones) {
       statusTag.setAttribute("status", "warn");
@@ -174,9 +189,17 @@ export function createZoneBlueprintInspector({ scope, call, log } = {}) {
       statusNote.textContent = "site-points·station-zones 응답을 불러오지 못했습니다. 로그인과 Fleet 연결을 확인하세요.";
       log?.("구역 도면 조회 실패: site-points / station-zones 응답 없음", "warn");
     } else {
-      statusTag.setAttribute("status", "active");
-      statusTag.textContent = `${model.items.length}개 구역`;
-      statusNote.textContent = `정류장 ${model.stops.length} · 대기칸 ${model.stagingBays.length} · 반출대 ${model.exportStations.length} · 팔 셀 ${model.armZones.length}`;
+      const overlaps = model.conflicts.filter((conflict) => conflict.kind === "overlap").length;
+      statusTag.setAttribute("status", overlaps ? "warn" : "active");
+      statusTag.textContent = `${model.items.length}개 구역${overlaps ? ` · 겹침 ${overlaps}` : ""}`;
+      const areaErrors = stationZones?.area_errors || [];
+      statusNote.textContent = [
+        `정류장 ${model.stops.length} · 대기칸 ${model.stagingBays.length} · 반출대 ${model.exportStations.length} · 팔 셀 ${model.armZones.length}`,
+        model.siteMap
+          ? `지도 ${model.siteMap.mapId} v${model.siteMap.version ?? "?"}`
+          : "활성 사이트 지도 없음 · 차로를 그리지 못함",
+        areaErrors.length ? `영역 오류 ${areaErrors.length}건: ${areaErrors.join("; ")}` : "",
+      ].filter(Boolean).join(" · ");
     }
     const target = resolveBlueprintTarget(model, initialQuery);
     if (target) selectedId = target.id;

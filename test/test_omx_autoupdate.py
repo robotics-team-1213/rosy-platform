@@ -997,6 +997,119 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
 
 
+def test_an_unplugged_arm_board_does_not_block_the_other_observers(tmp_path, monkeypatch, capsys):
+    """2026-11-27: arm_s unplugged or cleanly inactive/dead past handoff grace with torque OFF does not block arm_a/arm_b."""
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    unit_states = {"rosy-omx-observer@arm_b.service": ("active", "running"), "rosy-omx-observer@arm_s.service": ("inactive", "dead")}
+
+    def _run(args, **kw):
+        st, sub = unit_states.get(args[3], ("inactive", "dead"))
+        return subprocess.CompletedProcess(args, 0, stdout=f"ActiveState={st}\nSubState={sub}\n", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", _run)
+    live_dev, live_health = tmp_path / "follower_b", tmp_path / "arm_b.json"
+    live_dev.write_text("", encoding="utf-8")
+    live_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    stale_health = tmp_path / "arm_s.json"
+    stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    observers = [{"unit": "rosy-omx-observer@arm_b.service", "device": str(live_dev), "health": str(live_health)},
+                 {"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
+    host = m.Host({"devices": [str(live_dev)], "follower_device": str(live_dev), "observers": observers})
+    # Case A: unplugged & inactive/dead -> skipped and logged without step/result
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    row = json.loads(capsys.readouterr().out.strip())
+    assert row["event"] == "observers_skipped_offline" and row["units"] == ["rosy-omx-observer@arm_s.service"]
+    assert "step" not in row and "result" not in row
+    # Case B: plugged back in with inactive/dead + stale torque-OFF snapshot -> still skipped
+    (tmp_path / "absent_s").write_text("", encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    capsys.readouterr()
+    # Case C: observer running with stale snapshot -> defers
+    unit_states["rosy-omx-observer@arm_s.service"] = ("active", "running")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
+@pytest.mark.parametrize(
+    "state,sub,rc,exc",
+    [
+        ("active", "running", 0, None),
+        ("activating", "auto-restart", 0, None),
+        ("deactivating", "stop-sigterm", 0, None),
+        ("failed", "failed", 0, None),
+        ("inactive", "dead", 1, None),
+        ("", "", 0, OSError("no dbus")),
+    ],
+)
+def test_absent_board_never_skips_unless_unit_is_cleanly_inactive_dead(tmp_path, monkeypatch, state, sub, rc, exc):
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+
+    def _run(args, **kw):
+        if exc is not None:
+            raise exc
+        return subprocess.CompletedProcess(args, rc, stdout=f"ActiveState={state}\nSubState={sub}\n", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", _run)
+    stale_health = tmp_path / "arm_s.json"
+    stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    observers = [{"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
+    assert m.Host({"devices": [], "observers": observers}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
+def test_stopped_plugged_in_and_absent_edge_cases_fail_closed(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(
+        m.subprocess,
+        "run",
+        lambda args, **kw: subprocess.CompletedProcess(args, 0, stdout="ActiveState=inactive\nSubState=dead\n", stderr=""),
+    )
+    live_dev = tmp_path / "follower_s"
+    live_dev.write_text("", encoding="utf-8")
+    health = tmp_path / "arm_s.json"
+    obs_live = {"unit": "rosy-omx-observer@arm_s.service", "device": str(live_dev), "health": str(health)}
+
+    # 1) Hazard 1: fresh terminal_at overrides stale observed_at, plus exact 60.0s boundary -> fail closed
+    for payload in (
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": now - 1.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 60.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": float("-inf"), "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 3000.0, "terminal_at": True, "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(payload), encoding="utf-8")
+        assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # NaN terminal_at with stale observed_at & corrupt/missing health JSON -> fail closed
+    health.write_text(f'{{"expected_motor_count": 6, "observed_at": {now - 3000.0}, "terminal_at": NaN, "motors": {json.dumps([{"torque_enabled": False}] * 6)}}}', encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    health.write_text("{corrupt", encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.unlink()
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+    # 2) Plugged-in stopped board whose last snapshot had torque ON -> fail closed
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": True}] * 6}), encoding="utf-8")
+    assert m.Host({"devices": [str(live_dev)], "observers": [obs_live]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # 3) Unit in always_restart is never skipped even when unplugged
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    obs_absent = {"unit": obs_live["unit"], "device": str(tmp_path / "absent_s"), "health": str(health)}
+    assert m.Host({"devices": [], "observers": [obs_absent], "always_restart": [obs_live["unit"]]}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+    # 4) All observers offline-stopped -> fail closed with follower_device_missing (never None)
+    assert m.Host({"devices": [], "observers": [obs_absent]}).follower_idle_reason(tmp_path, tmp_path) == "follower_device_missing"
+    # 5) Dangling symlink with missing health is NOT treated as absent -> fails closed (observer_missing)
+    dangling = tmp_path / "dangling_s"
+    os.symlink(tmp_path / "missing_target", dangling)
+    assert m.Host({"devices": [], "observers": [{"unit": obs_live["unit"], "device": str(dangling), "health": str(tmp_path / "missing.json")}]}).follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+
+
 def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
     import json
 

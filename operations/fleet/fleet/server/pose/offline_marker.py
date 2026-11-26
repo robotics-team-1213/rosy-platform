@@ -12,6 +12,8 @@ from fleet.localization.relative_search_prior import MAX_FRAME_AGE_S, pose3
 
 # D-587 bounds sticker location, height/parallax and the calibrated floor fit at this site.
 MARKER_ERROR_M = 0.10
+STATIC_MARKER_ERROR_M = 0.05
+MAX_OFFLINE_PEER_SPEED_MPS = 0.20
 #: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle,
 #: seen at least STATIC_MIN_FRAMES times with no gap above STATIC_MAX_GAP_S.
 STATIC_HOLD_S = 2.0
@@ -156,8 +158,9 @@ class OfflineMarkerClearance:
                         or row["seq"] == prior["seq"] or math.dist(previous[:2], point[:2]) > STILL_PATH_M):
                     return self._decision(rid, "peer_marker_moved_or_changed", False)
             # Fleet cannot command a disconnected peer, so a marker held still is a parked obstacle and
-            # frame age adds no travel; a moving marker keeps the speed allowance and the moved check above.
-            margin = MARKER_ERROR_M + (0.0 if parked else self.config.max_speed_mps * age)
+            # frame age adds no travel; a moving marker uses the physical speed ceiling and the moved check above.
+            margin = (STATIC_MARKER_ERROR_M if parked
+                      else MARKER_ERROR_M + min(self.config.max_speed_mps, MAX_OFFLINE_PEER_SPEED_MPS) * age)
             samples.append((point[:2], margin, {"source_id": source.source_id, "enrolled_marker_id": marker_id,
                                                  "calibration_revision": revision, "seq": row["seq"],
                                                  "captured_at": row["captured_at"], "age_s": age,

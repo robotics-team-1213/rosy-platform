@@ -24,6 +24,12 @@ if str(OMX) not in sys.path:
 import cell_auto_setup as setup  # noqa: E402
 import cell_depth_lock as cdl  # noqa: E402
 import cell_job_api as api  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
+    monkeypatch.setattr(api, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
 import cell_job_client as client_mod  # noqa: E402
 import cell_task_worker as ctw  # noqa: E402
 import cell_upkeep_checks as cuk  # noqa: E402
@@ -403,6 +409,19 @@ def test_peer_fold_passive_motor_health_recovery_and_fail_closed(tmp_path):
     (mh_dir / "arm_a.json").write_text(json.dumps(_mh_doc()), encoding="utf-8")
     (cal_dir / "arm_a_follower.json").write_text(json.dumps(_cal_doc()), encoding="utf-8")
     assert _check() is None
+    # 2026-11-27: a latch the gone runner left (USB lost one second later) passes the same proof; a fresh one does not
+    (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": None, "human_hold_latched": True, "fault": "human hold",
+                                                             "t": now - 3600.0}), encoding="utf-8")
+    assert _check() is None
+    for unsafe in (_mh_doc(torque=True), _mh_doc(obs_at=now - 60.0), _mh_doc(fault=True)):
+        (mh_dir / "arm_a.json").write_text(json.dumps(unsafe), encoding="utf-8")
+        assert _check() is not None
+    open_jaws = _mh_doc()
+    open_jaws["motors"][5]["present_raw"] = 2400.0  # 58.6: jaws open or stopped on an object
+    (mh_dir / "arm_a.json").write_text(json.dumps(open_jaws), encoding="utf-8")
+    assert _check() is not None
+    (mh_dir / "arm_a.json").write_text(json.dumps(_mh_doc()), encoding="utf-8")
+    (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": "goto above_pick", "t": now - 3600.0}), encoding="utf-8")
 
     # Narrow/bad follower calibration or missing cal fails closed even with low raw ticks.
     for bad_cal in (None, _cal_doc(lift_max=3000), _cal_doc(drive_mode=1), _cal_doc(homing_offset=50)):
@@ -423,7 +442,8 @@ def test_peer_fold_passive_motor_health_recovery_and_fail_closed(tmp_path):
     (mh_dir / "arm_a.json").write_text(json.dumps(_mh_doc()), encoding="utf-8")
     for live_payload in (
         {"chunk": "goto above_pick", "t": now},
-        {"chunk": None, "human_hold_latched": True, "t": now - 3600.0},
+        {"chunk": None, "human_hold_latched": True, "t": now},
+        {"chunk": None, "human_hold_latched": True},
         {"chunk": "goto above_pick"},
         {"chunk": "goto above_pick", "t": now + 100.0},
         {"chunk": "goto above_pick", "t": 10**400},
@@ -434,3 +454,5 @@ def test_peer_fold_passive_motor_health_recovery_and_fail_closed(tmp_path):
     (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": "goto above_pick", "t": now - 3600.0}), encoding="utf-8")
     cell_arm_lease.claim("arm_a", "cell-job-api:1", "task", pid=os.getpid(), root=leases)
     assert _check() is not None
+    (wd / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": None, "human_hold_latched": True, "t": now - 3600.0}), encoding="utf-8")
+    assert _check() is not None  # a leased arm's latch is never treated as left behind

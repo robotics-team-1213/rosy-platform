@@ -15,7 +15,7 @@ const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate
   .replaceAll('/common/control-dom.js', controlDom.href);
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
-const { createChargeBaysView, chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+const { createChargeBaysView, chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText, armIncidentRowKey } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -128,7 +128,7 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
   assert.equal(rows.cards[0].quickControls[3].visionCheckCell, 'cell_s');
-  assert.equal(rows.cards[0].quickControls[4].clearArmHold, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[4].armIncident, 'cell_s');
   assert.equal(rows.cards[0].cameraViews.length, 2);
   assert.equal(rows.cards[1].cameraViews.length, 4);
   assert.deepEqual(chargeBayRows({}).cards.map(c => c.id), ['cell_s', 'cell_ab']);
@@ -163,9 +163,9 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.match(targets[0].jointLiveText, /\[LIVE · 2초 전\]/);
   assert.match(targets[0].jointLiveText, /J1:0\.0°/);
   assert.match(formatArmLiveJointText('arm_s', { arm_s: { joints_deg: [1, 2, 3, 4, 5, 6], folded: false, fresh: false, age_s: 25 } }), /\[스냅샷 · 25초 전\]/);
-  assert.ok(targets[0].quickControls.some(c => c.clearArmHold === 'arm_s'));
-  assert.ok(targets[1].quickControls.some(c => c.clearArmHold === 'arm_a'));
-  assert.ok(targets[2].quickControls.some(c => c.clearArmHold === 'arm_b'));
+  assert.ok(targets[0].quickControls.some(c => c.armIncident === 'arm_s'));
+  assert.ok(targets[1].quickControls.some(c => c.armIncident === 'arm_a'));
+  assert.ok(targets[2].quickControls.some(c => c.armIncident === 'arm_b'));
 
   const emptyTargets = inspectorTargetsFromRows({ cards: [] });
   assert.doesNotMatch(emptyTargets[0].jointLiveText, /folded: true|홈 대기/);
@@ -261,4 +261,20 @@ test('charge-bays stop receipts latch warning across refreshes, keep retry human
   } finally {
     globalThis.document = prevDoc;
   }
+});
+
+test('the arm hold control opens the shared alert-drawer row and never posts a clear of its own', async () => {
+  const { normalizeWorkcellObservations } = await import('/console/assets/cell-obs-model.js');
+  const obs = normalizeWorkcellObservations({ workcells: [{ arms: [
+    { arm_id: 'arm_s', source_id: 'omx_arm_s', incidents: [] },
+    { arm_id: 'arm_b', source_id: 'omx_arm_b', incidents: [
+      { incident_id: 'w1', state: 'open', decision: { hold: false, reason: 'guard stop handled' } },
+      { incident_id: 'c1', state: 'open', decision: { hold: true, reason: 'arm incident not cleared' } },
+    ] },
+  ] }] });
+  assert.equal(armIncidentRowKey('cell_ab', obs), 'omx_arm_b|arm-incident-c1', 'held incident first');
+  assert.equal(armIncidentRowKey('arm_b', obs), 'omx_arm_b|arm-incident-c1');
+  assert.equal(armIncidentRowKey('arm_s', obs), null, 'no open incident: no drawer row');
+  assert.equal(armIncidentRowKey('cell_s', null), null);
+  assert.doesNotMatch(code, /arm-holds\/clear/, 'the console card leaves clearing to the drawer and the cell page');
 });

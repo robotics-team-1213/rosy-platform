@@ -81,6 +81,20 @@ def test_build_body_appends_self_overlap_review():
     assert "Overlap-Review:" not in pr_land.build_body("summary", "")
 
 
+def test_build_body_carries_the_branch_safety_review_lines(tmp_path):
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tmp_path), *args], capture_output=True, text=True, check=True).stdout
+
+    git("init", "-q", "-b", "main")
+    git("-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "base")
+    git("-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "guard", "-m", "Safety-Review: lane docs/x.md")
+    git("-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "again", "-m", "Safety-Review: lane docs/x.md")
+    lines = pr_land.safety_lines(tmp_path, "HEAD~2")
+    assert lines == ["Safety-Review: lane docs/x.md"]  # deduplicated
+    assert pr_land.build_body("s", "", lines).splitlines()[2] == "Safety-Review: lane docs/x.md"
+    assert pr_land.safety_lines(tmp_path, "HEAD") == []
+
+
 def test_build_body_appends_session_line(monkeypatch):
     for env, name in (("ROSY_SESSION_NAME", "opencode-1"), ("CLAUDE_SESSION_NAME", "claude-x")):
         monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
@@ -124,7 +138,7 @@ def test_enqueues_only_the_verified_head(monkeypatch, tmp_path):
         calls.append(cmd)
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
-        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "config"]):
+        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "config"], ["git", "log"]):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 42}]'

@@ -56,6 +56,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/cell/cell-channel-mission.js": 1,  # D-687 Mission admission
     "applications/fleet/web/cell/cell-observation.js": 1,  # Focused arm incident clearance.
+    "applications/fleet/web/cell/cell-real2sim-actions.js": 1,  # Fleet arm hold with no open incident: person-check confirm
     "applications/fleet/web/work/channel-request-view.js": 2,  # D-680/D-693 Task and incident claim
     "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
     "applications/fleet/web/work/trip-proposal-view.js": 1,  # D-908 explicit independent trip admission.

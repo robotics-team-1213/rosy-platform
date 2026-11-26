@@ -514,6 +514,10 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             task = self._inflight.get(robot_id)
             if live.open and (task is None or task.done()):
                 self._inflight[robot_id] = asyncio.ensure_future(self._tick_robot(live))
+            elif not live.open and halt_unconfirmed(live.view.get("detail")) and (task is None or task.done()):
+                if self._clock() >= getattr(live, "_halt_retry_at", 0.0):
+                    live._halt_retry_at = self._clock() + 2.0
+                    self._inflight[robot_id] = asyncio.ensure_future(self._retry_unconfirmed_halt(live))
         self.halts.watch_handoff_stops(self._inflight)
         self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)))
         pending = [task for task in self._inflight.values() if not task.done()]
@@ -543,6 +547,13 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         except Exception:
             _LOG.exception("trip loop step failed for %s", live.view["robot_id"])
             await self._loop_failed(live)
+
+    async def _retry_unconfirmed_halt(self, live: LiveTrip) -> None:
+        robot_id = live.view["robot_id"]
+        async with self._lock_for(robot_id):
+            if not live.open and self._live.get(robot_id) is live and halt_unconfirmed(live.view.get("detail")):
+                if await self.halts._retry_trip_entry(live.view):
+                    self.halts.clear_trip(live.view["trip_id"])
 
     # ---- stopping -----------------------------------------------------------------------
 

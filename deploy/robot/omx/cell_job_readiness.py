@@ -62,6 +62,21 @@ def held_job_response(arm: str, reason: str) -> dict:
     return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{arm} held: {reason}"}
 
 
+def _stale_latch(arm: str, runner, live, session_held: bool) -> bool:
+    import cell_arm_lease
+    from cell_job_peer_health import stale_latch_superseded
+
+    lease_dir = getattr(runner, "lease_dir", None)
+    lease_path = Path(lease_dir) / f"{arm}.json" if lease_dir else None
+    lease = read_json_dict(lease_path) if lease_path else None
+    leased = (lease is None and lease_path is not None and lease_path.is_file()) or bool(lease and cell_arm_lease.live(lease))
+    health = getattr(runner, "motor_health_dir", None) or (Path.home() / ".local" / "state" / "rosy" / "motor-health")
+    from cell_job_api import LIVE_MAX_AGE_S
+
+    return stale_latch_superseded(arm, live, locked=session_held, leased=leased, max_age_s=LIVE_MAX_AGE_S, health_dir=health,
+                                  read_json_fn=read_json_dict, calibration_dir=getattr(runner, "calibration_dir", None))
+
+
 def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reason: str | None, active_job: str | None, cell_fleet: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     suffix = arm.split("_")[-1]
     live = read_json_dict(runner.workdir / f"chunk-io-{suffix}" / "live.json")
@@ -72,14 +87,20 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
         age_s = round(max(0.0, now - float(live["t"])), 3)
     fault = live.get("fault") if isinstance(live, dict) else None
     hold_latched = bool(live.get("human_hold_latched")) if isinstance(live, dict) else False
-    folded = _live_folded(live) if isinstance(live, dict) else None
+    folded = _live_folded(live) if isinstance(live, dict) else None  # guards judge peers coarsely until they pass the arm's library
+    stale_latch = hold_latched and _stale_latch(arm, runner, live, session_held)
+    superseded = {"fault": str(fault)[:160] if fault else None, "latched_t": live.get("t")} if stale_latch else None
+    if stale_latch:  # the runner that latched is gone and the arm reads torque-off, folded, jaws shut: report what is there now
+        fault, hold_latched, folded = None, False, True
     cid = "cell_s" if arm == "arm_s" else "cell_ab"
     info = {
         "session_lock_held": session_held,
         "incident_held": bool(inc_reason),
         "incident_reason": str(inc_reason)[:160] if inc_reason else None,
         "folded": folded if isinstance(folded, bool) else None,
+        "fold_basis": "coarse",
         "human_hold_latched": hold_latched,
+        "stale_latch_superseded": superseded,  # the left-behind latch, kept visible: its fault text and time
         "fault": str(fault)[:160] if fault else None,
         "live_state_age_s": age_s,
         "dirty": dirty,

@@ -175,7 +175,7 @@ def test_job_spec_one_session_wrapper_and_the_unchanged_drive_job(tmp_path):
     assert argv[argv.index("--operating-profile") + 1] == "arm-b-robot-profile.json"
     assert "--paced-chunks" in argv and argv[argv.index("--arm-id") + 1] == "arm_b" and argv[-1] == "--person-at-switch"
     assert job["moving"] and job["camera"] and "--commissioning" not in argv
-    for bad in ({"person_at_switch": False}, {"dry_run": True}, {"proposer": "op_b"}, {"mode": "hybrid"}):
+    for bad in ({"dry_run": True}, {"proposer": "op_b"}, {"mode": "hybrid"}):
         with pytest.raises(ValueError):
             api.build_argv(job, {**base, **bad}, tmp_path)
     with pytest.raises(ValueError, match="operating_profile"):

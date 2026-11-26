@@ -1410,6 +1410,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 Â§1); imports stdlib only
   - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
+  - operations/fleet/fleet/server/cell/cell_job_proxy_routes.py  # ARM-CELL run/recover proxy to :8781; every arm guard stays in the job API
   - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
   - operations/fleet/fleet/server/auth/policy_approval_routes.py  # D-1024 3 named-operator approval routes
   - operations/fleet/fleet/server/auth/policy_delivery.py  # D-1024 3 CORE lease/hold delivery port and ticker
@@ -1492,6 +1493,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_task_live_executor.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_incident_release.py
   - deploy/robot/omx/cell_auto_pick.py
   - deploy/robot/omx/cell_return_held.py
   - deploy/robot/omx/cell_cycle.py
@@ -1536,6 +1538,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_spec.py
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
+  - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_media_jobs.py
@@ -1794,6 +1797,8 @@ safety_anchors:
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.cell_job_proxy_routes.install_cell_job_proxy_routes, public: true}  # ARM-CELL proxy to :8781
+  - {symbol: fleet.server.cell_job_proxy_routes.CellJobProxy.start}  # three-job allowlist, operator != proposer
   - {symbol: fleet.server.task_reconcile_routes.install_task_reconcile_routes.reconcile_task, public: true}
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick}  # D-1024 3 lease issue only inside the window
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick_all}  # D-1024 3 ticker hook; no lease without a delivery port

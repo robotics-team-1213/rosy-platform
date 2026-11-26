@@ -75,15 +75,9 @@ def _clear_ephemeral_mirror(mirror: Path) -> None:
     """
     sp = _sp()
     try:
-        if (
-            mirror.is_symlink()
-            or not mirror.is_dir()
-            or not (mirror / "HEAD").is_file()
-            or not (mirror / "config").is_file()
-            or not (mirror / "objects").is_dir()
-            or (mirror / "index").exists()
-            or (mirror / "worktrees").exists()
-        ):
+        if (mirror.is_symlink() or not mirror.is_dir() or not (mirror / "HEAD").is_file()
+                or not (mirror / "config").is_file() or not (mirror / "objects").is_dir()
+                or (mirror / "index").exists() or (mirror / "worktrees").exists()):
             return
         head = (mirror / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
         if not head.startswith("ref: "):
@@ -101,22 +95,14 @@ def _clear_ephemeral_mirror(mirror: Path) -> None:
                     return
         clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         clean_env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
-        bare = sp.run(
-            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--bool", "--get", "core.bare"],
-            capture_output=True, text=True, env=clean_env, timeout=10,
-        )
+        def _git(*args: str):
+            return sp.run(["git", "--no-optional-locks", *args], capture_output=True, text=True, env=clean_env, timeout=10)
+        bare = _git("config", "--file", str(mirror / "config"), "--bool", "--get", "core.bare")
         if bare.returncode != 0 or bare.stdout.strip() != "true":
             return
-        wt = sp.run(
-            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--get", "core.worktree"],
-            capture_output=True, text=True, env=clean_env, timeout=10,
-        )
-        if wt.returncode != 1:
+        if _git("config", "--file", str(mirror / "config"), "--get", "core.worktree").returncode != 1:
             return
-        refs = sp.run(
-            ["git", "--no-optional-locks", "--git-dir", str(mirror), "for-each-ref"],
-            capture_output=True, text=True, env=clean_env, timeout=10,
-        )
+        refs = _git("--git-dir", str(mirror), "for-each-ref")
         if refs.returncode != 0 or refs.stdout.strip() != "":
             return
     except (OSError, subprocess.SubprocessError):
@@ -143,14 +129,8 @@ class Host:
         self.cfg = cfg
 
     def remote_head(self) -> str:
-        out = _sp().run(
-            ["git", "ls-remote", self.cfg["repo_url"], f"refs/heads/{self.cfg['branch']}"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=True,
-        ).stdout.split()
-        return out[0]
+        cmd = ["git", "ls-remote", self.cfg["repo_url"], f"refs/heads/{self.cfg['branch']}"]
+        return _sp().run(cmd, capture_output=True, text=True, timeout=60, check=True).stdout.split()[0]
 
     def _github_headers(self) -> dict[str, str]:
         headers = {"Accept": "application/vnd.github+json"}
@@ -212,11 +192,8 @@ class Host:
         if not self.cfg.get("restart_running_only"):
             return list(units) + extra
         sp = _sp()
-        return [
-            u
-            for u in units
-            if u in always or sp.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0
-        ] + extra
+        return [u for u in units
+                if u in always or sp.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0] + extra
 
     def restart(self, units) -> bool:
         """Restart the service units and report whether all are still active after `settle` seconds."""
@@ -265,17 +242,8 @@ class Host:
         try:
             for stale in mirror.glob("*.lock"):
                 stale.unlink()
-            sp.run(
-                ["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
-                check=True,
-                timeout=600,
-            )
-            data = sp.run(
-                ["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
-                capture_output=True,
-                check=True,
-                timeout=600,
-            ).stdout
+            sp.run(["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha], check=True, timeout=600)
+            data = sp.run(["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths], capture_output=True, check=True, timeout=600).stdout
             with tarfile.open(fileobj=io.BytesIO(data)) as tar:
                 tar.extractall(target, filter="data")
         finally:
@@ -283,23 +251,12 @@ class Host:
 
     def smoke(self, release: Path, python: Path) -> bool:
         try:
-            done = _sp().run(
-                [str(python), "-c", self.cfg.get("smoke", SMOKE)],
-                cwd=release,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            done = _sp().run([str(python), "-c", self.cfg.get("smoke", SMOKE)], cwd=release, capture_output=True, text=True, timeout=120)
             if not (done.returncode == 0 and "smoke ok" in done.stdout):
                 return False
             if "deploy/robot/omx" in self.cfg.get("paths", DEFAULT_PATHS) and (release / "deploy/robot/omx/cell_collect_plan.py").is_file():
-                extra = _sp().run(
-                    [str(python), "-c", "import sys; sys.path.insert(0, 'deploy/robot/omx'); import cell_collect_plan"],
-                    cwd=release,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                )
+                extra = _sp().run([str(python), "-c", "import sys; sys.path.insert(0, 'deploy/robot/omx'); import cell_collect_plan"],
+                                  cwd=release, capture_output=True, text=True, timeout=120)
                 return extra.returncode == 0
             return True
         except (OSError, subprocess.SubprocessError):
@@ -318,15 +275,48 @@ class Host:
             return None
         return handle
 
+    def _unit_props(self, unit: str, *props: str) -> dict[str, str]:
+        cmd = ["systemctl", "--user", "show", unit, *(x for p in props for x in ("-p", p))]
+        try:
+            shown = _sp().run(cmd, capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return {}
+        return {} if not shown or shown.returncode != 0 else dict(line.split("=", 1) for line in shown.stdout.splitlines() if "=" in line)
+
     def _observer_pid(self, unit: str) -> str | None:
-        shown = _sp().run(
-            ["systemctl", "--user", "show", unit, "-p", "ActiveState", "-p", "MainPID"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        ).stdout
-        props = dict(line.split("=", 1) for line in shown.splitlines() if "=" in line)
+        props = self._unit_props(unit, "ActiveState", "MainPID")
         return props["MainPID"] if props.get("ActiveState") == "active" and props.get("MainPID", "0") != "0" else None
+
+    def _snapshot_stale_torque_off(self, observer: dict) -> bool:
+        """True only when a stopped observer's snapshot is past the handoff grace window and had torque OFF."""
+        try:
+            health = json.loads(Path(observer["health"]).read_bytes().decode("utf-8"))
+            if not isinstance(health, dict):
+                return False
+            motors, expected, obs = health["motors"], health["expected_motor_count"], health["observed_at"]
+            term = obs if health.get("terminal_at") is None else health["terminal_at"]
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in (obs, term)):
+                return False
+            obs_f, term_f = float(obs), float(term)
+        except (OSError, KeyError, TypeError, ValueError, UnicodeDecodeError, OverflowError):
+            return False
+        if (not isinstance(motors, list) or type(expected) is not int or expected <= 0
+                or len(motors) != expected or not math.isfinite(obs_f) or not math.isfinite(term_f)):
+            return False
+        return (_tm().time() - max(obs_f, term_f)) > float(self.cfg.get("stopped_observer_grace_s", 60)) and all(
+            isinstance(m, dict) and m.get("torque_enabled") is False for m in motors
+        )
+
+    def _observer_offline_stopped(self, observer: dict) -> bool:
+        """True only when an observer is cleanly inactive/dead and either unplugged or long-stopped with torque OFF."""
+        dev, unit = observer.get("device"), observer.get("unit")
+        if not isinstance(unit, str) or not unit or unit in self.cfg.get("always_restart", []):
+            return False
+        props = self._unit_props(unit, "ActiveState", "SubState")
+        if props.get("ActiveState") != "inactive" or props.get("SubState") != "dead":
+            return False
+        absent = isinstance(dev, str) and bool(dev) and not os.path.lexists(dev) and not os.path.exists(dev)
+        return absent or self._snapshot_stale_torque_off(observer)
 
     def device_in_use(self) -> bool:
         sp = _sp()
@@ -345,7 +335,16 @@ class Host:
 
     def follower_idle_reason(self, release: Path, python: Path) -> str | None:
         if observers := self.cfg.get("observers"):
-            return next((r for o in observers if (r := self._observer_defer_reason(o)) is not None), None)
+            # Unplugging USB does not cut 12V torque, and session wrappers stop an observer before taking session.lock.
+            # Skip only cleanly inactive/dead observers (unplugged or past handoff grace with torque OFF), never all.
+            checked, skipped = [], []
+            for o in observers:
+                (skipped if self._observer_offline_stopped(o) else checked).append(o)
+            if skipped:
+                log(event="observers_skipped_offline", units=[o["unit"] for o in skipped])
+            if not checked:
+                return "follower_device_missing"
+            return next((r for o in checked if (r := self._observer_defer_reason(o)) is not None), None)
         code = (
             "import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
             f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"

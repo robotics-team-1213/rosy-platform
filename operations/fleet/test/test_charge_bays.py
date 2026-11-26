@@ -210,6 +210,15 @@ def test_centerline_evaluation_flags_misaligned_dock_for_immediate_reseat():
     assert act_ok["docking"]["verdict"] == "CONTACT_STOP"
 
 
+def test_offline_robot_located_in_bay_only_marks_that_bay():
+    bays = ChargeBays()
+    fleet = [robot("dead_in_c1", 50.0, (BAYS[0].x, BAYS[0].y), online=False), robot("low", 9.0)]
+    bays.observe(0.0, fleet, BAYS)
+    plan = bays.plan(fleet, BAYS)
+    assert [r["state"] for r in plan["bays"]] == ["planned", "planned", "free"]
+    assert actions(plan)["low"] == {"robot_id": "low", "action": "go", "bay": "C2", "reason": "low_battery"}
+
+
 def _world_261026_charge_graph():
     from fleet.routing.graph import build_graph
     from fleet.site_map import SiteMap
@@ -381,3 +390,24 @@ def test_road_nav2_http_route_dispatches_along_road_polyline(tmp_path):
     # No camera sighting, pin or auto-locate fit: the robot's own SLAM pose is not a site pose, so nothing goes out.
     assert res.status_code == 409 and res.json()["detail"]["code"] == "SITE_POSE_UNKNOWN"
     assert not any("goal" in str(call) or "navigat" in str(call) for call in bot.log)
+
+
+def test_pipeline_cell_action_maps_charge_c3(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    from fleet.server.sitemap import pipeline_routes as routes
+    from fleet.server.sitemap.pipeline_cell_task_routes import PLACE_OF_ACTION
+
+    assert PLACE_OF_ACTION["charge_c3"] == "C3"
+    site, graph, _ = build_world_261026_site_map()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
+    app = FastAPI()
+    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (3, site, graph, None)))
+    app.state.omx_cell_states = {"cell_a": {"robot_id": "rosy_46", "status": "ABORTED"}}
+    res = TestClient(app).post("/api/fleet/pipeline/pinky-tasks", json={"action": "charge_c3", "robot_id": "rosy_46"})
+    assert res.status_code == 200
+    task = res.json()["pinky_task"]
+    assert (task["place_id"], task["target_place"], task["status"]) == ("C3", "C3", "QUEUED")

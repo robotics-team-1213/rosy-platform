@@ -1,0 +1,195 @@
+"""arm_s cell_policy_drive -> Fleet R Pinky depart only after a real took_one (2026-11-26 decision)."""
+from __future__ import annotations
+
+import json
+import sys
+from io import BytesIO
+from pathlib import Path
+from urllib.error import HTTPError
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
+import cell_job_api as api  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
+    monkeypatch.setattr(api, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
+import cell_job_depart as depart  # noqa: E402
+
+PARAMS = {
+    "arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "max_chunks": 4, "operator": "op_a",
+    "mode": "act", "policy_root": "models/p", "policy_revision": "a" * 64, "cell_calibration": "cal/s.json",
+    "model_calibration": "cal/m.json", "person_at_switch": True, "depart_robot": "rosy_46",
+    "dest_site": "pinky-s1", "dest_tier": 1,
+}
+
+
+OK = {"result": "released", "parked": True, "park": {"command": "park", "ok": True, "settled": True}, "took_one": True}
+
+
+class _Proc:
+    def __init__(self, code):
+        self.code = code
+
+    def poll(self):
+        return self.code
+
+
+@pytest.fixture(autouse=True)
+def measured(monkeypatch):
+    """The shared act_verdict's inputs: live fold, park readback and zone_acceptance, each switchable per test."""
+    import cell_act_verdict as verdict_mod
+
+    state = {"live": True, "zone": True}
+    monkeypatch.setattr(depart, "measured_fold", lambda *a, **k: {"folded": state["live"], "state": None})
+    monkeypatch.setattr(depart, "fold_readback", lambda *a, **k: {"folded": True, "state": [0] * 6})
+    monkeypatch.setattr(depart, "plan_home", lambda cfg: [0] * 6)
+    monkeypatch.setattr(verdict_mod, "zone_acceptance", lambda *a: state["zone"])
+    return state
+
+
+def _run(tmp_path, monkeypatch, result, *, exit_code=0, post=None, **extra):
+    for n in ("cell-s.json", "chunks-s.json"):
+        (tmp_path / n).write_text("{}", encoding="utf-8")
+    (tmp_path / "tools-env-current.sh").write_text("export OMX=~/x/omx-tools-abc1234/deploy/robot/omx\n", encoding="utf-8")
+    monkeypatch.setattr(api.subprocess, "Popen", lambda *a, **kw: _Proc(None))
+    monkeypatch.setattr(api, "_session_lock_held", lambda *a, **k: False)
+    calls = []
+    monkeypatch.setattr(depart, "post_depart", lambda *a, **kw: calls.append((a, kw)) or (post or {"sent": True, "http_status": 200}))
+    runner = api.Runner(tmp_path, incident_check_fn=lambda a: None, fleet_safety_check_fn=lambda a: {"online": False, "blocked": False},
+                        fleet_r_url="https://fleet.example:8443", fleet_token_file=tmp_path / "tok")
+    res = runner.start("cell_policy_drive", {**PARAMS, **extra})
+    assert res["code"] == 202, res
+    run = runner.runs[res["id"]]
+    run["log"].write_text(json.dumps(result) + "\n", encoding="utf-8")
+    run["proc"].code = exit_code
+    return runner.get(res["id"]), calls, runner, res["id"]
+
+
+def test_took_one_posts_once_with_body(tmp_path, monkeypatch):
+    info, calls, runner, jid = _run(tmp_path, monkeypatch, OK)
+    runner.get(jid)  # a second poll must not send again
+    assert len(calls) == 1
+    assert calls[0][0][:3] == ("rosy_46", "depart_s1", f"depart-{jid}")
+    assert info["structured_result"]["took_one"] is True and info["structured_result"]["depart"]["http_status"] == 200
+    rows = [json.loads(x) for x in (tmp_path / "cell-job-api" / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r for r in rows if r.get("event") == "depart"][0]["http_status"] == 200
+
+
+@pytest.mark.parametrize(("result", "exit_code", "extra", "why"), [
+    ({**OK, "took_one": False, "reason": "gripper empty"}, 0, {}, "gripper empty"),
+    ({**OK, "took_one": True}, 3, {}, "job exit 3"),
+    ({**OK}, 0, {"dry_run": True}, "dry_run"),
+    ({**OK, "result": "refused"}, 0, {}, "not a success"),
+    ({**OK, "result": "fault"}, 0, {}, "not a success"),
+    ({**OK, "human_hold_latched": True}, 0, {}, "human_hold_latched"),
+    ({**OK, "torque_hold_commanded": True}, 0, {}, "torque_hold_commanded"),
+    ({**OK, "parked": False}, 0, {}, "not confirmed"),
+    ({k: v for k, v in OK.items() if k != "park"}, 0, {}, "not confirmed"),
+    ({**OK, "park": {"command": "park", "ok": True, "settled": True, "hold": True}}, 0, {}, "not confirmed"),
+])
+def test_no_post_and_reason_recorded(tmp_path, monkeypatch, result, exit_code, extra, why):
+    info, calls, *_ = _run(tmp_path, monkeypatch, result, exit_code=exit_code, **extra)
+    assert calls == []
+    d = info["structured_result"]["depart"]
+    assert d["sent"] is False and why in d["reason"]
+
+
+@pytest.mark.parametrize(("flag", "why"), [("live", "measured fold not confirmed"), ("zone", "zone_acceptance not met")])
+def test_no_depart_without_measured_fold_or_zone(tmp_path, monkeypatch, measured, flag, why):
+    measured[flag] = False
+    info, calls, *_ = _run(tmp_path, monkeypatch, OK)
+    assert calls == [] and why in info["structured_result"]["depart"]["reason"]
+
+
+def test_fleet_exception_keeps_arm_result(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("fleet down")
+
+    info, _, runner, jid = _run(tmp_path, monkeypatch, OK)
+    run = runner.runs[jid]
+    run["depart"] = None
+    monkeypatch.setattr(depart, "post_depart", boom)
+    assert depart.depart_once(runner, jid, run)["sent"] is False
+    assert info["exit"] == 0 and info["structured_result"]["took_one"] is True
+
+
+def test_job_api_imports_without_the_adapter_path():
+    """The job API service has no omx_adapter on its path: the depart verdict must not need it (review finding 2026-11-27)."""
+    import subprocess
+    omx = str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx")
+    code = f"import sys; sys.path[:0] = [{omx!r}]; import cell_job_api, cell_act_verdict; assert 'omx_adapter' not in sys.modules"
+    done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+
+
+def test_skip_reason_unit():
+    ok_verdict = {"verified": True, "folded": True, "zone_ok": True, "took_one": True, "live_fold": {"folded": True}}
+    base = {"job": "cell_policy_drive", "params": PARAMS, "exit_code": 0, "result": OK, "verdict": ok_verdict}
+    assert depart.depart_skip_reason(**base) is None
+    assert "not evaluated" in depart.depart_skip_reason(**{**base, "verdict": None})
+    assert "only for arm_s" in depart.depart_skip_reason(**{**base, "params": {**PARAMS, "arm": "arm_b"}})
+    assert depart.depart_skip_reason(**{**base, "params": {"arm": "arm_s"}}) == "depart not requested"
+    assert depart.depart_skip_reason(**{**base, "result": None}) == "no structured result"
+    assert "not a success" in depart.depart_skip_reason(**{**base, "result": {"took_one": True}})
+
+
+def test_post_depart_body_and_fleet_errors(tmp_path):
+    tok = tmp_path / "tok"
+    tok.write_text("secret\n", encoding="utf-8")
+    seen = {}
+
+    class Resp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, n): return b'{"ok": true}'
+
+    def ok(req, context, timeout):
+        seen.update(url=req.full_url, body=json.loads(req.data), auth=req.get_header("Authorization"))
+        return Resp()
+
+    r = depart.post_depart("rosy_46", "depart_s1", "t1", fleet_r_url="https://f:8443", token_file=tok, urlopen_fn=ok)
+    assert r["sent"] and r["http_status"] == 200
+    assert seen == {"url": "https://f:8443/api/fleet/pipeline/pinky-tasks",
+                    "body": {"robot_id": "rosy_46", "action": "depart_s1", "task_id": "t1"}, "auth": "Bearer secret"}
+
+    def refuse(req, context, timeout):
+        raise HTTPError(req.full_url, 403, "no", {}, BytesIO(b'{"detail":{"code":"FORBIDDEN"}}'))
+
+    r = depart.post_depart("rosy_46", "depart_s1", "t1", fleet_r_url="https://f:8443", token_file=tok, urlopen_fn=refuse)
+    assert r["http_status"] == 403 and "FORBIDDEN" in r["reason"]
+
+    def down(req, context, timeout):
+        raise OSError("unreachable")
+
+    r = depart.post_depart("rosy_46", "depart_s1", "t1", fleet_r_url="https://f:8443", token_file=tok, urlopen_fn=down)
+    assert r["sent"] is False and "unreachable" in r["reason"]
+    assert depart.post_depart("r", "depart_s1", "t", fleet_r_url=None, token_file=None)["sent"] is False
+    assert depart.post_depart("r", "depart_s1", "t", fleet_r_url="http://f", token_file=tok)["sent"] is False
+
+
+def _cfg(tmp_path, cfg):
+    (tmp_path / "cell-s.json").write_text(json.dumps(cfg), encoding="utf-8")
+
+
+def test_depart_without_dest_site_takes_the_act_policy_default(tmp_path):
+    p = {k: v for k, v in PARAMS.items() if k not in ("dest_site", "dest_tier")}
+    _cfg(tmp_path, {"sites": {"belt": {}, "stand": {}}, "act_policy": {"dest_site": "stand", "dest_tier": 2}})
+    assert depart.fill_depart_dest("cell_policy_drive", p, tmp_path) | {} == {**p, "dest_site": "stand", "dest_tier": 2}
+    _cfg(tmp_path, {"sites": {"belt": {}}})  # no act_policy: belt tier 1, the task path's default
+    assert depart.fill_depart_dest("cell_policy_drive", p, tmp_path)["dest_site"] == "belt"
+    assert depart.fill_depart_dest("cell_policy_drive", PARAMS, tmp_path) is PARAMS  # given: untouched
+    assert depart.fill_depart_dest("cell_policy_drive", {**p, "dry_run": True}, tmp_path).get("dest_site") is None
+
+
+def test_submit_without_dest_site_and_no_default_is_a_400_before_any_run(tmp_path, monkeypatch):
+    for n in ("cell-s.json", "chunks-s.json"):
+        (tmp_path / n).write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(api.subprocess, "Popen", lambda *a, **kw: pytest.fail("must not start"))
+    runner = api.Runner(tmp_path, incident_check_fn=lambda a: None, fleet_safety_check_fn=lambda a: {"online": False, "blocked": False})
+    res = runner.start("cell_policy_drive", {k: v for k, v in PARAMS.items() if k not in ("dest_site", "dest_tier")})
+    assert res["code"] == 400 and "depart_robot needs dest_site" in res["error"]

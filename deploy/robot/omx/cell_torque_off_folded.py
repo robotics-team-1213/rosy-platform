@@ -18,7 +18,8 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cell_job_peer_health import calibrated_positions_folded  # noqa: E402
+import cell_incident_release  # noqa: E402
+from cell_job_peer_health import calibrated_positions_folded, fold_basis  # noqa: E402
 from record_session_baseline import BaselineMismatch  # noqa: E402
 
 MOTORS = tuple(range(11, 17))
@@ -53,10 +54,10 @@ def run_baseline(device: str, out_dir: Path) -> int:
                            "--output", str(out_dir)], stdin=subprocess.DEVNULL, timeout=120).returncode
 
 
-def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_dir, result=None) -> dict:
+def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_dir, result=None, library=None) -> dict:
     """Result dict; raises Refused with a reason code. `session` supplies torque_off_until_confirmed/check_idle."""
     result = {} if result is None else result  # the caller keeps it, so a refusal still reports before/after
-    result.update(arm=arm, device=device)
+    result.update(arm=arm, device=device, fold_basis=fold_basis(library))
     try:
         guard = lock(arm)
     except SystemExit as exc:
@@ -74,7 +75,7 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
             bus.close()
         if calibration is None:
             raise Refused("CALIBRATION_MISSING", f"no calibration for {arm}: fold cannot be judged")
-        if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration):
+        if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration, library):
             raise Refused("NOT_FOLDED", "arm is not folded: torque is not cut on an extended arm")
         try:  # the pose may have changed since the first read: judge again right before the write
             bus = open_bus()
@@ -84,7 +85,7 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
                 bus.close()
         except Exception as exc:
             raise Refused("READ_FAILED", f"cannot re-read follower: {exc}", ERROR) from None
-        if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration):
+        if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration, library):
             raise Refused("NOT_FOLDED", "arm left the folded pose before torque OFF")
         ok, state = session.torque_off_until_confirmed()
         if not ok:
@@ -94,7 +95,7 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
             try:
                 result["after"] = session._with_follower(lambda b: (session.check_idle(b), snapshot(b))[1])
                 result["baseline"] = {"restored": restored}
-                result["folded_after"] = calibrated_positions_folded([result["after"][m]["position"] for m in MOTORS], calibration)
+                result["folded_after"] = calibrated_positions_folded([result["after"][m]["position"] for m in MOTORS], calibration, library)
                 return result
             except BaselineMismatch as exc:  # a SystemExit: caps an earlier session left raised
                 if restored or baseline(device, out_dir) != 0:
@@ -110,6 +111,7 @@ def main(argv=None, **inject) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm", required=True)
     parser.add_argument("--config", required=True, type=Path, help="record config JSON; robot.port is the follower by-id")
+    parser.add_argument("--library", type=Path, help="the arm's chunks-*.json (or cell config): narrows the fold rule to its park/home/standby poses")
     parser.add_argument("--out-dir", type=Path, default=Path("cell-job-api"))
     args = parser.parse_args(argv)
     import joint_tune
@@ -125,12 +127,22 @@ def main(argv=None, **inject) -> int:
         open_bus = inject.get("open_bus") or (lambda: joint_tune.SerialBus(device, 0))
         session = inject.get("session") or record_session.Session(
             open_bus=lambda which: open_bus(), systemctl=lambda *a: "", run=None, log=lambda **k: None)
+        lib = inject.get("library", _read_json(args.library) if args.library else None)
+        if args.library and fold_basis(lib) == "coarse":  # a library was named but gives no fold poses: do not fall back silently
+            raise Refused("LIBRARY_UNUSABLE", f"{args.library}: no usable park/home/standby pose")
         res = release(args.arm, device, open_bus=open_bus, lock=inject.get("lock") or joint_tune.session_lock, session=session,
                       calibration=inject.get("calibration", _read_json(CAL_DIR / f"{args.arm}_follower.json")),
                       baseline=inject.get("baseline") or run_baseline,
-                      out_dir=args.out_dir / f"baseline-{args.arm}-{int(time.time())}", result=out)
+                      out_dir=args.out_dir / f"baseline-{args.arm}-{int(time.time())}", result=out,
+                      library=lib)
         out.update(ok=True, reason_code=None)
         code = 0
+        # shortcut: injected runs skip the release; production calls main() bare
+        if (hook := inject.get("release", None if inject else cell_incident_release.after_torque_off)) is not None:
+            try:
+                out["incident_release"] = hook(args.arm)
+            except (SystemExit, Exception) as exc:  # the torque-off result above stands either way
+                out["incident_release"] = {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:120]}"}
     except Refused as exc:
         out.update(ok=False, reason_code=exc.code, error=str(exc))
         code = exc.exit_code

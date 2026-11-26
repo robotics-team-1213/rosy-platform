@@ -19,7 +19,9 @@ from fastapi.testclient import TestClient
 from core_api_web.api import deps
 from core_api_web.api.errors import ApiError, register_exception_handlers
 from core_api_web.api.peer_pairing.peer_crypto import public_key, transcript, verify
-from core_api_web.api.peer_pairing.receiver_service import PeerReceiver, RateLimited, Refused, WrongCode
+from core_api_web.api.peer_pairing.receiver_service import (
+    IDENTITY_RATE_LIMIT, PeerReceiver, RateLimited, Refused, WrongCode,
+)
 from core_api_web.api.peer_pairing.receiver_repository import OverlayRepository
 from core_api_web.api.peer_pairing.receiver_routes import router
 
@@ -168,10 +170,15 @@ class BoundedPeer(unittest.TestCase):
                 self.receiver.admit_proof('192.168.10.20')
             with self.assertRaises(Refused):
                 self.receiver.admit_proof('192.168.10.20')
-            for _ in range(300 - 35):
+            for _ in range(IDENTITY_RATE_LIMIT - 35):
                 self.receiver.admit_proof('192.168.10.20', identity=True)
-            with self.assertRaises(Refused):
+            with self.assertRaises(Refused) as limited:
                 self.receiver.admit_proof('192.168.10.20', identity=True)
+            self.assertEqual(60, limited.exception.retry_after_s)
+            self.now += timedelta(seconds=55)
+            with self.assertRaises(Refused) as sliding:
+                self.receiver.admit_proof('192.168.10.20', identity=True)
+            self.assertEqual(5, sliding.exception.retry_after_s)
 
     def test_final_repository_rechecks_grant_after_successful_key_proof(self):
         _, grant = self.grant()

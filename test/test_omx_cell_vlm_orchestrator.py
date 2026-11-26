@@ -13,6 +13,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
 import cell_job_api as api  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """These tests are about the job API's other gates; the D-1077 proof itself is tested in test_omx_stop_proof.py."""
+    monkeypatch.setattr(api, "prove_job", lambda *a, **k: ({"ok": True, "stub": True}, None))
 from cell_job_client import CellJobClient, CellJobError  # noqa: E402
 import cell_vlm_orchestrator as orch  # noqa: E402
 

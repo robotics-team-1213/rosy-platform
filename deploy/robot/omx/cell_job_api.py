@@ -26,7 +26,10 @@ from cell_job_guards import (  # noqa: E402
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
+from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
+from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
+import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
@@ -38,11 +41,9 @@ try:
 except ImportError:  # Windows unit tests
     fcntl = None
 
-JOB_TTL_S = 900.0
-LIVE_MAX_AGE_S = 15.0
+JOB_TTL_S, LIVE_MAX_AGE_S = 900.0, 15.0
 _REAL_POPEN = subprocess.Popen
-_check_arm_incident = check_arm_incident_hold
-_check_depth_lock_held = is_depth_lock_held
+_check_arm_incident, _check_depth_lock_held = check_arm_incident_hold, is_depth_lock_held
 
 
 def _flock_held(lock_path: Path, mode: int) -> bool:
@@ -67,14 +68,11 @@ def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
     return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
 
 
-def _tools_tree(workdir: Path) -> str | None:
-    return tools_tree_name(workdir)
+_tools_tree = tools_tree_name
 
 
 def _dirty_arms(run: dict) -> tuple[str, ...]:
-    if run.get("arms"):
-        return tuple(run["arms"])
-    return (run["arm"],) if run.get("arm") else ()
+    return tuple(run.get("arms") or ((run["arm"],) if run.get("arm") else ()))
 
 
 class Runner:
@@ -106,11 +104,8 @@ class Runner:
         return self._incident_check_fn(arm) if self._incident_check_fn is not None else _check_arm_incident(arm)
 
     def _check_fleet_safety(self, arm: str | None) -> dict:
-        if self._fleet_safety_check_fn is not None:
-            return self._fleet_safety_check_fn(arm)
-        return check_fleet_safety_online(
-            arm, fleet_r_url=self._fleet_r_url, fleet_token_file=self._fleet_token_file, ca_file=self._ca_file
-        )
+        if self._fleet_safety_check_fn is not None: return self._fleet_safety_check_fn(arm)
+        return check_fleet_safety_online(arm, fleet_r_url=self._fleet_r_url, fleet_token_file=self._fleet_token_file, ca_file=self._ca_file)
 
     def _audit_locked(self, jid: str, run: dict, code: int) -> None:
         if run["audited"]:
@@ -123,7 +118,7 @@ class Runner:
             "principal_role": run.get("principal_role", ROLE_HUMAN),
             "principal_id": run.get("principal_id", ROLE_HUMAN),
             "proposer": run.get("proposer"),
-            "fleet_online": run.get("fleet_online", False),
+            "fleet_online": run.get("fleet_online", False), "stop_proof": run.get("stop_proof"), "person_at_switch_ignored": run.get("person_at_switch_ignored"),
             "start": run["start"],
             "end": ended,
             "exit": code,
@@ -153,17 +148,18 @@ class Runner:
         )
 
     def start(self, name: str, params: dict, *, principal: Principal | None = None, idempotency_key: str | None = None) -> dict:
+        return cell_incident_release.start_with_release(lambda released: self._start(name, params, principal, idempotency_key, released), self._check_incident)
+
+    def _start(self, name: str, params: dict, principal: Principal | None, idempotency_key: str | None, released: set) -> dict:
         principal = principal or Principal(ROLE_HUMAN, ROLE_HUMAN)
-        if idempotency_key is not None and not IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key):
-            return {"code": 400, "error": "invalid Idempotency-Key header"}
+        ignored, params = params.get("person_at_switch"), {k: v for k, v in params.items() if k != "person_at_switch"}  # D-1077: recorded, never a claim
+        if idempotency_key is not None and not IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key): return {"code": 400, "error": "invalid Idempotency-Key header"}
         job = self.jobs.get(name)
-        if job is None:
-            return {"code": 404, "error": f"no job {name}"}
+        if job is None: return {"code": 404, "error": f"no job {name}"}
         eff_params, auth_err = authorize_principal(name, job, params, principal, moves_arm_fn=moves_arm)
-        if auth_err is not None:
-            return auth_err
+        if auth_err is not None: return auth_err
         try:
-            argv = build_argv(job, eff_params, self.workdir)
+            eff_params = fill_depart_dest(name, eff_params, self.workdir); argv = build_argv(job, eff_params, self.workdir)
         except (ValueError, OSError, RuntimeError) as exc:  # RuntimeError: Path.resolve() on a symlink loop (3.12)
             return {"code": 400, "error": str(exc)}
         arms = job_arms(job, eff_params)
@@ -182,6 +178,8 @@ class Runner:
                 if kind == "conflict":
                     return {"code": 409, "error_code": "IDEMPOTENCY_KEY_CONFLICT", "error": "Idempotency-Key conflict"}
             fleet_online = False
+            held_skip, release_enabled = set(), moving and not job.get("recovery_home") and self._incident_check_fn is None
+            inc_check = lambda x: None if x in held_skip else self._check_incident(x)  # noqa: E731
             if moving:
                 for r in self.runs.values():
                     if not r["moving"] or r["proc"].poll() is not None:
@@ -194,7 +192,9 @@ class Runner:
                 if not job.get("recovery_home"):
                     for a in arms:
                         if inc_reason := self._check_incident(a):
-                            return held_job_response(a, inc_reason)
+                            if not (release_enabled and a not in released):  # else decide last: every other refusal precedes the ~6 s re-read
+                                return held_job_response(a, inc_reason)
+                            held_skip.add(a)
                 for a in arms or (None,):
                     fleet_st = self._check_fleet_safety(a)
                     fleet_online = fleet_online or bool(fleet_st.get("online"))
@@ -205,29 +205,27 @@ class Runner:
                 attach_hold, rec_home = bool(job.get("attach_live_hold")), bool(job.get("recovery_home"))
                 attach_err = live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive) if (attach_hold or rec_home) else None
                 if attach_hold and attach_err: return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
-                lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
-                for check_arm in lock_arms:
+                for check_arm in (sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)):
                     if not ((attach_hold or (rec_home and attach_err is None)) and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
                 if target_arms == AB_ARMS:
-                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
+                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=inc_check, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
                         return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
                 elif arm in AB_ARMS:
-                    if peer_err := check_peer_ab_folded(
-                        arm, self.workdir, self.lease_dir, self.lock_dir,
-                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
-                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
-                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
-                    ):
+                    if peer_err := check_peer_ab_folded(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=inc_check, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
                         return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
             if job.get("camera"):
                 if any(r["camera"] and r["proc"].poll() is None for r in self.runs.values()):
                     return {"code": 409, "error": "another camera job is running (one D435 depth reader at a time)"}
                 if _check_depth_lock_held(self.lock_dir):
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
+            if held_skip:
+                raise cell_incident_release.NeedsRelease(sorted(held_skip)[0])
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
+            proof, proof_err = prove_job(self, jid, name, job, arms, eff_params, moving, ignored, principal, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)
+            if proof_err is not None: return proof_err
             log = self.out / f"{jid}.log"
-            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
+            env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, {**eff_params, "person_at_switch": proof is not None}), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
@@ -242,23 +240,22 @@ class Runner:
                 "purpose": eff_params.get("purpose") or name,
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
-                "proposer": eff_params.get("proposer"), "fleet_online": fleet_online,
-                "start": now, "expires_at": now + JOB_TTL_S,
+                "proposer": eff_params.get("proposer"), "fleet_online": fleet_online, "stop_proof": proof, "person_at_switch_ignored": ignored,
+                "start": now, "expires_at": now + JOB_TTL_S, "depart": None, "depart_lock": threading.Lock(),
                 "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
             if moving:
                 for dirty_arm in _dirty_arms(run):
-                    write_cell_state_dirty(
-                        self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
-                        fleet_online=fleet_online, principal=principal,
-                    )
+                    write_cell_state_dirty(self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None, fleet_online=fleet_online, principal=principal)
                 self._state_gen.bump()
             if idempotency_key and idem_digest is not None:
                 self._idempotency.record(idempotency_key, idem_digest, jid, name)
             if isinstance(proc, _REAL_POPEN):
                 def _reap(jid=jid, run=run):
                     code = run["proc"].wait()
+                    depart_once(self, jid, run)
+                    auto_recover_once(self, jid, run, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)
                     with self.lock:
                         self._audit_locked(jid, run, code)
 
@@ -295,6 +292,7 @@ class Runner:
                 run["_parsed_result"] = (structured_result, failure_bundle_id)
         else:
             structured_result, failure_bundle_id = None, None
+        structured_result = with_depart(structured_result, depart_once(self, jid, run) if code is not None else None)
         return {
             "id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code,
             "log": data, "structured_result": structured_result, "failure_bundle_id": failure_bundle_id,

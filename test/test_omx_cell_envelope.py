@@ -452,6 +452,23 @@ def test_commissioning_is_explicit_and_never_a_verified_result(task, envelope):
     assert result["allowed"] and result["status"] == result["mode"] == "commissioning"
 
 
+def test_commissioning_accepts_a_fresh_passing_stop_proof_and_nothing_else(task, envelope):
+    import time
+    import cell_stop_proof as sp
+
+    config, calibration, library, state = task
+    live = {"t": time.time(), "folded": True, "chunk": None}
+    proof = sp.measure("j", ("arm_s",), lambda _a: {"live": live, "session": True, "fleet": {}}, max_age_s=15.0)
+    assert proof["ok"]
+    forged = {k: v for k, v in proof.items() if k != "basis"} | {"at": proof["at"] + 0.5}  # never measured here
+    for trial, allowed in (({"stop_proof": proof}, True), ({"stop_proof": forged}, False), ({"stop_proof": {**proof, "ok": False}}, False),
+                           ({"stop_proof": {**proof, "at": 1.0}}, False), ({"stop_proof": proof, "person_at_switch": True}, False),
+                           ({"stop_proof": True}, False)):
+        result = envelope.assess({**config, "_commissioning": trial}, calibration, library, state, now=100.01)
+        assert result["allowed"] is allowed, trial
+    assert envelope.assess({**config, "_commissioning": {"stop_proof": proof}}, calibration, library, state, now=100.01)["mode"] == "commissioning"
+
+
 def test_a_changed_or_partial_ledger_is_not_accepted(tmp_path, task, envelope):
     attempts, _ = approve(tmp_path, envelope, task)
     with attempts.open("a", encoding="utf-8") as stream:

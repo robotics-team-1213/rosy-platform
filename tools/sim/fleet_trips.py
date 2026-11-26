@@ -67,7 +67,7 @@ def seed_site_map(tasks_db, lap=False, nav=False, depart=0):
     from fleet.server.site_map_store import SiteMapStore
     from fleet.site_map import SiteMap, from_lane_graph
     base = from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
-    ends = [dict(id=pid, name=pid, kind='stop', **dict(zip('xy', to_site(pose, nav))), yaw=to_site(pose, nav)[2])
+    ends = [dict(id=pid, name=pid, kind='stop', **dict(zip('xy', to_site(pose, nav))))  # no yaw: arrival squaring needs a ceiling-marker sighting the sim has none of
             for pid, pose in layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), lap, depart)[1].items()]
     # D-573 rev 8: the surveyed walls of this world from its site map (the lane graph has none)
     walls = [] if nav else json.loads((REPO / 'deploy/site/site-maps/map_v2_fleet-v5.json').read_text(encoding='utf-8'))['walls']
@@ -227,6 +227,9 @@ def drive(fleet, operator, spawns, places, requests, budget_s, log, core=None):
     """Plan and start each robot's trip, poll until all end. Returns the per-robot evidence.
     core(ns) -> CORE's line-follow status; each change of why CORE drives or holds goes to row['core']."""
     rows = {}
+    _, ctrl = call(f'{fleet}/dispatch-control', operator, log=log)
+    if ctrl.get('dispatch_enabled') is False:  # a restarted Fleet starts closed (D-540 9); the named operator rearms
+        call(f'{fleet}/dispatch/rearm', operator, 'POST', {'expected_generation': ctrl['generation']}, log)
     for ns, body in requests.items():
         code, plan = call(f'{fleet}/robots/{ns}/trip', operator, 'POST', body, log)
         rows[ns] = {'plan_status': code, 'plan': plan, 'states': [], 'trip_id': None, 'path': [], 'core': []}
@@ -316,7 +319,7 @@ def run(args):
                ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', RMW_IMPLEMENTATION='rmw_cyclonedds_cpp',
                CYCLONEDDS_URI='file://' + str(cyclone_profile(root, args.nav)),
                FLEET_TRIPS_LAP=args.scenario or ('1' if args.lap else ''), FLEET_TRIPS_NAV='1' if args.nav else '',
-               FLEET_TRIPS_DEPART=str(args.depart), **RENDER[args.render], **{MARK: run_id})
+               FLEET_TRIPS_DEPART=str(args.depart), **RENDER[args.render], **{MARK: run_id}, ROSY_VAR_LIB=str(root))
     launch = ['ros2', 'launch', 'gz_sim', 'map_v2_fleet_multi_real.launch.py', 'map_variant:=.',
               f'run_spec:={root / "run_spec.yaml"}',
               'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % tuple(spawns[ns]) for ns in ROBOTS)]

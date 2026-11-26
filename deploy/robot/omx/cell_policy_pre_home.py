@@ -6,7 +6,7 @@ import time
 from cell_policy_entry import PRE_SETTLE_TOL, stationary_idle as _stationary_idle
 from cell_policy_timing import (
     ack_status as _ack_status, best_effort_hold as _best_effort_hold, empty_gripper_ok as _empty_gripper_ok,
-    max_diff as _max_diff, pose6 as _pose6, send_hold as _send_hold,
+    library_home as _library_home, max_diff as _max_diff, rest_diagnosis as _rest_diagnosis, send_hold as _send_hold,
 )
 
 HOLD_CURRENT_LIMIT_MA = 140.0
@@ -17,25 +17,29 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
     """Fail-closed verification that the arm starts stationary at home with a confirmed empty gripper."""
     from cell_policy_shape import jaw_zone_error
 
-    hold_sent = False
+    hold_sent, home = False, None
 
-    def _refuse(cur: dict, reason: str, *, base: dict = row, result: str = "refused", **extra):
+    def _refuse(cur: dict, reason: str, *, base: dict = row, result: str = "refused", keep_hold: bool = False, **extra):
         nonlocal hold_sent
-        rows = [{**base, "refused": reason, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
-        rows.append({"command": "human-hold", **_ack_status(_send_hold(cell, log=log))})
-        hold_sent = True
+        diag = _rest_diagnosis(cur, home, library)
+        hold = keep_hold or home is None or not diag["no_hold"]  # no command sent: a clean arm at home or folded ends the session without a hold
+        facts = {"reason_code": reason.split(":")[0], "off_home": diag["off_home"], "folded": diag["folded"], "fold_basis": diag["fold_basis"], "hold_kept": hold,
+                 **({"next": "recover_hold"} if hold else {})}  # a kept hold is cleared by the recover_hold job (attach_live_hold)
+        rows = [{**base, "refused": reason, **facts, **extra, **(_ack_status(cur) if isinstance(cur, dict) else {})}]
+        if hold:
+            rows.append({"command": "human-hold", **_ack_status(_send_hold(cell, log=log))})
+            hold_sent = True
         for r in rows:
             log(r)
-        return None, {"result": result, "at": 0, "reason": reason, "parked": False}
+        return None, {"result": result, "at": 0, "reason": reason, "parked": False, **facts}
 
     try:
+        home = _library_home(library)
         if not _empty_gripper_ok(status, HOLD_CURRENT_LIMIT_MA, now=time.time()):
             return _refuse(status, "START_POSE_OFF_HOME: unconfirmed empty gripper",
                            result="fault" if status.get("fault") else "refused")
-        home_frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
-        home = _pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None
         if home is None:
-            return _refuse({}, "START_POSE_OFF_HOME: library missing home")
+            return _refuse(status, "START_POSE_OFF_HOME: library missing home")
         if (off_home := _max_diff([float(v) for v in status["state"]], home, 5)) > PRE_SETTLE_TOL:
             return _refuse(status, "START_POSE_OFF_HOME: arm off home; run home stage first", off_home=round(off_home, 3))
         s2, p2 = _stationary_idle(cell, status, home, check_home_target=True, max_off_home=PRE_SETTLE_TOL, sleep=sleep)
@@ -43,7 +47,7 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
             return _refuse(s2, "START_POSE_OFF_HOME: unconfirmed empty gripper",
                            result="fault" if isinstance(s2, dict) and s2.get("fault") else "refused")
         if p2 is None:
-            return _refuse(s2, "START_POSE_OFF_HOME",
+            return _refuse(s2, "START_POSE_OFF_HOME", keep_hold=True,  # not stationary: something else moves the arm
                            result="fault" if isinstance(s2, dict) and s2.get("fault") else "refused")
         live_poses = [p2, *([s2["target"]] if s2.get("target") is not None else [])]
         if jaw_spec is not None and (jaw_warn := jaw_zone_error(live_poses, kin, jaw_spec)):
@@ -60,3 +64,20 @@ def pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_
             except Exception:
                 pass
         return None, {"result": "refused", "at": 0, "reason": "START_POSE_OFF_HOME", "parked": False}
+
+
+def trim_backtrack_prefix(chunk, start, *, tol: float = 3.0, joints: int = 6):
+    """Drop a leading ACT backtrack prefix when arr[0] jumps off start and a later row returns closer."""
+    import numpy as np
+
+    arr = np.asarray(chunk, dtype=float)
+    start_arr = np.asarray(start, dtype=float)
+    if (arr.ndim != 2 or arr.shape[1] != joints or len(arr) < 2
+            or start_arr.ndim != 1 or len(start_arr) < 5
+            or not np.isfinite(arr).all() or not np.isfinite(start_arr[:5]).all()):
+        return arr
+    dists = np.abs(arr[:, :5] - start_arr[:5]).max(axis=1)
+    best = int(np.argmin(dists))
+    if best > 0 and dists[0] > tol and dists[best] < dists[0] - tol:
+        return arr[best:]
+    return arr

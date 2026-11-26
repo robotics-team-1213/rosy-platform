@@ -32,7 +32,7 @@ from fleet.server.rfid_receipts import is_inbound_supply
 
 #: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
 PLACE_OF_ACTION = {"dock_s3": "S3", "dock_and_unload_s3": "S3", "dock_s5": "S5", "charge_c1": "C1",
-                   "charge_c2": "C2", "depart_s1": "S1"}
+                   "charge_c2": "C2", "charge_c3": "C3", "depart_s1": "S1"}
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -550,8 +550,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             target_place = "HOLD_STOP"
             v_cmd = 0.0
             duration_s = 0.0
-        elif action in ("charge_c1", "charge_c2"):
-            target_place = "C1" if action == "charge_c1" else "C2"
+        elif action in ("charge_c1", "charge_c2", "charge_c3"):
+            target_place = PLACE_OF_ACTION[action]
             v_cmd = max_speed_mps
             duration_s = 0.35
         elif action in ("move_staging_c2", "move_staging_s3", "move_export_s1"):

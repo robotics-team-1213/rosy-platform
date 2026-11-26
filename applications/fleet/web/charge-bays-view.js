@@ -6,18 +6,21 @@ import { owns } from "/console/assets/unit-scope.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { renderOmxInspector } from "/console/assets/omx-inspector.js";
+import { armIncidentRowFor } from "/console/assets/arm-incident-clear.js";
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
 /** Choices that target a docked vehicle need the server's occupant; cell-wide emergency stops are always enabled. */
 const needsRobot = (choice) => Boolean(choice.cableGuardToggle || choice.zoneId);
 
+export const armIncidentRowKey = (target, obs) => armIncidentRowFor(target, obs)?.key || null;
+
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, readWorkcellObs = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, readWorkcellObs = null, openArmIncident = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -65,6 +68,11 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   async function executeChoice(choice, card, button, confirmed = false) {
     if (auth.locked || button.hasAttribute("disabled")) return;
     if (needsRobot(choice) && !card.robot_id) return;  // no occupant from the server: never guess one
+    if (choice.armIncident) {  // clearing lives in the alert drawer's shared row; a Fleet-only hold is cleared on the cell page
+      const key = armIncidentRowKey(choice.armIncident, readWorkcellObs?.());
+      if (!key || !openArmIncident?.(key)) location.assign("/console/cell#real2sim-heading");
+      return;
+    }
     if (choice.cancelTaskId && !confirmed) {  // irreversible: the shared confirmation, or nothing (fail closed)
       if (!confirmedAction) return;
       return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
@@ -96,14 +104,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         await call("/api/fleet/pipeline/cable-guard", {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({toggle: true, robot_id: card.robot_id}),
-        });
-      } else if (choice.clearArmHold) {
-        await call("/api/fleet/pipeline/arm-holds/clear", {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            arm_id: choice.clearArmHold,
-            note: "Fleet 콘솔 카메라로 홈 복귀(folded: true) 확인 후 홀드 해제",
-          }),
         });
       } else if (choice.humanSafetyCell) {
         stopRes = await call("/api/fleet/pipeline/human-safety-gate", {

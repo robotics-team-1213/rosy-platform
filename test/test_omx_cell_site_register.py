@@ -500,8 +500,6 @@ def test_site_surface_job_measures_a_registered_slot_under_the_existing_surface_
     j = spec.JOBS["site_surface"]
     params = {"arm": "arm_a", "config": "cell-arm-a-stack.json", "site": "ship-h1r0", "surface_clear": True}
     assert j["moving"] and j["camera"] and spec.moves_arm(j, params)
-    with pytest.raises(ValueError, match="person_at_switch"):  # the D-911 guard of the other surface job still applies
-        spec.build_argv(j, params, tmp_path)
     argv = spec.build_argv(j, {**params, "person_at_switch": True}, tmp_path)
     assert argv[-2:] == ["--commissioning", "--person-at-switch"]
     assert argv[argv.index("--remeasure-surface") + 1] == "ship-h1r0" and "--surface-clear" in argv and "--only" in argv

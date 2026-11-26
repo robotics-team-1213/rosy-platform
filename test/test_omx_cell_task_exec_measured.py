@@ -259,7 +259,9 @@ def test_worker_act_binds_request_without_starting_a_physical_session(tmp_path, 
 
     monkeypatch.setattr(start_gate, "read_state_range", lambda _root: {})  # statistics present; the gate itself has its own tests
     monkeypatch.setattr(cte, "check_arm_hold", lambda *_: {"held": False})
-    monkeypatch.setattr(cte.subprocess, "run", lambda *_a, **_kw: pytest.fail("started the physical session wrapper"))
+    calls, drive = [], {"out": {"result": "refused", "reason": "POLICY_LEASE_UNACKED", "at": 0, "parked": False}}
+    monkeypatch.setattr(cte.subprocess, "run", lambda cmd, **_kw: calls.append(cmd) or subprocess.CompletedProcess(
+        cmd, 0 if drive["out"].get("result") == "released" else 1, stdout=json.dumps(drive["out"]), stderr=""))
     wrap, cfg, _, _, _ = cte._arm_run_spec(arm_id, tmp_path)
     assert wrap.is_file()
     ab = arm_id != "arm_s"
@@ -285,17 +287,20 @@ def test_worker_act_binds_request_without_starting_a_physical_session(tmp_path, 
         "sites": {"pinky": {"auto_roi": [0, 0, 4, 4]}, "ship-h1r0": {"place": [0, 0], "surface_z": 0},
                   "belt": {"auto_roi": [0, 0, 4, 4], "surface_z": 0.1}},
         "act_policy": {"execution_allowed": True, "policy_root": str(checkpoint), "policy_revision": revision,
-                       "cell_calibration": "cell.json", "model_calibration": "model.json"},
+                       "cell_calibration": "cell.json", "model_calibration": "model.json",
+                       "library": "chunks-arm-s-inplace-live.json"},
     }
     cfg.write_text(json.dumps(config))
     task = {**HANDOFF, "cell_id": "cell_ab" if ab else "cell_s", "arm_id": arm_id, "execution_mode": "act_policy",
             "src_site": source, "dst_site": destination, "presence": {"operator": "onsite", "at": time.time()}}
     run = lambda: cte.execute_guarded_cell_task(task, prep_dir=tmp_path)
-    result = run()
+    result = run()  # the runner never armed the pushed lease: the drive refused before any motion
     assert result["error"] == "PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE"
     assert result["stage_result"]["task_verified"] is False
     assert result["stop_event"]["folded"] is False
     assert result["inference_performed"] is False and result["motion_issued"] is False
+    assert len(calls) == 1 and "--policy-lease" in calls[0] and "--person-at-switch" in calls[0]
+    assert (calls[0][calls[0].index("--goal-site") + 1] == destination) if ab else "--goal-site" not in calls[0]
     if ab:
         saved_belt = config["sites"]["belt"]
         config["sites"]["belt"] = {}
@@ -463,3 +468,61 @@ def test_guarded_exec_honors_calibrated_displaced_to_or_fails_closed(tmp_path, m
     act_bad = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy", "displaced_to": "bogus"},
                                             prep_dir=tmp_path)
     assert act_bad["error"] == "UNCALIBRATED_DISPLACED_SITE" and cmds == []
+
+
+def _act_task(tmp_path, monkeypatch, drive_out, *, took_one_zone=True):
+    """An S act_policy task whose drive (the subprocess) printed `drive_out`; fold and zone are the measured values."""
+    import hashlib
+
+    import cell_act_verdict as verdict_mod
+
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "model.safetensors").write_bytes(b"w")
+    revision = hashlib.sha256(b"w").hexdigest()
+    wrap, cfg, _, _, _ = cte._arm_run_spec("arm_s", tmp_path)
+    (tmp_path / "chunks-arm-s-inplace-live.json").write_text("{}")
+    cfg.write_text(json.dumps({
+        "arm_id": "arm_s", "io": "chunk-io-s", "sites": {"pinky": {"auto_roi": [0, 0, 4, 4]}, "belt": {}},
+        "act_policy": {"execution_allowed": True, "policy_root": str(checkpoint), "policy_revision": revision,
+                       "cell_calibration": "c.json", "model_calibration": "m.json"}}))
+    monkeypatch.setattr(cte, "check_arm_hold", lambda *_: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda *a, **k: {"folded": True, "state": None})
+    monkeypatch.setattr(cte, "fold_readback", lambda *a, **k: {"folded": True, "state": [0] * 6})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0})
+    wrote = []
+    monkeypatch.setattr(cte, "write_context", lambda *a, **k: wrote.append(a))
+    monkeypatch.setattr(verdict_mod, "zone_acceptance", lambda *a: took_one_zone)
+    monkeypatch.setattr(cte.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, stdout=json.dumps(drive_out), stderr=""))
+    task = {**HANDOFF, "execution_mode": "act_policy", "presence": {"operator": "onsite", "at": time.time()}}
+    return cte.execute_guarded_cell_task(task, prep_dir=tmp_path), wrote
+
+
+_DRIVE_OK = {"result": "released", "parked": True, "park": {**PARK}, "source": {"before": 1, "after": 0}, "took_one": True,
+             "zone_verification": ZONE}
+
+
+def test_act_with_an_armed_lease_runs_and_is_verified_only_on_took_one_and_zone(tmp_path, monkeypatch):
+    out, wrote = _act_task(tmp_path, monkeypatch, _DRIVE_OK)
+    assert out["stage_result"]["task_verified"] is True and out["stop_event"]["folded"] is True and wrote
+    assert "error" not in out
+
+
+@pytest.mark.parametrize("change,zone_ok", [({"took_one": False}, True), ({"took_one": None}, True), ({}, False)])
+def test_act_not_verified_without_both_took_one_and_the_zone(tmp_path, monkeypatch, change, zone_ok):
+    out, wrote = _act_task(tmp_path, monkeypatch, {**_DRIVE_OK, **change}, took_one_zone=zone_ok)
+    assert out["stage_result"]["task_verified"] is False and not wrote and out["error"] == "released"
+
+
+def test_act_unarmed_runner_is_refused_and_a_timeout_names_the_watchdog(tmp_path, monkeypatch):
+    out, _ = _act_task(tmp_path, monkeypatch, {"result": "refused", "reason": "POLICY_LEASE_UNACKED", "parked": False})
+    assert out["error"] == "PHYSICAL_POLICY_LEASE_OWNER_UNAVAILABLE" and out["motion_issued"] is False
+
+    def timeout(cmd, **_kw):
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    monkeypatch.setattr(cte.subprocess, "run", timeout)
+    task = {**HANDOFF, "execution_mode": "act_policy", "presence": {"operator": "onsite", "at": time.time()}}
+    out = cte.execute_guarded_cell_task(task, prep_dir=tmp_path)
+    assert out["error"] == "SUBPROCESS_TIMEOUT" and out["stop_event"]["lease_watchdog"] is True

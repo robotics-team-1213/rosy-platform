@@ -285,8 +285,9 @@ def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path,
     source = parent / "tools/hooks/pre-push"
     source.parent.mkdir(parents=True)
     source.write_bytes(SCRIPT.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-    (source.parent / "reference-transaction").write_bytes((SCRIPT.parent / "reference-transaction").read_bytes())
-    git(parent, "add", "tools/hooks/pre-push", "tools/hooks/reference-transaction")
+    for extra in ("reference-transaction", "commit-msg"):
+        (source.parent / extra).write_bytes((SCRIPT.parent / extra).read_bytes())
+    git(parent, "add", "tools/hooks/pre-push", "tools/hooks/reference-transaction", "tools/hooks/commit-msg")
     git(parent, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture")
     linked = tmp_path / "linked worktree"
     git(parent, "worktree", "add", "-qb", "linked", str(linked))

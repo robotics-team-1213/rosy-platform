@@ -85,3 +85,33 @@ def fit_naming_stop(stop: str | None, config: dict, z_view: float, **kw) -> dict
         if stop is None:
             raise
         raise SystemExit(f"{stop}; {exc}") from exc
+
+
+MOVE_MIN_INLIERS = 100  # the check's ORB match; the 11-26/27 cell reads 539-600, a bad match reads tens
+
+
+def regions_now(config: dict, found: dict, frame) -> dict:
+    """The config with its image regions (site ROIs, surfaces) carried to the current frame when the camera moved.
+
+    2026-11-27 arm_a: the A/B top camera moved 33 px and the remap's depth obstacle check read the pallet through its
+    old ROI, half off the pallet ("insufficient depth coverage 6946/11360"), so the remap that would fix the camera
+    could never start. The remap step already moves the regions after it; this moves a copy for the depth check only.
+    Without a good match (`camera_shift` not ok or under MOVE_MIN_INLIERS inliers) the regions stay and the check refuses."""
+    shift = found.get("camera_shift") or {}
+    if not found.get("camera_moved") or frame is None or not shift.get("ok") or (shift.get("inliers") or 0) < MOVE_MIN_INLIERS:
+        return config
+    import copy
+    from pathlib import Path
+
+    import cv2
+    from cell_calibrate_bound import move_regions
+
+    ref = cv2.imread(str(Path((config.get("preflight") or {}).get("reference_top", "")).expanduser()), cv2.IMREAD_GRAYSCALE)
+    if ref is None:
+        return config
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    try:
+        return move_regions(copy.deepcopy(config), ref, gray)
+    except (cv2.error, ValueError, TypeError, AttributeError):  # no usable homography: measure as before, which refuses
+        return config
+

@@ -15,8 +15,8 @@ from cell_policy_entry import (  # noqa: F401
 from cell_policy_retreat import retreat_from_jaw_zone as _retreat_from_jaw_zone
 from cell_policy_timing import (
     FAULT_KEYS, ack_status as _ack_status, best_effort_hold as _best_effort_hold,
-    empty_gripper_ok as _empty_gripper_ok, finite_stamp as _finite_num, max_diff as _max_diff, park_ack_ok,
-    pose6 as _pose6, retreat_ack_ok, run_entry_chunk as _run_entry_chunk, send_hold as _send_hold,
+    empty_gripper_ok as _empty_gripper_ok, finite_stamp as _finite_num, library_home as _library_home,
+    max_diff as _max_diff, park_ack_ok, pose6 as _pose6, rest_diagnosis as _rest_diagnosis, retreat_ack_ok, run_entry_chunk as _run_entry_chunk, send_hold as _send_hold,
     step_count as _step_count, valid_state as _valid_state, validate_entry_chunk as _validate_entry_chunk,
 )
 
@@ -53,9 +53,14 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
     def _park_receipt(reply: dict) -> dict:
         return {**_ack_status(reply), **({"command": reply["command"]} if "command" in reply else {})}
 
-    def _safe_park_or_hold(cmd_prefix: str = "", *, fault: bool = False, pre_logs: tuple[dict, ...] = ()) -> tuple[bool, dict | None]:
+    def _no_motion_at_home(status) -> bool:  # nothing sent yet and fault-free at home: refuse without human-hold
+        return not moved and _rest_diagnosis(status, _library_home(library), library)["no_hold"]
+
+    def _safe_park_or_hold(cmd_prefix: str = "", *, fault: bool = False, pre_logs: tuple[dict, ...] = (),
+                           status: dict | None = None) -> tuple[bool, dict | None]:
         nonlocal park_safe, hold_needed, safety_done
-        if dry_run or (not fault and not moved and not hold_needed and (pre_home or authorize is not None)):
+        if (dry_run or _no_motion_at_home(status)
+                or (not fault and not moved and not hold_needed and (pre_home or authorize is not None))):
             for r in pre_logs:
                 log(r)
             return False, None
@@ -94,17 +99,22 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         return False, park_reply
 
     def _fail(res: str, at: int, reason, cmd_prefix: str = "", *, fault: bool = False, extra: dict | None = None,
-              pre_logs: tuple[dict, ...] = ()) -> dict:
+              pre_logs: tuple[dict, ...] = (), status: dict | None = None) -> dict:
         nonlocal aborted
         aborted = True
-        parked_ok, park_reply = _safe_park_or_hold(cmd_prefix, fault=fault, pre_logs=pre_logs)
-        return {"result": res, "at": at, "reason": reason, **(extra or {}), "parked": parked_ok,
+        parked_ok, park_reply = _safe_park_or_hold(cmd_prefix, fault=fault, pre_logs=pre_logs, status=status)
+        diag = _rest_diagnosis(status, _library_home(library), library) if status is not None else {}
+        return {"result": res, "at": at, "reason": reason, **({k: diag[k] for k in ("off_home", "folded", "fold_basis")} if diag else {}),
+                **(extra or {}), "parked": parked_ok,
                 **({"park": _park_receipt(park_reply)} if park_reply is not None else {})}
 
-    def _legacy_jaw_hold(row: dict, n: int, jaw_warn: str) -> dict:
+    def _legacy_jaw_hold(row: dict, n: int, jaw_warn: str, status: dict | None = None) -> dict:
         nonlocal aborted
         aborted = True
-        _hold_and_log({**row, "refused": jaw_warn})
+        if _no_motion_at_home(status):
+            log({**row, "refused": jaw_warn})
+        else:
+            _hold_and_log({**row, "refused": jaw_warn})
         return {"result": "refused", "at": n, "reason": jaw_warn, "parked": False}
 
     def _checked_state(row: dict, n: int, *, catch_io: bool = False, hold_on_fail: bool = False) -> tuple[dict | None, list | None, dict | None]:
@@ -126,12 +136,13 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 return {"ok": True, "state": fallback, "holding": False}, [fallback], None
             fault = isinstance(status, dict) and bool(status.get("fault"))
             return None, None, _fail("fault" if fault else "refused", n, err_msg, fault=hold or hold_on_fail,
-                                     pre_logs=({**row, "refused": err_msg, **(_ack_status(status) if isinstance(status, dict) else {})},))
+                                     pre_logs=({**row, "refused": err_msg, **(_ack_status(status) if isinstance(status, dict) else {})},),
+                                     status=status if isinstance(status, dict) else None)
         live = [status["state"], *([status["target"]] if status.get("target") is not None else [])]
         if jaw_spec is not None and (jaw_warn := jaw_zone_error(live, kin, jaw_spec)):
             row["jaw_warning"] = jaw_warn
             if not dry_run:
-                return None, None, _legacy_jaw_hold(row, n, jaw_warn)
+                return None, None, _legacy_jaw_hold(row, n, jaw_warn, status)
         hold_needed = prev_hold
         return status, live, None
 
@@ -153,9 +164,9 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                     if (home_pose is None or not _empty_gripper_ok(status, HOLD_CURRENT_LIMIT_MA, now=time.time())
                             or _max_diff(status["state"], home_pose, 5) > PRE_SETTLE_TOL):
                         msg = "START_POSE_OFF_HOME: arm off home; run home stage first"
-                        return _fail("refused", n, msg, fault=True, pre_logs=({**row, "refused": msg},))
+                        return _fail("refused", n, msg, fault=True, pre_logs=({**row, "refused": msg},), status=status)
                 if state_gate is not None and (why := state_gate.roll_error(status["state"])):  # before entry: other roll branch
-                    return _fail("refused", n, why, fault=True, pre_logs=({**row, "refused": why},))
+                    return _fail("refused", n, why, fault=True, pre_logs=({**row, "refused": why},), status=status)
                 if entry_frames is not None:
                     hold_needed = True
                     _ran_e, entry_prefix, entry_err = _run_entry_chunk(
@@ -220,7 +231,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                        "proposed_last": proposed[-1].tolist(), **({"converted_chunk": converted.tolist()} if dry_run else {})}
                 force_all = jaw_spec is not None and in_jaw_zone(live_poses, kin, jaw_spec)
                 try:
-                    frames_cell = shape_chunk(proposed, state, low, high, fastest)
+                    frames_cell = shape_chunk(proposed, state, low, high, fastest, trim_backtrack=True)
                 except ValueError as error:
                     if dry_run:
                         row["envelope"] = {"ok": False, "reason": str(error)}

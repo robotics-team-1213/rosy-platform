@@ -17,4 +17,6 @@ def test_every_yaml_zone_is_aliased_and_yaml_unchanged():
     assert zones["schema"] == "rosy.station-zones.v1"
     assert zones["zones_by_id"]["EXP_S1"]["dst_site"] == "stand"
     assert zones["zones_by_id"]["EXP_S1"]["arm_id"] == "arm_a"
-    assert (zones["zones_by_id"]["EXP_S1"]["x"], zones["zones_by_id"]["EXP_S1"]["y"]) == (-0.6763, -0.1383)
+    # A zone stands at its place in the active site map; it stores no coordinate of its own.
+    assert zones["zones_by_id"]["EXP_S1"]["place_id"] == "S1"
+    assert not {"x", "y", "yaw_deg"} & zones["zones_by_id"]["EXP_S1"].keys()

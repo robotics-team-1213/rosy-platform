@@ -6,6 +6,13 @@ from pathlib import Path
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _stop_proof_passes(monkeypatch):
+    """D-1077: these drive runs are about collection; the stop proof itself is tested in test_omx_stop_proof.py."""
+    import cell_stop_proof
+    monkeypatch.setattr(cell_stop_proof, "session_proof", lambda *a, **k: {"ok": True, "code": None, "reason": None})
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx"))
 import cell_collect_plan as cp  # noqa: E402
 import cell_auto_safety  # noqa: E402

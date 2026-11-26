@@ -126,3 +126,33 @@ def test_direct_move_matches_transit_path():
                 seen.add(same)
     assert seen == {True, False}
 
+
+def test_a_moved_camera_carries_the_regions_before_the_depth_check(tmp_path):
+    """2026-11-27 arm_a: the depth check read the pallet through its pre-move ROI and refused the remap."""
+    cv2 = pytest.importorskip("cv2")
+    rng = np.random.default_rng(5)
+    ref = np.full((480, 640), 90, np.uint8)
+    for _ in range(160):
+        x, y = int(rng.integers(0, 620)), int(rng.integers(0, 460))
+        cv2.rectangle(ref, (x, y), (x + int(rng.integers(6, 40)), y + int(rng.integers(6, 40))), int(rng.integers(0, 255)), -1)
+    cv2.imwrite(str(tmp_path / "ref.png"), ref)
+    now = cv2.warpAffine(ref, np.float32([[1, 0, 30], [0, 1, 0]]), (640, 480), borderValue=90)
+    config = {"preflight": {"reference_top": str(tmp_path / "ref.png")}, "sites": {"pallet": {"auto_roi": [200, 100, 300, 300]}}}
+    found = {"camera_moved": True, "camera_shift": {"ok": True, "inliers": 500}}
+    moved = cc.rp.regions_now(config, found, now)
+    assert moved["sites"]["pallet"]["auto_roi"][0] == pytest.approx(230, abs=3) and config["sites"]["pallet"]["auto_roi"][0] == 200
+    assert cc.rp.regions_now(config, {"camera_moved": False}, now) is config
+    for weak in ({"ok": False}, {"ok": True, "inliers": 40}, None):
+        assert cc.rp.regions_now(config, {"camera_moved": True, "camera_shift": weak}, now) is config
+    assert cc.rp.regions_now(config, found, np.zeros((480, 640), np.uint8)) is config  # no homography: as before
+    seen = {}
+    monkey_depth = lambda cfg, depth, colour: seen.setdefault("roi", cfg["sites"]["pallet"]["auto_roi"]) and {"obstacle_mm": 0.0, "sites_mm": {}, "edge_px": 0.0}  # noqa: E731
+    import cell_cal_eval
+    orig = (cc.rp.site_obstacle_mm, cell_cal_eval.top_has_depth)
+    cc.rp.site_obstacle_mm, cell_cal_eval.top_has_depth = monkey_depth, lambda c: True
+    try:
+        view, _ = cc.rp.remap_view({**config, "coarse": {"z_view": 0.14}}, now, None, lambda: object(), depth_config=moved)
+    finally:
+        cc.rp.site_obstacle_mm, cell_cal_eval.top_has_depth = orig
+    assert seen["roi"][0] == moved["sites"]["pallet"]["auto_roi"][0] and view["sites"] is config["sites"]  # only the depth moved
+
