@@ -128,7 +128,7 @@ export function chargeBayRows(plan) {
           zoneId: id === "cell_s" ? "EXP_S3_BELT" : "EXP_S5_PALLET",
         },
         {label: "비전 안전 비상정지 (카메라 확인)", visionCheckCell: id},
-        {label: cellHeldArms.length ? "팔 홀드 해제(확인됨)" : "팔 홀드 점검·해제", clearArmHold: id},
+        {label: cellHeldArms.length ? "팔 보류 확인·해제 (알림 창)" : "팔 사건 확인 (알림 창)", armIncident: id},
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
         ...(task && task.status === "QUEUED"
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
@@ -217,7 +217,7 @@ export function inspectorTargetsFromRows(rows, obs = null) {
         ...(cellSOccupant ? [{id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: cellSOccupant}] : []),
       ]),
       buttons: s3.buttons || CELL_BUTTONS.cell_s,
-      quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
+      quickControls: (s3.quickControls || []).map((c) => c.armIncident ? {...c, armIncident: "arm_s"} : c),
     },
     {
       id: "arm_a",
@@ -239,7 +239,7 @@ export function inspectorTargetsFromRows(rows, obs = null) {
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
       ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
-      quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_a"} : c),
+      quickControls: (s5.quickControls || []).map((c) => c.armIncident ? {...c, armIncident: "arm_a"} : c),
     },
     {
       id: "arm_b",
@@ -261,7 +261,7 @@ export function inspectorTargetsFromRows(rows, obs = null) {
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
       ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
-      quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
+      quickControls: (s5.quickControls || []).map((c) => c.armIncident ? {...c, armIncident: "arm_b"} : c),
     },
     ...(s3.id ? [{...s3, cameraViews: mapViews(s3.cameraViews || []), shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || UNKNOWN_JOINT_TEXT)}] : []),
     ...(s5.id ? [{...s5, cameraViews: mapViews(s5.cameraViews || []), shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || UNKNOWN_JOINT_TEXT)}] : []),
