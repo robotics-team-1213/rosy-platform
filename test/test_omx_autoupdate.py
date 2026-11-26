@@ -1012,7 +1012,10 @@ def test_an_unplugged_arm_board_does_not_block_the_other_observers(tmp_path, mon
                  {"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
     host = m.Host({"devices": [str(live_dev)], "follower_device": str(live_dev), "observers": observers})
     assert host.follower_idle_reason(tmp_path, tmp_path) is None
-    (tmp_path / "absent_s").write_text("", encoding="utf-8")  # plugged back in: its stale snapshot defers again
+    (tmp_path / "absent_s").write_text("", encoding="utf-8")  # plugged back in with its observer stopped: still skipped
+    monkeypatch.setattr(m.Host, "_observer_pid", lambda self, unit: None if unit.endswith("arm_s.service") else "42")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    monkeypatch.setattr(m.Host, "_observer_pid", lambda self, unit: "42")  # its observer runs: the stale snapshot defers
     assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
 
 
