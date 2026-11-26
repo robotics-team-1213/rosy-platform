@@ -9137,6 +9137,177 @@
           "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
         }
       ]
+    },
+    {
+      "id": "cell_job_panel",
+      "title": "ARM-CELL run and recovery of OMX arms A/B through the cell job API",
+      "entrypoints": [
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/cell/cell-job-panel.js",
+        "applications/fleet/web/shared/cell-context-panel.js"
+      ],
+      "availability": "Needs ROSY_FLEET_CELL_JOBS on the Fleet host (cell URL, token file, per-arm files, model list) and a named operator. Every arm guard stays in the cell job API; no physical acceptance.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/cell/cell-job-panel.js",
+          "expression": "/api/fleet/cells/${encodeURIComponent(cell)}/jobs",
+          "resolution": "template base; appends /options, /readiness, /{job_id} or POST /{job}",
+          "request_ids": [
+            "GET:/api/fleet/cells/{cell}/jobs/options",
+            "GET:/api/fleet/cells/{cell}/jobs/readiness",
+            "GET:/api/fleet/cells/{cell}/jobs/queue",
+            "GET:/api/fleet/cells/{cell}/jobs/{job_id}",
+            "POST:/api/fleet/cells/{cell}/jobs/{job}"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/cells/{cell}/jobs/options",
+          "method": "GET",
+          "path": "/api/fleet/cells/{cell}/jobs/options",
+          "implementation": "operations/fleet/fleet/server/cell/cell_job_proxy_routes.py",
+          "handler": "cell_job_options",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real Fleet app and role guards with a fake cell job API (:8781); no arm, cell host or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_job_proxy_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cells/{cell}/jobs/options"
+        },
+        {
+          "id": "GET:/api/fleet/cells/{cell}/jobs/readiness",
+          "method": "GET",
+          "path": "/api/fleet/cells/{cell}/jobs/readiness",
+          "implementation": "operations/fleet/fleet/server/cell/cell_job_proxy_routes.py",
+          "handler": "cell_job_readiness",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real Fleet app and role guards with a fake cell job API (:8781); no arm, cell host or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_job_proxy_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cells/{cell}/jobs/readiness"
+        },
+        {
+          "id": "GET:/api/fleet/cells/{cell}/jobs/queue",
+          "method": "GET",
+          "path": "/api/fleet/cells/{cell}/jobs/queue",
+          "implementation": "operations/fleet/fleet/server/cell/cell_job_proxy_routes.py",
+          "handler": "cell_job_queue",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real Fleet app and role guards with a fake cell job API (:8781); no arm, cell host or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_job_proxy_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cells/{cell}/jobs/queue"
+        },
+        {
+          "id": "GET:/api/fleet/cells/{cell}/jobs/{job_id}",
+          "method": "GET",
+          "path": "/api/fleet/cells/{cell}/jobs/{job_id}",
+          "implementation": "operations/fleet/fleet/server/cell/cell_job_proxy_routes.py",
+          "handler": "cell_job_status",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real Fleet app and role guards with a fake cell job API (:8781); no arm, cell host or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_job_proxy_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cells/{cell}/jobs/{job_id}"
+        },
+        {
+          "id": "POST:/api/fleet/cells/{cell}/jobs/{job}",
+          "method": "POST",
+          "path": "/api/fleet/cells/{cell}/jobs/{job}",
+          "implementation": "operations/fleet/fleet/server/cell/cell_job_proxy_routes.py",
+          "handler": "cell_job_start",
+          "expected_statuses": [
+            202
+          ],
+          "status": "verified",
+          "verification_scope": "Real Fleet app and role guards with a fake cell job API (:8781); no arm, cell host or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_job_proxy_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cells/{cell}/jobs/{job}"
+        }
+      ],
+      "flows": [
+        {
+          "id": "cell_job_panel.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/cells/{cell}/jobs/options",
+                "GET:/api/fleet/cells/{cell}/jobs/readiness",
+                "POST:/api/fleet/cells/{cell}/jobs/{job}",
+                "GET:/api/fleet/cells/{cell}/jobs/{job_id}"
+              ],
+              "screen_assertion": "A dry run is sent first and polled; only after it ends with exit 0 the same real run opens and is sent with dry_run false."
+            }
+          ],
+          "scenario_id": "cell_job_panel.happy",
+          "browser_test": "operations/fleet/test/test_cell_job_panel_browser.py::test_dry_run_first_then_the_same_real_run",
+          "sample_status": "verified",
+          "test_scope": "Browser fixture API; server allowlist and operator binding are proved by the route contract test.",
+          "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+        },
+        {
+          "id": "cell_job_panel.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/cells/{cell}/jobs/readiness",
+                "POST:/api/fleet/cells/{cell}/jobs/{job}"
+              ],
+              "screen_assertion": "A job API refusal (409 PEER_ARM_NOT_FOLDED) is shown inline in the panel with its own reason; no toast."
+            }
+          ],
+          "scenario_id": "cell_job_panel.refused",
+          "browser_test": "operations/fleet/test/test_cell_job_panel_browser.py::test_recover_hold_and_refusal_shown_inline",
+          "sample_status": "verified",
+          "test_scope": "Browser fixture refusal; real passthrough is proved by test_job_api_refusal_passes_through_unchanged.",
+          "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+        },
+        {
+          "id": "cell_job_panel.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/cells/{cell}/jobs/options",
+                "GET:/api/fleet/cells/{cell}/jobs/readiness"
+              ],
+              "screen_assertion": "A viewer sees readiness but every control locked with the operator reason, and nothing is sent."
+            }
+          ],
+          "scenario_id": "cell_job_panel.terminal",
+          "browser_test": "operations/fleet/test/test_cell_job_panel_browser.py::test_viewer_sees_every_control_locked",
+          "sample_status": "verified",
+          "test_scope": "Browser fixture role; server 403 for viewers is proved by the route contract test.",
+          "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+        }
+      ]
     }
   ]
 }

@@ -2,6 +2,7 @@
 // Every arm guard stays in the job API; this panel only gates the buttons it shows. Errors stay inline here.
 import { html } from "/common/vendor/htm-preact.esm.min.js";
 import { UiButton } from "/common/preact-ui.js";
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 const READINESS_MS = 3000;
 const MODES = [["act", "ACT 정책"], ["hybrid", "혼합"], ["taught", "가르친 동작"]];
@@ -32,7 +33,8 @@ export function armRecoveryActions(arm) {
 /** Pure: one Korean line per readiness fact of an arm. */
 export function armReadinessText(arm) {
   if (!arm) return ["준비 상태를 받지 못했습니다."];
-  const age = typeof arm.live_state_age_s === "number" ? `관측 ${arm.live_state_age_s.toFixed(1)}초 전` : "관측 없음";
+  // evidenceAgeText prefixes " · "; these lines are already joined by it.
+  const age = typeof arm.live_state_age_s === "number" ? `관측 ${evidenceAgeText(arm.live_state_age_s).replace(" · ", "")}` : "관측 없음";
   return [
     arm.folded === true ? "접힘" : arm.folded === false ? "펼쳐짐" : "접힘 미확인",
     arm.human_hold_latched ? "사람 보류 걸림" : "보류 없음",
