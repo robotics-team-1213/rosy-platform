@@ -524,6 +524,7 @@ def test_bound_usb_fold_rechecks_identity_before_session_and_before_clear(tmp_pa
 
     def run_fn(command, **kw):
         assert kw["env"]["ROSY_RECOVERY_INCIDENT"] == command[command.index("--expected-incident-id") + 1] == incident
+        assert kw["env"]["ROSY_SESSION_CHUNKS"] == str((cwd / json.loads(Path(conf).read_text())["arm_s"]["library"]).resolve())
         calls.append(command)
         Path(command[command.index("--out") + 1]).write_text(json.dumps(
             {"result": "folded", "candidate": "park", "state": HOME, "home": HOME, "incident_id": incident}))
@@ -543,3 +544,22 @@ def test_bound_usb_fold_rechecks_identity_before_session_and_before_clear(tmp_pa
     monkeypatch.setattr(omx_incident, "_probe_hold", lambda *_: (False, None))
     with pytest.raises(SystemExit):
         omx_incident.refuse_if_held("arm_s", Link([]), allow_incident=incident)
+
+
+def test_recover_treats_partial_target_closing_load_as_holding_high():
+    class _LoadedCell:
+        def act(self, cmd):
+            if cmd == "state":
+                return {
+                    "ok": True, "state": [*REACH[:5], 54.04], "target": [*REACH[:5], 52.8],
+                    "holding": False, "human_hold_latched": True,
+                    "health": {"pwm": [0, 0, 0, 0, 0, -101], "current_ma": [0, 0, 0, 0, 0, 110]},
+                }
+            return {"ok": True}
+
+    res = af.recover(
+        _LoadedCell(), HOME, 48.8, plan=lambda s: [s, HOME], look=lambda _f: {"clear": True},
+        reserve=lambda _f: {"ok": True}, release=lambda: None, release_and_rise=lambda _c: {"result": "risen"},
+        low=lambda _s: False, allow_live_unlatch=True,
+    )
+    assert res["result"] == "held" and res["reason"] == "HOLDING_HIGH"
