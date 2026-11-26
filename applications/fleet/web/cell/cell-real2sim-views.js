@@ -219,7 +219,7 @@ export function createCellViews(ctx) {
     for (const args of pendingBinds) frames()?.bind(...args);
   }
 
-  function renderCameraMatrix() {
+  function renderCameraMatrix({ updateOnly = false } = {}) {
     const wall = $('cell-camera-matrix');
     if (!wall) return;
     const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
@@ -227,6 +227,7 @@ export function createCellViews(ctx) {
       for (const btn of matrixBtns) setOffBy(btn, reason);
       return;
     }
+    if (updateOnly) return;
     const pendingBinds = [];
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');

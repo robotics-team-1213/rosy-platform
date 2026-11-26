@@ -603,6 +603,8 @@ test("camera matrix and preset/create task buttons sync namedReason locks across
       for (const c of node.children || []) collectUiButtons(c, out);
       return out;
     };
+    pipeline.syncPermissions();
+    assert.equal(els['cell-camera-matrix'].childElementCount, 0);
     await pipeline.refreshCellTasks();
     const matrixBtns = collectUiButtons(els['cell-camera-matrix']).filter(b => !b.hasAttribute('aria-pressed'));
     assert.ok(matrixBtns.length >= 6);
@@ -611,7 +613,7 @@ test("camera matrix and preset/create task buttons sync namedReason locks across
     assert.equal(els['cell-task-create'].getAttribute('reason'), reason);
 
     reason = '';
-    await pipeline.refreshCellTasks();
+    pipeline.syncPermissions();
     assert.ok(matrixBtns.every(b => !b.disabled && !b.hasAttribute('reason')));
     assert.equal(Boolean(els['cell-task-preset-run'].disabled), false);
     assert.equal(Boolean(els['cell-task-create'].disabled), false);

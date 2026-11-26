@@ -236,7 +236,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     if (status) status.textContent = '접속하면 실물↔시뮬 파이프라인 상태를 확인할 수 있습니다.';
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.';
     syncOperatorButtons();
-    renderCameraMatrix();
+    renderCameraMatrix({ updateOnly: true });
   }
 
   function currentPayload() {
@@ -460,5 +460,10 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   $('cell-live-stream-toggle')?.addEventListener('click', () => { toggleLiveStream(); });
   $('station-zones-load')?.addEventListener('click', () => { void loadStationZonesYaml(); });
   $('station-zones-save')?.addEventListener('click', () => { void saveStationZonesYaml(); });
-  return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear};
+  function syncPermissions() {
+    syncOperatorButtons();
+    renderCameraMatrix({ updateOnly: true });
+  }
+
+  return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear, syncPermissions};
 }
