@@ -375,7 +375,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                     detail = trip.get("detail") or {}
                     row["outcome"] = {"robot_id": trip["robot_id"], "state": trip["state"],
                                       "reason": trip.get("reason"), "detail": {k: detail[k] for k in
-                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait", "wait_prefix") if k in detail}}
+                                      ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait",
+                                       "wait_prefix", "stop_sent") if k in detail}}
         return {"requests": rows}
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])

@@ -97,12 +97,17 @@ def test_s5_refusal_and_later_preview_are_separate_records(site):
     preview = {"at": 1795639225, "robot_id": "rosy_46", "to": "S5", "plan_id": "second", "stage": "preview"}
     refusal = {**preview, "plan_id": "first", "stage": "plan_refused", "code": "TRIP_LANE_CAMERA_UNAVAILABLE",
                "detail": {"error": "RATE_LIMITED"}}
-    browser, page, errors = _open(None, site, {**API, "/api/fleet/trip-requests": {"requests": [preview, refusal]}}, [])
+    canceled = {**preview, "robot_id": "rosy_42", "to": "C2", "plan_id": "prior", "stage": "start_accepted",
+                "outcome": {"state": "canceled", "detail": {"stop_sent": False,
+                            "peer_wait": {"waiting_on": ["rosy_45"]}}}}
+    browser, page, errors = _open(None, site, {**API, "/api/fleet/trip-requests": {"requests": [preview, canceled, refusal]}}, [])
     try:
         page.locator("#context-evidence-tab").click()
         page.locator("#trip-receipt-history summary").click()
         rows = page.locator("#trip-receipt-rows li")
-        expect(rows).to_have_count(2)
+        expect(rows).to_have_count(3)
+        expect(rows.nth(1)).to_contain_text("운행 취소 · 기체 정지 응답 미확인")
+        expect(rows.nth(1)).not_to_contain_text("자동 재확인")
         expect(rows.first).to_contain_text("S5 · 경로 계산 완료 · 출발 전")
         expect(rows.last).to_contain_text("RATE_LIMITED")
         assert not errors
