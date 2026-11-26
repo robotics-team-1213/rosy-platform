@@ -2,6 +2,7 @@
 // 제안·수락한 맞춤은 표시 전용이다. sighting·CameraMap·목표·cmd_vel 로 넘기지 않는다.
 
 import { invert3, project } from "/common/plane-math.js";
+import { fitBox } from "./site-map-model.js";
 
 export { invert3, project };
 export const MAP_FIT_PREFIX = "rosy-map-fit:";
@@ -207,15 +208,10 @@ export function pickLanes(siteLanes, sourceId) {
 
 // 지도(m, y 위) → 캔버스(px, y 아래). 여백은 m. 캔버스는 maxW×maxH 안에 들어간다.
 export function topDownLayout(bounds, maxWidth = 640, maxHeight = 400, marginM = 0.1) {
-  const w = bounds.max_x - bounds.min_x + 2 * marginM;
-  const h = bounds.max_y - bounds.min_y + 2 * marginM;
-  const pxPerM = Math.min(maxWidth / w, maxHeight / h);
-  const width = Math.max(8, Math.round(w * pxPerM));
-  const height = Math.max(8, Math.round(h * pxPerM));
-  const x0 = bounds.min_x - marginM;
-  const y1 = bounds.max_y + marginM;
-  const mapToCanvas = [pxPerM, 0, -x0 * pxPerM, 0, -pxPerM, y1 * pxPerM, 0, 0, 1];
-  return { width, height, pxPerM, mapToCanvas, canvasToMap: invert3(mapToCanvas) };
+  const b = { min_x: bounds.min_x - marginM, min_y: bounds.min_y - marginM, max_x: bounds.max_x + marginM, max_y: bounds.max_y + marginM };
+  const pxPerM = Math.min(maxWidth / (b.max_x - b.min_x), maxHeight / (b.max_y - b.min_y));
+  const w = (b.max_x - b.min_x) * pxPerM, h = (b.max_y - b.min_y) * pxPerM, { matrix: mapToCanvas } = fitBox(b, w, h, 0);
+  return { width: Math.max(8, Math.round(w)), height: Math.max(8, Math.round(h)), pxPerM, mapToCanvas, canvasToMap: invert3(mapToCanvas) };
 }
 
 // D-360 경기장 뷰의 대체 경로: 경기장 사각형(field, 캔버스 px) ↔ 지도 사각형(bounds, m, y 위).

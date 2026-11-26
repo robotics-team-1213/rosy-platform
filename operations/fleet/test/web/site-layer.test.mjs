@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
+  classifySightings, siteBounds, canvasSizeFor, gridLines,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, mapUpTurn,
   roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "../../../../applications/fleet/web/map/site-layer.js";
+import { fitBox, viewTurnOf } from "../../../../applications/fleet/web/shared/site-map-model.js";
+import { project as projectHomography } from "../../../../shared/web/plane-math.js";
 
 test("world_261026 charging bay overlays draw straight, leaving source geometry intact", () => {
   const polyline = [[-0.43002, 0.04266], [-0.4354, 0.3294], [-0.41816, 0.47]];
@@ -84,12 +86,10 @@ test("fit keeps metres square and flips y so +y points up the canvas", () => {
   const bounds = { min_x: 0, min_y: 0, max_x: 4, max_y: 2 };
   const { width, height } = canvasSizeFor(bounds, 1000);
   assert.deepEqual([width, height], [1000, 500]);
-  const t = fitTransform(bounds, width, height, 50);
-  const origin = project(t, 0, 0);
-  const corner = project(t, 4, 2);
+  const t = fitBox(bounds, width, height, 50);
   assert.equal(t.scale, 200);
-  assert.deepEqual(origin, { px: 100, py: 450 });
-  assert.deepEqual(corner, { px: 900, py: 50 });
+  assert.deepEqual(t.toPx(0, 0), [100, 450]);
+  assert.deepEqual(t.toPx(4, 2), [900, 50]);
 });
 
 test("grid lines land on 0.5 m multiples inside the range", () => {
@@ -114,32 +114,20 @@ test("relay evidence pills say what is late, lost or unknown", () => {
     { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" });
 });
 
-test("D-513 7: a 90° turn puts the picture's right edge at the bottom", () => {
-  const turn = quarterTurn(90, 1280, 720);
-  assert.deepEqual([turn.width, turn.height], [720, 1280]);
-  assert.deepEqual(turn.point(1280, 360), { x: 360, y: 1280 }); // right middle -> bottom middle
-  assert.deepEqual(turn.point(0, 0), { x: 720, y: 0 });          // top left -> top right
-  assert.deepEqual(quarterTurn(180, 10, 4).point(0, 0), { x: 10, y: 4 });
-  assert.deepEqual(quarterTurn(270, 10, 4).point(0, 0), { x: 0, y: 10 });
-  assert.deepEqual(quarterTurn(0, 10, 4).point(3, 2), { x: 3, y: 2 });
-});
-
-test("D-513 7: a click on the turned picture maps back through the turn and calibration", () => {
-  const h = [100, 0, 200, 0, -100, 100, 0, 0, 1]; // map (x, y) -> image (100x+200, -100y+100)
+test("D-513 7: a view turn rotates the fitted map clockwise, and toMap and the matrix agree with toPx", () => {
+  const bounds = { min_x: 0, min_y: 0, max_x: 4, max_y: 2 };
+  const down = (rot) => { const t = fitBox(bounds, 1000, 1000, 50, rot), a = t.toPx(0, 0), b = t.toPx(1, 0); return [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])]; };
+  assert.deepEqual([0, 90, 180, 270].map(down), [[1, 0], [0, 1], [-1, 0], [0, -1]]); // map +x: right, down, left, up
   for (const rot of [0, 90, 180, 270]) {
-    const turn = quarterTurn(rot, 400, 200);
-    const back = turn.unpoint(...Object.values(turn.point(30, 40)));
-    assert.deepEqual(back, { x: 30, y: 40 });
-    const shown = turn.point(100 * 0.5 + 200, -100 * -0.25 + 100);
-    const map = cameraScreenToMap(h, turn, shown.x, shown.y, { x: 0, y: 0 });
-    assert.ok(Math.abs(map.x - 0.5) < 1e-9 && Math.abs(map.y + 0.25) < 1e-9, `rot ${rot}`);
+    const t = fitBox(bounds, 720, 1280, 32, rot);
+    for (const [x, y] of [[0, 0], [4, 2], [1.25, 0.5]]) {
+      const [px, py] = t.toPx(x, y);
+      assert.ok(px >= 31.99 && px <= 688.01 && py >= 31.99 && py <= 1248.01, `rot ${rot} keeps (${x}, ${y}) inside`);
+      const back = t.toMap(px, py), viaMatrix = projectHomography(t.matrix, x, y);
+      assert.ok(Math.abs(back[0] - x) < 1e-9 && Math.abs(back[1] - y) < 1e-9, `rot ${rot}`);
+      assert.ok(Math.abs(viaMatrix[0] - px) < 1e-9 && Math.abs(viaMatrix[1] - py) < 1e-9, `matrix rot ${rot}`);
+    }
   }
-  assert.equal(cameraScreenToMap([0, 0, 0, 0, 0, 0, 0, 0, 0], quarterTurn(0, 1, 1), 0, 0, { x: 0, y: 0 }), null);
-  // A tilted camera: image rows above the horizon have no floor point.
-  const tilted = [100, 0, 0, 0, 100, 0, 0, 1, 1]; // w = y + 1: the floor is y > -1
-  const flat = quarterTurn(0, 400, 400);
-  assert.ok(cameraScreenToMap(tilted, flat, 0, 50, { x: 0, y: 0 }));
-  assert.equal(cameraScreenToMap(tilted, flat, 0, 150, { x: 0, y: 0 }), null); // beyond the horizon row 100
 });
 
 test("D-513 7: the picture turns so map +y points up — no installation key", () => {
@@ -153,9 +141,10 @@ test("D-513 7: the picture turns so map +y points up — no installation key", (
   assert.equal(mapUpTurn(undefined), 0);
 })
 
-test("D-513 7: the site map's view turn comes from the active map, else 0", () => {
-  assert.equal(siteViewTurn({ map: { view_turn_deg: 90 } }), 90);
-  assert.equal(siteViewTurn({ map: { view_turn_deg: 45 } }), 0);
-  assert.equal(siteViewTurn({ map: {} }), 0);
-  assert.equal(siteViewTurn(null), 0);
+test("D-513 7: the site map's view turn comes from the active map, else 0 (one check, site-map-model viewTurnOf)", () => {
+  const turnOf = (active) => viewTurnOf(active?.map);
+  assert.equal(turnOf({ map: { view_turn_deg: 90 } }), 90);
+  assert.equal(turnOf({ map: { view_turn_deg: 45 } }), 0);
+  assert.equal(turnOf({ map: {} }), 0);
+  assert.equal(turnOf(null), 0);
 });

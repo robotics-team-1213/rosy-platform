@@ -46,24 +46,34 @@ export function actionRows(plan, map) {
 }
 export function planIsCurrent(plan, active) { return Boolean(plan && active && plan.map_version === active.version); }
 
-export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
-  const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
-  const rot = (x, y) => [x * c + y * s, -x * s + y * c], xs = [], ys = [];
-  const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
-  for (const place of map.places) add(place.x, place.y);
-  for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+// 지도의 범위: 장소·도로·시설(+ 로봇 고리). 관제 지도와 현장 지도가 같은 범위로 맞춘다(2026-11-26 패널 C-6).
+export function mapBounds(map, discs = []) {
+  const xs = [], ys = [], add = (x, y) => { xs.push(x); ys.push(y); };
+  for (const place of map.places || []) add(place.x, place.y);
+  for (const edge of map.edges || []) for (const [x, y] of edge.polyline) add(x, y);
   for (const facility of map.facilities || []) for (const [x, y] of facility.geometry) add(x, y);
   for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);
   if (!xs.length) { const [x, y] = map.survey?.origin || [0, 0]; add(x - 1, y - 1); add(x + 1, y + 1); }
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  return {min_x: Math.min(...xs), min_y: Math.min(...ys), max_x: Math.max(...xs), max_y: Math.max(...ys)};
+}
+
+// 미터 범위 → 화면 px 하나: 축척·px 여백·y 뒤집기·화면 방향(D-513 7 시계 방향 quarter turn). matrix 는 같은 변환의 3×3.
+export function fitBox(b, width, height, pad = 24, turn = 0) {
+  const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
+  const rot = (x, y) => [x * c + y * s, -x * s + y * c], [ax, ay] = rot(b.min_x, b.min_y), [bx, by] = rot(b.max_x, b.max_y);
+  const minX = Math.min(ax, bx), maxX = Math.max(ax, bx), minY = Math.min(ay, by), maxY = Math.max(ay, by);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6), (height - 2 * pad) / Math.max(maxY - minY, 1e-6));
-  const ox = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2, oy = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2;
+  const ox = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2 - minX * scale, oy = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2 + maxY * scale;
   return {
-    scale, turn,
-    toPx: (x, y) => { const [rx, ry] = rot(x, y); return [ox + (rx - minX) * scale, oy + (maxY - ry) * scale]; },
-    toMap: (px, py) => { const rx = minX + (px - ox) / scale, ry = maxY - (py - oy) / scale; return [rx * c - ry * s, rx * s + ry * c]; },
+    scale, turn, matrix: [scale * c, scale * s, ox, scale * s, -scale * c, oy, 0, 0, 1],
+    toPx: (x, y) => { const [rx, ry] = rot(x, y); return [ox + rx * scale, oy - ry * scale]; },
+    toMap: (px, py) => { const rx = (px - ox) / scale, ry = (oy - py) / scale; return [rx * c - ry * s, rx * s + ry * c]; },
     rotateDeg: (angle) => -angle * 180 / Math.PI + turn,
   };
+}
+
+export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
+  return fitBox(mapBounds(map, discs), width, height, pad, turn);
 }
 
 export function rectangularView(record, mapId, width, height, turn = 0) {
