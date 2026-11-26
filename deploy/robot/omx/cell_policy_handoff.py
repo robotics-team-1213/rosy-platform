@@ -196,7 +196,9 @@ def validate_taught_goal(config, source, goal_site, destination, library):
     if (math.dist((place["x"], place["y"]), sites[goal]["place"]) > tol
             or abs((place["z"] - pick["z"]) - height_delta - sites[goal].get("place_dz", 0)) > tol):
         raise ValueError("taught library does not match the job destination pose and tier")
-    if math.dist((pick["x"], pick["y"]), sites[source]["pick"]) > prm.get(config.get("params"), "policy.pose_xy_tol_m"):
+    # A moving source (belt) has no fixed pick: the policy grasps it and the handoff lifts from the measured hold.
+    if (src_pick := sites[source].get("pick")) is not None and math.dist(
+            (pick["x"], pick["y"]), src_pick) > prm.get(config.get("params"), "policy.pose_xy_tol_m"):
         raise ValueError("taught library does not match the job source")
     if any(name not in library["chunks"] for name in (cmd.split()[-1] for cmd in FOLDED if cmd != "park")):
         raise ValueError("taught library is missing a folded carry chunk")
