@@ -1,5 +1,7 @@
 """An idle fold a blocked joint holds is tried once more, then the arm is held for a person (2026-11-03: before, the
 runner retried the fold every idle_park_s for good, pushing the blocked joint with torque on)."""
+import pytest
+
 from test_omx_chunk_runner import HOME, Robot, library, m
 
 
@@ -15,6 +17,22 @@ class BlockedRoll(Robot):
         return action
 
 
+def observe_latched_runner(runner, poll, ticks):
+    """End the simulation at its horizon even when the runner appropriately refuses stop."""
+    class EndOfObservation(Exception):
+        pass
+
+    remaining = iter(range(ticks))
+
+    def bounded_poll():
+        if next(remaining, None) is None:
+            raise EndOfObservation
+        return poll()
+
+    with pytest.raises(EndOfObservation):
+        runner.run(bounded_poll)
+
+
 def test_an_idle_fold_a_hold_stopped_is_tried_once_more_then_held_for_a_person():
     lib = library()
     lib["chunks"]["home"] = [HOME]
@@ -22,16 +40,20 @@ def test_an_idle_fold_a_hold_stopped_is_tried_once_more_then_held_for_a_person()
     r = m.Runner(BlockedRoll(), lib, fps=30, status=lambda row: status.append(dict(row, clock=clock[0])),
                  clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
                  params={"runner.idle_park_s": 5.0, "runner.idle_retry_s": 20.0, "runner.idle_stop_s": 5.0})
-    r.run(lambda: ["stop"] if clock[0] > 120 else [])
+    observe_latched_runner(r, lambda: ["stop"] if clock[0] > 120 else [], 121 * 30)
     parks = [s for s in status if s["command"] == "run park"]
     assert [s["ok"] for s in parks] == [False, False] and all("wrist_roll" in s["error"] for s in parks)
     assert parks[1]["clock"] - parks[0]["clock"] >= 20.0  # the retry waits idle_retry_s, not idle_park_s
-    person = [s for s in status if s.get("person_needed")]
+    person = [s for s in status if s.get("person_needed") and s["command"] == "park"]
     assert len(person) == 1 and "a person must free the arm" in person[0]["error"]
-    assert status[-1]["command"] == "stop" and status[-1]["clock"] > 120  # held, never stopped by itself
+    held = [s for s in status if s.get("person_needed") and s["command"] == "human-hold"]
+    assert len(held) == 1 and held[0]["ok"]
+    assert status[-1]["command"] == "stop" and status[-1]["clock"] > 120
+    assert not status[-1]["ok"] and "human hold latched" in status[-1]["error"]
+    assert r.human_hold_latched
 
 
-def test_a_command_after_a_held_fold_gives_the_idle_folds_back():
+def test_state_observation_after_a_held_fold_preserves_the_latch():
     lib = library()
     lib["chunks"]["home"] = [HOME]
     status, clock, sent = [], [0.0], []
@@ -45,9 +67,11 @@ def test_a_command_after_a_held_fold_gives_the_idle_folds_back():
     r = m.Runner(BlockedRoll(), lib, fps=30, status=lambda row: status.append(dict(row, clock=clock[0])),
                  clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
                  params={"runner.idle_park_s": 5.0, "runner.idle_retry_s": 20.0, "runner.idle_stop_s": 5.0})
-    r.run(lines)
+    observe_latched_runner(r, lines, 201 * 30)
     parks = [s["clock"] for s in status if s["command"] == "run park"]
-    assert len(parks) == 4 and parks[2] > 40  # two before the operator's command, two after
+    assert len(parks) == 2 and max(parks) < 40
+    assert any(row["command"] == "state" and row["ok"] for row in status)
+    assert r.human_hold_latched and not status[-1]["ok"] and status[-1]["command"] == "stop"
 
 
 def test_a_chunk_longer_than_the_idle_window_is_not_idle_time():

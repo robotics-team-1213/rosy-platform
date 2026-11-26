@@ -11,7 +11,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 
-def _origin(value):
+def https_app_origin(value):
     if not isinstance(value, str) or any(ord(c) <= 32 or ord(c) > 126 for c in value):
         raise ValueError('Learning origin must be an HTTPS origin')
     if any(c in value for c in ('@', '\\', '?', '#', '*', '%')):
@@ -44,6 +44,14 @@ def _origin(value):
     return value
 
 
+def calibration_origin_fields():
+    try:
+        origin = https_app_origin(os.environ.get("ROSY_CALIBRATION_ORIGIN", ""))
+    except ValueError:
+        return {}
+    return {"calibration_origin": origin}
+
+
 def _unique(pairs):
     result = {}
     for key, value in pairs:
@@ -63,7 +71,7 @@ def _load_apps():
         raise ValueError('Learning configuration must be a readable JSON object') from None
     if not isinstance(config, dict) or set(config) - {'model', 'ai'}:
         raise ValueError('Learning configuration permits only model and ai origins')
-    return {host: _origin(origin) for host, origin in config.items()}
+    return {host: https_app_origin(origin) for host, origin in config.items()}
 
 
 def install_learning_routes(app, web_root, csp):
@@ -77,17 +85,19 @@ def install_learning_routes(app, web_root, csp):
 
     # The hub entry reuses the model target: configured origins 303 straight to
     # Learning, anything else the 503 notice document.
-    def target(host):
+    def target(host, destination='/learning'):
         def redirect(request: Request):
             if request.url.query:
                 raise HTTPException(status_code=400, detail='Learning entry does not accept query parameters')
             if host not in apps:
                 return document(503, focus=host)
-            return RedirectResponse(apps[host] + '/learning', status_code=303, headers=headers)
+            return RedirectResponse(apps[host] + destination, status_code=303, headers=headers)
         return redirect
 
     app.add_api_route('/console/learning', target('model'), methods=['GET'],
                       include_in_schema=False, name='learning-entry:hub')
+    app.add_api_route('/console/learning/world', target('model', '/learning/world'), methods=['GET'],
+                      include_in_schema=False, name='learning-entry:world')
     for host in ('model', 'ai'):
         app.add_api_route('/console/learning/' + host, target(host), methods=['GET'],
                           include_in_schema=False, name='learning-entry:' + host)

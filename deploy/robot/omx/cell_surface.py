@@ -11,12 +11,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_pipeline as cp  # noqa: E402
+from cell_route_surface import contact_binding, contact_evidence, probe_binding  # noqa: E402
 
 
 def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_to: float, tcp_x_m: float | None = None) -> dict:
@@ -48,10 +50,9 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repea
         status = cell.act(command)
         steps.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if status.get("contact"):
-            z = fk(status["state"], tcp_x_m) if fk is fk_z else fk(status["state"])
             for after in ("retreat", "park"):
                 steps.append({"command": after, "ok": cell.act(after).get("ok")})
-            return {"result": "touched", "surface_z": round(z, 4), "error": status.get("error"), "steps": steps}
+            return {"result": "refused", "at": command, "error": "contact before probe descent", "steps": steps}
         if not status.get("ok"):
             if not status.get("fault") and not command.startswith("load"):
                 steps.append({"command": "park", "ok": cell.act("park").get("ok")})
@@ -60,13 +61,13 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repea
     for idx in range(n_rep):
         status = cell.act("run descend_probe")
         steps.append({"command": "run descend_probe", **{k: status.get(k) for k in cp.STEP_KEYS}})
-        if status.get("contact"):
+        if status.get("contact") and not status.get("fault"):
             z = fk(status["state"], tcp_x_m) if fk is fk_z else fk(status["state"])
             touches.append(z)
             last_err = status.get("error")
             ret = cell.act("retreat")
             steps.append({"command": "retreat", "ok": ret.get("ok")})
-            if not ret.get("ok") and idx + 1 < n_rep:
+            if not ret.get("ok"):
                 steps.append({"command": "park", "ok": cell.act("park").get("ok")})
                 return {"result": "fault" if ret.get("fault") else "refused", "at": "retreat", "steps": steps}
             continue
@@ -76,7 +77,10 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repea
             return {"result": "fault" if status.get("fault") else "refused", "at": "run descend_probe", "steps": steps}
         steps.append({"command": "park", "ok": cell.act("park").get("ok")})
         return {"result": "no contact", "steps": steps}
-    steps.append({"command": "park", "ok": cell.act("park").get("ok")})
+    park = cell.act("park")
+    steps.append({"command": "park", "ok": park.get("ok")})
+    if not park.get("ok"):
+        return {"result": "fault" if park.get("fault") else "refused", "at": "park", "steps": steps}
     if n_rep == 1:
         return {"result": "touched", "surface_z": round(touches[0], 4), "error": last_err, "steps": steps}
     spread_mm = round((max(touches) - min(touches)) * 1000.0, 2)
@@ -129,6 +133,51 @@ def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, st
     return probe_z_to, None
 
 
+def surface_selection_error(config, calibration, found, name):
+    import omx_tcp
+    from cell_recovery_cargo import fixed_base_geometry, fixed_site
+
+    site = (config.get("sites") or {}).get(name)
+    if (not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?", name)
+            or not fixed_base_geometry(site) or not fixed_site(name, config.get("arm_id"))):
+        return "registered fixed surface site required"
+    if (found.get("camera_issue") or found.get("camera_moved") or found.get("map_binding_error")
+            or (found.get("camera_shift") or {}).get("ok") is not True):
+        return "current camera alignment and bound map required"
+    mapped = calibration.get("sites") or {}
+    parent = site.get("map_from", name)
+    missing = found.get("missing_map") or []
+    if not (mapped.get(name) or mapped.get(parent)) or name in missing or parent in missing:
+        return "selected site's map is missing"
+    if not contact_binding(config, name, calibration, omx_tcp.config_tcp(config)):
+        return "surface contact cannot be bound to this arm, target, TCP and map"
+    return None
+
+
+def remeasure_surface(cell, config, calibration, step, work):
+    from cell_bound_home_placement import _empty, _pose
+    from cell_envelope import _state_current
+    from cell_robot_profile import load
+
+    profile = config.get("operating_profile_path")
+    if not profile:
+        return {step: "operating profile unavailable"}
+    cell.operating_profile = load(Path(profile).expanduser())["binding"]
+    state = cell.act("state")
+    if (not _state_current(state, time.time()) or state["operating_context"].get("scope") != "hardware"
+            or state["operating_context"].get("operating_profile") != cell.operating_profile
+            or state.get("human_hold_latched") is not False or not _pose(state.get("state"))
+            or not _empty(state, config["plan"]["grip_closed"])):
+        return {step: "fresh empty gripper on the selected arm required"}
+    res = run_surface_step(cell, config, step, work)
+    if res.get(step) == "touched":
+        evidence = contact_evidence(config, step.split()[1], calibration)
+        if evidence["status"] != "matched_contact":
+            return {step: evidence["reason"]}
+        res["contact"] = evidence
+    return res
+
+
 def run_surface_step(cell, config: dict, step: str, work: Path, *, repeat: int = 2) -> dict:
     """Execute one ``surface <site>`` calibration step with low-zone Z gating."""
     import omx_tcp
@@ -150,6 +199,7 @@ def run_surface_step(cell, config: dict, step: str, work: Path, *, repeat: int =
     lib = work / f"surface-{site}.library.json"
     lib.write_text(json.dumps(probe_library(
         config["plan"], xy[0], xy[1], yaw, 0.10, probe_z_to, tcp_x_m=tcp_x_m)))
+    binding = probe_binding(config, site, tcp_x_m)
     touched = touch(cell, lib, tcp_x_m=tcp_x_m, repeat=repeat)
     if touched["result"] == "touched":
         s["surface_z"] = touched["surface_z"]
@@ -158,6 +208,7 @@ def run_surface_step(cell, config: dict, step: str, work: Path, *, repeat: int =
         rtmp = rcp.with_suffix(".tmp")
         rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
                                     "xy": [xy[0], xy[1]], "measured": time.strftime("%Y-%m-%d %H:%M"),
+                                    "contact_binding": binding,
                                     **({"touches_m": touched["touches_m"], "spread_mm": touched["spread_mm"]}
                                        if "touches_m" in touched else {}),
                                     "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
@@ -195,7 +246,9 @@ def main(argv=None):
     path = work / f"surface-{args.site}.library.json"
     path.write_text(json.dumps(probe_library(plan, x, y, site["yaw_deg"], args.z_from, z_to, tcp_x_m=tcp_x_m)))
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    out = dict(touch(cell, path, tcp_x_m=tcp_x_m, repeat=args.repeat), site=args.site, xy=[x, y], measured=time.strftime("%Y-%m-%d %H:%M"))
+    binding = probe_binding(config, args.site, tcp_x_m)
+    out = dict(touch(cell, path, tcp_x_m=tcp_x_m, repeat=args.repeat), site=args.site, xy=[x, y],
+               contact_binding=binding, measured=time.strftime("%Y-%m-%d %H:%M"))
     (work / f"surface-{args.site}.json").write_text(json.dumps(out, indent=1))
     if args.write and out["result"] == "touched":
         site["surface_z"] = out["surface_z"]

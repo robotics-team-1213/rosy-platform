@@ -373,6 +373,12 @@ def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_worksp
 def test_keyboard_pixel_cursor_samples_without_changing_photo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
+    next_photo = page.locator('#pixel-next')
+    expect(next_photo).to_be_enabled()
+    rail = page.locator('.ui-rail-item[href="/catalog"]')
+    assert rail.evaluate("""link => link.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true,
+    }))""")
     page.locator('#pixel-class').select_option('1')
     page.locator('#pixel-canvas').focus()
     page.keyboard.press('Alt+ArrowRight')

@@ -78,7 +78,7 @@
     <a class="ui-rail-item" href="/console?view=work" data-action-icon="list">작업</a>
     <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
     <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·정비">설치·정비</a>
   </nav>
 <!-- fleet:nav:end -->
   <!-- D-741 6 — 화면 안 이동은 공용 하위 탐색 자리에 선다. 설치 작업 목록은 install.js가 공용 task-chooser로 이 자리에 채운다(robot_ui와 같은 규칙). -->
@@ -367,30 +367,45 @@
         </section>
         <section id="measured-calibration" class="install-step measured-calibration" aria-labelledby="measured-heading">
           <h3 id="measured-heading">실측 카메라 교정</h3>
-          <p class="hint">촬영·독립 측량 결과로 교정을 승인하고 추적 보정에 적용합니다. 적용한 영상은 <a href="/console/site-map#camera-draft-heading">현장 지도에서 초안으로 만들고 대조</a>할 수 있습니다.</p>
-          <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
-          <p id="measured-summary" class="hint"></p>
-          <div class="measured-limits">
-            <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
-            <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
-          </div>
-          <ui-actions>
-            <ui-button id="measured-approve" kind="primary" disabled>실측 교정 승인 저장</ui-button>
-            <ui-button id="measured-promote" kind="quiet" disabled>추적 보정에 적용</ui-button>
-            <ui-button id="measured-revoke" kind="quiet" disabled>승인 철회</ui-button>
-            <ui-button id="measured-refresh" kind="quiet" disabled>적용 상태 확인</ui-button>
-          </ui-actions>
-          <label class="ui-check"><input class="ui-field" id="measured-conditions" type="checkbox" disabled>현재 렌즈·초점·줌·영상 크롭 조건이 이 교정의 촬영 조건과 같음을 확인했습니다.</label>
-          <ui-actions>
-            <ui-button id="measured-confirm" kind="quiet" disabled>현재 조건 확인 후 미리보기</ui-button>
-            <ui-button id="measured-read" kind="quiet" disabled>확인된 미리보기 읽기</ui-button>
-          </ui-actions>
-          <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
-          <img id="measured-image" alt="실측 교정 지도 미리보기" hidden>
+          <section class="measured-group" aria-labelledby="measured-approval-heading">
+            <h4 id="measured-approval-heading">교정 승인</h4>
+            <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
+            <p id="measured-summary" class="hint"></p>
+            <div class="measured-limits">
+              <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
+              <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
+            </div>
+            <ui-actions>
+              <ui-button id="measured-approve" kind="primary" type="button" disabled>실측 교정 승인 저장</ui-button>
+              <ui-button id="measured-revoke" kind="quiet" type="button" disabled>승인 철회</ui-button>
+            </ui-actions>
+          </section>
+          <section class="measured-group" aria-labelledby="measured-preview-heading">
+            <h4 id="measured-preview-heading">Vision 미리보기</h4>
+            <label class="ui-check"><input class="ui-field" id="measured-conditions" type="checkbox" disabled>현재 렌즈·초점·줌·영상 크롭 조건이 이 교정의 촬영 조건과 같음을 확인했습니다.</label>
+            <ui-actions>
+              <ui-button id="measured-confirm" kind="quiet" type="button" disabled>현재 조건 확인 후 미리보기</ui-button>
+              <ui-button id="measured-read" kind="quiet" type="button" disabled>확인된 미리보기 보기</ui-button>
+              <ui-button id="measured-refresh" kind="quiet" type="button" disabled>교정 상태 확인</ui-button>
+            </ui-actions>
+            <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
+            <img id="measured-image" alt="실측 교정 지도 미리보기" hidden>
+          </section>
+          <section class="measured-group" aria-labelledby="measured-tracking-heading">
+            <h4 id="measured-tracking-heading">추적 보정</h4>
+            <ui-actions>
+              <ui-button id="measured-promote" kind="quiet" type="button" aria-describedby="measured-state" disabled>승인본을 추적 보정으로 저장</ui-button>
+            </ui-actions>
+          </section>
+          <p class="hint"><a href="/console/site-map#camera-draft-heading">현장 지도에서 영상으로 초안 만들기</a></p>
         </section>
         <section id="calibration-workbench" class="install-step calibration-workbench" aria-labelledby="workbench-heading">
-          <h3 id="workbench-heading">수동 N점 정밀 보정 워크벤치</h3>
-          <p class="hint">좌측 카메라 영상(휠 줌·Shift 드래그 팬·4× 확대 루페)과 우측 사이트 지도에서 4개 이상 대응점을 찍어 SE(3)+왜곡 보정을 계산하고 전후를 비교한 뒤 적용·잠금·복원합니다.</p>
+          <h3 id="workbench-heading">대응점으로 수동 보정</h3>
+          <p class="hint">카메라 영상과 사이트 지도에서 같은 지점을 4개 이상 선택하세요.</p>
+          <details class="hint-more">
+            <summary class="ui-disclosure-row">영상 조작과 보정 계산 방법</summary>
+            <p class="hint">휠로 영상을 확대하고 Shift를 누른 채 드래그해 이동합니다. 루페는 점을 4배로 확대합니다. 계산은 카메라의 3차원 자세(SE(3))와 렌즈 왜곡을 함께 반영합니다. 적용 전후를 비교한 뒤 저장하고, 필요하면 자동 보정을 잠그거나 이전 보정을 복원합니다.</p>
+          </details>
           <div id="manual-fit-recal-banner" class="workbench-recal-banner" hidden>
             <p class="hint" id="manual-recal-text" role="status"></p>
             <ui-actions>

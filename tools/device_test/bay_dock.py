@@ -4,6 +4,12 @@
                 --site-url URL (--site-ca-file CA | --site-insecure) --peer-check-ok "EVIDENCE"
                 --bay-verdict VERDICT.json --dock-id bay_c2 [--remove-dock]
 
+Stationary registration: add --commission-only for a read-only measurement, or --commission-only
+--apply-commission to register the independently verified result. Use verified TLS and ROSY_SITE_TOKEN_FILE.
+The bay verdict must also identify robot_id, site_map_id, site_map_version and observed_at (Unix seconds);
+survey contains method=field_measurement, measured_by, stop_face_site ({x,y,yaw}, metres and radians),
+artifact (path relative to the verdict) and sha256. The tool writes commission.json in its evidence directory.
+
 Steps: preflight (identity, battery unplugged, NO update hold yet, a bay verdict that names the bay and says
 the robot stands inside the bay line, rear toward the bay, no cable) -> approval_refresh (only when the
 navigation approval is not valid for the current release, D-985; the approval refuses to measure under an
@@ -517,7 +523,9 @@ def main(argv=None, robot=None):
     ap.add_argument("--site-insecure", action="store_true")
     ap.add_argument("--overhead-source")
     ap.add_argument("--peer-check-ok", default="", help="what the agent checked: ListAgents result, Fleet view")
-    ap.add_argument("--bay-verdict", required=True, help="JSON: bay_id, judged_by, in_bay_line, rear_toward_bay, cable_absent")
+    ap.add_argument("--commission-only", action="store_true", help="stationary survey verification (read-only by default)")
+    ap.add_argument("--apply-commission", action="store_true", help="register the verified dock without moving the robot")
+    ap.add_argument("--bay-verdict", help="JSON: bay_id, judged_by, in_bay_line, rear_toward_bay, cable_absent")
     ap.add_argument("--dock-id", required=True)
     ap.add_argument("--remove-dock", action="store_true", help="delete the dock record when the run ends")
     ap.add_argument("--cycles", type=int, default=1, help="dock this many times (leave the bay, dock again)")
@@ -536,6 +544,15 @@ def main(argv=None, robot=None):
     base = os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp"
     args.evidence_dir = args.evidence_dir or f"{base}/device-test/bay-dock-{stamp}-{time.strftime('%H%M%S')}"
     args.summary_dir = args.summary_dir or str(REPO / "docs" / "validation" / f"bay-dock-{stamp}")
+    if args.apply_commission and not args.commission_only:
+        ap.error("--apply-commission needs --commission-only")
+    if args.commission_only:
+        if args.insecure or args.site_insecure or args.remove_dock or not (args.site_url or "").startswith("https://"):
+            ap.error("stationary commission needs a verified Fleet site and CORE connection, without --remove-dock")
+        from bay_commission import commission_only
+        return commission_only(BayDock(robot or Live(args), args, args.evidence_dir))
+    if not args.bay_verdict:
+        ap.error("--bay-verdict is required for a physical trial")
     return BayDock(robot or Live(args), args, args.evidence_dir).execute()
 
 

@@ -21,6 +21,7 @@ import cell_policy_shape
 from cell_policy_timing import MAX_OBSERVATION_AGE_S, send_hold
 import cell_two_arm
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, validate_two_arm_task_pair
+from cell_two_arm_verification import transfer_refusal
 import numpy as np
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S
 
@@ -148,6 +149,8 @@ def run_two_arm_policy(
                 raise ValueError(f"arm {arm}: jaw_spec requires kinematics in kins")
 
     plan = validate_two_arm_task_pair(task_a, task_b)
+    if refusal := transfer_refusal({"a": task_a, "b": task_b}, dry_run=dry_run):
+        return {"schema": SCHEMA, "task_id": plan["task_id"], "plan": plan, **refusal}
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
     state_lock = threading.Lock()

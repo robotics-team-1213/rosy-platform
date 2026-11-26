@@ -14,10 +14,9 @@ import asyncio
 import logging
 import math
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Awaitable, Callable, Mapping, Optional, Sequence
-
-import yaml
 
 from core_common.protocol.localization import (CHECKING, DecisionSource, LocalizationDecision,
                                                LocState)
@@ -25,9 +24,10 @@ from fleet.localization import cues, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
 from fleet.localization.wall_tiebreak import Tiebreak
+from .localization_search_window import SearchWindowAdvisor
 from fleet.server.localization_pose_helpers import (
-    MapFrame, check_reached_unconfirmed, forget_removed_robots, fresh_overhead_sighting,
-    handle_pose_request, known_obstacle_points, map_frame, observe_pose_from_anchors,
+    MapFrame, check_reached_unconfirmed, default_lane_rules, forget_removed_robots, fresh_overhead_sighting,
+    handle_pose_request, known_obstacle_points, load_lane_rules, map_frame, observe_pose_from_anchors, sighting_in_robot_frame, loaded_wall_proven,
     track_anchor_provenance,
 )
 from fleet.swarm import read_spread, transport
@@ -47,8 +47,8 @@ UNCONFIRMED_YAW_RAD = math.radians(5.0)
 #: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
 #: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
 MISSION_QUIET_S = 1.0
-def _tiebreak_eligible(state: Mapping, active_map: Optional[str], *, binding_fit: Optional[object] = None) -> bool:
-    """True while waiting on a first pose in slam_fallback, shared site map, or bound robot grid."""
+def _tiebreak_eligible(state: Mapping, *, binding_fit=None, loaded_wall: bool = False) -> bool:
+    """A matching binding or loaded site-wall grid authorizes camera coordinates."""
     status = trust.status_of(state)
     if status is not None and status.state is LocState.LOCALIZED:
         return False
@@ -56,29 +56,8 @@ def _tiebreak_eligible(state: Mapping, active_map: Optional[str], *, binding_fit
     if isinstance(fb, Mapping):
         phase = fb.get("phase")
         if phase is not None:
-            return phase == "WAITING_LOCALIZATION"
-    if bool(active_map) and state.get("map_id") == active_map:
-        return True
-    return binding_fit is not None
-
-
-def load_lane_rules(path: Optional[Path]) -> dict:
-    """`lane_rules.yaml` as a dict; {} (no squares, no slots) when absent or unreadable."""
-    if path is None:
-        return {}
-    try:
-        rules = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-        logger.warning("localization: lane rules %s unreadable (%s); no squares or slots", path, exc)
-        return {}
-    return rules if isinstance(rules, dict) else {}
-
-
-def default_lane_rules() -> Optional[Path]:
-    """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
-    path = ((Path(__file__).resolve().parents[5] / "middleware") / "perception" / "map" / "map_v2_fleet"
-            / "lane_rules.yaml")
-    return path if path.is_file() else None
+            return phase == "WAITING_LOCALIZATION" and (binding_fit is not None or loaded_wall)
+    return binding_fit is not None or loaded_wall
 
 
 def build_localization_service(console, sightings, *, enabled: bool = True,
@@ -88,9 +67,11 @@ def build_localization_service(console, sightings, *, enabled: bool = True,
     """CLI wiring: on unless disabled; the overhead cue stays off unless asked for; pose requests may use the overhead pose (D-546)."""
     if not enabled:
         return None
-    slots, squares = service_logic.parse_reference_squares(
-        load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
+    rules = load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules())
+    reference_map_id = "map_v2_fleet" if lane_rules is None else rules.get("map_id")
+    slots, squares = service_logic.parse_reference_squares(rules)
     return LocalizationService(console.clients, slots=slots, squares=squares,
+                               reference_map_id=reference_map_id,
                                read_state=read_spread.spread(lambda rid: console.read_state(rid, POLL_S), POLL_S / 2, sleep=spread_sleep),  # D-760 8
                                sightings=sightings, overhead_cue=bool(overhead_cue),
                                pose_request_overhead=bool(pose_request_overhead),
@@ -108,6 +89,7 @@ def _pose(state: Mapping) -> Optional[cues.Pose]:
 class LocalizationService:
     def __init__(self, clients: Callable[[], Mapping[str, transport.RobotClient]], *,
                  slots: Sequence[cues.Slot] = (), squares: Sequence[tuple[float, float]] = (),
+                 reference_map_id: Optional[str] = None,
                  sightings=None, overhead_cue: bool = False, pose_request_overhead: bool = True,
                  arbiter: Optional[Arbiter] = None,
                  clock: Callable[[], float] = time.monotonic,
@@ -120,6 +102,7 @@ class LocalizationService:
         self._read_state = read_state or (lambda robot_id: self._clients()[robot_id].state())
         self._slots = tuple(slots)
         self._squares = tuple(squares)
+        self._reference_map_id = reference_map_id
         self._sightings = sightings
         self.overhead_cue = overhead_cue
         #: D-546 6 (a): the pose-request handler may answer from the overhead map pose.
@@ -171,12 +154,16 @@ class LocalizationService:
         #: by the ceiling camera (`Tiebreak`), and get the wall grid pushed by `_wall_sync`.
         self._fallback: set[str] = set()
         self._tiebreak = Tiebreak()
+        self._search_window = SearchWindowAdvisor()
         self._wall_sync = None
         #: Optional ceiling-camera (x, y) tiebreaker when ArUco sightings are absent.
         self._tiebreak_camera: Optional[Callable[[str, Optional[str]], Optional[tuple[float, float]]]] = None
         self._active_map_id: Optional[Callable[[], Optional[str]]] = None
         self._site_maps = None
         self._site_obstacle_pose: Optional[Callable[[str], Optional[tuple[str, float, float, float]]]] = None
+
+    def set_search_reference_reader(self, reader) -> None:
+        self._search_window.read_reference = reader
 
     def set_wall_sync(self, sync) -> None:
         self._wall_sync = sync
@@ -200,11 +187,13 @@ class LocalizationService:
     ) -> None:
         self._site_obstacle_pose = provider
 
-    def _binding_fit_for_state(self, rid: str, state: Mapping) -> Optional[object]:
+    def _binding_fit_for_state(
+        self, rid: str, state: Mapping, *, expected_site_map: Optional[str] = None,
+    ) -> Optional[object]:
         if self._site_maps is None:
             return None
         active = self._site_maps.active()
-        if active is None:
+        if active is None or (expected_site_map is not None and active[1].map_id != expected_site_map):
             return None
         fit, _ = self._site_maps.map_bindings.binding_for_grid(
             rid, state.get("map_grid_id"), (active[1].map_id, active[0]))
@@ -239,17 +228,12 @@ class LocalizationService:
         if cam is None:
             return None
         if not state:
-            return cam
-        fit = self._binding_fit_for_state(rid, state)
+            return None
+        active_map = self._current_active_map_id()
+        fit = self._binding_fit_for_state(rid, state, expected_site_map=active_map)
         if fit is not None:
             return fit.inverse(cam)
-        active_map = self._current_active_map_id()
-        if active_map and state.get("map_id") == active_map:
-            return cam
-        fb = state.get("slam_fallback")
-        if isinstance(fb, Mapping) and fb.get("phase") == "WAITING_LOCALIZATION":
-            return cam
-        return None
+        return cam if loaded_wall_proven(self, state, active_map) else None
 
     # --- console --------------------------------------------------------------------
 
@@ -313,7 +297,8 @@ class LocalizationService:
         active_map = self._current_active_map_id()
         self._fallback = {
             rid for rid, s in states.items()
-            if _tiebreak_eligible(s, active_map, binding_fit=self._binding_fit_for_state(rid, s))
+            if _tiebreak_eligible(s, binding_fit=self._binding_fit_for_state(rid, s),
+                                  loaded_wall=loaded_wall_proven(self, s, active_map))
         }
         if self._wall_sync is not None:
             try:
@@ -322,6 +307,8 @@ class LocalizationService:
                 logger.exception("wall map sync failed")
         localized = {rid: p for rid, s in states.items()
                      if trust.classify(s) == trust.TRUSTED and (p := _pose(s)) is not None}
+        for rid in localized:
+            self._search_window.forget(rid)
         frames = {rid: map_frame(s) for rid, s in states.items()}
         self._last_good.update({rid: (frame, pose) for rid, pose in localized.items()
                                 if (frame := frames[rid]) is not None})
@@ -339,13 +326,18 @@ class LocalizationService:
             self._arbitrate(rid, clients[rid], localized, anchors, frames, observations, now, state=state)
             for rid, state in states.items()
             if rid not in quiet
-            and (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
+            and (status := trust.status_of(state)) is not None
+            and (status.state is LocState.CANDIDATES
+                 or (status.state in (LocState.SUSPECT, LocState.UNKNOWN) and self._search_window.has_prior(rid, now)))))
         await asyncio.gather(*(self._pose_request(rid, clients[rid], state, now)
                                for rid, state in states.items()))
         self._observe_from_anchors(states, localized, anchors, observations, now)
-        await self._watch(localized, observations, now)
+        await self._watch(localized, observations, now, states)
         for rid, state in states.items():
             status = trust.status_of(state)
+            if (status is not None and status.state is LocState.LOCALIZED
+                    and trust.native_pose_freshness(state) is False):
+                continue
             rung = self._ladder.update(rid, status.state if status else None, now,
                                        paused=self._decision_pending(rid, status))
             if rid not in self._ladder.robots():
@@ -431,23 +423,31 @@ class LocalizationService:
         except Exception as exc:
             logger.debug("localization: %s candidates unreadable: %s", rid, exc)
             return
+        status = trust.status_of(state)
+        if status is None:
+            return
+        frame = frames.get(rid)
         if report is None:
+            self._tiebreak.interrupt(rid)
+            await self._search_window.consider(self, rid, client, frame, state, frames, anchors, now)
+            return
+        if status.state is not LocState.CANDIDATES:
             return
         if report.robot_id != rid:
             logger.warning("localization: %s reported candidates for %s; ignored", rid, report.robot_id)
             return
         self._last_report[rid] = report
-        frame = frames[rid]
+        self._search_window.observe_report(rid, frame, state, report, now)
         peers = {o: p for o, p in localized.items() if o != rid and frame is not None and frames[o] == frame}
         last = self._last_good.get(rid)
-        context = Context(peers=[p[:2] for o, p in peers.items() if o in anchors], slots=self._slots,
-                          squares=self._squares, last_good=last[1] if last and last[0] == frame else None,
-                          sighting=self._sighting(rid, now))
+        matching_references = frame is not None and frame[0] == self._reference_map_id
+        context = Context(peers=[p[:2] for o, p in peers.items() if o in anchors],
+                          slots=self._slots if matching_references else (), squares=self._squares if matching_references else (),
+                          last_good=last[1] if last and last[0] == frame else None,
+                          sighting=sighting_in_robot_frame(self, rid, state, now))
         # The monitor places this robot's unmapped objects from its leading candidate,
         # chosen without the peers cue: a mislocated peer must not pick the observer's pose.
-        leader = service_logic.clear_leader(
-            report, Context(slots=self._slots, squares=self._squares,
-                            last_good=context.last_good, sighting=context.sighting), now)
+        leader = service_logic.clear_leader(report, replace(context, peers=()), now)
         # D-395 rev. 3: clocks are not synced, so freshness runs on Fleet's clock from the
         # first time Fleet saw this report; a re-fetch of the same report keeps that time.
         key = (report.request_id, report.stamp)
@@ -510,7 +510,7 @@ class LocalizationService:
         observe_pose_from_anchors(self, states, localized, anchors, observations, now)
 
     async def _watch(self, localized: Mapping[str, cues.Pose], observations: Mapping[str, list],
-                     now: float) -> None:
+                     now: float, states: Mapping[str, dict]) -> None:
         """`observations`: robot -> [(evidence key, observed pose)]; a key is one report."""
         for rid in list(self._known):
             if rid not in localized:
@@ -518,7 +518,7 @@ class LocalizationService:
         suspects = []
         for rid, pose in localized.items():
             seen = list(observations.get(rid, ()))
-            sighting = self._sighting(rid, now)
+            sighting = sighting_in_robot_frame(self, rid, states[rid], now)
             if sighting is not None:
                 seen.append((("overhead", round(sighting.captured_at, 3)),
                              (sighting.x, sighting.y, sighting.yaw)))
@@ -589,8 +589,6 @@ class LocalizationService:
                 logger.warning("localization: mission %s to %s failed: %s", kind, rid, exc)
                 return
 
-    def _sighting(self, rid: str, now: float) -> Optional[cues.Sighting]:
-        return fresh_overhead_sighting(self, rid, now)
 
     def _forget_removed(self, current: set) -> None:
         forget_removed_robots(self, current)

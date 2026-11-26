@@ -97,6 +97,9 @@ SCENARIOS = [
     # belt read as a moved pile; a run without a chunk session said only "refused"; a park from a far pick overloaded the lift
     {"name": "camera moved: no grasp on a stale map", "camera": [True], "rounds": [], "result": "ask a person: camera_moved",
      "actions": ["ask_person"]},
+    *[{"name": cause, "camera": [{"camera_issue": cause}], "rounds": [],
+       "result": f"ask a person: {cause}", "actions": ["ask_person"]}
+      for cause in ("camera_map_binding", "camera_reference_missing", "camera_shift_unmeasured")],
     {"name": "camera bumped mid-carry: stop before the next pick", "camera": [False, True], "rounds": [(STALL, False, True)],
      "result": "ask a person: camera_moved", "actions": ["slow_down", "ask_person"]},
     {"name": "the belt runs all through the carry: not a moved pile", "belt": True,
@@ -142,7 +145,10 @@ class World:
         return img
 
     def camera(self, frame):
-        return {"max_px": 109.0} if self.picks < len(self.camera_at) and self.camera_at[self.picks] else None
+        observation = self.camera_at[self.picks] if self.picks < len(self.camera_at) else None
+        if isinstance(observation, dict):
+            return observation
+        return {"max_px": 109.0} if observation else None
 
     def pick(self):
         self.picks += 1

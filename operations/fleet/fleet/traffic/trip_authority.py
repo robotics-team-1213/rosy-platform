@@ -85,6 +85,9 @@ class AuthoritySender:
         last = self._sent.get(robot_id)
         if last is not None and last[0] == leg:
             absolute = max(absolute, last[1])
+        camera = (live.view.get("detail") or {}).get("camera_lane_fallback")
+        if camera is not None:
+            absolute = min(absolute, camera["authority_end_m"] + live.trim_m)
         self._sent[robot_id] = (leg, absolute)
         until = round(min(MAX_UNTIL_M, max(0.0, absolute - live.trim_m - front)), 3)
         self._held[robot_id] = {"leg": leg, "stamp": stamp, "until_m": until, "shrunk": False, "sent_at": self._clock()}

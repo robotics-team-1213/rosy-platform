@@ -17,6 +17,14 @@ During `arm_s` (Cell S) live calibration on 2026-11-24:
 
 ## Cause
 
+On 2026-11-26, the B-arm calibration kept the same ten measured pixel/FK pairs
+under eight site names. The points were taken at a 110 mm viewing height.
+Counting each name as a separate fit would overstate the measurements. Dropping
+the area fit when a pocket has no entry would instead request the same work again.
+For a named route, compare the point-list digest, viewing height and residuals,
+then check whether a visit or repeated support contact belongs to that exact
+arm, point, tool and map. A visit at viewing height establishes only that height.
+
 1. `cell_calibrate.main()` (`remap` and `consensus-repair`) only wrote to `map_sites(config)` and `cell_pivot.map_record()` returns `calibration["sites"]["belt"]` directly when that key already exists rather than following `map_from`. Meanwhile `check()` only checked `missing_maps(config, calibration, map_sites(config))`.
 2. `cell_calibrate.main()` unconditionally serialized `config` back to `args.config` at exit even for steps (`pivot-near`, `post-eval`, `depth-verify`) that never modified `config`.
 3. On `arm_s` (with `tcp_x_m=0.074`), the actual open/closed white-jaw circle measures `radius_mm=31.8, phase_deg=75.6` (verified via full-circle `fit_pivot_yaw`, `rms_mm=2.8, n=5`). Over the belt, `sites.belt.pivot_yaws=[35, 45, 55, 65, 75]` swings the reference jaw clear of the forearm.

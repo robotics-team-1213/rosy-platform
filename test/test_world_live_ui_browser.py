@@ -220,3 +220,56 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
             server.stop_event.set()
             server.shutdown()
             thread.join()
+
+
+def test_recording_return_restores_matching_record_paused(tmp_path: Path) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    _write_bundle(tmp_path)
+    path = tmp_path / "data/recording.json"
+    recording = json.loads(path.read_text(encoding="utf-8"))
+    recording["samples"].append({**recording["samples"][0], "offset_ms": 100_000})
+    serve._atomic_write_json(path, recording)
+
+    with serve.make_server(tmp_path, "127.0.0.1", free_port()) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        origin = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with playwright.sync_playwright() as pw:
+                browser = pw.chromium.launch(**launch_options(), args=["--enable-unsafe-swiftshader"])
+                page = browser.new_page()
+                play = page.locator("#rec-play")
+                slider = page.locator("#rec-range")
+                page.goto(origin + "/?view=run")
+                playwright.expect(play).to_have_attribute("aria-pressed", "true")
+                slider.evaluate("el => { el.value = 15000; el.dispatchEvent(new Event('input')); }")
+                page.reload()
+                playwright.expect(play).to_have_attribute("aria-pressed", "false")
+                playwright.expect(slider).to_have_value("15000")
+                page.locator("#tab-rec").press("Home")
+                page.reload()
+                playwright.expect(page.locator("#tab-map")).to_have_attribute("aria-selected", "true")
+                page.goto(origin + "/")
+                page.locator("#tab-rec").click()
+                playwright.expect(slider).to_be_visible()
+                slider.evaluate("el => { el.value = 21000; el.dispatchEvent(new Event('input')); }")
+                page.goto(origin + "/manifest.json")
+                page.go_back()
+                playwright.expect(slider).to_be_visible()
+                playwright.expect(slider).to_have_value("21000")
+                playwright.expect(play).to_have_attribute("aria-pressed", "false")
+                serve._atomic_write_json(path, {**recording, "source": "replacement"})
+                page.reload()
+                playwright.expect(slider).to_be_visible()
+                playwright.expect(slider).to_have_value("0")
+                page.route("**/data/recording.json", lambda route: route.abort())
+                page.reload()
+                playwright.expect(page.locator("#tab-rec")).to_have_attribute("aria-selected", "true")
+                page.locator("#tab-map").click()
+                page.reload()
+                playwright.expect(page.locator("#tab-map")).to_have_attribute("aria-selected", "true")
+                browser.close()
+        finally:
+            server.stop_event.set()
+            server.shutdown()
+            thread.join()

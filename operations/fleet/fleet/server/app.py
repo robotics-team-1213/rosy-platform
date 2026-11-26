@@ -117,7 +117,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
-               calibration_drift_watch=None,
+               calibration_drift_watch=None, road_vision_demand=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
@@ -219,7 +219,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 for resource in (getattr(app.state, "power_health_display", None),
                                  getattr(app.state, "motor_health_display", None), notification_http,
                                  app.state.control_unit_http, app.state.control_unit_stops,
-                                 calibration_drift_watch, post_action_observation_source, app.state.charge_runtime):
+                                 calibration_drift_watch, road_vision_demand, post_action_observation_source, app.state.charge_runtime):
                     if callable(close := getattr(resource, "aclose", None)):
                         cleanup.push_async_callback(close)
                 start_points = getattr(app.state, "start_points", None)
@@ -435,6 +435,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trip_lease=trip_lease, autonomous_robots=autonomous_robots, hub=hub, sightings=sightings,
         simulation_pose=simulation_pose, tracking=tracking, require_operator=require_operator,
         require_named_operator=require_named_operator, read_guard=read_guard)
+    trip_runner.road_vision_demand = road_vision_demand
 
     install_mission_and_channel_surfaces(
         app, policy_admission_core=policy_admission_core, mission_service=mission_service,

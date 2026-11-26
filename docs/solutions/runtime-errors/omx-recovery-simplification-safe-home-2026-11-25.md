@@ -24,6 +24,10 @@ applies_when: "Recovering a held or extended OMX arm back to home via Cell Job A
 5. **Fragmented endpoints (`cell_safe_home.py`, `cell_area_job_spec.py`, `cell_job_api.py`, `cell_job_spec.py`):** Added unified `POST /jobs/safe_home` that attaches to active torque-ON `human-hold` sessions or runs `ROSY_RECOVERY_INCIDENT` auto-fold after read-only `register_probe` confirms `hardware_error == 0`, while keeping Fleet safety stop (`E-stop` / `human_detected`) and human-token authorization enforced.
 
 ## Preserved Safety Invariants
+The site recovery view can show an old local hold reason even after the cell Fleet has classified the same ID as USB home recovery.
+Compare both reasons and the unsent outbox. An empty outbox and a positive cell Fleet hold identify the current classification.
+Use the incident-bound recovery entry and the worker's active arm configuration when verifying deployment. An eligible historical cell task or a staged `.pending` configuration does not establish that the worker can recover this record.
+
 - Never drops torque on an extended arm; live hold uses `recover-unlatch`; torque-OFF recovery refuses if any motor has `hardware_error != 0` on `register_probe`.
 - Never clears `latched` hardware faults or `windup_hits`; enforces `<= 3` open incidents per `safe_home` and Fleet's `3/24h` machine clear limit.
 - Fleet safety block (`409 FLEET_SAFETY_STOP`) and machine commissioning ban (`403 MACHINE_COMMISSIONING_FORBIDDEN`) still block `safe_home`.

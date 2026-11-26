@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy World · 학습 실험</title>
+  <link rel="icon" type="image/svg+xml" href="/common/brand/platform.svg">
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/template.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/world-experiments.js"></script>
+</head>
+<body class="ui-template">
+  <a class="skip-link" href="#world-experiments-main">학습 실험으로 이동</a>
+  <ui-shell grammar="procedure" class="ui-app-shell">
+    <!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+    <div class="ui-app-body" data-seats="rail">
+    <div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="Learning">
+      <!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행" aria-current="true">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end -->
+    </nav></div>
+    <div class="ui-app-main">
+    <div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>학습 실험</h1><span class="ui-crumbs" id="learning-tool-path"></span></div>
+    <main id="world-experiments-main" class="learning-main ui-task-page" tabindex="-1">
+      <ui-status id="experiment-connection" state="pending" role="status">실행 상태를 불러오는 중입니다.</ui-status>
+      <ui-status id="experiment-error" state="error" role="alert" hidden></ui-status>
+      <section class="learning-section" aria-labelledby="experiment-preset-heading">
+        <h2 id="experiment-preset-heading">새 실행</h2>
+        <p id="experiment-preset">실험 설정을 확인하는 중입니다.</p>
+        <div class="ui-workspace-bar">
+          <ui-button id="experiment-start" kind="primary" type="button" disabled reason="실행 상태를 확인하는 중입니다."><span id="experiment-start-label">학습 시작</span></ui-button>
+        </div>
+      </section>
+      <section class="learning-section" aria-labelledby="experiment-history-heading">
+        <h2 id="experiment-history-heading">실행 기록</h2>
+        <div class="ui-form learning-form">
+          <label class="ui-field-label" for="experiment-run">선택한 실행
+            <select class="ui-field" id="experiment-run"><option value="">실행 기록 없음</option></select>
+          </label>
+        </div>
+        <div id="experiment-details" hidden>
+          <ui-status id="experiment-state" state="empty" role="status"></ui-status>
+          <p id="experiment-run-error" hidden></p>
+          <dl class="ui-readout">
+            <dt>학습 스텝</dt><dd id="experiment-step">—</dd>
+            <dt>학습 손실</dt><dd id="experiment-loss">—</dd>
+            <dt>장면 SHA-256</dt><dd><code id="experiment-scene">—</code></dd>
+            <dt>결과 모델 SHA-256</dt><dd><code id="experiment-checkpoint">—</code></dd>
+          </dl>
+          <div class="ui-workspace-bar">
+            <ui-button id="experiment-stop" kind="quiet" type="button" disabled reason="실행을 선택하세요."><span id="experiment-stop-label">이 실행 중지</span></ui-button>
+          </div>
+        </div>
+      </section>
+      <section class="learning-section" aria-labelledby="s3-review-heading">
+        <h2 id="s3-review-heading">S3 MuJoCo 평가·재생</h2>
+        <p>시뮬레이션 검증 장면에서 저장한 파일을 브라우저에서 엽니다.</p>
+        <div class="ui-form learning-form">
+          <label class="ui-field-label">평가 보고서 <input class="ui-field" id="experiment-s3-report" type="file" accept=".json,application/json"></label>
+          <label class="ui-field-label">에피소드 기록 <input class="ui-field" id="experiment-s3-files" type="file" accept=".json,application/json" multiple></label>
+        </div>
+        <p id="experiment-s3-notice" role="status"></p>
+        <ui-status id="experiment-s3-error" state="error" role="alert" hidden></ui-status>
+        <div id="experiment-s3-results" hidden>
+          <dl class="ui-readout">
+            <dt>실행 ID</dt><dd id="experiment-s3-id"></dd>
+            <dt>고정 IK</dt><dd id="experiment-s3-ik"></dd>
+            <dt>학습 정책</dt><dd id="experiment-s3-learned"></dd>
+          </dl>
+          <div class="ui-form learning-form">
+            <label class="ui-field-label">에피소드 <select id="experiment-s3-select" class="ui-field"></select></label>
+          </div>
+          <div id="experiment-s3-player" hidden>
+            <div class="ui-workspace-bar"><ui-button id="experiment-s3-play" kind="quiet" type="button"><span id="experiment-s3-play-label">재생</span></ui-button></div>
+            <label class="ui-field-label">재생 위치 <input class="ui-field" id="experiment-s3-scrub" type="range" min="0" max="0" value="0"></label>
+            <div id="experiment-s3-map" hidden>
+              <canvas id="experiment-s3-canvas" width="240" height="190" role="img" aria-label="위에서 본 화물과 팔 끝 위치"></canvas>
+              <p class="quiet">사각형은 화물, 원은 기록된 팔 끝(TCP)입니다.</p>
+            </div>
+            <dl class="ui-readout">
+              <dt>시뮬레이션 시간 · 동작 단계</dt><dd id="experiment-s3-time"></dd>
+              <dt>화물 XYZ (m)</dt><dd id="experiment-s3-box"></dd>
+              <dt>화물 회전 WXYZ</dt><dd id="experiment-s3-rotation"></dd>
+              <dt>팔 관절 (rad)</dt><dd id="experiment-s3-arm"></dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </main>
+    </div>
+    </div>
+  </ui-shell>
+</body>
+</html>

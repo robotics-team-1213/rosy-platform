@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from contextlib import nullcontext, suppress
-import json
 import time
 import uuid
 from types import SimpleNamespace
 from fastapi import HTTPException, Request
+from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
@@ -16,19 +16,20 @@ from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pin
 from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity,
 )
+from core_common.profile import LEGACY_VEHICLE_SITE
+from .pipeline_cell_task_presets import cell_task_presets
 from .pipeline_governance_store import (
-    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id, is_named_operator,
+    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id,
     prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
 from fleet.server.sitemap.pipeline_unload_release import (
-    exit_target, install_unload_release_routes, manifest_count, unload_release,
+    install_unload_release_routes, manifest_count,
 )
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
+from fleet.server.rfid_receipts import is_inbound_supply
 
-
-_LEGACY_VEHICLE_SITE = "pinky"
 #: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
 PLACE_OF_ACTION = {"dock_s3": "S3", "dock_and_unload_s3": "S3", "dock_s5": "S5", "charge_c1": "C1",
                    "charge_c2": "C2", "depart_s1": "S1"}
@@ -135,20 +136,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _commit_ledger(bump_stop=True) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_stop_generation())
         return res
 
-    CELL_TASK_PRESETS: dict[str, dict] = {
-        "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
-        "s3_act_policy": {"preset": "s3_act_policy", "label": "S3 ACT 정책 구동 (arm_s · 최신 모델)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "execution_mode": "act_policy", "max_chunks": 4},
-        "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
-        "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
-        "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
-        "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
-        "s5_tier2_arm_b": {"preset": "s5_tier2_arm_b", "label": "S5 적재 2층 (arm_b: Belt -> Pallet L1)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None},
-        "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
-        "export_s3_belt": {"preset": "export_s3_belt", "label": "반출대 3 반출 (EXP_S3_BELT · arm_s)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "zone_id": "EXP_S3_BELT"},
-        "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
-        "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
-        "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
-    }
+    CELL_TASK_PRESETS = cell_task_presets()
 
     @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
     async def report_displaced_detection(request: Request):
@@ -176,8 +164,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         web_common = getattr(app.state, "web_common", None)
         try:
             targets = resolve_cell_task_targets(
-                cell_id, spec, web_common=web_common, default_cell_s_src=_LEGACY_VEHICLE_SITE,
-                legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
+                legacy_sites=("belt", LEGACY_VEHICLE_SITE),
             )
             identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
@@ -218,14 +206,14 @@ def install_cell_tasks_routes(app, ctx) -> None:
             cell_id=cell_id, src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
             active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
             is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
-            vehicle_sites=(_LEGACY_VEHICLE_SITE,),
+            vehicle_sites=(LEGACY_VEHICLE_SITE,),
         )
         if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
             resolved_disp = app.state.detected_displaced_site or "belt_far"
             app.state.detected_displaced_site = None
         else:
             resolved_disp = raw_disp or None
-        return _enrich_task_health({
+        task = _enrich_task_health({
             "task_id": task_id,
             "cell_id": cell_id,
             "arm_id": arm_id,
@@ -251,16 +239,26 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "status": target_status,
             "created_at": round(time.time(), 3),
         })
+        rfid = getattr(app.state, "rfid_receipts", None)
+        if rfid is not None and rfid.workcell and is_inbound_supply(task):
+            task.update(intake_occurrence_id=f"intake-{uuid.uuid4().hex}", intake_workcell=rfid.workcell)
+        return task
 
     def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None,
                       principal_role: str | None = None, save: bool = True,
-                      idempotency: tuple[str, str] | None = None) -> list[dict]:
+                      idempotency: tuple[str, str] | None = None, retry_of=None) -> list[dict]:
         seen_ids: set[str] = set()
         built = []
         for idx, s in enumerate(specs):
             if idempotency is not None and len(specs) == 1 and not s.get("task_id"):
                 s = {**s, "task_id": deterministic_idempotency_id("cell", idempotency[0])}
             task = _build_cell_task(active, s, seen_ids=seen_ids, principal_id=principal_id, principal_role=principal_role)
+            if retry_of is not None and "intake_occurrence_id" in task:
+                for key in ("intake_occurrence_id", "intake_workcell"):
+                    if key in retry_of:
+                        task[key] = retry_of[key]
+                    else:
+                        task.pop(key, None)
             if idempotency is not None:
                 task["idempotency_key"], task["idempotency_body_sha256"] = idempotency[0], idempotency[1]
             seen_ids.add(task["task_id"])
@@ -325,7 +323,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 try:
                     specs = expand_multi_tier_specs(
                         body, base_id=base_id, web_common=getattr(app.state, "web_common", None),
-                        legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                        legacy_sites=("belt", LEGACY_VEHICLE_SITE),
                     )
                 except ValueError as exc:
                     raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
@@ -411,6 +409,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {
             "tasks": tasks,
             "summary": summary,
+            **calibration_origin_fields(),
             **({"authority": gov.snapshot()} if gov is not None else {}),
             "cells": cells_info,
             "presets": list(CELL_TASK_PRESETS.values()),
@@ -482,9 +481,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
         new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier", *TASK_IDENTITY_FIELDS) if k in orig}
-        spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset")})
+        if orig.get("placement_attempt_id"):
+            raise HTTPException(409, detail={"code": "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"})
+        spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset", "zone_id") if k in orig})
         spec.update({"task_id": new_id, **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None}})
-        retried = _enqueue_one_task(active, spec, principal_id=principal_id)
+        retried, = _enqueue_many(active, [spec], principal_id=principal_id, retry_of=orig)
         return {"ok": True, "task": retried, "retried_from": task_id}
 
     @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=operator_guard)
@@ -499,6 +500,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                             for state in app.state.omx_cell_states.values())):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
         task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
+        if task_id in app.state.pinky_tasks:
+            raise HTTPException(409, detail={"code": "PINKY_TASK_ID_IN_USE"})
         cable_guard = bool(body.get("cable_guard_micro", True))
         max_step_m = checked_finite_float(body.get("max_step_m", 0.015 if cable_guard else 0.10))
         max_speed_mps = checked_finite_float(body.get("max_speed_mps", 0.02 if cable_guard else 0.08))
@@ -507,32 +510,28 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spawned_cell_task = unload_batch_id = None
         v_cmd, duration_s = 0.0, 0.0
         place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
-        if action in ("dock_s3", "dock_and_unload_s3"):
+        from fleet.server.pipeline_station_stop import assigned_rule, operator_departure, plan_station
+        station = None
+        if action == "station_stop":
+            station = plan_station(body, active[2], rules())
+            target_place = place_id = station["place_id"]
+        elif action in ("dock_s3", "dock_and_unload_s3"):
             if _aborted("cell_s"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S3"
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
+                if any(s.place == "S3" for s in getattr(rules(), "stops", ())):
+                    station = assigned_rule(rules(), "S3", "unload")
                 batch_id = f"unload-{uuid.uuid4().hex[:8]}"  # the camera adds the next carry (continue_unload)
                 spawned_cell_task = _enqueue_one_task(active, {
                     **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id, "task_id": f"{batch_id}-1",
                     "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
                 })
         elif action == "depart_s3":
-            release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
-            if not release["ready"]:
-                raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
-            target = exit_target(rules(), active[1])
-            if target is None:
-                raise HTTPException(409, detail={"code": "NO_EXIT_PLACE"})
-            principal = getattr(request.state, "site_principal", None)
-            unload_batch_id = release["batch_id"]
-            app.state.unload_releases[unload_batch_id] = {
-                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
-                "operator": getattr(principal, "principal_id", None), "target": target[0], "release": release}
-            place_id = target[0]
-            target_place = target[0]
+            place_id, unload_batch_id = operator_departure(app.state, request, robot_id, task_id, rules(), active[1], _is_human_detected(), app.state.pinky_tasks)
+            target_place = place_id
             v_cmd = max_speed_mps
             duration_s = 0.35
         elif action == "dock_s5":
@@ -585,15 +584,14 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": cable_guard, "max_step_m": max_step_m, "v_cmd_mps": v_cmd, "duration_s": duration_s,
             "decision": dec_row, "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
             **({"unload_batch_id": unload_batch_id} if unload_batch_id else {}),
+            **({"station_operation": station} if station else {}),
             "status": "QUEUED", "created_at": round(time.time(), 3), **dispatch_fields(active, request, place_id),
         }
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
-    def record_depart_task(robot_id, batch, place, now):
-        app.state.pinky_tasks[f"depart-{batch}"] = {"task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3",
-                                                    "target_place": place, "status": "SENT", "auto": True, "created_at": round(now, 3)}
-    ctx.record_depart_task = record_depart_task
+    from fleet.server.pipeline_station_stop import record_depart_task
+    ctx.record_depart_task = lambda *args: record_depart_task(app.state.pinky_tasks, *args)
     install_pinky_dispatch(app, ctx)
     install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS, ctx._enqueue_one_task = CELL_TASK_PRESETS, _enqueue_one_task

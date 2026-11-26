@@ -185,14 +185,14 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
-  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
+  assert.equal(tripStatusText(trip, MAP), '운행 접수 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
   for (const [state, label] of [['DEGRADED', '위치 정확도 저하'], ['UNKNOWN', '위치 확인 불가'], ['future', 'future']]) {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
   // D-763 8: the wait shows on an open trip only; a canceled trip keeps its last stored wait
   const waiting = {...trip, wait: {reason: 'signal', waiting: true, over_bound: false}};
-  assert.match(tripStatusText(waiting, MAP), / · 대기 · 신호$/);
+  assert.match(tripStatusText(waiting, MAP), /^대기 · 신호/);
   assert.doesNotMatch(tripStatusText({...waiting, state: 'canceled'}, MAP), /대기/);
   // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
   assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
@@ -201,7 +201,7 @@ test('D-494 trip panel text and button reasons', async () => {
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
   assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
-  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇은 이미 운행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇에 접수된 운행/);
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
@@ -506,6 +506,9 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2'), {
     to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2',
   });
+  assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2_slam'), {
+    to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2', approved_slam_required: true,
+  });
   const withStarts = {
     places: [
       ...stopOnlyMap.places,
@@ -515,6 +518,23 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   };
   assert.deepEqual(repeatPlaces(withStarts).map(p => p.id), ['A', 'B']);
   assert.deepEqual(repeatTripBody(withStarts, 'A', '', ''), {to: 'A', via: ['B'], repeat: true});
+});
+
+test('site points apply only to the displayed active map identity', async () => {
+  const {sitePointsForActiveMap} = await import('/console/assets/map-editor.js');
+  const active = {map: {map_id: 'warehouse'}, version: 2, sha256: 'sha-two'};
+  const source = {map_id: 'warehouse', version: 2, sha256: 'sha-two'};
+  const sitePoints = {sources: {site_map: source}};
+
+  assert.equal(sitePointsForActiveMap(sitePoints, active, 'active'), sitePoints);
+  for (const mapSource of ['draft', 'profile']) {
+    assert.equal(sitePointsForActiveMap(sitePoints, active, mapSource), null);
+  }
+  for (const mismatch of [{map_id: 'other'}, {version: 1}, {sha256: 'sha-one'}]) {
+    assert.equal(sitePointsForActiveMap({sources: {site_map: {...source, ...mismatch}}}, active, 'active'), null);
+  }
+  assert.equal(sitePointsForActiveMap({}, active, 'active'), null);
+  assert.equal(sitePointsForActiveMap(sitePoints, null, 'active'), null);
 });
 
 test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor and planned stop overlays', async () => {
@@ -565,7 +585,10 @@ test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor
   assert.ok(texts.includes('S3_app(예정)'));
   assert.ok(texts.includes('S_OUT(예정)'));
   assert.ok(texts.includes('[수령·출구]'));
-  assert.ok(texts.includes('arm_s 180°·cell_ab -90°'));
+  assert.ok(texts.includes('S 셀 기준점(참고)'));
+  const marker = layer.children.find(c => c.attributes.class === 'sp-cell-ref');
+  assert.match(marker.children[0].textContent, /S 셀/);
+  assert.doesNotMatch(marker.children[0].textContent, /cell_ab/);
 
   renderSitePointsSummary(panelEl, bodyEl, payload);
   assert.equal(panelEl.hidden, false);

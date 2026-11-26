@@ -528,3 +528,20 @@ def test_snap_start_ignore_heading_accepts_reversed_bay_pose_for_nav2():
     assert err.value.code == "TRIP_HEADING_CONFLICT"
     plan = _plan(site, (0.2, 0.0, math.pi), "B", ignore_start_heading=True)
     assert _edges(plan) == ["ab"]
+
+
+def test_nav2_margin_respects_nearest_lane_closures_direction_and_mode():
+    site = _map({"A": (0, 0), "B": (1, 0), "C": (0, .25), "D": (1, .25)},
+                [("lower", "A", "B"), ("upper", "C", "D")])
+    options = dict(ignore_start_heading=True, nav2_off_lane_margin_m=.02)
+    assert _edges(_plan(site, (.4, .11, 0.), "B", **options)) == ["lower"]
+    for start, goal, changes in [
+        ((.4, .11, 0.), "B", {"ignore_start_heading": False}),
+        ((.4, .11, 0.), "B", {"drive_modes": frozenset()}),
+        ((.4, .11, 0.), "B", {"blocked_edges": frozenset({"lower"})}),
+        ((.4, .11, 0.), "A", {}),  # a one-way lane still cannot run backwards
+        ((.4, .125, 0.), "D", {"nav2_off_lane_margin_m": .06}),  # equidistant parallel lanes
+        ((.4, .121, 0.), "B", {}),  # beyond the selected 20 mm margin
+    ]:
+        with pytest.raises(PlanError):
+            _plan(site, start, goal, **{**options, **changes})

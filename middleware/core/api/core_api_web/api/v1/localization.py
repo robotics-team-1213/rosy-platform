@@ -20,7 +20,7 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import LOCALIZE_ASSIST, NAVIGATE, check_grant, require_grant
 from core_api_web.api.v1.common import viewer
 from core_common.domain.tasks import TaskKind
-from core_common.protocol.localization import DecisionSource, LocalizationDecision
+from core_common.protocol.localization import DecisionSource, LocalizationDecision, LocalizationSearchWindow
 
 localization_router = APIRouter(prefix="/api/v1/localization", tags=["localization"])
 
@@ -144,6 +144,27 @@ def start_mission(body: MissionRequest, auth: AuthContext = Depends(assist),
 @localization_router.get("/mission")
 def mission_status(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return _mission(svc).status()
+
+
+@localization_router.post("/search-window", status_code=202)
+def search_window(body: LocalizationSearchWindow, auth: AuthContext = Depends(assist),
+                  svc: CoreServicesLike = Depends(get_services)):
+    """Offer a candidate-only prior while native localization is unresolved."""
+    _lease(svc, auth, "localization search window")
+    loc = reporting_assist(svc)
+    mission = getattr(svc, "loc_mission", None)
+    if mission is not None and mission.status().get("state") == "running":
+        raise ApiError("LOCALIZATION_MISSION_ACTIVE", 409, "a localization mission is active")
+    with svc.state.map_grid_gate:
+        if svc.state.map_grid_id != body.expected_map_grid_id:
+            raise ApiError("LOCALIZATION_MAP_GRID_CHANGED", 409, "the active occupancy grid differs")
+        try:
+            loc.search_window(body.model_dump(mode="json"))
+        except RuntimeError as exc:
+            raise ApiError("CAPABILITY_NOT_SUPPORTED", 501, str(exc)) from exc
+        except ValueError as exc:
+            raise ApiError("LOCALIZATION_SEARCH_WINDOW_BUSY", 409, str(exc)) from exc
+    return {"accepted": True}
 
 
 @localization_router.post("/suspect", status_code=202)

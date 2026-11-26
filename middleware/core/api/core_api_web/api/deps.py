@@ -29,6 +29,7 @@ from typing import Protocol
 # runtime/gateway/test/test_v1_import_boundary.py 가 고정한다.
 from core_features.calibration import CalibrationSessionError
 from core_features.command.approval_trials import TrialRefused
+from core_features.command.lidar_corridor import assess_straight_corridor
 from core_features.command.arbitration import Mode
 from core_features.safety.limits import SpeedLimits
 from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_TTL_S, TripLeaseError
@@ -58,7 +59,7 @@ __all__ = [
     "TripLeaseError",
     "Mode",
     "SpeedLimits",
-    "TrialRefused",
+    "TrialRefused", "assess_straight_corridor",
     "NavigationError",
     "PlannedPathScope",
     "GOAL_LEASE_MAX_S",

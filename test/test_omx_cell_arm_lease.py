@@ -71,6 +71,13 @@ def test_release_never_removes_another_owners_lease(tmp_path):
     assert lease.status(root=tmp_path) == {}
 
 
+def test_job_release_preserves_a_lease_transferred_to_the_recorder(tmp_path):
+    lease.claim("arm_s", "job:1", pid=os.getpid(), root=tmp_path)
+    assert not lease.release("arm_s", "job:1", root=tmp_path, expected_pid=None)
+    assert not lease.release("arm_s", "job:1", root=tmp_path, expected_pid=999_999_999)
+    assert lease.release("arm_s", "job:1", root=tmp_path, expected_pid=os.getpid())
+
+
 def test_status_lists_arms_with_live_flag(tmp_path):
     lease.claim("arm_a", "u@x", root=tmp_path)
     lease.claim("arm_b", "u@x", ttl_s=1, root=tmp_path, now=1)

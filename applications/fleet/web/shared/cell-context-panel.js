@@ -5,6 +5,7 @@ import { patchHidden } from "/common/control-dom.js";
 import { INCIDENT_CAUSES, INCIDENT_BASES } from "/console/assets/cell-frames.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
+import { isHomeRecovery } from "/console/assets/cell-obs-model.js";
 
 const WORK_REFRESH_MS = 5000;
 const ENDED_WORK_STATES = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]);
@@ -71,8 +72,8 @@ function IncidentClearForm({ arm, incident, clearReason, onClearIncident }) {
   return html`<li class="cell-context-item" data-incident-id=${incident.incident_id}>
     <div class="cell-context-item-head">
       <strong>${arm.label}</strong>
-      <ui-tag status=${incident?.decision?.hold !== false ? "crit" : "warn"}>
-        ${incident?.decision?.hold !== false ? "보류 · 해제 필요" : "원인 기록 대기"}
+      <ui-tag status=${!isHomeRecovery(incident) && incident?.decision?.hold !== false ? "crit" : "warn"}>
+        ${isHomeRecovery(incident) ? "홈 복구 대기" : incident?.decision?.hold !== false ? "보류 · 해제 필요" : "원인 기록 대기"}
       </ui-tag>
     </div>
     <p class="cell-context-reason">${summaryText}</p>
@@ -197,13 +198,13 @@ export function createCellContextPanel({
     const lockReason = !opOk ? OPERATOR_REASON : namedReason?.() || "";
     const openIncidents = [];
     for (const arm of obs?.arms || []) {
-      for (const incident of arm.openIncidents || []) {
+      for (const incident of [...(arm.openIncidents || []), ...(arm.homeRecoveries || [])]) {
         openIncidents.push({ arm, incident });
       }
     }
     const activeWork = activeCellWorkRows(workRows);
     const contextSig = JSON.stringify([
-      openIncidents.map(({ arm, incident }) => [arm.sourceId, incident.incident_id, incident.state, incident.decision?.hold]),
+      openIncidents.map(({ arm, incident }) => [arm.sourceId, incident.incident_id, incident.state, incident.event_kind, incident.decision?.hold]),
       activeWork.map((r) => [r.source, r.source_id, r.device_id, r.status, r.visible_state, r.updated_at]),
       workLoaded, workError, admittingId, admitFeedback, lockReason, Boolean(auth.locked),
     ]);
@@ -214,12 +215,13 @@ export function createCellContextPanel({
     const runningWork = activeWork.filter((r) => r.status !== "PROPOSED");
     const attentionCount = openIncidents.length + proposedWork.length;
     const allQuiet = !auth.locked && workLoaded && !workError && attentionCount === 0 && runningWork.length === 0;
-    const headTagStatus = openIncidents.some((x) => x.incident?.decision?.hold !== false)
+    const physicalIncidents = openIncidents.filter(({ incident }) => !isHomeRecovery(incident));
+    const headTagStatus = physicalIncidents.some((x) => x.incident?.decision?.hold !== false)
       ? "crit"
       : attentionCount ? "warn" : runningWork.length ? "active" : "neutral";
-    const headTagText = openIncidents.length
-      ? `사건 ${openIncidents.length}건`
-      : proposedWork.length
+    const headTagText = physicalIncidents.length
+      ? `사건 ${physicalIncidents.length}건`
+      : openIncidents.length ? "홈 복구 대기" : proposedWork.length
         ? `승인 대기 ${proposedWork.length}건`
         : runningWork.length ? `진행 ${runningWork.length}건` : "이상 없음";
 

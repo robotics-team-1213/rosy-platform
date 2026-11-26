@@ -371,8 +371,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                 assert "최근 4건 중 1건" in page.locator("#work-state").inner_text()
             else:
                 assert "건 중" not in page.locator("#work-state").inner_text()
-            assert page.get_by_role("navigation", name="작업 화면", exact=True).locator(
-                'a[aria-current="page"]').all_inner_texts() == [label]
+            assert page.locator('#work-status-filter a[aria-current="true"]').all_inner_texts() == [label]
         api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows, "truncated_sources": []}
         page.goto(site + "/console?view=work")
         _settle(page, '#work-list ui-button')
@@ -382,16 +381,17 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         assert page.locator('.doc-tabs a[href="/console?view=work"]').get_attribute("aria-current") == "page"
         assert page.locator('.doc-tabs a[aria-current="page"]').count() == 1
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        expected_links = ["전체 작업", "승인 대기", "끝난 작업", "새 작업", "정책", "학습"] if role == "operator" else ["전체 작업", "끝난 작업"]
+        expected_links = ["전체 작업", "정책", "학습"] if role == "operator" else ["전체 작업"]
         assert screens.locator("a:visible").all_inner_texts() == expected_links
         assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
         if role == "operator":
-            assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
+            expect(page.locator("#work-create")).to_be_visible()
+            assert page.locator("#work-create").get_attribute("href") == "/console?view=work&show=new"
             assert screens.get_by_role("link", name="정책", exact=True).get_attribute("href") == "/console/policy"
             assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
         else:
-            expect(screens.locator('a[href="/console?view=work&show=pending"]')).to_be_hidden()
-            expect(screens.locator('a[href="/console?view=work&show=new"]')).to_be_hidden()
+            expect(page.locator('#work-status-filter a[href="/console?view=work&show=pending"]')).to_be_hidden()
+            expect(page.locator("#work-create")).to_be_hidden()
             expect(screens.locator('a[href="/console/policy"]')).to_be_hidden()
             expect(screens.locator('a[href="/console/learning"]')).to_be_hidden()
         seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
@@ -413,6 +413,24 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         assert page.locator("#work-list ui-button").count() == 1
         page.locator("#work-list ui-button").click()
         assert "CORE" in page.locator("#work-detail").inner_text()
+        page.locator('#work-status-filter a[href$="show=done"]').click()
+        expect(page.locator('#work-status-filter a[aria-current="true"]')).to_have_text("끝난 작업")
+        expect(page.locator("#work-filter")).to_have_value("task")
+        expect(page.locator("#work-detail")).to_be_empty()
+        page.go_back()
+        page.reload()
+        _settle(page, '#work-list ui-button')
+        expect(page.locator("#work-filter")).to_have_value("task")
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(1)
+        expect(page.locator("#work-detail")).to_contain_text("CORE")
+        response = api["/api/fleet/work"]
+        api["/api/fleet/work"] = {**response, "rows": [rows[1]]}
+        page.locator("#work-refresh").click()
+        expect(page.locator("#work-detail")).to_be_empty()
+        api["/api/fleet/work"] = response
+        page.reload()
+        expect(page.locator("#work-list ui-button")).to_have_count(1)
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(0)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         if role == "operator":
             assert page.locator("#channel-requests").inner_text().find("<script>") >= 0
@@ -423,10 +441,18 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             assert "기명 운영자" in page.locator("#channel-requests-state").inner_text()
         page.locator("#work-filter").select_option("all")
         _shot(page, f"mixed-work-{role}-{size[0]}.png", full_page=True)
-        page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
+        page.locator("#work-filter").select_option("task")
+        page.locator("#work-list ui-button").click()
+        fail_work = lambda route: route.fulfill(status=503, json={"detail": "offline"})
+        page.route("**/api/fleet/work", fail_work)
         page.locator("#work-refresh").click()
         page.wait_for_function("() => document.getElementById('work-list').childElementCount === 0")
         assert "조회 실패" in page.locator("#work-state").inner_text()
+        expect(page.locator("#work-detail")).to_be_empty()
+        page.unroute("**/api/fleet/work", fail_work)
+        page.locator("#work-refresh").click()
+        expect(page.locator('#work-list ui-button[aria-pressed="true"]')).to_have_count(1)
+        expect(page.locator("#work-detail")).to_contain_text("CORE")
         assert not posts and not errors
     finally:
         browser.close()

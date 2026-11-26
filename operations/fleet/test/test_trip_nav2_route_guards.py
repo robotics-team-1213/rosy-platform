@@ -163,6 +163,48 @@ def test_nav2_goal_refused_stops_as_goal_refused_not_unreachable():
     assert view["state"] == "failed" and view["reason"] == "TRIP_GOAL_REFUSED"
     assert view["detail"]["goal_reason"] == "LOCALIZATION_UNTRUSTED"
 
+@pytest.mark.parametrize("blocker, dispatched", [("rosy_42", False), ("rosy_45", True)])
+def test_nav2_localization_refusal_records_blocker_and_dispatch_stage(blocker, dispatched):
+    robot = RouteFakeRobot("rosy_42")
+    peer = RouteFakeRobot("rosy_45")
+    _clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map(), peers=[peer])
+    peer._state["pose"] = dict(robot._state["pose"])
+    run(console.snapshot())
+    # Localization can change between the trip preflight and console admission.
+    route = runner._route
+
+    async def route_after_localization_change(*args):
+        (peer if dispatched else robot)._state["localization"] = {"state": "CANDIDATES", "pose_frame": "odom"}
+        return await route(*args)
+
+    runner._route = route_after_localization_change
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(
+        map_version=ver, start_pose=(pose["v"].x, pose["v"].y, pose["v"].yaw), goal="S3",
+        via=("S4", "S5"), stop_offset=False,
+    ), store.routing_config))
+    store.record_plan(plan_id="p-ref", robot_id="rosy_42", principal_id="bob", map_version=ver,
+                      request={"to": "S3", "via": ["S4", "S5"], "repeat": False, "drive_mode": "nav2"}, result={"plan": plan})
+
+    run(runner.start("p-ref", "bob"))
+    run(runner.tick())
+    view = runner.view("p-ref")
+    stored = store.trip("p-ref")
+    if blocker == "rosy_45":
+        assert view["state"] == "running"
+        wait = stored["detail"]["peer_wait"]
+        assert wait["command_robot_id"] == "rosy_42" and wait["waiting_on"] == [blocker]
+        assert wait["stage"] == "pre_dispatch_peer_check" and not wait["dispatch_attempted"]
+    else:
+        assert view["state"] == "failed" and view["reason"] == "TRIP_GOAL_REFUSED"
+        assert view["detail"]["goal_reason"] == "LOCALIZATION_UNTRUSTED"
+        assert stored["detail"]["goal_admission"] == {
+            "blocked_by": blocker, "waiting_on": [blocker],
+            "dispatch_attempted": False, "cancel_confirmed": False,
+        }
+    assert stored["detail"] == view["detail"]
+    assert not robot.routes
+
 
 def test_nav2_drive_mode_refuses_precision_stop_and_skips_non_precision_binding_checks():
     body = _south_loop_map().body()

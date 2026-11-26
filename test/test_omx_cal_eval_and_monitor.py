@@ -20,6 +20,25 @@ import cell_wrist_cal  # noqa: E402
 import omx_tcp  # noqa: E402
 
 
+@pytest.mark.parametrize(("measurement", "expected_diff", "message"), [
+    ({"depth_surface_z_m": -0.030}, 36.1, "D435 depth(-0.03) vs surface_z(-0.0661) = +36.1 mm"),
+    ({"relative_depth_diff_mm": 35.8}, None, "상대 높이 차이 +35.8 mm (절대 높이 미측정)"),
+    ({}, None, "높이 차이 초과 (차이값 없음)"),
+])
+def test_depth_failure_keeps_relative_and_absolute_measurements_distinct(measurement, expected_diff, message):
+    hygiene = []
+    fields = cell_cal_eval.attach_site_cross_verify(
+        "belt", False, -0.0661, {**measurement, "flags": ["depth_diff_gt_6mm"]}, None, hygiene,
+    )
+
+    assert fields["depth_diff_mm"] == expected_diff
+    assert fields["cross_verify_status"] == "fail"
+    assert hygiene == [{"level": "warning", "code": "depth_diff:belt", "message": f"belt: {message}"}]
+    summary = cell_cal_eval.build_cross_verify({"belt": fields}, {"verdict": "fail"}, [], {}, None)
+    assert summary["depth"]["verdict"] == "fail"
+    assert summary["eval_verdict"] == "hold"
+
+
 def test_learn_bias_preserves_pivot_circle_writes_map_sha_and_logs_rejected(tmp_path):
     cal_path = tmp_path / "map.json"
     rec = {"homography": [[1e-3, 0, -0.2], [0, 1e-3, -0.1], [0, 0, 1]], "points": []}

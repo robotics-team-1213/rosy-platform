@@ -18,12 +18,17 @@ export function compareCameras(a, b) {
   return cameraRank(a) - cameraRank(b);
 }
 
+export const isHomeRecovery = (incident) => incident?.event_kind === "home_recovery";
+
 export function partitionIncidents(incidents) {
   const list = Array.isArray(incidents) ? incidents : [];
-  const open = list.filter((inc) => inc?.state !== "cleared");
+  const pending = list.filter((inc) => inc?.state !== "cleared");
+  const open = pending.filter((inc) => !isHomeRecovery(inc));
+  const homeRecoveries = pending.filter(isHomeRecovery);
   const held = open.filter((inc) => inc?.decision?.hold !== false);
   const cleared = list.filter((inc) => inc?.state === "cleared");
-  return { open, held, cleared, namingCount: open.length - held.length };
+  const armHeld = pending.some((inc) => inc?.decision?.hold !== false);
+  return { open, held, cleared, homeRecoveries, armHeld, namingCount: open.length - held.length };
 }
 
 export function formatIncidentCountSummary(totalCount, heldCount, namingCount) {
@@ -97,7 +102,7 @@ export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()
       const positions = fresh ? Object.fromEntries(cleanEntries) : null;
       const metrics = readArmMetrics(arm, fresh, positions);
       const incidents = Array.isArray(arm?.incidents) ? arm.incidents : [];
-      const { open: openIncidents, held: heldIncidents } = partitionIncidents(incidents);
+      const { open: openIncidents, held: heldIncidents, homeRecoveries, armHeld } = partitionIncidents(incidents);
       const ageS = typeof arm?.source_age_s === "number" && Number.isFinite(arm.source_age_s)
         ? arm.source_age_s
         : (typeof arm?.receipt_age_s === "number" && Number.isFinite(arm.receipt_age_s) ? arm.receipt_age_s : null);
@@ -119,7 +124,8 @@ export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()
         incidents,
         openIncidents,
         heldIncidents,
-        held: heldIncidents.length > 0,
+        homeRecoveries,
+        held: armHeld,
         faults: Array.isArray(arm?.faults) ? arm.faults : [],
         ageS,
         sequence: typeof arm?.sequence === "number" ? arm.sequence : 0,
@@ -148,6 +154,8 @@ export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()
     camsTotal: cameras.length,
     camsLive: cameras.filter((c) => c.fresh).length,
     heldCount: arms.filter((a) => a.held).length,
+    incidentHeldCount: arms.filter((a) => a.heldIncidents.length > 0).length,
+    homeRecoveryCount: arms.reduce((n, a) => n + a.homeRecoveries.length, 0),
     openIncidentCount: arms.reduce((n, a) => n + a.openIncidents.length, 0),
     faultArmCount: arms.filter((a) => a.hwFaultMotors > 0 || a.motorHealth?.status === "fault").length,
     warnArmCount: arms.filter((a) => a.warnMotors > 0).length,
@@ -164,6 +172,8 @@ export function obsSignature(obs) {
       label: a.label,
       fresh: a.fresh,
       held: a.heldIncidents.length,
+      recovery: a.homeRecoveries?.length || 0,
+      armHeld: a.held,
       open: a.openIncidents.length,
       faults: a.faults,
       hw: a.hwFaultMotors,
@@ -178,29 +188,3 @@ export function obsSignature(obs) {
     cams: (obs.cameras || []).map((c) => [c.source_id, c.label, c.role, c.stream, c.arm_id, c.fresh]),
   });
 }
-
-// D-971: what the control PC measured, as plain lines (text only, never markup)
-export const incidentLines = incident => {
-  const {facts = {}, decision = {}, recovery = null} = incident;
-  const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const latched = facts.latched === undefined ? {} : facts.latched, flagged = facts.flagged === undefined ? [] : facts.flagged;
-  const measured = ['latched', 'flagged', 'folded', 'torque_after', 'windup_hits'].some(key => key in facts)
-    && record(latched) && Object.values(latched).every(latch => record(latch)
-      && typeof latch.hw_error === 'number'
-      && (latch.bits === undefined || (Array.isArray(latch.bits) && latch.bits.every(bit => typeof bit === 'string'))))
-    && Array.isArray(flagged) && flagged.every(row => record(row) && typeof row.command === 'string'
-      && ['error', 'fault'].every(key => row[key] == null || typeof row[key] === 'string'))
-    && (facts.folded === undefined || typeof facts.folded === 'boolean')
-    && (facts.windup_hits === undefined || Array.isArray(facts.windup_hits));
-  const measurements = measured ? [
-    Object.entries(facts.latched || {}).map(([id, latch]) => `ID ${id} 오류 ${latch.hw_error} (${(latch.bits || []).join('/')})`).join(', '),
-    facts.folded === undefined ? '' : `홈 접힘 ${facts.folded ? '예' : '아니오'} · 종료 후 토크 ${JSON.stringify(facts.torque_after || {})}`,
-    (facts.windup_hits || []).length ? `출력 상승 감지 ${facts.windup_hits.length}건` : '',
-    (facts.flagged || []).map(row => `실행기: ${row.command} ${row.error || row.fault || ''}`).join(' · '),
-  ].filter(Boolean) : [];
-  return [
-    typeof decision.reason === 'string' ? decision.reason : JSON.stringify(decision.reason),
-    ...(measurements.length ? measurements : [Object.keys(facts).length ? JSON.stringify(facts) : '']),
-    recovery ? `장치 안전 재부팅: ${JSON.stringify(recovery).slice(0, 300)}` : '',
-  ].filter(Boolean);
-};

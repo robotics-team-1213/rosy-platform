@@ -18,6 +18,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts  # noqa: E402
 
 
+_REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
+
+
+def _load_ref_gray(path: Path):
+    import cv2
+
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = str(path)
+    cached = _REF_GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return cached[2]
+    img = cv2.imread(key, cv2.IMREAD_GRAYSCALE)
+    if img is not None:
+        _REF_GRAY_CACHE[key] = (st.st_mtime_ns, st.st_size, img)
+    return img
+
+
 def _finite_float(value) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
@@ -213,3 +233,21 @@ def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, 
         os.fsync(stream.fileno())
     ref_tmp.replace(ref_path)
     cal_tmp.replace(cal_path)
+
+
+def map_sites(config: dict) -> list:
+    """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt."""
+    return config.get("calibrate", {}).get("map_sites") or [
+        s for s in ("floor", "pinky", "belt") if s in config["sites"]
+    ]
+
+
+def _map_write_sites(config: dict) -> list:
+    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
+    sites = list(map_sites(config))
+    seen = set(sites)
+    for name, site in (config.get("sites") or {}).items():
+        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
+            sites.append(name)
+            seen.add(name)
+    return sites

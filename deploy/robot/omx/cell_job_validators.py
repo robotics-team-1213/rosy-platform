@@ -131,6 +131,20 @@ def _two_arm_task_sites(v: str) -> tuple[str, str]:
     return src, dst
 
 
+def validate_dual_routes(task_a, task_b, *, moving):
+    from cell_two_arm_verification import transfer_refusal
+
+    a, b = [tuple("belt" if v == "not_places:belt" else v for v in _two_arm_task_sites(raw))
+            for raw in (task_a, task_b)]
+    if a[1] == b[1] or (a[0] == b[0] and a[0] != "belt") or a[0] == b[1] or a[1] == b[0]:
+        raise ValueError("task_a and task_b overlap on non-belt site")
+    if moving and any(_is_amr_bed_site(v) for v in (*a, *b)):
+        raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+    tasks = {arm: {"src": src, "dst": dst} for arm, (src, dst) in zip(("a", "b"), (a, b))}
+    if refusal := transfer_refusal(tasks, dry_run=not moving):
+        raise ValueError(json.dumps(refusal))
+
+
 def _two_arm_task(v):
     src, dst = _two_arm_task_sites(v)
     return f"{src}->{dst}"
@@ -143,6 +157,12 @@ def _roi(v):
 
 
 METRE = _num(-0.5, 0.5)
+
+
+def _route(v):
+    if not isinstance(v, list) or len(v) != 2:
+        raise ValueError("route requires [source, destination]")
+    return [_match(NAME)(site) for site in v]
 
 
 def _targets(v):

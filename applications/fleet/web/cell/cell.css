@@ -1,5 +1,5 @@
 /* D-741 2 — 본문은 칸이다. D-926 3: 하위 탐색이 단계 화면을 하나씩 보여 주므로 레시피와 셀 문서도 한 칸씩 선다. */
-.ui-subnav-nav[aria-label="작업 화면"] :is(a[href="/console?view=work&show=pending"], a[href="/console?view=work&show=done"], a[href="/console?view=work&show=new"], a[href="/console/learning"], .ui-subnav-head:has(+ a[href="/console/learning"])) { display: none; }
+.ui-subnav-nav[aria-label="작업 화면"] :is(a[href="/console/learning"], .ui-subnav-head:has(+ a[href="/console/learning"])) { display: none; }
 html[data-fleet-role="viewer"] .ui-subnav-nav[aria-label="작업 화면"] :is(a[href="#recipe-heading"], a[href="#cell-heading"], a[href="#preview-heading"], a[href="#proposal-heading"], a[href="#mission-heading"]) { display: none; }
 html[data-unit-scope-ready]:not([data-unit-arms]) .ui-subnav-nav[aria-label="작업 화면"] :is(a[href^="#"], .ui-subnav-head:has(+ a[href^="#"])) { display: none; }
 .cell-intro { display: grid; gap: var(--space-1); }
@@ -21,7 +21,7 @@ html[data-unit-scope-ready][data-unit-children] #cell-channel-mission-approval {
 .cell-obs-empty-strip p { margin: 0; color: var(--text-secondary); font-size: var(--text-label); }
 .cell-observation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--space-3); }
 .cell-observation-card:not([hidden]) { display: grid; align-content: start; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-chrome); }
-.cell-observation-card[data-arm-held="true"] { border-color: var(--status-crit-a45); }
+.cell-observation-card[data-incident-held="true"] { border-color: var(--status-crit-a45); }
 .cell-observation-card :is(h4, pre) { margin: 0; overflow-wrap: anywhere; }
 .cell-observation-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 .cell-incident-cleared-fold { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-06); }
@@ -31,6 +31,7 @@ html[data-unit-scope-ready][data-unit-children] #cell-channel-mission-approval {
 .cell-ops-fold > summary,
 .profile-unbound-fold > summary { cursor: pointer; font-size: var(--text-label); color: var(--text-secondary); }
 .cell-camera-wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); }
+.cell-camera-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .cell-camera-wall .cell-observation-card { cursor: zoom-in; }
 .cell-camera-wall .cell-observation-card:hover { background: var(--surface-flat); }
 .cell-camera-wall .cell-observation-card.focused { grid-column: 1 / -1; cursor: zoom-out; }

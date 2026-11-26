@@ -23,6 +23,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import cell_arm_lease  # noqa: E402
+import record_session_baseline as resting  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
 from record_session_helpers import (  # noqa: E402
     LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerUnconfirmed,
@@ -303,6 +304,10 @@ def main(argv=None, *, _globals: dict | None = None):
         # D-1048: cell_auto_fold's recovery session may open on the one held incident it names, nothing else
         recovery = os.environ.get("ROSY_RECOVERY_INCIDENT")
         omx_incident.refuse_if_held(args.arm, **({"allow_incident": recovery} if recovery else {}))
+        resting.check_pending(args.arm)
+        if (args.arm in ("arm_a", "arm_b") and os.environ.get("ROSY_BASELINE_RECOVERY_ARM") == args.arm
+                and args.chunks and args.operating_profile and not recovery and config["robot"]["type"] == "omx_follower"):
+            session.baseline_recovery_arm = args.arm
         record = session.execute(
             args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card, body_only=args.body_only
         )
@@ -330,6 +335,10 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_owner=monitor_owner,
                     motor_health_session=monitor_session,
                 )
+                from cell_recovery_cargo import interrupted_cargo
+
+                if cargo := interrupted_cargo(record, args.arm):
+                    record["recovery_cargo"] = cargo
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
                 if record.get("runner_held"):
                     raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read

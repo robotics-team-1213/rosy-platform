@@ -1,11 +1,8 @@
 """D-550 10: Fleet navigation goal leases — send ``lease_ttl_s`` and renew it (default off).
 
-Kept out of ``console.py`` (size budget). ``GoalLeases`` is the console's ``robot_id -> lease``
-table: ``{"state": "leased", "correlation_id", "ttl_s", "source", "task_id"}`` or
-``{"state": "unbounded"}`` (leases on, robot without the capability: Rule M display).
+GoalLeases tracks leased and unbounded goals per robot (Rule M display).
 
-One renewer per goal source (D-550 10), each only while its reason to move holds:
-
+Each goal source renews only while its reason to move holds (D-550 10):
 - ``operator`` (console goal, intent, D-463 route, queued release): the console loop, only while a
   named operator console sent ``POST /api/fleet/goal-lease/presence`` within the last ttl.
 - ``dispatch`` (D-316 attempt): the console loop, only while that attempt is open in the task store.
@@ -27,11 +24,14 @@ from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from typing import Callable, Optional
 
+from fleet.server.road_route_lease import RoadRouteLeases
 from fleet.server.named_stop_motion import (NamedStopMotion, _is_unreachable, current_repark_alignment,
                                              verify_release_proof)
+from fleet.server.peer_motion_wire import PeerMotionWire
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
+from fleet.swarm.navigation_transport import goal_lease_supported
 
 logger = logging.getLogger("fleet.goal_lease")
 
@@ -52,15 +52,7 @@ class NavigationStopped(RuntimeError):
     """A changed stop token invalidated this navigation continuation."""
 
 
-def goal_lease_supported(caps: Optional[dict]) -> bool:
-    """The robot's rosy.controls/1 base announces ``goal_lease: true``. An older CORE would
-    ignore ``lease_ttl_s``, so without it a Fleet goal is unbounded."""
-    items = (((caps or {}).get("controls") or {}).get("items") or []) if isinstance(caps, dict) else []
-    return any(isinstance(item, dict) and item.get("kind") == "base_velocity"
-               and item.get("goal_lease") is True for item in items)
-
-
-class GoalLeases(dict):
+class GoalLeases(PeerMotionWire, RoadRouteLeases, dict):
     def __init__(self, ttl_s: float, clients: dict, clock: Callable[[], float] = time.monotonic,
                  yielding: Callable[[str], bool] = lambda _robot_id: False) -> None:
         super().__init__()
@@ -91,7 +83,10 @@ class GoalLeases(dict):
         self._uncertain_motion: set[str] = set()
 
     @contextmanager
-    def motion_wire(self, robot_id, method, path, body):
+    def _check_motion_wire(self, robot_id, method, path, body):
+        if (method.upper() == "POST" and path in PREPARED_GOALS) or starts_or_sustains_motion(method, path, body):
+            if (reason := getattr(self, "station_stop_reason", lambda _: None)(robot_id)):
+                raise RobotApiError(robot_id, 409, reason, "the assigned station operation is awaiting external release")
         if method.upper() == "POST" and path in PREPARED_GOALS:
             permit = _prepared_wire.get()
             if permit is None or permit[0] is not self or permit[1:] != (robot_id, (body or {}).get("plan_id")):
@@ -416,19 +411,11 @@ class GoalLeases(dict):
             line_handoff=line_handoff, owner_epoch=owner_epoch, plan_id=plan_id,
             precision_required=precision_required)
 
-    async def send_route(self, robot_id: str, client, caps: Optional[dict], points: list[dict],
-                         correlation_id: Optional[str] = None, source: Optional[str] = None,
-                         task_id: Optional[str] = None) -> dict:
-        """Send one D-1009 pass/stop route with the exact same goal lease, stop-fence and cancellation rules."""
-        return await self._dispatch(
-            robot_id, client, caps, lambda options: client.navigation_route(points, **options),
-            correlation_id, source, task_id)
-
     async def _dispatch(self, robot_id: str, client, caps: Optional[dict], sender: Callable[[dict], object],
                         correlation_id: Optional[str], source: Optional[str] = None,
                         task_id: Optional[str] = None, *, expected_map_grid_id: str | None = None,
                         line_handoff: dict | None = None, owner_epoch: dict | None = None,
-                        plan_id: str | None = None, precision_required: bool = False) -> dict:
+                        plan_id: str | None = None, precision_required: bool = False, road_speed_controlled=False) -> dict:
         source = source or ("dispatch" if correlation_id is not None else "operator")
         self.check_motion()
         if source not in SOURCES:
@@ -436,13 +423,15 @@ class GoalLeases(dict):
         supported = goal_lease_supported(caps)
         if plan_id is not None and not supported:
             raise NavigationStopped("NAMED_STOP_GOAL_LEASE_REQUIRED")
-        ttl_s = self.ttl_s or (HANDOFF_LEASE_TTL_S if plan_id is not None else 0.0)
+        ttl_s = self.ttl_s or (HANDOFF_LEASE_TTL_S if plan_id is not None or road_speed_controlled else 0.0)
         gen = self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0) + 1
         stop = self.stop_token(robot_id)
         prev = self.pop(robot_id, None)
         options = {}
         if expected_map_grid_id is not None:
-            options.update(expected_map_grid_id=expected_map_grid_id, plan_id=plan_id)
+            options["expected_map_grid_id"] = expected_map_grid_id
+        if plan_id is not None:
+            options["plan_id"] = plan_id
         if owner_epoch is not None:
             options.update(owner_epoch)
         if line_handoff is not None:
@@ -485,7 +474,8 @@ class GoalLeases(dict):
         try:
             try:
                 with guard, dispatch_guard(admit_wire, paths={
-                        "/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/navigation/line-handoff-goal"}):
+                        "/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/navigation/line-handoff-goal",
+                        "/api/v1/navigation/bound-route"}):
                     result = await sender(options)
                     if claim is not None and self._named_stop_motion is claim:
                         if not isinstance(result, dict) or result.get("accepted") is not True:
@@ -525,6 +515,9 @@ class GoalLeases(dict):
         if not isinstance(result, dict) or type(result.get("accepted")) is not bool:
             raise RuntimeError("missing navigation goal acknowledgement")
         if result["accepted"] and ttl_s > 0:
+            if road_speed_controlled:
+                lease["road_speed_controlled"] = True
+                result = {**result, "road_speed_owner": correlation_id}
             self[robot_id] = lease
         return result
 
@@ -587,7 +580,7 @@ class GoalLeases(dict):
                 if client is None or not self._due(rid, lease, renewer):
                     continue
                 await client.navigation_goal_lease(lease["correlation_id"], lease["ttl_s"])
-            except Exception as exc:  # RobotApiError carries .status; no import (D-430 §3 rule 1)
+            except Exception as exc:  # RobotApiError carries .status; no import (D-430 Â§3 rule 1)
                 status = getattr(exc, "status", None)
                 if status in (403, 409) and self.get(rid) is lease:
                     # D-760 9: 403 = this client is not the goal's sender; CORE will expire it

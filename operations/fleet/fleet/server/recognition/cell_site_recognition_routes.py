@@ -5,13 +5,18 @@ from copy import deepcopy
 from datetime import datetime
 import json
 import math
+import os
 from pathlib import Path
 import re
+import time
 from typing import Any
 
 from fastapi import Depends, Header, HTTPException, Request, Response
 
 from fleet.pipeline.cell_site_targets import list_canonical_sites
+from fleet.server.placement_observation import placement_events
+from fleet.server.port_event_store import PortEventConflict
+from starlette.concurrency import run_in_threadpool
 
 SCHEMA_ID = "rosy.cell-site-recognition.v1"
 BODY_BYTES = 131072
@@ -98,6 +103,8 @@ def _validate_snapshot(payload: Any, *, known_site_refs: set[str]) -> dict[str, 
 def install_cell_site_recognition_routes(app, *, service, require_viewer, authorize=None,
                                          web_common: Path | None = None) -> None:
     """Install read-only GET and validated POST routes for `rosy.cell-site-recognition.v1`."""
+    placement_camera = os.getenv("ROSY_PLACEMENT_CAMERA_SOURCE")
+    placement_calibration = os.getenv("ROSY_PLACEMENT_CALIBRATION_REVISION")
 
     @app.get("/api/fleet/cell-site-recognition", tags=["workcell-observations"])
     def get_cell_site_recognition(response: Response, _principal=Depends(require_viewer)):
@@ -112,6 +119,7 @@ def install_cell_site_recognition_routes(app, *, service, require_viewer, author
     async def post_cell_site_recognition(
         request: Request,
         response: Response,
+        task_id: str | None = None,
         token: str | None = Header(None, alias="X-Workcell-Observation-Token"),
         authorization: str | None = Header(default=None),
     ):
@@ -136,8 +144,21 @@ def install_cell_site_recognition_routes(app, *, service, require_viewer, author
         except (UnicodeDecodeError, ValueError):
             raise _bad("INVALID_SITE_RECOGNITION", "body must be valid JSON") from None
 
-        known_refs = {s["wire_ref"] for s in list_canonical_sites(web_common)["sites"]}
+        catalog = list_canonical_sites(web_common)
+        known_refs = {s["wire_ref"] for s in catalog["sites"]}
         snapshot = _validate_snapshot(payload, known_site_refs=known_refs)
+        store = getattr(app.state, "port_event_store", None)
+        tasks = getattr(app.state, "omx_cell_tasks", {})
+        if (snapshot["source_id"] == placement_camera and snapshot["calibration_revision"] == placement_calibration
+                and snapshot["site_map_revision"] == catalog["revision"] and token
+                and service.authenticated_camera(snapshot["source_id"], token)):
+            if store is None or getattr(app.state, "_pipeline_ledger_fault", False):
+                raise HTTPException(503, detail={"code": "PLACEMENT_LEDGER_UNAVAILABLE"})
+            for event in list(placement_events(tasks.values(), snapshot, now=time.time(), task_id=task_id)):
+                try:
+                    await run_in_threadpool(store.append, "cell_ab", event)
+                except PortEventConflict:
+                    raise HTTPException(409, detail={"code": "PLACEMENT_OBSERVATION_CONFLICT"}) from None
         app.state.cell_site_recognition = deepcopy(snapshot)
         return {
             "ok": True,

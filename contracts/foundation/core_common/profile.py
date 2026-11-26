@@ -10,6 +10,9 @@ import yaml
 #: D-196: the robot package CORE loads when nothing names one.
 DEFAULT_ROBOT = "pinky_pro"
 
+#: Source-site ID used by installed vehicle-to-belt task presets and older receipts.
+LEGACY_VEHICLE_SITE = "pinky"
+
 
 def robot_config_dir(robot: str) -> Path:
     """Config directory of the robot package ``robot`` (D-196).

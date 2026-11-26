@@ -18,14 +18,16 @@ from urllib.parse import urlsplit
 if __package__:
     from .site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
-        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        SIGNATURE, Transient, _COMMIT, _LIST_LIMIT, _TAG,
+        active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
-        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        SIGNATURE, Transient, _COMMIT, _LIST_LIMIT, _TAG,
+        active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
@@ -247,6 +249,53 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
 
 
 class SiteRuntimeIO:
+    def _compare(self, current: str, candidate: str) -> tuple[str, str]:
+        # Later pages omit changed files but retain ancestry metadata.
+        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
+        try:
+            comparison = json.loads(self.http.get(url, _LIST_LIMIT))
+            return comparison['status'], comparison['merge_base_commit']['sha']
+        except (json.JSONDecodeError, KeyError, TypeError):
+            raise Transient('commit comparison is malformed') from None
+
+    def is_newer(self, current: str, candidate: str, or_same: bool = False) -> bool:
+        status, merge_base = self._compare(current, candidate)
+        return merge_base == current and (status == 'ahead' or (or_same and status == 'identical'))
+
+    def select(self, releases: list[dict], current: str, state: dict) -> dict | None:
+        repo = self.config['repo']
+        saved = state.get('selection_ancestors')
+        if isinstance(saved, dict) and saved.get('repo') == repo and saved.get('current') == current:
+            values = saved.get('commits')
+        else:
+            values = None
+        ancestors = {sha for sha in values[:256] if isinstance(sha, str) and _COMMIT.fullmatch(sha)} \
+            if isinstance(values, list) else set()
+
+        site = [row for row in releases
+                if isinstance(row.get("tag_name"), str) and _TAG.fullmatch(row["tag_name"])
+                and not row.get("draft")]
+        site.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        for row in site:
+            tag = row["tag_name"]
+            if tag == f"site-{current[:12]}" or tag in state["failed"]:
+                continue
+            names = {asset.get("name") for asset in row.get("assets") or [] if isinstance(asset, dict)}
+            if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
+                continue
+            target = row.get("target_commitish")
+            exact = isinstance(target, str) and _COMMIT.fullmatch(target) and target.startswith(tag[5:])
+            if exact and target in ancestors:
+                continue
+            status, merge_base = self._compare(current, target if exact else tag)
+            if status == 'ahead' and merge_base == current:
+                return row
+            # Only comparisons of two immutable commits can be reused across runs.
+            if exact and status == 'behind' and merge_base == target and len(ancestors) < 256:
+                ancestors.add(target)
+                state['selection_ancestors'] = {'repo': repo, 'current': current, 'commits': sorted(ancestors)}
+        return None
+
     def _site_busy(self) -> list[str]:
         return site_busy_reasons(self.config, self.http, root=self.paths.root)
 

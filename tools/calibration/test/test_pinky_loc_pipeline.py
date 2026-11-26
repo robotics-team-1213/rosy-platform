@@ -125,6 +125,10 @@ class _FakeFleet:
         self.track = {"robot_id": "rosy_45", "state": "CONFIRMED", "x": _to_site(ROBOT_PTS[0])[0],
                       "y": _to_site(ROBOT_PTS[0])[1], "age_s": 0.2, "map_id": "world_261026"}
         self.binding_matches = False
+        self.site_version = 394
+        self.sightings = []
+        self.evidence = {}
+        self.next_evidence = None
         self.posts = []
 
 
@@ -143,6 +147,9 @@ def _start_server(state: _FakeFleet):
 
         def do_GET(self):
             if self.path == "/api/fleet/state":
+                evidence = state.evidence
+                if state.next_evidence is not None:
+                    state.evidence, state.next_evidence = state.next_evidence, None
                 return self._send(200, {"robots": [{
                     "robot_id": "rosy_45",
                     "online": True,
@@ -152,12 +159,17 @@ def _start_server(state: _FakeFleet):
                         "map_grid_id": "occupancy:abc123",
                         "pose": state.pose,
                         "velocity": state.velocity,
+                        "evidence": evidence,
                         "localization": {"state": state.loc_state, "pose_frame": state.pose_frame},
                         "diagnostics_summary": {"navigation_readiness": "OK"},
                     },
                 }]})
             if self.path == "/api/fleet/tracking/identity":
                 return self._send(200, {"robots": [state.track]})
+            if self.path == "/api/fleet/sightings":
+                return self._send(200, {"sightings": state.sightings})
+            if self.path == "/api/fleet/site-map/active":
+                return self._send(200, {"version": state.site_version, "map": {"map_id": "world_261026"}})
             if self.path == "/api/fleet/robots/rosy_45/localization":
                 return self._send(200, {
                     "robot_id": "rosy_45",
@@ -192,6 +204,56 @@ def _start_server(state: _FakeFleet):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
+
+
+def test_approved_aruco_is_a_fit_sample_when_identity_is_unknown(tmp_path):
+    state = _FakeFleet()
+    state.loc_state, state.pose_frame = "LOCALIZED", "map"
+    state.track = {"robot_id": "rosy_45", "state": "UNKNOWN"}
+    sighting = {"robot_id": "rosy_45", "source_id": "ceiling_north", "map_id": "world_261026",
+                "calibration_source": "approved_record", "calibration_revision": "paint-1",
+                "processor_revision": "aruco-opencv-4.12", "stale": False, "age_ms": 500,
+                "seq": 12, "captured_at": 1234.0, "x": 0.2, "y": 0.3}
+    state.sightings = [sighting]
+    out = tmp_path / "pairs.json"
+    server = _start_server(state)
+    try:
+        client = plp.FleetClient(f"http://127.0.0.1:{server.server_port}")
+        kwargs = dict(robot_id="rosy_45", out_path=out, pair_spec=None, grid_id_override=None,
+                      site_map_id_override=None, max_track_age_s=1.0, aruco_source="ceiling_north")
+        with pytest.raises(plp.PipelineError, match="must precede"):
+            plp.run_sample(client, **kwargs, holdout=False)
+        state.evidence = {
+            "pose": {"evidence": "fresh", "received_at": "1970-01-01T00:20:34Z"},
+            "velocity": {"evidence": "fresh", "sampled_at": "1970-01-01T00:20:34Z"},
+        }
+        with pytest.raises(plp.PipelineError, match="holdout"):
+            plp.run_sample(client, **kwargs, holdout=True)
+        with pytest.raises(plp.PipelineError, match="after the ArUco capture"):
+            plp.run_sample(client, **kwargs, holdout=False)
+        state.next_evidence = {
+            "pose": {"evidence": "fresh", "received_at": "1970-01-01T00:20:34.100Z"},
+            "velocity": {"evidence": "fresh", "sampled_at": "1970-01-01T00:20:34.100Z"},
+        }
+        plp.run_sample(client, **kwargs, holdout=False)
+        doc = json.loads(out.read_text(encoding="utf-8"))
+        assert doc["site_map_version"] == 394
+        assert doc["samples"][0]["site"] == [0.2, 0.3]
+        assert doc["samples"][0]["source"] == "approved_aruco"
+        with pytest.raises(plp.PipelineError, match="already recorded"):
+            plp.run_sample(client, **kwargs, holdout=False)
+        sighting.update(stale=True, age_ms=1001, seq=13)
+        with pytest.raises(plp.PipelineError, match="fresh"):
+            plp.run_sample(client, **kwargs, holdout=False)
+        with pytest.raises(plp.PipelineError, match="manual holdout"):
+            plp.run_bind(client, robot_id="rosy_45", pairs_path=out, approve=True)
+        state.site_version += 1
+        with pytest.raises(plp.PipelineError, match="different site map revision"):
+            plp.run_sample(client, **kwargs, holdout=False)
+        assert state.posts == []
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_confirm_refusals_and_happy_path():
@@ -272,3 +334,66 @@ def test_sample_guards_and_bind_dry_run_vs_approve(tmp_path):
         assert exc.value.code == "MAP_BINDING_GRID_CHANGED"
     finally:
         srv.shutdown()
+
+
+
+@pytest.mark.parametrize("points,expected", [
+    ([(0, 0), (0.6, 0), (1.2, 0), (0, 1)], "COLLINEAR"),
+    (ROBOT_PTS, None),
+])
+def test_sample_readiness_matches_binding(tmp_path, capsys, points, expected):
+    path = tmp_path / "pairs.json"
+    for i, (x, y) in enumerate(points):
+        plp.run_sample(None, robot_id="rosy_42", out_path=path,
+                       pair_spec=f"{x},{y}={x},{y}", grid_id_override="g",
+                       site_map_id_override=None, holdout=i == 3, max_track_age_s=1)
+        result = json.loads(capsys.readouterr().out)
+    assert result["ready_for_bind"] is (expected is None)
+    if expected:
+        assert result["binding_refusal"]["code"] == expected
+    else:
+        assert result["binding_refusal"] is None
+
+
+@pytest.mark.parametrize("pairs,fit_code,site_span_shortfall", [
+    ([
+        ([0.415044, -0.410333], [-0.255224, 0.483407]),
+        ([0.409060, -0.326061], [-0.237613, 0.375868]),
+        ([0.396248, -0.162492], [-0.208315, 0.181937]),
+        ([0.394217, -0.082741], [-0.194098, 0.086882]),
+    ], "COLLINEAR", 0.599),
+    ([(p, p) for p in [(0, 0), (1.2, 0), (0, 0.6)]], None, 0.0),
+])
+def test_versioned_fit_reports_geometry_without_a_floor_holdout(
+        tmp_path, capsys, monkeypatch, pairs, fit_code, site_span_shortfall):
+    monkeypatch.setattr(plp, "_active_site", lambda _: ("world_261026", 394))
+    path = tmp_path / "pairs.json"
+    path.write_text(json.dumps({
+        "site_map_version": 394,
+        "samples": [{"robot": robot, "site": site, "source": "approved_aruco",
+                     "holdout": False} for robot, site in pairs[:-1]],
+    }), encoding="utf-8")
+    (rx, ry), (sx, sy) = pairs[-1]
+
+    plp.run_sample(None, robot_id="rosy_42", out_path=path,
+                   pair_spec=f"{rx},{ry}={sx},{sy}", grid_id_override="g",
+                   site_map_id_override=None, holdout=False, max_track_age_s=1)
+
+    result = json.loads(capsys.readouterr().out)
+    assert not result["ready_for_bind"]
+    assert result["binding_refusal"]["code"] == "HOLDOUT_REQUIRED"
+    assert result["manual_holdout_missing"]
+    geometry = result["fit_geometry"]
+    assert geometry["pairs"] == len(pairs)
+    assert geometry["pairs_remaining"] == 0
+    assert geometry["site_span_shortfall_m"] == pytest.approx(site_span_shortfall)
+    if fit_code:
+        assert geometry["refusal"]["code"] == fit_code
+        assert geometry["robot_spread_m"] == pytest.approx(0.0012)
+        assert geometry["site_spread_m"] == pytest.approx(0.0004)
+    else:
+        assert geometry["refusal"] is None
+    original = path.read_bytes()
+    assert plp.main(["--token-file", str(tmp_path / "unused-token"), "inspect", "--pairs", str(path)]) == 0
+    assert json.loads(capsys.readouterr().out) == result
+    assert path.read_bytes() == original

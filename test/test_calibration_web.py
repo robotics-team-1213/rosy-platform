@@ -83,6 +83,35 @@ def account_screen(store):
     server.server_close()
 
 
+@pytest.mark.parametrize(("query", "destination"), [
+    ("", "/"), ("?arm=arm_a", "/?arm=arm_a"), ("?arm=arm_b", "/?arm=arm_b"), ("?arm=arm_s", "/?arm=arm_s"),
+    ("?arm=https://example.invalid", "/"), ("?arm=arm_s&arm=arm_b", "/"),
+])
+def test_login_preserves_only_a_recognized_arm(account_screen, query, destination):
+    url, account = account_screen
+    received = []
+    def start(target):
+        received.append(target)
+        return "flow", "/"
+    account.start = start
+    assert call(url, "/api/account/login" + query)[0] == 200
+    assert received == [destination]
+
+
+def test_login_returns_to_the_exact_local_route_panel(account_screen):
+    url, account = account_screen
+    received = []
+    def start(target, *, destination_allowed):
+        assert destination_allowed(target) and not destination_allowed("https://outside.invalid/")
+        received.append(target)
+        return "flow", "/"
+    account.start = start
+    query = "?arm=arm_b&src_site=tmp-b-2-l1&dst_site=ship-h1r2-l0&task_id=fleet%3A12"
+    assert call(url, "/api/account/login" + query)[0] == 200
+    assert received == ["/" + query + "#route-arm_b"]
+    assert call(url, "/api/account/login" + query + "&task_id=other")[0] == 422
+
+
 def test_without_account_it_lists_and_shows_but_never_answers(open_screen, store):
     status, body = call(open_screen, web.API)
     rows = json.loads(body)
@@ -99,6 +128,12 @@ def test_page_and_assets_are_served_but_not_arbitrary_files(open_screen):
     assert call(open_screen, "/app.js")[0] == 200
     for path in ("/common/../calibration_web.py", "/common/AGENTS.md", "/../calibration_web.py", "/.git"):
         assert call(open_screen, path)[0] == 404
+
+
+def test_missing_common_manifest_returns_service_unavailable(open_screen, monkeypatch, tmp_path):
+    monkeypatch.setattr(web, "COMMON", tmp_path)
+    status, body = call(open_screen, "/common/tokens.css")
+    assert status == 503 and "자산 목록" in json.loads(body)["error"]
 
 
 def test_host_header_must_be_local(open_screen):
@@ -243,6 +278,30 @@ def test_profiles_endpoint_is_account_gated_and_survives_missing_tcp_x(store, tm
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_frame_response_pairs_bytes_provenance_and_lifetime(monkeypatch):
+    sent = []
+    handler = SimpleNamespace(send=lambda *args: sent.append(args))
+    monkeypatch.setattr(web.time, "time", lambda: 100.0)
+
+    def register(_entry, source, body):
+        assert (source, body) == ("live", b"camera")
+        return b"warped", {"status": "aligned", "generation": "bound", "reference_sha256": "ref",
+                           "max_px": 1.25, "inliers": 312}
+
+    monkeypatch.setattr(web.cell_calibration_view, "bind_frame", register)
+    web.Handler._send_frame(handler, {}, "live", b"camera", "image/png", "99.5")
+    code, media, body, headers = sent.pop()
+    assert (code, media, body) == (200, "image/jpeg", b"warped")
+    assert dict(headers) == {"X-Rosy-Frame-Binding": "aligned", "X-Rosy-Frame-Generation": "bound",
+                             "X-Rosy-Frame-Lifetime-Ms": "1500", "X-Rosy-Frame-Reference-Sha256": "ref",
+                             "X-Rosy-Frame-Shift-Px": "1.25", "X-Rosy-Frame-Inliers": "312"}
+    for stamp in (None, "97", "nan", "101", ""):
+        web.Handler._send_frame(handler, {}, "live", b"original", "image/png", stamp)
+        code, media, body, headers = sent.pop()
+        assert (code, media, body) == (200, "image/png", b"original")
+        assert dict(headers) == {"X-Rosy-Frame-Binding": "unverified", "X-Rosy-Frame-Lifetime-Ms": "0"}
 
 
 def test_live_frame_proxy_allows_loopback_and_blocks_remote_ssrf(store, tmp_path):

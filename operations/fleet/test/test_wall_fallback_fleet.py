@@ -5,11 +5,13 @@ import asyncio
 import base64
 import hashlib
 import math
+
+import pytest
 from types import SimpleNamespace
 
 from core_common.protocol.localization import CandidateReport
 from fakes import FakeClock, FakeRobot, run
-from fleet.localization import wall_tiebreak
+from fleet.localization import wall_grid, wall_tiebreak
 from fleet.localization.wall_tiebreak import Tiebreak
 from fleet.server.localization_service import LocalizationService
 from fleet.server.wall_map_sync import RETRY_S, WallMapSync
@@ -35,6 +37,18 @@ def test_the_camera_breaks_a_tie_between_mirror_twins_after_the_hold():
     assert decision.source.value == "overhead" and [c.value for c in decision.cues] == ["overhead"]
     assert (decision.pose.x, decision.pose.y, decision.pose.yaw) == A and decision.request_id == "r1-1"
     assert decide(report(), (0.9, -0.4)).pose.x == 1.0  # the other twin when the camera is there
+
+
+def test_a_new_native_report_or_heading_starts_a_new_hold():
+    tie = Tiebreak()
+    origin = report(poses=(A,), stamp=1.0)
+    assert tie.observe(origin, A[:2], 0.0) is None
+    rotated = report(poses=((*A[:2], math.pi),), stamp=1.0)
+    assert tie.observe(rotated, A[:2], 2.1) is None
+    later = report(poses=((*A[:2], math.pi),), stamp=2.0)
+    assert tie.observe(later, A[:2], 4.2) is None
+    tie.interrupt("r1")
+    assert tie.observe(later, A[:2], 6.3) is None
 
 
 def test_no_fresh_sighting_means_no_decision():
@@ -76,7 +90,7 @@ class Sightings:
         self.clock, self.rows = clock, {}
 
     def see(self, x, y):
-        self.rows["r1"] = {"robot_id": "r1", "x": x, "y": y, "yaw": 0.0, "captured_at": self.clock()}
+        self.rows["r1"] = {"robot_id": "r1", "x": x, "y": y, "yaw": 0.0, "captured_at": self.clock(), "map_id": "site-a"}
 
     def snapshot(self):
         return {"sightings": list(self.rows.values())}
@@ -98,6 +112,20 @@ def service(r, clock, sightings):
     return LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=sightings, clock=clock, wall=clock)
 
 
+def load_active_wall(svc, r, clock, *, wrong_grid=False, staged_version=4):
+    faces = [((-1., -.5), (-1., .5)), ((-1., .5), (1., .5)),
+             ((1., .5), (1., -.5)), ((1., -.5), (-1., -.5))]
+    site = SimpleNamespace(map_id="site-a", walls=[SimpleNamespace(face=face) for face in faces])
+    artifact = wall_grid.build("site-a", 4, faces)
+    svc.set_active_map_id(lambda: "site-a")
+    svc.set_wall_sync(WallMapSync(SimpleNamespace(active=lambda: (4, site)), lambda: {"r1": r}, clock))
+    r._state["map_grid_id"] = "occupancy:ffffffffffff" if wrong_grid else artifact["grid_id"]
+    if "slam_fallback" in r._state:
+        r._state["slam_fallback"]["wall_map"] = {
+            "map_id": artifact["map_id"], "version": staged_version, "sha256": artifact["sha256"],
+        }
+
+
 def ticks(svc, clock, seconds):
     for _ in range(int(round(seconds / 0.5))):
         run(svc.tick())
@@ -108,11 +136,24 @@ def test_after_the_fallback_switch_the_camera_decides_even_with_the_d257_overhea
     clock = FakeClock()
     r, seen = robot("WAITING_LOCALIZATION"), Sightings(clock)
     svc = service(r, clock, seen)
+    load_active_wall(svc, r, clock)
     for _ in range(12):
         seen.see(-0.9, 0.4)
         ticks(svc, clock, 0.5)
     assert len(r.decisions) == 1 and r.decisions[0].source.value == "overhead"
     assert (r.decisions[0].pose.x, r.decisions[0].pose.y) == (-1.0, 0.5)
+
+
+@pytest.mark.parametrize("wrong_grid,stage_version", [(True, 4), (False, 3)])
+def test_waiting_fallback_cannot_use_camera_with_only_staged_or_mismatched_walls(wrong_grid, stage_version):
+    clock = FakeClock()
+    r, seen = robot("WAITING_LOCALIZATION"), Sightings(clock)
+    svc = service(r, clock, seen)
+    load_active_wall(svc, r, clock, wrong_grid=wrong_grid, staged_version=stage_version)
+    for _ in range(12):
+        seen.see(-0.9, 0.4)
+        ticks(svc, clock, 0.5)
+    assert r.decisions == []
 
 
 def test_only_while_waiting_for_the_first_pose_and_only_with_a_sighting_is_anything_decided():
@@ -129,30 +170,31 @@ def test_only_while_waiting_for_the_first_pose_and_only_with_a_sighting_is_anyth
     assert r.decisions == []
 
 
-def test_tiebreak_camera_callback_resolves_led_fallback_and_shared_site_map_amcl():
-    def run_case(*, phase, map_id, active_map="site-a", cam_xy=(-0.9, 0.4)):
+def test_tiebreak_camera_callback_requires_proven_shared_site_grid():
+    def run_case(*, phase, map_id, load=False, active_map="site-a", cam_xy=(-0.9, 0.4)):
         clock = FakeClock()
         r = robot(phase)
         if map_id is not None:
             r._state["map_id"] = map_id
         svc = LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=None, clock=clock, wall=clock)
+        if load:
+            load_active_wall(svc, r, clock)
         svc.set_active_map_id(lambda: active_map)
         svc.set_tiebreak_camera(lambda rid, m: cam_xy if (rid == "r1" and m == active_map) else None)
         ticks(svc, clock, 3.0)
         return r.decisions
 
-    d_wait = run_case(phase="WAITING_LOCALIZATION", map_id="wall-local")
-    assert len(d_wait) == 1 and d_wait[0].evidence.get("tiebreak") == "twin"
-    assert (d_wait[0].pose.x, d_wait[0].pose.y) == (-1.0, 0.5)
+    assert run_case(phase="WAITING_LOCALIZATION", map_id="wall-local") == []
 
-    d_amcl = run_case(phase=None, map_id="site-a")
+    assert run_case(phase=None, map_id="site-a") == []
+    d_amcl = run_case(phase=None, map_id="site-a", load=True)
     assert len(d_amcl) == 1 and d_amcl[0].evidence.get("tiebreak") == "twin"
     assert (d_amcl[0].pose.x, d_amcl[0].pose.y) == (-1.0, 0.5)
 
     assert run_case(phase=None, map_id="wrong-map") == []
     assert run_case(phase=None, map_id=None) == []
     for bad_phase in ("MONITORING", "ACTIVE", "STOPPING", "SWITCHING", "FAILED"):
-        assert run_case(phase=bad_phase, map_id="site-a") == []
+        assert run_case(phase=bad_phase, map_id="site-a", load=True) == []
 
 
 def test_shared_map_twin_tiebreak_anchors_first_pinky_to_localize_peer_by_unmapped_objects():
@@ -198,6 +240,8 @@ def test_shared_map_twin_tiebreak_anchors_first_pinky_to_localize_peer_by_unmapp
     svc = LocalizationService(
         lambda: {"r1": r1, "r2": r2}, slots=[], squares=[], sightings=None, clock=clock, wall=clock,
     )
+    load_active_wall(svc, r1, clock)
+    r2._state["map_grid_id"] = r1._state["map_grid_id"]
     svc.set_active_map_id(lambda: "site-a")
     svc.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if (rid == "r1" and m == "site-a") else None)
 
@@ -235,6 +279,7 @@ def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfi
     auto_loc = AutoLocateService(tracking, map_pose=map_pose, clock=clock)
     svc = LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=wrong_sightings,
                               clock=clock, wall=clock)
+    load_active_wall(svc, r, clock)
     svc.set_active_map_id(map_pose.active_map_id)
     svc.set_tiebreak_camera(auto_loc.tiebreak_camera_xy)
     ticks(svc, clock, 3.0)
@@ -246,10 +291,11 @@ def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfi
     r_err._state["map_id"] = "site-a"
     r_err.decision_error = RobotApiError("r1", 409, "NO_ASYMMETRIC_CUE", "rejected")
     svc_err = LocalizationService(lambda: {"r1": r_err}, slots=[], squares=[], sightings=None, clock=c_err, wall=c_err)
+    load_active_wall(svc_err, r_err, c_err)
     svc_err.set_active_map_id(lambda: "site-a")
     svc_err.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
     ticks(svc_err, c_err, 3.0)
-    r_err._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
+    r_err._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": r_err._state["map_grid_id"],
                     "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ticks(svc_err, c_err, 0.5)
@@ -261,10 +307,11 @@ def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfi
     r_to._state["map_id"] = "site-a"
     r_to.decision_error = asyncio.TimeoutError()
     svc_to = LocalizationService(lambda: {"r1": r_to}, slots=[], squares=[], sightings=None, clock=c_to, wall=c_to)
+    load_active_wall(svc_to, r_to, c_to)
     svc_to.set_active_map_id(lambda: "site-a")
     svc_to.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
     ticks(svc_to, c_to, 3.0)
-    r_to._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
+    r_to._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": r_to._state["map_grid_id"],
                     "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ticks(svc_to, c_to, 0.5)

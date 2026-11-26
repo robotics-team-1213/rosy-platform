@@ -135,6 +135,6 @@ def test_site_goal_previews_server_plan_before_confirm_and_cancels_without_start
             "/api/fleet/robots/rosy_01/trip",
             "/api/fleet/trips/plan-b2/start",
         ]
-        expect(page.locator("#log")).to_contain_text("차로 주행 시작")
+        expect(page.locator("#log")).to_contain_text("차로 운행 접수")
         assert not errors
         browser.close()

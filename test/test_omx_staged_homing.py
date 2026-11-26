@@ -246,6 +246,9 @@ def test_outbox_abort_reason_codes():
     assert outbox_mod.abort_reason({"review_required": True, "error": "FOLD_READBACK_MISSING"}) == "REVIEW_REQUIRED"
     assert outbox_mod.abort_reason({"error": "FOLD_READBACK_MISSING"}) == "FOLD_READBACK_MISSING"
     assert outbox_mod.abort_reason({"error": "UNCALIBRATED_DISPLACED_SITE"}) == "UNCALIBRATED_DISPLACED_SITE"
+    assert outbox_mod.abort_reason({"error": "SITE_NOT_CALIBRATED"}) == "SITE_NOT_CALIBRATED"
+    assert outbox_mod.abort_reason({"error": "STAND_REQUIRES_ARM_A"}) == "STAND_REQUIRES_ARM_A"
+    assert outbox_mod.abort_reason({"error": "untrusted USB diagnostic"}) == "MEASURED_PLACEMENT_MISSING"
     assert outbox_mod.abort_reason({}) == "MEASURED_PLACEMENT_MISSING"
 
 
@@ -355,3 +358,66 @@ def test_omx_safe_home_rejects_missing_or_nonfinite_expiry(tmp_path, monkeypatch
         candidate_names_fn=lambda: ["park"], choice_key="auto_fold.candidate", schema="rosy.omx-auto-fold.v1",
     )
     assert rc_legacy == 0 and json.loads(out_p.read_text(encoding="utf-8"))["result"] == "folded"
+
+
+def test_incident_bound_home_requires_commissioned_capability_and_returns_late_exact_receipt(tmp_path, monkeypatch):
+    import cell_auto_fold_stages as stages
+    incident, rid = "a" * 32, "bound-r"
+    cfg = tmp_path / "auto-fold.json"
+    monkeypatch.setenv("ROSY_AUTO_FOLD_CONFIG", str(cfg))
+    wrapper = tmp_path / "wrap.sh"
+    wrapper.touch()
+    wrapper.chmod(0o755)
+    cfg.write_text(json.dumps({"arm_s": {"wrapper": str(wrapper), "cwd": str(tmp_path), "config": cfg.name,
+                                         "library": cfg.name, "roi": [0, 0, 10, 10], "site": "s"}}))
+    posted, launched = [], []
+    def launch(arm, *, expected_incident_id, **kw):
+        launched.append((arm, expected_incident_id, kw["stage"]))
+        return {"started": True}
+    spec = {"request_id": rid, "arm_id": "arm_s", "strategy": "auto_fold", "stop_generation": 1,
+            "root_task_id": f"home-recovery:arm_s:{incident}", "expires_at": time.time() + 60}
+    response = {"schema": "rosy.pipeline.cell-quality.v1", "human_hold": False, "safety_stop_generation": 1,
+                "pending_safe_home_arms": {"arm_s": spec}}
+    def fetch(req, **_):
+        if "8767" in req.full_url:
+            return io.BytesIO(b"{}")
+        posted.append(json.loads(req.data))
+        return io.BytesIO(json.dumps(response).encode())
+    def sync():
+        return sync_mod.sync_cell_telemetry("https://fleet.invalid", "tok", tmp_path, fetch, tls_verified=True,
+                                            allow_safe_home=True, launch_auto_fold_fn=launch)
+    sync()
+    assert posted[-1]["incident_bound_home_arms"] == ["arm_s"] and posted[-1]["incident_bound_home"] is True
+    assert launched == [("arm_s", incident, "full")]
+    response["pending_safe_home_arms"] = {}
+    sync()
+    assert posted[-1]["safe_home_acks"][0]["outcome"] == "started"
+    stages.write_req_result(tmp_path / "incidents", rid, "arm_s", "full",
+                            {"result": "cleared", "bound_incident_id": incident,
+                             "incident_id": incident, "evidence": {"incident_id": incident}})
+    sync()
+    assert posted[-1]["safe_home_acks"] == [{"request_id": rid, "arm_id": "arm_s", "incident_id": incident,
+                                            "outcome": "completed", "cleared_incident_id": incident}]
+    assert len(launched) == 1
+
+    response["pending_safe_home_arms"] = {"arm_s": {**spec, "request_id": "wrong", "incident_id": "b" * 32}}
+    sync()
+    assert len(launched) == 1
+    acks = json.loads((tmp_path / ".safe-home-acks.json").read_text())
+    assert acks["wrong"]["detail"] == "HOME_RECOVERY_BINDING_INVALID"
+    assert sync_mod._home_result_ack(tmp_path, "arm_b", rid, incident)["outcome"] == "failed"
+    monkeypatch.setenv("ROSY_AUTO_FOLD_CONFIG", str(cfg.with_suffix(".pending")))
+    cfg.rename(cfg.with_suffix(".pending"))
+    sync()
+    assert not posted[-1]["incident_bound_home"] and not posted[-1]["incident_bound_home_arms"]
+
+    import omx_incident
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    hold = {"fleet_held": True, "fleet_reason": HOME_RECOVERY_REASON, "incident_ids": [incident]}
+    monkeypatch.setattr(omx_incident, "status", lambda arm: hold if arm == "arm_s" else {})
+    for root in (None, "historical-aborted-task"):
+        response["pending_safe_home_arms"] = {"arm_s": {**spec, "root_task_id": root, "request_id": "old-r"}}
+        sync()
+        ack = json.loads((tmp_path / ".safe-home-acks.json").read_text())["old-r"]
+        assert ack["outcome"] == "skipped" and ack["detail"] == "HOME_RECOVERY_BINDING_REQUIRED"
+        assert len(launched) == 1

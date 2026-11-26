@@ -40,17 +40,48 @@ def _fault_kind(path) -> dict:
         return {"fault": None, "stop_reasons": None}
 
 
+def _auto_fold_config() -> Path:
+    import os
+    return Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
+
+
+def configured_fold_arms() -> list[str]:
+    """Advertise only active commissioning configurations with the command inputs present."""
+    import os
+    conf = _auto_fold_config()
+    if conf.name.endswith(".pending"):
+        return []
+    try:
+        settings = json.loads(conf.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    ready = []
+    for arm in ("arm_a", "arm_b", "arm_s"):
+        cfg = settings.get(arm) if isinstance(settings, dict) else None
+        if not isinstance(cfg, dict) or not all(isinstance(cfg.get(k), str) and cfg[k].strip()
+                for k in ("cwd", "wrapper", "config", "library", "site")):
+            continue
+        roi = cfg.get("roi")
+        if not isinstance(roi, list) or len(roi) != 4 or not all(type(n) is int for n in roi):
+            continue
+        cwd = Path(cfg["cwd"]).expanduser()
+        wrapper = cwd / cfg["wrapper"]
+        if (cwd.is_dir() and wrapper.is_file() and os.access(wrapper, os.X_OK)
+                and all((cwd / cfg[k]).is_file() for k in ("config", "library"))):
+            ready.append(arm)
+    return ready
+
+
 def launch_auto_fold(arm: str, popen=None, *, stage: str = "full", request_id: str | None = None,
                      expires_at: float | None = None, stop_generation: int | None = None,
-                     safety_fence: str | None = None) -> dict:
+                     safety_fence: str | None = None, expected_incident_id: str | None = None) -> dict:
     """D-1048: start cell_auto_fold for this arm in its own process once this session has let go of the arm. Off unless
     ~/.config/rosy/auto-fold.json names the arm (its wrapper, config, library, site and roi)."""
-    import os
     import subprocess
 
     if stage not in ("full", "release_and_lift", "park_only"):
         return {"started": False, "why": f"invalid stage: {stage}"}
-    conf = Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
+    conf = _auto_fold_config()
     try:
         if arm not in json.loads(conf.read_text(encoding="utf-8")):
             return {"started": False, "why": f"{arm} not in {conf.name}"}
@@ -58,6 +89,8 @@ def launch_auto_fold(arm: str, popen=None, *, stage: str = "full", request_id: s
         return {"started": False, "why": f"no {conf.name}"}
     command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch",
                "--arm", arm, "--config-file", str(conf), "--stage", stage]
+    if expected_incident_id is not None:
+        command += ["--expected-incident-id", expected_incident_id]
     if request_id:
         command += ["--request-id", str(request_id)]
     if expires_at is not None:

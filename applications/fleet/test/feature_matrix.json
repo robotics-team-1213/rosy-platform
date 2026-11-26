@@ -3211,7 +3211,8 @@
         "applications/fleet/web/signals.js",
         "applications/fleet/web/sitemap/site-map.js",
         "applications/fleet/web/trip-replan.js",
-        "applications/fleet/web/work/work-view.js"
+        "applications/fleet/web/work/work-view.js",
+        "applications/fleet/web/work/trip-receipts.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -3248,11 +3249,19 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
-          "expression": "/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel",
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/trips/{trip_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(tripId)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/trips/{trip_id}"
           ]
         },
         {
@@ -3311,6 +3320,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/work"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/trip-receipts.js",
+          "expression": "/api/fleet/trip-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/trip-requests"
           ]
         }
       ],
@@ -3469,6 +3486,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/confirm-replan"
+        },
+        {
+          "id": "GET:/api/fleet/trip-requests",
+          "method": "GET",
+          "path": "/api/fleet/trip-requests",
+          "implementation": "operations/fleet/fleet/server/trips/trip_routes.py",
+          "handler": "trip_request_history",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_trip.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/trip-requests"
         }
       ],
       "flows": [

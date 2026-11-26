@@ -68,16 +68,16 @@ test('one card line per trip robot', () => {
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_05'), '앞 블록 대기 · rosy_01');
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_09'), '');
   const advice = (row) => ({ robots: [{ robot_id: 'r', trip_state: 'running', advice: row }], units: [] });
-  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 4, accepted: true }), 'r'), '운행 중 · 신호 참고 전송 · seq 4');
-  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 0, accepted: false, reason: 'stale' }), 'r'), '운행 중 · 신호 참고 전송 · seq 0 · stale');
-  assert.equal(trafficCardLine(advice({ signal: false, sent_seq: 5, accepted: true }), 'r'), '운행 중');  // cleared: no line
+  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 4, accepted: true }), 'r'), '운행 접수 · 신호 참고 전송 · seq 4');
+  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 0, accepted: false, reason: 'stale' }), 'r'), '운행 접수 · 신호 참고 전송 · seq 0 · stale');
+  assert.equal(trafficCardLine(advice({ signal: false, sent_seq: 5, accepted: true }), 'r'), '운행 접수');  // cleared: no line
   // D-767 P0: the server puts a fresh preview on the row (an expired one is left off): the first two events
   const preview = (events) => ({ robots: [{ robot_id: 'r', trip_state: 'running', preview: events && { events } }], units: [] });
   assert.equal(trafficCardLine(preview([{ at_m: 0.42, kind: 'turn', params: { action: 'left' } },
     { at_m: 0.951, kind: 'crosswalk', params: {} }, { at_m: 1.5, kind: 'stop', params: {} }]), 'r'),
-  '운행 중 · 예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도');
-  assert.equal(trafficCardLine(preview([]), 'r'), '운행 중');
-  assert.equal(trafficCardLine(preview(undefined), 'r'), '운행 중');
+  '운행 접수 · 예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도');
+  assert.equal(trafficCardLine(preview([]), 'r'), '운행 접수');
+  assert.equal(trafficCardLine(preview(undefined), 'r'), '운행 접수');
   const unknown = {...TRAFFIC, robots: [{robot_id: 'rosy_04', waiting_for: [], lap: null, trip_state: 'running'}]};
   assert.equal(trafficCardLine(unknown, 'rosy_04'), '위치 불명 · 블록 유지');
 });
@@ -126,10 +126,10 @@ test('a repeat start pairs the robot with its start place and laps over every st
 });
 
 test('TRIP_BUSY is per robot and TRIP_LOOP_FULL names robots and capacity', () => {
-  assert.equal(tripErrorText('TRIP_BUSY', {trip_id: 'a'}), '이 로봇은 이미 운행 중입니다');
+  assert.equal(tripErrorText('TRIP_BUSY', {trip_id: 'a'}), '이 로봇에 접수된 운행이 있습니다');
   assert.equal(tripErrorText('TRIP_LOOP_FULL', {robots: 4, capacity: 3, held_per_robot: 3}),
     '고리 수용 한도를 넘어 출발할 수 없습니다 · 고리 4/3대');
-  assert.equal(tripStartReason({role: 'operator', plan: {}, running: {trip_id: 'a'}}), '이 로봇은 이미 운행 중입니다');
+  assert.equal(tripStartReason({role: 'operator', plan: {}, running: {trip_id: 'a'}}), '이 로봇에 접수된 운행이 있습니다');
 });
 
 test('occupancy-mode signals (D-525 rev 6) say green, orange or red with the zone state in words', () => {

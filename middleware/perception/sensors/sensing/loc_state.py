@@ -211,6 +211,13 @@ class LocalizationStateMachine:
             return self._suspect(reason)
         return Step(self.state)
 
+    def retire_candidates(self, reason):
+        """Discard a stopped candidate set invalidated by newer scan evidence."""
+        if self.state is LocState.CANDIDATES and self.check is None:
+            self.candidates = ()
+            return self._suspect(reason)
+        return Step(self.state)
+
     def _suspect(self, reason):
         self.state, self.reason = LocState.SUSPECT, reason
         self.check, self.request_id, self._low_since = None, None, None

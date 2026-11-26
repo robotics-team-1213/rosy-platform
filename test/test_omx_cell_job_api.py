@@ -21,6 +21,27 @@ def _make_workdir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.mark.parametrize(("job", "arm", "expected"), [
+    ("remap", "arm_a", "arm_a"), ("remap", "arm_b", "arm_b"),
+    ("remap", "arm_s", None), ("calibrate_check", "arm_a", None),
+])
+def test_baseline_recovery_is_bound_to_supervised_ab_remap(tmp_path, monkeypatch, job, arm, expected):
+    popen = Mock(return_value=Mock(poll=Mock(return_value=0)))
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setenv("ROSY_BASELINE_RECOVERY_ARM", "arm_b")
+    runner = api.Runner(_make_workdir(tmp_path))
+    params = {"config": f"cell-{arm[-1]}.json"}
+    if job == "remap":
+        params.update(arm=arm, person_at_switch=True)
+    assert runner.start(job, params)["code"] == 202
+    assert popen.call_args.kwargs["env"].get("ROSY_BASELINE_RECOVERY_ARM") == expected
+    if expected:
+        wrapper = Path(popen.call_args.args[0][0])
+        assert wrapper == Path(api.__file__).parent / "session-wrappers" / Path(api.SESSION[arm]).name
+        assert wrapper.is_file()
+        assert popen.call_args.kwargs["env"]["TOOLS_ROOT"] == str(wrapper.parents[4])
+
+
 @pytest.mark.parametrize(
     ("job", "site_params", "status"),
     [
@@ -726,6 +747,15 @@ def test_safe_home_job_admits_incident_held_blocks_fleet_stop_and_machine_token(
     )
     home_res = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "operating_profile": "prof.json", "person_at_switch": True})
     assert home_res["code"] == 409 and home_res["error_code"] == "ARM_INCIDENT_HELD"
+
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    original_check = runner._incident_check_fn
+    runner._incident_check_fn = lambda _arm: HOME_RECOVERY_REASON
+    pending = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json",
+                                   "operating_profile": "prof.json", "person_at_switch": True})
+    assert pending["code"] == 409 and pending["error_code"] == "HOME_RECOVERY_REQUIRED"
+    popen.assert_not_called()
+    runner._incident_check_fn = original_check
 
     mach_res = runner.start("safe_home", params, principal=guards.Principal(guards.ROLE_MACHINE, "bot"))
     assert mach_res["code"] == 403 and mach_res["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
