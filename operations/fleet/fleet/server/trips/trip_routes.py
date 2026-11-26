@@ -279,6 +279,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         plan_data = plan_body(plan)
         if parking:
             plan_data["parking_handoff"] = parking
+            plan_data["staging_distance_m"] = round(math.dist(pose[:2], active[2].place_xy(goal)), 4)
         if bound_nav2:
             plan_data["nav2_binding_id"] = binding_id
         elif binding_id is not None:

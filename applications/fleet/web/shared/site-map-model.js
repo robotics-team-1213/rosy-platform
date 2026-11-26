@@ -189,8 +189,8 @@ export function tripPoseReason(guide, robotId, active, corePose = null) {
 export function planTrip(request, robotId, body) { return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)}); }
 export function startTrip(request, planId) { return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'}); }
 export function tripRefusalText(error) { return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error); }
-export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+export function planSummaryText(plan, distance = `${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`) {
+  return `${plan.segments.length}개 차로 · ${distance} · 지도 v${plan.map_version}`
     + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 export function repeatTripReason({active, running, start}) {

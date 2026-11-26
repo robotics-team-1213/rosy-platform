@@ -27,7 +27,10 @@ export function consoleTripStartReason(input) {
 
 export function consolePlanSummaryText(plan) {
   const parking = plan.parking_handoff;
-  const road = planSummaryText(plan);
+  const distance = parking && Number.isFinite(plan.staging_distance_m)
+    ? `차로 경로 ${plan.length_m.toFixed(2)} m · 계획 시 위치에서 ${parking.staging_place_id}까지 직선 ${plan.staging_distance_m.toFixed(2)} m`
+    : undefined;
+  const road = planSummaryText(plan, distance);
   const summary = parking ? `${road} · ${parking.staging_place_id} 정차 후 ${parking.bay_id} 후진 주차` : road;
   const frame = plan.nav2_preflight;
   if (!frame) return summary;
