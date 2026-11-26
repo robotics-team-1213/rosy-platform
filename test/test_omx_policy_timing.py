@@ -1387,3 +1387,23 @@ def test_entry_post_state_jaw_gate_lag_and_drain_and_fifo_errno(tmp_path, monkey
 
     monkeypatch.setattr(os, "open", lambda *_a, **_kw: (_ for _ in ()).throw(PermissionError(errno.EACCES, "denied")))
     assert FifoCell(tmp_path, {}).act("state")["fault"] == "fifo io error"
+
+
+def test_seeded_dry_run_is_not_aged_by_an_idle_encoder_sample():
+    import time
+
+    import cell_policy_timing as timing
+
+    class IdleCell:  # no arm session: the last encoder sample is hours old
+        def policy_state(self):
+            return {"ok": True, "state": [0.0] * 6, "t": time.time() - 3600}
+
+    shadow = type("S", (), {"image_views": {}})()
+    infer = lambda state, _images: ([list(state)] * 4, {})
+    seeded = timing._observe(IdleCell(), shadow, infer, 0.5, None, None, time.monotonic, time.sleep, True,
+                             seed_state=[1.0] * 6)
+    assert seeded.observed > time.monotonic() - 1
+    timing.action_window(seeded.frames, seeded.observed, time.monotonic(), 30, 4, 0.5)
+    unseeded = timing._observe(IdleCell(), shadow, infer, 0.5, None, None, time.monotonic, time.sleep, True)
+    with pytest.raises(ValueError, match="stale policy observation"):
+        timing.action_window(unseeded.frames, unseeded.observed, time.monotonic(), 30, 4, 0.5)
