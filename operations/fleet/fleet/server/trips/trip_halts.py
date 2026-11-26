@@ -65,9 +65,12 @@ def idle_cancel_owner(receipt, received_at):
 
 def pause_proof_args(trip: dict) -> dict:
     hold = trip.get("hold") or {}
+    args = {}
     if hold.get("reason") == "fleet_hold" and (hold.get("stop") is not None or trip.get("drive_mode") in {"free", "nav2"}):
-        return {"pause_after": hold.get("at", 0), **({"peer_idle": True} if pre_dispatch_wait(trip) else {})}
-    return {}
+        args["pause_after"] = hold.get("at", 0)
+    if pre_dispatch_wait(trip):  # no goal was ever sent, so a cancel needs the same idle proof as a pause
+        args["peer_idle"] = True
+    return args
 
 
 class TripHalts:
@@ -160,9 +163,10 @@ class TripHalts:
         sample = (state.get("evidence") or {}).get("velocity") or {}
         stamp = parse_utc(sample.get("sampled_at"))
         vel = state.get("velocity") or {}
+        # CORE snapshots omit goal; only the pre-dispatch idle proof (owner checked separately) may rely on that.
         if (sample.get("evidence") != "fresh" or stamp is None or stamp <= after
                 or not 0 <= self._clock() - stamp < STALE_POSE_S
-                or state.get("robot_id") != robot_id or "goal" not in state or state["goal"] is not None
+                or state.get("robot_id") != robot_id or state.get("goal") is not None or not idle_only and "goal" not in state
                 or (state.get("line_follow") or {}).get("mode") != "OFF"
                 or state.get("navigation") not in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 or state.get("mode") not in {"IDLE", "NAVIGATION"}
@@ -207,7 +211,7 @@ class TripHalts:
         else:
             idle_proof = None
             try:
-                wire = self.idle_wire(robot_id) if peer_idle and not handoff_pending and pause_after is not None else None
+                wire = self.idle_wire(robot_id) if peer_idle and not handoff_pending else None
                 cancel_res = await self._call(self._cancel_goal(robot_id))
                 after_cancel = self._clock() if wire is not None else None
                 canceled = _cancel_ack(cancel_res)

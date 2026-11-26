@@ -548,7 +548,7 @@ def test_planned_stop_goal_clears_stale_site_claims(monkeypatch):
 
 
 @pytest.mark.parametrize("case", ["vacant", "old_core", "post_dispatch", "previous_route", "wrong_robot",
-                                  "moving", "old_twist", "skew", "new_owner", "new_wire", "wire_pending", "restart"])
+                                  "moving", "active_goal", "cancel_vacant", "cancel_moving", "old_twist", "skew", "new_owner", "new_wire", "wire_pending", "restart"])
 def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(case):
     robot = RouteFakeRobot("rosy_42")
     clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _corridor_map())
@@ -583,8 +583,9 @@ def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(cas
     async def state(_rid):
         clock.advance(.1)
         stamp = datetime.fromtimestamp(clock.now - (1 if case == "old_twist" else .02), timezone.utc).isoformat()
-        return {"robot_id": rid, "mode": "IDLE", "navigation": "IDLE", "goal": None, "line_follow": {"mode": "OFF"},
-                "velocity": {"linear": .1 if case == "moving" else 0., "angular": 0.},
+        return {"robot_id": rid, "mode": "IDLE", "navigation": "IDLE", "line_follow": {"mode": "OFF"},
+                **({"goal": {"x": 1.0}} if case == "active_goal" else {}),
+                "velocity": {"linear": .1 if case in ("moving", "cancel_moving") else 0., "angular": 0.},
                 "evidence": {"velocity": {"evidence": "fresh", "sampled_at": stamp}}}
     async def navigation(_rid):
         if case == "new_wire":
@@ -595,6 +596,12 @@ def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(cas
     runner.halts.read_stop_state = state
     runner.halts.read_navigation = navigation
     runner.halts.wire_epoch = leases.idle_wire_epoch
+    if case in ("cancel_vacant", "cancel_moving"):  # a cancel with no dispatched goal needs the same idle proof
+        canceled = run(runner.cancel(tid, "bob"))["detail"]
+        assert canceled["stop_sent"] is (case == "cancel_vacant") and ("error" in canceled) is (case == "cancel_moving")
+        if case == "cancel_vacant":
+            assert canceled["pause_proof"]["basis"] == "pre_dispatch_idle"
+        return
     paused = run(runner.pause(tid, "bob"))
     stop = paused["hold"]["stop"]
     assert not stop["cancel_ack"]
