@@ -19,9 +19,11 @@ def _task(i, status="COMPLETED", objects=0, expected=None, done_at=None):
 
 
 def _state(tasks, folded=True, age=2.0, phase="RELEASED", held=False):
+    last = max((t for t in tasks if t["status"] == "COMPLETED"), key=lambda t: t["completed_at"], default={})
     return SimpleNamespace(
         omx_cell_tasks={t["task_id"]: t for t in tasks},
-        omx_cell_states={"cell_s": {"phase": phase, "amr_motion_inhibited": False}},
+        omx_cell_states={"cell_s": {"phase": phase, "amr_motion_inhibited": False, "robot_id": last.get("robot_id"),
+                                    "unload_batch_id": last.get("unload_batch_id"), "stage_id": last.get("task_id")}},
         arm_live_states={"arm_s": {"folded": folded, "updated_at": time.time() - age}},
         arm_holds={"arm_s": {"held": held}}, unload_releases={}, pinky_tasks={})
 
@@ -32,6 +34,13 @@ def reasons(state, **kw):
 
 def test_camera_zero_after_the_last_carry_is_ready_without_any_count():
     assert reasons(_state([_task(0, objects=1), _task(1, objects=0)])) == []
+
+
+@pytest.mark.parametrize("field", ["robot_id", "unload_batch_id", "stage_id"])
+def test_released_cell_must_belong_to_the_robot_batch_and_last_stage(field):
+    state = _state([_task(0)])
+    state.omx_cell_states["cell_s"][field] = "previous"
+    assert reasons(state) == ["CELL_RELEASE_IDENTITY_MISMATCH"]
 
 
 def test_each_disagreement_holds_the_vehicle():
@@ -101,6 +110,24 @@ def test_ready_on_two_ticks_sends_once_to_the_exit_and_records_before_it():
     assert state.unload_releases["u"]["state"] == "SENT" and state.pinky_tasks["depart-u"]["auto"] is True
     tick(state, console)
     assert len(console.goals) == 1  # never twice for one batch
+
+
+def test_product_automatic_departure_stages_one_map_bound_trip(monkeypatch):
+    from fleet.server.pipeline_pinky_dispatch import FLAG, _depart_refusal
+    monkeypatch.setenv(FLAG, "1")
+    state, console, saves = _state([_task(0)]), Console(), []
+    def stage(*args):
+        ur._stage_departure_trip(state, *args, 394, lambda: saves.append(1))
+    args = dict(console=console, rules=RULES, site=SITE, enqueue=lambda _: None,
+                human_detected=False, save=lambda: None, now=time.time(), stage_trip=stage)
+    for _ in range(3):
+        asyncio.run(ur.depart_tick(state, **args))
+    assert not console.goals and len(saves) == 1
+    row = state.pinky_tasks["depart-u"]
+    assert (row["place_id"], row["map_version"], row["status"]) == ("S1", 394, "QUEUED")
+    assert _depart_refusal(state, row, now=time.time(), human_detected=False) is None
+    state.omx_cell_states["cell_s"]["stage_id"] = "other"
+    assert _depart_refusal(state, row, now=time.time(), human_detected=False) == "CELL_RELEASE_IDENTITY_MISMATCH"
 
 
 def test_no_exit_place_holds_instead_of_guessing():
@@ -298,7 +325,8 @@ def test_dock_and_unload_needs_no_count_and_an_operator_depart_is_gated(tmp_path
     assert early.status_code == 409 and "UNLOAD_IN_PROGRESS" in early.json()["detail"]["reasons"]
     now = time.time()
     batch[0].update(status="COMPLETED", completed_at=now, stage_result={"source_clearance": {"objects": 0}})
-    app.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "amr_motion_inhibited": False}
+    app.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "robot_id": "rosy_46",
+                                          "unload_batch_id": batch[0]["unload_batch_id"], "stage_id": batch[0]["task_id"]}
     app.state.arm_live_states["arm_s"] = {"folded": True, "updated_at": now}
     read = client.get("/api/fleet/pipeline/unload-release", params={"robot_id": "rosy_46"}).json()
     assert read["ready"] is True and read["departure"] is None
@@ -322,7 +350,8 @@ def test_operator_depart_s3_requires_exit_place_without_reserving(tmp_path, monk
     now = time.time()
     batch = next(iter(app.state.omx_cell_tasks.values()))
     batch.update(status="COMPLETED", completed_at=now, stage_result={"source_clearance": {"objects": 0}})
-    app.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "amr_motion_inhibited": False}
+    app.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "robot_id": "rosy_46",
+                                          "unload_batch_id": batch["unload_batch_id"], "stage_id": batch["task_id"]}
     app.state.arm_live_states["arm_s"] = {"folded": True, "updated_at": now}
     res = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "depart_s3", "robot_id": "rosy_46"})
     assert res.status_code == 409 and res.json()["detail"]["code"] == "NO_EXIT_PLACE"

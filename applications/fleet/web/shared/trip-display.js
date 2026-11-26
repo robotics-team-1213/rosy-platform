@@ -11,6 +11,8 @@ export const AI_FACT_LABEL = {
 };
 
 export const TRIP_ERROR_LABEL = {
+  TRIP_QUEUED: '출발 명령이 대기열에 있습니다',
+  TRIP_DISPATCH_DISABLED: '자동 출발이 꺼져 있어 정차 중입니다',
   TRIP_PROPOSAL_NOT_FOUND: '해당 이송 제안을 찾을 수 없습니다 · 제안 식별자를 확인하세요',
   TRIP_PROPOSAL_FORBIDDEN: '이 이송 제안을 읽거나 승인할 권한이 없습니다 · 제안자와 다른 기명 운영자가 승인해야 합니다',
   TRIP_PROPOSAL_CONFLICT: '이송 제안이나 실행 세대가 바뀌었습니다 · 원본을 다시 조회하세요',

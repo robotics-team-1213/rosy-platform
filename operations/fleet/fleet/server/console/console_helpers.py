@@ -251,6 +251,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     달리는 로봇이 아니라 **서 있는 로봇**이 길을 막고 있으면 순서로는 풀리지 않는다.
     그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
     """
+    if (check := getattr(self, "station_stop_reason", None)) and (reason := check(robot_id)):
+        raise HubError("COMMAND_REJECTED", reason)
     if route_points is not None and (stop_binding is not None or line_handoff is not None):
         raise HubError("COMMAND_REJECTED", "ROUTE_AND_STOP_BINDING_EXCLUSIVE")
     if line_handoff is not None and (lease_source != "trip" or task_id is not None or stop_binding is None):

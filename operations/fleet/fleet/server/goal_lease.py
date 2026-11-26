@@ -1,11 +1,8 @@
 """D-550 10: Fleet navigation goal leases â€” send ``lease_ttl_s`` and renew it (default off).
 
-Kept out of ``console.py`` (size budget). ``GoalLeases`` is the console's ``robot_id -> lease``
-table: ``{"state": "leased", "correlation_id", "ttl_s", "source", "task_id"}`` or
-``{"state": "unbounded"}`` (leases on, robot without the capability: Rule M display).
+GoalLeases tracks leased and unbounded goals per robot (Rule M display).
 
-One renewer per goal source (D-550 10), each only while its reason to move holds:
-
+Each goal source renews only while its reason to move holds (D-550 10):
 - ``operator`` (console goal, intent, D-463 route, queued release): the console loop, only while a
   named operator console sent ``POST /api/fleet/goal-lease/presence`` within the last ttl.
 - ``dispatch`` (D-316 attempt): the console loop, only while that attempt is open in the task store.
@@ -87,6 +84,9 @@ class GoalLeases(PeerMotionWire, RoadRouteLeases, dict):
 
     @contextmanager
     def _check_motion_wire(self, robot_id, method, path, body):
+        if (method.upper() == "POST" and path in PREPARED_GOALS) or starts_or_sustains_motion(method, path, body):
+            if (reason := getattr(self, "station_stop_reason", lambda _: None)(robot_id)):
+                raise RobotApiError(robot_id, 409, reason, "the assigned station operation is awaiting external release")
         if method.upper() == "POST" and path in PREPARED_GOALS:
             permit = _prepared_wire.get()
             if permit is None or permit[0] is not self or permit[1:] != (robot_id, (body or {}).get("plan_id")):

@@ -754,7 +754,8 @@ def test_depart_s3_dispatch_revalidation_and_reservation_cleanup():
             "u-1-1": {"task_id": "u-1-1", "robot_id": "rosy_46", "unload_batch_id": "u-1", "unload_index": 0,
                       "status": "COMPLETED", "completed_at": now, "stage_result": {"source_clearance": {"objects": 0}}}
         }
-        state.omx_cell_states = {"cell_s": {"phase": "RELEASED", "amr_motion_inhibited": False}}
+        state.omx_cell_states = {"cell_s": {"phase": "RELEASED", "amr_motion_inhibited": False,
+                                            "robot_id": "rosy_46", "unload_batch_id": "u-1", "stage_id": "u-1-1"}}
         state.arm_live_states = {"arm_s": {"folded": folded, "updated_at": now}}
         state.unload_releases = {"u-1": {"robot_id": "rosy_46", "task_id": "p1", "state": "OPERATOR", "target": "S1"}}
         return state, task, World(state)

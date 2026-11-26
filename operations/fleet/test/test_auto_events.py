@@ -72,9 +72,11 @@ def _task(i, status="COMPLETED", objects=0, expected=None, done_at=None):
 
 
 def _state(tasks, folded=True, age=2.0, phase="RELEASED", held=False):
+    last = max(tasks, key=lambda t: t.get("completed_at", 0), default={})
     return SimpleNamespace(
         omx_cell_tasks={t["task_id"]: t for t in tasks},
-        omx_cell_states={"cell_s": {"phase": phase, "amr_motion_inhibited": False}},
+        omx_cell_states={"cell_s": {"phase": phase, "amr_motion_inhibited": False, "robot_id": last.get("robot_id"),
+                                    "stage_id": last.get("task_id"), "unload_batch_id": last.get("unload_batch_id")}},
         arm_live_states={"arm_s": {"folded": folded, "updated_at": time.time() - age}},
         arm_holds={"arm_s": {"held": held}}, unload_releases={}, pinky_tasks={})
 
