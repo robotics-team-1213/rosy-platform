@@ -54,6 +54,15 @@ def fold_basis(*sources: Any) -> str:
     return "calibrated" if fold_ranges(*sources) else "coarse"
 
 
+def arm_library_path(workdir: Path, arm: str) -> Path | None:
+    """The arm's own chunk library (or, failing that, its cell config) in the workdir; None when there is none to narrow the fold rule."""
+    letter = arm.split("_")[-1]
+    for pattern in (f"chunks-arm-{letter}-*.json", f"cell-{letter}.json"):
+        if found := sorted(Path(workdir).glob(pattern)):
+            return found[0]
+    return None
+
+
 def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
     """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range."""
     if isinstance(row.get("folded"), bool):

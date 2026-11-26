@@ -88,6 +88,25 @@ def test_session_proof_reads_the_runners_own_live_state():
     assert sp.session_proof(object(), "run-1", "arm_s")["code"] == "STOP_PROOF_LIVE_STALE"  # a session with nothing fresh to show
 
 
+def test_torque_off_folded_gets_the_arms_own_library_and_a_peer_fold_uses_it(tmp_path, monkeypatch):
+    (tmp_path / "cell-b.json").write_text("{}", encoding="utf-8")
+    job = api.JOBS["torque_off_folded"]
+    assert "--library" not in api.build_argv(job, {"arm": "arm_b", "config": "cell-b.json"}, tmp_path)  # none: omitted
+    (tmp_path / "chunks-arm-b-x.json").write_text(json.dumps({"chunks": {"park": [[0, -90, 60, 60, 0, 40]]}}), encoding="utf-8")
+    argv = api.build_argv(job, {"arm": "arm_b", "config": "cell-b.json"}, tmp_path)
+    assert argv[argv.index("--library") + 1] == "chunks-arm-b-x.json"
+    io = tmp_path / "chunk-io-b"
+    io.mkdir()
+    # lift/elbow pass the coarse rule but wrist_flex is far from this arm's own park pose
+    state = [0, -90, 60, -30, 0, 40]
+    (io / "live.json").write_text(json.dumps({"t": time.time(), "state": state, "chunk": None}), encoding="utf-8")
+    kw = dict(session_lock_held_fn=lambda *_: False, read_json_fn=guards.read_json_dict, live_max_age_s=15.0,
+              incident_check_fn=lambda _a: None, motor_health_dir=tmp_path / "h")
+    assert "not folded" in guards.check_peer_ab_folded("arm_a", tmp_path, tmp_path / "l", None, **kw)
+    (tmp_path / "chunks-arm-b-x.json").unlink()  # no library: the coarse rule only, which this pose passes
+    assert guards.check_peer_ab_folded("arm_a", tmp_path, tmp_path / "l", None, **kw) is None
+
+
 def _runner(tmp_path, monkeypatch, *, live=None, fleet=ONLINE, popen=None):
     for name in ("cell-a.json", "cell-b.json", "cell-s.json", "chunks-s.json"):
         (tmp_path / name).write_text("{}", encoding="utf-8")

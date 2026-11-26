@@ -45,6 +45,7 @@ from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_camera_heal import with_camera_heal  # noqa: E402,F401  (re-exported for cell_job_api)
 from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
+from cell_job_peer_health import arm_library_path
 from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
@@ -373,6 +374,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_torque_off_folded.py" and (lib := arm_library_path(workdir, checked["arm"])):
+        args += ["--library", lib.name]  # the arm's own fold poses; none in the workdir: the coarse rule, as before
     if job["script"] == "cell_media_jobs.py":
         args = ["--workdir", str(workdir), *args]
     if job["script"] in POLICY_SCRIPTS and "endpoint_url" in opt_checked:
