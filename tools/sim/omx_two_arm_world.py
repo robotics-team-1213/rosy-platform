@@ -302,15 +302,12 @@ class World:
         spec.add_mesh(name="pocket_side", uservert=wall(section(H["hw"]), 2 * (H["hl"] + reach) * mm, True))
         spec.add_mesh(name="pocket_end", uservert=wall(section(H["hl"]), 2 * (H["hw"] + reach) * mm, False))
         box = mujoco.mjtGeom.mjGEOM_BOX
-        if kit == "v24-docks":  # convex boxes outside the hull so concave berth STLs stay visual-only
-            for side in (-1, 1):
-                tag = "p" if side > 0 else "s"
-                world.add_geom(name=f"berth_v24_dock_{tag}", type=box, pos=sites.ship_cell(L, 60.0, side * 92.075, 8.5),
-                               size=[71.0 * mm, 23.775 * mm, 8.5 * mm], rgba=[0, 0, 0, 0])
-                world.add_geom(name=f"berth_v24_cradle_{tag}", type=box, pos=sites.ship_cell(L, 105.5, side * 74.31, 7.0),
-                               size=[97.5 * mm, 9.19 * mm, 7.0 * mm], rgba=[0, 0, 0, 0])
-            world.add_geom(name="berth_v24_stopper_col", type=box, pos=sites.ship_cell(L, -9.025, 0.0, 6.0),
-                           size=[7.475 * mm, 41.5 * mm, 6.0 * mm], rgba=[0, 0, 0, 0])
+        if kit == "v24-docks":  # convex boxes outside hull & belt cutout; concave berth STLs stay visual-only
+            for nm, cx, cy, cz, hx, hy, hz in (("dock", 60., 92.075, 8.5, 71., 23.775, 8.5), ("cradle", 105.5, 74.31, 7., 97.5, 9.19, 7.), ("stopper", -10.25, 36.25, 6., 6.25, 5.25, 6.)):
+                for side in (-1, 1):
+                    world.add_geom(name=f"berth_v24_{nm}_{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, cx, side * cy, cz),
+                                   size=[hx * mm, hy * mm, hz * mm], rgba=[0, 0, 0, 0])
+            world.add_geom(name="berth_v24_stopper_col", type=box, pos=sites.ship_cell(L, -4.525, 0., 6.), size=[2.975 * mm, 31. * mm, 6. * mm], rgba=[0, 0, 0, 0])
         for k, (x0_, x1_, y0_, y1_, z1_) in enumerate(sites.STERN["boxes"]):  # stern floor, aft and fore deck, side decks, rails (ship mm, z from table)
             for side in ((1,) if y0_ == -y1_ else (-1, 1)):
                 world.add_geom(name=f"stern{k}{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, (x0_ + x1_) / 2, side * (y0_ + y1_) / 2, (3 + z1_) / 2),

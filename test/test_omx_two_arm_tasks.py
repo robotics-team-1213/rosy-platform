@@ -564,7 +564,8 @@ def test_black_fixture_parts_have_collision_without_false_contacts():
     model = world.model
     col_names = (
         "a_plate_col", "b_plate_col", "a_clamp", "b_clamp", "a_bridge_col", "b_bridge_col",
-        "berth_v24_dock_p", "berth_v24_dock_s", "berth_v24_cradle_p", "berth_v24_cradle_s", "berth_v24_stopper_col",
+        "berth_v24_dock_p", "berth_v24_dock_s", "berth_v24_cradle_p", "berth_v24_cradle_s",
+        "berth_v24_stopper_p", "berth_v24_stopper_s", "berth_v24_stopper_col",
     )
     for name in col_names:
         gid = model.geom(name).id
@@ -587,7 +588,7 @@ def test_black_fixture_parts_have_collision_without_false_contacts():
     assert not home_world.contact_report(home_world.reset())["arm_other"]
 
     box_q, box_v = world.box_q["bar-1"], world.box_v["bar-1"]
-    for name in ("b_bridge_col", "b_plate_col", "b_clamp", "berth_v24_dock_s", "berth_v24_cradle_s", "berth_v24_stopper_col"):
+    for name in ("b_bridge_col", "b_plate_col", "b_clamp", "berth_v24_dock_s", "berth_v24_cradle_s", "berth_v24_stopper_s", "berth_v24_stopper_col"):
         data = world.reset()
         gid = model.geom(name).id
         pos = data.geom_xpos[gid].copy()
