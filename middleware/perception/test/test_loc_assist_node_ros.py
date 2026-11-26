@@ -248,3 +248,32 @@ def test_window_candidate_requires_a_new_fresh_scan_stamp(node, monkeypatch):
     monkeypatch.setattr(node.core, "search_window_ready", lambda now: True)
     monkeypatch.setattr(node, "scan_mount", lambda scan: pytest.fail("replayed scan tried to verify a window"))
     assert node.confirm_window_candidate(candidate, (stamp, time.monotonic_ns()), now, node.generation) == ([], [])
+
+
+def test_injection_check_and_recheck_candidates_pass_localized_true(node, monkeypatch):
+    from control.sensing.localization import MapAgreement
+    from loc_world import MOUNT, field, scan
+
+    calls = []
+    orig_explain = MapAgreement.explain
+    orig_robust = MapAgreement.robust_score
+    monkeypatch.setattr(MapAgreement, "explain", lambda self, s, r, a, localized=False: (
+        calls.append(("explain", localized)), orig_explain(self, s, r, a, localized=localized))[1])
+    monkeypatch.setattr(MapAgreement, "robust_score", lambda self, s, r, a, localized=False: (
+        calls.append(("robust", localized)), orig_robust(self, s, r, a, localized=localized))[1])
+
+    truth = (.86, -.52, math.pi)
+    ns = node.tf.frame_prefix
+    node.tf.set_transform_static(transform(ns + 'base_link', 'laser', 0., (MOUNT.x, MOUNT.y, MOUNT.yaw)), 'test')
+    node.field = field()
+    ranges, angles = scan(truth, beams=640)
+    core = node.core
+    core.search_started(BASE_S, ODOM)
+    core.search_finished(BASE_S, ODOM, [PoseCandidate(*truth, .97, 'slot:B')])
+    node.recheck_candidates(BASE_S + .5, BASE_S, laser_scan(BASE_S, ranges, angles))
+    assert ("robust", True) in calls
+
+    calls.clear()
+    machine = run_injection(node, truth, truth)
+    assert machine.state.name == "LOCALIZED"
+    assert ("explain", True) in calls

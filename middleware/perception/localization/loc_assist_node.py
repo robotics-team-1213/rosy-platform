@@ -116,9 +116,9 @@ class LocAssistNode(Node):
             self.declare_parameter(name, value)
         ids = iter(range(1, 1 << 62))
         boot = time.strftime('%H%M%S')
-        self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'), retry_s=self.p('retry_s'),
-                              hold_s=self.p('hold_s'), min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'),
-                              max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
+        self.core = LocAssist(
+            lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'), retry_s=self.p('retry_s'), hold_s=self.p('hold_s'),
+            min_fit=self.p('minimum_fit'), fit_drop_s=self.p('fit_drop_s'), max_gap_s=self.p('max_gap_s'), drop_fit=self.p('drop_fit'))
         self._last_settled_scan_s = -math.inf
         self._last_fit_drop_log_s = -math.inf
         self.verification_trace = None
@@ -135,11 +135,10 @@ class LocAssistNode(Node):
         self.last_window_ns = -WINDOW_RETRY_NS
         self.tf = RobotTransformBuffer(self)
         self.listener = TransformListener(self.tf, self)
-        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
-                             reliability=ReliabilityPolicy.RELIABLE)
-        self.pub = {'state': self.create_publisher(String, 'localization/state', latched),
-                    'candidates': self.create_publisher(String, 'localization/candidates', latched),
-                    'result': self.create_publisher(String, 'localization/result', 10)}
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+        self.pub = {
+            'state': self.create_publisher(String, 'localization/state', latched), 'candidates': self.create_publisher(String, 'localization/candidates', latched),
+            'result': self.create_publisher(String, 'localization/result', 10)}
         self.initial_pose = self.create_publisher(PoseWithCovarianceStamped, 'initialpose', 10)
         self.create_subscription(OccupancyGrid, 'map', self.on_map, latched)
         self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data)
@@ -249,10 +248,12 @@ class LocAssistNode(Node):
         tr = tf.transform.translation
         sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
-        use_localized = bool(machine.autonomy_allowed)
+        use_localized = bool(machine.autonomy_allowed or machine.check is not None)
         if (trace is not None or use_localized) and hasattr(self.field, 'explain'):
-            breakdown = (self.field.explain(sensor, ranges, angles, localized=True) if use_localized
-                         else self.field.explain(sensor, ranges, angles))
+            try:
+                breakdown = self.field.explain(sensor, ranges, angles, localized=use_localized)
+            except TypeError:
+                breakdown = self.field.explain(sensor, ranges, angles)
             fit = breakdown.robust_score
             if use_localized and fit < self.core.machine.drop_fit and now - self._last_fit_drop_log_s >= 1.0:
                 self._last_fit_drop_log_s = now
@@ -271,6 +272,12 @@ class LocAssistNode(Node):
         if self.core.objects_due(now):
             self.report_objects(now, msg, sensor)
 
+    def _robust_localized(self, pose, ranges, angles):
+        try:
+            return self.field.robust_score(pose, ranges, angles, localized=True)
+        except TypeError:
+            return self.field.robust_score(pose, ranges, angles)
+
     def recheck_candidates(self, now, scan_stamp, scan):
         ranges, angles = self.scan_arrays(scan)
         if len(valid_beams(ranges, angles)[0]) < 30:
@@ -282,7 +289,7 @@ class LocAssistNode(Node):
         candidates = self.core.machine.candidates
         sensor = [sensor_from_base((c.x, c.y, c.yaw), mount) for c in candidates]
         full = self.scan_arrays(scan, 1) if any(c.origin == "window" for c in candidates) else None
-        fits = [self.field.robust_score(pose, *(full if c.origin == "window" else (ranges, angles)))
+        fits = [self._robust_localized(pose, *(full if c.origin == "window" else (ranges, angles)))
                 for c, pose in zip(candidates, sensor)]
         objects = None
         if all(fit >= self.core.machine.min_fit for fit in fits):
@@ -339,8 +346,7 @@ class LocAssistNode(Node):
     def _on_auto_recovery(self, payload):
         try:
             pose = payload['pose']
-            candidate_pose = ((float(pose['x']), float(pose['y']), float(pose['yaw']))
-                              if isinstance(pose, dict) else tuple(float(v) for v in pose))
+            candidate_pose = (float(pose['x']), float(pose['y']), float(pose['yaw'])) if isinstance(pose, dict) else tuple(float(v) for v in pose)
             xy = payload['camera_xy']
             camera_xy = (float(xy['x']), float(xy['y'])) if isinstance(xy, dict) else (float(xy[0]), float(xy[1]))
             raw_yaw = payload.get('camera_yaw')
@@ -352,8 +358,7 @@ class LocAssistNode(Node):
             return
         fit = self._auto_recovery_fit(candidate_pose)
         out, reason = self.core.try_auto_recovery(
-            self.now(), candidate_pose, fit=fit, camera_xy=camera_xy,
-            camera_yaw=camera_yaw, request_id=payload.get('request_id'))
+            self.now(), candidate_pose, fit=fit, camera_xy=camera_xy, camera_yaw=camera_yaw, request_id=payload.get('request_id'))
         if reason:
             self.get_logger().info(f'auto_recovery rejected: {reason}')
         self.publish(out)
@@ -483,10 +488,7 @@ class LocAssistNode(Node):
         budget = self.p('search_budget_s')
         message = f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates'
         # rclpy fixes the severity at each logging call site.
-        if elapsed > budget:
-            self.get_logger().warning(message)
-        else:
-            self.get_logger().info(message)
+        (self.get_logger().warning if elapsed > budget else self.get_logger().info)(message)
         recent = now - self.sighted_at <= self.p('sighting_max_age_s')
         scores = None
         if recent and self.paint is not None and self.paint_map is not None:
@@ -559,10 +561,7 @@ class LocAssistNode(Node):
             except Exception:
                 pass  # the sampled map-frame sensor pose is still in the report
         message = "localization verification " + json.dumps(trace.report(now, mount), sort_keys=True)
-        if trace.check.result == FAILED:
-            self.get_logger().warning(message)
-        else:
-            self.get_logger().info(message)
+        (self.get_logger().warning if trace.check.result == FAILED else self.get_logger().info)(message)
 
     def inject(self, injection):
         msg = PoseWithCovarianceStamped()

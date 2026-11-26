@@ -74,7 +74,7 @@ class LocalizationStateMachine:
         if not candidates:
             return Step(self.state, reason='no_candidates')
         self.request_id, self.candidates = self._new_id(), tuple(candidates)
-        self.check, self.state = None, LocState.CANDIDATES
+        self.check, self.state, self.reason = None, LocState.CANDIDATES, None
         return Step(self.state, ('report_candidates',))
 
     def _is_verified_overhead_twin_tiebreak(self, candidate_index, pose, source, cue_set, evidence) -> bool:
