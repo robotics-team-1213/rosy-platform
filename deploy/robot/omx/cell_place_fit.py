@@ -16,6 +16,7 @@ import math
 import numpy as np
 
 import cell_params as prm
+from cell_site_target import REGISTER_KEYS
 
 TIERS = (1, 2, 3)  # 1단 (l0, layer 0), 2단 (l1, layer 1), 3단 (l2, layer 2)
 
@@ -45,6 +46,8 @@ def with_tiers(config: dict, calibration: dict | None = None, catalog: list | No
                 z0 = round(base_z + layer * step, 4)
                 tsite = {**site, "layer": layer, "tier": layer + 1, "surface_z": z0, "tier_of": name}
                 tsite.pop("tier_step_m", None)
+                for key in REGISTER_KEYS:  # the base entry is the one truth; cell_site_target.unmeasured_refusal follows tier_of
+                    tsite.pop(key, None)
                 if "z" in site:
                     tsite["z"] = round(site["z"] + (z0 - site["surface_z"]), 4)
                 sites[tname] = tsite

@@ -42,6 +42,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
+from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
@@ -247,7 +248,7 @@ JOBS = {
             "dry_run": _bool,
         },
     },
-    **MEDIA_JOBS, **AREA_JOBS,
+    **MEDIA_JOBS, **AREA_JOBS, **SITE_JOBS,
 }
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
@@ -289,6 +290,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: {exc}") from None
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
+    check_site_files(job, {**checked, **opt_checked}, workdir)
     operator = checked.get("operator") or opt_checked.get("operator")
     proposer = checked.get("proposer") or opt_checked.get("proposer")
     if proposer and (not operator or proposer.casefold() == operator.casefold()):
@@ -346,7 +348,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--remeasure-map", "remeasure")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--remeasure-map", "remeasure"), ("--replace", "replace")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
@@ -359,7 +361,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     for option in (
         "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
-        "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
+        "post_eval", "z_evidence", "tier_evidence", "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
         "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts", "min_score",

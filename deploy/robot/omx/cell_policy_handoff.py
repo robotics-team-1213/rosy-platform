@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cell_params as prm
 from cell_pick_geom import grasp_depth, surface_z
+from cell_site_target import unmeasured_refusal
 from cell_transfer import FOLDED, RETURN_HELD, Gate, transfer_folded
 
 
@@ -165,6 +166,8 @@ def validate_taught_goal(config, source, goal_site, destination, library):
     goal = next((name for name in names if name in sites), None)
     if goal is None or source not in sites:
         raise ValueError("source and destination must exist in the arm's configured sites")
+    if unmeasured_refusal(sites, goal_site, destination, source):
+        raise ValueError("SITE_NOT_MEASURED: a registered slot needs XY and Z measurements before the arm goes there")
     effective = {**config, "sites": sites}
     pick, place = (library["source"][k] for k in ("pick", "place"))
     # Check xy and relative elevation so a taught lower-tier library cannot serve a higher-tier job.

@@ -17,6 +17,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a RO
 - Do not enable a runtime profile or invent joint, serial, or camera identities; those need device acceptance first.
 - Example/template files stay free of real hosts, addresses, and credentials (public repo).
 - Every real-arm command goes `checked` through `cell_transfer.Gate` (D-911); each re-plan is assessed. Moving steps need `--commissioning --person-at-switch`; without them use `--dry-run` or `--plan-only`, which move nothing. Never bypass the Gate.
+- A designated slot (cell-site-map name) opens for motion only after `cell_site_register` promotes it to measured (Z then XY evidence; layers 1/2 also tier step); until then every motion path refuses `SITE_NOT_MEASURED`. Order and config locking: `cell_site_register.py`.
 - Supervised tools (`cell_step`, `cell_push --friction`, `cell_two_arm --carry`, `cell_pipeline --stage recover --person-at-switch`) are D-911: `--commissioning --person-at-switch`, else `--dry-run`/`--plan-only`.
 - Automatic roles stay held by D-911 until reviewed; `cell_role` is rescue only (load is a Fleet ARM_TRANSFER job, D-996 5).
 - Sessions end torque OFF with caps restored, except a runner HOLD: the arm folds home and is read back before torque OFF, else a human hold keeps torque ON until a person sends SIGUSR2. Never cut torque on an extended arm.
