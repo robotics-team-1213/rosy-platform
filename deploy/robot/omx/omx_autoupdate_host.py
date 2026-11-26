@@ -318,6 +318,10 @@ class Host:
             return None
         return handle
 
+    def _observer_active(self, observer: dict) -> bool:  # unplugged/stopped with free buses: nothing drives it (11-27 arm_s)
+        try: return self._observer_pid(observer["unit"]) is not None  # noqa: E701
+        except (AttributeError, KeyError, OSError, ValueError, subprocess.SubprocessError): return True  # noqa: E701 unknown = running
+
     def _observer_pid(self, unit: str) -> str | None:
         shown = _sp().run(
             ["systemctl", "--user", "show", unit, "-p", "ActiveState", "-p", "MainPID"],
@@ -345,9 +349,8 @@ class Host:
 
     def follower_idle_reason(self, release: Path, python: Path) -> str | None:
         if observers := self.cfg.get("observers"):
-            # An unplugged board cannot hold torque, so its stale observer must not block the other arms (2026-11-27).
-            present = [o for o in observers if not o.get("device") or os.path.exists(o["device"])]
-            return next((r for o in present if (r := self._observer_defer_reason(o)) is not None), None)
+            return next((r for o in observers if (not o.get("device") or os.path.exists(o["device"])) and self._observer_active(o)
+                         and (r := self._observer_defer_reason(o)) is not None), None)
         code = (
             "import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
             f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
