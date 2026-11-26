@@ -14,6 +14,8 @@ from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.site_map import SiteMap, with_floor_surveys
 from fleet.swarm.robots import RobotEndpoint
 
@@ -89,7 +91,8 @@ def test_the_active_map_route_serves_the_survey_and_keeps_the_stored_hash(tmp_pa
     store = SiteMapStore(tmp_path / "tasks.sqlite")
     store.import_if_empty(SiteMap.model_validate(_world()), source="survey-test")
     users = {sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
-    client = TestClient(create_app(console, site_users=users, site_maps=store))
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
+    client = TestClient(create_app(console, task_service=tasks, site_users=users, site_maps=store))
     body = client.get("/api/fleet/site-map/active", headers=VIEWER).json()
     edges = {edge["id"]: edge for edge in body["map"]["edges"]}
     assert edges["bay_1"]["display_source"]["kind"] == "survey"

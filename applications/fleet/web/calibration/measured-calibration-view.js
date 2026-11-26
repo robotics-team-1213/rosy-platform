@@ -1,7 +1,7 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import { setOff } from "/common/cause-line.js";
 import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
-import { invert3 as invert3x3 } from "/console/assets/map-fit.js";
+import { invert3 as invert3x3 } from "/common/plane-math.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
