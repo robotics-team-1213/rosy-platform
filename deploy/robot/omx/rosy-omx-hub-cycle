@@ -1,0 +1,104 @@
+#!/usr/bin/python3
+"""Power-cycle one USB hub port for the OMX camera heal (PR #917 review item 4). Installed root-owned as
+/usr/local/sbin/rosy-omx-hub-cycle by install-hub-cycle.sh; the cell user reaches it only through a sudoers drop-in
+that names this file, so it takes exactly two arguments and trusts nothing else:
+
+  rosy-omx-hub-cycle <hub> <port>     hub: sysfs name such as 3-1.4 (digits, '-', dotted digits); port: 1..maxchild
+
+The hub must be a USB hub under /sys/bus/usb/devices. The port is cut for OFF_S seconds and switched back on
+(ClearPortFeature/SetPortFeature PORT_POWER over usbfs). Self-contained on purpose: root never imports from the
+user-writable release tree. Exit 0 and one JSON line on success, 2 on a refused argument, 1 on an I/O failure.
+"""
+import ctypes
+import fcntl
+import json
+import re
+import signal
+import struct
+import sys
+import time
+from pathlib import Path
+
+SYSFS = Path("/sys/bus/usb/devices")
+USBFS = Path("/dev/bus/usb")
+HUB_NAME = re.compile(r"[0-9]{1,3}-[0-9]{1,3}(\.[0-9]{1,3}){0,6}")
+USBDEVFS_CONTROL = 0xC0185500
+PORT_POWER = 8
+OFF_S = 3.0
+
+
+class _Ctrl(ctypes.Structure):
+    _fields_ = [("bRequestType", ctypes.c_ubyte), ("bRequest", ctypes.c_ubyte), ("wValue", ctypes.c_uint16),
+                ("wIndex", ctypes.c_uint16), ("wLength", ctypes.c_uint16), ("timeout", ctypes.c_uint32),
+                ("data", ctypes.c_void_p)]
+
+
+def _int(path: Path) -> int:
+    return int(path.read_text().strip(), 10)
+
+
+def validate(hub: str, port: str, sysfs: Path = SYSFS) -> tuple[Path, int]:
+    """(hub sysfs path, port) or ValueError. The name pattern forbids '/', '..' and anything but a bus path."""
+    if not HUB_NAME.fullmatch(hub) or not re.fullmatch(r"[0-9]{1,2}", port):
+        raise ValueError(f"refused: {hub!r} {port!r} is not a USB hub name and port number")
+    path = sysfs / hub
+    try:
+        if (path / "bDeviceClass").read_text().strip() != "09":
+            raise ValueError(f"refused: {hub} is not a USB hub")
+        children = _int(path / "maxchild")
+    except OSError as exc:
+        raise ValueError(f"refused: {hub} is not readable as a hub: {exc}") from None
+    if not 1 <= int(port) <= children:
+        raise ValueError(f"refused: port {port} outside 1..{children} of {hub}")
+    return path, int(port)
+
+
+def cycle(path: Path, port: int, *, ioctl=fcntl.ioctl, sleep=time.sleep, usbfs: Path = USBFS) -> dict:
+    node = usbfs / f"{_int(path / 'busnum'):03d}" / f"{_int(path / 'devnum'):03d}"
+
+    def request(fd, kind, req, value, length=0, data=0):
+        return ioctl(fd, USBDEVFS_CONTROL, _Ctrl(kind, req, value, port, length, 1000, data))
+
+    def status(fd):
+        buf = (ctypes.c_ubyte * 4)()
+        request(fd, 0xA3, 0x00, 0, 4, ctypes.addressof(buf))
+        return struct.unpack("<HH", bytes(buf))
+
+    with open(node, "rb+") as fh:
+        before = status(fh.fileno())
+        # A stop signal (the job API signals the whole process group) must not leave the port unpowered.
+        old = {s: signal.signal(s, signal.SIG_IGN) for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)}
+        try:
+            request(fh.fileno(), 0x23, 0x01, PORT_POWER)  # ClearPortFeature(PORT_POWER)
+            sleep(OFF_S)
+        finally:
+            try:
+                request(fh.fileno(), 0x23, 0x03, PORT_POWER)  # SetPortFeature(PORT_POWER)
+            finally:
+                for s, handler in old.items():
+                    signal.signal(s, handler)
+        sleep(0.15)
+        after = status(fh.fileno())
+    return {"hub": path.name, "port": port, "before": before, "after": after}
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 2:
+        print("usage: rosy-omx-hub-cycle <hub> <port>", file=sys.stderr)
+        return 2
+    try:
+        path, port = validate(*argv)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    try:
+        print(json.dumps(cycle(path, port)))
+    except OSError as exc:
+        print(f"hub cycle failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

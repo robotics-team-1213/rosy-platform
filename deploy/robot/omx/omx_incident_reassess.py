@@ -155,7 +155,7 @@ def resume_observer(arm, port, *, run=None, users=None, scan=None,
 
 
 def reassess(arm, config, *, device=None, fetch=None, read=None, lease_root=None, by_id=Path("/dev/serial/by-id"),
-             calibration_dir=CALIBRATION, now=time.time, sleep=time.sleep, gap=GAP_S, held=True) -> dict:
+             calibration_dir=CALIBRATION, now=time.time, sleep=time.sleep, gap=GAP_S, held=True, with_frames=True) -> dict:
     """The `remeasured` block (core_common ArmIncidentRemeasure) of `arm`'s own follower and plan home (its cell
     config). The standalone read captures held-box evidence. The legacy clear keeps its original views."""
     import cell_arm_lease
@@ -182,6 +182,7 @@ def reassess(arm, config, *, device=None, fetch=None, read=None, lease_root=None
         if type(lo) is not int or type(hi) is not int or not 0 <= lo < hi <= 4095:
             raise SystemExit(f"{arm}: no valid gripper calibration in {cal_file}; not read")
     views = zip(("top", "wrist"), HELD_VIEWS[arm]) if held else zip(VIEWS[arm], VIEWS[arm])
+    views = views if with_frames else ()  # frames=False: the camera-heal check reads the arm while its camera is the dead one
     fetch = fetch or viewer_fetch("http://127.0.0.1:8767")
     lock = session_lock(arm)  # SystemExit when a session holds the arm
     paused_obs = False

@@ -66,3 +66,4 @@ deploy/hosts/** text eol=lf
 learning/envs/isaac/models/*.npz binary
 shared/web/meshes/* -text
 shared/web/vendor/* -text
+deploy/robot/omx/rosy-omx-hub-cycle text eol=lf
