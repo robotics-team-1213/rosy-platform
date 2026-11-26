@@ -13,16 +13,23 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from cell_act_verdict import SUCCESS_RESULTS, act_verdict, fold_readback, measured_fold, plan_home, unverified_reason
 from cell_job_readiness import parse_structured_result
-from cell_policy_entry import FAULT_KEYS, park_ack_ok
+from cell_policy_entry import FAULT_KEYS
 
 DEPART_PATH = "/api/fleet/pipeline/pinky-tasks"
 DEPART_ACTIONS = ("depart_s1",)
-SUCCESS_RESULTS = ("released", "chunks_done")  # same as task_verified in cell_task_act_run.py
+
+def measured_verdict(workdir: Path, params: dict, exit_code: int | None, result: dict) -> dict:
+    """The same act_verdict as task_verified: measured live fold, park readback and the destination zone_acceptance (D-1057)."""
+    cfg = json.loads((workdir / params["config"]).read_text(encoding="utf-8"))
+    handoff = {"cell_id": "cell_s", "tier": params.get("dest_tier"), "src_site": params.get("site")}
+    return act_verdict(result, exit_code, handoff, params.get("dest_site") or "", fold_readback_fn=fold_readback,
+                       home=plan_home(cfg), live_fold=measured_fold(params["arm"], workdir))
 
 
-def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: dict | None) -> str | None:
-    """Why no depart command is sent, or None when the arm really took one item."""
+def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: dict | None, verdict: dict | None = None) -> str | None:
+    """Why no depart command is sent, or None when the arm really took one item and the shared verdict is verified."""
     if job != "cell_policy_drive" or not params.get("depart_robot"):
         return "depart not requested"
     if params.get("arm") != "arm_s":
@@ -39,9 +46,9 @@ def depart_skip_reason(job: str, params: dict, exit_code: int | None, result: di
         return f"arm result {result.get('result')!r} is not a success"
     if bad := [k for k in (*FAULT_KEYS, "torque_hold_commanded") if result.get(k)]:
         return f"arm hold/fault/torque hold: {', '.join(bad)}"
-    if result.get("parked") is not True or not park_ack_ok(result.get("park"), require_command=True):
-        return "arm fold (parked) not confirmed"  # the same fold proof as task_verified; Fleet's 409 is not relied on
-    return None
+    if verdict is None:
+        return "measured fold / zone_acceptance not evaluated"
+    return unverified_reason(verdict)  # the same judgement as task_verified; Fleet's 409 is not relied on
 
 
 def post_depart(robot_id: str, action: str, task_id: str, *, fleet_r_url: str | None,
@@ -90,7 +97,14 @@ def depart_once(runner, jid: str, run: dict) -> dict | None:
             robot, action = params["depart_robot"], params.get("depart_action", "depart_s1")
             try:
                 result = parse_structured_result(run["log"])[0]
-                why = depart_skip_reason(run["job"], params, run["proc"].poll(), result)
+                code = run["proc"].poll()
+                verdict, err = None, ""
+                try:
+                    verdict = measured_verdict(runner.workdir, params, code, result) if isinstance(result, dict) else None
+                except Exception as exc:  # unreadable config or telemetry: no measured proof, no depart
+                    err = f": {exc}"
+                why = depart_skip_reason(run["job"], params, code, result, verdict)
+                why = why + err if why and verdict is None else why
                 run["depart"] = {"sent": False, "robot_id": robot, "action": action, "reason": why} if why else post_depart(
                     robot, action, f"depart-{jid}", fleet_r_url=runner._fleet_r_url, token_file=runner._fleet_token_file, ca_file=runner._ca_file)
                 with runner.lock, open(runner.out / "audit.jsonl", "a", encoding="utf-8") as fh:

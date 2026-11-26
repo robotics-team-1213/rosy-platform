@@ -15,8 +15,7 @@ import time
 from typing import Any
 
 from cell_policy_lease import UNACKED
-from cell_policy_timing import park_ack_ok
-from cell_presence import zone_acceptance
+from cell_act_verdict import act_verdict
 from cell_task_act import _fail
 import cell_diagnose
 
@@ -59,18 +58,11 @@ def execute_act_policy_task(
             refused["stage_result"]["policy_request"] = plan["policy_request"]
         return refused
     measured_at = time.time()
-    raw_park = parsed.get("park") if isinstance(parsed.get("park"), dict) else {}
-    park_valid = park_ack_ok(raw_park, require_command=True)
-    park_row = {**raw_park, "command": "park"} if park_valid else dict(raw_park)
-    fold = fold_readback_fn({"transfer": {"steps": [park_row]}}, plan_home_fn(cfg_data))
-    live_fold = measured_fold_fn(arm_id, prep_dir)
-    folded = bool(parsed.get("parked") is True and park_valid and fold["folded"] and live_fold["folded"])
+    v = act_verdict(parsed, proc.returncode, handoff, dst, fold_readback_fn=fold_readback_fn,
+                    home=plan_home_fn(cfg_data), live_fold=measured_fold_fn(arm_id, prep_dir))
+    fold, live_fold, folded, took_one, zone, zone_ok, verified = (
+        v["fold"], v["live_fold"], v["folded"], v["took_one"], v["zone"], v["zone_ok"], v["verified"])
     source = parsed.get("source") if isinstance(parsed.get("source"), dict) else {}
-    took_one = parsed.get("took_one") is True
-    zone = parsed.get("zone_verification") if isinstance(parsed.get("zone_verification"), dict) else None
-    zone_ok = zone_acceptance(zone, handoff, dst)
-    verified = bool(proc.returncode == 0 and parsed.get("result") in ("released", "chunks_done")
-                    and folded and took_one and zone_ok)
     clearance = source_clearance_fn(cfg, cat_path, roi, src_site) if folded and source_clearance_fn else None
     if verified:
         write_context_fn(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, roi, zone, cat_path=cat_path)
