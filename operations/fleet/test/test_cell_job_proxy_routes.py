@@ -7,11 +7,14 @@ the job API's refusal passed through with its own status and body, viewer read-o
 from hashlib import sha256
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fleet.server.app import create_app
-from fleet.server.cell_job_proxy_routes import CellJobProxy, load_config
+from fleet.server.account_receiver import COOKIE
+from fleet.server.cell_job_proxy_routes import CellJobProxy, install_cell_job_proxy_routes, load_config
 from fleet.server.console import FleetConsole
+from fleet.server.site_auth import SitePrincipal
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 
@@ -98,7 +101,7 @@ def test_browser_cannot_name_files_or_the_operator(setup, body):
     assert fake.calls == []
 
 
-@pytest.mark.parametrize("proposer", ["operator-a", "Operator-A ", " OPERATOR-a"])
+@pytest.mark.parametrize("proposer", ["operator-a", "Operator-A ", " OPERATOR-a", "operator -a"])
 def test_proposer_equal_to_the_operator_is_refused_before_sending(setup, proposer):
     client, fake = setup
     res = client.post("/api/fleet/cells/cell_ab/jobs/safe_home", headers=OP, json={"arm": "arm_a", "proposer": proposer})
@@ -166,3 +169,55 @@ def test_config_comes_from_the_fleet_host_file(tmp_path):
     path = tmp_path / "cell-jobs.json"
     path.write_text('{"cells": {"cell_ab": {"url": "http://x:8781"}}}', encoding="utf-8")
     assert load_config({"ROSY_FLEET_CELL_JOBS": str(path)}) == {"cell_ab": {"url": "http://x:8781"}}
+
+
+ACCOUNT_ID = "bHHysln4Y4YRNe3MlrXA3VkffHdkkoHE"
+
+
+class FakeAccount:
+    def __init__(self, profile):
+        self.profile_value, self.cookies = profile, []
+
+    def profile(self, cookie):
+        self.cookies.append(cookie)
+        return self.profile_value
+
+
+def account_client(profile, cookie="session-cookie"):
+    """An Account operator (opaque principal_id) behind the proxy route, with Account userinfo faked."""
+    app = FastAPI()
+    person = SitePrincipal(ACCOUNT_ID, "operator", account_id=ACCOUNT_ID, site_resource="site:lab")
+    install_cell_job_proxy_routes(app, require_viewer=lambda: person, require_named_operator=lambda: person, environ={})
+    fake = FakeJobApi()
+    app.state.cell_job_proxy = CellJobProxy({"cell_ab": {"url": "http://cell:8781", "token_file": __file__,
+                                                         "arms": {"arm_a": ARM_FILES}}}, request_fn=fake)
+    app.state.account_client = FakeAccount(profile)
+    client = TestClient(app)
+    if cookie:
+        client.cookies.set(COOKIE, cookie)
+    return client, fake
+
+
+def test_account_operator_is_sent_by_login_not_account_id():
+    """2026-11-27 live: the cell job ran with --operator <Account ID>; the operator is the person's login."""
+    client, fake = account_client({"account_id": ACCOUNT_ID, "login": "agent-operator", "display_name": "Agent Op"})
+    assert client.post("/api/fleet/cells/cell_ab/jobs/safe_home", json={"arm": "arm_a", "proposer": "proposer-b"}).status_code == 202
+    assert fake.calls[0][3]["operator"] == "agent-operator" and ACCOUNT_ID not in str(fake.calls[0][3])
+    assert client.app.state.account_client.cookies == ["session-cookie"]
+
+
+@pytest.mark.parametrize("proposer", ["agent-operator", " Agent-Operator", "agent op", ACCOUNT_ID, ACCOUNT_ID.lower()])
+def test_account_proposer_equal_to_login_display_name_or_id_is_refused(proposer):
+    client, fake = account_client({"account_id": ACCOUNT_ID, "login": "agent-operator", "display_name": "Agent Op"})
+    res = client.post("/api/fleet/cells/cell_ab/jobs/cell_policy_drive", json={"arm": "arm_a", "proposer": proposer})
+    assert res.status_code == 400 and res.json()["error_code"] == "PROPOSER_IS_OPERATOR"
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("profile, cookie", [(None, "session-cookie"), ({"account_id": ACCOUNT_ID}, "session-cookie"),
+                                             ({"account_id": ACCOUNT_ID, "login": "x", "display_name": "x"}, None)])
+def test_account_operator_without_a_readable_name_is_refused_not_sent_by_id(profile, cookie):
+    client, fake = account_client(profile, cookie)
+    res = client.post("/api/fleet/cells/cell_ab/jobs/safe_home", json={"arm": "arm_a", "proposer": "proposer-b"})
+    assert res.status_code == 403 and res.json()["error_code"] == "OPERATOR_NAME_REQUIRED"
+    assert fake.calls == []
