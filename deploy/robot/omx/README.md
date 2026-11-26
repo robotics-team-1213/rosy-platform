@@ -1424,6 +1424,12 @@ arm A 체크포인트는 `arm_a`를 쓴다. 파일이 없으면 기존 LeRobot �
 envelope는 검토된 라이브러리 범위를 사용한다. `policy-drive.jsonl`에 변환 직후의 `converted_chunk`와
 기존 턱 보정 적용 뒤의 `envelope.ok` 및 거절 이유를 기록한다.
 
+`cell_policy_run` 작업(A·B)은 한 번 제출로 한 세션·한 잠금 안에서 사전 확인(무게·envelope·라이브러리·세션 상태·카메라
+새 프레임), home(필요 시), `cell_policy_drive`(자체 1청크 dry run·entry·정책 청크·park)를 차례로 돈다. 파라미터는 drive와
+같고 `operating_profile`이 더해지며 `dry_run`은 없다. 결과 JSON은 단계별 시간(`stages`)과 거절 단계·이유(`stage`, `reason`)를
+담는다. 세션 시작 실패는 래퍼가 `session_refusal.py`로 이유 코드(`lock_held`, `motor_comm` 등)와 comm 코드를 남기고,
+잠금 대기·관측기 handoff·comm 1회·카메라 1회만 150 s 안에서 다시 시도한다. 모터 fault·토크 ON·hold는 다시 시도하지 않는다.
+
 sim 단위 체크포인트의 기본값은 추론당 8스텝이다. 15 fps에서 약 533 ms다.
 `--n-action` 또는 Job API의 `n_action`으로 바꿀 수 있다. 최대값은 체크포인트의 `chunk_size`다.
 현재 청크를 재생하는 동안 최신 인코더와 카메라 관측에서 다음 청크를 추론한다.
