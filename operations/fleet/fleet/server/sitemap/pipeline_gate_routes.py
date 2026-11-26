@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from fastapi import HTTPException, Request
 from fleet.pipeline import resolve_omx_cells
-from fleet.pipeline.station_zones import load_station_zones, save_station_zones_yaml
+from fleet.pipeline.station_zones import active_lanes, load_station_zones, save_station_zones_yaml
 
 from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_dir
@@ -342,7 +342,7 @@ def install_gates_routes(app, ctx) -> None:
         if not yaml_text.strip():
             raise HTTPException(422, detail={"code": "EMPTY_YAML"})
         try:
-            updated = save_station_zones_yaml(yaml_text, zones_override_path)
+            updated = save_station_zones_yaml(yaml_text, zones_override_path, lanes=active_lanes(active_map))
         except ValueError as exc:
             raise HTTPException(422, detail={"code": "INVALID_STATION_ZONES_YAML", "message": str(exc)})
         return {"ok": True, **updated}
