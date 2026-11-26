@@ -352,11 +352,14 @@ def main(argv=None) -> int:
             else:
                 import omx_tcp
                 demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
-                res = run_episode(runner, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
-                                  log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
-                                  max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
-                                  params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
-                                  paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal)
+                kw = dict(offset=offset, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
+                          max_obs_age_s=args.max_obs_age_s, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
+                          rim_z_m=rim_z_m, paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal)
+                from cell_policy_preflight import preflight
+                if not args.dry_run and handoff is None and (refused := preflight(runner, shadow, args.library, work, config, log, kw)):
+                    return refused  # the same episode as a dry run refused: nothing moved
+                res = run_episode(runner, shadow, args.library, work, max_chunks=args.max_chunks, dry_run=args.dry_run,
+                                  log=log, handoff=handoff, authorize=authorize, **kw)
             if look:
                 after = look()
                 res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
