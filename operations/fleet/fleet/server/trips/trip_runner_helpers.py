@@ -89,6 +89,9 @@ class TripRunnerHelpers:
     """Read queries and robot/pose/persistence helpers mixed into ``TripRunner``."""
 
     def execution_view(self, view):
+        # An id-only acceptance receipt has no robot or lifecycle evidence yet.
+        if not view.get("robot_id") or not view.get("state"):
+            return view
         live = self._live.get(view["robot_id"])
         if live is not None and live.view["trip_id"] != view["trip_id"]:
             live = None
