@@ -400,7 +400,7 @@ def test_partial_target_act_grasp_sets_holding_and_paced_abort_holds_instead_of_
     from chunk_runner_settle import check_chunk_settled
 
     runner = _dummy_runner(holding=False, target_grip=52.8)
-    runner.chunk, runner.jitter = "policy", {"shaking": False}
+    runner.chunk, runner.jitter, runner.paced_ticks, runner.peak_lag = "policy", {"shaking": False}, 0, 0.0
     runner.library = {"fps": 30, "gripper_closed": 48.8, "chunks": {"home": [[0.0] * 6]}}
     runner.fps, runner.over_ticks, runner.damped_ticks = 30, 0, 0
     runner.last_grip, runner.last_body, runner.settle_since = 54.04, [20.78, 5.15, 3.0, 43.59, -29.18], 0.0
