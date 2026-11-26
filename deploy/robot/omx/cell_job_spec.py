@@ -386,11 +386,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
-            if params.get("person_at_switch") is True:
-                raise ValueError("reviewed automatic jobs cannot be combined with person_at_switch (D-911)")
             return [*prefix, "bash", "-c", PY, job["script"], *args]
-        if params.get("person_at_switch") is not True:
-            raise ValueError("a moving job needs person_at_switch: true")
+        # D-1077: the flag name stays for the scripts; cell_job_api starts this argv only after its stop proof passed (a request value is ignored)
         tail = ["--commissioning", "--person-at-switch"] if job.get("commissioning", True) else ["--person-at-switch"]
         return [*prefix, "bash", "-c", PY, job["script"], *args, *tail]
     if job["script"] == "cell_policy_drive.py" and params.get("arm") == "arm_s" and opt_checked.get("dry_run"):

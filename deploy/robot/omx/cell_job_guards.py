@@ -69,12 +69,6 @@ def authorize_principal(
         return eff, None
     if principal.role != ROLE_MACHINE:
         return eff, {"code": 403, "error_code": "FORBIDDEN_ROLE", "error": f"unsupported principal role {principal.role}"}
-    if eff.get("person_at_switch") is True:
-        return eff, {
-            "code": 403,
-            "error_code": "MACHINE_COMMISSIONING_FORBIDDEN",
-            "error": "cell-job-machine cannot assert person_at_switch or start commissioning motion",
-        }
     opt = job.get("optional") or ()
     if moves_arm_fn(job, eff) and not (bool(job.get("reviewed_only")) or ("reviewed_auto" in opt and eff.get("reviewed_auto") is True)):
         return eff, {

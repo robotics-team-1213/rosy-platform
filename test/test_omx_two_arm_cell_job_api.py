@@ -124,9 +124,6 @@ def test_cell_two_arm_policy_argv_and_fail_closed_validation(tmp_path):
     assert "--dry-run" not in live_argv
     assert live_argv[-2:] == ["--commissioning", "--person-at-switch"]
 
-    with pytest.raises(ValueError, match="person_at_switch"):
-        api.build_argv(job, _base_two_arm_params(), wd)
-
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(job, _base_two_arm_params(proposer="Alice", operator="alice", dry_run=True), wd)
 

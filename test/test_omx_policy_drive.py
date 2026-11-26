@@ -1496,5 +1496,7 @@ def test_live_local_cpu_act_sets_nice_and_thread_env(tmp_path, monkeypatch):
               "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--goal-slot", "4",
               "--operator", "op_b", "--paced-chunks", "--max-chunks", "1"]
     assert drive.main([*common, "--dry-run"]) == 0 and nice_calls == []
+    import cell_stop_proof
+    monkeypatch.setattr(cell_stop_proof, "session_proof", lambda *a, **kw: {"ok": True, "code": None, "reason": None})
     assert drive.main([*common, "--person-at-switch"]) == 0 and nice_calls == [10]
     assert all(os.environ[v] == "2" for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"))
