@@ -150,3 +150,17 @@ def test_cli_still_refuses_paced_taught(tmp_path, capsys):
         drive.main(["--config", str(tmp_path / "c.json"), "--library", str(tmp_path / "l.json"), "--mode", "taught",
                     "--goal-site", "tray", "--paced-chunks", "--dry-run", "--operator", "x"])
     assert "--paced-chunks requires act or hybrid mode" in capsys.readouterr().err
+
+
+def test_job_spec_admits_paced_hybrid_and_still_refuses_paced_taught(tmp_path):
+    import cell_job_spec as spec
+
+    for name in ("cell-s.json", "chunks-s.json"):
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+    base = {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "max_chunks": 1, "operator": "human_op",
+            "dry_run": True, "paced_chunks": True}
+    argv = spec.build_argv(spec.JOBS["cell_policy_drive"], {**base, "mode": "hybrid"}, tmp_path)
+    assert "--paced-chunks" in argv and argv[argv.index("--mode") + 1] == "hybrid"
+    import pytest
+    with pytest.raises(ValueError, match="paced_chunks requires"):
+        spec.build_argv(spec.JOBS["cell_policy_drive"], {**base, "mode": "taught"}, tmp_path)
