@@ -11,7 +11,7 @@ from typing import Optional
 from fleet.routing.cost import STOP
 from fleet.routing.execute import plan_again, replan_hold
 from fleet.server.trip_admission import LOCALIZED
-from fleet.server.trip_halts import _cancel_ack, error_code as _code
+from fleet.server.trip_halts import _cancel_ack, error_code as _code, idle_cancel_owner, pre_dispatch_wait
 from fleet.server.trip_laps import carry_on, hold_back_m, next_lap
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import TripError
@@ -66,11 +66,15 @@ class TripReplan:
         stop["confirmed"] = False
         stop.pop("proof", None)
         try:
-            if not stop.get("cancel_ack"):
+            pred = live.active_route is None and live.last_goal is None and pre_dispatch_wait(live.view)
+            if not pred:
+                stop.pop("idle_owner", None)
+            if not stop.get("cancel_ack") and not stop.get("idle_owner"):
                 last = stop.get("attempted_at")
                 if last is not None and self._clock() - last < self.config.restart_retry_s:
                     return False
                 stop["attempted_at"] = self._clock()
+                wire = self.halts.idle_wire(robot_id) if pred else None
                 try:
                     receipt = await self._call(self._cancel_goal(robot_id)) if self._cancel_goal else None
                 finally:
@@ -78,14 +82,22 @@ class TripReplan:
                         # A lost handoff reply leaves either controller holding the wheels.
                         await self._call(self._junction.hold(robot_id))
                 stop["cancel_ack"] = _cancel_ack(receipt)
-                if not stop["cancel_ack"]:
+                observed = idle_cancel_owner(receipt, self._clock()) if wire is not None and not stop["cancel_ack"] else None
+                if observed is not None:
+                    owner, after = observed
+                    stop.update(idle_owner=owner, wire_epoch=wire, idle_ack_at=after)
+                elif not stop["cancel_ack"]:
                     stop["error"] = "CANCEL_UNCONFIRMED"
                     return False
-            proof = await self.halts.measured_stop(robot_id, stop["attempted_at"])
+            if stop.get("idle_owner"):
+                proof = await self.halts.measured_idle_stop(robot_id, stop["idle_ack_at"], stop["idle_owner"], stop["wire_epoch"])
+            else:
+                proof = await self.halts.measured_stop(robot_id, stop["attempted_at"])
             if proof is None:
                 stop["error"] = "TRIP_PAUSE_STOP_UNCONFIRMED"
                 if self._clock() - stop["attempted_at"] >= self.config.restart_retry_s:
                     stop["cancel_ack"] = False
+                    stop.pop("idle_owner", None)
                 return False
             stop.update(confirmed=True, proof=proof)
             stop.pop("error", None)

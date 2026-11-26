@@ -10,12 +10,19 @@ def native_readback(self, run_id: UUID | None = None) -> dict:
         before = snapshot() if snapshot is not None else None
         after = snapshot() if snapshot is not None else None
         stable = before is not None and before == after
-        return self.native.readback(
+        result = self.native.readback(
             run_id, admitting=self._admitting is not None or self.precision_reserved(),
             pending_submission=before[1] if before else True,
             actuating_callback=before[2] if before else True,
             lease_active=self._lease is not None,
             transport_generation=before[0] if stable else None)
+        if (run_id is None and stable and before[1:] == (False, False)
+                and self._nav_state is NavigationState.IDLE and self._admitting is None
+                and not self.precision_reserved() and not self.mapping_active and self._lease is None
+                and self._moving_session is None and self._active_correlation_id is None
+                and self._reserved_path is None and self._prepared_path is None and result['owner']['owner_run_id'] is None):
+            result['idle_owner'] = {**result['owner'], 'transport_generation': before[0]}
+        return result
 
 
 def with_terminal_navigation(self, expected_boot_id: str, handover, *, expected_run_id=None,
