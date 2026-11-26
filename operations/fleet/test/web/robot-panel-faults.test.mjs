@@ -5,8 +5,10 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { createRobotPanel } = await import("../../../../applications/fleet/web/shared/robot-panel.js");
+const { robotProfile } = await import("../../../../applications/fleet/web/shared/robot-profile.js");
 const { dockEntries } = await import("../../../../applications/fleet/web/shared/robot-dock-model.js");
 const { createRobotDock } = await import("../../../../applications/fleet/web/shared/robot-dock.js");
+const { armIncidentAlertRows } = await import("../../../../applications/fleet/web/cell/arm-incident-clear.js");
 
 function makeDom(t) {
   const prevDoc = globalThis.document;
@@ -103,11 +105,13 @@ test("robot-panel mounts faults section first when provided and omits when null"
   assert.equal(body.children[0].dataset.section, "status");
 });
 
-test("dockEntries and createRobotDock render multi-fault count badge and cap at 9+", (t) => {
+test("dockEntries and createRobotDock render multi-fault count badge via robotProfile and cap at 9+", (t) => {
   makeDom(t);
+  const plain = robotProfile({ id: "rosy_01", kind: "mobile", online: true, evidence: "fresh", estop: true });
+  assert.equal(Object.hasOwn(plain.alarm, "count"), false, "no count key when count is omitted");
   const profiles = [
-    { id: "rosy_46", name: "46", kind: "mobile", link: { state: "fresh", text: "정상" }, alarm: { level: "danger", text: "최우선 2건", count: 3 } },
-    { id: "arm_a", name: "ARM_A", kind: "arm", link: { state: "fresh", text: "정상" }, alarm: { level: "caution", text: "사건 12건", count: 12 } },
+    robotProfile({ id: "rosy_46", name: "46", kind: "mobile", online: true, evidence: "fresh", estop: true, alarm: { level: "danger", text: "최우선 2건", count: 3 } }),
+    robotProfile({ id: "arm_a", name: "ARM_A", kind: "arm", online: true, evidence: "fresh", alarm: { level: "caution", text: "사건 12건", count: 12 } }),
   ];
   const entries = dockEntries(profiles);
   assert.equal(entries[0].marks[0].count, 3);
@@ -115,4 +119,18 @@ test("dockEntries and createRobotDock render multi-fault count badge and cap at 
   const dock = createRobotDock({ profiles });
   const counts = dock.root.querySelectorAll(".robot-dock-count").map((n) => n.textContent);
   assert.deepEqual(counts, ["3", "9+"]);
+});
+
+test("OMX armIncidentAlertRows retains canonical arm.id and arm.sourceId when label differs", () => {
+  const armRows = armIncidentAlertRows({
+    arms: [{
+      id: "arm_a", sourceId: "omx_arm_a", label: "Arm A",
+      openIncidents: [{ incident_id: "inc-1", decision: { hold: true } }],
+      homeRecoveries: [],
+    }],
+  });
+  const flat = [...armRows.crit, ...armRows.warn];
+  const matched = flat.filter((r) => r.arm?.id === "arm_a" || r.arm?.sourceId === "omx_arm_a");
+  assert.equal(matched.length, 1);
+  assert.equal(matched[0].robotId, "Arm A");
 });

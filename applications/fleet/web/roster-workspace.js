@@ -256,8 +256,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         servo: { currentMa: currentMa ?? undefined, temperatureC: tempC ?? undefined },
         place: armPositionLine(def, anc, cellId),
         task: anc.cell_status || (obsArm?.fresh ? "실시간 관측" : obsArm ? "대기" : undefined),
-        alarm: hold && obsArm?.heldIncidents?.length ? { level: "caution", text: `보류 ${obsArm.heldIncidents.length}건`, count: obsArm.heldIncidents.length }
-          : hwFault ? { level: "danger", text: "모터 고장" }
+        alarm: hwFault ? { level: "danger", text: "모터 고장" }
+          : hold && obsArm?.heldIncidents?.length ? { level: "danger", text: `보류 ${obsArm.heldIncidents.length}건`, count: obsArm.heldIncidents.length }
           : obsArm?.homeRecoveries?.length ? { level: "caution", text: "홈 복구 대기" }
           : hold ? { level: "caution", text: "홀드 중" }
           : obsArm?.openIncidents?.length ? { level: "caution", text: `사건 ${obsArm.openIncidents.length}건`, count: obsArm.openIncidents.length }
@@ -331,7 +331,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         if (view.stateUnavailable) return null;
         const armRows = profile.kind === "arm" ? armIncidentAlertRows(view.workcellObs) : null;
         const matchId = detail?.obsArm?.sourceId || profile.id;
-        const raw = armRows ? [...armRows.crit, ...armRows.warn].filter((r) => r.robotId === matchId || r.robotId === profile.id)
+        const raw = armRows ? [...armRows.crit, ...armRows.warn].filter((r) => r.arm?.id === profile.id || r.arm?.sourceId === matchId || r.robotId === matchId || r.robotId === profile.id)
           : (detail?.robot ? (roster.attentionItems?.(detail.robot) || []) : []);
         const rows = raw.map((r) => ({
           severity: r.severity === "crit" ? "crit" : "warn",
