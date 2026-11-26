@@ -91,8 +91,25 @@ def test_camera_shift_keeps_remap(cell, monkeypatch):
     assert "rebind_followers" not in _check(cfg, cal)
 
 
-def test_old_calibration_without_per_site_record_keeps_remap(cell):
-    cfg, cal, _, _ = cell
+def test_legacy_calibration_without_per_site_record_rebinds_followers(cell):
+    cfg, cal, ref, cal_path = cell
     cal.pop("reference_geometry_sites")
     found = _check(cfg, cal)
+    assert found["rebind_followers"] == ["ship-h0", "ship-h1"] and cc.stale(found) == ["rebind-followers"]
+    assert mf.rebind(cfg, cal, cal_path, found, 6.0) == {"rebind-followers": ["ship-h0", "ship-h1"]}
+    saved = json.loads(cal_path.read_text())
+    assert bound_map_error(saved, cfg, ref.read_bytes()) is None and "reference_geometry_sites" in saved
+
+
+def test_legacy_calibration_with_a_changed_existing_site_keeps_remap(cell):
+    cfg, cal, _, _ = cell
+    cal.pop("reference_geometry_sites")
+    cfg["sites"]["pallet"]["auto_roi"] = [10, 0, 21, 10]
+    found = _check(cfg, cal)
     assert "rebind_followers" not in found and found["map_binding_error"] == mf.GEOMETRY_CHANGED
+
+
+def test_per_site_record_of_another_generation_keeps_remap(cell):
+    cfg, cal, _, _ = cell
+    cal["reference_geometry_sites"]["geometry_sha"] = "stale"
+    assert "rebind_followers" not in _check(cfg, cal)

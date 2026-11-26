@@ -28,18 +28,29 @@ def added_followers(calibration: dict, config: dict, reference_bytes: bytes, shi
     """The added follower sites when they are the only binding change, else [] (keep today's remap)."""
     from cell_auto_evidence import bound_map_error
 
-    record = calibration.get("reference_geometry_sites")
-    if not (isinstance(record, dict) and record.get("geometry_sha") == calibration.get("reference_geometry_sha")
-            and isinstance(record.get("sites"), dict)):
-        return []  # older calibration without the per-site record
     if bound_map_error(calibration, config, reference_bytes) != GEOMETRY_CHANGED:
         return []  # image or map changed too, or nothing changed
     if not (shift and shift.get("ok") and shift.get("max_px", float("inf")) <= limit_px):
         return []
-    bound, now = record["sites"], {n: cell_attempts.digest(g) for n, g in site_geometry(config).items()}
+    geometry, mapped = site_geometry(config), calibration.get("sites") or {}
+    now = {n: cell_attempts.digest(g) for n, g in geometry.items()}
+    record = calibration.get("reference_geometry_sites")
+    if record is None:
+        # legacy calibration (2026-11-27 live arm A): the bound sites are the current ones minus candidate followers,
+        # proven only when they digest to the stored reference_geometry_sha exactly
+        candidates = {n for n, g in geometry.items() if n not in mapped and isinstance(g["map_from"], str)
+                      and (mapped.get(g["map_from"]) or {}).get("homography")}
+        kept = {n: g for n, g in geometry.items() if n not in candidates}
+        if cell_attempts.digest(kept) != calibration.get("reference_geometry_sha"):
+            return []
+        bound = {n: now[n] for n in kept}
+    elif isinstance(record, dict) and record.get("geometry_sha") == calibration.get("reference_geometry_sha") \
+            and isinstance(record.get("sites"), dict):
+        bound = record["sites"]
+    else:
+        return []  # a per-site record from another generation
     if any(now.get(name) != sha for name, sha in bound.items()):
         return []  # a bound site was removed or changed
-    mapped = calibration.get("sites") or {}
     added = sorted(set(now) - set(bound))
     for name in added:
         parent = config["sites"][name].get("map_from")
