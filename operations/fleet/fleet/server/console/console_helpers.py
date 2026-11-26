@@ -341,10 +341,12 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
         with dispatch_guard(check_route_binding, paths={"/api/v1/navigation/bound-route"}):
             result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
                 lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
-                expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding))
+                expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding),
+                grid_from=bays.Grid.from_payload, untrusted=trust.UNTRUSTED)
     elif route_points is not None:
         result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
-            lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id))
+            lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id),
+            grid_from=bays.Grid.from_payload, untrusted=trust.UNTRUSTED)
     else:
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
     if result["accepted"] is False:

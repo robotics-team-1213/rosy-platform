@@ -224,19 +224,18 @@ def peer_proof(self, peers):
     return {"peer_evidence": {rid: sample for rid in peers if (sample := provider.evidence(rid))}}
 
 
-async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send):
-    from fleet.server import bays
+async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from, untrusted):
     from fleet.swarm.dispatch_guard import dispatch_guard
 
     await self._observe()
-    grid = bays.Grid.from_payload(await self.map()) if len(self._order) > 1 else None
+    grid = grid_from(await self.map()) if len(self._order) > 1 else None
 
     class PeerWait(Exception):
         pass
 
     def check():
         self.goal_leases.check_stop(robot_id, stop)
-        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid)
+        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid, untrusted)
         if wait is not None:
             raise PeerWait(wait)
 
@@ -248,11 +247,10 @@ async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, s
         return exc.args[0]
 
 
-def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
-    from fleet.localization import trust
+def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid, untrusted):
 
     here = self._pose_of(robot_id)
-    if here is None or self._verdict(robot_id) == trust.UNTRUSTED:
+    if here is None or self._verdict(robot_id) == untrusted:
         return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED",
                 "command_robot_id": robot_id, "blocked_by": robot_id, "waiting_on": [robot_id],
                 "dispatch_attempted": False, "cancel_confirmed": False}
