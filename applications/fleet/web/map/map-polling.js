@@ -1,3 +1,4 @@
+import { updateSelectedTrip } from "/console/assets/trip-receipts.js";
 // 현장 지도 폴링(D-798 3.2, map-view.js에서 나눔): 사이트 사각형·활성 지도·교정, 점유 격자, 교통 표,
 // 로봇 상황(guide), 카메라 관측. 주기는 셸(console.js)이 쥐고, 그리기는 map-view.js의 draw가 한다.
 import { classifySightings, siteViewTurn } from "./site-layer.js";
@@ -142,8 +143,11 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, sc
       life.check();
       trafficGate.ok();
       // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
-      const trips = traffic.robots.length || view.trafficTrips?.length
+      const tracking = view.selectedGoal?.tripId && view.selectedGoal.status === "ACCEPTED";
+      const trips = tracking || traffic.robots.length || view.trafficTrips?.length
         ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      life.check();
+      if (updateSelectedTrip(view, trips)) onTrafficChanged();
       view.trafficTrips = trips.open || [];
       view.endedTrips = trips.trips || [];
       life.check();

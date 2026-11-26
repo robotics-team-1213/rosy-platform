@@ -177,7 +177,7 @@ def test_console_route_goal_lease_and_trip_guard():
     assert robot._state["navigation"] == "CANCELED"
 
 
-def test_console_route_untrusted_peer_cancels_without_single_point_queue():
+def test_console_route_waits_for_untrusted_peer_before_motor_dispatch():
     r42 = RouteFakeRobot("rosy_42")
     r45 = RouteFakeRobot("rosy_45")
     r45._state["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
@@ -191,9 +191,32 @@ def test_console_route_untrusted_peer_cancels_without_single_point_queue():
     assert reply["accepted"] is False
     assert reply["queued"] is False
     assert reply["reason"] == "LOCALIZATION_UNTRUSTED"
-    assert reply["cancel_confirmed"] is True
-    assert r42._state["navigation"] == "CANCELED"
+    assert reply["command_robot_id"] == "rosy_42" and reply["waiting_on"] == ["rosy_45"]
+    assert reply["cancel_confirmed"] is False and reply["dispatch_attempted"] is False
+    assert r42.routes == []
     assert console._queued == {}
+
+
+@pytest.mark.parametrize("path", ["/api/v1/navigation/route", "/api/v1/navigation/bound-route"])
+def test_peer_moving_into_route_during_lease_preparation_stops_wire_dispatch(path):
+    from fleet.server.traffic_arbitration_helpers import guarded_road_send
+    from fleet.swarm.dispatch_guard import check_dispatch
+
+    r42, r45 = RouteFakeRobot("rosy_42"), RouteFakeRobot("rosy_45")
+    _, console, *_ = _console_runner(r42, _south_loop_map(), peers=[r45])
+    r45._state["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
+    obstacle = {"point": (3.0, 3.0)}
+    console.set_site_pose_providers(mover=lambda _: ("site", 0, 0, 0),
+                                    obstacle=lambda _: ("site", *obstacle["point"], 0))
+    async def send():
+        obstacle["point"] = (0.2, 0.0)
+        check_dispatch(path=path)
+        pytest.fail("peer on route reached the motion writer")
+
+    reply = run(guarded_road_send(console, "rosy_42", [{"x": 0.4, "y": 0}], (0.4, 0),
+                                  console.goal_leases.stop_token("rosy_42"),
+                                  lambda _: ("site", [(0, 0), (0.4, 0)]), send))
+    assert reply["waiting_on"] == ["rosy_45"] and not reply["dispatch_attempted"]
 
 
 def test_sample_nav2_route_splits_closed_loop_and_keeps_open_path_single_stop():

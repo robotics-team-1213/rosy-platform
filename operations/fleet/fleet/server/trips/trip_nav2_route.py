@@ -508,13 +508,26 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         return
     if reply.get("accepted") is False or reply.get("queued"):
         reason = reply.get("reason") or ""
-        if robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS:
+        peer_wait = (reply.get("blocked_by") not in (None, robot_id)
+                       and reply.get("queued") is False
+                       and (reply.get("dispatch_attempted") is False or reply.get("cancel_confirmed") is True)
+                       and reason in ("LOCALIZATION_UNTRUSTED", "ROUTE_CONFLICT", "YIELDING", "MAP_FRAME_MISMATCH"))
+        if peer_wait or (robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS):
+            if peer_wait:
+                detail = live.view["detail"]
+                proof = _GoalRefused(reason, reply).detail["goal_admission"]
+                prior = detail.get("peer_wait") or {}
+                detail["peer_wait"] = {**proof, "since": prior.get("since", runner._clock()),
+                                       "checked_at": runner._clock(), "reason": reason}
             live.active_route = None
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
             return
         raise _GoalRefused(reason, reply)
+    if wait := live.view["detail"].pop("peer_wait", None):
+        live.progress_at = runner._clock()
+        live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
     live.active_route = {"end_index": end_index, "points": len(payload)}
