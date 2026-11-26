@@ -76,12 +76,12 @@ def action_window(chunk, observed, start, fps, steps, max_age):
 LIVE_MAX_AGE_S = 0.25  # the runner publishes live.json every ~0.1 s between chunks; the 0.6 s observation limit is unchanged
 
 
-def _live_snapshot(cell, now=time.time):
+def _live_snapshot(cell):
     """The running session's own latest joint sample, with no FIFO round trip (2026-11-26: 9 stale refusals). None unless
     it is fresh, idle between chunks and clean; the caller then asks the runner as before."""
     live = cell.policy_state() if hasattr(cell, "policy_state") else None
     t = live.get("t") if isinstance(live, dict) else None
-    if (isinstance(t, bool) or not isinstance(t, (int, float)) or not 0 <= now() - t <= LIVE_MAX_AGE_S
+    if (isinstance(t, bool) or not isinstance(t, (int, float)) or not 0 <= time.time() - t <= LIVE_MAX_AGE_S
             or live.get("chunk") is not None or any(live.get(k) for k in FAULT_KEYS) or not live.get("state")):
         return None
     return {**live, "ok": True}
