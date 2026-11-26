@@ -37,7 +37,6 @@ python tools/remote/omx_hotfix.py commit --base a41840cb86 --ref omx-bench-deplo
 # 2) 원격 pytest 검증
 python tools/remote/omx_hotfix.py test --sha <COMMIT_SHA> --log-dir D:/DevTemp/omx-bench-deploy-out -- test/test_omx_bench_record.py
 
-# 3) 셀 PC 배포 및 서비스 재시작
-python tools/remote/omx_hotfix.py deploy --sha <COMMIT_SHA> --tested-log D:/DevTemp/omx-bench-deploy-out/run-1.txt --host robttt@rosy-arm-cell.tailb4b84d.ts.net
-ssh robttt@rosy-arm-cell.tailb4b84d.ts.net "systemctl --user restart rosy-omx-bench-record.service && systemctl --user is-active rosy-omx-bench-record.service"
+# 3) 셀 PC 배포: --link omx-bench-current면 /api/arms가 idle·잠금 없음일 때 서비스까지 재시작, 바쁘면 "bench restart held"·종료 코드 3(배포는 완료, 한가할 때 재시작)
+python tools/remote/omx_hotfix.py deploy --sha <COMMIT_SHA> --tested-log D:/DevTemp/omx-bench-deploy-out/run-1.txt --host robttt@rosy-arm-cell.tailb4b84d.ts.net --link omx-bench-current
 ```
