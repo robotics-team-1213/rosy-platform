@@ -264,7 +264,7 @@ async function pollRobots() {
     ]);
     if (tripsRes.status === 'fulfilled') {
       state.open = tripsRes.value.open || [];
-      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
+      status('trip-run', state.open.length ? `${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
         : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
     } else {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');
