@@ -54,3 +54,9 @@ applies_when: "streaming 30 Hz joint targets or multi-chunk pick-and-place traje
 **Still open (not verified on the real arm).** The remaining sway comes from servo tracking. Elbow and wrist present-minus-sent have opposite signs, and their PWM crosses zero during descents (a backlash hypothesis). `runner.pitch_hold_gain` (default 0) nudges wrist_flex by the last tick's jaw pitch error on descents. Turn it on only for a real-arm A/B, comparing `sway` receipts with it off and on.
 
 **Next time.** Judge arm shaking where the task sees it (the TCP), not per joint, whenever several joints move together. Before trusting a judge, replay a real trace through it.
+
+## Arm A remap tracking stop and trace recovery, 2026-11-26
+
+During the first upward move, Arm A's shoulder encoder advanced from -62.25 to -58.49 runner units before the tracking guard stopped the move. Manual travel was possible. In a supervised repeat with the same 18 targets and unchanged guard settings, halving the remap transit speed from 0.4 to 0.2 let all 18 moves settle. The arm parked, and independent replay of the camera observations reproduced the fit (3.10 mm mean, 6.87 mm maximum leave-one-out error). This establishes a working speed for this trajectory. Load, wear and other possible causes of the original tracking error were not isolated.
+
+Long moves can return a successful command with a `segment_too_large` trace receipt. The raw lines still carry the command's owner session ID, motion-library SHA and chunk name. Match all three to the status record in the job interval, require a unique source and contiguous byte range, and hash that range separately. Mark the checksum as reconstructed. Retain the original receipt status. This recovered 20,075 control ticks across 18 moves. The comparison run stopped after 113 ticks. Read `sent` and `present` on the same tick. PWM is the latest sampled motor value and may repeat across ticks.
