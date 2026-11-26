@@ -304,6 +304,9 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""
+        previous = self.view(trip_id)
+        if previous is not None and previous["state"] == "canceled":
+            return previous
         live = self._open(trip_id)
         live.view.update(state="canceled", reason=reason)
         live.view["detail"]["canceled_by"] = principal_id

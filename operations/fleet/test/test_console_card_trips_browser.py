@@ -375,18 +375,22 @@ def test_convoy_follows_the_leader_from_the_formation_block(site):  # noqa: F811
         browser.close()
 
 
-def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
+@pytest.mark.parametrize("reply_lost", [False, True])
+def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site, reply_lost):  # noqa: F811
     """D-540 1: one `운행 취소` per card, quiet, no confirm: the open trip if there is one, else the goal plus
     lane driving that is on. A stopped trip opens its card with the lease end reason (D-541 7)."""
 
     from playwright.sync_api import expect
 
     posts = []
-    answers = {"/api/fleet/trips/t-1/cancel": (200, {**LEAD, "state": "canceled", "detail": {"stop_sent": False}}),
+    receipt = {**LEAD, "state": "canceled", "detail": {"stop_sent": False}}
+    answers = {"/api/fleet/trips/t-1/cancel": (503, {}) if reply_lost else (200, receipt),
                "/api/fleet/robots/rosy_02/cancel": (200, {"ok": True}),
                "/api/fleet/robots/rosy_02/line-follow": (200, {"result": {"state": "OFF"}})}
     browser, page, errors = _open(None, site, API, posts, answers)
     try:
+        if reply_lost:
+            page.route("**/api/fleet/trips/t-1", lambda route: route.fulfill(json=receipt))
         lead = _card(page, "rosy_01")
         assert lead.get_attribute("data-collapsed") is None
         assert "반복 운행 2바퀴째" in lead.inner_text()
