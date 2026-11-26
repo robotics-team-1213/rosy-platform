@@ -154,8 +154,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const fallback = canvasSizeFor(bounds, 800);
     // D-515: 실영상도 지도 미터 뷰(+y 위) 위에 위에서 본 직사각형으로 편다. 지도 방향이 화면
     // 방향이라 따로 돌리지 않고(D-513 7의 mapUpTurn 불필요), 클릭도 미터 뷰를 그대로 거꾸로 푼다.
-    const width = rect.width > 0 ? rect.width : fallback.width;
-    const height = rect.height > 0 ? rect.height : fallback.height;
+    const width = rect.width > 0 ? rect.width : fallback.width, height = rect.height > 0 ? rect.height : fallback.height;
     const dpr = window.devicePixelRatio || 1;
     const ctx = clearCanvas(canvas, Math.round(width * dpr), Math.round(height * dpr));
     ctx.scale(dpr, dpr);
@@ -167,9 +166,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const sameFrame = view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
     const t = fitBox(sameFrame && activeMap.places?.length ? mapBounds(activeMap) : bounds, width, height, 32, rot);
     // 눈금자는 격자 범위 중 보이는 칸(여백 32, 위 좌표 칩 띠 40 안쪽)만 — 밖 눈금은 가장자리로 몰려 겹친다.
-    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32);
-    const ruler = {min_x: Math.max(bounds.min_x, Math.min(ax, bx)), max_x: Math.min(bounds.max_x, Math.max(ax, bx)),
-      min_y: Math.max(bounds.min_y, Math.min(ay, by)), max_y: Math.min(bounds.max_y, Math.max(ay, by))};
+    const [ax, ay] = t.toMap(32, 40), [bx, by] = t.toMap(width - 32, height - 32), { max, min } = Math;
+    const ruler = { min_x: max(bounds.min_x, min(ax, bx)), max_x: min(bounds.max_x, max(ax, bx)), min_y: max(bounds.min_y, min(ay, by)), max_y: min(bounds.max_y, max(ay, by)) };
     const toPx = (x, y) => { const [px, py] = t.toPx(x, y); return { x: px, y: py }; };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
     view.siteToWorld = (x, y) => { const [mx, my] = t.toMap(x, y); return { x: mx, y: my }; };
@@ -197,11 +195,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const hovered = view.hoverEntity?.kind === "place" ? view.hoverEntity.place : null;
       if (hovered && !(layerOn("labels") && /^[CS]/.test(String(hovered.id)))) {
         const p = toPx(hovered.x, hovered.y);
-        ctx.save();
-        ctx.font = font("micro");
-        ctx.fillStyle = css("--ink");
-        ctx.fillText(String(hovered.id), p.x + 7, p.y - 6);
-        ctx.restore();
+        ctx.save(); ctx.font = font("micro"); ctx.fillStyle = css("--ink");
+        ctx.fillText(String(hovered.id), p.x + 7, p.y - 6); ctx.restore();
       }
     }
     if (showLanes && layerOn("labels")) {
