@@ -121,6 +121,7 @@ CALIBRATION = [
     "test/test_calibration_frame_browser.py",
     "test/test_calibration_header_browser.py",
     "test/test_calibration_job_controls_browser.py",
+    "test/test_calibration_flow_browser.py",
 ]
 BENCH = ["test/test_omx_bench_narrow_browser.py"]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD + CALIBRATION + BENCH
