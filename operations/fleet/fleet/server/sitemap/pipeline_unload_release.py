@@ -286,8 +286,8 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             continue
         target = exit_target(rules, site)
         if stage_trip is not None:
-            from fleet.server.work.pipeline_station_stop import stop_reason
-            if stop_reason(state, robot_id):
+            from fleet.server.pipeline_station_stop import stop_reason
+            if stop_reason(state, robot_id, state.pinky_tasks):
                 continue
             if target is not None and record is None:
                 stage_trip(robot_id, batch, target[0], release, now)
@@ -418,7 +418,10 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
     return sent
 
 
-from fleet.server.work.pipeline_station_stop import _stage_departure_trip
+def _stage_departure_trip(state, robot_id, batch, place, release, now, version, save):
+    from fleet.server.pipeline_pinky_dispatch import enabled
+    from fleet.server.pipeline_station_stop import stage_departure_trip
+    return stage_departure_trip(state, robot_id, batch, place, release, now, version, save, state.pinky_tasks, enabled)
 
 
 def install_unload_release_routes(app, ctx) -> None:

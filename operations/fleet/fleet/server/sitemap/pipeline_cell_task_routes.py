@@ -25,7 +25,7 @@ from .pipeline_governance_store import (
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
 from fleet.server.sitemap.pipeline_unload_release import (
-    exit_target, install_unload_release_routes, manifest_count, unload_release,
+    install_unload_release_routes, manifest_count,
 )
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
 from fleet.server.rfid_receipts import is_inbound_supply
@@ -510,10 +510,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spawned_cell_task = unload_batch_id = None
         v_cmd, duration_s = 0.0, 0.0
         place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
-        from fleet.server.work.pipeline_station_stop import assigned_rule
+        from fleet.server.pipeline_station_stop import assigned_rule
         station = None
         if action == "station_stop":
-            from fleet.server.work.pipeline_station_stop import plan_station
+            from fleet.server.pipeline_station_stop import plan_station
             station = plan_station(body, active[2], rules())
             target_place = place_id = station["place_id"]
         elif action in ("dock_s3", "dock_and_unload_s3"):
@@ -531,8 +531,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
                     "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
                 })
         elif action == "depart_s3":
-            from fleet.server.work.pipeline_station_stop import operator_departure
-            place_id, unload_batch_id = operator_departure(app.state, request, robot_id, task_id, rules(), active[1], _is_human_detected())
+            from fleet.server.pipeline_station_stop import operator_departure
+            place_id, unload_batch_id = operator_departure(app.state, request, robot_id, task_id, rules(), active[1], _is_human_detected(), app.state.pinky_tasks)
             target_place = place_id
             v_cmd = max_speed_mps
             duration_s = 0.35
@@ -592,9 +592,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
-    from functools import partial
-    from fleet.server.work.pipeline_station_stop import record_depart_task
-    ctx.record_depart_task = partial(record_depart_task, app.state)
+    from fleet.server.pipeline_station_stop import record_depart_task
+    ctx.record_depart_task = lambda *args: record_depart_task(app.state.pinky_tasks, *args)
     install_pinky_dispatch(app, ctx)
     install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS, ctx._enqueue_one_task = CELL_TASK_PRESETS, _enqueue_one_task

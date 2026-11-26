@@ -23,8 +23,8 @@ def assigned_rule(rules, place, role):
     return {"role": role, "place_id": place, "timeout_s": entry.timeout_s, "state": "ASSIGNED"}
 
 
-def stop_reason(state, robot):
-    for task in state.pinky_tasks.values():
+def stop_reason(state, robot, tasks):
+    for task in tasks.values():
         station = task.get("station_operation") or {}
         if task.get("robot_id") != robot or not station:
             continue
@@ -43,8 +43,8 @@ def arrived(task, now):
         station.update(state="WAITING", trip_id=task["trip_id"], arrived_at=now, deadline=now + station["timeout_s"])
 
 
-def supervise(state, now, human, save):
-    for task in state.pinky_tasks.values():
+def supervise(state, now, human, save, tasks):
+    for task in tasks.values():
         op = task.get("station_operation") or {}
         if op.get("state") != "WAITING":
             continue
@@ -83,10 +83,9 @@ def record_release(op, actor, now, save, proof=None):
         raise
 
 
-def install(app, ctx):
-    from fleet.server.pipeline_pinky_dispatch import requester_named
+def install(app, ctx, tasks_of, release_path, requester_named):
     def held(robot):
-        return stop_reason(app.state, robot)
+        return stop_reason(app.state, robot, tasks_of())
     if ctx.console is not None:
         ctx.console.station_stop_reason = held
         leases = getattr(ctx.console, "goal_leases", None)
@@ -95,9 +94,9 @@ def install(app, ctx):
     if runner := getattr(app.state, "trip_runner", None):
         runner.station_stop_reason = held
 
-    @app.post("/api/fleet/pipeline/pinky-tasks/{task_id}/station-release", dependencies=ctx.operator_guard)
+    @app.post(release_path, dependencies=ctx.operator_guard)
     async def release(task_id: str, body: Release, request: Request):
-        task = app.state.pinky_tasks.get(task_id) or {}
+        task = tasks_of().get(task_id) or {}
         op = task.get("station_operation") or {}
         principal = getattr(request.state, "site_principal", None)
         if not requester_named(app.state, principal):
@@ -119,19 +118,18 @@ def install(app, ctx):
         return {"station_operation": op}
 
 
-def _stage_departure_trip(state, robot_id, batch, place_id, release, now, map_version, save):
+def stage_departure_trip(state, robot_id, batch, place_id, release, now, map_version, save, tasks, enabled):
     """Persist the release and the corresponding named-place task in the same ledger snapshot."""
-    from fleet.server.pipeline_pinky_dispatch import enabled
     tid = f"depart-{batch}"
     if batch in state.unload_releases:
         return
     record = {"robot_id": robot_id, "task_id": tid, "at": now, "target": place_id, "release": release}
     inserted = False
-    if tid in state.pinky_tasks or not enabled():
-        record.update(state="HELD", reason="DEPART_TASK_ID_IN_USE" if tid in state.pinky_tasks else "TRIP_DISPATCH_DISABLED")
+    if tid in tasks or not enabled():
+        record.update(state="HELD", reason="DEPART_TASK_ID_IN_USE" if tid in tasks else "TRIP_DISPATCH_DISABLED")
     else:
         record["state"] = "TRIP_QUEUED"
-        state.pinky_tasks[tid] = {
+        tasks[tid] = {
             "task_id": tid, "robot_id": robot_id, "action": "depart_s3", "place_id": place_id, "target_place": place_id,
             "unload_batch_id": batch, "map_version": map_version, "auto": True, "requested_by": "fleet:auto-depart",
             "requester_named": False, "status": "QUEUED", "created_at": now,
@@ -143,7 +141,7 @@ def _stage_departure_trip(state, robot_id, batch, place_id, release, now, map_ve
     except Exception:
         state.unload_releases.pop(batch, None)
         if inserted:
-            state.pinky_tasks.pop(tid, None)
+            tasks.pop(tid, None)
         raise
 
 
@@ -155,14 +153,14 @@ def plan_station(body, graph, rules):
     return assigned_rule(rules, place_id, role)
 
 
-def record_depart_task(state, robot_id, batch, place, now):
-    state.pinky_tasks[f"depart-{batch}"] = {"task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3",
+def record_depart_task(tasks, robot_id, batch, place, now):
+    tasks[f"depart-{batch}"] = {"task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3",
                                             "target_place": place, "status": "SENT", "auto": True, "created_at": round(now, 3)}
 
 
-def operator_departure(state, request, robot_id, task_id, rules, site, human):
+def operator_departure(state, request, robot_id, task_id, rules, site, human, tasks):
     from fleet.server.pipeline_unload_release import unload_release, exit_target
-    if reason := stop_reason(state, robot_id):
+    if reason := stop_reason(state, robot_id, tasks):
         raise HTTPException(409, detail={"code": reason})
     release = unload_release(state, robot_id, now=time.time(), human_detected=bool(human))
     if not release["ready"]:

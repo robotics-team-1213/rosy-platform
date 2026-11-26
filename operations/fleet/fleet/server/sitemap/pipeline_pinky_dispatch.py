@@ -96,7 +96,7 @@ def _auto_depart(task: dict) -> bool:
 def _depart_refusal(state, task: dict, *, now: float, human_detected: bool) -> str | None:
     if task.get("action") != "depart_s3":
         return None
-    from fleet.server.sitemap.pipeline_unload_release import DEPART_FOLD_AGE_S, FOLD_MAX_AGE_S, unload_release
+    from fleet.server.pipeline_unload_release import DEPART_FOLD_AGE_S, FOLD_MAX_AGE_S, unload_release
 
     batch_id = task.get("unload_batch_id")
     rec = (getattr(state, "unload_releases", None) or {}).get(batch_id) if batch_id else None
@@ -207,7 +207,7 @@ def settle(task: dict, runner, now: float, state=None) -> bool:
         task["receipt"] = {**(task.get("receipt") or {}), "trip_state": state_str}
         return changed
     if state_str == "arrived":
-        from fleet.server.work.pipeline_station_stop import arrived
+        from fleet.server.pipeline_station_stop import arrived
         arrived(task, now)
         _end(task, "ARRIVED", None, now, state=state)
     elif state_str in ("canceled", "stopped"):
@@ -271,8 +271,8 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
     if not enabled():
         return []
     human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
-    from fleet.server.work.pipeline_station_stop import supervise
-    supervise(state, now, human_now(), save)
+    from fleet.server.pipeline_station_stop import supervise
+    supervise(state, now, human_now(), save, state.pinky_tasks)
     for task in list(state.pinky_tasks.values()):
         if not (_ours(task) and task.get("status") in IN_FLIGHT):
             continue
@@ -494,8 +494,9 @@ def install_pinky_dispatch(app, ctx) -> None:
     """The cancel route and ``app.state.task_dispatch_tick`` (run by the pipeline's 1 s loop in pipeline_unload_release)."""
     import time
 
-    from fleet.server.work.pipeline_station_stop import install as install_station_stops
-    install_station_stops(app, ctx)
+    from fleet.server.pipeline_station_stop import install as install_station_stops
+    install_station_stops(app, ctx, lambda: app.state.pinky_tasks,
+                          "/api/fleet/pipeline/pinky-tasks/{task_id}/station-release", requester_named)
 
     def active_or_none():
         try:

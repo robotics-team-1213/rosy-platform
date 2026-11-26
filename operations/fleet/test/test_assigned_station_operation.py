@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from fleet.server.work.pipeline_station_stop import assigned_rule, arrived, install, stop_reason, supervise
+from fleet.server.pipeline_station_stop import assigned_rule, arrived, install, stop_reason, supervise
 from test_unload_release import _state, _task
 
 
@@ -28,16 +28,18 @@ def test_assigned_station_holds_until_matching_named_release_even_after_timeout(
     from fleet.server.goal_lease import GoalLeases
     from fleet.swarm.api.ports import RobotApiError
     console=NS(goal_leases=GoalLeases(0., {}))
-    install(app, NS(console=console,operator_guard=[],_is_human_detected=lambda:False,_save_ledger=save))
+    from fleet.server.pipeline_pinky_dispatch import requester_named
+    install(app, NS(console=console,operator_guard=[],_is_human_detected=lambda:False,_save_ledger=save),
+            lambda:app.state.pinky_tasks, "/api/fleet/pipeline/pinky-tasks/{task_id}/station-release", requester_named)
     assert console.station_stop_reason("r") is None
     app.state.trip_runner.view=lambda _:{"state":"arrived"}
-    assert stop_reason(app.state,"r")=="STATION_WAITING"
+    assert stop_reason(app.state,"r",app.state.pinky_tasks)=="STATION_WAITING"
     arrived(task,10.)
     with pytest.raises(OSError):
-        supervise(app.state,15.,False,lambda: (_ for _ in ()).throw(OSError()))
-    assert stop_reason(app.state,"r")=="STATION_WAITING"
-    supervise(app.state,15.,False,save)
-    assert stop_reason(app.state,"r")=="STATION_TIMEOUT_HOLD"
+        supervise(app.state,15.,False,lambda: (_ for _ in ()).throw(OSError()),app.state.pinky_tasks)
+    assert stop_reason(app.state,"r",app.state.pinky_tasks)=="STATION_WAITING"
+    supervise(app.state,15.,False,save,app.state.pinky_tasks)
+    assert stop_reason(app.state,"r",app.state.pinky_tasks)=="STATION_TIMEOUT_HOLD"
     for path in ("/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/docking/dock"):
         with pytest.raises(RobotApiError, match="external release"):
             with console.goal_leases.motion_wire("r", "POST", path, {}):
@@ -52,7 +54,7 @@ def test_assigned_station_holds_until_matching_named_release_even_after_timeout(
             assert client.post(route,json={**body,field:"other"},headers={"operator":"1"}).status_code==409
         for _ in range(2):
             assert client.post(route,json=body,headers={"operator":"1"}).json()["station_operation"]["state"]=="RELEASED"
-    assert stop_reason(app.state,"r") is None and changes==["TIMEOUT_HOLD","RELEASED"]
+    assert stop_reason(app.state,"r",app.state.pinky_tasks) is None and changes==["TIMEOUT_HOLD","RELEASED"]
 
 
 def test_unload_receipt_requires_the_assigned_trip_and_batch_then_survives_duplicate_ticks():
@@ -63,13 +65,13 @@ def test_unload_receipt_requires_the_assigned_trip_and_batch_then_survives_dupli
     state.pinky_tasks={"load":task}
     arrived(task,time())
     with pytest.raises(OSError):
-        supervise(state,time(),False,lambda: (_ for _ in ()).throw(OSError()))
+        supervise(state,time(),False,lambda: (_ for _ in ()).throw(OSError()),state.pinky_tasks)
     assert task["station_operation"]["state"]=="WAITING"
     state.omx_cell_states["cell_s"]["stage_id"]="old"
-    supervise(state,time(),False,lambda:None)
-    assert stop_reason(state,"rosy_46")=="STATION_WAITING"
+    supervise(state,time(),False,lambda:None,state.pinky_tasks)
+    assert stop_reason(state,"rosy_46",state.pinky_tasks)=="STATION_WAITING"
     state.omx_cell_states["cell_s"]["stage_id"]="u-1"
     for _ in range(2):
-        supervise(state,time(),False,lambda:None)
+        supervise(state,time(),False,lambda:None,state.pinky_tasks)
     assert task["station_operation"]["evidence"]=={"batch_id":"u","stage_id":"u-1"}
-    assert task["station_operation"]["trip_id"]=="trip" and stop_reason(state,"rosy_46") is None
+    assert task["station_operation"]["trip_id"]=="trip" and stop_reason(state,"rosy_46",state.pinky_tasks) is None
