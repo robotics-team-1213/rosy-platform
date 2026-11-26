@@ -18,7 +18,7 @@ from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bi
 from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 from cell_calibrate_bound import _load_ref_gray, _map_write_sites, map_sites
 import cell_diagnose
-import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
+import cell_calibration as cal, cell_config_io, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402  (cell_config_io: one locked writer for every config rewrite)
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
@@ -388,7 +388,6 @@ def main(argv=None):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
     if config_dirty:
-        import cell_config_io  # one lock and one writer for every config rewrite (also keeps a registered slot's evidence)
         if err := cell_config_io.write_config_checked(args.config, {k: v for k, v in config.items() if k not in ("params", "plan")}, 1, done):
             print(json.dumps({"config_write_failed": err, "done": done}, default=str), flush=True)
             return 2
