@@ -132,10 +132,10 @@ exec 8>"$R/repo.lock"  # concurrent runs fetching into one repo race on ref lock
 flock -w 600 8 || { echo "[remote] $R/repo.lock still held after 600 s (lsof it)" >&2; exit 1; }
 [ -d "$R/repo/.git" ] || git clone -q --no-checkout "$3" "$R/repo"
 cd "$R/repo"
-if ! git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1; then
-  git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
-  git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
-fi
+# Always refresh origin/main: tests diff against merge-base(HEAD, origin/main) (records cutover rule),
+# and a stale ref there counted the records bot's later main commits as the branch's own edits.
+git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
+git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
 """ + remote_job.SWEEP + r"""chmod -R u+rwX -- "$R/runs/$NAME" 2>/dev/null || true
 git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked

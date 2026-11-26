@@ -216,7 +216,7 @@ class Teacher:
         if not ok:
             return dict(row, result="unreachable", reason=f"{arm} cannot do the step tool-down inside the limits: {note}")
         app_s = self.servo_comp.pace_seconds(arm, q, q_app, 2.5) if self.servo_comp is not None else 2.5
-        yield from self.move_g(np.append(q[:5], g_open), np.append(q_app[:5], g_open), app_s, j1_lead=step["from"] == "belt" and L.choices.get("wait_pose") == "home")
+        yield from self.move_g(q, np.append(q_app[:5], g_open), app_s, j1_lead=step["from"] == "belt" and L.choices.get("wait_pose") == "home")
         yield from self.settle_g(data, arm, q_app, g_open, np.array([*wps[0][1], wps[0][2]]))
         q, off, worst, prev, held = q_app, None, 0., wps[0], {}
         adj_xy = None
@@ -259,11 +259,12 @@ class Teacher:
                     yield from self.settle_g(data, arm, q, g, p_end)
             prev = (name, xy, z, yaw, grip)
         ctx.phase = "park"
+        g_park = float(ik_arm.wait[5]) if L.choices.get("home_gripper") == "real" else g_to
         park_s = self.servo_comp.pace_seconds(arm, q, ik_arm.wait, 2.5) if self.servo_comp is not None else 2.5
-        yield from self.move_g(np.append(q[:5], g_to), np.append(ik_arm.wait[:5], g_to), park_s)
-        yield from self.settle_g(data, arm, ik_arm.wait, g_to)
+        yield from self.move_g(np.append(q[:5], g_to), np.append(ik_arm.wait[:5], g_park), park_s)
+        yield from self.settle_g(data, arm, ik_arm.wait, g_park)
         for _ in range(round(.7 * FPS)):
-            yield np.append(ik_arm.wait[:5], g_to)
+            yield np.append(ik_arm.wait[:5], g_park)
         scomp = dict(physics=L.choices["physics"], settle_frames=self.settle_frames,
                      max_trim_deg=round(math.degrees(self.servo_comp.max_trim_rad[arm]), 2) if self.servo_comp else 0.0,
                      damped_frames=self.servo_comp.damped_frames[arm] if self.servo_comp else 0,
