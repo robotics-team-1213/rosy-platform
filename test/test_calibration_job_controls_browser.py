@@ -101,10 +101,12 @@ def test_operator_starts_job_and_recovers_its_result_after_reload(screen):
             page.keyboard.press("Enter")
             assert not calls["spawn"]
             page.locator("#jobSwitch").check()
+            page.locator("#jobRemeasure").check()
             page.locator("#jobStart").focus()
             page.keyboard.press("Enter")
             expect(page.locator("#jobProgress")).to_contain_text("종료", timeout=10000)
-            assert len(calls["spawn"]) == 1
+            assert len(calls["spawn"]) == 1 and "--remeasure-map" in calls["spawn"][0][0]
+            expect(page.locator("#jobRemeasure")).not_to_be_checked()
             progress = page.locator("#jobProgress").inner_text()
             assert "arm_b" in progress and " · " in progress
             expect(page.locator("#recentJobsWrap")).to_contain_text("종료")
