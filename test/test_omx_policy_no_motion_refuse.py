@@ -15,9 +15,11 @@ from cell_policy_timing import run_timed  # noqa: E402
 from omx_adapter.chunk_library import NAMES, SCHEMA  # noqa: E402
 
 HOME = [0.0, -58.0, 50.0, 50.0, -5.0, 49.0]
-OFF_HOME = [0.0, -58.0, 70.0, 50.0, -5.0, 49.0]
+OFF_HOME = [0.0, -20.0, 50.0, 50.0, -5.0, 49.0]  # neither at home nor folded
+FOLDED_REST = [-0.02, -58.05, 54.97, 50.13, -4.96, 49.16]  # 2026-11-26 21:53: folded at rest, 5 units off the library home elbow
 LIB = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 46.6,
        "chunks": {"home": [HOME], "entry": [HOME, [1, -57, 51, 50, -5, 49]]}}
+LIB_1126 = {**LIB, "chunks": {**LIB["chunks"], "home": [[0.0, -58.0, 50.0, 50.0, -5.0, 58.1]]}}
 HOLD_REPLY = {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True}
 
 
@@ -94,9 +96,14 @@ def test_paced_unusable_state_reply_holds_even_at_home(patch, tmp_path):
 def test_idle_at_home_unit():
     from cell_policy_timing import idle_at_home
 
-    assert idle_at_home(_status(), HOME) is True
+    assert idle_at_home(_status(), HOME) is True and idle_at_home(_status(FOLDED_REST), HOME) is True
+    assert not idle_at_home(_status(FOLDED_REST, contact=True), HOME)
+    for patch in ({"holding": True}, {"chunk": 3}, {"jitter": {"shaking": True}}):  # folded needs an empty, still, idle arm
+        assert not idle_at_home(_status(FOLDED_REST, **patch), HOME)
+    assert not idle_at_home(_status(OFF_HOME, folded=True), HOME)  # a reported flag does not stand in for the state
+    assert not idle_at_home(_status(FOLDED_REST), None)
     assert not any(idle_at_home(s, h) for s, h in [
-        (_status(OFF_HOME), HOME), (_status(contact=True), HOME), (_status(ok=False), HOME), (_status(), None), (None, HOME),
+        (_status(OFF_HOME), HOME), (_status(contact=True), HOME), (_status(ok=False), HOME), (_status(OFF_HOME), None), (None, HOME),
         (_status(state=["x"] * 6), HOME), (_status(state=HOME[:3]), HOME), (_status(state=[float("nan")] * 6), HOME)])
 
 
@@ -110,3 +117,34 @@ def test_paced_state_read_error_holds(tmp_path):
     cell = Boom(_status())
     assert _paced(cell, tmp_path, [], pre_home=True)["result"] == "refused"
     assert "human-hold" in cell.cmds
+
+
+def test_1126_folded_rest_off_home_ends_without_hold_and_says_why():
+    status = _status(FOLDED_REST)
+    for lib, cell_fn in ((LIB_1126, pre_settle_home),):
+        cell, rows = Cell(status), []
+        res, err = cell_fn(cell, lib, status, {"chunk": 0}, rows.append, None, None)
+        assert res is None and "human-hold" not in cell.cmds
+        assert err["reason_code"] == "START_POSE_OFF_HOME" and err["folded"] is True and err["hold_kept"] is False
+        assert 4.9 < err["off_home"] < 5.1 and rows[0]["off_home"] == err["off_home"] and rows[0]["folded"] is True
+
+
+def test_not_home_not_folded_keeps_hold_and_names_recover_hold():
+    status = _status(OFF_HOME)
+    cell, rows = Cell(status), []
+    _res, err = pre_settle_home(cell, LIB_1126, status, {"chunk": 0}, rows.append, None, None)
+    assert "human-hold" in cell.cmds and err["hold_kept"] is True and err["folded"] is False and err["off_home"] > 30
+    assert rows[0]["next"] == "recover_hold"
+
+
+def test_folded_rest_timed_and_paced(tmp_path):
+    status = _status(FOLDED_REST)
+    cell, rows = Cell(status), []
+    res = run_timed(cell, SimpleNamespace(sim_rule=None, n_action_steps=1, chunk_size=1), LIB_1126, tmp_path, infer=None,
+                    shape=None, max_step=1.0, n_action=1, max_obs_age_s=0.6, max_chunks=1, dry_run=False, log=rows.append)
+    assert res["result"] == "refused" and res["folded"] is True and "human-hold" not in cell.cmds
+    cell2 = Cell(status)
+    res2 = paced.run_paced_chunks(cell2, SimpleNamespace(image_views={}), LIB_1126, tmp_path, off=None, max_chunks=1, dry_run=False,
+                                  log=[].append, goal={}, sim_units=False, open_g=60.0, model_closed=46.0, closed=46.6, low=None,
+                                  high=None, fastest=1.0, kin=None, jaw_spec=None, resolved_tcp=None, authorize=None, pre_home=True)
+    assert res2["result"] == "refused" and res2["folded"] is True and "human-hold" not in cell2.cmds

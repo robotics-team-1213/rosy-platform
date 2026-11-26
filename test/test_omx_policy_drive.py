@@ -1159,16 +1159,18 @@ def test_paced_pre_home_settles_sagged_start_or_fails_closed(tmp_path, monkeypat
                                max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
     assert r_home["result"] == "chunks_done" and not any("presettle" in e for e in c_home.events) and c_home.events.count("park") == 1
 
-    # Sagged and extended off-home starts — even with `presettle` chunk and verified authorize — fail closed with confirmed HOLD (run home stage first).
+    # Off-home starts fail closed (run home stage first): a folded rest (11-26 sagged pose) ends with no HOLD, neither home nor folded keeps it.
     seen_auth = []
-    for lp, pose in ((lib_path, sagged_pose), (ev_lib_path, sagged_pose), (ev_lib_path, [0, -58, 65.0, 50, -5, 49])):
+    for lp, pose, hold in ((lib_path, sagged_pose, False), (ev_lib_path, sagged_pose, False),
+                           (ev_lib_path, [0, -58, 65.0, 50, -5, 49], False), (ev_lib_path, [0, -20, 50, 50, -5, 49], True)):
         c_off = PreHomeCell(pose)
         r_off = drive.run_episode(
             c_off, Policy([chunk]), lp, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append,
             authorize=lambda *_a, **_kw: seen_auth.append(_a), paced_chunks=True,
         )
         assert r_off["result"] == "refused" and r_off["parked"] is False and "run home stage first" in r_off["reason"]
-        assert c_off.events == ["state", "human-hold"] and not seen_auth
+        assert c_off.events == (["state", "human-hold"] if hold else ["state"]) and not seen_auth
+        assert r_off["hold_kept"] is hold and r_off["reason_code"] == "START_POSE_OFF_HOME" and r_off["off_home"] > 0
 
     # Real Authorization passes check_home=False through to cell_envelope.assess.
     import cell_envelope
