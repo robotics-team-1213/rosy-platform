@@ -46,4 +46,4 @@ No package-local suite. Run the manipulation and OMX integration tests after a c
 
 ## Manual Notes
 
-Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.
+Harness (D-61): [progress.md](progress.md) · [logs.md](logs.md) · [index.md](index.md); procedure in the repository root `AGENTS.md`.

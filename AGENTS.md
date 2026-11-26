@@ -75,6 +75,7 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 
 ### Working In This Directory
 
+- **모듈 하네스(D-61):** 모듈 폴더에서 작업하기 전 그 모듈의 `progress.md`·`index.md`를 읽는다. 바꾼 뒤 `logs.md`에 덧붙이고, 게이트가 바뀌었으면 `progress.md`를 덮어쓴 다음 저장소 루트에서 `python tools/harness/rosy_harness.py generate`를 돌린다.
 - 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 브랜치는 `origin/main`에서 만들고, PR이 `DIRTY`일 때만 `git merge origin/main`으로 갱신한다(D-1055).
 - Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
