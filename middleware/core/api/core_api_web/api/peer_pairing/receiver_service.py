@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -15,6 +16,8 @@ from core_common.protocol.peer_pairing import (APPROVAL_CODE_ALPHABET, APPROVAL_
                                                RepositoryDenied, screen_code_dated)
 
 _log = logging.getLogger(__name__)
+#: Public /identity probes per source per 60 s window (covers multi-robot Fleet polling + trip ticks).
+IDENTITY_RATE_LIMIT = 1800
 #: D-483 4: wrong approval codes per request before it is rejected.
 APPROVAL_CODE_ATTEMPTS = 5
 #: D-483 3: the hand-over file rosy-face reads (live pending requests, newest first).
@@ -229,9 +232,12 @@ class PeerReceiver:
         with self._lock:
             self._prune()
             key = ('identity:' if identity else 'proof:') + source
-            limit = 300 if identity else 30
-            if len(self._rates.get(key, [])) >= limit or (key not in self._rates and len(self._rates) >= 128):
-                raise RateLimited('proof rate limit reached')
+            limit = IDENTITY_RATE_LIMIT if identity else 30
+            timestamps = self._rates.get(key)
+            if (timestamps is not None and len(timestamps) >= limit) or (timestamps is None and len(self._rates) >= 128):
+                wait = (max(1, min(60, math.ceil(60 - (self.clock() - timestamps[0]).total_seconds())))
+                        if timestamps else 60)
+                raise RateLimited('proof rate limit reached', retry_after_s=wait)
             self._rates.setdefault(key, []).append(self.clock())
 
     def _row(self, request_id, secret=None):

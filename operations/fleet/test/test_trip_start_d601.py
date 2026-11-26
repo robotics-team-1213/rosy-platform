@@ -244,3 +244,39 @@ def test_d604_the_plan_route_reads_the_line_camera_from_capabilities(tmp_path):
     dead = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
     assert dead.status_code == 422 and dead.json()["detail"]["code"] == "TRIP_LANE_CAMERA_UNAVAILABLE"
     assert dead.json()["detail"]["detail"]["source"] == "NONE"
+
+
+def test_b_camera_check_retries_short_429_and_surfaces_rate_limited():
+    runner, _store, ports = _setup()
+    calls = 0
+
+    async def flaky_cam(_robot_id):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RobotApiError("rosy_60", 429, "RATE_LIMITED", "slow down", {"retry_after_s": 0.01})
+        return {"available": True}
+
+    ports.front_camera = flaky_cam
+    run(runner.camera_check("rosy_60"))
+    assert calls == 2
+
+    async def always_429(_robot_id):
+        raise RobotApiError("rosy_60", 429, "RATE_LIMITED", "slow down", {"retry_after_s": 0.01})
+
+    ports.front_camera = always_429
+    with pytest.raises(TripError) as err:
+        run(runner.camera_check("rosy_60"))
+    assert (err.value.status, err.value.code) == (429, "RATE_LIMITED")
+
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from test_site_map_trip import OPERATOR, _app, _on_ring_s
+    from test_trip_caps import _caps, _robot_caps
+    with TemporaryDirectory() as tmp:
+        client, _tasks, store, robot = _app(Path(tmp))
+        robot._state = _on_ring_s(store)
+        _robot_caps(robot, _caps())
+        client.app.state.trip_runner.camera_check = runner.camera_check
+        res = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+        assert res.status_code == 429 and res.json()["detail"]["code"] == "RATE_LIMITED"

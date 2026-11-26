@@ -621,3 +621,43 @@ def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(cas
             run(runner.resume(tid, "bob"))
         assert exc.value.code == "TRIP_PAUSE_STOP_UNCONFIRMED"
         assert stop["confirmed"] is False and not robot.routes
+
+
+def test_measured_stop_accepts_core_snapshot_without_goal_key_and_recovers_prior_stop(tmp_path):
+    robot = RouteFakeRobot("rosy_42")
+    clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    runner.halts.read_stop_state = lambda _rid: asyncio.sleep(0, result=robot._state)
+    pose["v"] = MapPose(0.5, -0.23, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(
+        map_version=ver, start_pose=(0.5, -0.23, math.pi), goal="J_in", stop_offset=False,
+    ), store.routing_config))
+    store.record_plan(plan_id="p-goal-omit", robot_id="rosy_42", principal_id="bob", map_version=ver,
+                      request={"to": "J_in", "drive_mode": "nav2"}, result={"plan": plan})
+    run(runner.start("p-goal-omit", "bob"))
+    run(runner.tick())
+    robot._state.pop("goal", None)
+    robot._state.update(mode="IDLE", navigation="IDLE", velocity={"linear": 0.005, "angular": -0.01},
+                        line_follow={"mode": "OFF"})
+    clock.advance(0.2)
+    stamp = datetime.fromtimestamp(clock.now - 0.01, timezone.utc).isoformat()
+    robot._state["evidence"] = {"velocity": {"sampled_at": stamp, "evidence": "fresh"}}
+    paused = run(runner.pause("p-goal-omit", "bob"))
+    assert paused["hold"]["stop"]["confirmed"] is False
+    clock.advance(0.2)
+    stamp = datetime.fromtimestamp(clock.now - 0.01, timezone.utc).isoformat()
+    robot._state["evidence"] = {"velocity": {"sampled_at": stamp, "evidence": "fresh"}}
+    run(runner.tick())
+    paused = run(runner.pause("p-goal-omit", "bob"))
+    assert paused["hold"]["stop"]["confirmed"] is True
+
+    resumed = run(runner.resume("p-goal-omit", "bob"))
+    assert resumed["hold"] is None
+
+    # Closed trip with unconfirmed halt self-recovers on subsequent tick.
+    live = runner._live["rosy_42"]
+    live.view["state"] = "canceled"
+    live.view["detail"]["stop_sent"] = False
+    clock.advance(3.0)
+    run(runner.tick())
+    assert live.view["detail"]["stop_sent"] is True

@@ -62,7 +62,8 @@ class TripProgress:
                 done = (self._completed(live, index) and remaining <= self.config.pass_window_m
                         and nxt_dist <= nxt.width_m / 2)
             else:
-                done = remaining <= self.config.advance_free_m and (not live.nav2 or nxt_dist <= nxt.width_m / 2)
+                margin = float(getattr(self.config, "nav2_off_lane_margin_m", 0.06)) if live.nav2 else 0.0
+                done = remaining <= self.config.advance_free_m and (not live.nav2 or nxt_dist <= nxt.width_m / 2 + margin)
             if not (done or onto_next):
                 break
             index += 1
