@@ -107,7 +107,7 @@ def main():
             elif route.startswith("frame/") and route[6:] in {str(i) for i in range(len(profiles))}:
                 try:
                     result = frame(bridge, profiles[int(route[6:])])
-                except (ValueError, KeyError, OSError, cv2.error):
+                except (ValueError, KeyError, TypeError, OSError, cv2.error):
                     result = {"error":"새 영상 또는 추적 가능한 프레임 대기"}
                 body = json.dumps(result).encode()
             else:
