@@ -104,6 +104,8 @@ class _Run:
     n: int = 0                           # run number: a caller tells its own run from a foreign one
     mode_epoch: int | None = None
     precision_token: object | None = None
+    repark_authority: Callable[[], bool] | None = None
+    odom_discontinuity: bool = False
 
 
 def _wrap(angle: float) -> float:
@@ -152,11 +154,18 @@ class LocalizationMission:
     def observe_odom(self, x: float, y: float, yaw: float) -> None:
         with self._lock:
             run, previous = self._run, self._odom
+            now = self._clock()
+            if (not all(math.isfinite(v) for v in (x, y, yaw, now))
+                    or (self._odom_at is not None and now < self._odom_at)):
+                self._odom = self._odom_at = None
+                if run is not None:
+                    run.odom_discontinuity = True
+                return
             if run is not None and previous is not None:
                 run.travelled_m += math.hypot(x - previous[0], y - previous[1])
                 run.turned_rad += abs(_wrap(yaw - previous[2]))
                 run.signed_rad += _wrap(yaw - previous[2])
-            self._odom, self._odom_at = (float(x), float(y), float(yaw)), self._clock()
+            self._odom, self._odom_at = (float(x), float(y), float(yaw)), now
 
     def observe_scan(self, sample) -> None:
         """Keep the latest LiDAR sample; the front sector is measured only when needed."""
@@ -171,7 +180,7 @@ class LocalizationMission:
     def odom_pose(self) -> Optional[tuple[float, float, float]]:
         """The latest odom pose if fresh, else None (repark closes its loop on it)."""
         with self._lock:
-            fresh = self._odom is not None and self._clock() - self._odom_at <= self.config.sensor_stale_s
+            fresh = self._odom is not None and 0 <= self._clock() - self._odom_at <= self.config.sensor_stale_s
             return self._odom if fresh else None
 
     @property
@@ -184,7 +193,7 @@ class LocalizationMission:
 
     def start(self, kind: str, max_distance_m: float, max_time_s: float,
               target: Optional[dict] = None, speed: Optional[float] = None, *, expected_idle_epoch: int | None = None,
-              expected_navigation: dict | None = None) -> dict:
+              expected_navigation: dict | None = None, repark_authority: Callable[[], bool] | None = None) -> dict:
         """Start a mission or raise `MissionRefused` (409) / `ValueError` (400)."""
         if kind not in KINDS:
             raise ValueError(f"unknown mission kind {kind!r}")
@@ -236,7 +245,8 @@ class LocalizationMission:
                     distance = room
             if blocked is not None:
                 raise MissionRefused("path_not_clear", blocked)
-            run = _Run(kind, distance, float(max_time_s), target, now, search=search, speed=speed, n=self._runs + 1)
+            run = _Run(kind, distance, float(max_time_s), target, now, search=search, speed=speed,
+                       n=self._runs + 1, repark_authority=repark_authority)
             self._take_motion_mode(run, expected_idle_epoch, "busy", expected_navigation)
             self._runs += 1
             if kind == LANE:
@@ -259,7 +269,8 @@ class LocalizationMission:
             return body
 
     def start_rotate_to(self, *, expected_idle_epoch: int | None = None,
-                        expected_navigation: dict | None = None, **request: Any) -> dict:
+                        expected_navigation: dict | None = None, repark_authority: Callable[[], bool] | None = None,
+                        **request: Any) -> dict:
         """D-603: start a bounded turn to an odom heading (`rotate_to.rotate_goal` keywords), or raise
         `ValueError` (400) / `MissionRefused` (409, upper-case codes). The caller checked who asks."""
         gate = self._loc.gate if expected_idle_epoch is not None else nullcontext()
@@ -279,7 +290,8 @@ class LocalizationMission:
             blocked, _room = self._judge(ROTATE, now)
             if blocked is not None:
                 raise MissionRefused("ROTATE_CLEARANCE", blocked, self._clearance(now))
-            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal, n=self._runs + 1)
+            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal, n=self._runs + 1,
+                       repark_authority=repark_authority)
             self._take_motion_mode(run, expected_idle_epoch, "MOTION_BUSY", expected_navigation)
             self._runs += 1
             self._last = {"kind": ROTATE_TO, "state": "running", "reason": None}
@@ -288,6 +300,11 @@ class LocalizationMission:
 
     def _take_motion_mode(self, run: _Run, expected_idle_epoch: int | None, busy_code: str,
                           expected_navigation: dict | None = None) -> None:
+        if run.repark_authority is not None:
+            if self.odom_pose() is None:
+                raise MissionRefused("ODOMETRY_STALE", "no fresh odometry for the repark segment")
+            if not run.repark_authority():
+                raise MissionRefused("TRIP_LEASED", "repark driving authority changed before the segment")
         if expected_idle_epoch is None:
             if expected_navigation is not None:
                 raise ValueError("a navigation predecessor requires an IDLE epoch")
@@ -363,6 +380,8 @@ class LocalizationMission:
         cfg = self.config
         if self._safety.estop or self._modes.is_emergency:
             return "estop"
+        if run.repark_authority is not None and not run.repark_authority():
+            return "trip_lease_changed"
         status = self._loc.status()
         if run.kind != ROTATE_TO and run.search and status is not None \
                 and status.state is LocState.LOCALIZED:
@@ -372,7 +391,8 @@ class LocalizationMission:
             return "cancelled"
         if now - run.started_at > run.max_time_s:
             return "timeout"
-        if now - (self._odom_at if self._odom_at is not None else run.started_at) > cfg.sensor_stale_s:
+        odom_age = now - (self._odom_at if self._odom_at is not None else run.started_at)
+        if run.odom_discontinuity or not 0 <= odom_age <= cfg.sensor_stale_s:
             return "odometry_stale"
         if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
             return "obstacle_sensor_stale"

@@ -104,9 +104,10 @@ def repark(body: ReparkRequest, auth: AuthContext = Depends(operator),
     """Cell arm reach fix: a bounded sideways shift (<= 0.06 m) / fore-aft (<= 0.10 m) built of
     rotate_to and nudge missions (`core_features.localization.repark`); same admission as rotate_to."""
     runner = _mission(svc).repark
+    authority = svc.trip_lease.repark_authority(auth.token_id, body.operator_name)
     owner = _admit(svc, auth, "repark", body.operator_name)
     try:
-        started = runner.start(body.forward_m, body.left_m)
+        started = runner.start(body.forward_m, body.left_m, authority=authority)
     except ValueError as exc:
         raise ApiError("VALIDATION_ERROR", 400, str(exc)) from exc
     except MissionRefused as exc:
@@ -132,6 +133,7 @@ class ScopedReparkRequest(ReparkRequest):
 def scoped_repark(body: ScopedReparkRequest, auth: AuthContext = Depends(operator),
                   svc: CoreServicesLike = Depends(get_services)):
     runner = _mission(svc).repark
+    authority = svc.trip_lease.repark_authority(auth.token_id, body.operator_name)
     identity = (str(body.expected_boot_id), str(body.expected_nav_run_id), body.expected_nav_generation,
                 body.expected_nav_correlation_id, body.expected_map_grid_id)
     first = True
@@ -158,7 +160,7 @@ def scoped_repark(body: ScopedReparkRequest, auth: AuthContext = Depends(operato
                                       expected_boot_id=body.expected_boot_id,
                                       expected_owner_generation=body.expected_owner_generation,
                                       expected_idle_epoch=body.expected_idle_epoch,
-                                      expected_navigation=previous, admission=admission)
+                                      expected_navigation=previous, admission=admission, authority=authority)
     except ValueError as exc:
         raise ApiError("VALIDATION_ERROR", 400, str(exc)) from exc
     except MissionRefused as exc:
