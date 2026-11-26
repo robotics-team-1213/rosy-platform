@@ -180,13 +180,18 @@ def active_site_map_snapshot(view: dict, observed_at_ms: int) -> dict | None:
                and all(isinstance(point, (list, tuple)) and len(point) == 2 and all(map(finite, point))
                        for point in line) for line in lines):
         return None
+    # Display-only extras (D-513 7 view turn, place names) are copied only when well formed.
+    map_view = {
+        "map_id": body["map_id"],
+        "places": [{key: place[key] for key in ("id", "name", "x", "y")
+                    if key != "name" or isinstance(place.get("name"), str)} for place in places],
+        "edges": [{"polyline": line} for line in lines],
+    }
+    if body.get("view_turn_deg") in (90, 180, 270) and type(body["view_turn_deg"]) is int:
+        map_view["view_turn_deg"] = body["view_turn_deg"]
     return {
         "version": version, "sha256": sha, "activated_at": activated_at, "observed_at_ms": observed_at_ms,
-        "map": {
-            "map_id": body["map_id"],
-            "places": [{key: place[key] for key in ("id", "x", "y")} for place in places],
-            "edges": [{"polyline": line} for line in lines],
-        },
+        "map": map_view,
     }
 
 
