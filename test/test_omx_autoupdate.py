@@ -997,6 +997,25 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
 
 
+def test_an_unplugged_arm_board_does_not_block_the_other_observers(tmp_path, monkeypatch):
+    """2026-11-27: arm_s's board was unplugged, its stale health deferred the update for arm_a/arm_b too."""
+    import json
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    live_dev, live_health = tmp_path / "follower_b", tmp_path / "arm_b.json"
+    live_dev.write_text("", encoding="utf-8")
+    live_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    stale_health = tmp_path / "arm_s.json"
+    stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    observers = [{"unit": "rosy-omx-observer@arm_b.service", "device": str(live_dev), "health": str(live_health)},
+                 {"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
+    host = m.Host({"devices": [str(live_dev)], "follower_device": str(live_dev), "observers": observers})
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    (tmp_path / "absent_s").write_text("", encoding="utf-8")  # plugged back in: its stale snapshot defers again
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
 def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
     import json
 
