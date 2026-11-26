@@ -23,6 +23,9 @@ RULE_AFTER_TORQUE_OFF = "torque_off_folded_remeasure"
 RULE_BEFORE_REFUSAL = "precheck_auto_clear"
 COOLDOWN_S = 10.0
 _last: dict[str, float] = {}
+WAIT_S = 15.0  # a second request for an arm already being re-read waits this long for the first one's result
+_inflight: dict[str, threading.Event] = {}
+_last_refusal: dict[str, tuple] = {}
 
 
 class _Skip(Exception):
@@ -51,6 +54,15 @@ def summary(block) -> str:
             f"home_err={block.get('max_home_err')} stable={block.get('stable')}")
 
 
+def fleet_hold_reason(arm: str) -> str | None:
+    """The reason Fleet gives for its open hold of this arm (the Fleet-only record), or None when unreadable or not held."""
+    import omx_incident_fleet
+
+    link = omx_incident_fleet.link_for(arm)
+    answer = link.hold() if link is not None else None
+    return str(answer.reason or "") if answer is not None and omx_incident_fleet._effectively_held(answer) else None
+
+
 def human_only(arm: str) -> str | None:
     """Why a machine must not release this arm even when the pipeline could (verdict C: latch, cable wind-up, object in the
     jaws and a home recovery stay with a person), else None. Unreadable facts pass: the pipeline then fails closed itself."""
@@ -64,6 +76,16 @@ def human_only(arm: str) -> str | None:
 
         if omx_incident_fleet.held(arm) == HOME_RECOVERY_REASON:
             return "home recovery required"
+        try:  # Fleet can hold a home recovery or latch the local record never had; unreadable: the pipeline's own veto decides
+            fleet_reason = (fleet_hold_reason(arm) or "").lower()
+        except Exception:
+            fleet_reason = ""
+        if HOME_RECOVERY_REASON.lower() in fleet_reason or "home recovery" in fleet_reason:
+            return "home recovery required (Fleet hold)"
+        if "latch" in fleet_reason:
+            return "latched hardware error (Fleet hold)"
+        if "wind-up" in fleet_reason or "snag" in fleet_reason:
+            return "wind-up or snag (Fleet hold)"
         path = omx_incident_pipeline._latest_incident_file(arm)
         loaded = json.loads(path.read_text(encoding="utf-8")) if path else None
         facts = loaded.get("facts", loaded) if isinstance(loaded, dict) else None
@@ -95,6 +117,10 @@ def _record(arm: str, rule: str, result: dict, measured: str, now: float) -> Non
                "incident_id": result.get("incident_id"), "safety_score": result.get("safety_score"),
                "decision": result.get("decision"), "measured": measured, "why": str(result.get("why"))[:200],
                "hard_vetoes": [v.get("code") for v in result.get("hard_vetoes") or [] if isinstance(v, dict)]}
+        signature = (rule, row["cleared"], row["incident_id"], row["decision"], row["why"], row["hard_vetoes"])
+        if not row["cleared"] and _last_refusal.get(arm) == signature:  # the same refusal again: one row is enough
+            return
+        _last_refusal[arm] = signature
         path = omx_incident_fleet.incidents_dir() / "auto-release.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as stream:
@@ -103,6 +129,25 @@ def _record(arm: str, rule: str, result: dict, measured: str, now: float) -> Non
             Path(result["incident_file"]).with_name("release.json").write_text(json.dumps(row, default=str, indent=1), encoding="utf-8")
     except Exception:  # a lost note must never change what the arm does
         pass
+
+
+class NeedsRelease(Exception):
+    """Every other check passed and only an arm incident hold remains: try the automatic release, then ask again."""
+
+    def __init__(self, arm: str):
+        super().__init__(arm)
+        self.arm = arm
+
+
+def start_with_release(attempt, check) -> dict:
+    """cell_job_api.start: run attempt(released_arms); on NeedsRelease (nothing was registered) re-read that arm once, retry."""
+    released: set = set()
+    while True:
+        try:
+            return attempt(released)
+        except NeedsRelease as need:
+            released.add(need.arm)
+            before_refusal([need.arm], check)
 
 
 def evaluate(arm: str, rule: str, *, pipeline=None, config="auto", clear_fn=None, reassess_fn=None, now_fn=time.time) -> dict:
@@ -149,8 +194,9 @@ def after_torque_off(arm: str, **kwargs) -> dict:
 
 
 def before_refusal(arms, check, *, enabled: bool = True, evaluate_fn=None, now_fn=time.monotonic) -> None:
-    """cell_job_api: for each held arm, one evaluation per COOLDOWN_S so the request that would be refused can go on.
-    The caller checks the hold again afterwards; a hold that stays is refused exactly as before."""
+    """cell_job_api, after every other refusal check: for each held arm, one evaluation per COOLDOWN_S so the request that
+    would be refused can go on. A request that meets a re-read already running for the arm waits for it (WAIT_S) instead of
+    starting a second one. The caller checks the hold again afterwards; a hold that stays is refused exactly as before."""
     if not enabled:
         return
     for arm in arms:
@@ -161,10 +207,22 @@ def before_refusal(arms, check, *, enabled: bool = True, evaluate_fn=None, now_f
             if not reason or reason == HOME_RECOVERY_REASON:  # a home recovery is its own job, never a release
                 continue
             with _lock:
+                running = _inflight.get(arm)
                 now = now_fn()
-                if arm in _last and now - _last[arm] < COOLDOWN_S:
-                    continue
-                _last[arm] = now
-            (evaluate_fn or evaluate)(arm, RULE_BEFORE_REFUSAL)
+                if running is None:
+                    if arm in _last and now - _last[arm] < COOLDOWN_S:
+                        continue
+                    _last[arm] = now
+                    _inflight[arm] = done = threading.Event()
+            if running is not None:
+                running.wait(WAIT_S)
+                continue
+            try:
+                (evaluate_fn or evaluate)(arm, RULE_BEFORE_REFUSAL)
+            finally:
+                with _lock:
+                    _last[arm] = now_fn()  # the cooldown counts from the end of the ~6 s re-read
+                    _inflight.pop(arm, None)
+                done.set()
         except (SystemExit, Exception):  # the caller's own hold check decides
             continue

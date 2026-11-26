@@ -1492,6 +1492,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_task_live_executor.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_incident_release.py
   - deploy/robot/omx/cell_auto_pick.py
   - deploy/robot/omx/cell_return_held.py
   - deploy/robot/omx/cell_cycle.py

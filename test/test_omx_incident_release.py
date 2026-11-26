@@ -136,3 +136,63 @@ def test_api_still_refuses_when_the_evaluation_leaves_the_hold(tmp_path, monkeyp
     monkeypatch.setattr(rel, "evaluate", lambda arm, rule: seen.append(arm))
     res = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
     assert res["error_code"] == "ARM_INCIDENT_HELD" and seen == ["arm_a"]
+
+
+def test_concurrent_requests_for_one_arm_share_one_reread():
+    import threading
+
+    started, release, ran = threading.Event(), threading.Event(), []
+
+    def slow(arm, rule):
+        ran.append(arm)
+        started.set()
+        release.wait(5)
+
+    first = threading.Thread(target=rel.before_refusal, args=(["arm_s"], lambda a: "held"), kwargs={"evaluate_fn": slow})
+    first.start()
+    assert started.wait(5)
+    second = threading.Thread(target=rel.before_refusal, args=(["arm_s"], lambda a: "held"), kwargs={"evaluate_fn": slow})
+    second.start()
+    second.join(0.3)
+    assert second.is_alive()  # waits for the first instead of re-reading
+    release.set()
+    first.join(5)
+    second.join(5)
+    assert ran == ["arm_s"] and not second.is_alive() and rel._inflight == {}
+
+
+@pytest.mark.parametrize("reason", [HOME_RECOVERY_REASON, "1 open arm incident(s): latched hardware error on 11", "2 open arm incident(s): wind-up before the end"])
+def test_a_fleet_only_home_recovery_or_latch_hold_stays_with_a_person(tmp_path, monkeypatch, reason):
+    monkeypatch.setattr(omx_incident_fleet, "held", lambda arm: None)  # the local copy knows nothing of it
+    monkeypatch.setattr(rel, "fleet_hold_reason", lambda arm: reason)
+    run, calls = fake_pipeline()
+    out = rel.evaluate("arm_s", "r", pipeline=run, config=None)
+    assert calls == [] and out["cleared"] is False and "Fleet hold" in out["why"]
+
+
+def test_an_unreadable_fleet_hold_does_not_decide_and_a_plain_fleet_hold_goes_to_the_pipeline(monkeypatch):
+    monkeypatch.setattr(omx_incident_fleet, "held", lambda arm: None)
+    monkeypatch.setattr(rel, "fleet_hold_reason", Mock(side_effect=OSError))
+    run, calls = fake_pipeline()
+    assert rel.evaluate("arm_s", "r", pipeline=run, config=None, clear_fn=lambda *a, **k: None)["cleared"] and len(calls) == 1
+    monkeypatch.setattr(rel, "fleet_hold_reason", lambda arm: "1 open arm incident(s): torque lost")
+    assert rel.evaluate("arm_s", "r", pipeline=run, config=None, clear_fn=lambda *a, **k: None)["cleared"] and len(calls) == 2
+
+
+def test_the_same_refusal_is_audited_once(tmp_path):
+    run, _ = fake_pipeline(allowed=False)
+    for _ in range(3):
+        rel.evaluate("arm_s", "r", pipeline=run, config=None)
+    assert len((tmp_path / "incidents" / "auto-release.jsonl").read_text().splitlines()) == 1
+
+
+def test_api_does_not_reread_for_a_request_refused_for_another_reason(tmp_path, monkeypatch):
+    runner = _runner(tmp_path, monkeypatch, {"arm_a": "arm_a incident open"})
+    seen = []
+    monkeypatch.setattr(rel, "evaluate", lambda arm, rule: seen.append(arm))
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, lock_dir: True)
+    assert "session lock" in runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})["error"]
+    assert runner.start("remap", {"arm": "arm_a", "config": "missing.json", "person_at_switch": True})["code"] == 400
+    runner.runs["x"] = {"moving": True, "proc": Mock(poll=Mock(return_value=None)), "arms": ["arm_a"], "arm": "arm_a", "job": "j"}
+    assert "already runs" in runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})["error"]
+    assert seen == []

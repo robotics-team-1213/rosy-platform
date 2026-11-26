@@ -152,15 +152,16 @@ class Runner:
         )
 
     def start(self, name: str, params: dict, *, principal: Principal | None = None, idempotency_key: str | None = None) -> dict:
+        return cell_incident_release.start_with_release(lambda released: self._start(name, params, principal, idempotency_key, released), self._check_incident)
+
+    def _start(self, name: str, params: dict, principal: Principal | None, idempotency_key: str | None, released: set) -> dict:
         principal = principal or Principal(ROLE_HUMAN, ROLE_HUMAN)
         if idempotency_key is not None and not IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key):
             return {"code": 400, "error": "invalid Idempotency-Key header"}
         job = self.jobs.get(name)
-        if job is None:
-            return {"code": 404, "error": f"no job {name}"}
+        if job is None: return {"code": 404, "error": f"no job {name}"}
         eff_params, auth_err = authorize_principal(name, job, params, principal, moves_arm_fn=moves_arm)
-        if auth_err is not None:
-            return auth_err
+        if auth_err is not None: return auth_err
         try:
             argv = build_argv(job, eff_params, self.workdir)
         except (ValueError, OSError, RuntimeError) as exc:  # RuntimeError: Path.resolve() on a symlink loop (3.12)
@@ -170,7 +171,6 @@ class Runner:
         arm = arms[0] if len(arms) == 1 else ("arm_ab" if target_arms == AB_ARMS else None)
         moving = moves_arm(job, eff_params)
         idem_digest = IdempotencyStore.payload_sha256(name, eff_params) if idempotency_key else None
-        cell_incident_release.before_refusal(arms, self._check_incident, enabled=moving and not job.get("recovery_home") and self._incident_check_fn is None)
         with self.lock:
             for old_jid, r in self.runs.items():
                 if (code := r["proc"].poll()) is not None:
@@ -182,6 +182,8 @@ class Runner:
                 if kind == "conflict":
                     return {"code": 409, "error_code": "IDEMPOTENCY_KEY_CONFLICT", "error": "Idempotency-Key conflict"}
             fleet_online = False
+            held_skip, release_enabled = set(), moving and not job.get("recovery_home") and self._incident_check_fn is None
+            inc_check = lambda x: None if x in held_skip else self._check_incident(x)  # noqa: E731
             if moving:
                 for r in self.runs.values():
                     if not r["moving"] or r["proc"].poll() is not None:
@@ -194,7 +196,9 @@ class Runner:
                 if not job.get("recovery_home"):
                     for a in arms:
                         if inc_reason := self._check_incident(a):
-                            return held_job_response(a, inc_reason)
+                            if not (release_enabled and a not in released):  # else decide last: every other refusal precedes the ~6 s re-read
+                                return held_job_response(a, inc_reason)
+                            held_skip.add(a)
                 for a in arms or (None,):
                     fleet_st = self._check_fleet_safety(a)
                     fleet_online = fleet_online or bool(fleet_st.get("online"))
@@ -205,26 +209,22 @@ class Runner:
                 attach_hold, rec_home = bool(job.get("attach_live_hold")), bool(job.get("recovery_home"))
                 attach_err = live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive) if (attach_hold or rec_home) else None
                 if attach_hold and attach_err: return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
-                lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
-                for check_arm in lock_arms:
+                for check_arm in (sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)):
                     if not ((attach_hold or (rec_home and attach_err is None)) and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
                 if target_arms == AB_ARMS:
-                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
+                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=inc_check, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
                         return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
                 elif arm in AB_ARMS:
-                    if peer_err := check_peer_ab_folded(
-                        arm, self.workdir, self.lease_dir, self.lock_dir,
-                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
-                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
-                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
-                    ):
+                    if peer_err := check_peer_ab_folded(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=inc_check, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
                         return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
             if job.get("camera"):
                 if any(r["camera"] and r["proc"].poll() is None for r in self.runs.values()):
                     return {"code": 409, "error": "another camera job is running (one D435 depth reader at a time)"}
                 if _check_depth_lock_held(self.lock_dir):
                     return {"code": 409, "error_code": "DEPTH_LOCK_HELD", "error": "depth-d435.lock held by another process"}
+            if held_skip:
+                raise cell_incident_release.NeedsRelease(sorted(held_skip)[0])
             jid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
             log = self.out / f"{jid}.log"
             env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, eff_params), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
