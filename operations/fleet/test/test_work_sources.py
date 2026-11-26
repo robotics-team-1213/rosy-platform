@@ -26,6 +26,30 @@ def _rows(body, source):
     return {row["source_id"]: row for row in body["rows"] if row["source"] == source}
 
 
+def test_open_trip_work_wait_uses_operator_hold_and_pre_dispatch_receipt(tmp_path):
+    client, _ = _app(tmp_path)
+    peer = {"stage": "pre_dispatch_peer_check", "dispatch_attempted": False}
+    view = {"trip_id": "trip42", "plan_id": "trip42", "robot_id": "rosy_42", "started_by": "operator",
+            "state": "running", "detail": {"peer_wait": peer}, "created_at": 1., "updated_at": 1.}
+    def check(state, reason):
+        client.app.state.site_maps.put_trip(view)
+        row = _rows(_work(client, "viewer-secret"), "trip")["trip42"]
+        assert (row["status"], row["visible_state"]) == (view["state"], state)
+        assert (row["wait"]["reason"] if row["wait"] else None) == reason
+
+    check("waiting", "peer_pre_dispatch")
+    peer["dispatch_attempted"] = True
+    check("waiting", "peer_clearance")
+    view["hold"] = {"reason": "fleet_hold", "stop": {"confirmed": False}}
+    check("waiting", "fleet_hold_unconfirmed")
+    view["hold"]["stop"]["confirmed"] = True
+    check("waiting", "fleet_hold")
+    view["state"] = "stopped"
+    check("intervention", None)
+    view.update(state="running", hold=None, detail={"last_peer_wait": peer})
+    check("in_progress", None)
+
+
 def test_trip_rows_carry_state_robot_reason_and_the_wait_answer(tmp_path):
     client, _ = _app(tmp_path)
     _trip(client, "t-wait", "running", 1_000.0, {"reason": "signal", "since": 3.0, "waiting": True,

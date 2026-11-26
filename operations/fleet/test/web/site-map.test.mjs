@@ -185,14 +185,14 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
-  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
+  assert.equal(tripStatusText(trip, MAP), '운행 접수 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
   for (const [state, label] of [['DEGRADED', '위치 정확도 저하'], ['UNKNOWN', '위치 확인 불가'], ['future', 'future']]) {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
   // D-763 8: the wait shows on an open trip only; a canceled trip keeps its last stored wait
   const waiting = {...trip, wait: {reason: 'signal', waiting: true, over_bound: false}};
-  assert.match(tripStatusText(waiting, MAP), / · 대기 · 신호$/);
+  assert.match(tripStatusText(waiting, MAP), /^대기 · 신호/);
   assert.doesNotMatch(tripStatusText({...waiting, state: 'canceled'}, MAP), /대기/);
   // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
   assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
@@ -201,7 +201,7 @@ test('D-494 trip panel text and button reasons', async () => {
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
   assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
-  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇은 이미 운행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇에 접수된 운행/);
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);

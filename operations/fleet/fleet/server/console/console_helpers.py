@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from fleet.hub.hub import HubError
 from fleet.localization import trust
 from fleet.server import bays, traffic
+from fleet.server.peer_wait_prefix import check_wait_prefix
 from fleet.server.traffic_arbitration_helpers import peer_proof, guarded_road_send
 from fleet.server.console_view import _error_of, _shown, classify_link, link_reason
 from fleet.swarm.dispatch_guard import dispatch_guard
@@ -344,11 +345,11 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
                 lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
                 expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding, **({"road_speed_controlled": True} if road_speed_controlled else {})),
-                grid_from=bays.Grid.from_payload)
+                grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix)
     elif route_points is not None:
         result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
             lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id, **({"road_speed_controlled": True} if road_speed_controlled else {})),
-            grid_from=bays.Grid.from_payload)
+            grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix)
     else:
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
     if result["accepted"] is False:

@@ -13,7 +13,7 @@ import pytest
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
-FRESH = {"velocity": {"evidence": "fresh", "stale_after_s": 0.5}}
+FRESH = {"velocity": {"evidence": "fresh", "stale_after_s": 5}}
 
 
 def _moving(robot_id, linear=0.0, mode="IDLE", **state):
@@ -45,14 +45,15 @@ def test_card_names_the_motion_source_and_flags_the_unowned_mover(site):  # noqa
         try:
             def chip(robot_id):
                 return page.locator(f'article.robot-summary[data-robot-id="{robot_id}"] [data-motion-source]')
-            expect(chip("rosy_01")).to_have_text("배차 운행 · kim")
-            expect(chip("rosy_02")).to_have_text("배차 운행")
+            expect(chip("rosy_01")).to_have_text("배차 · kim · 이동 중")
+            expect(chip("rosy_02")).to_have_text("배차 · 정지")
+            expect(page.locator('#cockpit-hud [data-hud-key="mission"] strong')).to_have_text("2대 · 미확인 1대")
             expect(chip("rosy_07")).to_have_text("정지 · 대기")
             expect(chip("rosy_03")).to_have_text("원인 불명 이동")
             expect(chip("rosy_04")).to_have_text("수동 모드 · 조종 주체 확인 불가")
             expect(chip("rosy_05")).to_contain_text("출처 확인 불가 · 상태")
             expect(chip("rosy_05")).to_contain_text("초 전 값")
-            expect(chip("rosy_06")).to_have_text("도킹 동작 (충전 복귀)")
+            expect(chip("rosy_06")).to_have_text("충전 복귀 · 정지")
             summary = lambda rid: page.locator(f'article.robot-summary[data-robot-id="{rid}"]')  # noqa: E731
             expect(summary("rosy_03")).to_contain_text("원인 불명 이동 — Fleet이 모르는 이동입니다")
             expect(summary("rosy_01")).not_to_contain_text("Fleet이 모르는 이동")

@@ -545,3 +545,72 @@ def test_planned_stop_goal_clears_stale_site_claims(monkeypatch):
                                                     "binding_id": "fit-1", "map_grid_id": "grid-A"}))
     assert reply["accepted"] is True and robot_id not in console._site_claims
     assert console._claims[robot_id] == [(0, 0), (0.5, 0.0)]
+
+
+@pytest.mark.parametrize("case", ["vacant", "old_core", "post_dispatch", "previous_route", "wrong_robot",
+                                  "moving", "old_twist", "skew", "new_owner", "new_wire", "wire_pending", "restart"])
+def test_idle_peer_wait_pause_requires_post_cancel_standstill_and_same_owner(case):
+    robot = RouteFakeRobot("rosy_42")
+    clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _corridor_map())
+    clock.now = time.time()
+    rid, tid = "rosy_42", "peer-paused"
+    pose["v"] = MapPose(.1, 0., 0., "LOCALIZED", "sighting", 0., .1, .1, "site-line")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=ver, start_pose=(.1, 0., 0.), goal="P3"), store.routing_config))
+    store.record_plan(plan_id=tid, robot_id=rid, principal_id="bob", map_version=ver,
+                      request={"to": "P3", "drive_mode": "nav2"}, result={"plan": plan})
+    async def refuse(_rid, _points):
+        return {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED", "blocked_by": "peer",
+                "waiting_on": ["peer"], "dispatch_attempted": case == "post_dispatch",
+                "stage": "post_dispatch_peer_check" if case == "post_dispatch" else "pre_dispatch_peer_check",
+                "cancel_confirmed": case == "post_dispatch", "command_robot_id": "other" if case == "wrong_robot" else rid}
+    runner._route = refuse
+    run(runner.start(tid, "bob"))
+    run(runner.tick())
+    live = runner._live[rid]
+    assert live.view["detail"]["peer_wait"] and not robot.routes
+    if case == "previous_route":
+        live.view["detail"]["nav2_route"] = {"points": 3}
+    leases = console.goal_leases
+    if case == "wire_pending":
+        leases.pending[rid] = 1
+    owner = {"owner_run_id": None, "boot_id": "a2154d53-b016-4f96-ada0-22b191c9fb13",
+             "owner_generation": 4, "transport_generation": 3, "mode_epoch": 1, "dock_owner_generation": 0}
+    async def cancel(_rid):
+        stamp = datetime.fromtimestamp(clock() + (1. if case == "skew" else 0), timezone.utc).isoformat()
+        return {"navigation": "IDLE", "operation": None, "idle_observed_at": stamp,
+                **({} if case == "old_core" else {"idle_owner": owner})}
+    async def state(_rid):
+        clock.advance(.1)
+        stamp = datetime.fromtimestamp(clock.now - (1 if case == "old_twist" else .02), timezone.utc).isoformat()
+        return {"robot_id": rid, "mode": "IDLE", "navigation": "IDLE", "goal": None, "line_follow": {"mode": "OFF"},
+                "velocity": {"linear": .1 if case == "moving" else 0., "angular": 0.},
+                "evidence": {"velocity": {"evidence": "fresh", "sampled_at": stamp}}}
+    async def navigation(_rid):
+        if case == "new_wire":
+            with leases.motion_wire(rid, "POST", "/api/v1/navigation/goal", {}):
+                pass
+        return {"navigation": "IDLE", "idle_owner": owner | ({"owner_generation": 5} if case == "new_owner" else {})}
+    runner._cancel_goal = runner.halts._cancel_goal = cancel
+    runner.halts.read_stop_state = state
+    runner.halts.read_navigation = navigation
+    runner.halts.wire_epoch = leases.idle_wire_epoch
+    paused = run(runner.pause(tid, "bob"))
+    stop = paused["hold"]["stop"]
+    assert not stop["cancel_ack"]
+    if case == "restart":
+        from fleet.server.trip_halts import pause_proof_args
+        halted = run(runner.halts.halt_robot(rid, False, None, **pause_proof_args(paused)))
+        assert halted["stop_sent"] and halted["pause_proof"]["basis"] == "pre_dispatch_idle"
+    elif case == "vacant":
+        assert stop["proof"]["basis"] == "pre_dispatch_idle"
+        assert run(runner.resume(tid, "bob"))["hold"] is None
+        clock.advance(NAV2_TRANSIENT_RETRY_S + .1)
+        run(runner.tick())
+        assert live.view["detail"]["peer_wait"] and not robot.routes
+    else:
+        from fleet.server.trip_runner import TripError
+        with pytest.raises(TripError) as exc:
+            run(runner.resume(tid, "bob"))
+        assert exc.value.code == "TRIP_PAUSE_STOP_UNCONFIRMED"
+        assert stop["confirmed"] is False and not robot.routes
