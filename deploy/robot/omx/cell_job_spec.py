@@ -159,6 +159,8 @@ JOBS = {
             "site": _match(NAME),
             "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
             "paced_chunks": _bool,
+            "depart_robot": _match(NAME),  # arm_s only: after took_one, cell_job_depart asks Fleet R to send this Pinky
+            "depart_action": _match(re.compile(r"depart_s1")),
         },
     },
     "stack_plan": {"script": "cell_stack_plan.py", "argv": ["--plan-json", "{plan}"], "params": {"plan": _match(TASK_FILE)}},
