@@ -357,6 +357,67 @@ def test_repeat_surface_uses_named_registered_target(screen):
     assert argv[argv.index("--only") + 1] == "surface" and "--commissioning" in argv and "--person-at-switch" in argv
 
 
+def test_post_eval_uses_one_registered_point_and_existing_movement_guards(screen):
+    url, _, calls, jobs, _ = screen
+    body = {"arm": "arm_b", "step": "post-eval", "site": "floor", "person_at_switch": True}
+    sites = jobs.status()["arms"]["arm_b"]["sites"]
+    assert sites["floor"]["can_post_eval"]
+    for extra in ({"site": None}, {"site": "missing"}, {"person_at_switch": False}, {"targets": []},
+                  {"targets": ["floor:0,0"]}, {"apply": True}, {"x": 0.3}):
+        assert post(url, "/api/calibration/jobs", {**body, **extra})[0] == 422
+    jobs.lease().claim("arm_b", "foreign", "manual", 600, os.getpid(), None)
+    assert post(url, "/api/calibration/jobs", body)[0] == 409
+    jobs.lease().release("arm_b", "foreign")
+    assert not calls["spawn"]
+    status, job = post(url, "/api/calibration/jobs", body)
+    assert status == 202 and job["site"] == "floor" and "surface_clear" not in job
+    assert job["targets"] == ["floor:0.1,-0.2"]
+    for thread in jobs.threads:
+        thread.join(5)
+    assert calls["spawn"][0][0] == [
+        "wrap.sh", "py", jobs.engine("cell_post_eval.py"), "--config", str(jobs.arm_config("arm_b")[0]),
+        "--targets", "floor:0.1,-0.2", "--commissioning", "--person-at-switch",
+    ]
+
+
+@pytest.mark.parametrize(("step", "targets", "arm", "route", "use_policy"), [
+    ("check", [], "arm_b", ["tmp-b-2-l1", "ship-h1r2-l0"], True),
+    ("check", ["floor:0.1,-0.2"], "arm_b", ["tmp-b-2-l1", "ship-h1r2-l0"], False),
+    ("check", [], "arm_a", ["tmp-b-2-l1", "ship-h1r2-l0"], False),
+    ("check", [], "arm_b", None, False), ("check", [], "arm_b", True, False),
+    ("depth-verify", [], "arm_b", ["tmp-b-2-l1", "ship-h1r2-l0"], False),
+])
+def test_only_generic_check_uses_enabled_same_arm_route_profile(screen, step, targets, arm, route, use_policy):
+    url, _, calls, jobs, cells = screen
+    stack_path = jobs.arm_config("arm_b")[0]
+    policy_path = cells.parent / "policy.json"
+    policy_path.write_text(json.dumps({"arm_id": arm, "preflight": {"check_route": route}}))
+    jobs.arms["arm_b"]["route_config"] = str(policy_path)
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": step, "targets": targets})[0] == 202
+    for thread in jobs.threads:
+        thread.join(5)
+    argv, cwd, _ = calls["spawn"][0]
+    expected = policy_path if use_policy else stack_path
+    assert argv[argv.index("--config") + 1] == str(expected) and cwd == str(expected.parent)
+
+
+@pytest.mark.parametrize(("name", "entry", "arm"), [
+    ("floor", {"start": [0.1, -0.2]}, "arm_b"), ("floor", {"place": [True, -0.2]}, "arm_b"),
+    ("floor", {"place": [0.2, float("nan")]}, "arm_b"), ("floor", {"place": [0.2]}, "arm_b"),
+    ("stand:r1-s1", {"place": [0.1, -0.2]}, "arm_b"),
+    ("tmp-a-1-l1", {"place": [0.1, -0.2]}, "arm_b"),
+    ("floor", {"place": [0.1, -0.2]}, "arm_a"),
+])
+def test_post_eval_ineligible_points_hidden_and_refused(cell, name, entry, arm):
+    jobs = jobs_mod.Jobs(cell, spawn=lambda *args: pytest.fail("ineligible job started"),
+                         incident_tool=lambda *args: ({}, ""))
+    path, config = jobs.arm_config("arm_b")
+    config.update(arm_id=arm, sites={name: entry})
+    path.write_text(json.dumps(config))
+    assert not jobs.status()["arms"]["arm_b"]["sites"][name]["can_post_eval"]
+    assert jobs.start({"arm": "arm_b", "step": "post-eval", "site": name, "person_at_switch": True}, "operator")[0] == 422
+
+
 @pytest.mark.parametrize("geometry", [{"moves": True}, {"on_vehicle": "pinky"}, {"moving_px": [0, 10]},
                                       {"tier_of": "floor"}, {"tier": 2}, {"layers_below": 1}, {"layer": 1}, {"z_offset_m": .03}])
 def test_mobile_or_elevated_board_is_ineligible_in_form_api_and_engine(screen, geometry):

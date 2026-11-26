@@ -1,6 +1,10 @@
 """Describe reusable named-route calibration and the remaining measurements, without moving the arm."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import re
+
 import numpy as np
 
 from cell_attempts import digest
@@ -72,6 +76,41 @@ def _area_map_candidate(calibration, canonical):
             "status": "area_measurements_only"}
 
 
+def _cad_image_observation(calibration, canonical, roi, reference_current, xy):
+    observations = calibration.get("cad_image_observations")
+    if not canonical or "cad_image_observations" not in calibration:
+        return None
+    if not isinstance(observations, dict):
+        return {"status": "invalid", "reason": "invalid_observations"}
+    base = canonical["base_site"]
+    if base not in observations:
+        return None
+    row = observations[base]
+    hashes = ("capture_sha256", "holdout_sha256", "camera_reference_sha256")
+    if not isinstance(row, dict) or set(row) != {"center_px", "holdout_max_px", *hashes}:
+        return {"status": "invalid", "reason": "invalid_fields"}
+    if any(not isinstance(row[key], str) or not re.fullmatch(r"[a-fA-F0-9]{64}", row[key]) for key in hashes):
+        return {"status": "invalid", "reason": "invalid_digest"}
+    if row["capture_sha256"].lower() == row["holdout_sha256"].lower():
+        return {"status": "invalid", "reason": "identical_captures"}
+    center = row["center_px"]
+    error = row["holdout_max_px"]
+    if not isinstance(center, list) or len(center) != 2 or not all(map(_finite, center)):
+        return {"status": "invalid", "reason": "invalid_center"}
+    if not _finite(error) or error < 0:
+        return {"status": "invalid", "reason": "invalid_holdout_error"}
+    ref = calibration.get("reference_top_sha256")
+    if not reference_current or not isinstance(ref, str) or ref.lower() != row["camera_reference_sha256"].lower():
+        return {"status": "stale", "reason": "camera_reference_not_current"}
+    if not roi or not (roi[0] <= center[0] < roi[2] and roi[1] <= center[1] < roi[3]):
+        return {"status": "invalid", "reason": "center_not_in_named_roi"}
+    result = {"status": "recorded_image_only", "center_px": list(center), "holdout_max_px": error,
+              **{key: row[key] for key in hashes}}
+    if xy is None:
+        result["next"] = "verify_arm_base_registration"
+    return result
+
+
 def route_calibration_report(config, calibration, check, source, destination):
     """Extend the static route check for diagnostic callers; runtime binding keeps its original contract."""
     route = route_check(config, source, destination)
@@ -115,6 +154,9 @@ def route_calibration_report(config, calibration, check, source, destination):
                     "top_roi": site["named_top_roi"], "floor_reference": (
                         {"rois": floor["floor"], "optical_depth_mm": floor["floor_depth_mm"]}
                         if site["floor_reference_configured"] else None)}
+        observation = _cad_image_observation(calibration, canon, site["named_top_roi"], reference_current, xy)
+        if observation is not None:
+            endpoint["cad_image_observation"] = observation
         endpoints[role] = endpoint
         # These are advisory observations. Nothing in this list is passed to the commissioning executor.
         actions = [(site["target_error"], "resolve_named_site"), (not mapped["current"] and mapped["reason"] != "reference_not_current",
@@ -136,3 +178,26 @@ def route_calibration_report(config, calibration, check, source, destination):
                                      "gaps": gaps, "gaps_are_advisory": True, "next_machine_action": next_action,
                                      "scene": {"status": "not_sampled", "next": "capture_fresh_route_before_transfer"}}
     return route
+
+
+def include_route_report(config, calibration, found, args, ap):
+    """Attach diagnostic evidence only to a read-only calibration check."""
+    if args.step == "check" and not (args.route or args.plan_only or args.replay_frames):
+        route = (config.get("preflight") or {}).get("check_route")
+        if route is not None:
+            if not isinstance(route, list) or len(route) != 2 or not all(isinstance(s, str) and s for s in route):
+                ap.error("preflight.check_route requires two site names")
+            args.route = route
+    if args.route:
+        evidence_path = args.cad_image_evidence or config.get("cad_image_evidence_path")
+        if evidence_path:
+            # Relative filenames in a cell profile refer to files beside that profile.
+            path = args.config.parent / Path(evidence_path).expanduser()
+            try:
+                fragment = json.loads(path.read_text(encoding="utf-8-sig"))
+                if not isinstance(fragment, dict) or not isinstance(fragment.get("cad_image_observations"), dict):
+                    raise ValueError("expected a cad_image_observations object")
+            except (OSError, ValueError) as exc:
+                ap.error(f"cannot read CAD image evidence: {exc}")
+            calibration = {**calibration, "cad_image_observations": fragment["cad_image_observations"]}
+        found["route"] = route_calibration_report(config, calibration, found, *args.route)

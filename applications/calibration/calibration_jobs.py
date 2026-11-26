@@ -20,8 +20,8 @@ from urllib.parse import urlsplit
 
 OPERATE = "calibration.operate"
 STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "pivot-near": ["--only", "pivot-near"],
-         "remap": ["--only", "remap"], "surface": ["--only", "surface"]}
-MOVING = {"pivot-near", "remap", "surface"}  # D-911: a person at the power switch
+         "remap": ["--only", "remap"], "surface": ["--only", "surface"], "post-eval": []}
+MOVING = {"pivot-near", "remap", "surface", "post-eval"}  # D-911: a person at the power switch
 TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)?")  # never starts with '-'
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
 SITE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?")
@@ -49,6 +49,21 @@ def site_point(name, site):
             and all(type(v) in (int, float) and math.isfinite(v) for v in point)):
         return point
     return None
+
+
+def post_eval_point(name, site, arm):
+    # The deployed engine takes a single site:x,y argument; a colon in the name is ambiguous.
+    if not isinstance(name, str) or ":" in name or not isinstance(site, dict):
+        return None
+    point = site_point(name, site)
+    if point is None:
+        return None
+    try:
+        from cell_site_target import resolve_cell_ab_site
+        resolved = resolve_cell_ab_site(name) or resolve_cell_ab_site(name, 1)
+    except (ImportError, OSError, ValueError, KeyError, TypeError):
+        return None
+    return point if resolved is None or arm in resolved["arms"] else None
 
 
 def map_grade(key, record):
@@ -152,6 +167,23 @@ class Jobs:
         path = Path(self.arms[arm]["config"]).expanduser()
         return path, json.loads(path.read_text(encoding="utf-8"))
 
+    def check_config_path(self, arm, default):
+        route_path = self.arms[arm].get("route_config")
+        if not isinstance(route_path, str) or not Path(route_path).is_absolute():
+            return default
+        path = Path(route_path)
+        try:
+            profile = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return default
+        if not isinstance(profile, dict) or profile.get("arm_id") != arm:
+            return default
+        preflight = profile.get("preflight")
+        route = preflight.get("check_route") if isinstance(preflight, dict) else None
+        if isinstance(route, list) and len(route) == 2 and all(isinstance(s, str) and s.strip() for s in route):
+            return path
+        return default
+
     def env(self, arm, owner):
         return {**os.environ, **self.arms[arm].get("env", {}), "ROSY_ARM_LEASE_OWNER": owner}
 
@@ -163,7 +195,7 @@ class Jobs:
         return [tier["item"] for zone in layout["zones"] for slot in zone["slots"]
                 if arm in slot["arms"] for tier in slot["tiers"]]
 
-    def site_status(self, config):
+    def site_status(self, config, arm):
         path = config.get("calibration_path")
         if not path:
             return {}
@@ -190,6 +222,7 @@ class Jobs:
                 "grade": grade, "coarse": grade == "coarse", "inherited": key not in (name, f"{name}~coarse"),
                 "sha": hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()[:12]}
             out[name] = {"map": summary, "surface_z": site.get("surface_z"), "map_from": site.get("map_from"),
+                         "can_post_eval": config.get("arm_id") == arm and post_eval_point(name, site, arm) is not None,
                          "place_xy_m": site_point(name, site), "can_remeasure_surface": can_remeasure_surface(name, site, config.get("arm_id")),
                          "bias": [{k: r.get(k) for k in ("point_m", "bias_mm", "kind", "n", "rms_mm", "measured")}
                                   for r in regions if r.get("site") == name]}
@@ -204,7 +237,7 @@ class Jobs:
         for arm in self.arms:
             incident, err = self.incident_tool([self.python, self.engine("omx_incident.py"), "status", "--arm", arm], 10)
             try:
-                sites = self.site_status(self.arm_config(arm)[1])
+                sites = self.site_status(self.arm_config(arm)[1], arm)
             except (OSError, ValueError) as exc:
                 sites = {"error": str(exc)}
             arms[arm] = {"lease": leases.get(arm), "incident": incident if incident is not None else {"error": err},
@@ -270,13 +303,26 @@ class Jobs:
                 if xy is None:
                     return 422, {"error": f"S팔 공급 경로의 {name} 중심 XY를 검증해 등록하세요."}
                 targets.append(f"{name}:{xy[0]},{xy[1]}")
+        if step == "check" and not targets and not route and "supply_route" not in body:
+            config_path = self.check_config_path(arm, config_path)
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
         if targets:
             argv += ["--targets", *targets]
         if route:
             argv += ["--route", *route]
-        if "site" in body or step == "surface":
+        if step == "post-eval":
+            name = body.get("site")
+            site = (config.get("sites") or {}).get(name) if isinstance(name, str) else None
+            if (set(body) != {"arm", "step", "site", "person_at_switch"} or config.get("arm_id") != arm
+                    or not config.get("calibration_path")):
+                return 422, {"error": "팔과 등록된 측정 지점만 선택하세요."}
+            point = post_eval_point(name, site, arm)
+            if point is None:
+                return 422, {"error": "이 팔에 중심 좌표가 등록된 지점을 선택하세요."}
+            targets = [f"{name}:{point[0]},{point[1]}"]
+            argv = [self.python, self.engine("cell_post_eval.py"), "--config", str(config_path), "--targets", *targets]
+        elif "site" in body or step == "surface":
             name = body.get("site")
             site = (config.get("sites") or {}).get(name) if isinstance(name, str) else None
             if (step != "surface" or targets or config.get("arm_id") != arm or not isinstance(site, dict)
@@ -316,6 +362,7 @@ class Jobs:
                 record["task_id"] = body["task_id"]  # Advisory link provenance, never a Fleet command.
             if "site" in body:
                 record["site"] = body["site"]
+            if step == "surface":
                 record["surface_clear"] = True
             try:
                 proc = self.spawn(argv, str(config_path.parent), self.env(arm, owner), self.job_file(job_id, "log"))
