@@ -23,6 +23,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 CONFIG_ENV = "ROSY_FLEET_CELL_JOBS"
 POST_JOBS = ("cell_policy_drive", "recover_hold", "safe_home")
 _JOB_ID = re.compile(r"[\w-]{1,64}")
+# Run settings a model needs on the cell (backend, calibration, goal, step budget); host config only, never the browser.
+MODEL_PARAMS = ("act_backend", "endpoint_url", "token_file", "model_calibration", "cell_calibration", "goal_slot",
+                "goal_site", "n_action", "max_obs_age_s")
 _ARM_FILES = {"cell_policy_drive": ("config", "library"), "recover_hold": ("config", "library", "site", "roi"),
               "safe_home": ("config", "library", "site", "roi")}
 
@@ -122,6 +125,7 @@ class CellJobProxy:
                 if model is None:
                     return _refuse(400, "MODEL_NOT_CONFIGURED", f"model {req.model} is not in the Fleet list")
                 params.update({k: model[k] for k in ("policy_root", "policy_revision") if model.get(k)})
+                params.update({k: v for k, v in (model.get("params") or {}).items() if k in MODEL_PARAMS})
         return self._send(cell, "POST", f"/jobs/{job}", params)
 
 
