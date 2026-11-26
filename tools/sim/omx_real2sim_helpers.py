@@ -217,7 +217,7 @@ def measure_temp_plates(frame, layout, prev=None):
             lanes.append(dict(lane=k, xy=[round(v, 4) for v in xy], yaw_deg=round(math.degrees(fold(yaw)), 1),
                               source=(b["kind"] + (" (partial)" if b["partial"] else "")) if b else "plate-fit",
                               residual_mm=round(math.dist(xy, b["xy"]) * 1000, 1) if b else None))
-        plates[t] = dict(lanes=lanes, seen=len(seen))
+        plates[t] = dict(lanes=lanes, seen=len(seen), axis=[round(v, 4) for v in place(((shape["radius_m"], 0.), 0.), pose)[0]])  # the fan centre: its arm axis
         sizes += [b["size"] for b in seen.values() if b["kind"] == "pad" and not b["partial"]]
     scale = None
     if sizes:
