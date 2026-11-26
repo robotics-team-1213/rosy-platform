@@ -41,7 +41,14 @@ def _client(tmp_path):
     return TestClient(app)
 
 
-def test_real2sim_pipeline_reads_snapshots_cad_inventory_sysid_and_stages(tmp_path):
+def test_real2sim_pipeline_reads_snapshots_cad_inventory_sysid_and_stages(tmp_path, monkeypatch):
+    # pin the set: the newest committed snapshot is "active", so a later one (20261115-0415, v24 docks) must not move these
+    snaps = tmp_path / "snapshots"
+    snaps.mkdir()
+    for src in sorted((ROOT / "deploy/robot/omx/sim/cell_snapshots").glob("*.json")):
+        if src.stem <= "20261112-1838":
+            shutil.copy(src, snaps / src.name)
+    monkeypatch.setenv(ENV_SNAPSHOTS, str(snaps))
     client = _client(tmp_path)
     response = client.get("/api/fleet/cell-app/real2sim-pipeline", headers=VIEWER)
     assert response.status_code == 200, response.text
