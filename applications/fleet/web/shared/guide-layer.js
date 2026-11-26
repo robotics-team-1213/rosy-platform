@@ -334,7 +334,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     const goalX = typeof selectedGoal?.x === "number" ? selectedGoal.x : (densePts.length ? densePts[densePts.length - 1][0] : null);
     const goalY = typeof selectedGoal?.y === "number" ? selectedGoal.y : (densePts.length ? densePts[densePts.length - 1][1] : null);
-    const dispatched = selectedGoal?.status === "DISPATCHED" || selectedGoal?.status === "BERTHING";
+    const dispatched = selectedGoal?.status === "ARRIVED" || selectedGoal?.status === "DISPATCHED" || selectedGoal?.status === "BERTHING";
     const blocked = selectedGoal?.status === "BLOCKED";
     const routeColor = blocked ? css("--status-crit") : dispatched ? goalCol : warnCol;
     ctx.save();
@@ -450,7 +450,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
         const lenStr = typeof lenVal === "number" ? ` · ${lenVal.toFixed(2)}m` : "";
         const statusStr = selectedGoal?.statusText ? ` · ${selectedGoal.statusText}` : "";
         const goalTitle = selectedGoal?.label || `(${goalX.toFixed(2)}, ${goalY.toFixed(2)})`;
-        const phase = blocked ? "출발 보류" : dispatched ? "접수된 목표" : selectedGoal?.status === "UNCONFIRMED" ? "접수 확인 불가" : "출발 전";
+        const phase = selectedGoal?.status === "ACCEPTED" ? "실행 상태" : selectedGoal?.status === "ARRIVED" ? "도착" : blocked ? "출발 보류" : dispatched ? "접수된 목표" : selectedGoal?.status === "UNCONFIRMED" ? "접수 확인 불가" : "출발 전";
         drawChip(ctx, null, gp.x, gp.y - 18, `${phase} · ${goalTitle}${statusStr}${lenStr}${viaStr}`, blocked ? "bad" : dispatched ? "good" : "warn");
       }
     }

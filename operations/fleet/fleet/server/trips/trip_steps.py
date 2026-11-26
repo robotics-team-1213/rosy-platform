@@ -208,6 +208,9 @@ class TripSteps:
                     await self._step_free(live, index + 1, pose, staging=index)
             elif live.nav2:
                 await step_nav2_route(self, live, index, s, pose)
+                if live.view["detail"].get("peer_wait"):
+                    self._save(live)
+                    return
                 if live.view["detail"].get("camera_lane_fallback"):
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:

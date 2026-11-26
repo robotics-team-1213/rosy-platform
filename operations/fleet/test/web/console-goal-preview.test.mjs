@@ -170,8 +170,8 @@ test("S2: viaTrip plans on server and draws PREVIEW before confirm, then calls o
     "/api/fleet/robots/rosy_01/trip",
     "/api/fleet/trips/plan-123/start",
   ]);
-  assert.equal(env.view.selectedGoal.status, "DISPATCHED");
-  assert.equal(env.view.selectedGoal.statusText, "Fleet 출발 접수");
+  assert.equal(env.view.selectedGoal.status, "ACCEPTED");
+  assert.equal(env.view.selectedGoal.statusText, "Fleet 접수 · 기체 실행 확인 중");
 });
 
 test("S2: canceling confirm dispatches no /start and marks PREVIEW cancelled", async (t) => {

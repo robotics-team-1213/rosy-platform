@@ -12,7 +12,7 @@ from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
-from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
+from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
@@ -40,20 +40,6 @@ _TRANSIENT_GOAL_REFUSALS = ("ROUTE_CONFLICT", "YIELDING")
 
 def _wrap_angle(angle: float) -> float:
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
-
-def _wall_clearance(x: float, y: float, walls) -> float:
-    best = math.inf
-    for wall in walls or ():
-        face = wall.get("face") if isinstance(wall, dict) else getattr(wall, "face", None)
-        if not face or len(face) < 2:
-            continue
-        for a, b in zip(face, face[1:]):
-            dx, dy = b[0] - a[0], b[1] - a[1]
-            l2 = dx * dx + dy * dy
-            t = 0.0 if l2 == 0.0 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
-            best = min(best, math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy)))
-    return best
 
 
 def _split_closed_loop(pts: list[tuple[float, float, float, str]], start_xy: tuple[float, float], walls=()) -> None:
@@ -520,13 +506,26 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         return
     if reply.get("accepted") is False or reply.get("queued"):
         reason = reply.get("reason") or ""
-        if robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS:
+        peer_wait = (reply.get("blocked_by") not in (None, robot_id)
+                       and reply.get("queued") is False
+                       and (reply.get("dispatch_attempted") is False or reply.get("cancel_confirmed") is True)
+                       and reason in ("LOCALIZATION_UNTRUSTED", "ROUTE_CONFLICT", "YIELDING", "MAP_FRAME_MISMATCH"))
+        if peer_wait or (robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS):
+            if peer_wait:
+                detail = live.view["detail"]
+                proof = _GoalRefused(reason, reply).detail["goal_admission"]
+                prior = detail.get("peer_wait") or {}
+                detail["peer_wait"] = {**proof, "since": prior.get("since", runner._clock()),
+                                       "checked_at": runner._clock(), "reason": reason}
             live.active_route = None
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
             runner._fence(robot_id)
             return
         raise _GoalRefused(reason, reply)
+    if wait := live.view["detail"].pop("peer_wait", None):
+        live.progress_at = runner._clock()
+        live.view["detail"]["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
     live.active_route = {"end_index": end_index, "points": len(payload)}

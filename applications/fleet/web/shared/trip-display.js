@@ -166,10 +166,17 @@ export function tripEndText(trip) {
   if (trip?.state !== 'stopped' && trip?.state !== 'failed') return '';
   const {reason} = trip;
   const why = reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[reason] || TRIP_ERROR_LABEL[reason] || reason;
-  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
+  const admission = trip.detail?.goal_admission;
+  const peers = admission?.waiting_on?.length ? admission.waiting_on : [admission?.blocked_by].filter(Boolean);
+  const peerHold = trip.detail?.goal_reason === 'LOCALIZATION_UNTRUSTED' && peers.length;
+  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why,
+    peerHold ? `명령 대상 ${trip.robot_id} · 경로 안전거리 확인 불가 (${peers.join(', ')})` : trip.detail?.goal_reason,
+    admission?.cancel_confirmed && '기체 목표 취소 확인'].filter(Boolean).join(' · ');
 }
 
 export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
+  const peer = trip?.detail?.peer_wait;
+  if (peer) return `통행 대기 · 명령 대상 ${trip.robot_id} · 안전거리 확인 대상 ${peer.waiting_on.join(', ')} · 자동 재확인 중`;
   return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
 }
 

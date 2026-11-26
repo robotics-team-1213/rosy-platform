@@ -183,10 +183,10 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (viaTrip) {
         started = true;
         setGoal({ status: "STARTING", statusText: "Fleet 출발 접수 확인 중" });
-        await startTrip(call, prePlanned.plan_id);
+        const trip = await startTrip(call, prePlanned.plan_id);
         owner.check();
-        setGoal({ status: "DISPATCHED", statusText: "Fleet 출발 접수" });
-        log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(prePlanned.plan_id).slice(0, 8)})`, "good");
+        setGoal({ status: "ACCEPTED", tripId: trip?.trip_id, statusText: "Fleet 접수 · 기체 실행 확인 중" });
+        log(`${robotId} → ${where} 차로 운행 접수 (계획 ${String(prePlanned.plan_id).slice(0, 8)})`, "warn");
         refreshGuide();
         return;
       }
