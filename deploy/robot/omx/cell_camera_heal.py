@@ -37,7 +37,7 @@ def with_camera_heal(argv: list[str], job: dict, params: dict) -> list[str]:
     if not targets:
         return argv
     return ["bash", "-c", ENV + CAMERA_HEAL, CAMERA_HEAL_SCRIPT,
-            *[x for t in targets for x in ("--target", t)], "--", *argv]
+            *[f"--target={t}" for t in targets], "--", *argv]
 
 
 def _dead_roles(cameras: dict, io) -> list[str]:
