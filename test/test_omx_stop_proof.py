@@ -89,7 +89,6 @@ def test_session_proof_reads_the_runners_own_live_state():
 
 
 def test_torque_off_folded_gets_the_arms_own_library_and_a_peer_fold_uses_it(tmp_path, monkeypatch):
-    (tmp_path / "cell-b.json").write_text("{}", encoding="utf-8")
     job = api.JOBS["torque_off_folded"]
     assert "--library" not in api.build_argv(job, {"arm": "arm_b", "config": "cell-b.json"}, tmp_path)  # none: omitted
     (tmp_path / "chunks-arm-b-x.json").write_text(json.dumps({"chunks": {"park": [[0, -90, 60, 60, 0, 40]]}}), encoding="utf-8")
