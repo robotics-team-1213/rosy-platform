@@ -29,7 +29,7 @@ from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery, start_check  # noqa: F401
 from fleet.server.trip_geometry import pose_view  # noqa: F401
-from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed
+from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed, pause_proof_args
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, convoy_refusal, stop_points  # noqa: F401
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
@@ -332,6 +332,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 halted = await self.halts.halt_robot(
                     robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
                     handoff_pending=bool(detail.get("named_stop_handoff_pending")),
+                    **pause_proof_args(trip),
                 )
                 detail.update(halted)
                 if halted.get("stop_sent") and "error" not in halted:
@@ -552,4 +553,5 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         camera = live.view["detail"].get("camera_lane_fallback")
         return await self.halts.halt_robot(
             live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
-            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")))
+            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")),
+            **pause_proof_args(live.view))

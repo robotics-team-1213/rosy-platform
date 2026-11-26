@@ -824,6 +824,30 @@ def test_a_restart_marks_open_trips_stopped_and_stops_their_robots_once(tmp_path
     assert ports.sent == [("stop", "SE", 0.0)] and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
 
 
+def test_restarted_pause_keeps_stopped_trip_pending_until_robot_reports_zero(tmp_path):
+    from datetime import datetime, timezone
+
+    path = tmp_path / "fleet.sqlite3"
+    store = SiteMapStore(path)
+    store.put_trip({"trip_id": "t", "robot_id": "rosy_60", "state": "running", "drive_mode": "free",
+                    "next_place": None, "detail": {}, "hold": {"reason": "fleet_hold", "at": 1.0,
+                                                                "stop": {"confirmed": False}}})
+    store.close()
+    runner, store, ports = _setup(path=path)
+    ports.now = 10.0
+    run(runner.halts.halt_restarted())
+    assert store.trip("t")["detail"]["stop_sent"] is False
+    assert run(runner.retry_halt("t"))["detail"]["stop_sent"] is False
+    state = {"robot_id": "rosy_60", "mode": "IDLE", "navigation": "CANCELED", "goal": None,
+             "velocity": {"linear": 0.0, "angular": 0.0}, "line_follow": {"mode": "OFF"},
+             "evidence": {"velocity": {"evidence": "fresh", "sampled_at": datetime.fromtimestamp(
+                 ports.now - 0.01, timezone.utc).isoformat()}}}
+    runner.halts.read_stop_state = lambda _: asyncio.sleep(0, result=state)
+    result = run(runner.retry_halt("t"))
+    assert result["state"] == "stopped" and result["detail"]["stop_sent"] is True
+    assert not runner.halts.restarted and not ports.goals
+
+
 def test_a_restart_halt_without_a_place_only_turns_line_follow_off(tmp_path):
     store = SiteMapStore(tmp_path / "fleet.sqlite3")
     store.put_trip({"trip_id": "t", "robot_id": "rosy_60", "state": "running", "drive_mode": "lane",

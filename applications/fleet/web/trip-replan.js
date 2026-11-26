@@ -11,7 +11,8 @@ export function replanView(trip, { operator, named = "", busy = false }) {
   const hold = trip.hold || {};
   const plan = hold.plan;
   const paused = hold.reason === "fleet_hold" || hold.reason === "nav2_problem";
-  const facts = paused
+  const pending = hold.stop?.confirmed === false;
+  const facts = pending ? tripErrorText("TRIP_PAUSE_STOP_UNCONFIRMED") : paused
     ? (hold.reason === "fleet_hold"
       ? "Fleet 일시 정지 대기 중 · 재개 지시를 기다립니다"
       : "Nav2 주행 문제로 정지 중 · 확인 후 재개하세요")
@@ -21,7 +22,7 @@ export function replanView(trip, { operator, named = "", busy = false }) {
         `장소 ${(plan.places || []).length}곳`].filter(Boolean).join(" · ")
       : `다시 계산한 경로가 없습니다${hold.code ? ` (${hold.code})` : ""} · 운행을 취소하세요`;
   const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : "";
-  return { facts, confirmReason: paused ? (lock || named) : (lock || named || (plan ? "" : "다시 계산한 경로가 없습니다")), cancelReason: lock };
+  return { facts, confirmReason: paused ? (lock || named || (pending ? facts : "")) : (lock || named || (plan ? "" : "다시 계산한 경로가 없습니다")), cancelReason: lock };
 }
 
 /** D-577 (d) wait-cycle row for one robot: Fleet's decision per cycle robot, the AI facts naming it. */
