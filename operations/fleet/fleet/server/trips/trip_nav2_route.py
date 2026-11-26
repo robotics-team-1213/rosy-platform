@@ -558,7 +558,8 @@ def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
         if not runner._poses_in_robot_frame:
             return None, {"map_id": active[1].map_id, "robot_map_id": None}
         return site_pts, None
-    fit, reason = runner._store.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+    bindings = getattr(runner._store, "map_bindings", None)
+    fit, reason = bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0])) if bindings is not None else (None, "MAP_BINDING_REQUIRED" if binding_required else None)
     if fit is not None:
         binding = (fit, reason)
     elif binding_required or reason == "MAP_BINDING_GRID_CHANGED" or (
@@ -569,7 +570,7 @@ def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
         binding = None
     current_binding_id = None
     if binding is not None:
-        current_binding_id = (runner._store.map_bindings.active(robot_id) or {}).get("binding_id")
+        current_binding_id = ((bindings.active(robot_id) if bindings is not None else None) or {}).get("binding_id")
         if binding_id is not None and current_binding_id != binding_id:
             return None, {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"}
     converted_pts = []
