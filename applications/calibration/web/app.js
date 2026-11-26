@@ -1,3 +1,5 @@
+import { addDtDd, renderInspector } from "./inspector.js";
+export { addDtDd };
 import "/common/ui.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests } from "./requests.js";
@@ -30,7 +32,15 @@ function currentProfile() {
 
 function syncArmLinks(arm) {
   const login = $("account-login");
-  if (login) login.href = arm ? `/api/account/login?arm=${encodeURIComponent(arm)}` : "/api/account/login";
+  if (!login) return;
+  const params = new URLSearchParams(arm ? {arm} : {});
+  const original = new URLSearchParams(location.search);
+  if (arm && original.get("arm") === arm) {
+    for (const key of ["src_site", "dst_site", "task_id"]) {
+      for (const value of original.getAll(key)) params.append(key, value);
+    }
+  }
+  login.href = "/api/account/login" + (params.size ? "?" + params : "");
 }
 
 function setSegmentGroup(buttons, activeBtn) {
@@ -39,14 +49,6 @@ function setSegmentGroup(buttons, activeBtn) {
     b.classList.toggle("active", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   }
-}
-
-export function addDtDd(dl, term, value) {
-  const dt = document.createElement("dt");
-  dt.textContent = term;
-  const dd = document.createElement("dd");
-  dd.textContent = value;
-  dl.append(dt, dd);
 }
 
 export function makeTable(headers) {
@@ -72,27 +74,56 @@ export async function fetchJson(url) {
   return body;
 }
 
-function loadFrameImage(profileId, source) {
-  const key = `${profileId}:${source}`;
-  const existing = state.frameCache.get(key);
-  if (existing && existing.status === "ready") return existing.img;
-  if (!existing) {
-    const img = new Image();
-    const rec = { img, status: "loading" };
+function frameFor(profile, source, force = false) {
+  const key = `${profile.id}:${source}`;
+  let rec = state.frameCache.get(key);
+  const generation = profile.camera_top?.generation;
+  if (!rec || rec.expected !== generation) {
+    clearTimeout(rec?.expiryTimer);
+    rec?.image?.close();
+    rec = {expected: generation, image: null, loading: false, next: 0};
     state.frameCache.set(key, rec);
-    img.onload = () => { rec.status = "ready"; renderCanvases(); };
-    img.onerror = () => { rec.status = "error"; renderCanvases(); };
-    img.src = `/api/calibration/v1/profiles/${encodeURIComponent(profileId)}/frame/${encodeURIComponent(source)}?t=${Date.now()}`;
   }
-  return null;
+  if (rec.loading || (!force && performance.now() < rec.next)) return rec;
+  rec.loading = true;
+  const started = performance.now();
+  const path = `/api/calibration/v1/profiles/${encodeURIComponent(profile.id)}/frame/${source}`;
+  (async () => {
+    try {
+      const res = await fetch(path, {cache: "no-store"});
+      if (!res.ok) throw new Error(String(res.status));
+      const image = await createImageBitmap(await res.blob());
+      if (state.frameCache.get(key) !== rec) { image.close(); return; }
+      rec.image?.close();
+      rec.image = image;
+      rec.binding = res.headers.get("X-Rosy-Frame-Binding");
+      rec.generation = res.headers.get("X-Rosy-Frame-Generation");
+      rec.reference = res.headers.get("X-Rosy-Frame-Reference-Sha256");
+      rec.shift = res.headers.get("X-Rosy-Frame-Shift-Px");
+      rec.expires = started + Number(res.headers.get("X-Rosy-Frame-Lifetime-Ms") || 0);
+      clearTimeout(rec.expiryTimer);
+      if (source === "live" && rec.binding === "aligned" && rec.expires > performance.now()) {
+        rec.expiryTimer = setTimeout(renderCanvases, rec.expires - performance.now() + 1);
+      }
+      if (rec.generation && rec.expected !== rec.generation && rec.requested !== rec.generation) {
+        rec.requested = rec.generation;
+        void loadSnapshot();
+      }
+    } catch {
+      rec.image?.close();
+      rec.image = null;
+    } finally {
+      rec.loading = false;
+      rec.next = source === "live" ? performance.now() + 600 : Infinity;
+      if (state.frameCache.get(key) === rec && currentProfile()?.id === profile.id && state.frameSource === source) renderCanvases();
+    }
+  })();
+  return rec;
 }
 
 function refreshActiveFrame() {
-  const prof = currentProfile();
-  if (!prof) return;
-  state.frameCache.delete(`${prof.id}:${state.frameSource}`);
-  loadFrameImage(prof.id, state.frameSource);
-  renderCanvases();
+  const profile = currentProfile();
+  if (profile) frameFor(profile, state.frameSource, true);
 }
 
 function renderProfileBar() {
@@ -117,6 +148,10 @@ function renderProfileBar() {
     btn.addEventListener("click", () => {
       const url = new URL(location.href);
       const arm = p.arm_id || p.id;
+      if (url.searchParams.get("arm") !== arm) {
+        for (const key of ["src_site", "dst_site", "task_id"]) url.searchParams.delete(key);
+        if (url.hash.startsWith("#route-")) url.hash = "";
+      }
       if (["arm_a", "arm_b", "arm_s"].includes(arm)) url.searchParams.set("arm", arm);
       else url.searchParams.delete("arm");
       history.replaceState(null, "", url);
@@ -207,61 +242,6 @@ function renderSiteSelect(profile) {
     opt.textContent = `${name}${extraTxt} (${looTxt})`;
     if (name === state.siteName) opt.selected = true;
     sel.appendChild(opt);
-  }
-}
-
-function renderInspector() {
-  const empty = $("inspectorEmpty");
-  const dl = $("inspectorDl");
-  dl.replaceChildren();
-  const d = state.selectedData;
-  if (!d) {
-    empty.hidden = false;
-    dl.hidden = true;
-    return;
-  }
-  empty.hidden = true;
-  dl.hidden = false;
-  addDtDd(dl, "종류", d.kind || "-");
-  if (d.site) addDtDd(dl, "Site", d.site);
-  if (d.role) addDtDd(dl, "역할", d.role);
-  if (d.arm_m) {
-    addDtDd(dl, "Arm XY (m)", `[${d.arm_m[0].toFixed(4)}, ${d.arm_m[1].toFixed(4)}]`);
-    addDtDd(dl, "Arm XY (mm)", `[${(d.arm_m[0] * 1000).toFixed(1)}, ${(d.arm_m[1] * 1000).toFixed(1)}] mm`);
-  }
-  if (d.pixel) addDtDd(dl, "측정 Pixel (z_view)", `[${d.pixel[0].toFixed(1)}, ${d.pixel[1].toFixed(1)}]`);
-  if (d.pixel_z_view) addDtDd(dl, "투영 px (z_view)", `[${d.pixel_z_view[0].toFixed(1)}, ${d.pixel_z_view[1].toFixed(1)}]`);
-  if (d.pixel_surface_z) addDtDd(dl, "투영 px (surface_z)", `[${d.pixel_surface_z[0].toFixed(1)}, ${d.pixel_surface_z[1].toFixed(1)}]`);
-  if (Number.isFinite(d.surface_z)) addDtDd(dl, "surface_z (m)", `${d.surface_z} m`);
-  if (Number.isFinite(d.depth_surface_z)) {
-    const dTxt = Number.isFinite(d.depth_diff_mm) ? ` (${d.depth_diff_mm >= 0 ? "+" : ""}${d.depth_diff_mm} mm)` : "";
-    addDtDd(dl, "D435 depth surface_z", `${d.depth_surface_z} m${dTxt}`);
-  }
-  if (Number.isFinite(d.place_vs_start_step_mm)) {
-    addDtDd(dl, "Place−Start 높이차", `${d.place_vs_start_step_mm >= 0 ? "+" : ""}${d.place_vs_start_step_mm} mm`);
-  }
-  if (Number.isFinite(d.touch_surface_z)) {
-    const tTxt = Number.isFinite(d.touch_diff_mm) ? ` (${d.touch_diff_mm >= 0 ? "+" : ""}${d.touch_diff_mm} mm)` : "";
-    addDtDd(dl, "Touch 영수증 surface_z", `${d.touch_surface_z} m${tTxt}`);
-  }
-  if (Number.isFinite(d.loo_dist_mm)) addDtDd(dl, "LOO 잔차 거리", `${d.loo_dist_mm.toFixed(2)} mm`);
-  if (d.map_sigma_mm && Number.isFinite(d.map_sigma_mm.max_mm)) {
-    addDtDd(dl, "예측 불확실성 (1σ)", `max ±${d.map_sigma_mm.max_mm} mm (mean ±${d.map_sigma_mm.mean_mm} mm)`);
-  }
-  if (Array.isArray(d.loo_residual_mm)) {
-    addDtDd(dl, "LOO 벡터 (map−arm)", `[${d.loo_residual_mm[0].toFixed(2)}, ${d.loo_residual_mm[1].toFixed(2)}] mm`);
-  }
-  if (Number.isFinite(d.err_dist_mm)) addDtDd(dl, "Dropped 오차", `${d.err_dist_mm} mm (${d.err_px || "?"} px)`);
-  if (d.bias_mm) {
-    addDtDd(dl, "Bias (map−FK)", `[${d.bias_mm[0]}, ${d.bias_mm[1]}] mm (RMS ${d.rms_mm ?? "?"} mm)`);
-    const sigTxt = Number.isFinite(d.bias_sigma_mm) ? ` · 1σ ±${d.bias_sigma_mm} mm` : "";
-    addDtDd(dl, "Fit / Region", `${d.fit_model || "-"} · radius=${d.radius_mm ?? "-"} mm${sigTxt}`);
-    const cnt = d.n ?? d.samples ?? "?";
-    addDtDd(dl, "Sample / Map SHA", `${cnt}회 / ${d.map_sha || "-"} (${d.stale_map ? "stale" : "fresh"})`);
-  }
-  if (d.tcp) {
-    addDtDd(dl, "Live TCP", `x=${d.tcp.x} y=${d.tcp.y} z=${d.tcp.z} yaw=${d.tcp.yaw_deg}°`);
-    addDtDd(dl, "Freshness", d.stale ? `stale (${d.age_s ?? "?"}s)` : `fresh (${d.age_s}s)`);
   }
 }
 
@@ -434,20 +414,27 @@ function renderCanvases() {
   const profile = currentProfile();
   if (!profile) return;
   const siteObj = profile.sites?.[state.siteName] || null;
+  const source = state.frameSource;
+  const frame = frameFor(profile, source);
+  const verified = Boolean(frame.image && frame.generation && frame.generation === frame.expected &&
+    frame.reference && frame.reference === profile.camera_top?.reference_sha256 &&
+    (source === "reference" ? frame.binding === "reference" :
+      frame.binding === "aligned" && performance.now() < frame.expires));
+  const tagged = source === "reference" ? "기준 영상 일치" : "실시간 영상 정합 확인";
+  const shiftText = frame.shift == null ? "" : `이동 ${frame.shift}px`;
   const fb = classifyFrameBinding(profile);
-  $("topCardSub").textContent = `${profile.arm_id} · site=${state.siteName || "-"} · z=${state.zPlane} (z_view=${siteObj?.map?.z_view ?? "-"}, surf_z=${siteObj?.surface_z ?? "-"}) · center=${JSON.stringify(profile.camera_top?.center_px || [])} · ${fb.shiftText}`;
+  $("topCardSub").textContent = `${profile.arm_id} · site=${state.siteName || "-"} · z=${state.zPlane} (z_view=${siteObj?.map?.z_view ?? "-"}, surf_z=${siteObj?.surface_z ?? "-"}) · center=${JSON.stringify(profile.camera_top?.center_px || [])} · ${shiftText || fb.shiftText}`;
   const maxReach = profile.limits?.max_reach_m != null ? `${profile.limits.max_reach_m}m` : "n/a";
   const parkReach = profile.limits?.park_reach_m != null ? `${profile.limits.park_reach_m}m` : "n/a";
   $("armCardSub").textContent = `${profile.arm_id} · max_reach=${maxReach} · park=${parkReach} · LOO scale ${state.errorScale}x`;
 
   const bindTag = $("frameBindTag");
-  bindTag.setAttribute("status", fb.status);
-  bindTag.textContent = fb.badge;
-  bindTag.title = fb.title;
+  bindTag.setAttribute("status", verified ? "ok" : "warn");
+  bindTag.textContent = verified ? tagged : "정합 미확인 · 오버레이 숨김";
+  bindTag.title = verified ? [tagged, shiftText].filter(Boolean).join(" · ") : (shiftText || fb.title);
 
-  const img = loadFrameImage(profile.id, state.frameSource);
   const topRes = renderTopView($("topCanvas"), {
-    profile, siteName: state.siteName, image: img, layers: state.layers,
+    profile, siteName: state.siteName, image: frame.image, frameSource: source, frameVerified: verified, layers: state.layers,
     zPlane: state.zPlane, errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastTopHitTargets = topRes?.hitTargets || [];
@@ -504,7 +491,7 @@ function renderAll() {
   renderSiteSelect(profile);
   renderRobotAndBias(profile);
   renderSitesTable(profile);
-  renderInspector();
+  renderInspector(state.selectedData);
   renderCanvases();
 }
 
@@ -552,7 +539,7 @@ function wireControls(reqs) {
   $("btnReloadSnapshot").addEventListener("click", () => loadSnapshot());
   $("btnRefreshFrame").addEventListener("click", () => refreshActiveFrame());
   $("btnClearSelect").addEventListener("click", () => {
-    state.selectedKey = null; state.selectedData = null; renderCanvases(); renderInspector();
+    state.selectedKey = null; state.selectedData = null; renderCanvases(); renderInspector(state.selectedData);
   });
   $("siteSelect").addEventListener("change", (ev) => {
     state.siteName = ev.target.value; state.selectedKey = null; state.selectedData = null; renderAll();
@@ -579,7 +566,7 @@ function wireControls(reqs) {
     const c = $(canvasId);
     c.addEventListener("click", (ev) => {
       const hit = pickHit(c, ev.clientX, ev.clientY, getTargets());
-      if (hit) { state.selectedKey = hit.key; state.selectedData = hit.data; renderCanvases(); renderInspector(); }
+      if (hit) { state.selectedKey = hit.key; state.selectedData = hit.data; renderCanvases(); renderInspector(state.selectedData); }
     });
   }
 }
@@ -593,3 +580,7 @@ const reqs = initRequests({ onSessionChanged: account => {
 } });
 wireControls(reqs);
 reqs.session.restore().then(() => { reqs.refresh(); loadSnapshot(); });
+
+setInterval(() => {
+  if (!document.hidden && !$("panelGrid").hidden && state.frameSource === "live") renderCanvases();
+}, 400);

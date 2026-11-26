@@ -91,7 +91,7 @@ def test_feature_is_off_without_cells(tmp_path):
 def test_route_check_binds_the_executor_config_and_arm_scoped_slots(screen):
     url, _, calls, jobs, cell = screen
     route = ["tmp-b-2-l1", "ship-h1r2-l0"]
-    body = {"arm": "arm_b", "step": "check", "route": route}
+    body = {"arm": "arm_b", "step": "check", "route": route, "task_id": "fleet:route-12"}
     endpoint = "/api/calibration/jobs"
     assert post(url, endpoint, body)[0] == 409  # never fall back to the calibration stack config
     cfg = cell.parent / "route.json"
@@ -101,9 +101,11 @@ def test_route_check_binds_the_executor_config_and_arm_scoped_slots(screen):
     cfg.write_text(json.dumps({"arm_id": "arm_b"}))
     assert post(url, endpoint, {**body, "route": ["tmp-a-1-l1", route[1]]})[0] == 422
     assert post(url, endpoint, {**body, "step": "remap", "person_at_switch": True})[0] == 422
+    assert post(url, endpoint, {**body, "task_id": "../wrong"})[0] == 422
     assert not calls["spawn"]
     status, job = post(url, endpoint, body)
     assert status == 202 and job["route"] == route and job["route_config"] == cfg.name
+    assert job["task_id"] == body["task_id"]
     argv, cwd, _ = calls["spawn"][0]
     assert argv == ["py", jobs.engine("cell_calibrate.py"), "--config", str(cfg), "check", "--route", *route]
     assert cwd == str(cfg.parent)

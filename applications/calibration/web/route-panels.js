@@ -21,8 +21,26 @@ function element(tag, text, className) {
   return node;
 }
 
+function linkedRoute(arm) {
+  const q = new URLSearchParams(location.search);
+  if (q.get("arm") !== arm || !["src_site", "dst_site", "task_id"].some(k => q.has(k))) return null;
+  const route = [q.get("src_site"), q.get("dst_site")];
+  const task = q.get("task_id");
+  const valid = ["arm", "src_site", "dst_site"].every(k => q.getAll(k).length === 1)
+    && route.every(s => s && /^[A-Za-z0-9][A-Za-z0-9_:-]{0,95}$/.test(s)) && route[0] !== route[1]
+    && (!q.has("task_id") || (q.getAll("task_id").length === 1 && /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/.test(task)));
+  return {route, task, valid};
+}
+
+function linkedTask(panel) {
+  const link = panel.link;
+  const route = panel.arm === "arm_s" ? defaults.arm_s : panel.selects.map(s => s.value);
+  return link?.valid && route.every((s, i) => s === link.route[i]) ? link.task : null;
+}
+
 function createPanel(arm, api) {
   const card = element("article", "", "cal-card");
+  card.id = "route-" + arm;
   const title = element("h2", arm.slice(-1).toUpperCase() + "팔 경로 점검", "ui-section-heading");
   const form = element("form", "", "answer-form");
   if (arm === "arm_s") form.append(element("p", "공급 경로 · pinky → belt"));
@@ -51,11 +69,14 @@ function createPanel(arm, api) {
     const body = {arm, step: "check"};
     if (arm === "arm_s") body.supply_route = true;
     else body.route = route;
+    const task = linkedTask(panel);
+    if (task) body.task_id = task;
     render(panel);
     try {
       const job = await api("/api/calibration/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify(body)});
-      if (job.arm !== arm || (arm === "arm_s" ? job.supply_route !== true : job.route?.join("|") !== route.join("|")))
+      if (job.arm !== arm || (task && job.task_id !== task) ||
+          (arm === "arm_s" ? job.supply_route !== true : job.route?.join("|") !== route.join("|")))
         throw new Error("팔과 경로가 일치하지 않습니다.");
       panel.rows.unshift(job);
     } catch (error) {
@@ -105,7 +126,7 @@ function displayResult(panel, job) {
 
 function showEvidence(panel, job) {
   const details = element("details");
-  details.append(element("summary", "점검 근거 · " + (job.route_config || job.arm)),
+  details.append(element("summary", "점검 근거 · " + (job.route_config || job.arm) + (job.task_id ? " · Fleet " + job.task_id : "")),
     element("pre", JSON.stringify(job.result, null, 2)));
   panel.result.append(details);
 }
@@ -114,9 +135,12 @@ function render(panel) {
   clearTimeout(panel.timer);
   const route = panel.selects.map(s => s.value);
   const active = panel.rows.find(j => j.status === "running");
+  const task = linkedTask(panel);
   const job = panel.rows.find(j => j.step === "check"
+    && (!task || j.task_id === task)
     && (panel.arm === "arm_s" ? j.supply_route === true : j.route?.join("|") === route.join("|")));
-  const reason = !panel.operator ? "작업 권한으로 로그인하세요." : active ? "팔에서 작업 실행 중 · " + active.id
+  const reason = panel.invalidLink ? "이 팔에서 점검할 수 없는 Fleet 경로 링크입니다." :
+    !panel.operator ? "작업 권한으로 로그인하세요." : active ? "팔에서 작업 실행 중 · " + active.id
     : panel.sending ? "점검 요청 중" : panel.arm !== "arm_s" && (!route[0] || !route[1]) ? "이송 실행기 설정과 칸 목록을 확인하세요."
     : route.length && route[0] === route[1] ? "서로 다른 칸을 선택하세요." : "";
   setOff(panel.button, !!reason, reason, panel.note.id);
@@ -125,7 +149,8 @@ function render(panel) {
   panel.note.textContent = notice?.route.join("|") === route.join("|") ? notice.text : reason ||
     (job ? job.id + " · " + ({done: "점검 종료", failed: "점검 실패", interrupted: "중단"}[job.status] || job.status) : "");
   panel.result.replaceChildren();
-  displayResult(panel, job);
+  if (task) panel.result.append(element("p", "연결된 Fleet 작업 · " + task));
+  if (!panel.invalidLink) displayResult(panel, job);
   if (active) panel.timer = setTimeout(async () => {
     try {
       const fresh = await panel.api("/api/calibration/jobs/" + encodeURIComponent(active.id));
@@ -154,9 +179,14 @@ export function setRoutePanels(arms, jobs, operator, api) {
     panel.rows = jobs.filter(j => j.arm === arm);
     panel.siteStatus = arms[arm].sites;
     const sites = arms[arm].route_sites || [];
-    if (panel.sites.join("|") !== sites.join("|")) {
+    const link = linkedRoute(arm);
+    const linkChanged = JSON.stringify(panel.link) !== JSON.stringify(link);
+    panel.link = link;
+    panel.invalidLink = link && (!link.valid || (arm === "arm_s" ? link.route.join("|") !== defaults.arm_s.join("|")
+      : !link.route.every(s => sites.includes(s))));
+    if (linkChanged || panel.sites.join("|") !== sites.join("|")) {
       panel.selects.forEach((s, index) => {
-        const previous = s.value || panel.rows.find(j => j.route)?.route[index] || defaults[arm][index];
+        const previous = link ? link.route[index] : s.value || panel.rows.find(j => j.route)?.route[index] || defaults[arm][index];
         s.replaceChildren(new Option("칸 선택", ""), ...sites.map(id => new Option(id, id)));
         s.value = sites.includes(previous) ? previous : "";
       });
@@ -166,4 +196,9 @@ export function setRoutePanels(arms, jobs, operator, api) {
     render(panel);
   }
   root.hidden = !panels.size;
+  const linked = panels.get(new URLSearchParams(location.search).get("arm"));
+  if (linked && !linked.anchorShown && location.hash === "#" + linked.card.id) {
+    linked.anchorShown = true;
+    linked.card.scrollIntoView({block: "start"});
+  }
 }

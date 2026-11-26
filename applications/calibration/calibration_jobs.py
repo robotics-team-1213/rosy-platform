@@ -26,6 +26,7 @@ TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
 SITE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*(?::[A-Za-z0-9_-]+)?")
 JOB_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{6}")
+TASK_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}")
 CLEAR_FRESH_S = 600
 REASONS_MAX = 2000
 EVIDENCE_KINDS = {"frame", "joints", "torque"}
@@ -239,6 +240,9 @@ class Jobs:
         if step in MOVING and body.get("person_at_switch") is not True:
             return 422, {"error": "팔이 움직이는 단계는 전원 스위치 앞의 사람이 필요합니다(person_at_switch)."}
         route = body.get("route")
+        if "task_id" in body and (step != "check" or not (route or body.get("supply_route") is True)
+                or not isinstance(body["task_id"], str) or not TASK_REF.fullmatch(body["task_id"])):
+            return 422, {"error": "경로 점검에 연결할 Fleet 작업 ID를 확인하세요."}
         if "route" in body:
             if (step != "check" or targets or "site" in body or arm not in ("arm_a", "arm_b")
                     or not isinstance(route, list) or len(route) != 2 or route[0] == route[1]
@@ -255,10 +259,12 @@ class Jobs:
         else:
             config_path, config = self.arm_config(arm)
         if "supply_route" in body:
+            from core_common.profile import LEGACY_VEHICLE_SITE
+
             if (body["supply_route"] is not True or arm != "arm_s" or step != "check" or targets
                     or route or "site" in body or config.get("arm_id") != arm):
                 return 422, {"error": "공급 경로 점검에는 S팔 실행기 설정이 필요합니다."}
-            for name in ("pinky", "belt"):
+            for name in (LEGACY_VEHICLE_SITE, "belt"):
                 site = (config.get("sites") or {}).get(name)
                 xy = site_point(name, site) if isinstance(site, dict) else None
                 if xy is None:
@@ -306,6 +312,8 @@ class Jobs:
                 record.update(route=route, route_config=config_path.name)
             if body.get("supply_route") is True:
                 record.update(supply_route=True, route_config=config_path.name)
+            if "task_id" in body:
+                record["task_id"] = body["task_id"]  # Advisory link provenance, never a Fleet command.
             if "site" in body:
                 record["site"] = body["site"]
                 record["surface_clear"] = True

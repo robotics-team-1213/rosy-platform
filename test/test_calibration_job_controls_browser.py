@@ -35,6 +35,7 @@ def test_arm_route_panels_show_only_the_requested_slots_and_preserve_both_result
                     return route.fulfill(status=202, json={"id": "s-check", "arm": arm, "step": "check", "supply_route": True, "status": "done",
                         "result": {"check": {"camera_shift": {"ok": True}}, "todo": []}})
                 route.fulfill(status=202, json={"id": arm + "-test", "arm": arm, "step": "check", "route": pairs[arm],
+                    "task_id": body.get("task_id"),
                     "route_config": arm + ".json", "status": "done", "result": {"todo": ["remap"] if arm == "arm_a" else [],
                         "check": {"route": {"calibration_evidence": {"sites": {"source": {"top_roi": [1, 2, 3, 4]},
                             "destination": {}}, "reference_current": arm == "arm_b", "next_machine_action": "measure_named_xy"}}}}})
@@ -58,6 +59,22 @@ def test_arm_route_panels_show_only_the_requested_slots_and_preserve_both_result
             expect(page.locator("#routePanels article").nth(1)).to_contain_text("카메라 XY 맵 재측정 필요")
             expect(page.locator("#routePanels article").last).not_to_contain_text("카메라 XY 맵 재측정 필요")
             assert sent == [{"arm": arm, "step": "check", "route": pair} for arm, pair in pairs.items()]
+            arms["arm_b"]["route_sites"] = [*pairs["arm_b"], "tmp-b-1-l0"]
+            pairs["arm_b"] = ["tmp-b-1-l0", "ship-h1r2-l0"]
+            link = "?arm=arm_b&src_site=tmp-b-1-l0&dst_site=ship-h1r2-l0&task_id=fleet%3A17"
+            page.goto(url + "/" + link + "#route-arm_b")
+            b = page.locator("#route-arm_b")
+            expect(b.get_by_label("출발칸")).to_have_value("tmp-b-1-l0")
+            expect(b).to_contain_text("연결된 Fleet 작업 · fleet:17")
+            expect(page.locator("#account-login")).to_have_attribute("href", "/api/account/login" + link)
+            assert len(sent) == 2
+            b.get_by_text("경로 사전 점검", exact=True).click()
+            expect(b).to_contain_text("점검 근거 · arm_b.json · Fleet fleet:17")
+            assert sent[-1] == {"arm": "arm_b", "step": "check", "route": pairs["arm_b"], "task_id": "fleet:17"}
+            page.goto(url + "/?arm=arm_s&src_site=unknown&dst_site=belt#route-arm_s")
+            expect(supply.locator("ui-button[type=submit]")).to_be_disabled()
+            expect(supply).to_contain_text("점검할 수 없는 Fleet 경로 링크")
+            assert len(sent) == 3
             assert not calls["spawn"]
         finally:
             browser.close()

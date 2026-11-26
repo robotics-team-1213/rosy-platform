@@ -98,6 +98,20 @@ def test_login_preserves_only_a_recognized_arm(account_screen, query, destinatio
     assert received == [destination]
 
 
+def test_login_returns_to_the_exact_local_route_panel(account_screen):
+    url, account = account_screen
+    received = []
+    def start(target, *, destination_allowed):
+        assert destination_allowed(target) and not destination_allowed("https://outside.invalid/")
+        received.append(target)
+        return "flow", "/"
+    account.start = start
+    query = "?arm=arm_b&src_site=tmp-b-2-l1&dst_site=ship-h1r2-l0&task_id=fleet%3A12"
+    assert call(url, "/api/account/login" + query)[0] == 200
+    assert received == ["/" + query + "#route-arm_b"]
+    assert call(url, "/api/account/login" + query + "&task_id=other")[0] == 422
+
+
 def test_without_account_it_lists_and_shows_but_never_answers(open_screen, store):
     status, body = call(open_screen, web.API)
     rows = json.loads(body)
@@ -264,6 +278,30 @@ def test_profiles_endpoint_is_account_gated_and_survives_missing_tcp_x(store, tm
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_frame_response_pairs_bytes_provenance_and_lifetime(monkeypatch):
+    sent = []
+    handler = SimpleNamespace(send=lambda *args: sent.append(args))
+    monkeypatch.setattr(web.time, "time", lambda: 100.0)
+
+    def register(_entry, source, body):
+        assert (source, body) == ("live", b"camera")
+        return b"warped", {"status": "aligned", "generation": "bound", "reference_sha256": "ref",
+                           "max_px": 1.25, "inliers": 312}
+
+    monkeypatch.setattr(web.cell_calibration_view, "bind_frame", register)
+    web.Handler._send_frame(handler, {}, "live", b"camera", "image/png", "99.5")
+    code, media, body, headers = sent.pop()
+    assert (code, media, body) == (200, "image/jpeg", b"warped")
+    assert dict(headers) == {"X-Rosy-Frame-Binding": "aligned", "X-Rosy-Frame-Generation": "bound",
+                             "X-Rosy-Frame-Lifetime-Ms": "1500", "X-Rosy-Frame-Reference-Sha256": "ref",
+                             "X-Rosy-Frame-Shift-Px": "1.25", "X-Rosy-Frame-Inliers": "312"}
+    for stamp in (None, "97", "nan", "101", ""):
+        web.Handler._send_frame(handler, {}, "live", b"original", "image/png", stamp)
+        code, media, body, headers = sent.pop()
+        assert (code, media, body) == (200, "image/png", b"original")
+        assert dict(headers) == {"X-Rosy-Frame-Binding": "unverified", "X-Rosy-Frame-Lifetime-Ms": "0"}
 
 
 def test_live_frame_proxy_allows_loopback_and_blocks_remote_ssrf(store, tmp_path):

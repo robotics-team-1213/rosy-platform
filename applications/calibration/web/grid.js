@@ -2,40 +2,12 @@
 // Reads all colours and fonts exclusively from window.RosyPalette (tokens.css) so dark/light themes
 // and shared/web token contracts remain intact without inline styles or raw hex values.
 
+import { applyH, invert3x3, parallaxPixel } from "./grid-projection.js";
+export { applyH, invert3x3, parallaxPixel };
+
 const tone = (name) => window.RosyPalette.cssColor(name);
 const font = (role = "micro", family = "mono") => window.RosyPalette.canvasFont(role, family);
 const siteHit = (site, role, s, pt) => ({ kind: "site", role, site, surface_z: s.surface_z, depth_surface_z: s.depth_surface_z, depth_diff_mm: s.depth_diff_mm, place_vs_start_step_mm: s.place_vs_start_step_mm, touch_surface_z: s.touch_surface_z, touch_diff_mm: s.touch_diff_mm, ...pt });
-
-export function invert3x3(h) {
-  const [[a, b, c], [d, e, f], [g, i, j]] = h;
-  const c00 = e * j - f * i;
-  const c01 = c * i - b * j;
-  const c02 = b * f - c * e;
-  const det = a * c00 + d * c01 + g * c02;
-  if (Math.abs(det) < 1e-18) return null;
-  const inv = 1 / det;
-  return [
-    [c00 * inv, c01 * inv, c02 * inv],
-    [(f * g - d * j) * inv, (a * j - c * g) * inv, (c * d - a * f) * inv],
-    [(d * i - e * g) * inv, (b * g - a * i) * inv, (a * e - b * d) * inv],
-  ];
-}
-
-export function applyH(m, x, y) {
-  const w = m[2][0] * x + m[2][1] * y + m[2][2];
-  if (!Number.isFinite(w) || Math.abs(w) < 1e-12) return null;
-  return [(m[0][0] * x + m[0][1] * y + m[0][2]) / w, (m[1][0] * x + m[1][1] * y + m[1][2]) / w];
-}
-
-export function parallaxPixel(pixel, fromZ, toZ, camera) {
-  if (!pixel || !camera?.center_px || !Number.isFinite(camera?.height_m)) return pixel;
-  if (!Number.isFinite(fromZ) || !Number.isFinite(toZ)) return pixel;
-  const denom = camera.height_m - toZ;
-  if (Math.abs(denom) < 1e-6) return pixel;
-  const scale = (camera.height_m - fromZ) / denom;
-  const [cx, cy] = camera.center_px;
-  return [cx + (pixel[0] - cx) * scale, cy + (pixel[1] - cy) * scale];
-}
 
 function drawArrow(ctx, x0, y0, x1, y1, color, headSize = 7, dashed = false) {
   const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
@@ -85,6 +57,12 @@ function looColor(distMm) {
   return tone("--status-good");
 }
 
+function freshTcp(profile) {
+  const live = profile?.robot_status?.live;
+  return live?.stale === false && Number.isFinite(live.fresh_until) && Date.now() / 1000 <= live.fresh_until
+    ? live.tcp : null;
+}
+
 function collectBounds(profile, siteObj) {
   const pts = [[0, 0]];
   const add = (xy) => {
@@ -108,7 +86,7 @@ function collectBounds(profile, siteObj) {
     add(r.point_m);
     add(r.map_point_m);
   }
-  const tcp = profile.robot_status?.live?.tcp;
+  const tcp = freshTcp(profile);
   if (tcp) add([tcp.x, tcp.y]);
   let minX = -0.06;
   let maxX = 0.24;
@@ -134,7 +112,8 @@ export function renderTopView(canvas, state) {
   ctx.fillStyle = tone("--ground-deep");
   ctx.fillRect(0, 0, fw, fh);
 
-  if (image && image.complete && image.naturalWidth > 0) {
+  const hasImage = Boolean(image && (image.naturalWidth || image.width));
+  if (hasImage) {
     ctx.drawImage(image, 0, 0, fw, fh);
   } else {
     ctx.fillStyle = tone("--ink-quiet");
@@ -150,10 +129,17 @@ export function renderTopView(canvas, state) {
   const cam = profile?.camera_top || {};
   const fitZ = map?.z_view;
   const surfaceZ = siteObj?.surface_z;
-  const targetZ = zPlane === "surface" && Number.isFinite(surfaceZ) ? surfaceZ : fitZ;
+  const targetZ = zPlane === "surface" ? surfaceZ : fitZ;
 
   const projectArm = (armXy) => {
-    if (!invH || !armXy) return null;
+    if (!invH || !armXy || (zPlane === "surface" && !Number.isFinite(targetZ))) return null;
+    const centre = map.camera_origin_m;
+    if (targetZ !== fitZ && centre) {
+      const [cx, cy, cz] = centre;
+      if (!Number.isFinite(fitZ) || !(cz > Math.max(targetZ, fitZ))) return null;
+      const ratio = (cz - fitZ) / (cz - targetZ);
+      return applyH(invH, cx + (armXy[0] - cx) * ratio, cy + (armXy[1] - cy) * ratio);
+    }
     const p = applyH(invH, armXy[0], armXy[1]);
     if (!p) return null;
     return targetZ !== fitZ ? parallaxPixel(p, fitZ, targetZ, cam) : p;
@@ -178,6 +164,8 @@ export function renderTopView(canvas, state) {
     for (let y = 80; y < fh; y += 80) ctx.fillText(String(y), 2, y + 2);
     ctx.restore();
   }
+
+  if (!hasImage || state.frameVerified !== true) return { hitTargets };
 
   // 2. Projected arm-space metric 모눈종이 (50mm major, 10mm minor over workspace)
   if (layers.metricGrid && invH) {
@@ -259,7 +247,7 @@ export function renderTopView(canvas, state) {
       }
     }
     if (siteObj?.start?.arm_m) {
-      const sp = projectArm(siteObj.start.arm_m);
+      const sp = zPlane === "surface" ? siteObj.start.pixel_surface_z : siteObj.start.pixel_z_view;
       if (sp) {
         drawDiamond(ctx, sp[0], sp[1], 7, tone("--series-goal"), tone("--scrim"));
         drawBadge(ctx, sp[0] + 8, sp[1] + 4, `${siteName}.start`, tone("--series-goal"), tone("--scrim"));
@@ -267,7 +255,7 @@ export function renderTopView(canvas, state) {
       }
     }
     if (siteObj?.place?.arm_m) {
-      const pp = projectArm(siteObj.place.arm_m);
+      const pp = zPlane === "surface" ? siteObj.place.pixel_surface_z : siteObj.place.pixel_z_view;
       if (pp) {
         ctx.save();
         ctx.strokeStyle = tone("--series-primary");
@@ -283,8 +271,8 @@ export function renderTopView(canvas, state) {
   // 4. Calibration points, LOO residual vectors, dropped marks, missed planned points
   if (layers.points && map) {
     for (const pl of map.planned_points || []) {
-      if (pl.status !== "missed") continue;
-      const p = projectArm(pl.arm_m);
+      if (pl.status === "observed") continue;
+      const p = zPlane === "surface" ? pl.pixel_surface_z : pl.pixel_z_view;
       if (!p) continue;
       ctx.save();
       ctx.strokeStyle = tone("--ink-quiet");
@@ -292,11 +280,11 @@ export function renderTopView(canvas, state) {
       ctx.setLineDash([3, 2]);
       ctx.beginPath(); ctx.arc(p[0], p[1], 7, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
-      hitTargets.push({ key: `missed:${pl.arm_m.join(",")}`, x: p[0], y: p[1], data: { kind: "missed", ...pl } });
+      hitTargets.push({ key: `planned:${pl.arm_m.join(",")}`, x: p[0], y: p[1], data: { kind: "planned", ...pl } });
     }
     for (const d of map.dropped_marks || []) {
       const [ox, oy] = d.pixel;
-      const pred = projectArm(d.arm_m) || d.pred_pixel;
+      const pred = d.pred_pixel;
       if (pred) drawArrow(ctx, pred[0], pred[1], ox, oy, tone("--status-crit"), 7, true);
       drawCross(ctx, ox, oy, 6, tone("--status-crit"), 2.5);
       drawBadge(ctx, ox + 7, oy, `drop ${d.err_dist_mm}mm`, tone("--status-crit"), tone("--scrim"));
@@ -360,11 +348,10 @@ export function renderTopView(canvas, state) {
       ctx.restore();
     }
     const tcpPx = profile?.robot_status?.live?.tcp_pixel;
-    if (Array.isArray(tcpPx)) {
-      const stale = profile.robot_status.live.stale;
-      const col = stale ? tone("--ink-quiet") : tone("--robot-1");
+    if (state.frameSource === "live" && freshTcp(profile) && Array.isArray(tcpPx)) {
+      const col = tone("--robot-1");
       drawDiamond(ctx, tcpPx[0], tcpPx[1], 8, col, null);
-      drawBadge(ctx, tcpPx[0] + 9, tcpPx[1], stale ? "TCP (stale)" : "TCP", col, tone("--scrim"));
+      drawBadge(ctx, tcpPx[0] + 9, tcpPx[1], "TCP", col, tone("--scrim"));
       hitTargets.push({ key: "tcp", x: tcpPx[0], y: tcpPx[1], data: { kind: "tcp", ...profile.robot_status.live } });
     }
   }
@@ -506,7 +493,7 @@ export function renderArmGrid(canvas, state) {
   // 4. Calibration points + LOO residuals + dropped + missed
   if (layers.points && map) {
     for (const pl of map.planned_points || []) {
-      if (pl.status !== "missed") continue;
+      if (pl.status === "observed") continue;
       const [px, py] = toCanvas(pl.arm_m[0], pl.arm_m[1]);
       ctx.save();
       ctx.strokeStyle = tone("--ink-quiet");
@@ -514,7 +501,7 @@ export function renderArmGrid(canvas, state) {
       ctx.lineWidth = 1.8;
       ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
-      hitTargets.push({ key: `missed:${pl.arm_m.join(",")}`, x: px, y: py, data: { kind: "missed", ...pl } });
+      hitTargets.push({ key: `planned:${pl.arm_m.join(",")}`, x: px, y: py, data: { kind: "planned", ...pl } });
     }
     for (const d of map.dropped_marks || []) {
       const [tx, ty] = toCanvas(d.arm_m[0], d.arm_m[1]);
@@ -574,13 +561,12 @@ export function renderArmGrid(canvas, state) {
   }
 
   // 6. Live TCP + yaw heading
-  if (layers.centerAndTcp && profile?.robot_status?.live?.tcp) {
-    const tcp = profile.robot_status.live.tcp;
-    const stale = profile.robot_status.live.stale;
-    const col = stale ? tone("--ink-quiet") : tone("--robot-1");
+  const tcp = freshTcp(profile);
+  if (layers.centerAndTcp && tcp) {
+    const col = tone("--robot-1");
     const [tx, ty] = toCanvas(tcp.x, tcp.y);
     const rad = (tcp.yaw_deg * Math.PI) / 180;
-    drawArrow(ctx, tx, ty, tx + 22 * Math.cos(rad), ty - 22 * Math.sin(rad), col, 6, stale);
+    drawArrow(ctx, tx, ty, tx + 22 * Math.cos(rad), ty - 22 * Math.sin(rad), col, 6);
     drawDiamond(ctx, tx, ty, 7, col, tone("--scrim"));
     drawBadge(ctx, tx + 8, ty, `TCP (${Math.round(tcp.x * 1000)}, ${Math.round(tcp.y * 1000)})`, col, tone("--scrim"));
     hitTargets.push({ key: "tcp", x: tx, y: ty, data: { kind: "tcp", ...profile.robot_status.live } });

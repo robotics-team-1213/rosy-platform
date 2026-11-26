@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from threading import Lock
 import time
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,64 @@ def resolve_frame_target(entry: dict[str, Any], source: str) -> dict[str, Any]:
     return {"kind": "none"}
 
 
+_FRAME_MATCH_LOCK = Lock()
+
+
+def _generation(calibration):
+    return cell_attempts.digest([calibration[k] for k in
+                                 ("reference_top_sha256", "reference_map_sha", "reference_geometry_sha")])
+
+
+def bind_frame(entry, source, frame_bytes):
+    """Register these exact image bytes; unmatched frames retain their original pixels."""
+    import cv2
+    import numpy as np
+    import cell_preflight
+
+    report = {"status": "unverified"}
+    try:
+        config, _ = _read_json(Path(entry["config_path"]))
+        calibration, _ = _read_json(Path(entry.get("calibration_path") or config["calibration_path"]).expanduser())
+        if source == "reference":
+            reference = frame_bytes
+        elif source == "live":
+            ref = entry.get("reference_top_path") or config["preflight"]["reference_top"]
+            reference = Path(ref).expanduser().read_bytes()
+        else:
+            return frame_bytes, report
+        if not reference or bound_map_error is None or bound_map_error(calibration, config, reference):
+            return frame_bytes, report
+        report.update(reference_sha256=calibration["reference_top_sha256"], generation=_generation(calibration))
+        if source == "reference":
+            return frame_bytes, {**report, "status": "reference"}
+        ref_image = cv2.imdecode(np.frombuffer(reference, np.uint8), cv2.IMREAD_GRAYSCALE)
+        image = cv2.imdecode(np.frombuffer(frame_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if ref_image is None or image is None or image.shape[:2] != ref_image.shape:
+            return frame_bytes, report
+        with _FRAME_MATCH_LOCK:
+            shift = cell_preflight.camera_shift_px(ref_image, cv2.cvtColor(image, cv2.COLOR_BGR2GRAY),
+                                                   include_transform=True)
+        if not shift.get("ok"):
+            return frame_bytes, report
+        report.update(max_px=shift["max_px"], inliers=shift["inliers"])
+        param_file = config.get("params_path")
+        params_path = Path(entry["config_path"]).parent / Path(param_file).expanduser() if param_file else None
+        params = prm.load(params_path)["values"]
+        if shift["inliers"] < 30 or not 0 <= shift["max_px"] <= prm.get(params, "calibrate.max_shift_px"):
+            return frame_bytes, report
+        matrix = np.asarray(shift["reference_to_current"], dtype=float)
+        if np.linalg.matrix_rank(matrix) != 3:
+            return frame_bytes, report
+        registered = cv2.warpPerspective(image, matrix, ref_image.shape[::-1],
+                                         flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
+        ok, jpeg = cv2.imencode(".jpg", registered)
+        if ok:
+            return jpeg.tobytes(), {**report, "status": "aligned"}
+    except (KeyError, OSError, ValueError, TypeError, AttributeError, cv2.error, np.linalg.LinAlgError):
+        pass
+    return frame_bytes, report
+
+
 def _image_size(path: Path | None) -> list[int] | None:
     if path is None or not path.is_file():
         return None
@@ -117,7 +176,8 @@ def _camera_shift(ref_path: Path | None, live_path: Path | None) -> dict | None:
         cur = cv2.imread(str(live_path), cv2.IMREAD_GRAYSCALE)
         if ref is None or cur is None:
             return None
-        return cell_preflight.camera_shift_px(ref, cur)
+        with _FRAME_MATCH_LOCK:
+            return cell_preflight.camera_shift_px(ref, cur)
     except Exception as exc:
         return {"ok": False, "why": f"{type(exc).__name__}: {exc}"}
 
@@ -133,12 +193,22 @@ def _project_point(record: dict | None, camera: dict, arm_xy: list[float] | None
         return {"arm_m": arm_xy, "pixel_z_view": None, "pixel_surface_z": None}
     px_sz = None
     fit_z = record.get("z_view")
-    if target_z is not None and fit_z is not None and camera.get("center_px") and camera.get("height_m"):
+    if target_z is not None and fit_z is not None:
         try:
-            us, vs = cal.parallax((u_zv, v_zv), float(fit_z), float(target_z), camera)
-            px_sz = [round(float(us), 2), round(float(vs), 2)]
-        except Exception:
-            px_sz = None
+            centre = (record.get("camera_in_base") or {}).get("t")
+            if centre is not None:
+                # Intersect the ray through the surface point with the plane on which H was fitted.
+                cx, cy, cz = map(float, centre)
+                if cz <= max(target_z, fit_z):
+                    raise ValueError("camera must be above both planes")
+                ratio = (cz - fit_z) / (cz - target_z)
+                us, vs = cal.to_pixel(h, (cx + (arm_xy[0] - cx) * ratio, cy + (arm_xy[1] - cy) * ratio))
+            else:
+                us, vs = cal.parallax((u_zv, v_zv), float(fit_z), float(target_z), camera)
+            if math.isfinite(us) and math.isfinite(vs):
+                px_sz = [round(float(us), 2), round(float(vs), 2)]
+        except (KeyError, ValueError, TypeError, ZeroDivisionError):
+            pass
     return {"arm_m": [float(arm_xy[0]), float(arm_xy[1])], "pixel_z_view": px_zv, "pixel_surface_z": px_sz}
 
 
@@ -168,16 +238,16 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
             "err_px": round(math.hypot(px[0] - pred_px[0], px[1] - pred_px[1]), 2),
         })
 
-    inlier_arms = [p["arm_m"] for p in inliers]
-    dropped_arms = [d["arm_m"] for d in dropped]
-    near = lambda pt, pool: any(math.hypot(pt[0] - q[0], pt[1] - q[1]) <= 5e-4 for q in pool)
+    # Jaw/FK coordinates in legacy fits do not identify individual commanded TCP visits.
+    visits = {tuple(v["point"]): v for v in record.get("planned_visits", [])}
     planned = []
     for pt in planned_pts:
-        status = "inlier" if near(pt, inlier_arms) else ("dropped" if near(pt, dropped_arms) else "missed")
+        visit = visits.get(tuple(pt), {})
         proj = _project_point(record, camera, pt, target_z)
         planned.append({
             "arm_m": [float(pt[0]), float(pt[1])],
-            "status": status,
+            "status": visit.get("status", "unmatched"),
+            "measured_tcp_m": visit.get("measured_tcp_m"), "observed_pixel": visit.get("pixel"),
             "pixel_z_view": proj["pixel_z_view"],
             "pixel_surface_z": proj["pixel_surface_z"],
         })
@@ -185,6 +255,7 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
     return {
         "homography": h,
         "is_pose": bool(record.get("camera_in_base")),
+        "camera_origin_m": (record.get("camera_in_base") or {}).get("t"),
         "z_view": record.get("z_view"),
         "coarse": bool(record.get("coarse")),
         "measured": record.get("measured") or "",
@@ -343,6 +414,13 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     ref_site = next((s for s in map_sites if s in sites_out and sites_out[s]["map"]), None)
     ref_record = cell_pivot.map_record(with_maps, ref_site) if ref_site else None
     live_info = cell_cal_eval.parse_live(live, config, plan, ref_record, now_ts=now_ts, joints_tcp_fn=cell_pivot.joints_tcp)
+    sample_time = (live or {}).get("t")
+    fresh_s = prm.get(config.get("params"), "verify.live_fresh_s")
+    if isinstance(sample_time, (int, float)) and math.isfinite(sample_time):
+        live_info["fresh_until"] = sample_time + fresh_s
+        if sample_time > (time.time() if now_ts is None else now_ts):
+            live_info["stale"] = True
+
     drift = cell_cal_monitor.summarize(config, calibration)
     lateral = cell_post_eval.lateral_summary(config, with_maps, now_ts=now_ts)
     for msg in drift.get("suggested_advisory") or ():
@@ -369,7 +447,8 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
             "center_px": camera_top.get("center_px"), "frame_size": frame_size,
             "has_reference": bool(ref_path and ref_path.is_file()),
             "has_live": bool((live_img_path and live_img_path.is_file()) or is_allowed_frame_url(entry.get("live_frame_url") or camera_top.get("url"))),
-            "shift": shift,
+            "shift": shift, "reference_sha256": calibration.get("reference_top_sha256") if not bind_err else None,
+            "generation": _generation(calibration) if not bind_err else None,
         },
         "limits": {
             "max_reach_m": (config.get("calibrate") or {}).get("max_reach_m") or limits.get("max_reach_m"),

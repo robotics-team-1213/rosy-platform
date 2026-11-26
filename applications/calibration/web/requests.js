@@ -9,7 +9,8 @@ export function initRequests({ onSessionChanged } = {}) {
   let account = null;
   let canOperate = false;
   let loggingOut = false;
-  let selected = location.hash.slice(1);
+  const requestHash = () => /^#route-arm_[abs]$/.test(location.hash) ? "" : location.hash.slice(1);
+  let selected = requestHash();
 
   const text = (tag, value, className) => {
     const node = document.createElement(tag);
@@ -244,7 +245,7 @@ export function initRequests({ onSessionChanged } = {}) {
     if (!loggingOut) session.restore();
   }, 10000);
   window.addEventListener("hashchange", () => {
-    selected = location.hash.slice(1);
+    selected = requestHash();
     if (selected) show(selected);
   });
 
