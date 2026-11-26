@@ -1516,6 +1516,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_two_arm_verification.py
   - deploy/robot/omx/cell_route_check.py
   - deploy/robot/omx/cell_route_calibration.py
+  - deploy/robot/omx/cell_calibration_view_frame.py
   - deploy/robot/omx/cell_route_surface.py
   - deploy/robot/omx/cell_route_visit.py
   - deploy/robot/omx/cell_route_depth.py
