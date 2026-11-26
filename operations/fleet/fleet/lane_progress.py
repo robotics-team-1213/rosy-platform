@@ -12,9 +12,9 @@ import heapq
 import math
 from typing import Mapping, Optional, Sequence
 
-TARGET_GAP_M = 0.6     # D-941 start value; replace with the measured body stop distance
+TARGET_GAP_M = 0.28     # D-941: short following gap matching close station stops
 K_PER_S = 0.5          # shortcut: nominal gain, tune on the track with two robots
-MIN_GAP_M = 0.25       # closer than this the follower stops whatever the leader does
+MIN_GAP_M = 0.20       # closer than this (center-to-center ~7-8 cm body gap) the follower stops whatever the leader does
 ON_LOOP_M = 0.1        # shortcut: about half a lane; use the lane width_m once robots are measured on it
 
 
