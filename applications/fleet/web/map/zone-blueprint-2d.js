@@ -1,5 +1,7 @@
 // SVG-only 2D site-floor & arm-cell slot/tier blueprint renderer using CSS tokens only.
 
+import { placeText } from "/common/map-rules.js";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function svgNode(tag, attrs = {}, text = null) {
@@ -176,7 +178,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-stop", "data-zone-id": s.id, "data-selected": String(s.id === selectedId) });
         g.append(svgNode("circle", { cx: px(s.x), cy: py(s.y), r: 11 }));
         g.append(svgNode("text", { x: px(s.x) + 14, y: py(s.y) + 4, class: "zb-label" }, s.id));
-        bindSelect(g, s.id, s.name && s.name !== s.id ? `정류장 ${s.name} (${s.id}) 선택` : `정류장 ${s.id} 선택`);
+        bindSelect(g, s.id, `정류장 ${placeText(s)} 선택`);
         svg.append(g);
       }
     }
@@ -188,7 +190,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-staging", "data-zone-id": bay.id, "data-selected": String(bay.id === selectedId) });
         g.append(svgNode("rect", { x: cx - 12, y: cy - 9, width: 24, height: 18, rx: 3 }));
         g.append(svgNode("text", { x: cx + 16, y: cy + 4, class: "zb-label" }, bay.id));
-        bindSelect(g, bay.id, bay.name && bay.name !== bay.id ? `임시 대기칸 ${bay.name} (${bay.id}) 선택` : `임시 대기칸 ${bay.id} 선택`);
+        bindSelect(g, bay.id, `임시 대기칸 ${placeText(bay)} 선택`);
         svg.append(g);
       }
     }
@@ -200,7 +202,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-export", "data-zone-id": st.id, "data-selected": String(st.id === selectedId) });
         g.append(svgNode("polygon", { points: `${cx},${cy - 12} ${cx + 12},${cy} ${cx},${cy + 12} ${cx - 12},${cy}` }));
         g.append(svgNode("text", { x: cx + 15, y: cy + 4, class: "zb-label" }, st.id));
-        bindSelect(g, st.id, st.name && st.name !== st.id ? `반출대 ${st.name} (${st.id}) 선택` : `반출대 ${st.id} 선택`);
+        bindSelect(g, st.id, `반출대 ${placeText(st)} 선택`);
         svg.append(g);
       }
     }

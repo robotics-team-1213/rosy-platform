@@ -577,7 +577,8 @@ def test_world_factory_actors_node_unit_tests(tmp_path: Path) -> None:
         pytest.skip("Node.js is unavailable")
     result = subprocess.run(
         [node, "--test", "--test-reporter=spec", str(ROOT / "applications/world/test/factory-actors.test.mjs"),
-         str(ROOT / "applications/world/test/map-rules.test.mjs")],
+         str(ROOT / "applications/world/test/sim-freshness.test.mjs"),
+         str(ROOT / "shared/web/test/map-rules.test.mjs")],
         cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr

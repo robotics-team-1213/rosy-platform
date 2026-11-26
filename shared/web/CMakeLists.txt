@@ -41,6 +41,7 @@ install(FILES
   workflow-controls.js
   cause-line.js
   plane-math.js
+  map-rules.js
   preact-ui.js
   component-controls.css
   component-gallery.css

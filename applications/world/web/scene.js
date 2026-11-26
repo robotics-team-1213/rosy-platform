@@ -1,7 +1,7 @@
 import {
   configureStudioRenderer, attachStudioEnvironment, createProceduralFactoryFloor,
 } from "./studio-look.js";
-import { scaleBar } from "./map-rules.js";
+import { scaleBar } from "./common/map-rules.js";
 import {
   readCadGeometry, readEquipment, cadLabels, lightEquipment, siteMarkings,
 } from "./scene-geometry.js";

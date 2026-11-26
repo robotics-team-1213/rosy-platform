@@ -11,8 +11,9 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/assets/fleet-session.js';
-import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, mapEvidence, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, activeMapEvidence, planIsCurrent, planPolylines, siteMapErrorText, editViewTurn, planTrip, tripRefusalText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
+import {placeText, viewTurnOf} from '/common/map-rules.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {roadOverlayPoints, surveyedRoadPoints, surveyText, unmeasuredRoadPoints} from '/console/assets/site-layer.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
@@ -88,7 +89,7 @@ function render() {
   const {view, point: backgroundPoint} = sourcePanel.drawBackground(svg, map, () => fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs()));
   state.view = view;
   const activeSource = $('map-source').value === 'active';
-  const evidence = mapEvidence(state.active, surveyedRoadPoints), evidenceText = (activeSource ? '' : '초안 표시 · 기준 ') + evidence.text;
+  const evidence = activeMapEvidence(state.active, surveyedRoadPoints), evidenceText = (activeSource ? '' : '초안 표시 · 기준 ') + evidence.text;
   if ($('map-evidence').textContent !== evidenceText) Object.assign($('map-evidence'), {textContent: evidenceText, title: evidence.title});
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
   // D-573 1/7: crosswalk areas under the lanes (read-only polygons) and their waiting bands.
@@ -314,7 +315,7 @@ async function load() {
   state.sitePoints = await loadSitePointsOverlay(request, active);
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
-    .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
+    .map((place, index) => new Option(`${index + 1} ${placeText(place)}`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'

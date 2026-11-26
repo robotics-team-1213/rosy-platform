@@ -11,6 +11,7 @@ import {
   streamEvidence, roadOverlayPoints, surveyedRoadPoints, unmeasuredRoadPoints,
 } from "./site-layer.js";
 import { fitBox, mapBounds } from "/console/assets/site-map-model.js";
+import { scaleBar } from "/common/map-rules.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { bindLayerToggles, createMapOverlays } from "./map-overlays.js";
 import { createMapPolling } from "./map-polling.js";
@@ -248,11 +249,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.font = font("micro"); ctx.fillStyle = css("--ink-quiet");
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("N", 0, 3.5);
     ctx.restore();
-    let stepM = pxPerM * 0.5 >= 40 ? 0.5 : pxPerM * 1.0 >= 28 ? 1.0 : 2.0;
-    const sx = cx + 16, sy = 25, maxBar = rightBound - sx;
-    if (stepM * pxPerM > maxBar && stepM > 0.5 && pxPerM * 0.5 >= 28) stepM = 0.5;
-    const barPx = stepM * pxPerM;
-    if (barPx > maxBar || barPx < 24) return;
+    const sx = cx + 16, sy = 25, scale = scaleBar(pxPerM, rightBound - sx);
+    if (!scale) return;
+    const { stepM, barPx } = scale;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.strokeStyle = css("--ink-quiet"); ctx.fillStyle = css("--ink-quiet"); ctx.lineWidth = 1.2;
