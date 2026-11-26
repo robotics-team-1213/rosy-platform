@@ -11,7 +11,7 @@ ROSY Platform (ROS 2 Jazzy, first hardware Pinky Pro, Apache-2.0) connects world
 
 ## Subdirectories
 
-Top-level folder roles: [folder responsibility guide](docs/reference/platform-folder-responsibilities.md) and `tools/harness/platform_parts.yaml`. Root files: `README.md` (landing, core contracts), `CONCEPTS.md`, `PRODUCT.md`, `DESIGN.md`, `STATUS.md` (generated; edit progress/logs/ADRs instead).
+Top-level folder roles: [folder responsibility guide](docs/reference/platform-folder-responsibilities.md) and `tools/harness/platform_parts.yaml`. `STATUS.md` is generated; edit progress/logs/ADRs instead.
 
 ## For AI Agents
 
@@ -22,16 +22,16 @@ Top-level folder roles: [folder responsibility guide](docs/reference/platform-fo
 - **현장 PC:** `operations/fleet`가 사실 검증·admission·사람 확인으로 답을 고른다(Decision은 `operations/decision`).
 - **로봇:** CORE가 장치 상태·안전을 다시 확인하고 최종 `/cmd_vel`을 단독 발행한다(D-516). 소스 경로로 실행 호스트를 추정하지 않는다(D-315).
 
-시험 위치(D-527): 개발 PC는 원격 시험 요청, CI는 코드 계약·푸시 게이트, 모델 PC는 독립 평가·승격 receipt, AI PC는 고정 버전 스모크, 현장은 그림자·장치 수용. 장치 주소·계정은 gitignored `private/`.
+시험 위치(D-527): 개발 PC는 원격 요청, CI는 계약·푸시 게이트, 모델 PC는 독립 평가·승격, AI PC는 고정 버전 스모크, 현장은 그림자·장치 수용.
 
-### D-427 이후 공동 작업 규칙 (2026-10-04, 이동 기간 2·5항 삭제)
+### D-427 이후 공동 작업 규칙
 
-소스 이전(D-427·D-429·D-430) 뒤에도 모든 세션이 지킨다. 이전 경로 `legacy`와 잔여 검사에는 한 release 유예를 둔다.
+소스 이전(D-427·D-429·D-430) 뒤에도 모든 세션이 지킨다.
 
 1. **우선순위:** main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
-2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. 공유 main 체크아웃에서는 브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다. 순서는 아래 「같이 하는 깃」이다.
+2. **main 체크아웃에서 작업하지 않는다.** 브랜치 전환·커밋은 `.worktrees/<topic>`에서만(아래 「같이 하는 깃」).
 3. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
-4. **병합 경로는 [D-1055](docs/adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md)다:** 공개 `main`에는 주제 PR 하나가 Merge Queue를 거쳐 merge commit으로만 들어간다. 로컬 `main` 먼저 착지(D-868 1·2항)는 폐기했다.
+4. **병합 경로는 [D-1055](docs/adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md)다:** 공개 `main`에는 주제 PR 하나가 Merge Queue를 거쳐 merge commit으로만 들어간다.
 5. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
 
 ### 같이 하는 깃
@@ -53,21 +53,21 @@ Top-level folder roles: [folder responsibility guide](docs/reference/platform-fo
 
 ### GitHub 게시와 두 에이전트 검토
 
-공개 `main`은 주제 PR을 Merge Queue로 merge commit 병합해서만 갱신한다(D-1055). squash·rebase 병합과 직접 push는 하지 않는다. 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, head가 바뀌면 다시 검토해 최종 게시 head가 검토 head와 같아야 한다. 필수 검사(`ci-result`, `review-gate`)와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다.
+작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 최종 게시 head는 검토 head와 같아야 한다. 필수 검사와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다.
 
 ### Working In This Directory
 
 - **모듈 하네스(D-61):** 모듈 폴더에서 작업하기 전 그 모듈의 `progress.md`·`index.md`를 읽는다. 바꾼 뒤 `logs.md`에 덧붙이고, 게이트가 바뀌었으면 `progress.md`를 덮어쓴 다음 저장소 루트에서 `python tools/harness/rosy_harness.py generate`를 돌린다.
-- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 브랜치는 `origin/main`에서 만들고, PR이 `DIRTY`일 때만 `git merge origin/main`으로 갱신한다(D-1055).
-- Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
+- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다.
+- Contracts: `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, `docs/reference/ROSY ADR Log.md`. Do not invent REST paths, modes or protocol fields missing from the API ref or `core_common.protocol.schemas`.
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
 - Single process: main thread rclpy `EventsExecutor` (D-1058; rollback `ROSY_CORE_EXECUTOR=threaded`), worker thread uvicorn+FastAPI (D-1), entry `ros2 run core core`. Do not split into two processes.
-- `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
-- Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
+- `slam_toolbox` is optional: `ros_bridge` imports it inside try/except, never at module top; CI boots without it.
+- Config merge order: `rosy_default.yaml` (contracts/foundation/config) → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - This repo is PUBLIC. Place new files by D-226: internal material, real device addresses/accounts and filled device config go in gitignored `private/` (`<robot-ip>` in public docs; lab SSH targets in `private/lab-hosts.json`); dated evidence in `docs/validation/<topic>-<YYYY-MM-DD>/`. A new secret kind needs its ignore rule and template in `test/architecture/test_document_placement.py` in the same change.
-- Hardware profile is YAML: in-tree Pinky spec `middleware/devices/pinky/profile/config/profile.yaml`; the robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml`.
+- Hardware profiles are YAML (`middleware/devices/pinky/profile/config/`, robot side `deploy/robot/pinky_pro/config/`).
 - ROS package discovery uses the manifest `colcon_roots`. Do not reintroduce `rosy_*` or `pinky_*` package names (the CORE launch file keeps its legacy name `rosy_core.launch.py`).
-- Dashboard screens are static files in `middleware/robot_ui/robot`, served in-process by FastAPI (`core_api_web`), not a Node server (D-23).
+- Dashboard screens are static files in `middleware/robot_ui/robot` served by FastAPI (`core_api_web`), not Node (D-23).
 
 ### Testing Requirements
 
@@ -75,7 +75,7 @@ Tiers are D-436. pytest never runs on this laptop (D-584): use `tools/remote/rem
 
 ```bash
 python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir $ROSY_SCRATCH/<name>
-python tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
+python tools/harness/rosy_harness.py lint
 ```
 
 ### Common Patterns

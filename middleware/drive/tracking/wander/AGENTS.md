@@ -12,7 +12,7 @@ The wander autonomy: a 20 ms FSM (`wait forward pause look calc recon wall backu
 ## Key Files
 | File | Description |
 |------|-------------|
-| `node.py` | `WanderNode(Node, Senses, Judge, Contact, Motion)` — FSM tick dispatcher, `_announce` pairs `/wander/state` + `/robot/mode` (one fused label from `control/modes.pick_mode`; `/safety/mode` is a deprecated same-value alias), shared FSM entries (`_hold`/`_start_backup`/`_start_escape`/`_start_turn`/`_resume_forward`), `stop_motors()` publishes the fused label so shutdown never leaves a stale label |
+| `node.py` | `WanderNode(Node, Senses, Judge, Contact, Motion)`: FSM tick dispatcher; `_announce` pairs `/wander/state` + `/robot/mode` (fused label, see rules); shared FSM entries `_hold`/`_start_backup`/`_start_escape`/`_start_turn`/`_resume_forward`; `stop_motors()` publishes the fused label |
 | `senses.py` | Topic callbacks + geometry helpers: `_on_wall` (delegates to `modes.nose_on_wall`), `_pick_turn_sign` (via `recover.side_sign`/`ratio_sign`), `_ir_ready` floor-band check |
 | `judge.py` | LOOK/CALC/RECON/PAUSE: look sampling → `_calc_plan` (kind/sign/why), `_commit_plan` enters the plan; hazard answers come from `recover.hazard_action` |
 | `contact.py` | WALL/BACK: `_can_reverse`, `_back_cmd`, `_tick_wall` (policy via `wall_first_move`), `_tick_backup` (raw hazard persistence → disable) |
@@ -22,7 +22,7 @@ The wander autonomy: a 20 ms FSM (`wait forward pause look calc recon wall backu
 
 ### Working In This Directory
 - Cliff/tilt decisions go through `control/recover.hazard_action` — do not re-branch on `self.cliff`/`self.tilt` in tick handlers.
-- State and mode are always published together (`_announce`/`_publish_mode`); `/safety/mode` fan-out is a deprecated alias line — keep it single-site.
+- State and mode are always published together (`_announce`/`_publish_mode`); the fused label comes from `control/modes.pick_mode`. `/safety/mode` is a deprecated same-value alias line — keep it single-site. Shutdown never leaves a stale label.
 - Cliff only counts after the first forward drive (`seen_forward` gate lives inside `hazard_action`); raw `self.cliff` remains only where the comment says so (backup persistence, forward interrupt).
 - Enter states via the shared helpers; the only forward entry is `_resume_forward`.
 

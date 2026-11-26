@@ -22,7 +22,7 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 | (not in this folder) | MapPose lives in `rosy.world.state.projections.map_pose`. Import it directly (D-752). This folder does not re-export it. Fleet service, transaction, and admission stay in `server/` |
 | `lane_compliance.py` | D-511 2: signed lateral offset (left +), body margin `width_m/2 − (|d| + half width)` from `core_common.robot_body`, `LaneComplianceTracker` (OK/WARN/ACT/UNKNOWN, `persist_n`), `LaneComplianceConfig` (`fleet.lane_compliance`, provisional defaults). Observe only |
 | `wall_grid.py` | SLAM fallback: active site map walls -> Nav2 trinary map in the site frame (0.025 m, walls >= 1 cell, pure stdlib, deterministic sha256), served by `GET /api/fleet/site-map/wall-grid` |
-| `wall_tiebreak.py` | D-1046 bounded exception to "overhead never decides alone": two ~180-degree twin loc_assist candidates, both scan fit >= 0.85, picked by the ceiling camera position (>= 1 m apart, 2 s hold); the service allows it only while the robot's CORE reports `slam_fallback.phase` WAITING_LOCALIZATION, never ACTIVE |
+| `wall_tiebreak.py` | D-1046 bounded exception to "overhead never decides alone": two ~180-degree twin loc_assist candidates, both scan fit >= 0.85, picked by ceiling camera position (>= 1 m apart, 2 s hold); allowed only while CORE reports `slam_fallback.phase` WAITING_LOCALIZATION, never ACTIVE |
 
 ## For AI Agents
 
@@ -30,7 +30,8 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 
 - Keep it pure: `test_boundaries.py` forbids httpx, websockets, rclpy, asyncio, fastapi, `fleet.swarm` and `fleet.server` here.
 - A missing input is a 0 cue, never a guess; the arbiter must work with no camera and no peers.
-- `last_good` and `overhead` weigh less than the margin on purpose: neither may decide alone (D-395 §7). The one exception is `wall_tiebreak.py` (D-1046, owner: the SLAM fallback): only for a robot in `slam_fallback.phase` WAITING_LOCALIZATION (the first pose after the automatic wall-map switch, never in ACTIVE), only between scan-fit >= 0.85 mirror twins, with a fresh camera sighting held 2 s; the decision carries `source: overhead` and `evidence.tiebreak`.
+- `last_good` and `overhead` weigh less than the margin on purpose: neither may decide alone (D-395 §7).
+- Exception `wall_tiebreak.py` (D-1046, owner: SLAM fallback): only in `slam_fallback.phase` WAITING_LOCALIZATION (first pose after the wall-map switch, never ACTIVE), only between scan-fit >= 0.85 mirror twins, fresh camera sighting held 2 s; decision carries `source: overhead` and `evidence.tiebreak`.
 
 ### Testing Requirements
 
