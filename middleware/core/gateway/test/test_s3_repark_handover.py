@@ -8,7 +8,7 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 
 from core_api_web.api.deps import Mode
 from test_localization_mission import OPERATOR, VIEWER, _state, core  # noqa: F401
-from test_motion_repark import _run
+from test_motion_repark import _open_lease, _run
 from test_navigation_handover import request
 from test_station_return_handover import terminal_navigation
 
@@ -17,7 +17,7 @@ PATH = "/api/v1/motion/repark/run"
 GRID = "occupancy:0123456789ab"
 
 
-@pytest.mark.parametrize("case", ["forward", "reverse", "wrong_nav", "wrong_grid", "stale_idle", "forged_idle"])
+@pytest.mark.parametrize("case", ["forward", "reverse", "release", "wrong_nav", "wrong_grid", "stale_idle", "forged_idle"])
 def test_named_stop_handover_precedes_motion(core, case):
     client, services = core
     services.localization.on_state(_state("LOCALIZED"))
@@ -44,9 +44,11 @@ def test_named_stop_handover_precedes_motion(core, case):
         services.modes.transition(Mode.IDLE)
         if case == "forged_idle":
             command["expected_idle_epoch"] = services.modes.epoch
+    if case == "release":
+        _open_lease(client, "s3-correction", job_id="job")
     reply = client.post(PATH, json=command, headers=OPERATOR)
     assert backend.canceled == 0
-    if case not in ("forward", "reverse"):
+    if case not in ("forward", "reverse", "release"):
         assert reply.status_code == 409, reply.text
         assert services.loc_mission.runs_started == 0
         assert services.command.select_output().linear == 0.0
@@ -55,6 +57,14 @@ def test_named_stop_handover_precedes_motion(core, case):
     operation = reply.json()["operation"]
     services.loc_mission.tick()
     assert services.command.select_output().linear * delta > 0
+    if case == "release":
+        assert client.delete("/api/v1/trip-lease/s3-correction", headers=OPERATOR).status_code == 200
+        services.loc_mission.tick()
+        status = client.get(PATH, params={"run_id": operation["run_id"]}, headers=VIEWER).json()
+        assert status["operation"]["result"] == "FAILED"
+        assert services.command.select_output().linear == 0.0
+        assert services.modes.mode is Mode.IDLE
+        return
     # A zero cycle already in flight at terminal cannot witness the released mode.
     cmd_vel_cycle(services.command, services.power, lambda _: _run(services),
                   readiness=SimpleNamespace(is_ready=lambda: False))

@@ -215,7 +215,8 @@ def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_
     args = (sample['x'], sample['y'], sample['yaw'])
     kwargs = dict(frame=msg.header.frame_id, source_stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec)
     receipt = None
-    if _source_read is None and _execution is None and (_motion_read is None or _motion_read[0] is None):
+    mission = getattr(bridge._svc, "loc_mission", None)
+    if mission is None and _source_read is None and _execution is None and (_motion_read is None or _motion_read[0] is None):
         wall = state.set_odom_pose(*args, **kwargs)
     else:
         receipt = state._record_odom_pose(*args, **kwargs)
@@ -230,6 +231,18 @@ def observe_odom(bridge, msg, sample, *, station=None, _execution=None, _motion_
         observe_station_motion(bridge, msg, sample, station, _receipt=receipt, _read=_motion_read)
     observe_bounded_trial(bridge, msg, sample)
     observe_lane_return(bridge, msg, sample, wall=wall)
+    if mission is not None:
+        _observe_localization_mission(bridge, mission, msg, sample, receipt)
+
+
+def _observe_localization_mission(bridge, mission, msg, sample, receipt):
+    try:
+        stamp_ns, _, _ = _original_odom(bridge, msg, sample, receipt)
+        source_now_ns = bridge._node.get_clock().now().nanoseconds
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return
+    mission.observe_odom(sample["x"], sample["y"], sample["yaw"],
+                         source=(stamp_ns, source_now_ns, receipt[1]))
 
 
 def observe_station_motion(bridge, msg, sample, station, *, _receipt=None, _read=None):

@@ -251,7 +251,6 @@ class RosBridge(RosBridgeHelpersMixin):
                                      sampled_at=odometry.velocity_sample_time(self, msg, sample, received_ns))
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
-        self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
         self._mirror.odometry(msg)
 
     def _on_lane_model_status(self, msg: String) -> None:
