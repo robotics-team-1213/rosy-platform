@@ -144,6 +144,28 @@ def unwedge_pull_dips(state: list[float], target: list[float], home: list[float]
     return fk_z(probe, tcp_x_m=tcp_x_m) < z_now - 0.001
 
 
+def _norm_arm(val) -> str | None:
+    if not isinstance(val, str):
+        return None
+    if val in ("arm_a", "arm_b", "arm_s"):
+        return val
+    return val[:-9] if val.endswith("_follower") and val[:-9] in ("arm_a", "arm_b", "arm_s") else None
+
+
+def _session_arm(sess: dict) -> tuple[str | None, bool]:
+    prof = sess.get("operating_profile")
+    chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
+    io_name = Path(chunks_io).name if isinstance(chunks_io, str) and chunks_io else ""
+    io_arm = f"arm_{io_name[9:]}" if io_name.startswith("chunk-io-") and io_name[9:] in ("a", "b", "s") else None
+    raws = (sess.get("arm"), prof.get("device_id") if isinstance(prof, dict) else None,
+            prof.get("instance_id") if isinstance(prof, dict) else None, sess.get("motor_health_owner"))
+    found = {a for v in raws if (a := _norm_arm(v)) is not None} | ({io_arm} if io_arm else set())
+    if any(isinstance(v, str) and v and _norm_arm(v) is None for v in raws[:2]) or len(found) > 1:
+        return "__conflict__", True
+    real_rec = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+    return (next(iter(found)), True) if found else (None, real_rec)
+
+
 def wait_session_json(session: Path, arm: str, started: float, sleep) -> tuple[dict | None, str | None]:
     """Poll `session.json` until a fresh matching-arm recovery session finishes and writes torque_after."""
     for _ in range(36):
@@ -153,16 +175,7 @@ def wait_session_json(session: Path, arm: str, started: float, sleep) -> tuple[d
             except (OSError, ValueError):
                 sess = None
             if isinstance(sess, dict):
-                prof = sess.get("operating_profile")
-                chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
-                io_tag = chunks_io.rstrip("/").rsplit("-", 1)[-1] if isinstance(chunks_io, str) else ""
-                sess_arm = (
-                    (sess.get("arm") if isinstance(sess.get("arm"), str) and sess.get("arm") else None)
-                    or (prof.get("instance_id") if isinstance(prof, dict) and prof.get("instance_id") else None)
-                    or (sess.get("motor_health_owner") if isinstance(sess.get("motor_health_owner"), str) and sess.get("motor_health_owner") else None)
-                    or (f"arm_{io_tag}" if io_tag in ("a", "b", "s") else None)
-                )
-                real_rec = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+                sess_arm, real_rec = _session_arm(sess)
                 if sess_arm == arm or (not real_rec and sess_arm is None and "torque_after" in sess):
                     return sess, None
         sleep(5)
