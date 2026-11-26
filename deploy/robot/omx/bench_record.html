@@ -95,7 +95,7 @@
         </div>
       </div>
       <div class="stop-group">
-        <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live title="즉시 정지 요청 · 물리 차단은 follower 전원 스위치">비상정지 (E-Stop)</button>
+        <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live aria-describedby="hdr-stop-note" title="녹화 정상 종료 요청 · 전원 차단은 작업대 전원 스위치">녹화 중지</button><span id="hdr-stop-note" class="bench-sr-only">전원 차단은 작업대 전원 스위치</span>
       </div>
     </section>
   </header>
@@ -125,14 +125,14 @@
               <label class="check-row"><input type="checkbox" id="mh-dead-lease-check"><span>팔이 접혀 있고 토크 OFF 상태임을 직접 확인했습니다 (죽은 러너 임대 해제)</span></label>
             </div>
             <div id="mh-clear-box" class="mh-step">
-              <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 복구 후 홈 복귀</button>
+              <div id="mh-quick-actions" class="mh-quick-actions"></div>
+              <button type="button" id="mh-clear-btn" class="btn-tool">팔 확인 완료 · 복구 후 홈 복귀</button>
               <div id="mh-clear-confirm" class="reset-confirm-bar" hidden>
                 <span class="quiet">보류를 해제하고 멈춘 유닛을 복원한 뒤, 팔과 리더를 안전하게 홈으로 복귀시킬까요?</span>
-                <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">확인 · 복구 후 홈 복귀</button>
+                <button type="button" id="mh-clear-yes" class="btn-tool btn-xs">확인 · 복구 후 홈 복귀</button>
                 <button type="button" id="mh-clear-only-yes" class="btn-tool btn-xs">보류만 해제</button>
                 <button type="button" id="mh-clear-no" class="btn-tool btn-xs">취소</button>
               </div>
-              <div id="mh-quick-actions" class="mh-quick-actions"></div>
               <button type="button" id="mh-log-btn" class="btn-tool btn-xs">실시간 로그 보기</button>
             </div>
           </div>

@@ -132,7 +132,7 @@ def test_bench_v6_two_row_header_red_record_shortcuts_and_arm_cam_filter():
         assert marker in html, marker
     assert html.index('id="hdr-row-menu"') < html.index('id="hdr-row-ops"')
     assert 'class="btn-rec topbar-rec-btn"' in html
-    assert '.btn-rec{background:var(--crit);' in css
+    assert '.btn-rec{background:var(--ink);' in css and '.btn-rec .btn-lbl::first-letter{color:var(--crit)}' in css
     assert "record.classList.toggle('is-recording',stopping)" in cam_js
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
 
@@ -163,7 +163,7 @@ def test_bench_context_precedes_phase_controls_and_sidebar_has_no_duplicate_summ
                    'hdr-rerecord-btn', 'hdr-live-metrics', 'goal-result-line', 'back-to-setup-btn'):
         assert f'id="{marker}"' in ops
     assert 'role="tab' not in ops
-    assert re.search(r'<div class="stop-group">\s*<button[^>]*id="hdr-estop-btn"[^>]*>[^<]+</button>\s*</div>\s*$', ops)
+    assert re.search(r'<div class="stop-group">\s*<button[^>]*id="hdr-estop-btn"[^>]*>[^<]+</button>(?:<span id="hdr-stop-note"[^>]*>[^<]+</span>)?\s*</div>\s*$', ops)
     assert re.search(r'\.topbar-row\{[^}]*flex-wrap:nowrap', css)
     assert re.search(r'\.context-btn\{[^}]*text-overflow:ellipsis', css)
 

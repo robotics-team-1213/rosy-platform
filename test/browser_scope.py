@@ -122,7 +122,8 @@ CALIBRATION = [
     "test/test_calibration_header_browser.py",
     "test/test_calibration_job_controls_browser.py",
 ]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD + CALIBRATION
+BENCH = ["test/test_omx_bench_narrow_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD + CALIBRATION + BENCH
 
 SERVER = "operations/fleet/fleet/server/"
 WEB = "applications/fleet/web/"
@@ -166,6 +167,7 @@ SCOPE: dict[str, list[str]] = {
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": OMX_PILOT,
+    **{f"deploy/robot/omx/bench_record.{ext}": BENCH for ext in ("css", "html")},
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "learning/curation/perception/review_app.py": LEARNING,
