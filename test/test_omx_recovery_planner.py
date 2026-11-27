@@ -454,7 +454,7 @@ def test_ascending_departure_allows_vertical_lift_edge_and_under_jaw_blob_only()
     assert not res_out_c["clear"] and res_out_c["off_surface"] > 0
 
 
-def test_deep_droop_generates_open_elbow_and_elbow_first_candidates_and_settles_grip():
+def test_deep_droop_generates_elbow_first_candidates_and_settles_final_jog():
     deep_pose = [-21.32, 15.02, 7.16, 45.1, 30.26, 57.0]
     home_a = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
     assert crp.fk_z(deep_pose, tcp_x_m=0.0740) < 0.0
@@ -467,39 +467,39 @@ def test_deep_droop_generates_open_elbow_and_elbow_first_candidates_and_settles_
 
     cands = crp.build_candidates(
         deep_pose, home_a, 49.0, lambda s: [s, home_a],
-        tcp_x_m=0.0740, clear_z_m=0.10, situation="low_open_jaws", extended=True, grip_open=62.0,
+        tcp_x_m=0.0740, clear_z_m=0.10, situation="low_open_jaws", extended=True,
     )
     names = [c[0] for c in cands]
     assert names[0] == "lift_then_park"
-    assert "open_elbow_lift_then_park" in names and "elbow_lift_then_park" in names
-    assert names.index("open_elbow_lift_then_park") < names.index("park")
-    open_cmds = dict((c[0], c[1]) for c in cands)["open_elbow_lift_then_park"]
-    assert open_cmds[0] == "grip 62.0" and open_cmds[1].startswith("jog elbow_flex.pos -")
-    assert all(crp.candidate_family(n) in ("shoulder_lift", "open_elbow_lift", "elbow_lift", "pan", "park", "elbow_clear") for n in names)
+    assert "elbow_lift_then_park" in names
+    assert not any(n.startswith("open_elbow_lift_") for n in names)
+    assert names.index("elbow_lift_then_park") < names.index("park")
+    elbow_cmds = dict((c[0], c[1]) for c in cands)["elbow_lift_then_park"]
+    assert elbow_cmds[0].startswith("jog elbow_flex.pos -") and not any(c.startswith("grip ") for c in elbow_cmds)
 
-    # run_detour_jogs waits for grip settling on axis 5 before sending body jogs
-    class _GripWaitCell:
-        def __init__(self):
-            self.cmds = []
+    # run_detour_jogs polls settle even on a single/final jog before returning
+    class _FinalJogCell:
+        def __init__(self, *, settles: bool):
             self.s = list(deep_pose)
             self.t = list(deep_pose)
             self.polls = 0
+            self.settles = settles
 
         def act(self, cmd):
-            self.cmds.append(cmd)
-            if cmd == "grip 62.0":
-                self.t[5] = 62.0
+            if cmd.startswith("jog "):
+                self.t[2] += float(cmd.split()[-1])
                 return {"ok": True, "state": list(self.s), "target": list(self.t)}
             if cmd == "state":
                 self.polls += 1
-                if self.polls >= 2:
-                    self.s[5] = 61.5
-                return {"ok": True, "state": list(self.s), "target": list(self.t)}
-            if cmd.startswith("jog "):
-                assert abs(self.s[5] - 62.0) <= 3.0  # grip must be settled before body jog runs
+                if self.settles and self.polls >= 2:
+                    self.s[2] = self.t[2]
                 return {"ok": True, "state": list(self.s), "target": list(self.t)}
             raise AssertionError(cmd)
 
-    gcell = _GripWaitCell()
-    ok, err, _ = crp.run_detour_jogs(gcell, ["grip 62.0", "jog elbow_flex.pos -2.5"], settle_tol=3.0, sleep=lambda _s: None)
-    assert ok is True and err is None and gcell.polls == 2
+    ok_cell = _FinalJogCell(settles=True)
+    ok, err, _ = crp.run_detour_jogs(ok_cell, ["jog elbow_flex.pos -4.0"], settle_tol=3.0, settle_polls=5, sleep=lambda _s: None)
+    assert ok is True and err is None and ok_cell.polls == 2
+
+    stuck_cell = _FinalJogCell(settles=False)
+    ok2, err2, _ = crp.run_detour_jogs(stuck_cell, ["jog elbow_flex.pos -4.0"], settle_tol=3.0, settle_polls=3, sleep=lambda _s: None)
+    assert ok2 is False and err2 == "DETOUR_NOT_SETTLED" and stuck_cell.polls == 3

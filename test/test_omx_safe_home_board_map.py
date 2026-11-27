@@ -120,22 +120,35 @@ def test_safe_home_unlinks_stale_out_sets_session_chunks_and_refuses_held_lease(
         if not live_mode:
             assert envs[0]["ROSY_SESSION_CHUNKS"] == str(args.library.resolve())
 
-    # 3. Paused observer is released if status_fn or wrapper fails before session start
+    # 3. Paused observer uses session_lock and releases lock before releasing observer on failure
     from contextlib import nullcontext
-    released = []
+    events = []
+    import joint_tune_lock as jtl
     import register_probe as rp
     import omx_incident_reassess as oir
-    monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: True)
+
+    class _DummyLock:
+        def close(self):
+            events.append("lock_close")
+
+    monkeypatch.setattr(jtl, "session_lock", lambda arm: events.append(f"lock_acquire:{arm}") or _DummyLock())
+    monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: events.append("pause_obs") or True)
     monkeypatch.setattr(rp, "open_readonly_port", lambda _d: nullcontext())
     monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: [{"id": 11, "hardware_error": 0}])
-    monkeypatch.setattr(csh, "_release_observer", lambda arm: released.append(arm))
+    monkeypatch.setattr(csh, "_release_observer", lambda arm: events.append(f"release_obs:{arm}"))
     with pytest.raises(RuntimeError):
         csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
                           status_fn=lambda _a: (_ for _ in ()).throw(RuntimeError("boom")))
-    assert released == ["arm_b"]
+    assert events == ["lock_acquire:arm_b", "pause_obs", "lock_close", "release_obs:arm_b"]
+
+    events.clear()
+    monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("probe fail")))
+    rc_pf, res_pf = csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {})
+    assert rc_pf == 2 and res_pf["result"] == "refused_hw_probe_unavailable"
+    assert events == ["lock_acquire:arm_b", "pause_obs", "lock_close", "release_obs:arm_b"]
 
 
-def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(cell, tmp_path):
+def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(cell, tmp_path, monkeypatch):
     _, ports = cell
     args = args_for(tmp_path, ports["arm_a"])
     args.arm = "arm_a"
@@ -144,14 +157,15 @@ def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(ce
     Path(args.config).write_text(json.dumps(cfg))
     args.library.write_text("{}")
 
-    def six_rows(faults=None, torque_on=()):
+    def six_rows(faults=None, torque_on=(), temp=35):
         faults = faults or {}
         return [
-            {"id": i, "torque_enabled": 1 if i in torque_on else 0, "hardware_error": faults.get(i, 0)}
+            {"id": i, "torque_enabled": 1 if i in torque_on else 0, "hardware_error": faults.get(i, 0),
+             **({} if temp is None else {"temperature": temp})}
             for i in range(11, 17)
         ]
 
-    # 1. Rebootable ID 12 overload (32) with all 6 motors torque=0 auto-reboots and proceeds to fold
+    # 1. Rebootable ID 12 overload (32) with all 6 motors torque=0 and temp<45C auto-reboots and proceeds to fold
     reboot_calls, fold_envs = [], []
 
     def ok_reboot(ids):
@@ -173,8 +187,14 @@ def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(ce
     )
     assert rc_ok == 0 and reboot_calls == [[12]] and res_ok["rebooted_ids"] == [12] and len(fold_envs) == 1
 
-    # 2. Non-rebootable hw_error=8 (encoder) OR torque_enabled=1 refuses before calling reboot_fn
-    for bad_rows in (six_rows({12: 8}), six_rows({12: 32}, torque_on=(11,))):
+    # 2. Non-rebootable hw_error=8, torque_enabled=1, hot temp>=45C, missing/bool temp refuse before calling reboot_fn
+    for bad_rows in (
+        six_rows({12: 8}),
+        six_rows({12: 32}, torque_on=(11,)),
+        six_rows({12: 32}, temp=45),
+        six_rows({12: 32}, temp=None),
+        six_rows({12: 32}, temp=True),
+    ):
         calls = []
         rc_bad, res_bad = csh.run_safe_home(
             args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
@@ -183,10 +203,59 @@ def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(ce
         )
         assert rc_bad == 2 and res_bad["result"] == "refused_hw_error" and calls == [] and "reboot_attempt" not in res_bad
 
-    # 3. Unclean post-reboot readback refuses and records reboot_attempt
-    rc_dirty, res_dirty = csh.run_safe_home(
+    # 3. Unclean post-reboot readback (hw_error!=0 or bool torque=False) refuses and records reboot_attempt
+    for bad_after in (
+        {i: {"torque": 0, "hw_error": 32 if i == 12 else 0} for i in range(11, 17)},
+        {i: {"torque": False if i == 11 else 0, "hw_error": 0} for i in range(11, 17)},
+    ):
+        rc_dirty, res_dirty = csh.run_safe_home(
+            args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+            read_fn=lambda _d: six_rows({12: 32}),
+            reboot_fn=lambda ids, a=bad_after: {"rebooted": list(ids), "after": a},
+        )
+        assert rc_dirty == 2 and res_dirty["result"] == "refused_hw_error" and res_dirty["reboot_attempt"]["rebooted"] == [12]
+
+    # 4. Refused Fleet clear returns non-zero (rc=4) with clear_failed=True while preserving folded result
+    monkeypatch.chdir(tmp_path)
+    tok = tmp_path / "tok"
+    tok.write_text("tok")
+    rc_cf, res_cf = csh.run_safe_home(
         args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
-        read_fn=lambda _d: six_rows({12: 32}),
-        reboot_fn=lambda ids: {"rebooted": list(ids), "after": {i: {"torque": 0, "hw_error": 32 if i == 12 else 0} for i in range(11, 17)}},
+        read_fn=lambda _d: six_rows(),
+        status_fn=lambda _a: {"incident_ids": ["inc-latched"]},
+        run_fn=fake_fold,
+        wait_sess_fn=lambda *_a: ({"torque_after": {str(i): 0 for i in range(11, 17)}, "hardware_faults": {}, "caps_restored": True}, None),
+        token_fn=lambda: tok,
+        clear_fn=lambda *_a, **_kw: (_ for _ in ()).throw(SystemExit("clear refused: latched")),
     )
-    assert rc_dirty == 2 and res_dirty["result"] == "refused_hw_error" and res_dirty["reboot_attempt"]["rebooted"] == [12]
+    assert rc_cf == 4 and res_cf["result"] == "folded" and res_cf["clear_failed"] is True
+    assert "inc-latched" in res_cf["clear_errors"]
+
+    # 5. Live probe (read_fn=None) + reboot keeps session_lock across reboot_fn before closing lock
+    from contextlib import nullcontext
+    import joint_tune_lock as jtl
+    import omx_incident_reassess as oir
+    import register_probe as rp
+
+    seq = []
+
+    class _SeqLock:
+        def close(self):
+            seq.append("lock_close")
+
+    monkeypatch.setattr(jtl, "session_lock", lambda arm: seq.append(f"lock_acquire:{arm}") or _SeqLock())
+    monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: seq.append("pause_obs") or True)
+    monkeypatch.setattr(rp, "open_readonly_port", lambda _d: nullcontext())
+    monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: six_rows({12: 32}))
+    monkeypatch.setattr(csh, "_release_observer", lambda arm: seq.append(f"release_obs:{arm}"))
+
+    def locked_reboot(ids):
+        seq.append(f"reboot:{ids}")
+        return {"rebooted": list(ids), "after": {i: {"torque": 0, "hw_error": 0} for i in range(11, 17)}}
+
+    rc_lk, res_lk = csh.run_safe_home(
+        args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+        reboot_fn=locked_reboot, status_fn=lambda _a: {"incident_ids": []}, run_fn=fake_fold,
+    )
+    assert rc_lk == 0 and res_lk["rebooted_ids"] == [12]
+    assert seq == ["lock_acquire:arm_a", "pause_obs", "reboot:[12]", "lock_close"]

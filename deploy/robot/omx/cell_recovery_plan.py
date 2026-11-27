@@ -8,9 +8,7 @@ from pathlib import Path
 
 from cell_auto_fold_fallback import (  # noqa: E402
     append_lift_candidates,
-    candidate_family,
     extended_candidate_names,
-    unwedge_pull_dips,
 )
 
 STEP_MAX = 5.0  # matches chunk_runner_guards.JOG_MAX (never emit a single jog > 5.0)
@@ -144,6 +142,17 @@ def _best_z_dir(cur: list[float], axis: int, z_now: float, bounds, tcp_x_m: floa
     return max(opts, key=lambda item: item[0])[1]
 
 
+def unwedge_pull_dips(state: list[float], target: list[float], home: list[float], size: float,
+                      clear_z_m: float, tcp_x_m: float | None = None) -> bool:
+    """Return True if an elbow_flex pull would dip TCP z below clear_z_m while lift can still rise."""
+    z_now = fk_z(state, tcp_x_m=tcp_x_m)
+    if z_now >= clear_z_m or (home[1] - target[1]) * (home[1] - state[1]) <= 0:
+        return False
+    probe = list(state)
+    probe[2] += max(-size, min(size, home[2] - target[2]))
+    return fk_z(probe, tcp_x_m=tcp_x_m) < z_now - 0.001
+
+
 def _norm_arm(val) -> str | None:
     if not isinstance(val, str):
         return None
@@ -186,21 +195,15 @@ def fk_lift_plan(
     start: list[float], *, lift_units: float = 30.0, clear_z_m: float = 0.10,
     bounds=None, tcp_x_m: float | None = None, home=None,
     axis_order=((1, "shoulder_lift.pos"), (2, "elbow_flex.pos")),
-    per_axis_cap: dict[int, int] | None = None, grip_open: float | None = None,
+    per_axis_cap: dict[int, int] | None = None,
 ) -> tuple[list[str], list[list[float]], list[float]] | None:
-    """Build an open-jaw vertical FK-z lift sequence using strong joints before any horizontal turn."""
+    """Build a vertical FK-z lift sequence using strong joints before any horizontal turn."""
     cur = [float(v) for v in start[:6]]
     z0 = fk_z(cur, tcp_x_m=tcp_x_m)
     if z0 >= clear_z_m:
         return None
     budget = min(MAX_LIFT_BUDGET, max(1, int(round(lift_units))))
     frames, cmds, used = [list(cur)], [], 0
-    if (grip_open is not None and not isinstance(grip_open, bool)
-            and math.isfinite(float(grip_open)) and float(grip_open) > cur[5] + 1.0):
-        target_grip = round(float(grip_open), 2)
-        cmds.append(f"grip {target_grip}")
-        cur[5] = target_grip
-        frames.append(list(cur))
     for axis, name in axis_order:
         if used >= budget or fk_z(cur, tcp_x_m=tcp_x_m) >= clear_z_m:
             break
@@ -238,7 +241,7 @@ def classify_situation(state: list[float], target: list[float], home: list[float
 
 def build_candidates(state: list[float], home: list[float], closed: float, plan, *, bounds=None,
                      tcp_x_m: float | None = None, clear_z_m: float = 0.10, situation: str = "extended",
-                     extended: bool = False, grip_open: float | None = None) -> list[tuple[str, list[str], list[list[float]]]]:
+                     extended: bool = False) -> list[tuple[str, list[str], list[list[float]]]]:
     """Generate guarded (name, jog_commands, swept_frames) candidates for tier-1 recovery."""
     cur = [float(v) for v in state[:6]]
     if not extended:
@@ -254,7 +257,7 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
     raw: list[tuple[str, list[str], list[list[float]]]] = []
     append_lift_candidates(
         cur, home, plan, bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m,
-        situation=situation, grip_open=grip_open, fk_lift_fn=fk_lift_plan,
+        situation=situation, fk_lift_fn=fk_lift_plan,
         chunk_jog_fn=chunk_jog_commands, interp_fn=interpolate_pose,
         step_max=STEP_MAX, elbow_cap=ELBOW_FIRST_CAP, raw=raw,
     )
@@ -281,30 +284,26 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
 
 def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 25,
                     sleep=time.sleep) -> tuple[bool, str | None, dict | None]:
-    """Execute chunked detour jogs sequentially, polling settle after grip changes and between multi-step commands."""
+    """Execute chunked detour jogs sequentially, polling settle on body axes after every jog before park."""
     last_ack = None
-    for idx, command in enumerate(commands):
+    for command in commands:
         ack = cell.act(command)
         last_ack = ack if isinstance(ack, dict) else {"ok": False}
         if last_ack.get("ok") is not True or any(last_ack.get(k) for k in _FAULT_KEYS):
             return False, "DETOUR_REFUSED", last_ack
-        is_grip = command.startswith("grip ")
-        if is_grip or (len(commands) > 1 and idx + 1 < len(commands)):
-            need_len = 6 if is_grip else 5
-            axes = slice(5, 6) if is_grip else slice(0, 5)
-            for _ in range(settle_polls):
-                st = cell.act("state")
-                last_ack = st if isinstance(st, dict) else {"ok": False}
-                if last_ack.get("ok") is not True or any(last_ack.get(k) for k in _FAULT_KEYS):
-                    return False, "DETOUR_REFUSED", last_ack
-                s_vals, t_vals = last_ack.get("state"), last_ack.get("target")
-                if (isinstance(s_vals, list) and len(s_vals) >= need_len
-                        and isinstance(t_vals, list) and len(t_vals) >= need_len
-                        and max(abs(float(t) - float(s)) for t, s in zip(t_vals[axes], s_vals[axes])) <= settle_tol):
-                    break
-                sleep(0.2)
-            else:
-                return False, "DETOUR_NOT_SETTLED", last_ack
+        for _ in range(settle_polls):
+            st = cell.act("state")
+            last_ack = st if isinstance(st, dict) else {"ok": False}
+            if last_ack.get("ok") is not True or any(last_ack.get(k) for k in _FAULT_KEYS):
+                return False, "DETOUR_REFUSED", last_ack
+            s_vals, t_vals = last_ack.get("state"), last_ack.get("target")
+            if (isinstance(s_vals, list) and len(s_vals) >= 5
+                    and isinstance(t_vals, list) and len(t_vals) >= 5
+                    and max(abs(float(t) - float(s)) for t, s in zip(t_vals[:5], s_vals[:5])) <= settle_tol):
+                break
+            sleep(0.2)
+        else:
+            return False, "DETOUR_NOT_SETTLED", last_ack
     return True, None, last_ack
 
 

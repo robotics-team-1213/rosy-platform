@@ -2,9 +2,7 @@
 """Guarded Torque-ON unlatch and slow recovery-park helpers for active `human-hold` sessions."""
 from __future__ import annotations
 
-import json
 import math
-from pathlib import Path
 import time
 from typing import Any
 
@@ -270,24 +268,6 @@ def queue_recovery_park(runner, words: list[str], *, checked: bool, empty_margin
     runner.queue, runner.chunk, runner.settle_since, runner.played = frames, verb, None, []
 
 
-def _resolve_grip_open(config: dict, closed: float) -> float | None:
-    """Return calibrated wide jaw opening (> closed + 1.0 and <= 65.0) from config/plan_path, else None."""
-    cand = (config.get("plan") or {}).get("grip_open") if isinstance(config, dict) else None
-    if cand is None and isinstance(config, dict) and config.get("plan_path"):
-        try:
-            plan_doc = json.loads(Path(str(config["plan_path"])).expanduser().read_text(encoding="utf-8"))
-            if isinstance(plan_doc, dict):
-                cand = plan_doc.get("grip_open")
-        except (OSError, ValueError, TypeError):
-            cand = None
-    if cand is None and isinstance(config, dict):
-        cand = (config.get("coarse") or {}).get("grip_open")
-    if isinstance(cand, bool) or not isinstance(cand, (int, float)) or not math.isfinite(float(cand)):
-        return None
-    val = float(cand)
-    return round(val, 2) if closed + 1.0 < val <= 65.0 else None
-
-
 def run_fold_session_cli(args, recover_fn, schema: str) -> int:
     """Execute `cell_auto_fold.py` CLI fold/unlatch inside an arm session with fail-safe hold cleanup."""
     import json
@@ -350,7 +330,6 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
                                           args.roi, prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
             return space.reserve(arm, lane, ttl_s=360.0)
 
-        grip_open = _resolve_grip_open(config, closed)
         result = recover_fn(
             cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
             release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n: choices.ranked(choice_key, n),
@@ -358,7 +337,6 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
             allow_live_unlatch=args.unlatch_hold, advisor=advisor, load_check=load_check,
             bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True,
             held_plan=lambda s: recovery_park_path(library, s, library["fps"]), library_sha256=digest(library),
-            grip_open=grip_open,
         )
     except Exception as exc:  # whatever broke, keep torque ON if moved/latched/unlatch-hold; else stop now when supervised
         err = f"ERROR: {type(exc).__name__}: {str(exc)[:160]}"

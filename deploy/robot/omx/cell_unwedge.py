@@ -271,8 +271,7 @@ def decide(last: str | None, blocked: str | None, lifted: float) -> str:
 
 def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
             clear_z_m: float | None = None, tcp_x_m: float | None = None) -> dict:
-    from cell_auto_fold_fallback import unwedge_pull_or_ascend
-    from cell_recovery_plan import fk_z
+    from cell_recovery_plan import fk_z, unwedge_pull_dips
 
     status = cell.act("state")
     if status.get("ok") is not True or lags(status) is None:
@@ -285,11 +284,15 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
     for step in range(round(MAX_STEPS * STEP / size)):
         lifted = lift_direction * (status["state"][1] - initial_lift)
         action = decide(last, blocked, lifted)
-        action, joint, index, delta, err_res = unwedge_pull_or_ascend(
-            status, action, home, size, clear_z_m, tcp_x_m, blocked, actions=ACTIONS, body=BODY,
-        )
-        if err_res is not None:
-            return {**err_res, **({"at": step} if err_res["result"] == "stuck" else {}), "rows": rows}
+        if clear_z_m is not None and action == "pull" and blocked != "lift" and unwedge_pull_dips(
+                status["state"], status["target"], home, size, clear_z_m, tcp_x_m):
+            action = "lift"
+        joint = ACTIONS[action]
+        index = BODY.index(joint)
+        remaining = home[index] - status["target"][index]  # jog changes the held target, not the measured pose
+        if remaining * (home[index] - status["state"][index]) <= 0:
+            return {"result": "stopped", "error": f"{joint} reached home before clearance", "rows": rows}
+        delta = max(-size, min(size, remaining))
         status = cell.act(f"jog {joint}.pos {delta}")
         if not status.get("ok"):
             return {"result": "stopped", "at": step, "error": status.get("error"), "rows": rows}
@@ -333,34 +336,31 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
 
 
 def release_and_rise(cell, *, sleep=time.sleep) -> dict:
-    """An arm stopped low with a box in its jaws: open back to about the opening it came down with, then rise straight up with
-    the jaws round the box. A pull here would drag the box, so a blocked rise stops and asks. The caller folds home; a park
-    closes the jaws first and refuses while the box is in them (2026-11-07, arm_b: this order, by hand, peak lag 0.77)."""
+    """Open jaws slightly and rise straight up; a blocked rise backs down to its starting support."""
     status = cell.act("state")
-    if not status.get("ok"):
-        return {"result": "stopped", "error": status.get("error")}
+    if status.get("ok") is not True or (init_lags := lags(status)) is None:
+        return {"result": "stopped", "error": status.get("error") or "body measurements unavailable"}
+    limits = [min(LAG_CEIL, max(LAG_STOP, b + DROOP_ROOM)) for b in init_lags]
+    size = SMALL_STEP if max(init_lags) > LAG_STOP else STEP
     target, want = status["target"][5], status["state"][5] + RELEASE_OPEN
     while want - target > 0.05:
         step = round(min(JAW_STEP, want - target), 2)
-        status = cell.act(f"jog gripper.pos {step}")
-        if not status.get("ok"):
+        if not (status := cell.act(f"jog gripper.pos {step}")).get("ok"):
             return {"result": "stopped", "at": "open", "error": status.get("error")}
         target += step
         sleep(SETTLE_S)
     status = cell.act("state")
     if not status.get("ok") or status["state"][5] < want - JAW_TOL:
         return {"result": "stuck", "at": "open", "jaws": status.get("state", [None] * 6)[5]}
-    for step in range(int(CLEAR / STEP)):
-        status = cell.act(f"jog shoulder_lift.pos {-STEP}")
-        if not status.get("ok"):
+    for step in range(round(CLEAR / size)):
+        if not (status := cell.act(f"jog shoulder_lift.pos {-size}")).get("ok"):
             return {"result": "stopped", "at": step, "error": status.get("error")}
         sleep(SETTLE_S)
-        status = cell.act("state")
-        if not status.get("ok"):
-            return {"result": "stopped", "at": step, "error": status.get("error")}
-        if max(lags(status)) > LAG_STOP:
-            cell.act(f"jog shoulder_lift.pos {STEP / 2}")  # stop pushing, then hold with torque on
-            return {"result": "stuck", "at": step, "lags": lags(status)}
+        if not (status := cell.act("state")).get("ok") or (lag := lags(status)) is None:
+            return {"result": "stopped", "at": step, "error": status.get("error") or "body measurements unavailable"}
+        if any(v > lim for v, lim in zip(lag, limits)):
+            back = [(cell.act(f"jog shoulder_lift.pos {size}"), sleep(SETTLE_S))[0] for _ in range(step + 1)]
+            return {"result": "stuck", "at": step, "lags": lag, "returned": all(b.get("ok") for b in back)}
     return {"result": "risen", "state": status["state"]}
 
 
