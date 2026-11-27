@@ -12,6 +12,7 @@ import { robotProfile, armEffectivePose, armPositionLine, armCameraChannels, mob
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { node } from "/common/control-dom.js";
 import { armIncidentAlertRows } from "/console/assets/arm-incident-clear.js";
+import { createArmCommandSection, createCellObjectStager, syncArmCameraOverlay } from "/console/assets/arm-cell-controls.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
@@ -20,7 +21,7 @@ import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { rosterPower } from "./roster-presentation.js";
 import { staleAgeS } from "./state-age.js";
 
-export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "", openQueueRow = null }) {
+export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, objectHighlight = null, onCellChanged = null, isOperator = () => false, namedReason = () => "", openQueueRow = null }) {
   const locPanel = createLocalizationPanel({ scope, view, auth, call, log, render, confirmedAction, isOperator, namedReason });
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
@@ -48,19 +49,12 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   const camStandby = node("span", "영상 대기", "omx-inspector-cam-standby");
   camStandby.setAttribute("role", "status");
   const camBadge = node("small", "영상 대기 · 클릭하여 연결", "omx-inspector-cam-badge");
+  const camStagingHost = document.createElement("div");
   camFrame.append(camImg, camStandby);
   const armStatusBox = document.createElement("div");
   const armHealthBox = document.createElement("section");
-  const armCommandsBox = document.createElement("div");
-  armCommandsBox.className = "ui-control-stack";
-  armCommandsBox.append(node("p", "로봇팔 작업 준비와 승인은 작업 화면(셀)에서 진행합니다.", "hint"));
-  const armObsLink = node("a", "팔 관측·사건 보기", "ui-action-link");
-  armObsLink.dataset.kind = "quiet";
-  armObsLink.href = "/console/cell#observation-heading";
-  const armWorkLink = node("a", "팔레트 적재 화면 열기", "ui-action-link");
-  armWorkLink.dataset.kind = "quiet";
-  armWorkLink.href = "/console/cell";
-  armCommandsBox.append(armObsLink, armWorkLink);
+  const armCommands = createArmCommandSection({ call, confirmedAction, isOperator, namedReason, log, onChanged: () => { onCellChanged?.(); render(); } });
+  const armStager = createCellObjectStager({ scope, call, auth, objectHighlight, confirmedAction, isOperator, namedReason, log, onChange: () => { if (openId) sync(); render(); }, onDispatched: () => onCellChanged?.() });
   const settingsBox = document.createElement("div");
 
   let latestRecords = [];
@@ -289,7 +283,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     </div>`, cameraToggleSlot);
   }
 
-  function syncCameraBox(children, visionSpec) {
+  function syncCameraBox(children, visionSpec, overlayCb = null) {
     if (visionSpec) children.push(camFrame, camBadge);
     const same = cameraBox.childElementCount === children.length
       && children.every((child, idx) => cameraBox.children[idx] === child);
@@ -303,6 +297,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       boundCamKey = visionSpec.key;
       camFeed.bind(camImg, visionSpec.view, camBadge, visionSpec.label);
     }
+    overlayCb?.();
     return cameraBox;
   }
 
@@ -409,11 +404,12 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
             lastCamToggleSig = toggleSig;
             renderCamTabs("팔 카메라 선택", channels, activeCh?.id || null, "arm");
           }
+          const camView = activeCh && (activeCh.roiTarget ? { roiTarget: activeCh.roiTarget } : { source: activeCh.source, id: activeCh.id, label: activeCh.label });
           return syncCameraBox([cameraToggleSlot], activeCh && {
             key: `${profile.id}:${activeCh.id}:${activeCh.roiTarget || activeCh.source}`,
-            view: activeCh.roiTarget ? { roiTarget: activeCh.roiTarget } : { source: activeCh.source },
+            view: camView,
             label: activeCh.label,
-          });
+          }, () => { if (camView && !camView.roiTarget) { cameraBox.append(camStagingHost); syncArmCameraOverlay(camFrame, camStagingHost, camView, view.sitePointsCameras, view.cellObjects, armStager); } });
         }
         const channels = mobileCameraChannels(profile.id);
         const frontActive = mobileCamChannel === "front" && frontCamera.robotId() === profile.id;
@@ -440,10 +436,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
           locPanel.sync(detail?.robot);
           return locPanel.element();
         }
-        armObsLink.href = detail?.obsArm?.sourceId
-          ? `/console/cell?focus=arm:${encodeURIComponent(detail.obsArm.sourceId)}#observation-heading`
-          : "/console/cell#observation-heading";
-        return armCommandsBox;
+        return armCommands.sync(profile.id, detail?.obsArm);
       },
       manual(profile) {
         if (profile.kind !== "mobile") return null;

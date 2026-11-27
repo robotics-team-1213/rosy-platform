@@ -585,7 +585,7 @@ def test_hold_point_backs_off_standing_peer_clearance_and_formation_gap(gap):
         h.runner._store.rules = NS(active_rules=lambda: NS(formation=NS(min_gap_m=gap)))
     h.table_row(occupied_ahead_m=1.0 - S_FROM, peers={"rosy_46": ["site", .90, 0.]})
     stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
-    keep = .18 + .03  # the console's clearance: site keep-out + NAV2_ROUTE_MIN_GAP_M
+    keep = .18  # the console's clearance: the one site keep-out (#1128)
     assert why == "hold_point" and .90 - stop > max(keep, (gap or .2) + .03)
     assert .90 - stop < max(keep, (gap or .2) + .03) + .02 + 1e-9  # the farthest such stop
 

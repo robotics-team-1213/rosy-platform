@@ -22,7 +22,7 @@ from cell_depth_lock import is_depth_lock_held  # noqa: E402
 from cell_failure_context import default_bundle_root  # noqa: E402
 from cell_job_guards import (  # noqa: E402
     IDEMPOTENCY_KEY_RE, ROLE_HUMAN, ROLE_MACHINE, IdempotencyStore, Principal,
-    authenticate_bearer, authorize_principal, check_arm_incident_hold, check_fleet_safety_online,
+    authenticate_bearer, authenticate_worker, authorize_principal, read_worker_token, check_arm_incident_hold, check_fleet_safety_online,
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
@@ -33,39 +33,14 @@ import cell_hold_retry, cell_incident_release  # noqa: E401,E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
+    session_lock_held as _session_lock_held, whole_cell_lock_held as _whole_cell_lock_held,
 )
 from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm, with_camera_heal  # noqa: E402,F401
-
-try:
-    import fcntl
-except ImportError:  # Windows unit tests
-    fcntl = None
+import cell_target_binding  # noqa: E402
 
 JOB_TTL_S, LIVE_MAX_AGE_S = 900.0, 15.0
 _REAL_POPEN = subprocess.Popen
 _check_arm_incident, _check_depth_lock_held = check_arm_incident_hold, is_depth_lock_held
-
-
-def _flock_held(lock_path: Path, mode: int) -> bool:
-    if fcntl is None or not lock_path.exists():
-        return False
-    with open(lock_path, "a+") as fh:
-        try:
-            fcntl.flock(fh.fileno(), mode | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-    return False
-
-
-def _session_lock_held(arm: str, lock_dir: Path | None = None) -> bool:
-    """True when another process holds ~/rosy-omx/session-<arm>.lock."""
-    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / f"session-{arm}.lock", fcntl.LOCK_EX)
-
-
-def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
-    """True when an exclusive whole-cell ~/rosy-omx/session.lock is held by another process."""
-    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
 
 
 _tools_tree = tools_tree_name
@@ -177,6 +152,8 @@ class Runner:
                     return {"code": 202, "id": existing_jid, "idempotent_replay": True}
                 if kind == "conflict":
                     return {"code": 409, "error_code": "IDEMPOTENCY_KEY_CONFLICT", "error": "Idempotency-Key conflict"}
+            if bind_err := cell_target_binding.check_admission(eff_params, self._state_gen.current()):
+                return bind_err
             fleet_online = False
             held_skip, release_enabled = set(), moving and not job.get("recovery_home") and self._incident_check_fn is None
             inc_check = lambda x: None if x in held_skip else self._check_incident(x)  # noqa: E731
@@ -301,7 +278,7 @@ class Runner:
 
 def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = "http://127.0.0.1:8767",
                 *, machine_token: str | None = None, human_principal_id: str = ROLE_HUMAN,
-                machine_principal_id: str = ROLE_MACHINE):
+                machine_principal_id: str = ROLE_MACHINE, worker_token: str | None = None):
     if machine_token is not None and hmac.compare_digest(token.encode("utf-8"), machine_token.encode("utf-8")):
         raise ValueError("human and machine tokens must differ")
 
@@ -328,7 +305,7 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
                 machine_token=machine_token,
                 human_id=human_principal_id,
                 machine_id=machine_principal_id,
-            )
+            ) or authenticate_worker(self.headers.get("Authorization", ""), worker_token)
             if principal is None:
                 self._send(401, {"error": "unauthorized"})
             return principal
@@ -343,7 +320,7 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
                 return self._send(code, body, ctype, extra_headers=hdrs)
             if routed := handle_get_route(
                 self.path, runner,
-                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held,
+                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held, viewer_url=viewer,
             ):
                 code, body, ctype, hdrs = routed
                 return self._send(code, body, ctype, extra_headers=hdrs)
@@ -389,7 +366,7 @@ def main():
     machine_token = read_token(a.machine_token_file) if a.machine_token_file else None
     cell_incident_release.use_record_dir(a.workdir)
     runner = Runner(a.workdir.expanduser(), fleet_r_url=a.fleet_r_url, fleet_token_file=a.fleet_token_file, ca_file=a.ca_file)
-    server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token)
+    server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token, worker_token=read_worker_token(human_token, machine_token))
     cell_hold_retry.start(runner, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)  # D-1079: no hold waits for a person
     print(f"cell job API on {a.bind}:{a.port}", flush=True)
     server.serve_forever()

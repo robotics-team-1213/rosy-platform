@@ -22,6 +22,7 @@ import cell_site_target
 from cell_route_check import pick_site
 from cell_task_act import plan_act_policy_task
 from cell_task_act_run import execute_act_policy_task
+from cell_task_motion import free_pick_request, run_job
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 _DEFAULT_URLOPEN = urlopen
@@ -37,6 +38,7 @@ def make_ca_urlopen(ca_file: str | Path | None = None):
         kwargs.pop("context", None)
         return urlopen(req, context=ctx, **kwargs)
 
+    _open.raw_urlopen = lambda req, **kw: urlopen(req, **kw)
     return _open
 
 
@@ -212,6 +214,10 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     if hold.get("held"):
         return {"arm": arm_id, "error": f"ARM_INCIDENT_HELD:{hold.get('reason')}",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
+    motion = handoff.get("motion")
+    if motion is not None and not (isinstance(motion, dict) and motion.get("kind") == "free_pick" and handoff.get("cell_id") == "cell_ab"):
+        return {"arm": arm_id, "error": "CELL_MOTION_NOT_EXECUTABLE",  # a push is propose-only: its completion check and approval rule are not decided
+                "stop_event": {"command": "stop", "ok": False, "folded": False}}
     wrapper, cfg, cat, default_roi, default_src = _arm_run_spec(arm_id, prep_dir)
     if handoff.get("execution_mode") == "act_policy":
         if handoff.get("displaced_to") not in (None, ""):
@@ -282,13 +288,21 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
+    import cell_target_binding
+    cmd += cell_target_binding.handoff_cli_args(handoff)
     hint = (handoff.get("tier_hint") or {}).get("layers_below")
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                              env={**os.environ, "TOOLS_ROOT": str(tools_root()),
-                                   "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
+        if motion is not None:  # free-position pick: the cell job API decides and moves, not a subprocess of ours
+            proc, refusal = run_job(handoff, *free_pick_request(motion, arm_id=arm_id, config=cfg.name, catalog=cat_path.name, roi=roi, src=src, dst=dst))
+            if refusal:
+                return {"arm": arm_id, "error": refusal, "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},
+                        "stop_event": {"command": "stop", "ok": False, "folded": False}}
+        else:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                                  env={**os.environ, "TOOLS_ROOT": str(tools_root()),
+                                       "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
     except subprocess.TimeoutExpired:
         return {"arm": arm_id, "error": "SUBPROCESS_TIMEOUT",
                 "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},
@@ -311,6 +325,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
     if placed:
         write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone, cat_path=cat_path)
+        from cell_objects_sync import bump_state_gen_after_pick
+        bump_state_gen_after_pick(prep_dir, arm_id=arm_id, placed=True, task_id=str(handoff.get("task_id") or ""))
     zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     if dst_res and not dst_res["is_legacy_pallet"]:

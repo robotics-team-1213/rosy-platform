@@ -51,7 +51,7 @@ def test_an_untrusted_robot_blocks_routes_within_the_keep_out_of_its_last_truste
     route = [(0.0, 0.0), (2.0, 0.0)]                  # one long segment: distance is to the segment
     assert trust.blocks(route, (1.0, 0.19)) is True
     assert trust.blocks(route, (1.0, 0.21)) is False
-    assert trust.UNTRUSTED_KEEP_OUT_M == 0.20
+    assert trust.UNTRUSTED_KEEP_OUT_M == 0.20   # heading unknown: the circumscribed body counts, not the aligned 0.18
 
 
 def test_an_unknown_route_is_not_blocked_by_a_located_obstacle():

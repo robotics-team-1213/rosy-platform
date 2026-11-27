@@ -1994,6 +1994,22 @@
       ],
       "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
     },
+    "GET:/api/fleet/pipeline/cell-objects": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_cell_objects.py",
+        "test_cell_objects_ingest_query_auth_and_d136_guards"
+      ],
+      "source_revision": "53aafba752c160558f3ee88793514f266b69f91f"
+    },
+    "POST:/api/fleet/pipeline/cell-objects": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_cell_objects.py",
+        "test_cell_objects_ingest_query_auth_and_d136_guards"
+      ],
+      "source_revision": "53aafba752c160558f3ee88793514f266b69f91f"
+    },
     "POST:/api/fleet/pipeline/cell-tasks": {
       "status": 200,
       "test": [

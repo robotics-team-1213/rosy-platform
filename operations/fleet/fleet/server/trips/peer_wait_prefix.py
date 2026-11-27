@@ -159,7 +159,7 @@ def check_wait_prefix(console, robot_id, points, site_route_of):
             or len(route[1]) != len(expected)
             or any(math.dist(pt, xy) > NAV2_ROUTE_MIN_GAP_M for pt, xy in zip(route[1], expected))):
         return False
-    clearance = getattr(console, "_site_keep_out_m", 0.18) + NAV2_ROUTE_MIN_GAP_M
+    clearance = getattr(console, "_site_keep_out_m", DEFAULT_SITE_KEEP_OUT_M)  # the one keep-out, no extra 0.03
     markers = getattr(console, "_site_marker_clearance", None)
     for rid in peers:
         for corridor in (route, (map_id, centerline)):
@@ -276,10 +276,8 @@ def hold_point(runner, live, active, index, s, seg=None):
     The stop's turn footprint stays inside the table's authority, the held span and that segment (no junction pivot),
     keeps ``_hold_margin`` before the cut, and steps back ``STEP_M`` while, anywhere within Nav2's goal tolerance, it
     touches a zone unit, a crosswalk or a curve tighter than the sampler's curve radius, or while it or the centreline
-    to it is within the console's clearance (keep-out + ``NAV2_ROUTE_MIN_GAP_M``) of a standing peer the table read,
+    to it is within the console's clearance (the one site keep-out) of a standing peer the table read,
     or closer than the road-speed gap to one (``check_wait_prefix`` still checks every peer at the wire)."""
-    from fleet.server.nav2_route_sampling import NAV2_ROUTE_MIN_GAP_M
-
     seg = index if seg is None else seg
     row = table_answer(runner, live)
     body = nominal_body_for((live.view.get("caps") or {}).get("kind"))
@@ -296,7 +294,7 @@ def hold_point(runner, live, active, index, s, seg=None):
     here = base + live.progress(index, s)
     stop = min(end - clear, cut - _hold_margin(runner, body), segment["s_to"] - clear + to_arc) - to_arc
     # shortcut: the default site keep-out; a site that raises it is still vetoed at the wire, then waits
-    keep = getattr(runner, "site_keep_out_m", DEFAULT_SITE_KEEP_OUT_M) + NAV2_ROUTE_MIN_GAP_M
+    keep = getattr(runner, "site_keep_out_m", DEFAULT_SITE_KEEP_OUT_M)  # the console's one keep-out (#1128)
     peers = [(p[1], p[2]) for p in (row.get("peers") or {}).values() if p and p[0] == active[1].map_id]
     gap = _min_gap(runner) + tol
     while stop >= segment["s_from"] and to_arc + stop - here > runner.config.arrive_free_m:

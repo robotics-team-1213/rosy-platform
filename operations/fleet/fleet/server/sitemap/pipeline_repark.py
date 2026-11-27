@@ -58,6 +58,9 @@ def on_abort(state, task: dict, stage_result: dict, now: float, rules=None) -> d
     requests = getattr(state, "repark_requests", None)
     if requests is None:
         requests = state.repark_requests = {}
+    if task.get("motion"):  # a free position is stale after a failure: never rebuilt as a fixed-site carry
+        _event(state, {"task_id": task["task_id"], "robot_id": task.get("robot_id"), "arm_id": task.get("arm_id")}, "held", "MOTION_NOT_REPARKED", now)
+        return None
     root = task.get(ROOT_KEY) or task["task_id"]
     done = getattr(state, "repark_done", None)
     if done is None:
@@ -123,6 +126,8 @@ def close(state, request_id: str, body: dict, enqueue, now: float) -> dict:
     new = body.get("state")
     if new not in ("DONE", "FAILED"):
         raise ValueError("state must be DONE or FAILED")
+    if (state.omx_cell_tasks.get(request["task_id"]) or {}).get("motion"):
+        raise ValueError("MOTION_NOT_REPARKED")  # never a fixed-site carry of the anchor, whatever a request says
     request.update(state=new, closed_at=now, moved_robot_dxdy_m=body.get("moved_robot_dxdy_m"))
     if new == "FAILED":
         _event(state, request, "failed", str(body.get("reason") or body.get("why") or "REPARK_FAILED"), now)

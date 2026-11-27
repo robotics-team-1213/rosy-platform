@@ -66,6 +66,10 @@
       "path": "assistant/assistant-command.js",
       "media_type": "application/javascript"
     },
+    "assistant-pick-place.js": {
+      "path": "cell/assistant-pick-place.js",
+      "media_type": "application/javascript"
+    },
     "assistant.css": {
       "path": "assistant/panel.css",
       "media_type": "text/css"
@@ -130,6 +134,10 @@
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "arm-cell-controls.js": {
+      "path": "cell/arm-cell-controls.js",
+      "media_type": "application/javascript"
+    },
     "cell-obs-model.js": {
       "path": "shared/cell-obs-model.js",
       "media_type": "application/javascript"
@@ -156,6 +164,14 @@
     },
     "cell-cam-roi.js": {
       "path": "cell/cell-cam-roi.js",
+      "media_type": "application/javascript"
+    },
+    "cell-cam-objects.js": {
+      "path": "cell/cell-cam-objects.js",
+      "media_type": "application/javascript"
+    },
+    "cell-pick-place-staging.js": {
+      "path": "cell/cell-pick-place-staging.js",
       "media_type": "application/javascript"
     },
     "cell-cam-roi.css": {

@@ -162,6 +162,22 @@ def stop_ends_trip_lease(svc: CoreServicesLike, auth: AuthContext, halt: bool = 
         trip.end("mode_left", by=lease_actor(auth), halt=halt)
 
 
+def idle_after_cancel(svc: CoreServicesLike) -> None:
+    """A cancel that leaves no goal, no line-follow and no trip lease must not leave the robot in NAVIGATION.
+
+    NAVIGATION without an owner blocks peers' handoff checks and the updater; Fleet's next goal re-enters it.
+    """
+    trip = getattr(svc, "trip_lease", None)
+    if (svc.modes.mode is Mode.NAVIGATION and not svc.line_follow.active
+            and svc.nav.nav_state.value not in ("PLANNING", "NAVIGATING")
+            and (trip is None or trip.current() is None)):
+        ok, _ = svc.modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)
+        if ok:
+            svc.command.clear_navigation()
+            svc.state.set_mode(RobotMode.IDLE)
+            svc.events.publish("mode.changed", source="api", data={"from": "api", "to": Mode.IDLE.value, "by": "navigation_cancel"})
+
+
 def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None:
     """`POST /mode` semantics, shared with the D-407 MANUAL / ABORT stuck answers."""
     if new_mode is Mode.NAVIGATION:

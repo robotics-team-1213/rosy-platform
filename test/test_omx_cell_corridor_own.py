@@ -180,3 +180,65 @@ def test_fold_lane_outside_the_roi_is_unseen_not_clear(tmp_path):
     one = {**_config(None), "sites": {"belt": _config(None)["sites"]["belt"]}}
     fallback = crp.build_multi_site_look(_Cell(img), one, {}, "belt", belt_only, None, _to_px, TCP_X, own_state=lambda: START)
     assert fallback(frames)["off_surface"] > 0
+
+
+def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_travel_floor(monkeypatch, tmp_path):
+    """2026-11-27 runs 7-9: cargo on the ship lies under every fold path, and a two-tier stack matched the catalogue as
+    one container, so the match alone cannot tell how tall it stands."""
+    import cell_free_source as fs
+    import cell_objects
+
+    img = _furniture()
+    hull = [[300, 280], [340, 280], [340, 320], [300, 320]]  # on the pallet
+    found = [{"matched": True, "hull_px": hull}]
+    heights = np.zeros(SHAPE, np.float32)
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (np.zeros((n, 1)), {}))
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (heights, [[1, 0, 0], [0, 1, 0]], [], 600.0))
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(cell_pivot, "map_record", lambda _calibration, _name: {})
+    monkeypatch.setattr(cell_objects, "detect", lambda _i, _r, _m, _c, _k, _z, _p, poly, _lab: found if poly == PALLET else [])
+    config = {**_config(None), "catalog_path": str(tmp_path / "catalog.json")}
+
+    def cargo(cfg=config):
+        return own.low_cargo(cfg, {}, img, ROI, SHAPE)
+
+    heights[280:321, 300:341] = 64.0  # two tiers: under the floor (100 mm) by more than the margin
+    assert cargo()[300, 320] == 1 and 0 < cargo().sum() < 2500
+    heights[280:321, 300:341] = 99.0  # three tiers
+    assert not cargo().any()
+    heights[280:321, 300:341] = 64.0
+    found[0]["matched"] = False
+    assert not cargo().any()
+    found[0]["matched"] = True
+    assert cargo(_config(None)) is None  # no catalogue named: the fold excuses no object
+    heights[290:302, 310:322] = 120.0  # a hand over part of the outline
+    assert not cargo().any()
+    heights[:] = 0.0
+    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high: no bare surface to measure from
+    assert not cargo().any()
+    heights[:] = 0.0
+    heights[280:321, 300:341] = 64.0
+    assert cargo().any()
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: (_ for _ in ()).throw(OSError("no catalogue")))
+    assert cargo() is None
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (None, None, ["missing_depth"], None))
+    assert cargo() is None
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (None, "depth-d435.lock busy"))
+    assert cargo() is None
+
+    # the fold's look lets what low_cargo names pass under high travel, and nothing else
+    reference = tmp_path / "reference-top.png"
+    cv2.imwrite(str(reference), _furniture())
+    across = crp.interpolate_pose(LIFT, HOME, max_step=2.0)
+    low, high = cc.runs([cell_pivot.joints_tcp(f, tcp_x_m=TCP_X)[:3] for f in across])
+    lane = cc.corridor(high, _to_px, SHAPE, ROI) > 0
+    links = own.own_mask(_config(None), "belt", _to_px, (START,), SHAPE, ROI, TCP_X) > 0
+    depth = cv2.distanceTransform((lane & ~links).astype(np.uint8), cv2.DIST_L2, 3)
+    row, col = np.unravel_index(int(depth.argmax()), depth.shape)
+    assert not low and depth[row, col] >= 7, "the fixture needs a high lane beside the arm"
+    img[row - 6:row + 7, col - 6:col + 7] = (125, 125, 125)
+    monkeypatch.setattr(own, "low_cargo", lambda *_a, **_k: None)
+    assert _look(img, reference)(across)["high"]
+    monkeypatch.setattr(own, "low_cargo", lambda *_a, **_k: np.ones(SHAPE, np.uint8))
+    assert _look(img, reference)(across)["clear"] is True

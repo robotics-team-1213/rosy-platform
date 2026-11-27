@@ -368,6 +368,11 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                 request_current_homes(base, token, ctx, urlopen_fn, bound_arms, arm_holds, pending_home)
             except (OSError, ValueError, KeyError) as exc:
                 qout["bound_home_request_error"] = type(exc).__name__
+        try:
+            from cell_objects_sync import sync_cell_objects
+            qout["cell_objects_sync"] = sync_cell_objects(base, token, ctx, urlopen_fn, prep_dir=prep_dir)
+        except Exception as exc:
+            qout["cell_objects_sync_error"] = type(exc).__name__
         return qout
     except Exception:
         try:

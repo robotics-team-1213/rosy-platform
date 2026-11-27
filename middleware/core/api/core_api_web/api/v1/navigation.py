@@ -18,6 +18,7 @@ from core_api_web.api.v1.common import (
     require_manual_released,
     require_kept,
     localized_start,
+    idle_after_cancel,
     stop_ends_trip_lease,
     viewer,
 )
@@ -373,6 +374,7 @@ def navigation_cancel(auth: AuthContext = Depends(operator),
     receipt = []
     svc.nav.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
     stop_ends_trip_lease(svc, auth)
+    idle_after_cancel(svc)
     result = {"navigation": svc.nav.nav_state.value,
               "operation": receipt[0].model_dump(mode="json") if receipt else None}
     if not receipt and result["navigation"] == "IDLE":

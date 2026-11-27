@@ -384,6 +384,7 @@ def test_check_arm_incident_hold_supports_standalone_cell_api_layout(tmp_path):
         "cell_decisions.py",
         "cell_job_guards.py",
         "cell_job_peer_health.py",
+        "cell_job_worker.py",  # cell_job_guards imports it
         "cell_params.py",
         "joint_push.py",
         "joint_tune_lock.py",
