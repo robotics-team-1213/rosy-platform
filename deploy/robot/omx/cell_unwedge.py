@@ -361,9 +361,9 @@ def release_and_rise(cell, *, sleep=time.sleep) -> dict:
         status = cell.act("state")
         if not status.get("ok"):
             return {"result": "stopped", "at": step, "error": status.get("error")}
-        if max(lags(status)) > LAG_STOP:
-            cell.act(f"jog shoulder_lift.pos {STEP / 2}")  # stop pushing, then hold with torque on
-            return {"result": "stuck", "at": step, "lags": lags(status)}
+        if max(lags(status)) > LAG_STOP:  # back down the way it rose, onto the support it started on (2026-11-27 arm_a ID12 overload)
+            back = [(cell.act(f"jog shoulder_lift.pos {STEP}"), sleep(SETTLE_S))[0] for _ in range(step + 1)]  # one settle per jog
+            return {"result": "stuck", "at": step, "lags": lags(status), "returned": all(b.get("ok") for b in back)}
     return {"result": "risen", "state": status["state"]}
 
 

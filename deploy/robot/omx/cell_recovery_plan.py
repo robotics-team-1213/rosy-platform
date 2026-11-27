@@ -265,6 +265,9 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
         segs = [moved] if abs(d) <= STEP_MAX else interpolate_pose(cur, moved, max_step=STEP_MAX)
         raw.append((f"pan{d:+g}", chunk_jog_commands("shoulder_pan.pos", d), [list(cur), *segs, *plan(moved)]))
 
+    if abs(d_in := max(-20.0, min(20.0, float(home[2]) - cur[2]))) > 10.0:  # forearm in first: a shorter lever on shoulder_lift (D-1079)
+        e_pose = [cur[0], cur[1], cur[2] + d_in, *cur[3:]]
+        raw.insert(1, ("elbow_in_then_park", chunk_jog_commands("elbow_flex.pos", d_in), [list(cur), *interpolate_pose(cur, e_pose, max_step=STEP_MAX), *plan(e_pose)]))
     if abs(float(home[4]) - cur[4]) > 10.0 or cur[2] >= -35.0:
         elbow_pose = [cur[0], cur[1], cur[2] - 10.0, *cur[3:]]
         cmds = chunk_jog_commands("elbow_flex.pos", -10.0)
@@ -283,7 +286,7 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
 def extended_candidate_names() -> list[str]:
     """Return every tier-1 candidate name that `build_candidates(..., extended=True)` may produce."""
     return ["park", "lift_then_park", "lift_pan+10", "lift_pan-10",
-            "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15", "elbow_clear_then_park"]
+            "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15", "elbow_clear_then_park", "elbow_in_then_park"]
 
 
 def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 15,
@@ -312,7 +315,9 @@ def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settl
 
 
 def make_load_checker(config: dict, library: dict, params: dict | None = None):
-    """Build an optional `load_predict.check_chunk` gate for fold candidates, or None."""
+    """The optional `load_predict.check_chunk` gate, or None; a recovery no person started (D-1079) refuses unknown/unchecked load."""
+    refuse = not __import__("os").environ.get("ROSY_JOB_PRINCIPAL", "").startswith("human:")
+    _UNCHECKED = lambda frames: {"ok": False, "verdict": "unknown", "report": {"why": "no load model: an automatic recovery refuses it"}}  # noqa: E731
     lm_path = config.get("load_model_path")
     port = config.get("port") or (config.get("follower") or {}).get("port") or (config.get("robot") or {}).get("port")
     if not port and config.get("record_config_path"):
@@ -322,17 +327,17 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         except (OSError, ValueError):
             port = None
     if not lm_path or not port:
-        return None
+        return _UNCHECKED if refuse else None
     import cell_params as prm
     import load_predict
 
     model = load_predict.load(Path(str(lm_path)).expanduser())
     arm = model["arms"].get(load_predict.arm_for(model, port))
     if arm is None:
-        return None
+        return _UNCHECKED if refuse else None
     fps = int(library.get("fps", 30))
     caps = config.get("caps")
-    refuse_unknown = bool(prm.get(params, "loadcheck.refuse_unknown"))
+    refuse_unknown = refuse or bool(prm.get(params, "loadcheck.refuse_unknown"))
 
     def check_frames(frames) -> dict:
         rep = load_predict.check_chunk(arm, frames, fps, params, caps)
@@ -340,6 +345,7 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         ok = verdict != "risky" and not (verdict == "unknown" and refuse_unknown)
         return {"ok": ok, "verdict": verdict, "report": rep}
 
+    check_frames.arm = arm  # the fold's start record reads the same model (gravity_pwm_expected)
     return check_frames
 
 

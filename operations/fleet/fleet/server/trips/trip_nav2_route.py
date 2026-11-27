@@ -19,6 +19,7 @@ from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, rese
 from fleet.server.peer_wait_prefix import held_at_m as _held_at_m, table_answer as _table_answer, traffic_end_index as _traffic_end_index
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
+from fleet.server.trip_lane_realign import observe as observe_lane_departure
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
 from fleet.server.transient_loc_hold import (hold_transient_localization, loc_diag_from_state,
@@ -285,6 +286,8 @@ async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, po
 def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | None,
                     target_end: int | None = None, pose=None) -> str:
     """Return ``'busy'``, ``'aborted'``, or ``'ready'`` for sending the next route."""
+    if nav == "CANCELED" and (live.active_route or {}).get("superseded"):
+        return "ready"  # our own cancel of a replaced route (its ack lost): resend, never an abort
     if nav in _NAV_ABORTED:
         return "aborted"
     if nav in _NAV_RUNNING:
@@ -361,6 +364,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 return
         if nav is not None and live.active_route is not None:
             live.active_route["nav_state"] = nav
+        if live.active_route is not None and await observe_lane_departure(runner, live, index, pose, state, nav):
+            live.active_route = {**live.active_route, "superseded": True}  # D-1080: cancel, ack, resend from here
         verdict = _route_finished(runner, live, index, s, nav, target_end=target_end, pose=pose)
         if verdict == "aborted":
             if nav == "FAILED" and await _start_camera_finish(runner, live, index, s, active):
