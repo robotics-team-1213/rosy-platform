@@ -873,13 +873,12 @@ def test_rest_tolerance_is_inclusive_at_eight_units(tmp_path, monkeypatch):
 
 
 def test_a_multi_frame_home_chunk_uses_its_first_frame_for_the_lookup_and_the_rested_fact(tmp_path, monkeypatch):
-    """handle() takes home = chunks.home[0]; rested_folded is measured against that same frame (facts["home"])."""
+    """handle() takes home = chunks.home[0] (the FIRST frame); rested_folded measures REST_TOL against that same frame
+    (facts["home"]). The readiness rule behind it (cell_job_peer_health) reads the LAST frame, so both must agree."""
     monkeypatch.chdir(tmp_path)
-    second = list(S_HOME); second[2] += 20.0
+    second = list(S_HOME); second[2] += 12.0  # last frame: inside the readiness fold range, outside REST_TOL of frame 0
     lib = {"chunks": {"home": [S_HOME, second]}}
-    out = _run(tmp_path, "first", REST, lib, home=None)  # rests on frame 0 only
-    assert out == {"incident": False}
-    near_second = list(second); near_second[2] += 4.3
-    out = _run(tmp_path, "second", near_second, lib, home=None)  # rests on frame 1 only
+    assert _run(tmp_path, "first", REST, lib, home=None) == {"incident": False}  # near frame 0
+    out = _run(tmp_path, "second", second, lib, home=None)  # at the last frame only
     assert out["facts"]["home"] == S_HOME and out["facts"]["rested_folded"] is False
     assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
