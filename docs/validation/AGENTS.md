@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Frozen evidence records: what was run, on which commit and artifact, and what was observed (simulation, artifact comparison, UI surface, device commissioning). A passing record here is evidence for its stated scope only; it is not device, ARM64 image, or field acceptance unless it says so.
+Frozen evidence records: what was run, on which commit and artifact, and what was observed (simulation, artifact comparison, UI surface, device commissioning). A passing record here is evidence for its stated scope only; it is not device, ARM64 image, or field acceptance unless it says so. Since D-1090 new dated evidence goes to `$ROSY_SCRATCH` and the PR body; add a record here only when a README or STATUS links it, and update an existing one first. The area has no file-count headroom (`test/architecture/test_file_count_budget.py`).
 
 ## Key Files
 
@@ -38,7 +38,7 @@ Current entries by theme (dated folders carry no AGENTS.md of their own):
 
 ### Working In This Directory
 
-- Records are frozen. Do not rewrite results; add a new dated entry for a re-run and link back.
+- Records are frozen. Do not rewrite results; append a dated re-run section to the existing record instead of a new entry (D-1090).
 - New entries use the date of the run in the name. Dated evidence must not live inside module folders under `src/`; it moves here (D-226).
 - Shell scripts belong only under an `evidence/` path inside an entry.
 - Raw captures, bags, and videos are gitignored (large, may be private). Record their location and hash in `result.md` instead of committing them.
