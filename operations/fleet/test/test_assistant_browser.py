@@ -432,7 +432,7 @@ def test_arm_cell_live_stage_camera_objects_and_drawer_commands(site):
 
             page.locator('button[data-arm-id="arm_s"]').click()
             expect(page.locator('#assistant-robot')).to_have_value('')
-            page.get_by_role('tab', name='명령').click()
+            page.locator('[data-jump-section="commands"]').click()
             shuttle = page.locator('[data-arm-preset="s3_shuttle"]')
             expect(shuttle).to_be_visible()
             shuttle.click()
