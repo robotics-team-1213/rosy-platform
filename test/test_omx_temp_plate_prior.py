@@ -146,7 +146,7 @@ def test_an_unmeasured_registered_slot_is_site_not_measured():
 def test_tiers_read_from_depth_where_each_count_would_show():
     import cell_depth  # noqa: F401  (read_tops uses its height_at)
 
-    heights = np.full((1000, 1000), 15.5)  # the arm plate 15.5 mm over the table: arm z 0
+    heights = np.full((1000, 1000), 15.5)  # the pocket floor 15.5 mm over the table (deck_floor)
     to_depth = np.float32([[1, 0, 0], [0, 1, 0]])
     for s, top in zip(SLOTS, (97.2, 2 * 32.4 + 10.0, 0.0)):
         c = px(s["xy"], 0)

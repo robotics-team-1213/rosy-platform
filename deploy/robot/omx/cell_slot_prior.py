@@ -11,7 +11,11 @@ clearance. The prior only explains what was measured, it never replaces a measur
   ({residual_mm, residual_deg} of the plate's reference marks F1-F4) are measured each time the plate is set down;
   no fit, or a residual over 3 mm / 1 deg, turns the prior off and the site behaves as without slots.
 - Each slot's tier count comes from depth (`n = round(top / tier_step)`, within cell_depth_slots.TOL_MM), never from
-  the prior. Unknown tiers: the slot's own blobs take the free path; as a neighbour it counts as 3 tiers.
+  the prior. The height reference is the plate's own flat top beside the pockets (cell_temp_plate.deck_points, CAD
+  13.6 mm over the table, pocket floor 5.6 mm under it), read on the median of DEPTH_CAPTURES depth captures; the arm
+  base ring (cell_depth.plate_top) swung 13.9-18.2 mm on arm_b and read nothing on arm_a (2026-11-27 18:10). No deck
+  reading means every tier is unknown. Unknown tiers: the slot's own blobs take the free path; as a neighbour it counts
+  as 3 tiers.
 - A slot's blobs are measured again inside the slot's own image outline at the top tier's height. Exactly one
   catalogue match within 8 mm / 5 deg of the slot and 4 mm across it is snapped onto the pocket axis; anything else
   in the slot takes the free path (and is refused there when it fails).
@@ -29,6 +33,7 @@ import numpy as np
 
 import cell_depth_slots
 import cell_site_target
+import cell_temp_plate
 
 FIT_MM, FIT_DEG = 3.0, 1.0  # plate reference-mark residual over which the prior is off
 SNAP_MM, SNAP_DEG, ACROSS_MM = 8.0, 5.0, 4.0  # object to slot: centre distance, axis angle, offset across the axis
@@ -36,6 +41,8 @@ TIER_TOL_MM = cell_depth_slots.TOL_MM  # tier identification band (7 mm)
 MAX_TIERS = 3
 SIDE_HOLD_MM = 16.0  # half a tier: depth and side cameras further apart hold the slot
 OUTLINE_PAD_MM = 3.0  # a pocket outline is padded by this much for the side faces' edge pixels
+DEPTH_CAPTURES = 3  # separate depth captures (each already a per-pixel median burst) whose height maps are medianed
+DECK_BAND_MM = 4.0  # a deck sample counts within this of the CAD plate top over the table (the pocket floor reads 5.6 lower)
 
 
 def active(site_cfg: dict) -> tuple[list | None, str]:
@@ -103,10 +110,27 @@ def snap(o: dict, slot: dict, pocket_len_mm: float, length_mm: float) -> dict | 
                           "across_mm": round(float(d @ v), 1), "turn_deg": round(float(turn), 1)}}
 
 
-def read_tops(heights, to_depth, plate_mm: float, slots: list, surface_z: float, step_m: float, pixel_fn) -> dict:
-    """{slot: stack top in mm above the plate surface} from a depth height map (mm above the table): each tier count is
-    tried where its top would show, and kept only when depth reads that same count there. `plate_mm` is the arm's
-    own plate above the table (arm z 0, cell_depth.plate_top)."""
+def deck_floor(heights, to_depth, slots: list, surface_z: float, pixel_fn) -> float | None:
+    """The pocket floor (mm above the table) from the plate's arm-side flat top, or None: more than a third of the samples
+    off DECK_BAND_MM of the CAD top (stacks, the table, a pocket, a hand-fitted slot pose that misses the strip)."""
+    import cell_depth
+
+    z_top = surface_z + (cell_temp_plate.TOP_MM - cell_temp_plate.FLOOR_MM) / 1000
+    points = cell_temp_plate.deck_points(slots)
+    pixels = [pixel_fn(p, z_top) for p in points]
+    if not points or any(p is None for p in pixels):
+        return None
+    vals = [cell_depth.height_at(heights, to_depth, p, 1) for p in pixels]
+    on = [v for v in vals if math.isfinite(v) and abs(v - cell_temp_plate.TOP_MM) <= DECK_BAND_MM]
+    if 3 * len(on) < 2 * len(vals):
+        return None
+    return float(np.median(on)) - (cell_temp_plate.TOP_MM - cell_temp_plate.FLOOR_MM)
+
+
+def read_tops(heights, to_depth, floor_mm: float, slots: list, surface_z: float, step_m: float, pixel_fn) -> dict:
+    """{slot: stack top in mm above the pocket floor} from a depth height map (mm above the table): each tier count is
+    tried where its top would show, and kept only when depth reads that same count there. `floor_mm` is the pocket
+    floor above the table (deck_floor)."""
     import cell_depth
 
     tops = {}
@@ -115,7 +139,7 @@ def read_tops(heights, to_depth, plate_mm: float, slots: list, surface_z: float,
             px = pixel_fn(tuple(s["xy"]), surface_z + n * step_m)
             if px is None:
                 break
-            top = cell_depth.height_at(heights, to_depth, px) - plate_mm - 1000 * surface_z
+            top = cell_depth.height_at(heights, to_depth, px) - floor_mm
             if tier_of(top, 1000 * step_m) == n:
                 tops[s["name"]] = round(top, 1)
                 break
@@ -123,21 +147,31 @@ def read_tops(heights, to_depth, plate_mm: float, slots: list, surface_z: float,
 
 
 def depth_tops(config: dict, slots: list, surface_z: float, step_m: float, pixel_fn, colour) -> dict:
-    """read_tops on a fresh top depth frame; {} (every tier unknown) when depth, its alignment or the arm plate is missing."""
+    """read_tops on the per-pixel median of DEPTH_CAPTURES fresh top depth captures; {} (every tier unknown) when fewer
+    than most captures arrive, or the alignment or the plate deck is missing."""
     import time
+    import warnings
 
     import cell_depth
     import cell_zone_verification as zones
 
     try:
-        depth, _, error = zones._depth_after(config, time.time())
-        if error or depth is None:
+        maps = []
+        for _ in range(DEPTH_CAPTURES):
+            depth, _, error = zones._depth_after(config, time.time())
+            if not error and depth is not None:
+                raw = depth.astype(np.uint16)
+                maps.append((depth, cell_depth.height_map(raw, cell_depth.table_plane(raw))))
+        if 2 * len(maps) <= DEPTH_CAPTURES:
             return {}
-        raw = depth.astype(np.uint16)
-        heights = cell_depth.height_map(raw, cell_depth.table_plane(raw))
-        to_depth, _ = cell_depth_slots.frame_alignment(depth, colour)
-        plate = cell_depth.plate_top(heights, to_depth, pixel_fn((0.0, 0.0), 0.0))
-        return {} if plate is None else read_tops(heights, to_depth, plate, slots, surface_z, step_m, pixel_fn)
+        stack = np.stack([h for _, h in maps])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # a pixel no capture saw stays NaN
+            heights = np.nanmedian(stack, axis=0)
+        heights[2 * np.isfinite(stack).sum(axis=0) <= DEPTH_CAPTURES] = np.nan  # a pixel most captures missed is unknown
+        to_depth, _ = cell_depth_slots.frame_alignment(maps[0][0], colour)
+        floor = deck_floor(heights, to_depth, slots, surface_z, pixel_fn)
+        return {} if floor is None else read_tops(heights, to_depth, floor, slots, surface_z, step_m, pixel_fn)
     except Exception:  # noqa: BLE001 - any depth failure leaves every tier unknown (the free path), never a crash
         return {}
 
