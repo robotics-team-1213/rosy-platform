@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
+- 2026-11-28 · uncommitted · D-1082 복구 사다리 1단계
 - 2026-11-28 · uncommitted · Hold point review round 4
 - 2026-11-27 · uncommitted · Nav2 road trip table-cut hold point
 - 2026-11-27 · uncommitted · Hold point review round 3
 - 2026-11-27 · uncommitted · Hold point review fixes
-- 2026-11-27 · uncommitted · Fleet cell-task motion (free_pick) and D-1081

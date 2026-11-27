@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.492
+**Version:** v1.493
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.493 Dock map-tag reframe (CORE)
+
+Operators can use `POST /api/v1/docking/docks/{dock_id}/reframe` to move a dock's map identity tags (`map_id`, `metadata.map_epoch`, `commissioned_grid_id` and generation) to the current native frame after a same-frame map swap. The pose does not change, so only a caller that has verified the pose in that frame (Fleet, through its approved site binding) should use it. Auth: operator.
+
+Body: `robot_id`, `map_id`, `map_grid_id`, `map_generation` (the frame now), `expected_map_id` and `expected_grid_id` (the dock's stored `map_id` and `commissioned_grid_id`, null if none), `binding_id` (must equal the dock's `metadata.binding_id` when it has one) and `new_binding_id` (stored on the dock).
+
+Errors: `404 NOT_FOUND` for an unknown dock. `409 MAP_FRAME_CHANGED` when the robot, grid or generation differs from the body, the dock database frame differs from `map_id`, or the dock's tags or binding differ from the expected ones. `409 STATIONARY_REQUIRED` when the robot is not localized, idle and standing still, or a native owner holds a run. The commission gates apply.
 
 ### v1.492 OMX readiness: 오래된 팔 상태는 알 수 없음 (Cell)
 
@@ -5220,6 +5228,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.493 | 2026-11-27 | [CORE] POST /docking/docks/{id}/reframe re-tags a dock after a same-frame map swap |
 | v1.492 | 2026-11-27 | [Cell] Additive: readiness arms[].state_unknown, 오래된 folded 는 null |
 | v1.491 | 2026-11-27 | [Cell] [Cell] Additive: POST /jobs/<id>/cancel |
 | v1.490 | 2026-11-27 | [Fleet] [Fleet] Additive: cell-task motion object (free_pick, push), claim capabilities, cell-task-worker scope |
