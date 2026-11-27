@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -53,6 +54,7 @@ def pick_parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
     ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
     ap.add_argument("--map-only", action="store_true", help="pick on the measured site map without a pivot bias region near the object (recorded)")
+    ap.add_argument("--at-px", help="with --from free:<site>: U,V pixel of the object's top face in the top view")
     ap.add_argument("--stop-proof", action="store_true", help="D-1077/D-1078: prove arm stop capability at start without --person-at-switch")
     return ap
 
@@ -62,6 +64,8 @@ def validate_pick_args(args) -> None:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
     if getattr(args, "stop_proof", False) and (args.commissioning or args.person_at_switch):
         raise SystemExit("--stop-proof cannot be combined with --commissioning/--person-at-switch")
+    if getattr(args, "at_px", None) and not (str(args.source).startswith("free:") and re.fullmatch(r"\d{1,4},\d{1,4}", args.at_px)):
+        raise SystemExit("--at-px U,V (pixels) needs --from free:<site>")
     if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
         raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
 
@@ -105,6 +109,7 @@ def open_cell(args, commissioning=False):
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
     config["_verify_zones"] = bool(getattr(args, "verify_zones", False))
     config["_map_only"] = bool(getattr(args, "map_only", False))
+    config["_free_px"] = [float(v) for v in args.at_px.split(",")] if getattr(args, "at_px", None) else None
     if (clear := getattr(args, "neighbour_clear_mm", None)) is not None:
         if not 10.0 <= clear <= 30.0:
             raise SystemExit("--neighbour-clear-mm must be 10..30")

@@ -9,6 +9,8 @@ from urllib.parse import urlsplit
 ARM = re.compile(r"arm_[abs]")
 ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
+SOURCE = re.compile(r"(?:free:)?[a-z0-9_][a-z0-9_.-]{0,62}")  # a site, or free:<site> (a measured position that site gives the map and height for)
+AT_PX = re.compile(r"\d{1,4},\d{1,4}")
 TWO_ARM_SITE = re.compile(r"[a-z0-9_:-]{1,48}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
 MANIFEST_FILE = re.compile(r"(?:upkeep|cell-upkeep)-[a-z0-9_.-]{1,60}\.json")
@@ -190,7 +192,7 @@ def _is_amr_bed_site(v: str) -> bool:
     s = v.strip().lower()
     if s.startswith("not_places:"):
         s = s[len("not_places:"):]
-    base = re.sub(r"-l[0-9]+$", "", s.split(":", 1)[0])
+    base = re.sub(r"-l[0-9]+$", "", s.removeprefix("free:").split(":", 1)[0])
     return base.startswith(("pinky", "bed")) or base in ("tray", "vehicle_tray")
 
 

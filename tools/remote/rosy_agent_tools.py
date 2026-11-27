@@ -47,6 +47,7 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
          "roi": {"type": "array", "items": {"type": "integer"}},
          "source": {"type": "string"}, "dest": {"type": "string"},
          "object": {"type": "string"}, "colour": {"type": "string"}, "layers_below": {"type": "integer"}, "neighbour_clear_mm": {"type": "number"},
+         "at_px": {"type": "string", "description": "U,V pixel of the object top face; with source free:<site>"},
      }, ["config", "catalog", "roi", "source", "dest"])},
     {"name": "fleet_state", "description": "Read Fleet-R /api/fleet/state (registered robots, online status, scope).",
      "inputSchema": _obj_schema({})},

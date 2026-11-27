@@ -15,6 +15,7 @@ from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
     CLOSING, choose, finger_room_view, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed,
 )
 import cell_executor  # noqa: E402
+import cell_free_source  # noqa: E402
 import cell_release_evidence  # noqa: E402
 import cell_route_depth  # noqa: E402
 import cell_recovery_cargo  # noqa: E402
@@ -62,11 +63,12 @@ def _run_auto_core(
 ) -> dict:
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
-    if source not in config["sites"]:
+    anchor = cell_free_source.anchor_of(source)  # --from free:<site>: a measured position; that site only gives the map and the surface height
+    if (anchor or source) not in config["sites"]:
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
-    if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], source, dest)):  # before any camera or arm step
+    if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], anchor or source, dest)):  # before any camera or arm step
         return {**out, "result": "refused", "error": refused}
     map_error = cell_auto_evidence.map_pose_preflight(cell, config, calibration, calibration_path, work, dry_run, out)
     if map_error:
@@ -75,6 +77,10 @@ def _run_auto_core(
         cell, config, calibration, source, dest, roi, work, dry_run, out)
     if track_error:
         return {**out, "result": track_error}
+    if anchor:  # after the map checks: they bind the stored site geometry
+        config, calibration, roi, free_error = cell_free_source.prepare(cell, config, calibration, anchor, roi, catalog, out)
+        if free_error:
+            return {**out, "result": free_error}
     dest_site, place_xy = parse_dest(config, source, dest)
     config, carry, carry_shadow = cell_carry_choices.apply(config, choices, dest, dest_site, log, source)  # sim-ranked carry offer, learns from this try
     droi = config["sites"][dest_site].get("auto_roi") or (
