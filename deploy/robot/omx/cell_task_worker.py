@@ -30,6 +30,7 @@ from cell_fleet_pipeline import FleetModelPipeline
 from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
 import cell_incident_release
 import cell_site_target
+from cell_task_motion import push_evidence_ok
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
     make_default_request_fn, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
@@ -175,7 +176,7 @@ def poll_and_execute_once(
         if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
             continue
         send_bed_observation(request_fn, bed_observe_fn, task)  # D-1057 2-9: cell S only, before the claim
-        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id, "capabilities": ["motion"]})
+        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id, "capabilities": ["motion", "push"]})
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
@@ -247,17 +248,20 @@ def poll_and_execute_once(
         stopped = hw_tel.get("stop_event") or {}
         if not isinstance(stopped, dict):
             stopped = {}
+        motion = handoff.get("motion") if isinstance(handoff.get("motion"), dict) else {}
+        is_push = motion.get("kind") == "push"
         measured = (claim_bound
                     and stage_result.get("handoff_lease_id") == handoff.get("handoff_lease_id")
                     and stage_result.get("directive_id") == task_id
                     and stage_result.get("arm_id") == handoff.get("arm_id")
                     and stage_result.get("task_verified") is True
-                    and verification.get("verified") is True
-                    and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
-                                                      if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
+                    and (push_evidence_ok(motion, stage_result.get("push")) if is_push else
+                         verification.get("verified") is True
+                         and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                           if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",)))
                     and stopped.get("ok") is True and stopped.get("folded") is True
                     and isinstance(hw_tel.get("measured_at"), (int, float)) and not isinstance(hw_tel.get("measured_at"), bool))
-        if cell_id == "cell_ab":
+        if cell_id == "cell_ab" and not is_push:
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
             measured = measured and isinstance(place, dict) and cell_site_target.cell_ab_place_verified(handoff, place, z_gate, tier, verification)

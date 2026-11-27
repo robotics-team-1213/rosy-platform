@@ -323,3 +323,80 @@ def test_a_push_on_a_dark_frame_is_refused_not_reported_clear(tmp_path, monkeypa
     args = _tier_config(tmp_path, floor={"surface_z": -0.01})
     assert cpu.main([*args, "--site", "floor"]) == 1
     assert "refused: light top" in json.loads(capsys.readouterr().out)["result"]
+
+
+# --- measured completion (owner decision 2026-11-28) ---
+import cell_push_measure as meas  # noqa: E402
+
+
+def _obj(x, y, matched=True):
+    return {"centre_mm": [x, y], "matched": matched}
+
+
+def test_displacement_is_measured_along_and_across_the_push():
+    d = (0.0, 1.0)
+    got = meas.displacement([_obj(0, 100)], [_obj(2, 110)], (0, 105), d, 10, 30)
+    assert got == {"measured": True, "commanded_mm": 10, "moved_mm": 10.2, "along_dir_mm": 10.0, "lateral_mm": 2.0}
+    stayed = meas.displacement([_obj(0, 100)], [_obj(0, 100)], (0, 105), d, 10, 30)  # found where it was: it did not move
+    assert stayed["measured"] is True and stayed["along_dir_mm"] == 0.0 and stayed["moved_mm"] == 0.0
+    back = meas.displacement([_obj(0, 100)], [_obj(0, 95)], (0, 100), d, 10, 30)
+    assert back["along_dir_mm"] == -5.0  # dragged the wrong way is reported as such
+
+
+def test_no_matched_object_before_or_after_is_not_measured_and_never_guessed():
+    d = (1.0, 0.0)
+    assert meas.displacement([], [_obj(10, 0)], (0, 0), d, 10, 30)["measured"] is False
+    assert meas.displacement([_obj(0, 0, matched=False)], [_obj(10, 0)], (0, 0), d, 10, 30)["measured"] is False
+    assert meas.displacement([_obj(200, 0)], [_obj(210, 0)], (0, 0), d, 10, 30)["measured"] is False  # not the object under the pixel
+    gone = meas.displacement([_obj(0, 0)], [], (0, 0), d, 10, 30)
+    assert gone["measured"] is False and "after" in gone["why"]
+    assert meas.displacement([_obj(0, 0)], [_obj(90, 0)], (0, 0), d, 10, 30)["measured"] is False  # a far object is not this one
+
+
+def test_the_park_that_ends_a_push_carries_its_readback_for_the_fold_check():
+    cell = Scripted({"park": {"state": [1, 2, 3, 4, 5, 6], "settled": True, "fault": None}})
+    out = cpu.run_push(cell, Path("lib.json"))
+    park = meas.last_park(out["steps"])
+    assert out["result"] == "pushed" and park["command"] == "park" and park["state"] == [1, 2, 3, 4, 5, 6] and park["settled"] is True
+    assert meas.last_park([]) is None and meas.last_park([{"command": "run slide_push"}]) is None
+
+
+def test_a_real_push_reports_the_measured_displacement_and_the_parked_state(tmp_path, monkeypatch, capsys):
+    before, after = np.zeros((480, 640, 3), np.uint8), np.ones((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            self.frames = [before, after]
+
+        def frame(self, camera):
+            return self.frames.pop(0)
+
+    def detect(frame, *a, **k):  # the same detection before (dark frame) and after (bright frame)
+        return [_obj(130.0, -20.0)] if frame.max() == 0 else [_obj(131.0, -30.5)]
+
+    for module in (cpu.cd, cpu.cell_attempts):
+        monkeypatch.setattr(module, "RUN", dict(module.RUN))
+    park = {"command": "park", "ok": True, "state": [0, -58, 50, 50, -5, 58], "settled": True, "fault": None}
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_preflight, "ready", lambda *a: [])
+    monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {"loo_error_mm": {"max": 1.0}})
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
+    monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(cpu.cell_objects, "load_catalog", lambda p: [])
+    monkeypatch.setattr(cpu.cell_objects, "detect", detect)
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: [])
+    monkeypatch.setattr(cpu, "push_library", lambda *a, **k: {"chunks": {}})
+    monkeypatch.setattr(cpu, "look_first", lambda *a, **k: {"verdict": "pass"})
+    monkeypatch.setattr(cpu, "run_push", lambda cell, lib, friction=False: {"result": "pushed", "steps": [{"command": "run slide_push", "ok": True}, park]})
+    (tmp_path / "cal.json").write_text("{}")
+    config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
+              "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
+              "cameras": {"top": {"height_m": 0.6, "center_px": [320, 240]}}, "sites": {"pallet": {"surface_z": -0.01}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(config))
+    (tmp_path / "catalog.json").write_text("[]")
+    code = cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10", "--px", "312,201",
+                     "--dir", "0,1", "--mm", "10", "--catalog", str(tmp_path / "catalog.json"), "--commissioning", "--person-at-switch"])
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 0 and printed["result"] == "pushed" and printed["park"] == park and "steps" not in printed
+    assert printed["displacement"] == {"measured": True, "commanded_mm": 10.0, "moved_mm": 10.5, "along_dir_mm": 10.5, "lateral_mm": 1.0}
