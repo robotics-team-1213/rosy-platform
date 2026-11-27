@@ -267,7 +267,7 @@ def prepare(cell, config, calibration, anchor, roi, catalog, out):
     cands = []
     for h0 in sorted({e["top_height_mm"] for e in catalog}, reverse=True):
         base = z_top - h0 / 1000.0
-        for o in cell_objects.detect(img, tight, record, cam, catalog, base, config.get("params"), poly, None, hsv):
+        for o in cell_objects.detect(img, tight, record, cam, catalog, base, config.get("params"), None, None, hsv):  # no clip: a neighbour in the tight roi must be seen
             entry = next((e for e in catalog if e["id"] == o.get("object")), None)
             if o["matched"] and entry and entry["top_height_mm"] == h0 and not o.get("split_from"):
                 cands.append((h0, base, o))
