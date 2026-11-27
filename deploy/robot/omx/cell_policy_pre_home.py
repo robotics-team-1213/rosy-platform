@@ -81,3 +81,30 @@ def trim_backtrack_prefix(chunk, start, *, tol: float = 3.0, joints: int = 6):
     if best > 0 and dists[0] > tol and dists[best] < dists[0] - tol:
         return arr[best:]
     return arr
+
+
+def ease_start(chunk, start, *, joints: int = 5):
+    """Fade the body offset between `start` and the chunk's first action out over the chunk (smoothstep), last row kept.
+
+    Sim-trained ACT actions lead the sim state (the sim arm lags its command), so on the real arm, which tracks closely,
+    each chunk's first action sits ~15 units ahead of the measured pose (real5 2026-11-27): shaped as is, the chunk opens
+    with a full-speed sprint from rest and shoulder_lift trips the following-error fault. The jaw column is untouched."""
+    import numpy as np
+
+    arr = np.array(chunk, dtype=float)
+    if len(arr) < 2:
+        return arr
+    s = np.linspace(0.0, 1.0, len(arr))
+    weight = 1.0 - s * s * (3.0 - 2.0 * s)
+    arr[:, :joints] += weight[:, None] * (np.asarray(start, dtype=float)[:joints] - arr[0, :joints])
+    return arr[1:]  # row 0 is now `start` itself
+
+
+def refuse_outside(arr, lo, hi, names) -> None:
+    """Raise on the first frame value outside [lo, hi] (the reviewed envelope with its margin)."""
+    import numpy as np
+
+    outside = np.argwhere((arr < lo) | (arr > hi))
+    if len(outside):
+        i, j = outside[0]
+        raise ValueError(f"frame {i} {names[j]}={arr[i, j]:.1f} outside reviewed {lo[j]:.1f}..{hi[j]:.1f}")
