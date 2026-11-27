@@ -70,7 +70,7 @@ def test_backs_off_once_looks_again_then_reissues_slow_and_recentred(monkeypatch
     rig = Rig(monkeypatch)
     assert rig.record["kind"] == "same_spot" and rig.record["back_off"]["phase"] == "pending"
     rig.poll(ri.REISSUE_DELAYS_S[0] + 2)
-    assert rig.steps == [("rosy_42", "backward", back.BACK_OFF_M)] and rig.calls == [], rig.record
+    assert rig.steps == [("rosy_42", "backward", back.BACK_OFF_M)] and rig.calls == [], rig.record.get("waiting_for")
     assert rig.record["back_off"]["phase"] == "backing" and rig.record["back_off"]["before"] is not None
     rig.status = {"kind": "nudge_backward", "state": "done", "reason": "done"}
     rig.poll(3)
