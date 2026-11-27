@@ -5169,3 +5169,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음(ci-result 통과, 후손, hotfix floor, smoke, 셀 유휴 관문 그대로, 확인 주체만 서명 PC로 옮김)
 - 결정: D-805 7 '서명 키가 준비되면 같은 서명으로 맞춘다'의 실행. 셀 설정과 서명 PC 타이머는 병합 뒤 적용
 - 교훈: 없음(셀 수용 전)
+
+## 2026-11-27 · uncommitted · OMX cell-task-worker principal and motion worker (D-1081)
+
+- 변경: ADR D-1081 records the cell-task-worker principal, strict key allowlist and rollout order (cell API and worker first, switch after).
+- 증거: docs only; no host contacted
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
