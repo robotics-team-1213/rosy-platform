@@ -163,3 +163,31 @@ def test_trailing_peer_stale_odom_stamp_does_not_shrink_leader_grant():
                 _call=lambda coro: coro, _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: None)))
     asyncio.run(RoadSpeed(NS(arbitrated_pose=lambda _rid: trailing_peer), update).renew(runner, live, (1, site), 0, 1.5, pose))
     assert grants[-1]["limit_mps"] == .15 and grants[-1]["expires_at"] == 11.3
+
+
+def test_renew_builds_the_profile_with_only_the_request_terminal_stop_striped():
+    site = SiteMap.model_validate({"schema": "rosy.site_map/1", "map_id": "road",
+        "places": [dict(id=n, name=n, x=x, y=0, kind="stop") for n, x in [("A", 0), ("P", .5), ("B", 1)]],
+        "edges": [{"id": "AB", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "direction": "one_way",
+                   "width_m": .1, "speed_cap_mps": .15}]})
+    pose = NS(x=.1, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
+
+    def profile(request, repeat):
+        live = NS(request=request, repeat=repeat, open=True, active_route={"road_speed_owner": "run"},
+                  view={"robot_id": "first", "detail": {}}, route_rev=0, trim_m=0.,
+                  segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=1.)], progress=lambda idx, s: s)
+        async def update(_rid, cid, _grant):
+            return {"renewed": True, "correlation_id": cid}
+        runner = NS(_clock=lambda: 10., _roster=lambda: ["first"], _live={}, _call=lambda coro: coro,
+                    _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: None)))
+        asyncio.run(RoadSpeed(NS(arbitrated_pose=lambda _rid: None), update).renew(runner, live, (1, site), 0, .1, pose))
+        return live.road_profile
+
+    def slowest(rows, lo, hi):
+        return min((v for d, v in rows if lo <= d <= hi), default=None)
+
+    rows = profile({"to": "B"}, False)
+    assert slowest(rows, .4, .6) is None or slowest(rows, .4, .6) >= .15   # pass-through P: no stripe
+    assert min(v for _, v in rows) <= .05                                    # terminal B keeps its stripe
+    rows = profile({"to": "B"}, True)                                        # repeat: every stripe stays
+    assert slowest(rows, .4, .6) <= .05
