@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
+- 2026-11-27 · uncommitted · pr2-faults-panel-and-command-parity
 - 2026-11-27 · uncommitted · pr0-confirm-idempotency-gates
 - 2026-11-27 · uncommitted · pr1-stop-zone-overlay-and-next-steps
 - 2026-11-26 · 193197c657 · zone blueprint drawn on the active site map from station-zones YAML
 - 2026-11-26 · 7aa1fe40b4 · station-zone areas that overlap a lane or each other are refused on save
-- 2026-11-26 · uncommitted · 측량 도로선을 지도 기록 필드로 서버가 냄
