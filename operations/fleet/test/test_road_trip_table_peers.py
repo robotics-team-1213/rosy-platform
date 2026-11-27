@@ -113,6 +113,12 @@ def test_a_pin_at_the_lap_end_cuts_the_route_at_the_place_before_and_extends_onc
 def test_an_occupied_unit_in_the_first_segment_sends_nothing():
     runner, live = _live({"occupied_ahead_m": 0.3})
     assert nav2._traffic_end_index(runner, live, 0) is None
+    assert nav2._held_at_m(live) == 0.3  # 2026-11-27 live run: refused_at_m is None here and float(None) ended the trip
+
+
+@pytest.mark.parametrize("row, at", [({"refused_at_m": 0.2, "occupied_ahead_m": 0.3}, 0.2), ({}, 0.0), (None, 0.0)])
+def test_the_hold_record_reads_the_refusal_first_and_never_a_missing_value(row, at):
+    assert nav2._held_at_m(_live(row)[1]) == at
 
 
 @pytest.mark.parametrize("change", ["no_answer", "stale", "other_revision", "convoy", "no_front"])

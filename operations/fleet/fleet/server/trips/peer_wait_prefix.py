@@ -69,6 +69,13 @@ def traffic_end_index(runner, live, index: int) -> int | None:
     return allowed
 
 
+def held_at_m(live) -> float:
+    """Plan metres where the table holds this trip: its refusal, else the occupied unit that cut the route."""
+    row = live.traffic or {}
+    at = row.get("refused_at_m") if row.get("refused_at_m") is not None else row.get("occupied_ahead_m")
+    return float(at or 0.0)
+
+
 def road_centerline(live, pos, along, end):
     here = live.view["pose"]
     path = [(here["x"], here["y"])]

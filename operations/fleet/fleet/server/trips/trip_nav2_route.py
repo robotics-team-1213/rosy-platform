@@ -16,7 +16,7 @@ from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_op
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reservation_covers, reserved_wait, road_centerline
-from fleet.server.peer_wait_prefix import table_answer as _table_answer, traffic_end_index as _traffic_end_index
+from fleet.server.peer_wait_prefix import held_at_m as _held_at_m, table_answer as _table_answer, traffic_end_index as _traffic_end_index
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.road_route_lease import RoadSpeedRefused
@@ -381,7 +381,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if target_end is None:
         live.view["detail"]["traffic_hold"] = {
             "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
-            "refused_at_m": round(float((live.traffic or {}).get("refused_at_m", 0.0)), 3),
+            "refused_at_m": round(_held_at_m(live), 3),
         }
         return
     live.view["detail"].pop("traffic_hold", None)
@@ -396,7 +396,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             and live.segments[index]["s_to"] - s <= runner.config.arrive_free_m and live.view["hold"] is None):
         live.view["detail"]["traffic_hold"] = {
             "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
-            "refused_at_m": round(float((live.traffic or {}).get("refused_at_m", 0.0)), 3),
+            "refused_at_m": round(_held_at_m(live), 3),
         }
         return
     if not await ready_free_goal(runner, live) or not live.open:
