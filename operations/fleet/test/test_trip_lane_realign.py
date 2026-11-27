@@ -275,3 +275,46 @@ def test_the_site_camera_age_acts_and_a_long_odom_bridge_does_not():
     run(realign.observe(rig.runner, rig.live, 0, _slam(_at(rig.arc, 0.4, 0.06)), LOCALIZED, "NAVIGATING"))
     record = rig.live.view["detail"]["lane_departure"]
     assert record["kind"] == "camera_stale" and record["bridged_m"] == 0.2
+
+
+def test_a_trip_on_the_camera_pose_reads_the_robots_bound_slam_instead(monkeypatch):
+    """2026-11-27 live run on R: a console trip drives on the camera pose, and every tick read SLAM_POSE_UNBOUND."""
+    rig = Rig()
+    native = {"v": _at(rig.arc, 0.4, 0.06)}
+    asked = []
+    rig.runner._store = NS(active=rig.store.active, map_bindings=NS(
+        matching_fit=lambda rid, state, site: asked.append((rid, state, site)) or ("fit", None)))
+    monkeypatch.setattr(realign, "fresh_native_slam", lambda state, now: (native["v"], 0.1, now))
+    monkeypatch.setattr(realign, "bound_pose", lambda fit, pose: pose)
+
+    def tick(cam_left):
+        rig.cam = _camera(_at(rig.arc, 0.4, cam_left))
+        trip_pose = MapPose(*_at(rig.arc, 0.4, cam_left), "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=0.1,
+                            map_id="site-loop", anchor_source="sighting")   # the trip's pose is the camera's
+        replace = run(realign.observe(rig.runner, rig.live, 0, trip_pose, LOCALIZED, "NAVIGATING"))
+        rig.clock.advance(0.5)
+        return replace, rig.live.view["detail"]["lane_departure"]
+
+    assert [tick(0.06)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # both poses past the line
+    version, site, _graph = rig.store.active()
+    assert asked[-1] == ("r1", LOCALIZED, (site.map_id, version))                   # this robot, its state, this map
+    native["v"] = _at(rig.arc, 0.4, 0.0)                                             # the robot's own pose is on the lane
+    record = tick(0.06)[1]
+    assert (record["kind"], record["reason"]) == ("location", "SLAM_CAMERA_GAP")
+
+
+@pytest.mark.parametrize("fit, sample, why", [((None, "GRID_MISMATCH"), "ok", "GRID_MISMATCH"),
+                                              ((None, None), "ok", "MAP_BINDING_REQUIRED"),
+                                              (("fit", None), None, "SLAM_POSE_STALE")])
+def test_without_a_bound_slam_pose_it_stays_a_location_record(monkeypatch, fit, sample, why):
+    rig = Rig()
+    rig.runner._store = NS(active=rig.store.active, map_bindings=NS(matching_fit=lambda *a: fit))
+    monkeypatch.setattr(realign, "fresh_native_slam",
+                        lambda state, now: None if sample is None else (_at(rig.arc, 0.4, 0.06), 0.1, now))
+    monkeypatch.setattr(realign, "bound_pose", lambda f, pose: pose)
+    rig.cam = _camera(_at(rig.arc, 0.4, 0.06))
+    camera_trip_pose = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=0.1,
+                               map_id="site-loop", anchor_source="sighting")
+    assert run(realign.observe(rig.runner, rig.live, 0, camera_trip_pose, LOCALIZED, "NAVIGATING")) is False
+    record = rig.live.view["detail"]["lane_departure"]
+    assert (record["kind"], record["reason"], record["slam_reason"]) == ("location", "SLAM_POSE_UNBOUND", why)
