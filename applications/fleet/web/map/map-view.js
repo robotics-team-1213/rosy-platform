@@ -32,9 +32,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
-  // D-360 레이어 토글. 첫 화면은 정돈된 가상 지도(로봇·도로·교통·라벨)만 켜고, 천장 카메라 관측/추적 고리는 필요 시 켠다.
+  // D-360 레이어 토글. 기본 레이어(로봇·도로·교통·라벨·카메라 관측)를 켜고, 추적 오차 고리는 필요 시 켠다.
   if (!view.layers) {
-    view.layers = { poses: true, omx: true, lanes: true, zones: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
+    view.layers = { poses: true, omx: true, lanes: true, zones: true, traffic: true, labels: true, site: true, grid: true, sightings: true, tracking: false };
   }
   view.layers.storedRoutes ??= false;
   const layerOn = (key) => view.layers?.[key] !== false;

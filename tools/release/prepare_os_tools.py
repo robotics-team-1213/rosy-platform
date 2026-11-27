@@ -193,7 +193,7 @@ def _extract_7zip(cache):
 
 def prepare(cache=None):
     _require_windows()
-    cache = Path(cache) if cache is not None else Path(os.environ['LOCALAPPDATA']) / 'Rosy/os-tools'
+    cache = Path(cache) if cache is not None else vm.default_cache()
     cache = cache.absolute()
     _ensure_directory(cache)
     for expected in (MSI, QEMU):

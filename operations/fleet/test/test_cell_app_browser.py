@@ -193,6 +193,7 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(matrix_zoom).to_have_attribute("aria-pressed", "true")
     expect(page.locator('#omx-right-inspector [data-inspect-target="cell_ab"]')).to_have_attribute("aria-selected", "true")
     matrix_card.get_by_role("button", name="S3→S5 연속 실행").press("Enter")
+    page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
     expect(page.locator("#cell-tasks-status")).to_contain_text("fake-task")
     assert preset_posts == ["full_s3_to_s5_pipeline"]
     expect(matrix_zoom).to_have_attribute("aria-pressed", "true")

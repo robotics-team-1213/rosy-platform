@@ -3,6 +3,7 @@ import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
+import { randomUUID } from "/console/assets/uuid.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { renderOmxInspector } from "/console/assets/omx-inspector.js";
@@ -12,6 +13,8 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 
 /** Choices that target a docked vehicle need the server's occupant; cell-wide emergency stops are always enabled. */
 const needsRobot = (choice) => Boolean(choice.cableGuardToggle || choice.zoneId);
+const needsConfirm = (choice) => !choice.humanSafetyCell && !choice.visionCheckCell && !choice.cableGuardToggle
+  && !choice.armIncident && !choice.cancelTaskId;
 
 export const armIncidentRowKey = (target, obs) => armIncidentRowFor(target, obs)?.key || null;
 
@@ -20,7 +23,8 @@ function markNoRobot(button, choice, card) {
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, readWorkcellObs = null, openArmIncident = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, namedReason = () => "", readWorkcellObs = null, openArmIncident = null }) {
+  const opReason = () => (auth.locked ? "세션 잠김" : namedReason());
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -78,6 +82,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
+    if (needsConfirm(choice) && !confirmed) {
+      if (!confirmedAction || opReason()) return;
+      return confirmedAction.run({
+        message: `${choice.label || choice.preset || choice.zoneId || "셀 작업"}을(를) 실행할까요?`,
+        opener: button,
+        eligible: () => !auth.locked && !opReason(),
+        request: () => executeChoice(choice, card, button, true),
+      });
+    }
     const isStop = Boolean(choice.humanSafetyCell || choice.visionCheckCell);
     const myStopGen = isStop ? ++stopGen : 0;
     const origLabel = button.textContent;
@@ -126,8 +139,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         });
       } else {
         await call("/api/fleet/pipeline/cell-tasks", {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({preset: choice.preset, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
+          method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": randomUUID()},
+          body: JSON.stringify({preset: choice.preset, propose: false, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
         });
       }
       if (isStop && myStopGen === stopGen) {
@@ -158,7 +171,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       }
     } finally {
       button.textContent = origLabel;
-      setOffBy(button, "");
+      setOffBy(button, needsConfirm(choice) ? opReason() : "");
     }
   }
 
@@ -193,6 +206,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       active.dualPair || null,
       active.buttons || [],
       active.quickControls || [],
+      opReason(),
     ]);
     if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
     lastInspectorSig = nextSig;
@@ -208,6 +222,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       standbyText: "영상 대기 · 클릭하여 연결",
       tagText: active.text || "대기 중",
       tagStatus: active.status || "neutral",
+      quickDispatchReason: opReason(),
       actionsClass: "omx-card-actions",
       actionChoices: [...(active.buttons || []), ...(active.quickControls || [])],
       disclosure: {
@@ -231,33 +246,43 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         renderInspector(rows);
       },
       onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId, button }) => {
-        if (auth.locked || button.hasAttribute("disabled")) return;
-        setOffBy(button, "요청 처리 중");
-        const orig = button.textContent;
-        button.textContent = "등록 중…";
-        try {
-          await call("/api/fleet/pipeline/cell-tasks", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-              cell_id: targetCell,
-              arm_id: targetArm,
-              tier,
-              displaced_to: displacedTo,
-              robot_id: robotId,
-            }),
-          });
-          await refresh();
-        } catch (err) {
-          patchText(hint, `맞춤 실행 실패: ${err.message}`);
-          patchHidden(hint, false);
-        } finally {
-          button.textContent = orig;
-          setOffBy(button, "");
-        }
+        const reason = opReason();
+        if (auth.locked || button.hasAttribute("disabled") || reason || !confirmedAction) return;
+        return confirmedAction.run({
+          message: `${targetArm} 맞춤 작업(${targetCell} · ${tier}층${displacedTo ? " · " + displacedTo : ""})을 대기열에 등록할까요?`,
+          opener: button,
+          eligible: () => !auth.locked && !opReason(),
+          request: async () => {
+            setOffBy(button, "요청 처리 중");
+            const orig = button.textContent;
+            button.textContent = "등록 중…";
+            try {
+              await call("/api/fleet/pipeline/cell-tasks", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Idempotency-Key": randomUUID()},
+                body: JSON.stringify({
+                  cell_id: targetCell,
+                  arm_id: targetArm,
+                  tier,
+                  displaced_to: displacedTo,
+                  robot_id: robotId,
+                  propose: false,
+                }),
+              });
+              await refresh();
+            } catch (err) {
+              patchText(hint, `맞춤 실행 실패: ${err.message}`);
+              patchHidden(hint, false);
+            } finally {
+              button.textContent = orig;
+              setOffBy(button, opReason());
+            }
+          },
+        });
       },
       onRenderAction: (button, choice, item) => {
         markNoRobot(button, choice, item);
+        if (!button.hasAttribute("disabled") && needsConfirm(choice) && opReason()) setOffBy(button, opReason());
         button.addEventListener("click", () => executeChoice(choice, item, button));
       },
       onDisclosureToggle: (open, bindCameras) => {

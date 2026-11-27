@@ -309,6 +309,19 @@ def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
     assert anchor.reference("sha256:" + "0" * 64) is None
 
 
+@pytest.mark.parametrize("task", ["stack", "stack-t3", "rehandle"])
+def test_20261110_snapshot_choices_keep_the_stack_reachable_with_the_default_arm_bases(task):
+    """11-10 passed stack 9/9 and rehandle 12/12 on these choices; the fixed 194 mm bases (x .091) made arm_b 7 mm short at the measured stern."""
+    import omx_two_arm_tasks as tasks
+    snap = dict(cell_snapshot="deploy/robot/omx/sim/cell_snapshots/20261110-1231.json", temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
+    layout = sites.Layout(**snap)
+    assert layout.choices["arm_bases"] == "cad-194"  # the 194 gap kept, x follows the measured hull
+    assert layout.arms["arm_b"].base[0] == pytest.approx(layout.choices["ship_stern_x_m"] - .0704)
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert len(tasks.validate(layout, tasks.get_task(layout, task))) == {"stack": 9, "stack-t3": 3, "rehandle": 12}[task]
+    assert sites.Layout().choices["arm_bases"] == "measured-194"  # an assumed ship keeps the fixed bases
+
+
 def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
     snap_path = "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
     from_snap = sites.Layout(cell_snapshot=snap_path, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot", arm_bases="snapshot")

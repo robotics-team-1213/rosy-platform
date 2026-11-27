@@ -20,6 +20,8 @@ from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
+from fleet.server.transient_loc_hold import (hold_transient_localization, loc_diag_from_state,
+                                              recheck_binding)
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_start_checks import crosswalks_on, signals_on, start_check
 from fleet.swarm.dispatch_guard import dispatch_guard
@@ -292,7 +294,7 @@ async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, po
 
 
 def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | None,
-                    target_end: int | None = None) -> str:
+                    target_end: int | None = None, pose=None) -> str:
     """Return ``'busy'``, ``'aborted'``, or ``'ready'`` for sending the next route."""
     if nav in _NAV_ABORTED:
         return "aborted"
@@ -308,7 +310,14 @@ def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | Non
     more = end_idx < limit and live.view["hold"] is None
     if nav in ("ARRIVED", "IDLE"):
         rem_to_end = (live.segments[end_idx]["s_to"] - s) if index == end_idx else math.inf
-        done_here = index > end_idx or rem_to_end <= runner.config.arrive_free_m or live.view["hold"] is not None
+        at_end = index > end_idx
+        if not at_end and index == end_idx and rem_to_end <= runner.config.arrive_free_m:
+            if pose is None:
+                at_end = True
+            else:
+                gx, gy, _ = live.arc(end_idx).point_at(live.segments[end_idx]["s_to"])
+                at_end = math.hypot(pose.x - gx, pose.y - gy) <= runner.config.arrive_free_m
+        done_here = at_end or live.view["hold"] is not None
         return "ready" if (more or not done_here) else "busy"
     # Fake tests without a navigation field advance once past end_idx (or near its end when more laps exist).
     past_end = index > end_idx or (
@@ -356,11 +365,14 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                     return
                 prefix_receipt["state"] = "at_wait_place"
                 live.active_route = None
-        if runner.config.map_binding_required or live.nav2_binding_scope is not None:
-            await runner._recheck_binding(live, active)
-            if not live.open:
+        if (runner.config.map_binding_required or live.nav2_binding_scope is not None
+                or (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None):
+            await recheck_binding(runner, live, active)
+            if not live.open or live.view["detail"].get("localization_wait"):
                 return
-        verdict = _route_finished(runner, live, index, s, nav, target_end=target_end)
+        if nav is not None and live.active_route is not None:
+            live.active_route["nav_state"] = nav
+        verdict = _route_finished(runner, live, index, s, nav, target_end=target_end, pose=pose)
         if verdict == "aborted":
             if nav == "FAILED" and await _start_camera_finish(runner, live, index, s, active):
                 return
@@ -413,6 +425,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
+        if (frame_err or {}).get("binding") == "ROBOT_NOT_LOCALIZED":
+            diag = loc_diag_from_state(state, runner._store.map_bindings.active(robot_id))
+            if await hold_transient_localization(runner, live, robot_id, diag):
+                return
         await runner._stop(live, "stopped", "map_frame", frame_err)
         return
     payload = [
@@ -506,7 +522,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
     live.command_ack_mono = time.monotonic()
-    live.active_route = {"end_index": end_index, "points": len(payload)}
+    live.active_route = {"end_index": end_index, "points": len(payload),
+                         **({"nav_state": "NAVIGATING"} if state is not None else {})}
     if prefix is not None:
         live.active_route["wait_prefix"] = True
     elif detail.get("wait_prefix"):
@@ -541,13 +558,19 @@ def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
         if not runner._poses_in_robot_frame:
             return None, {"map_id": active[1].map_id, "robot_map_id": None}
         return site_pts, None
-    binding = (
-        runner._store.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
-        if binding_required else None
-    )
+    bindings = getattr(runner._store, "map_bindings", None)
+    fit, reason = bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0])) if bindings is not None else (None, "MAP_BINDING_REQUIRED" if binding_required else None)
+    if fit is not None:
+        binding = (fit, reason)
+    elif binding_required or reason == "MAP_BINDING_GRID_CHANGED" or (
+        reason == "ROBOT_NOT_LOCALIZED" and (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None
+    ):
+        binding = (None, reason)
+    else:
+        binding = None
     current_binding_id = None
     if binding is not None:
-        current_binding_id = (runner._store.map_bindings.active(robot_id) or {}).get("binding_id")
+        current_binding_id = ((bindings.active(robot_id) if bindings is not None else None) or {}).get("binding_id")
         if binding_id is not None and current_binding_id != binding_id:
             return None, {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"}
     converted_pts = []

@@ -62,6 +62,11 @@ def pid1_start(raw, unit, boot_id, earliest_us):
     raise ValueError("no matching PID1 unit-start event after the boot deadline")
 
 
+def default_cache() -> Path:
+    """ROSY_OS_TOOLS_CACHE (D: on the laptop), else %LOCALAPPDATA%/Rosy/os-tools; each run leaves ~35 GB release-prep-*."""
+    return Path(os.environ.get('ROSY_OS_TOOLS_CACHE') or Path(os.environ['LOCALAPPDATA']) / 'Rosy/os-tools')
+
+
 def committed_archive(source: Path, revision: str) -> bytes:
     """Operator preparation never includes uncommitted, ignored or untracked files."""
     if not isinstance(revision, str) or not re.fullmatch(r'[0-9a-f]{40}', revision):
@@ -401,7 +406,7 @@ class WindowsGuest(Guest):
     work_bytes = 32 * 1024**3
 
     def __init__(self, directory, *, cache=None):
-        self.cache = Path(cache) if cache is not None else Path(os.environ['LOCALAPPDATA']) / 'Rosy/os-tools'
+        self.cache = Path(cache) if cache is not None else default_cache()
         self.cache = self.cache.absolute()
         if (self.cache.resolve() != self.cache or self.cache == Path(self.cache.anchor)
                 or any(c in str(self.cache) for c in ',\r\n\0')):

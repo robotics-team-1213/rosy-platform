@@ -141,7 +141,10 @@ class TripProgress:
     def _arrived(self, live: LiveTrip, index: int, remaining: float, lane: bool, pose: MapPose) -> bool:
         """Lane arrival needs our accepted stop and the actual pose within its stop destination."""
         if not lane:
-            return remaining <= self.config.arrive_free_m
+            if remaining > self.config.arrive_free_m:
+                return False
+            x, y, _ = live.arc(index).point_at(live.segments[index]["s_to"])
+            return math.hypot(pose.x - x, pose.y - y) <= self.config.arrive_free_m
         sent = live.sent
         if sent is None or (sent["index"], sent["action"]) != (index, STOP):
             return False
