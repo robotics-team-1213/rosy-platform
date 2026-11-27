@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fleet.server.app import create_app
-from fleet.server.account_receiver import COOKIE
+from fleet.server.auth.account_receiver import COOKIE
 from fleet.server.cell_job_proxy_routes import CellJobProxy, install_cell_job_proxy_routes, load_config
 from fleet.server.console import FleetConsole
 from fleet.server.site_auth import SitePrincipal
@@ -192,6 +192,7 @@ def account_client(profile, cookie="session-cookie"):
     app.state.cell_job_proxy = CellJobProxy({"cell_ab": {"url": "http://cell:8781", "token_file": __file__,
                                                          "arms": {"arm_a": ARM_FILES}}}, request_fn=fake)
     app.state.account_client = FakeAccount(profile)
+    app.state.account_cookie = COOKIE
     client = TestClient(app)
     if cookie:
         client.cookies.set(COOKIE, cookie)

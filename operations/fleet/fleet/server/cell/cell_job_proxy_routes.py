@@ -20,8 +20,6 @@ from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
-from fleet.server.account_receiver import COOKIE as ACCOUNT_COOKIE
-
 CONFIG_ENV = "ROSY_FLEET_CELL_JOBS"
 POST_JOBS = ("cell_policy_drive", "recover_hold", "safe_home")
 _JOB_ID = re.compile(r"[\w-]{1,64}")
@@ -144,7 +142,8 @@ def operator_identity(request, principal) -> tuple[str, tuple] | None:
     if not principal.account_id:
         return principal.principal_id, ()
     client = getattr(request.app.state, "account_client", None)
-    cookie = request.cookies.get(ACCOUNT_COOKIE)
+    cookie_name = getattr(request.app.state, "account_cookie", None)
+    cookie = request.cookies.get(cookie_name) if cookie_name else None
     profile = client.profile(cookie) if client is not None and cookie else None
     if not profile or not profile.get("login"):
         return None
