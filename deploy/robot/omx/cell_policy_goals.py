@@ -26,3 +26,33 @@ def resolve_goal_site(site: str) -> tuple[str, int]:
     if destination not in GOALS:
         raise ValueError(f"{site!r} has no h1 policy goal slot")
     return destination, GOALS.index(destination)
+
+
+def cli_goal(args, shadow, parser) -> tuple[int | None, str | None, int | None]:
+    """(goal slot, destination, its h1 slot) from --goal-site/--goal-slot against the checkpoint's goal input (cell_policy_drive)."""
+    destination = mapped_slot = None
+    goal_slot = args.goal_slot
+    goal_size = getattr(shadow, "goal_size", None)
+    if args.goal_site is not None:
+        if shadow is not None and goal_size is None and args.mode == "act":
+            parser.error("checkpoint has no goal input")
+        if shadow is not None and goal_size is not None and goal_size != len(GOALS):
+            parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
+        try:
+            destination, mapped_slot = resolve_goal_site(args.goal_site)
+        except (ValueError, OSError) as error:
+            parser.error(str(error))
+        if goal_slot is None and shadow is not None and goal_size is not None:
+            goal_slot = mapped_slot
+        if args.mode == "hybrid" and goal_slot is not None and goal_slot != mapped_slot:
+            parser.error("hybrid ACT goal must match the taught destination")
+    if shadow is not None and goal_size is not None:
+        if goal_slot is None or not 0 <= goal_slot < goal_size:
+            parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{goal_size - 1}")
+    elif goal_slot is not None:
+        parser.error("checkpoint has no goal input")
+    if args.mask_pick_goal and (shadow is None or goal_size is None):
+        parser.error("--mask-pick-goal requires a goal-conditioned checkpoint")
+    if getattr(shadow, "belt_input", False) and list(shadow.env_names[:goal_size]) != list(GOALS):
+        parser.error(f"checkpoint goal names {shadow.env_names[:goal_size]} are not the cell's h1 slots {list(GOALS)}")
+    return goal_slot, destination, mapped_slot

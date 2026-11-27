@@ -30,7 +30,7 @@ from cell_policy_entry import (  # noqa: E402,F401
     configured_arm_id as _configured_arm_id, open_policy_shadow,
     resolve_arm_id as _resolve_arm_id, safe_log_url as _safe_log_url,
 )
-from cell_policy_goals import GOALS, resolve_goal_site  # noqa: E402
+from cell_policy_goals import GOALS, cli_goal, resolve_goal_site  # noqa: E402,F401
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
 from cell_policy_shape import (  # noqa: E402,F401
@@ -45,7 +45,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
                 max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
                 params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None,
-                paced_chunks: bool = False, mask_pick_goal: bool = False, state_gate=None) -> dict:
+                paced_chunks: bool = False, mask_pick_goal: bool = False, state_gate=None, belt=None) -> dict:
     if mask_pick_goal and (handoff is None or goal_slot is None or getattr(shadow, "goal_size", None) is None):
         raise ValueError("masked pickup requires a goal-conditioned hybrid handoff")
     library = json.loads(library_path.read_text(encoding="utf-8"))
@@ -106,6 +106,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     goal = {} if goal_slot is None else {"goal": goal_slot}
     if mask_pick_goal:
         goal["mask_goal"] = True
+    if belt is not None:  # measured once before the run (cell_belt_pose), the same for every chunk
+        goal["belt"] = belt
 
     def live_jaw_error(measured_pose, target_pose) -> str | None:
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
@@ -229,29 +231,7 @@ def main(argv=None) -> int:
     shadow = open_policy_shadow(args, config, parser, lrs)
     lease = None
     try:
-        destination = mapped_slot = None
-        goal_slot = args.goal_slot
-        goal_size = getattr(shadow, "goal_size", None)
-        if args.goal_site is not None:
-            if shadow is not None and goal_size is None and args.mode == "act":
-                parser.error("checkpoint has no goal input")
-            if shadow is not None and goal_size is not None and goal_size != len(GOALS):
-                parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
-            try:
-                destination, mapped_slot = resolve_goal_site(args.goal_site)
-            except (ValueError, OSError) as error:
-                parser.error(str(error))
-            if goal_slot is None and shadow is not None and goal_size is not None:
-                goal_slot = mapped_slot
-            if args.mode == "hybrid" and goal_slot is not None and goal_slot != mapped_slot:
-                parser.error("hybrid ACT goal must match the taught destination")
-        if shadow is not None and goal_size is not None:
-            if goal_slot is None or not 0 <= goal_slot < goal_size:
-                parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{goal_size - 1}")
-        elif goal_slot is not None:
-            parser.error("checkpoint has no goal input")
-        if args.mask_pick_goal and (shadow is None or goal_size is None):
-            parser.error("--mask-pick-goal requires a goal-conditioned checkpoint")
+        goal_slot, destination, mapped_slot = cli_goal(args, shadow, parser)
         cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8")) if shadow else {}
         if shadow is not None and shadow.sim_rule is None:
             if args.model_calibration is None:
@@ -329,6 +309,14 @@ def main(argv=None) -> int:
         before = look() if look else None
         if before is not None and before.get("objects") == 0 and not args.dry_run:
             return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
+        belt_pose = None
+        if getattr(shadow, "belt_input", False):  # before any motion, arm home: one top frame, held for the episode as in training
+            import cell_belt_pose
+            belt_pose = cell_belt_pose.measure_cell(cell, shadow.belt_reference)
+            log({"belt_pose": belt_pose})
+            if not belt_pose["ok"]:
+                return _finish({"result": "refused", "at": 0, "reason_code": belt_pose["reason_code"],
+                                "reason": belt_pose["reason"], "parked": False, "belt_pose": belt_pose})
         if args.task_id:
             config["_fleet_task"] = args.task_id
         def _execute() -> dict:
@@ -356,12 +344,15 @@ def main(argv=None) -> int:
                 demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
                 kw = dict(offset=offset, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
                           max_obs_age_s=args.max_obs_age_s, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
-                          rim_z_m=rim_z_m, paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal, state_gate=state_gate)
+                          rim_z_m=rim_z_m, paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal, state_gate=state_gate,
+                          belt=belt_pose["features"] if belt_pose else None)
                 from cell_policy_preflight import preflight
                 if not args.dry_run and handoff is None and (refused := preflight(runner, shadow, args.library, work, config, log, kw)):
                     return refused  # the same episode as a dry run refused: nothing moved
                 res = run_episode(runner, shadow, args.library, work, max_chunks=args.max_chunks, dry_run=args.dry_run,
                                   log=log, handoff=handoff, authorize=authorize, **kw)
+                if belt_pose:
+                    res["belt_pose"] = belt_pose
             if look:
                 after = look()
                 res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
