@@ -1,0 +1,140 @@
+{
+ "id": "adv_estop_blocks_planned_box",
+ "evidence": "synthetic variant of belt_middle_box (recorded run) with the cell's readiness listing active_estop in blocking_refusals (a recorded refusal name)",
+ "note": "The cell planned a pick but its readiness says a blocking refusal is active. Naive rule: pick what the cell planned. Right: do not move.",
+ "raw": {
+  "arm": "arm_b",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_b_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "belt",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "belt",
+       "to": "pallet",
+       "attempts": [
+        {
+         "observed": 1,
+         "refused": [],
+         "chosen": {
+          "object": "container-2",
+          "colour": "red",
+          "closing_axis_offset_deg": 85.5,
+          "bias_mm": [
+           0,
+           0
+          ],
+          "bias_region": null,
+          "approach_m": 0.045
+         },
+         "plan": {
+          "pick": {
+           "x": 0.1863,
+           "y": 0.1784,
+           "z": -0.0571,
+           "yaw_deg": -85.2
+          },
+          "place": {
+           "x": 0.153,
+           "y": -0.128,
+           "z": 0.005,
+           "yaw_deg": -90
+          }
+         },
+         "pivot_needed": "no clear pivot point within reach of the object",
+         "long_axis_deg": -89.7
+        }
+       ],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 0.7,
+        "inliers": 596
+       },
+       "result": "planned"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": [
+    "active_estop"
+   ]
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}

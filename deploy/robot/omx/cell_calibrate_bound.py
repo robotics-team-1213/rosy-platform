@@ -183,6 +183,9 @@ def coverage_advisories(config: dict, calibration: dict, bias: dict | None, para
     return out
 
 
+RECT_REGIONS = ("auto_roi", "detect_roi", "moving_px")  # [x0, y0, x1, y1] per site
+
+
 def move_regions(config: dict, reference, current) -> dict:
     """Carry every image region (site polygons and ROIs) from the reference frame to the current one (ORB + RANSAC)."""
     import cv2
@@ -195,18 +198,26 @@ def move_regions(config: dict, reference, current) -> dict:
         np.float32([k1[x.queryIdx].pt for x in m]), np.float32([k2[x.trainIdx].pt for x in m]), cv2.RANSAC, 3.0
     )
     tp = lambda pts: [[int(round(float(v))) for v in q] for q in cv2.perspectiveTransform(np.float32([pts]), H)[0]]  # noqa: E731
+    def rect(r):
+        q = np.array(tp([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]]))
+        return [int(max(0, q[:, 0].min())), int(max(0, q[:, 1].min())), int(min(639, q[:, 0].max())), int(min(479, q[:, 1].max()))]
+
+    # 2026-11-27 arm_s: only surface_px and auto_roi moved, so belt.detect_roi stayed above the belt and every pick saw 0 objects
     for site in config["sites"].values():
         if site.get("surface_px"):
             site["surface_px"] = tp(site["surface_px"])
-        if site.get("auto_roi"):
-            r = site["auto_roi"]
-            q = np.array(tp([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]]))
-            site["auto_roi"] = [
-                int(max(0, q[:, 0].min())),
-                int(max(0, q[:, 1].min())),
-                int(min(639, q[:, 0].max())),
-                int(min(479, q[:, 1].max())),
-            ]
+        for key in RECT_REGIONS:
+            if site.get(key):
+                site[key] = rect(site[key])
+                if key != "auto_roi" and (site[key][0] >= site[key][2] or site[key][1] >= site[key][3]):
+                    del site[key]  # moved out of the frame: readers fall back to auto_roi rather than an empty box
+        if site.get("markings_px"):
+            site["markings_px"] = [tp(p) for p in site["markings_px"]]
+        if site.get("home_jaws_px"):
+            site["home_jaws_px"] = tp([site["home_jaws_px"]])[0]
+    for holder in (config, config.get("calibrate") or {}):
+        if holder.get("scene_ignore_px"):
+            holder["scene_ignore_px"] = [rect(r) for r in holder["scene_ignore_px"]]
     return config
 
 

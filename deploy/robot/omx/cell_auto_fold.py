@@ -29,7 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence
+from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence, fold_context, start_record
+from cell_fold_rehome import rehomed
 PAN_DETOURS = (5.0, -5.0, 10.0, -10.0)
 SETTLE_TOL = 3.0  # chunk_runner.SETTLE_TOL (kept here so the plan is testable without the runner)
 HOLDING_MARGIN = 4.0  # jaws stopped this far above their closing command are on something (cell_transfer.STILL_HOLDING_UNITS)
@@ -78,9 +79,10 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
             held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
-            require_empty_gripper: bool = False) -> dict:
-    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
-    gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
+            require_empty_gripper: bool = False, hold_reason: str | None = None, rehome=None) -> dict:
+    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names, context)
+    gives the candidates' try order (learned outcomes); the set of candidates is never changed by it. hold_reason: the
+    fault of the hold that started this fold (None: the live hold's own fault)."""
     if stage not in ("full", "release_and_lift", "park_only"):
         raise ValueError(f"unsupported stage: {stage}")
     from cell_pipeline_io import fold_from_hold, park_succeeded
@@ -120,6 +122,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     known["state"] = state
     if state is None:
         return hold("STATE_UNREADABLE", is_holding=require_empty_gripper)
+    start = start_record(state, status, hold_reason if hold_reason is not None else status.get("fault"))
     if require_empty_gripper and _ok_state({"ok": True, "state": status.get("target")}) is None:
         return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if latched["active"] and not allow_live_unlatch:
@@ -183,6 +186,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
 
     park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
     situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
+    context = fold_context(state, home, start["hold_reason"])  # order(names, context): learned per situation, never the set
     tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
                               clear_z_m=clear_z_m, situation=situation, extended=True)
              if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
@@ -192,7 +196,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         and status.get("torque_hold_commanded") is True and not status.get("holding")
     )
     rank = (
-        {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+        {name: i for i, name in enumerate(order([name for name, _, _ in tries], context))}
         if order is not None else {name: i for i, (name, _, _) in enumerate(tries)}
     )
     tries.sort(key=lambda c: (
@@ -227,7 +231,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             at = known["state"] = _ok_state(parked)
             note({"step": "fold_from_hold", "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
                   "error": parked.get("error"), "contact": parked.get("contact")})
-            if park_succeeded(parked) and at is not None and folded(at, home):
+            if park_succeeded(parked) and (at := rehomed(cell, rehome, at, home, settle_tol=SETTLE_TOL, rest_tol=REST_TOL, note=note) or at) is not None and folded(at, home):
                 release()
                 return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps,
                         "corridor": verdict, "unlatched_live_hold": True}
@@ -246,7 +250,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
               "error": parked.get("error"), "contact": parked.get("contact")})
         ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
-        if ok_park and at is not None and folded(at, home):
+        if ok_park and (at := rehomed(cell, rehome, at, home, settle_tol=SETTLE_TOL, rest_tol=REST_TOL, note=note) or at) is not None and folded(at, home):
             release()
             return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
                     "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
@@ -254,7 +258,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
 
     for name, before, frames in tries:
         if (outcome := _try_candidate(name, before, frames)) is not None:
-            return outcome
+            return {**outcome, "context": context, **start}
     if advisor is not None:
         try:
             adv = advisor({"state": state, "target": list(target[:6]), "home": list(home), "closed": closed,
@@ -264,7 +268,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             adv = {"audit": {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
         note({"step": "advisor", **(adv.get("audit") or {})})
         if (cand := adv.get("candidate") if isinstance(adv, dict) else None) is not None and (outcome := _try_candidate(*cand)) is not None:
-            return outcome
+            return {**outcome, "context": context, **start}
     return hold("ALL_PATHS_BLOCKED")
 
 

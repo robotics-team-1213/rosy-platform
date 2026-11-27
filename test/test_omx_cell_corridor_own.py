@@ -62,12 +62,12 @@ def _furniture() -> np.ndarray:
     return img
 
 
-def _look(img, reference: Path | None, state=START, bound: str | None = None):
+def _look(img, reference: Path | None, state=START, bound: str | None = None, roi=ROI):
     """The fold's look: the reference bound by its sha256 (or `bound`), the arm's links from `state` (None: not asked)."""
     calibration = {}
     if reference is not None:
         calibration["reference_top_sha256"] = bound or hashlib.sha256(reference.read_bytes()).hexdigest()
-    return crp.build_multi_site_look(_Cell(img), _config(reference), calibration, "belt", ROI, None, _to_px, TCP_X,
+    return crp.build_multi_site_look(_Cell(img), _config(reference), calibration, "belt", roi, None, _to_px, TCP_X,
                                      allow_ascending_departure=True,
                                      own_state=None if state is None else (lambda: state))
 
@@ -161,3 +161,22 @@ def test_fold_from_the_belt_edge_clears_against_the_reference_and_still_sees_an_
         seen_img[row - 6:row + 7, col - 6:col + 7] = np.clip(colour, 0, 255)
         seen = _look(seen_img, reference)(frames)
         assert not seen["clear"] and (seen["low"] or seen["high"]), colour
+
+
+def test_fold_lane_outside_the_roi_is_unseen_not_clear(tmp_path):
+    """2026-11-27 16:51: a belt-sized ROI let arm_a's real fold pass with 95 % of its lane never looked at."""
+    frames = [START, *crp.interpolate_pose(START, LIFT, max_step=2.0), *crp.interpolate_pose(LIFT, HOME, max_step=2.0)]
+    reference = tmp_path / "reference-top.png"
+    cv2.imwrite(str(reference), _furniture())
+    img = _furniture()
+    img[_arm(START)] = 20
+    assert _look(img, reference)(frames)["clear"] is True
+    belt_only = (BELT[0][0], BELT[0][1], BELT[2][0], BELT[2][1])
+    narrow = _look(img, reference, roi=belt_only)(frames)
+    assert not narrow["clear"] and narrow["off_surface"] > 0
+    assert own.with_outside({"clear": True, "off_surface": 0}, [(0.1, 0.0, 0.2)], _to_px, SHAPE, ROI)["clear"] is True
+    assert own.with_outside({"clear": True, "off_surface": 0}, [(0.3, 0.0, 0.2)], _to_px, SHAPE, ROI)["off_surface"] > 0
+    # one measured surface only (the look's fallback) is held to the same rule
+    one = {**_config(None), "sites": {"belt": _config(None)["sites"]["belt"]}}
+    fallback = crp.build_multi_site_look(_Cell(img), one, {}, "belt", belt_only, None, _to_px, TCP_X, own_state=lambda: START)
+    assert fallback(frames)["off_surface"] > 0

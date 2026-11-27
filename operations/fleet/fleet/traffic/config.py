@@ -4,6 +4,9 @@ import math
 import sys
 from pathlib import Path
 
+#: The one keep-out between two aligned robots, lane or bay (safety-distance verdict and user decision 2026-11-27:
+#: 0.20 left no room on a 0.20 m lane and next to a 0.226 m bay). bays.YIELD_KEEP_OUT_M, trust.UNTRUSTED_KEEP_OUT_M,
+#: the console's site keep-out and its goal-occupied distance all read this value.
 DEFAULT_SITE_KEEP_OUT_M = 0.18
 MIN_SITE_KEEP_OUT_M = 0.16
 

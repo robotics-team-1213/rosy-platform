@@ -165,10 +165,21 @@ def test_the_alcove_is_found_and_is_clear_of_the_route():
 
 
 def test_a_plain_corridor_has_no_bay_and_says_so():
-    """폭 1 m 방의 정직한 답이다. 있는 척하면 로봇을 벽으로 보낸다."""
+    """좁은 통로의 정직한 답이다. 있는 척하면 로봇을 벽으로 보낸다.
+
+    폭 0.6 m 통로다. 1.0 m 통로는 keep-out 0.18 m·외접 반지름 0.093 m(2026-11-27)에서 0.13 m 폭 기체 두 대가
+    0.40 m 떨어져 설 수 있어, 비켜설 자리가 실제로 있다."""
+    grid = _grid([CORRIDOR[0], *CORRIDOR[1:7], CORRIDOR[-1]])
+    route = _line(0.2, 0.35, 2.4, 0.35)
+    assert bays.best_bay(grid, route, (1.25, 0.35), keep_out_m=bays.YIELD_KEEP_OUT_M) is None
+
+
+def test_a_bay_never_leaves_the_body_inside_a_wall_cell():
+    """자리의 칸 중심에서 가장 가까운 벽 칸의 가까운 변까지가 외접 반지름 이상이다(반 칸 보정)."""
     grid = _grid(CORRIDOR)
     route = _line(0.2, 0.55, 2.4, 0.55)
-    assert bays.best_bay(grid, route, (1.25, 0.55), keep_out_m=bays.YIELD_KEEP_OUT_M) is None
+    bay = bays.best_bay(grid, route, (1.25, 0.55), keep_out_m=bays.YIELD_KEEP_OUT_M)
+    assert bay is not None and bays.free_width_at(grid, bay) / 2 >= bays.ROBOT_RADIUS_M
 
 
 def test_a_bay_behind_a_wall_is_not_a_bay():

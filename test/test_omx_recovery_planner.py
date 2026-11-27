@@ -335,7 +335,7 @@ def test_choices_ranking_cannot_bypass_low_open_jaws_lift_priority(tmp_path):
         _Cell(), HOME_B, 48.8, plan=lambda s: [s, HOME_B], look=_look,
         reserve=lambda _f: {"ok": True}, release=lambda: None,
         release_and_rise=lambda _c: {"result": "risen"}, low=lambda _s: True,
-        order=lambda n: ch.ranked(af.CHOICE, n), tcp_x_m=0.0740, clear_z_m=0.10, extended_detours=True, sleep=lambda _s: None,
+        order=lambda n, ctx: ch.ranked_in_context(af.CHOICE, n, ctx), tcp_x_m=0.0740, clear_z_m=0.10, extended_detours=True, sleep=lambda _s: None,
     )
     assert out["result"] == "folded" and out["candidate"] == "lift_then_park"
 

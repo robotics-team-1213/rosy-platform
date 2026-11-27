@@ -37,7 +37,7 @@ export function armReadinessText(arm) {
   const age = typeof arm.live_state_age_s === "number" ? `관측 ${evidenceAgeText(arm.live_state_age_s).replace(" · ", "")}` : "관측 없음";
   return [
     arm.folded === true ? "접힘" : arm.folded === false ? "펼쳐짐" : "접힘 미확인",
-    arm.human_hold_latched ? "사람 보류 걸림" : "보류 없음",
+    arm.human_hold_latched ? "보류 · 자동 복구 재시도 중" : "보류 없음",
     arm.incident_held ? `사건 보류: ${arm.incident_reason || "사유 없음"}` : "사건 없음",
     arm.session_lock_held ? "세션 잠금 있음" : "세션 잠금 없음",
     arm.fault ? `고장: ${arm.fault}` : null,
