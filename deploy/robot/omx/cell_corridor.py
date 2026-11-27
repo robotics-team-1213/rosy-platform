@@ -7,7 +7,8 @@ through FK and are drawn into the top view as a corridor as wide as the gripper 
 - above it (travel, 138 mm on 2026-11-01) catalogue objects pass underneath, but an unknown blob (a hand, the
   other arm) may be tall and is in the way too.
 The pick object's own blob is the work. The place slot must be empty unless a stack is declared (`--stack`). The
-disc around the arm's own base, where the folded arm itself shows, is left out.
+disc around the arm's own base, where the folded arm itself shows, is left out; so are the arm's own links where the
+caller knows them from its joints (`own`, `cell_corridor_own.own_mask`).
 
     python cell_corridor.py --config cell.json --library auto-....json --site belt --roi x0 y0 x1 y1   # read only
 """
@@ -246,17 +247,21 @@ def _filter_departure_low_mask(mask: np.ndarray, seen_low: np.ndarray, roi, star
 
 
 def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None,
-          surface_px=None, high_surface_px=None, allow_ascending_departure: bool = False) -> dict:
+          surface_px=None, high_surface_px=None, allow_ascending_departure: bool = False, own=None) -> dict:
     """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.
     `known`: 0/1 mask of catalogue objects, which may pass under high travel. `surface_px`: the polygon(s) the mask
     covers; corridor pixels beyond it are unseen, not clear (2026-11-01). Optional `high_surface_px` expands only
-    the above-clear_z transit surface check (e.g. convex hull across calibrated multi-arm sites)."""
+    the above-clear_z transit surface check (e.g. convex hull across calibrated multi-arm sites). `own`: 0/1 mask of
+    the arm's own links; they are no obstacle to the arm and count as seen, since nothing else can be where they are."""
     get = lambda k, d: prm.get(params, k, d)  # noqa: E731
     clear_z, base_m = get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M)
     low, high = runs(tcp, clear_z, base_m)
     off_map = sum(to_px(p) is None for run in low + high for p in run)
     work = [px for p in (pick_xy, stack_xy) if p is not None and (px := to_px(p)) is not None]
     mask = without_blobs(mask, roi, work) > 0
+    own = None if own is None else np.asarray(own) > 0
+    if own is not None:
+        mask &= ~own
     half, min_px = get("corridor.half_width_mm", HALF_WIDTH_MM), get("corridor.min_px", MIN_PX)
     unknown = mask & ~(known > 0) if known is not None else mask
     lanes = [corridor(path, to_px, mask.shape, roi, half) > 0 for path in (low, high)]
@@ -264,6 +269,8 @@ def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params
     if surface_px:
         seen_low = _fill_surfaces(mask.shape, roi, surface_px)
         seen_high = _fill_surfaces(mask.shape, roi, high_surface_px) if high_surface_px else seen_low
+        if own is not None:
+            seen_low, seen_high = seen_low | own, seen_high | own
         if (allow_ascending_departure and high_surface_px and off_map == 0
                 and _is_ascending_departure(tcp, low, clear_z, base_m)):
             h, w = mask.shape[:2]
