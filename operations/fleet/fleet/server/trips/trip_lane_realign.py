@@ -29,6 +29,9 @@ REALIGN_SLOW_MPS = 0.05
 COOLDOWN_S = 3.0            # one recentring resend per departure window; the resend itself must not be repeated
 REALIGNED_LAT_M = 0.02
 REALIGNED_DEG = 10.0
+#: The slow cap lives on fresh camera evidence of a departure: this long without one (camera lost, a location
+#: problem, or back inside the lane but not yet aligned) it is lifted, so no robot crawls on without a reason.
+SLOW_EVIDENCE_S = 10.0
 _RUNNING = ("NAVIGATING", "PLANNING")
 
 _LOG = logging.getLogger("fleet.server.trip_runner")
@@ -58,8 +61,10 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
     last = detail.get("lane_departure") or {}
     now = runner._clock()
     out = {"at": now, "slow": bool(last.get("slow")), "replaced": last.get("replaced", 0),
-           "replaced_at": last.get("replaced_at"), "ticks": 0}
+           "replaced_at": last.get("replaced_at"), "departed_at": last.get("departed_at"), "ticks": 0}
     detail["lane_departure"] = out
+    if out["slow"] and (out["departed_at"] is None or now - out["departed_at"] >= SLOW_EVIDENCE_S):
+        out.update(slow=False, slow_expired_at=now)
 
     def note(kind, reason=None, **fields):
         if kind == "camera_stale" and last.get("kind") != kind:
@@ -104,6 +109,7 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
         return note("on_lane" if margin >= NEAR_EDGE_M else "near_edge", **fields)
     out["ticks"] = (last.get("ticks", 0) if last.get("kind") == "departed" else 0) + 1
     note("departed", **fields)
+    out["departed_at"] = now
     if out["ticks"] < PERSIST_TICKS or nav not in _RUNNING:
         return False
     out["slow"] = True
