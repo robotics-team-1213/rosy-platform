@@ -22,7 +22,7 @@ from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
 )
-from cell_auto_setup import load_config, pick_main  # noqa: E402,F401
+from cell_auto_setup import load_config, pick_main, refresh_stop_proof  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
 import cell_calibration as cal  # noqa: E402
 import cell_carry_choices  # noqa: E402
@@ -231,6 +231,8 @@ def _run_auto_core(
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
+            if config.get("_stop_proof_job_id"):
+                refresh_stop_proof(cell, config)
             gate = Gate(cell_route_depth.motion_cell(guarded, before_frame), config, calibration, sequence=sequence)
             gate.on_grasp = lambda status: cell_recovery_cargo.record_grasp(
                 config, catalog, target, source, dest_site, status, calibration=calibration, source_tier=source_tier)

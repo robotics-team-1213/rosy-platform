@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from typing import Any
 
 _DIR = str(Path(__file__).resolve().parent)
@@ -264,6 +265,101 @@ def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[st
     return bridge.call_tool("fleet_propose_cell_task", payload)
 
 
+def cmd_sites(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    res = bridge.call_tool("fleet_cell_sites")
+    if not res.get("ok"):
+        return res
+    d = res.get("data") or {}
+    sites = d.get("sites") or []
+    if args.area:
+        sites = [s for s in sites if isinstance(s, dict) and s.get("area") == args.area]
+    return {
+        "ok": True,
+        "schema": d.get("schema"),
+        "count": len(sites),
+        "zones": d.get("zones") or [],
+        "sites": [
+            {k: s.get(k) for k in ("site_id", "sim_site", "area", "col", "row", "tier", "arms", "status") if k in s}
+            for s in sites if isinstance(s, dict)
+        ],
+    }
+
+
+def _infer_pick_cell(args: argparse.Namespace) -> str:
+    if args.cell:
+        return args.cell
+    preset = str(args.preset or "").strip()
+    if preset.startswith("s5_") or preset == "export_s5_pallet":
+        return "cell_ab"
+    if preset.startswith(("s3_", "full_s3_")) or preset == "export_s3_belt":
+        return "cell_s"
+    if args.arm in ("arm_a", "arm_b"):
+        return "cell_ab"
+    return "cell_s"
+
+
+def _poll_pick_tasks(bridge: br.RosyAgentBridge, task_ids: list[str], timeout_s: float) -> tuple[bool, list[dict[str, Any]]]:
+    deadline = time.monotonic() + max(0.5, float(timeout_s))
+    terminal = {"COMPLETED", "ABORTED", "CANCELLED"}
+    latest: dict[str, dict[str, Any]] = {}
+    while True:
+        res = bridge.call_tool("fleet_cell_tasks")
+        if res.get("ok"):
+            for t in (res.get("data") or {}).get("tasks") or []:
+                if isinstance(t, dict) and t.get("task_id") in task_ids:
+                    latest[t["task_id"]] = t
+            if all(tid in latest and latest[tid].get("status") in terminal for tid in task_ids):
+                return True, [latest[tid] for tid in task_ids]
+        if time.monotonic() >= deadline:
+            return False, [latest.get(tid, {"task_id": tid, "status": "UNKNOWN"}) for tid in task_ids]
+        time.sleep(1.5)
+
+
+def cmd_pick(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    cell_id = _infer_pick_cell(args)
+    payload: dict[str, Any] = {"cell_id": cell_id}
+    for cli_k, pay_k in (
+        ("arm", "arm_id"), ("src", "src_site"), ("dst", "dst_site"), ("tier", "tier"),
+        ("preset", "preset"), ("mode", "execution_mode"), ("max_chunks", "max_chunks"),
+        ("robot_id", "robot_id"), ("zone_id", "zone_id"), ("request_key", "request_key"),
+    ):
+        if (val := getattr(args, cli_k)) is not None:
+            payload[pay_k] = val
+    if args.tiers is not None:
+        try:
+            payload["tiers"] = [int(x.strip()) for x in args.tiers.split(",") if x.strip()]
+        except ValueError:
+            return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": "tiers must be comma-separated integers"}
+    if args.auto_admit:
+        payload["auto_admit"] = True
+    tool_name = "fleet_propose_cell_task" if args.propose else "fleet_dispatch_cell_task"
+    if args.dry_run:
+        if err := br._validate_args(br.TOOL_MAP[tool_name], payload):
+            return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": err}
+        return {"ok": True, "dry_run": True, "tool": tool_name, "payload": payload}
+    res = bridge.call_tool(tool_name, payload)
+    if not res.get("ok") or not args.wait:
+        return res
+    data = res.get("data") or {}
+    tasks = data.get("tasks") or ([data["task"]] if isinstance(data.get("task"), dict) else [])
+    task_ids = [str(t["task_id"]) for t in tasks if isinstance(t, dict) and t.get("task_id")]
+    if not task_ids:
+        return res
+    if any(t.get("status") == "PROPOSED" for t in tasks if isinstance(t, dict)):
+        return {**res, "waited": False, "needs_approval": True, "task_ids": task_ids}
+    done, final_tasks = _poll_pick_tasks(bridge, task_ids, args.wait_timeout_s)
+    return {
+        **res,
+        "ok": done and all(t.get("status") == "COMPLETED" for t in final_tasks),
+        "waited": True,
+        "timed_out": not done,
+        "final_tasks": [
+            {k: t.get(k) for k in ("task_id", "status", "arm_id", "src_site", "dst_site", "tier", "approved_by", "last_refusal")}
+            for t in final_tasks
+        ],
+    }
+
+
 def cmd_schema(args: argparse.Namespace) -> tuple[Any, int]:
     if args.tool:
         if args.tool not in br.TOOL_MAP:
@@ -322,17 +418,41 @@ def build_parser() -> argparse.ArgumentParser:
     p_prop.add_argument("--request-key", default=None)
     p_prop.add_argument("--dry-run", action="store_true")
 
+    p_sites = sub.add_parser("sites")
+    p_sites.add_argument("--area", default=None)
+
+    p_pick = sub.add_parser("pick")
+    p_pick.add_argument("--cell", choices=["cell_s", "cell_ab"], default=None)
+    p_pick.add_argument("--arm", default=None)
+    p_pick.add_argument("--src", default=None)
+    p_pick.add_argument("--dst", default=None)
+    p_pick.add_argument("--tier", type=int, default=None)
+    p_pick.add_argument("--tiers", default=None)
+    p_pick.add_argument("--preset", default=None)
+    p_pick.add_argument("--mode", choices=["guarded_pick", "act_policy"], default=None)
+    p_pick.add_argument("--max-chunks", type=int, default=None)
+    p_pick.add_argument("--robot-id", default=None)
+    p_pick.add_argument("--zone-id", default=None)
+    p_pick.add_argument("--request-key", default=None)
+    p_pick.add_argument("--propose", action="store_true")
+    p_pick.add_argument("--auto-admit", action="store_true")
+    p_pick.add_argument("--dry-run", action="store_true")
+    p_pick.add_argument("--wait", action="store_true")
+    p_pick.add_argument("--wait-timeout-s", type=float, default=120.0)
+
     p_schema = sub.add_parser("schema")
     p_schema.add_argument("tool", nargs="?", default=None)
 
     p_call = sub.add_parser("call")
     p_call.add_argument("tool")
-    p_call.add_argument("--args-json", default="{}")
+    p_call.add_argument("--args-json", default=None)
+    p_call.add_argument("--args-file", type=Path, default=None)
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.cmd == "schema":
         out, rc = cmd_schema(args)
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -346,8 +466,15 @@ def main(argv: list[str] | None = None) -> int:
         res = cmd_frame(bridge, args)
     elif args.cmd == "propose":
         res = cmd_propose(bridge, args)
+    elif args.cmd == "sites":
+        res = cmd_sites(bridge, args)
+    elif args.cmd == "pick":
+        res = cmd_pick(bridge, args)
     else:
-        res = bridge.call_tool(args.tool, json.loads(args.args_json))
+        if args.args_file is not None and args.args_json is not None:
+            ap.error("--args-file and --args-json are mutually exclusive")
+        raw_json = Path(args.args_file).expanduser().read_text(encoding="utf-8-sig") if args.args_file is not None else (args.args_json or "{}")
+        res = bridge.call_tool(args.tool, json.loads(raw_json))
     print(json.dumps(res, ensure_ascii=False))
     return 0 if res.get("ok") else 1
 

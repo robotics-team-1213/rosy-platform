@@ -52,12 +52,15 @@ def pick_parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
     ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
     ap.add_argument("--map-only", action="store_true", help="pick on the measured site map without a pivot bias region near the object (recorded)")
+    ap.add_argument("--stop-proof", action="store_true", help="D-1077/D-1078: prove arm stop capability at start without --person-at-switch")
     return ap
 
 
 def validate_pick_args(args) -> None:
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if getattr(args, "stop_proof", False) and (args.commissioning or args.person_at_switch):
+        raise SystemExit("--stop-proof cannot be combined with --commissioning/--person-at-switch")
     if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
         raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
 
@@ -73,6 +76,18 @@ def fifo_cell(config: dict, cameras: dict) -> tuple[dict, cp.FifoCell]:
     binding = config.get("_operating_profile_binding")
     kwargs = {"operating_profile": binding} if binding is not None else {}
     return config, cp.FifoCell(Path(config["io"]).expanduser(), cameras, **kwargs)
+
+
+def refresh_stop_proof(cell, config: dict) -> dict:
+    """Measure a fresh D-1077 stop-capability proof right before motion or gate open."""
+    import cell_stop_proof
+
+    job_id = str(config.get("_stop_proof_job_id") or "auto-pick")
+    proof = cell_stop_proof.session_proof(cell, job_id, str(config.get("arm_id") or "arm"))
+    if not proof.get("ok"):
+        raise SystemExit(f"no stop-capability proof ({proof.get('code')}): {proof.get('reason')}")
+    config["_commissioning"] = {"stop_proof": proof}
+    return config
 
 
 def open_cell(args, commissioning=False):
@@ -94,6 +109,9 @@ def open_cell(args, commissioning=False):
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     config, cell = fifo_cell(config, config["cameras"])
+    if getattr(args, "stop_proof", False) and not getattr(args, "dry_run", False):
+        config["_stop_proof_job_id"] = getattr(args, "task_id", None) or "auto-pick"
+        refresh_stop_proof(cell, config)
     work = Path(config["work_dir"]).expanduser()
     cp.KEEP["dir"] = work / "frames"
     cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),

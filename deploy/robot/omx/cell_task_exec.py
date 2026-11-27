@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from cell_act_verdict import FOLD_FRESH_S, FOLD_TOLERANCE, fold_readback, measured_fold, plan_home  # noqa: F401 (moved: the job API needs them without omx_adapter)
-from cell_presence import presence_ok, review_required, zone_acceptance
+from cell_presence import autonomous_policy_enabled, presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
 import cell_site_target
 from cell_route_check import pick_site
@@ -278,7 +278,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--roi", *(str(int(v)) for v in roi),
         "--from", src,
         "--dest", dst,
-        *(["--commissioning", "--person-at-switch"] if presence_ok(handoff) else []),  # never declared by the worker itself
+        *(["--commissioning", "--person-at-switch"] if presence_ok(handoff) else ["--stop-proof"] if autonomous_policy_enabled(handoff) else []),
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
