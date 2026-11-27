@@ -44,7 +44,7 @@ def test_same_request_is_durable_once_and_conflict_is_rejected(tmp_path):
     assert failure.value.status_code == 409
     asyncio.run(service.step('alice', 'req-1'))
     result = service.read('alice', 'req-1')
-    assert result.state == 'ANSWERED' and result.action_admissible is False
+    assert result.state == 'ANSWERED' and result.kind == 'STATUS' and result.action_admissible is False
     assert result.facts[0].ref == 'robot:r1'
     assert 'IDLE' in result.response
     asyncio.run(service.step('alice', 'req-1'))
@@ -58,7 +58,7 @@ def test_same_request_is_durable_once_and_conflict_is_rejected(tmp_path):
 def test_unconfigured_model_holds_without_call_and_history_is_scoped(tmp_path):
     service, journal, calls, _ = fixture(tmp_path, admitted=False)
     row, _ = service.submit('alice', message())
-    assert row.state == 'HOLD' and row.reason == 'ASSISTANT_NOT_ADMITTED'
+    assert row.state == 'HOLD' and row.kind is None and row.reason == 'ASSISTANT_NOT_ADMITTED'
     asyncio.run(service.step('alice', 'req-1'))
     assert not calls
     assert len(journal.history('alice', 'conv-1')) == 1
@@ -105,7 +105,7 @@ def test_control_only_hands_off_and_stale_facts_are_held(tmp_path):
     service.submit('alice', message())
     asyncio.run(service.step('alice', 'req-1'))
     row = service.read('alice', 'req-1')
-    assert row.state == 'ANSWERED' and '작업 화면' in row.response and '보냈습니다' not in row.response
+    assert row.state == 'ANSWERED' and row.kind == 'CONTROL' and '작업 화면' in row.response and '보냈습니다' not in row.response
 
     async def stale(*_): return [AssistantFact(ref='robot:r1', text='old', observed_at=1.)]
     service.context = stale

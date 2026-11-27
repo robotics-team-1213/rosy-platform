@@ -217,7 +217,13 @@ async function call(path, options = {}) {
 }
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
-const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
+const assistant = createAssistantPanel({
+  scope: pageScope, call, el, readSelection: () => view.focusRobot,
+  readRobots: () => view.robots, readPlaces: () => view.activeSiteMap?.map?.places || [],
+  onSelectRobot: (id) => selection.set(id || null, { source: "assistant" }),
+  onOpenRobot: (id) => { if (id) rosterWorkspace.open(id); },
+  confirm: (options) => confirmedAction.run(options), log,
+});
 const zoneBlueprint = createZoneBlueprintInspector({
   scope: pageScope,
   call,
@@ -339,6 +345,7 @@ function render() {
         ? "로봇을 선택하고 지도를 찍으면 확인 후 목표를 보냅니다."
         : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
+  assistant.syncContext();
   refreshDiagnostics();
 }
 

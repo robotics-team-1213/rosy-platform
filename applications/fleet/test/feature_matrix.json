@@ -8648,9 +8648,10 @@
         {
           "consumer": "applications/fleet/web/assistant/panel.js",
           "expression": "/api/fleet/assistant/messages/",
-          "resolution": "concatenated request_id; panel.poll",
+          "resolution": "concatenated request_id; panel.poll and submitNavigation",
           "request_ids": [
-            "GET:/api/fleet/assistant/messages/{request_id}"
+            "GET:/api/fleet/assistant/messages/{request_id}",
+            "POST:/api/fleet/assistant/messages/{request_id}/navigation"
           ]
         },
         {
@@ -8713,6 +8714,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/assistant/messages/{request_id}"
+        },
+        {
+          "id": "POST:/api/fleet/assistant/messages/{request_id}/navigation",
+          "method": "POST",
+          "path": "/api/fleet/assistant/messages/{request_id}/navigation",
+          "implementation": "operations/fleet/fleet/server/assistant/routes.py",
+          "handler": "navigate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_assistant_navigation_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/assistant/messages/{request_id}/navigation"
         }
       ],
       "flows": [

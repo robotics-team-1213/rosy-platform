@@ -62,6 +62,10 @@
       "path": "assistant/assistant-voice.js",
       "media_type": "application/javascript"
     },
+    "assistant-command.js": {
+      "path": "assistant/assistant-command.js",
+      "media_type": "application/javascript"
+    },
     "assistant.css": {
       "path": "assistant/panel.css",
       "media_type": "text/css"

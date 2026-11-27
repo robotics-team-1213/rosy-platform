@@ -5,6 +5,9 @@ globalThis.crypto ??= webcrypto;
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
 const { createDialogue } = await import('../../../../applications/fleet/web/assistant/panel.js');
+const {
+  KIND_META, buildNavigationPayload, controlRemainingS, formatNavigationError, isControlExpired,
+} = await import('../../../../applications/fleet/web/assistant/assistant-command.js');
 
 test('an account change discards old replies and creates a new conversation', () => {
   const state = createDialogue();
@@ -47,4 +50,34 @@ test('signing out clears the draft request and prevents submission', () => {
   assert.equal(state.rows.length, 0);
   assert.equal(state.retry(), null);
   assert.throws(() => state.begin('안녕'), /IDENTITY/);
+});
+
+test('dialogue preserves kind, selected_robot_id, and navState lifecycle', () => {
+  const state = createDialogue();
+  state.setIdentity('alice');
+  const ticket = state.begin('r1을 충전소로 이동해줘', 'r1');
+  assert.equal(state.receive(ticket, {
+    ...ticket.message, state: 'ANSWERED', kind: 'CONTROL', response: '이동 명령 제안',
+    created_at: 1000, completed_at: 1005,
+  }), true);
+  assert.equal(state.rows[0].kind, 'CONTROL');
+  assert.equal(state.rows[0].selected_robot_id, 'r1');
+  state.patchNav(ticket.message.request_id, { draft: { x: '1.5', y: '2.0', yaw: '0' } });
+  assert.deepEqual(state.getNav(ticket.message.request_id).draft, { x: '1.5', y: '2.0', yaw: '0' });
+  state.reset();
+  assert.equal(state.getNav(ticket.message.request_id), null);
+});
+
+test('command handoff validates coordinates, expiry, kind labels, and errors', () => {
+  assert.equal(KIND_META.CONTROL.label, '명령 제안');
+  assert.deepEqual(buildNavigationPayload('r1', '1.5', '-2.25', '0.5'), { robot_id: 'r1', x: 1.5, y: -2.25, yaw: 0.5 });
+  assert.equal(buildNavigationPayload('', '1', '2', '0'), null);
+  assert.equal(buildNavigationPayload('r1', '', '2', '0'), null);
+  assert.equal(buildNavigationPayload('r1', '100001', '2', '0'), null);
+  assert.equal(buildNavigationPayload('r1', '1', '2', '4'), null);
+  assert.equal(controlRemainingS({ completed_at: 1000 }, 1012), 18);
+  assert.equal(isControlExpired({ completed_at: 1000 }, 1030), false);
+  assert.equal(isControlExpired({ completed_at: 1000 }, 1031), true);
+  assert.match(formatNavigationError({ status: 409 }), /30초/);
+  assert.match(formatNavigationError({ status: 403 }), /권한/);
 });
