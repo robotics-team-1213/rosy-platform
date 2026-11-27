@@ -304,3 +304,10 @@
 - 증거: geg6 실측(2026-11-04) — FQN 섹션(`/rosy_42/slam_probe:`)의 `--params-file`가 raw 실행 노드에 값 적용(`scan_topic=/rosy_42/scan` 구독 확인), bare 섹션은 미적용. 착지 시험 묶음에 새 가드 2개(섹션 FQN 단정, composition False 단정)를 변이 증명과 함께 추가.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 대상 — [native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md](../../../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md)의 벤치 우회가 제품 수정으로 해소되는 항목.
+
+## 2026-11-28 · uncommitted · fix(nav2): 좁은 U턴 주시 거리 하한 0.13, 제자리 회전 임계 0.80
+
+- 변경: RPP `min_lookahead_dist` 0.09→0.13, `max_lookahead_dist` 0.16→0.18, `lookahead_time` 2.0→1.5, `lookahead_dist` 0.12→0.14(속도 비례 중 미사용), `rotate_to_heading_min_angle` 0.70→0.80. 11-27 U턴 질러감의 원인은 RemovePassedGoals 반경 0.09 가 꼭짓점을 지운 것이지 주시 거리가 아니다(현 sagitta L 0.13, R 0.11~0.135 에서 약 1.6~2 cm). 주석·BT XML 주석·시험 고정값을 바로잡음.
+- 증거: 패널 `D:/DevTemp/nav2-passed-goals/panel-tight` r1/r2. 원격 시험은 커밋 메시지·보고 참조.
+- gate 변화: 없음. 실기 주행 확인 전.
+- CE: 해당 없음.
