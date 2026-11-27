@@ -96,7 +96,7 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
     try:
         # 1. schema
         assert cli.main(["schema"]) == 0
-        assert len(json.loads(capsys.readouterr().out)) == 18
+        assert len(json.loads(capsys.readouterr().out)) == 20
         assert cli.main(["schema", "cell_frame"]) == 0
         assert json.loads(capsys.readouterr().out)["name"] == "cell_frame"
         assert cli.main(["schema", "no_such_tool"]) == 1

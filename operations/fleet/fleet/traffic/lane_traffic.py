@@ -28,6 +28,7 @@ import math
 import time
 from typing import Iterable, Mapping, Optional
 
+from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from rosy.world.state.projections.map_pose import MapPoseConfig
 from fleet.traffic import blocks, handover, signal_phase
@@ -39,7 +40,11 @@ from fleet.traffic.lane_traffic_helpers import (
     _round,
     _shift,
     build_traffic_view,
+    occupied_ahead,
+    pinned_behind,
     resolve_handover,
+    route_occupants,
+    unit_owners,
     units_under_pose,
 )
 from fleet.traffic.signal_service import SignalService, PRESENCE_S as PRESENCE_S
@@ -243,6 +248,8 @@ class TrafficService(SignalService):
         lives = list(lives)
         fresh = {robot_id: pose_view(pose) for robot_id, pose in (poses or {}).items()}
         fresh.update({live.view["robot_id"]: live.view.get("pose") for live in lives if live.open})
+        recent = {robot_id for robot_id, p in fresh.items()  # D-1009: only a pose this recent may relax a refusal
+                  if p and type(p.get("age_s")) in (int, float) and 0 <= p["age_s"] < STALE_POSE_S}
         fresh = {robot_id: (p["x"], p["y"], p["yaw"]) for robot_id, p in fresh.items()
                  if p and p.get("state") == LOCALIZED and p.get("x") is not None and p.get("y") is not None}
         self._last_pose.update(fresh)
@@ -275,8 +282,14 @@ class TrafficService(SignalService):
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
         gaps = self._link(active[2], robots, trips)
         now = self._clock()
+        behind = {robot.id: [rid for rid, units in state.pinned.items() if rid not in moving and pinned_behind(
+                      active[2], trips[robot.id].segments, robot, units, fresh.get(rid) if rid in recent else None,
+                      self._length + self._u_max + self.authority_reach(rid), self._u_max)]
+                  for robot in robots if robot.d is not None}
         result = blocks.step(layout, robots, self._state, now, green=self._green(),
-                             merge_max_wait_s=self._departure()[0])
+                             merge_max_wait_s=self._departure()[0], behind=behind)
+        owners = unit_owners(state)  # who this answer counted, unit by unit
+        seen = {robot_id: fresh[robot_id] for robot_id in recent & set(fresh)}
         self._busy = result.busy
         self._occupancy = {plan.zone: signal_phase.zone_occupancy(self._state, robots, plan.zone, result.unplaced)
                            for plan in self._signals.values()}
@@ -296,8 +309,13 @@ class TrafficService(SignalService):
                 if index is not None:
                     refused_unit[robot.id] = robot.spans[index].unit
                     refused = robot.spans[index].d0 - live.segments[0]["s_from"]  # back to plan metres
+            occupied = occupied_ahead(robot, state, owners)
             live.traffic = {"waiting_for": list(waiting) or (["pose_jump"] if self.jumped(robot.id) else []),
-                            "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": refused, **used}
+                            "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": refused, **used,
+                            # D-1009 road route: who this answer counted and where its route meets them
+                            "route_rev": live.route_rev,
+                            "peers": route_occupants(robot, owners, seen, active[1].map_id),
+                            "occupied_ahead_m": None if occupied is None else occupied - live.segments[0]["s_from"]}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
         self._view["signals"] = self._signal_view(active[2])
         for row in self._view["robots"]:

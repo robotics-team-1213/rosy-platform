@@ -38,6 +38,37 @@ def reservation_covers(runner, live, index):
             and runner.traffic.owns_span(live, front, target + body.rotation_clear_m()))
 
 
+def table_answer(runner, live) -> dict | None:
+    """This trip revision's fresh block-table answer (D-1009 road route), or None: then no peer is left to it."""
+    row = live.traffic or {}
+    stamp, front = row.get("pose_stamp"), row.get("front_d_m")
+    if (live.convoy or row.get("route_rev") != live.route_rev or not isinstance(row.get("peers"), dict)
+            or not all(type(v) in (int, float) and math.isfinite(v) for v in (stamp, front))
+            or not 0 <= runner._clock() - stamp < STALE_POSE_S):
+        return None
+    return row
+
+
+def traffic_end_index(runner, live, index: int) -> int | None:
+    """Last segment index allowed by the Fleet traffic block table, or ``None`` if held here.
+
+    With a fresh table answer the route also ends at the place before the first unit another robot occupies,
+    so a road route is never sent into an occupied block (the standing peers the table counted are left to it)."""
+    from fleet.traffic.lane_traffic import PAST_PLACE_M
+
+    answer = table_answer(runner, live)
+    occupied = None if answer is None else answer.get("occupied_ahead_m")
+    if (live.traffic or {}).get("refused_at_m") is None and occupied is None:
+        return len(live.segments) - 1
+    allowed: int | None = None
+    for k in range(index, len(live.segments)):
+        if runner.traffic.holds(live, k) or (
+                occupied is not None and occupied < live.progress(k, live.segments[k]["s_to"]) + PAST_PLACE_M):
+            break
+        allowed = k
+    return allowed
+
+
 def road_centerline(live, pos, along, end):
     here = live.view["pose"]
     path = [(here["x"], here["y"])]

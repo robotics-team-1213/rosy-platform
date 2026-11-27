@@ -217,7 +217,7 @@ async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
 
 async def route(self, robot_id: str, points: Sequence[dict], *,
                 lease_source: str | None = None, route_binding: dict | None = None,
-                attempt_id: str | None = None, road_speed_controlled=False) -> dict:
+                attempt_id: str | None = None, road_speed_controlled=False, table_peers=None) -> dict:
     """Dispatch one D-1009 pass/stop route under the console's goal admission & traffic arbitration."""
     pts = list(points)
     if not pts:
@@ -230,7 +230,8 @@ async def route(self, robot_id: str, points: Sequence[dict], *,
         return await self._goal(robot_id, float(end["x"]), float(end["y"]),
                                 float(0.0 if end.get("yaw") is None else end["yaw"]),
                                 task_id=None, attempt_id=attempt_id, attempt_seq=None, lease_source=lease_source,
-                                route_points=pts, route_binding=route_binding, road_speed_controlled=road_speed_controlled)
+                                route_points=pts, route_binding=route_binding, road_speed_controlled=road_speed_controlled,
+                                table_peers=dict(table_peers or {}) if lease_source == "trip" else {})
     finally:
         self._goal_busy.discard(robot_id)
 
@@ -239,7 +240,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 task_id: str | None, attempt_id: str | None,
                 attempt_seq: int | None, lease_source: str | None,
                 stop_binding: dict | None = None, line_handoff=None,
-                route_points: Sequence[dict] | None = None, route_binding: dict | None = None, road_speed_controlled=False) -> dict:
+                route_points: Sequence[dict] | None = None, route_binding: dict | None = None, road_speed_controlled=False,
+                table_peers=None) -> dict:
     """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
     내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -345,11 +347,11 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
                 lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id,
                 expected_map_grid_id=route_binding["map_grid_id"], recheck=refresh_route_binding, **({"road_speed_controlled": True} if road_speed_controlled else {})),
-                grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix)
+                grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix, table_peers=table_peers)
     elif route_points is not None:
         result = await guarded_road_send(self, robot_id, route_points, (x, y), stop, site_route_of,
             lambda: self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id, **({"road_speed_controlled": True} if road_speed_controlled else {})),
-            grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix)
+            grid_from=bays.Grid.from_payload, check_wait_prefix=check_wait_prefix, table_peers=table_peers)
     else:
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
     if result["accepted"] is False:
@@ -420,6 +422,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             grid = bays.Grid.from_payload(await self.map())
             self.goal_leases.check_stop(robot_id, stop)
             standing = self._standing_in_the_way(robot_id, intended, grid, (x, y), site_route=site_route)
+            if route_points is not None:  # D-1009: peers the trip's block table counted stay with the table
+                standing = [rid for rid in standing if not self._table_governed(robot_id, rid, table_peers)]
             if standing:
                 if route_points is not None:
                     stop = (stop[0], stop[1] + 1)

@@ -160,3 +160,137 @@ def test_recording_is_cancelled_and_draft_reenabled_after_page_restore(site):
             assert not errors
         finally:
             browser.close()
+
+
+def test_assistant_control_handoff_picks_place_confirms_and_submits_navigation(site):
+    from playwright.sync_api import expect, sync_playwright
+    api = {
+        **API,
+        '/api/fleet/assistant/status': {
+            'available': True, 'mode': 'READ_ONLY', 'reason': None, 'execution_enabled': True,
+        },
+        '/api/fleet/site-map': {
+            'maps': [{
+                'map_id': 'site-main',
+                'polygon_m': [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+                'bounds_m': {'min_x': 0.0, 'min_y': 0.0, 'max_x': 2.0, 'max_y': 2.0},
+            }],
+        },
+        '/api/fleet/site-map/active': {
+            'version': 1,
+            'activated_by': 'bob',
+            'map': {
+                'map_id': 'site-main',
+                'places': [{'id': 'dock_a', 'name': '도크 A', 'kind': 'dock', 'x': 1.25, 'y': -0.5, 'yaw': 0.5}],
+                'edges': [],
+            },
+        },
+    }
+    with sync_playwright() as playwright:
+        posts, nav_posts = [], []
+        browser, page, errors = _open(playwright, site, api, posts)
+        try:
+            def handle_msg(route):
+                body = route.request.post_data_json
+                posts.append(body)
+                route.fulfill(status=202, json={
+                    **body, 'state': 'ANSWERED', 'kind': 'CONTROL',
+                    'response': '아래에서 이동 좌표를 확인해 접수해 주세요.',
+                    'facts': [], 'created_at': 1000., 'completed_at': 9999999999., 'reason': None,
+                    'action_admissible': False,
+                })
+
+            def handle_nav(route):
+                body = route.request.post_data_json
+                nav_posts.append(body)
+                route.fulfill(status=200, json={
+                    'accepted': True, 'queued': True,
+                    'task': {'task_id': 'nav-task-42', 'robot_id': body['robot_id'], 'status': 'QUEUED'},
+                })
+
+            page.route('**/api/fleet/assistant/messages/*/navigation', handle_nav)
+            page.route('**/api/fleet/assistant/messages', handle_msg)
+
+            page.locator('#assistant-quick-toggle').click()
+            expect(page.locator('#assistant-panel')).to_be_visible()
+            expect(page.locator('#assistant-quick-toggle')).to_have_attribute('aria-expanded', 'true')
+            expect(page.locator('#assistant-mode-tag')).to_contain_text('대화·명령 가능')
+
+            page.locator('#assistant-robot').select_option('rosy_01')
+            page.locator('[data-assistant-prompt="move"]').click()
+            import re
+            expect(page.locator('#assistant-input')).to_have_value(re.compile(r'rosy_01'))
+            page.locator('#assistant-send').click()
+
+            expect(page.locator('#assistant-messages')).to_contain_text('명령 제안')
+            expect(page.locator('#assistant-messages')).to_contain_text('명령 대상: rosy_01')
+            assert posts[-1]['selected_robot_id'] == 'rosy_01'
+
+            page.locator('[data-assistant-place="true"]').select_option('dock_a')
+            expect(page.locator('[data-assistant-coord="x"]')).to_have_value('1.25')
+            expect(page.locator('[data-assistant-coord="y"]')).to_have_value('-0.50')
+            expect(page.locator('[data-assistant-coord="yaw"]')).to_have_value('0.50')
+
+            page.locator('[data-assistant-nav-submit="true"]').click()
+            dialog = page.locator('dialog.ui-confirm')
+            expect(dialog).to_be_visible()
+            expect(page.locator('#estop')).to_be_visible()
+            dialog.get_by_role('button', name='요청 전송').click()
+            expect(dialog).to_be_hidden()
+
+            assert nav_posts == [{'robot_id': 'rosy_01', 'x': 1.25, 'y': -0.5, 'yaw': 0.5}]
+            expect(page.locator('.assistant-receipt')).to_contain_text('nav-task-42')
+            expect(page.locator('.assistant-receipt a[href="/console?view=work"]')).to_be_visible()
+            assert not errors
+        finally:
+            browser.close()
+
+
+def test_assistant_control_readonly_and_conflict_refusal_never_dispatch(site):
+    from playwright.sync_api import expect, sync_playwright
+    api = {
+        **API,
+        '/api/fleet/assistant/status': {
+            'available': True, 'mode': 'READ_ONLY', 'reason': None, 'execution_enabled': False,
+        },
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        try:
+            page.route('**/api/fleet/assistant/messages', lambda route: route.fulfill(status=202, json={
+                **route.request.post_data_json, 'state': 'ANSWERED', 'kind': 'CONTROL',
+                'response': '작업 화면에서 진행해 주세요.', 'facts': [],
+                'created_at': 1000., 'completed_at': 9999999999., 'reason': None, 'action_admissible': False,
+            }))
+            page.locator('#assistant-quick-toggle').click()
+            expect(page.locator('#assistant-mode-tag')).to_contain_text('조회 전용')
+            page.locator('#assistant-robot').select_option('rosy_01')
+            page.locator('#assistant-input').fill('rosy_01을 보내줘')
+            page.locator('#assistant-send').click()
+            expect(page.locator('.assistant-command-card')).to_contain_text('조회 전용 모드')
+            expect(page.locator('.assistant-command-card a[href="/console?view=work&show=new"]')).to_be_visible()
+            expect(page.locator('[data-assistant-nav-submit="true"]')).to_have_count(0)
+
+            page.route('**/api/fleet/assistant/status', lambda route: route.fulfill(json={
+                'available': True, 'mode': 'READ_ONLY', 'reason': None, 'execution_enabled': True,
+            }))
+            page.route('**/api/fleet/assistant/messages/*/navigation', lambda route: route.fulfill(
+                status=409, json={'detail': 'ASSISTANT_CONTROL_EXPIRED'},
+            ))
+            page.locator('#assistant-new-chat').click()
+            page.locator('#assistant-close').click()
+            page.locator('#assistant-quick-toggle').click()
+            expect(page.locator('#assistant-mode-tag')).to_contain_text('대화·명령 가능')
+            page.locator('#assistant-input').fill('rosy_01 이동')
+            page.locator('#assistant-send').click()
+            page.locator('[data-assistant-coord="x"]').fill('1.0')
+            page.locator('[data-assistant-coord="y"]').fill('2.0')
+            page.locator('[data-assistant-nav-submit="true"]').click()
+            dialog = page.locator('dialog.ui-confirm')
+            expect(dialog).to_be_visible()
+            dialog.get_by_role('button', name='요청 전송').click()
+            expect(page.locator('.assistant-nav-error')).to_contain_text('30초')
+            expect(page.locator('.assistant-receipt')).to_have_count(0)
+            assert not errors
+        finally:
+            browser.close()

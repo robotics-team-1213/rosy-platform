@@ -336,6 +336,8 @@ def test_worker_act_dry_run_reports_no_physical_evidence(tmp_path, monkeypatch):
         observed.update(live_act_fn({**HANDOFF, "execution_mode": "act_policy"}))
         return []
 
+    import omx_incident_fleet
+    monkeypatch.setattr(omx_incident_fleet, "INCIDENTS", omx_incident_fleet.INCIDENTS)  # main() points it at --prep-dir
     monkeypatch.setattr(ctw, "poll_and_execute_once", poll)
     monkeypatch.setattr(ctw, "execute_live_hardware_arm", lambda *_a, **_k: pytest.fail("legacy dispatch"))
     monkeypatch.setattr(ctw, "execute_guarded_cell_task", lambda *_a, **_k: pytest.fail("physical dispatch"))

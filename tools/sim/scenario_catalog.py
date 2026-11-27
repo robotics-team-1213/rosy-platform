@@ -163,8 +163,8 @@ def teacher_tasks() -> set[str]:
 
 
 def bridge_tools() -> set[str]:
-    """Tool names in tools/remote/rosy_agent_bridge.py TOOL_SPECS, read as text."""
-    text = (ROOT / "tools" / "remote" / "rosy_agent_bridge.py").read_text(encoding="utf-8")
+    """Tool names in tools/remote/rosy_agent_tools.py TOOL_SPECS, read as text."""
+    text = (ROOT / "tools" / "remote" / "rosy_agent_tools.py").read_text(encoding="utf-8")
     return set(re.findall(r'\{"name": "([a-z0-9_]+)"', text))
 
 

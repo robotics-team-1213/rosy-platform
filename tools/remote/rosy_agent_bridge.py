@@ -1,4 +1,4 @@
-"""Stdlib-only 18-tool HTTP CLI & MCP stdio bridge across OMX Cell (:8781), Fleet-R, and Learning (:8768)."""
+"""Stdlib-only 20-tool HTTP CLI & MCP stdio bridge across OMX Cell (:8781), Fleet-R, and Learning (:8768)."""
 from __future__ import annotations
 
 import argparse
@@ -18,8 +18,10 @@ import urllib.request
 
 if __package__:
     from .rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
+    from .rosy_agent_tools import OPERATIONS_MCP_TOOLS, TOOL_MAP, TOOL_SPECS, _CELLS, _VIEWS, _obj_schema
 else:
     from rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
+    from rosy_agent_tools import OPERATIONS_MCP_TOOLS, TOOL_MAP, TOOL_SPECS, _CELLS, _VIEWS, _obj_schema
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_ERROR_BYTES = 65_536
@@ -28,8 +30,6 @@ SUPPORTED_MCP_PROTOCOLS = ("2024-11-05", "2025-03-26", "2025-06-18")
 _SAFE_RESP_HEADERS = frozenset({
     "x-frame-seq", "x-source-stamp", "etag", "cache-control", "content-type", "content-length",
 })
-_VIEWS = ["top", "side", "arm_s_top", "arm_s_wrist", "arm_a_wrist", "arm_b_wrist"]
-_CELLS = ["cell_s", "cell_ab"]
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -120,94 +120,8 @@ def _load_config_file(path: Path | None) -> dict[str, Any]:
     return out
 
 
-def _obj_schema(props: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
-    return {"type": "object", "properties": props, "required": required or [], "additionalProperties": False}
-
-
 def _safe_segment(val: str) -> bool:
     return bool(val) and val not in (".", "..") and ".." not in val and "/" not in val and "\\" not in val and "\x00" not in val
-
-
-TOOL_SPECS: tuple[dict[str, Any], ...] = (
-    {"name": "cell_readiness", "description": "Read OMX cell :8781 /readiness state and cell_state_gen.",
-     "inputSchema": _obj_schema({})},
-    {"name": "cell_failure_context", "description": "Read latest or named CellFailureContext bundle from :8781.",
-     "inputSchema": _obj_schema({"bundle_id": {"type": "string"}, "arm": {"type": "string"}, "kind": {"type": "string"}})},
-    {"name": "cell_failure_asset", "description": "Fetch an image, JSON, or trace-tail asset from a :8781 failure bundle.",
-     "inputSchema": _obj_schema({"bundle_id": {"type": "string"}, "filename": {"type": "string"}}, ["bundle_id", "filename"])},
-    {"name": "cell_frame", "description": "Fetch live cell frame JPEG from :8781 preserving sequence headers.",
-     "inputSchema": _obj_schema({"view": {"type": "string", "enum": _VIEWS}}, ["view"])},
-    {"name": "cell_queue", "description": "Read :8781 /queue active jobs, optionally with recent /jobs and /failures.",
-     "inputSchema": _obj_schema({"include_jobs": {"type": "boolean"}, "include_failures": {"type": "boolean"},
-                                 "arm": {"type": "string"}, "limit": {"type": "integer"}})},
-    {"name": "cell_upkeep_check", "description": "Run non-motion upkeep_check on :8781.",
-     "inputSchema": _obj_schema({"manifest": {"type": "string"}, "out": {"type": "string"}}, ["manifest"])},
-    {"name": "cell_dry_run", "description": "Run observe-only auto_pick_dry_run on :8781.",
-     "inputSchema": _obj_schema({
-         "config": {"type": "string"}, "catalog": {"type": "string"},
-         "roi": {"type": "array", "items": {"type": "integer"}},
-         "source": {"type": "string"}, "dest": {"type": "string"},
-         "object": {"type": "string"}, "colour": {"type": "string"}, "layers_below": {"type": "integer"},
-     }, ["config", "catalog", "roi", "source", "dest"])},
-    {"name": "fleet_state", "description": "Read Fleet-R /api/fleet/state (registered robots, online status, scope).",
-     "inputSchema": _obj_schema({})},
-    {"name": "fleet_cell_readiness", "description": "Read Fleet-R cell readiness, digest, and dispatch_generation.",
-     "inputSchema": _obj_schema({"cell_id": {"type": "string", "enum": _CELLS}}, ["cell_id"])},
-    {"name": "fleet_cell_tasks", "description": "List Fleet-R /api/fleet/pipeline/cell-tasks and cell safety summary.",
-     "inputSchema": _obj_schema({"cell_id": {"type": "string", "enum": _CELLS}, "status": {"type": "string"}})},
-    {"name": "fleet_propose_cell_task", "description": "Propose a Fleet-R cell task (PROPOSED only). For fallback, supply the failure bundle ID, context digest, readiness digest, and a stable request_key. For policy fallback, copy correlation.fleet_task_id into fallback_from_task_id.",
-     "inputSchema": _obj_schema({
-         "cell_id": {"type": "string", "enum": _CELLS}, "arm_id": {"type": "string"}, "src_site": {"type": "string"}, "dst_site": {"type": "string"},
-         "preset": {"type": "string"}, "robot_id": {"type": "string"}, "tier": {"type": "integer"},
-         "execution_mode": {"type": "string", "enum": ["guarded_pick", "act_policy"]}, "max_chunks": {"type": "integer"},
-         "displaced_to": {"type": "string"}, "zone_id": {"type": "string"},
-         "task_id": {"type": "string"}, "request_key": {"type": "string"}, "fallback_from_task_id": {"type": "string"},
-         "fallback_verb": {"type": "string"}, "failure_bundle_id": {"type": "string"}, "failure_context_sha256": {"type": "string"},
-         "expected_context_sha256": {"type": "string"}, "expected_readiness_digest": {"type": "string"},
-         "expected_authority_epoch": {"type": "integer"}, "expected_dispatch_generation": {"type": "integer"}, "expected_stop_generation": {"type": "integer"},
-     }, ["cell_id"])},
-    {"name": "job_status", "description": "Poll cell :8781 job or learning :8768 canonical run status.",
-     "inputSchema": _obj_schema({"job_id": {"type": "string"}, "plane": {"type": "string", "enum": ["cell", "learning"]}}, ["job_id"])},
-    {"name": "cell_open_human_request", "description": "Open an operator person-request on Fleet-R.",
-     "inputSchema": _obj_schema({
-         "robot_id": {"type": "string"},
-         "kind": {"type": "string", "enum": ["unplug_charger", "plug_charger", "move_robot", "clear_area", "other"]},
-         "text": {"type": "string"}, "why": {"type": "string"}, "expires_s": {"type": "number"},
-     }, ["kind", "text", "why"])},
-    {"name": "cell_capture_clip", "description": "Capture bounded non-motion MP4 clip via :8781.",
-     "inputSchema": _obj_schema({
-         "view": {"type": "string", "enum": _VIEWS}, "duration_s": {"type": "integer"},
-         "fps": {"type": "integer"}, "out_dir": {"type": "string"},
-     }, ["view", "duration_s"])},
-    {"name": "cell_dataset_pipeline", "description": "Run convert_episodes or transfer_dataset offline media job via :8781.",
-     "inputSchema": _obj_schema({
-         "stage": {"type": "string", "enum": ["convert", "transfer"]}, "episodes": {"type": "string"},
-         "out": {"type": "string"}, "repo_id": {"type": "string"}, "collection": {"type": "string"},
-         "fps": {"type": "integer"}, "images": {"type": "string"},
-         "outcome": {"type": "string", "enum": ["success", "failed", "failure"]},
-     }, ["stage"])},
-    {"name": "learning_run_job", "description": "Start a canonical offline learning job on :8768.",
-     "inputSchema": _obj_schema({
-         "kind": {"type": "string"}, "arm_id": {"type": "string"}, "request_id": {"type": "string"}, "params": {"type": "object"},
-     }, ["kind", "arm_id", "request_id", "params"])},
-    {"name": "learning_stage_bundle", "description": "Fetch canonical bundle-manifest from :8768 and stage policy bundle onto :8781.",
-     "inputSchema": _obj_schema({"run_id": {"type": "string"}, "target_dir": {"type": "string"}}, ["run_id", "target_dir"])},
-    {"name": "cell_area_dry_run", "description": "Run observe/IK-plan only area_xyz_pick dry_run on :8781.",
-     "inputSchema": _obj_schema({
-         "arm": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]},
-         "config": {"type": "string"},
-         "pick_area": {"type": "string"}, "pick_x": {"type": "number"}, "pick_y": {"type": "number"}, "pick_z": {"type": "number"},
-         "place_area": {"type": "string"}, "place_x": {"type": "number"}, "place_y": {"type": "number"}, "place_z": {"type": "number"},
-         "pick_yaw_deg": {"type": "number"}, "place_yaw_deg": {"type": "number"}, "max_attempts": {"type": "integer"},
-         "stay_in_hover": {"type": "boolean"}, "no_vision_refine": {"type": "boolean"},
-         "catalog": {"type": "string"}, "object": {"type": "string"},
-     }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
-)
-TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
-OPERATIONS_MCP_TOOLS = frozenset({
-    "cell_readiness", "cell_failure_context", "cell_failure_asset", "cell_frame", "cell_queue",
-    "fleet_state", "fleet_cell_readiness", "fleet_cell_tasks", "fleet_propose_cell_task",
-})
 
 
 def _check_type(ps: dict[str, Any], val: Any, key: str) -> str | None:
@@ -253,13 +167,13 @@ def _validate_args(spec: dict[str, Any], args: Any) -> str | None:
     for k, val in args.items():
         if err := _check_type(props[k], val, k):
             return err
-    if spec["name"] == "fleet_propose_cell_task":
+    if spec["name"] in ("fleet_propose_cell_task", "fleet_dispatch_cell_task"):
         return validate_proposal_args(args)
     return None
 
 
 class RosyAgentBridge:
-    """Pure stdlib HTTP dispatcher implementing the 18 ROSY tools across 3 control planes."""
+    """Pure stdlib HTTP dispatcher implementing the 20 ROSY tools across 3 control planes."""
 
     def __init__(self, cfg: BridgeConfig) -> None:
         self.cfg = cfg
@@ -416,13 +330,16 @@ class RosyAgentBridge:
         if name == "fleet_cell_readiness":
             cid = urllib.parse.quote(a["cell_id"], safe="")
             return self._http("GET", f"{fu}/api/fleet/pipeline/cells/{cid}/readiness", token=ft, cookie=fc)
+        if name == "fleet_cell_sites":
+            return self._http("GET", f"{fu}/api/fleet/pipeline/cell-sites", token=ft, cookie=fc)
         if name == "fleet_cell_tasks":
             q = urllib.parse.urlencode({k: str(a[k]) for k in ("cell_id", "status") if a.get(k)})
             return self._http("GET", f"{fu}/api/fleet/pipeline/cell-tasks" + (f"?{q}" if q else ""), token=ft, cookie=fc)
-        if name == "fleet_propose_cell_task":
+        if name in ("fleet_propose_cell_task", "fleet_dispatch_cell_task"):
             if refusal := self.check_cell_proposal_context(a):
                 return refusal
-            payload = {**a, "propose": True}
+            propose_only = name == "fleet_propose_cell_task"
+            payload = {**a, "propose": True} if propose_only else dict(a)
             if a.get("failure_bundle_id"):
                 payload["failure_context_sha256"] = a["expected_context_sha256"]
             hdrs = {"Idempotency-Key": str(a["request_key"])} if a.get("request_key") else None
@@ -431,8 +348,13 @@ class RosyAgentBridge:
                 data = res.get("data")
                 task = data.get("task") if isinstance(data, dict) else None
                 status = (data.get("status") if isinstance(data, dict) else None) or (task.get("status") if isinstance(task, dict) else None)
-                if status != "PROPOSED":
-                    return {"ok": False, "status": 502, "error_code": "PROPOSE_NOT_ENFORCED", "detail": f"upstream did not confirm status=PROPOSED (got {status!r})"}
+                if propose_only:
+                    if status != "PROPOSED":
+                        return {"ok": False, "status": 502, "error_code": "PROPOSE_NOT_ENFORCED", "detail": f"upstream did not confirm status=PROPOSED (got {status!r})"}
+                else:
+                    if status not in ("QUEUED", "PROPOSED"):
+                        return {"ok": False, "status": 502, "error_code": "DISPATCH_STATUS_INVALID", "detail": f"unexpected task status {status!r}"}
+                    res["needs_approval"] = status == "PROPOSED"
             return res
         if name == "job_status":
             jid = urllib.parse.quote(str(a["job_id"]), safe="")
@@ -580,7 +502,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("list-tools")
     p_call = sub.add_parser("call")
     p_call.add_argument("tool")
-    p_call.add_argument("--args-json", default="{}")
+    p_call.add_argument("--args-json", default=None)
+    p_call.add_argument("--args-file", type=Path, default=None)
     p_mcp = sub.add_parser("mcp-stdio")
     p_mcp.add_argument("--operations-only", action="store_true",
                        help="expose observation and Fleet proposal tools only")
@@ -591,7 +514,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "mcp-stdio":
         return serve_mcp_stdio(bridge, stdin=sys.stdin, stdout=sys.stdout, operations_only=args.operations_only)
-    res = bridge.call_tool(args.tool, json.loads(args.args_json))
+    if args.args_file is not None and args.args_json is not None:
+        ap.error("--args-file and --args-json are mutually exclusive")
+    raw_json = Path(args.args_file).expanduser().read_text(encoding="utf-8-sig") if args.args_file is not None else (args.args_json or "{}")
+    res = bridge.call_tool(args.tool, json.loads(raw_json))
     print(json.dumps(res, ensure_ascii=False))
     return 0 if res.get("ok") else 1
 

@@ -16,6 +16,7 @@ from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_op
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reservation_covers, reserved_wait, road_centerline
+from fleet.server.peer_wait_prefix import table_answer as _table_answer, traffic_end_index as _traffic_end_index
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.road_route_lease import RoadSpeedRefused
@@ -41,18 +42,6 @@ _TRANSIENT_GOAL_REFUSALS = ("ROUTE_CONFLICT", "YIELDING")
 def _immediate_hold(live: LiveTrip) -> bool:
     hold = live.view["hold"] or {}
     return hold.get("reason") in _IMMEDIATE_HOLD_REASONS or hold.get("source") == "nav2_problem"
-
-
-def _traffic_end_index(runner, live: LiveTrip, index: int) -> int | None:
-    """Last segment index allowed by the Fleet traffic block table, or ``None`` if held here."""
-    if (live.traffic or {}).get("refused_at_m") is None:
-        return len(live.segments) - 1
-    allowed: int | None = None
-    for k in range(index, len(live.segments)):
-        if runner.traffic.holds(live, k):
-            break
-        allowed = k
-    return allowed
 
 
 async def _cancel_active_route(runner, live: LiveTrip, robot_id: str, nav: str | None) -> None:
@@ -436,6 +425,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         for rx, ry, ryaw, kind in robot_pts
     ]
     options = {}
+    if (answer := _table_answer(runner, live)) is not None:
+        options["table_peers"] = answer["peers"]
     controlled = getattr(runner, "road_speed", None) is not None and (
         prefix is not None or live.nav2_binding_scope is not None or runner.config.map_binding_required
         or runner._store.rules.active_rules() is not None)

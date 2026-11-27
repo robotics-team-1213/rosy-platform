@@ -5136,3 +5136,19 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음(관측 신선도 한계 0.6 s, 가드, person_at_switch, D-1024, lease 그대로)
 - 결정: 없음
 - 교훈: 없음(실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 팔 사고 해제 자동 실행, 셀 기본 기준 99
+
+- 변경: cell_task_worker가 30 s마다 cell_incident_release.watch를 부름(hold가 열린 팔만, 사고 id·자세·토크·하드웨어 오류가 바뀌고 두 번 연속 같을 때 1회). pipeline·auto_clear·CLI 기본 min_score 95→99(공용 하한 95와 Fleet 판정은 그대로). worker·job API가 사고 기록과 24 h 해제 횟수를 작업 디렉터리의 incidents/에서 읽음(이전에는 cwd 기준이라 facts unreadable)
+- 증거: 원격 pytest test_omx_incident_release.py, test_omx_incident_auto_clear.py와 관련 OMX 시험(로그는 PR 보고)
+- gate 변화: 없음(hard veto, 점수 감점, 24 h 반복 한도 그대로)
+- 결정: 사용자 2026-11-27 완전 자동, 기준 99
+- 교훈: 없음(실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 임시판 칸 사전지식(cell_slot_prior)
+
+- 변경: 사이트 선택 키 slots·slots_fit을 읽어 칸 밖 덩어리 제외, 깊이 층수로 칸 안 재측정·칸 축 맞춤(8 mm/5°/가로 4 mm), 맞춰진 물체에만 사이트 finger_params 적용. 집게 닫기 칸 축 수직 ±3°, 이웃 높이 모르면 3단, SITE_NOT_MEASURED·깊이/측면 반 단 보류. slots 없으면 이전과 같음. 도달 보조 함수는 cell_auto_reach.py로 그대로 옮김
+- 증거: 원격 pytest affected 선택 7회(test_omx_temp_plate_prior.py 포함, 2026-11-27 상단 프레임 고정 입력)
+- gate 변화: 없음(auto.neighbour_clear_mm·min_jaw_margin_mm·finger_mm 기본값, outside_blocks 그대로)
+- 결정: 2026-11-27 임시판 인식 패널 안전 조건
+- 교훈: 없음(셀 설정 값·판 기준점 측정·실물 수용 전)

@@ -36,6 +36,59 @@ def units_under_pose(
     return units
 
 
+def pinned_behind(graph, segments, robot, units, pose, reach: float, u_max: float) -> bool:
+    """A pinned robot's whole pin (``pose`` ± ``reach`` along the lane, never narrowed) lies behind this trip
+    robot's estimated rear, measured on the arcs of the unit under its front. The rear is the unpadded body, as
+    for the unit under the front in ``blocks.step`` 2 (the pin already carries the padding). The farthest
+    projection on those arcs counts. Unknown pose, off those arcs, or any overlap: False."""
+    front = None if pose is None or robot.d is None else next(
+        (span for span in robot.spans if span.d0 <= robot.d < span.d1), None)
+    if front is None or front.unit not in units:
+        return False
+    base, along = 0.0, []
+    for segment in segments:
+        arc = graph.arcs[arc_id(segment)]
+        if base < front.d1 and base + arc.length_m > front.d0:
+            dist, s, _tangent = arc.project(pose[0], pose[1])
+            if dist <= arc.width_m / 2 + u_max:
+                along.append(base + s)
+        base += arc.length_m
+    return bool(along) and max(along) + reach <= robot.d - robot.body_length_m
+
+
+def unit_owners(state) -> dict[str, set[str]]:
+    """``{unit: robots that hold it, last covered it or pin it}`` after a table step."""
+    owners: dict[str, set[str]] = {}
+    for rid, held in state.held.items():
+        for unit, _forward in held.values():
+            owners.setdefault(unit, set()).add(rid)
+    for table in (state.last_occupied, state.pinned):
+        for rid, units in table.items():
+            for unit in units:
+                owners.setdefault(unit, set()).add(rid)
+    return owners
+
+
+def occupied_ahead(robot, state, owners) -> Optional[float]:
+    """Route metres where this robot's route first enters a unit it does not hold and another robot holds,
+    last covered or pins (the place cut for a Nav2 road route, D-1009); None when nothing is ahead."""
+    if robot.d is None:
+        return None
+    held = state.held.get(robot.id, {})
+    return next((span.d0 for i, span in enumerate(robot.spans)
+                 if span.d1 > robot.d and i not in held and owners.get(span.unit, set()) - {robot.id}), None)
+
+
+def route_occupants(robot, owners, fresh, map_id) -> dict[str, list]:
+    """``{peer: [map id, x, y]}``: robots owning a unit on this robot's route ahead of its rear, with the pose
+    read this period that placed them (the console checks they still stand there, D-1009)."""
+    if robot.d is None:
+        return {}
+    ahead = {span.unit for span in robot.spans if span.d1 > robot.d - robot.body_length_m}
+    return {rid: [map_id, round(fresh[rid][0], 4), round(fresh[rid][1], 4)]
+            for unit in ahead for rid in owners.get(unit, ()) if rid != robot.id and rid in fresh}
+
+
 def resolve_handover(service: Any, layout, trips: dict, robots, refused_unit: dict, now: float) -> None:
     """D-517 5 (M4): Fleet's resolver for a wait cycle or a 30 s UNKNOWN (``handover.decide``)."""
     localized = {robot.id for robot in robots if robot.d is not None}
