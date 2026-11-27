@@ -94,7 +94,7 @@ async def build_context(app, principal, selected_robot_id, locale='ko-KR'):
                     cat = str(obj.get('catalog_id') or '').strip()
                     if not cat or cat.lower() == 'unmatched':
                         continue
-                    site = str(obj.get('site') or '').strip() or ('pinky' if cid == 'cell_s' else 'stand')
+                    site = str(obj.get('site') or '').strip() or ('shuttle' if cid == 'cell_s' else 'stand')
                     key = (code(cat, locale), code(site, locale), bool(obj.get('pickable')))
                     counts[key] = counts.get(key, 0) + 1
             if not counts:
