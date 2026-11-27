@@ -21,7 +21,7 @@
 | `park` 명령 | `chunk_runner_commands.py` | `park_path`로 홈. 집게는 닫음 |
 | `stop` | `chunk_runner_commands.py` | 실물(scope=hardware)은 기본 `fold_on_stop`: 홈이 아니면 `park_path` 뒤 종료. `stop now`는 접지 않음. 접을 수 없으면(가드 hold, hard fault, 해제 미확인) 토크 ON으로 human-hold |
 | 무명령(idle) | `chunk_runner_settle.check_runner_idle` | 마지막 명령·청크 끝에서 `runner.idle_park_s`(60 s) → `park`. 접기가 hold로 막히면 `idle_retry_s`(300 s) 뒤 한 번 더, 두 번째도 막히면 사람 호출 hold. 홈 도착 `idle_stop_s`(30 s) 뒤 세션 종료·토크 OFF. 정책(ACT) 세션은 제외 |
-| 무명령 + 집게 열기 | `runner.idle_open_grip`(기본 0 = 끔, 최대 65) | 값을 주면 첫 idle 접기에서 **빈 집게**를 제자리에서 그 값까지 열고 1.5 s 뒤 `park`(1절 "집게 열림 → 먼저 들어 올림" 경로). 빈 집게 판정: `holding` false, fault 없음, 실측 집게와 명령 집게가 모두 `gripper_closed` + 2.0 이하. 하나라도 아니면 열지 않고 기존 `park`. 재시도 접기에서는 열지 않음 |
+| 무명령 + 집게 열기 | `runner.idle_open_grip`, `chunk_runner_idle_open.py`(기본 0 = 끔, 최대 65) | 값을 주면 첫 idle 접기에서 **빈 집게**를 제자리에서 그 값까지 열고 1.5 s 뒤 `park`(1절 "집게 열림 → 먼저 들어 올림" 경로). 빈 집게 판정: `holding` false, fault 없음, 실측 집게와 명령 집게가 모두 `gripper_closed` + 2.0 이하. 하나라도 아니면 열지 않고 기존 `park`. 재시도 접기에서는 열지 않음 |
 | 작업 전 재홈 | `cell_transfer.Gate.open` → `cell_unwedge.rehome_before_work` | 아래 3절 |
 | `POST /jobs/home` | `cell_pipeline --stage home` → `return_home(grip=True)` | 3절과 같은 조그, 끝에 집게를 홈 값으로 |
 | ACT 시작 검사 | `cell_policy_pre_home.pre_settle_home` | 홈 2.0 이내·정지·빈 집게가 아니면 `START_POSE_OFF_HOME`로 거절. hold를 남기면 다음 단계는 `recover_hold` |
