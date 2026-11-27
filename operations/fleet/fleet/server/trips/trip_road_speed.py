@@ -16,7 +16,8 @@ GRANT_S = 1.5
 async def _goal_finished(runner, rid) -> bool:
     """A lease 409 is a normal end only when CORE itself reports the goal done: ARRIVED (or FAILED, which the step
     loop retries through _handle_nav2_failure), no goal, no e-stop. The step loop reads the same state next tick and
-    still demands fresh zero velocity before it reports arrival, so the lease race never needs that proof here.
+    takes the same arrival path a normal CORE ARRIVED takes (plain Nav2: navigation done plus pose proximity; parking
+    and free stops also demand fresh zero velocity), so the lease race adds no new arrival rule here.
     Anything else (cancelled, replaced, still navigating, unknown) stays a stop."""
     if getattr(runner, "_robot_state", None) is None:
         return False
