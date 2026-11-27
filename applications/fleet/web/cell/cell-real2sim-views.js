@@ -30,12 +30,18 @@ export function createCellViews(ctx) {
       draftChoices: state.draftChoicesByTarget,
       frames: frames(),
       framesActive: true,
+      cameraRois: state.sitePointsCameras || null,
+      showRoi: state.showRoi !== false,
       runButtonLabel: undefined,
       quickDispatchReason: typeof ctx.namedReason === 'function' ? ctx.namedReason() : '',
       actionsClass: 'omx-inspector-actions',
       onSelectTarget: (id) => selectInspectorTarget(id),
       onToggleDual: () => {
         state.dualInspectorCamMode = !state.dualInspectorCamMode;
+        renderRightInspector(body);
+      },
+      onToggleRoi: () => {
+        state.showRoi = state.showRoi === false;
         renderRightInspector(body);
       },
       onSelectCam: (targetId, camId) => {

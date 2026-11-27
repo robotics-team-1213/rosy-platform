@@ -1,19 +1,6 @@
 /* Shared styles for the OMX right inspector across Console and Cell screens. */
 
-.omx-right-inspector {
-  position: sticky;
-  top: var(--space-3);
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: var(--space-3);
-  border: 1px solid var(--line-14);
-  border-radius: var(--radius-panel);
-  background: var(--surface-raised);
-  overflow: hidden;
-}
+.omx-right-inspector { position: sticky; top: var(--space-3); display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
 .omx-right-inspector:empty { display: none; }
 .omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); }
 .omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
@@ -57,3 +44,8 @@
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
   .omx-inspector-tabs ui-button { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-2); }
 }
+
+.omx-cam-roi-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.omx-cam-roi-rect { fill: var(--series-primary); fill-opacity: 0.14; stroke: var(--series-primary); stroke-width: 2; stroke-dasharray: 6 4; }
+.omx-cam-roi-point { fill: var(--series-goal); stroke: var(--surface-canvas); stroke-width: 2; }
+.omx-cam-roi-label { fill: var(--text-primary); font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); paint-order: stroke; stroke: var(--surface-canvas); stroke-width: 3; }

@@ -24,6 +24,7 @@ from fleet.site_points_catalog import (
     build_coordinate_frames,
     build_end_to_end_stages,
     build_zone_rules,
+    load_cell_site_pixels,
 )
 from fleet.site_rules import SiteRules
 
@@ -195,6 +196,7 @@ def build_site_points(
     legacy_station_zones: dict[str, Any] | None = None,
     view: Literal["full", "port"] = "full",
     include_junctions: bool = False,
+    web_common: Path | None = None,
 ) -> dict[str, Any]:
     if view not in ("full", "port"):
         raise ValueError(f"unsupported site-points view: {view!r}")
@@ -488,13 +490,20 @@ def build_site_points(
 
     s3_ready = bool((berth_by_stop_id.get("S3") or {}).get("nav2_berth_ready"))
     s_out_ready = bool((berth_by_stop_id.get("S_OUT") or {}).get("nav2_berth_ready"))
+    pixels = load_cell_site_pixels(web_common)
     return _with_digest(
         {
             "schema": SCHEMA_FULL,
             "sources": sources,
             "vehicle_stops": vehicle_stops,
             "arm_zones": cell_sites,
-            "coordinate_frames": build_coordinate_frames(site_map, site_rules, cell_sites),
+            "coordinate_frames": build_coordinate_frames(site_map, site_rules, cell_sites, web_common=web_common),
+            "cameras": {
+                "schema": pixels["schema"],
+                "image_size_px": pixels["image_size_px"],
+                "status": pixels["status"],
+                **pixels["cameras"],
+            },
             "conveyor_transfer": build_conveyor_transfer(),
             "zone_rules": build_zone_rules(cell_sites),
             "end_to_end_stages": build_end_to_end_stages(

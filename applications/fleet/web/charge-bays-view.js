@@ -46,6 +46,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   }, true);
   const selectedInspectorCam = {};
   let dualCamMode = false;
+  let showRoi = true;
+  let sitePointsCameras = null;
   let lastRows = null;
   let lastInspectorSig = "";
   let lastListSig = "";
@@ -206,6 +208,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       active.dualPair || null,
       active.buttons || [],
       active.quickControls || [],
+      showRoi,
+      Boolean(sitePointsCameras),
       opReason(),
     ]);
     if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
@@ -219,6 +223,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       draftChoices,
       frames,
       framesActive: framesOn && inspectorOpen,
+      cameraRois: sitePointsCameras,
+      showRoi,
       standbyText: "영상 대기 · 클릭하여 연결",
       tagText: active.text || "대기 중",
       tagStatus: active.status || "neutral",
@@ -237,6 +243,11 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       },
       onToggleDual: () => {
         dualCamMode = !dualCamMode;
+        lastInspectorSig = "";
+        renderInspector(rows);
+      },
+      onToggleRoi: () => {
+        showRoi = !showRoi;
         lastInspectorSig = "";
         renderInspector(rows);
       },
@@ -330,7 +341,13 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (inFlight || unavailable || auth.locked || document.hidden || !owns("drive")) return;
     inFlight = true;
     try {
-      const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
+      const [planRes, spRes] = await Promise.allSettled([
+        call("/api/fleet/charge-bays", { signals: [life.signal] }),
+        sitePointsCameras ? Promise.resolve(null) : call("/api/fleet/site-points?view=full", { signals: [life.signal] }),
+      ]);
+      if (spRes.status === "fulfilled" && spRes.value?.cameras) sitePointsCameras = spRes.value.cameras;
+      if (planRes.status === "rejected") throw planRes.reason;
+      const plan = planRes.value;
       life.check();
       const rows = chargeBayRows(plan);
       patchText(state, `칸 ${rows.bays.length}`);
