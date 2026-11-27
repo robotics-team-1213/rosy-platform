@@ -9,6 +9,7 @@ from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
+from fleet.pipeline.cell_motion import prepare_cell_motion, restrict_motion_admission
 from fleet.pipeline.cell_site_targets import act_route_refusal, expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
@@ -163,6 +164,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             raise HTTPException(409, detail={"code": "CELL_TASK_ID_EXISTS"})
         web_common = getattr(app.state, "web_common", None)
         try:
+            spec, motion = prepare_cell_motion(spec, cell_id=cell_id, web_common=web_common, legacy_sites=("belt", LEGACY_VEHICLE_SITE))
             targets = resolve_cell_task_targets(
                 cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
                 legacy_sites=("belt", LEGACY_VEHICLE_SITE),
@@ -206,6 +208,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
             vehicle_sites=(LEGACY_VEHICLE_SITE,),
         )
+        target_status, gov_meta = restrict_motion_admission(motion, target_status, gov_meta, principal_role)
         if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
             resolved_disp = app.state.detected_displaced_site or "belt_far"
             app.state.detected_displaced_site = None
@@ -216,6 +219,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cell_id": cell_id,
             "arm_id": arm_id,
             "directive": directive,
+            **({"motion": motion} if motion else {}),
             "robot_id": resolved_robot_id,
             "robot_kind": str(spec.get("robot_kind") or "pinky"),
             "src_site": targets["src_site"],
@@ -332,7 +336,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 if preset is None:
                     raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
                 if "steps" in preset:
-                    if has_identity_input(body):
+                    if has_identity_input(body) or body.get("motion") is not None:
                         raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
                     base_id = str(body.get("task_id") or (deterministic_idempotency_id("pipe", scoped_key) if scoped_key else f"pipe-{uuid.uuid4().hex[:6]}"))
                     step_specs = []
@@ -479,7 +483,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier", *TASK_IDENTITY_FIELDS) if k in orig}
-        if orig.get("placement_attempt_id"):
+        if orig.get("placement_attempt_id") or orig.get("motion"):  # a motion is proposed again, never rebuilt as a fixed-site pick
             raise HTTPException(409, detail={"code": "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"})
         spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset", "zone_id") if k in orig})
         spec.update({"task_id": new_id, **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None}})

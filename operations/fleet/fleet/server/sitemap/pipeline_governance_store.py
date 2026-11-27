@@ -520,6 +520,8 @@ def admit_cell_task_guarded(
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         if task.get("status") != "PROPOSED":
             raise HTTPException(409, detail={"code": "CELL_TASK_NOT_PROPOSED"})
+        if (task.get("motion") or {}).get("kind") == "push":
+            raise HTTPException(409, detail={"code": "PUSH_NOT_EXECUTABLE"})  # a push has no execution or completion path yet
         proposer = str(task.get("proposer") or "").strip()
         if not proposer or proposer == approver:
             raise HTTPException(403, detail={"code": "SELF_APPROVAL_FORBIDDEN"})

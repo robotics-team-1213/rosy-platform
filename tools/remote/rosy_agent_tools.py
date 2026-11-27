@@ -18,6 +18,7 @@ _CELL_TASK_PROPS: dict[str, Any] = {
     "tier": {"type": "integer"}, "tiers": {"type": "array", "items": {"type": "integer"}},
     "execution_mode": {"type": "string", "enum": ["guarded_pick", "act_policy"]},
     "max_chunks": {"type": "integer"}, "displaced_to": {"type": "string"}, "zone_id": {"type": "string"},
+    "motion": {"type": "object", "description": "free_pick {kind, anchor_site, at_px [u,v], dst_site, frame_seq, frame_sha256, object?, colour?} or push {kind, site, px [u,v], dir [dx,dy], mm 5..20, frame_seq, frame_sha256}; pixels only, never metres; frame_seq/frame_sha256 are an audit record of the frame you chose, not a binding: the cell re-measures at run time and refuses when no measured blob lies at the pixel"},
     "task_id": {"type": "string"}, "request_key": {"type": "string"}, "auto_admit": {"type": "boolean"},
     "fallback_from_task_id": {"type": "string"}, "fallback_verb": {"type": "string"},
     "failure_bundle_id": {"type": "string"}, "failure_context_sha256": {"type": "string"},

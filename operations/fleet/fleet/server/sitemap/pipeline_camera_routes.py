@@ -13,6 +13,7 @@ from fleet.server.pipeline.bound_home_receipt import sync_home_receipts, verifie
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
+from fleet.pipeline.cell_motion import claim_refusal
 from fleet.site_rules import SiteRules
 
 from fleet.server.pipeline_port_events import (
@@ -24,7 +25,6 @@ from fleet.server.pipeline_autonomous_policy import skip_claim_presence_check
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
-
 
 from fleet.server.pipeline_recovery_policy import effective_stop_fence
 from fleet.server.pipeline_recovery_tools import (
@@ -281,6 +281,8 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        if (why := claim_refusal(task, body)):  # before any state changes: the task stays QUEUED
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": why}
         # D-1057: the claiming principal must be a registered owner of this cell, or a result could never be accepted and the
         # task would stay RUNNING. Refused before the ledger changes. Bare apps without authentication (no principal) skip it.
         from fleet.server.sitemap.pipeline_evidence import cell_owner_principals, owner_principal_refusal
@@ -370,7 +372,7 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"), "src_site": task["src_site"], "dst_site": task["dst_site"],
             "interlock_scope": task.get("interlock_scope"), "displaced_to": task.get("displaced_to"),
             "tier_hint": task.get("tier_hint"), "presence": task["presence"],
-            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks", "approval_mode", "approved_by") if task.get(k) is not None},
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "motion", "execution_mode", "max_chunks", "approval_mode", "approved_by") if task.get(k) is not None},
         }
         return {"claimed": True, "task": strip_task_for_claim(task), "handoff": handoff, "gate": res["gate"]}
 

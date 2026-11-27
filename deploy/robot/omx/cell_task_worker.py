@@ -175,7 +175,7 @@ def poll_and_execute_once(
         if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
             continue
         send_bed_observation(request_fn, bed_observe_fn, task)  # D-1057 2-9: cell S only, before the claim
-        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
+        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id, "capabilities": ["motion"]})
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
