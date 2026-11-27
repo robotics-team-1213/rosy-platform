@@ -148,3 +148,27 @@ def test_moving_peer_of_unknown_kind_or_with_a_goal_on_the_wire_blocks():
 def test_moving_peer_claim_must_belong_to_its_leased_goal(kw):
     with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
         _run((-1.0, -.5), peer_state=DRIVING, claims={"peer": LOOP_CLAIM}, **kw)
+
+
+def _peer_run(peer_state, **kw):
+    fit = Fit(0., 0., 0., (.037,))
+    clients = {"mover": NS(), "peer": NS()}
+    console = NS(clients=lambda: clients, robot_ids=clients.keys(), _clearance_m=.7,
+                 goal_leases=NS(pending={}), _goal_busy=set(),
+                 _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda *_a: (fit, None))),
+                 _capability_display=NS(_kept=lambda *_a: PINKY_CAPS))
+    site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1}, None, (-.42, .47),
+                  ({"peer": clients["peer"]}, {"peer": peer_state}), route=[(-.42, .15)], **kw)
+
+
+def test_navigation_mode_peer_stopped_with_inert_navigation_is_a_fixed_body():
+    sticky = _state(-.42 + .452, .47) | {"mode": "NAVIGATION", "navigation": "IDLE"}
+    _peer_run(sticky)                            # held or not (this PR widened #1122's held-only relaxation)
+    _peer_run(sticky, held_by_fleet={"peer"})
+    # Still a fixed body: geometry applies, and a moving or goal-active held peer is not accepted.
+    with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
+        _peer_run(_state(-.42 + .10, .47) | {"mode": "NAVIGATION"}, held_by_fleet={"peer"})
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _peer_run(sticky | {"navigation": "NAVIGATING"}, held_by_fleet={"peer"})
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _peer_run(sticky | {"velocity": {"linear": .1, "angular": 0.}}, held_by_fleet={"peer"})

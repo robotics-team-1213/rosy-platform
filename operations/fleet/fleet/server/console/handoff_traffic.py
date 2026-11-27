@@ -184,7 +184,8 @@ def _check_moving_peer(console, robot, state, position, path, site_map_id, unkno
         raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")
 
 
-def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None):
+def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None, held_by_fleet=frozenset()):
+    # held_by_fleet (#1122): peers Fleet holds for the mover; a stopped peer in NAVIGATION now passes without it.
     clients, observed = peers
     marker_clearance = getattr(console, "_site_marker_clearance", None)
     current = {rid: client for rid, client in console.clients().items() if rid != mover}
