@@ -14,6 +14,7 @@ import json
 import logging
 from contextlib import nullcontext
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence, runtime_checkable
+from uuid import UUID
 
 import httpx
 
@@ -26,6 +27,7 @@ from core_common.protocol.schemas import LineStuckPrecondition, SwarmFollowParam
 from fleet.swarm.robots import RobotEndpoint, ws_url
 from fleet.swarm.station_transport import StationTransport
 from fleet.swarm.navigation_transport import NavigationTransport
+from fleet.swarm.motion_ingress import ADMIT_DEADLINE_PATHS, MOTION_ADMIT_WITHIN_S, MOTION_TIMEOUT_S
 from fleet.swarm.transport_helpers import (
     _WebsocketSink,
     _as_event,
@@ -82,12 +84,31 @@ def _rejection(robot_id: str, exc: BaseException) -> Optional["RobotApiError"]:
     return None
 
 
+def _parse_owner_epoch(view: Any) -> tuple[Optional[str], Optional[int]]:
+    owner = view.get("owner") if isinstance(view, dict) else None
+    if not isinstance(owner, dict):
+        return None, None
+    try:
+        boot_id = str(UUID(str(owner["boot_id"])))
+    except (KeyError, TypeError, ValueError):
+        return None, None
+    generation = owner.get("owner_generation")
+    if type(generation) is not int or generation < 0:
+        return boot_id, None
+    return boot_id, generation
+
+
 class HttpRobotClient(StationTransport, NavigationTransport):
     def __init__(self, endpoint: RobotEndpoint, *, http: Optional[httpx.AsyncClient] = None,
-                 timeout_s: float = 5.0) -> None:
+                 timeout_s: float = MOTION_TIMEOUT_S) -> None:
         self.robot_id = endpoint.robot_id
         self._ep = endpoint
         self._motion_wire = None
+        self._motion_timeout_s = timeout_s
+        self._admit_deadline = False
+        self._generation_fence = False
+        self._admit_boot_id: Optional[str] = None
+        self._owner_generation: Optional[int] = None
         self._owns_http = http is None
         from fleet.swarm.discovery_transport import DiscoveryTransport, tls_context
         context = tls_context(endpoint)
@@ -106,7 +127,38 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         return check_response(self.robot_id, resp)
 
     async def _get(self, path: str) -> dict:
-        return self._check(await self._http.get(path, headers=self._headers()))
+        data = self._check(await self._http.get(path, headers=self._headers()))
+        if path.split("?", 1)[0] == "/api/v1/navigation/state":
+            self._observe_navigation_owner(data)
+        return data
+
+    def _clear_admit_capability(self) -> None:
+        self._admit_deadline = False
+        self._generation_fence = False
+        self._admit_boot_id = None
+        self._owner_generation = None
+
+    def _observe_navigation_owner(self, view: Any) -> tuple[Optional[str], Optional[int]]:
+        boot_id, generation = _parse_owner_epoch(view)
+        if boot_id is None:
+            if self._admit_boot_id is not None:
+                self._clear_admit_capability()
+            return None, None
+        if self._admit_boot_id is not None and boot_id != self._admit_boot_id:
+            self._clear_admit_capability()
+            return boot_id, generation
+        if self._admit_deadline and self._generation_fence:
+            self._admit_boot_id = boot_id
+            if generation is not None:
+                self._owner_generation = generation
+        return boot_id, generation
+
+    async def _refresh_navigation_owner(self) -> tuple[Optional[str], Optional[int]]:
+        try:
+            view = self._check(await self._http.get("/api/v1/navigation/state", headers=self._headers()))
+        except Exception:
+            return None, None
+        return self._observe_navigation_owner(view)
 
     def bind_motion_wire(self, gate) -> None:
         self._motion_wire = gate
@@ -114,15 +166,45 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def _request(self, method, path, body=None) -> httpx.Response:
         from fleet.swarm.dispatch_guard import check_dispatch
         gate = self._motion_wire
-        with (gate(self.robot_id, method, path, body) if gate is not None else nullcontext()) as unresolved:
+        is_start = method.upper() == "POST" and path in ADMIT_DEADLINE_PATHS
+        bounded = is_start and self._admit_deadline and self._generation_fence
+        if is_start:
+            body = dict(body or {})
+            body.pop("admit_within_s", None)
+            if bounded and (body.get("expected_boot_id") is None or body.get("expected_owner_generation") is None):
+                if self._admit_boot_id is not None and self._owner_generation is None:
+                    await self._refresh_navigation_owner()
+                if (self._admit_deadline and self._generation_fence
+                        and self._admit_boot_id is not None and self._owner_generation is not None
+                        and body.get("expected_boot_id") is None and body.get("expected_owner_generation") is None):
+                    body["expected_boot_id"] = self._admit_boot_id
+                    body["expected_owner_generation"] = self._owner_generation
+            elif (bounded and self._admit_boot_id is not None
+                  and body.get("expected_boot_id") is not None
+                  and str(body["expected_boot_id"]) != self._admit_boot_id):
+                self._clear_admit_capability()
+            gen = body.get("expected_owner_generation")
+            bounded = (self._admit_deadline and self._generation_fence
+                       and bool(body.get("expected_boot_id")) and type(gen) is int and gen >= 0)
+            if bounded:
+                body["admit_within_s"] = MOTION_ADMIT_WITHIN_S
+        with (gate(self.robot_id, method, path, body, timeout_s=self._motion_timeout_s)
+              if gate is not None else nullcontext()) as unresolved:
             if method.upper() in {"POST", "PUT", "DELETE"}:
                 check_dispatch(path=path)
             try:
-                response = await self._http.request(method, path, json=body, headers=self._headers())
-            except (httpx.RequestError, asyncio.CancelledError):
+                request = self._http.request(method, path, json=body, headers=self._headers())
+                if bounded:
+                    # httpx timeouts are per phase; recovery needs a total delivery bound (D-1079).
+                    response = await asyncio.wait_for(request, self._motion_timeout_s)
+                else:
+                    response = await request
+            except (httpx.RequestError, TimeoutError, asyncio.CancelledError):
                 if unresolved is not None:
                     unresolved()
                 raise
+            if is_start and self._owner_generation is not None:
+                self._owner_generation = None
             if response.status_code >= 500 and unresolved is not None:
                 unresolved()
             return response
@@ -136,7 +218,14 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         return await self._get("/api/v1/robot/state")
 
     async def capabilities(self) -> dict:
-        return await self._get("/api/v1/system/capabilities")
+        self._clear_admit_capability()
+        caps = await self._get("/api/v1/system/capabilities")
+        nav = caps.get("navigation") or {}
+        if nav.get("admit_deadline") is True and nav.get("generation_fence") is True:
+            self._admit_deadline = True
+            self._generation_fence = True
+            await self._refresh_navigation_owner()
+        return caps
 
     async def map(self) -> dict:
         """점유 격자. 관제 화면이 N대를 한 좌표계 위에 그리려면 이것 하나가 필요하다."""

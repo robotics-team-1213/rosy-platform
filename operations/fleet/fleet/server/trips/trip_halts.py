@@ -2,17 +2,15 @@
 import asyncio
 from contextlib import nullcontext
 import logging
-import math
 
 from core_common.protocol.evidence import STALE_POSE_S
 from rosy.world.state.projections.map_pose_samples import parse_utc
 
 from fleet.routing.cost import STOP
 from fleet.server.trip_ports import OPEN
+from fleet.server.named_stop_motion import measured_stop_proof
 
 _LOG = logging.getLogger("fleet.server.trip_runner")  # the trip loop's logger, as before the D-517 split
-_STOP_LINEAR_MPS = 0.01
-_STOP_ANGULAR_RPS = 0.02
 
 
 def error_code(exc: BaseException) -> str:
@@ -170,24 +168,7 @@ class TripHalts:
         if self.read_stop_state is None:
             return None
         state = await self._call(self.read_stop_state(robot_id))
-        if not isinstance(state, dict):
-            return None
-        sample = (state.get("evidence") or {}).get("velocity") or {}
-        stamp = parse_utc(sample.get("sampled_at"))
-        vel = state.get("velocity") or {}
-        # CORE snapshots omit goal; quiescence is proved by mode, navigation, line_follow, and fresh zero velocity.
-        if (sample.get("evidence") != "fresh" or stamp is None or stamp <= after
-                or not 0 <= self._clock() - stamp < STALE_POSE_S
-                or state.get("robot_id") != robot_id or state.get("goal") is not None
-                or (state.get("line_follow") or {}).get("mode") != "OFF"
-                or state.get("navigation") not in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
-                or state.get("mode") not in {"IDLE", "NAVIGATION"}
-                or idle_only and (state["mode"] != "IDLE" or state["navigation"] != "IDLE")
-                or any(type(vel.get(k)) not in (float, int) or not math.isfinite(vel[k]) for k in ("linear", "angular"))
-                or abs(vel["linear"]) > _STOP_LINEAR_MPS or abs(vel["angular"]) > _STOP_ANGULAR_RPS):
-            return None
-        return {"sampled_at": sample["sampled_at"], "navigation": state["navigation"],
-                "goal": None, "velocity": {"linear": 0.0, "angular": 0.0}}
+        return measured_stop_proof(state, robot_id, after, self._clock(), idle_only=idle_only)
 
     def idle_wire(self, robot):
         return self.wire_epoch(robot) if self.wire_epoch else None

@@ -1,10 +1,11 @@
 """Track Fleet transport activity that invalidates stationary peer observations."""
 from contextlib import contextmanager
 
-from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
+from fleet.server.uncertain_motion import UncertainMotion
+from fleet.swarm.motion_ingress import MOTION_TIMEOUT_S, PREPARED_GOALS, starts_or_sustains_motion
 
 
-class PeerMotionWire:
+class PeerMotionWire(UncertainMotion):
     def __init__(self):
         super().__init__()
         self._wire_versions = {}
@@ -21,15 +22,18 @@ class PeerMotionWire:
         return self._wire_versions.get(robot, 0)
 
     @contextmanager
-    def motion_wire(self, robot_id, method, path, body):
+    def motion_wire(self, robot_id, method, path, body, *, timeout_s=MOTION_TIMEOUT_S):
         moving = starts_or_sustains_motion(method, path, body) or path in PREPARED_GOALS
         if moving:
             self._wire_versions[robot_id] = self._wire_versions.get(robot_id, 0) + 1
             self._wire_pending[robot_id] = self._wire_pending.get(robot_id, 0) + 1
         try:
-            with self._check_motion_wire(robot_id, method, path, body) as unresolved:
+            sent_at = self._clock()
+            with self._check_motion_wire(robot_id, method, path, body,
+                                         sent_at=sent_at, timeout_s=timeout_s) as unresolved:
                 yield unresolved
         finally:
             if moving:
                 self._wire_pending[robot_id] -= 1
+
 

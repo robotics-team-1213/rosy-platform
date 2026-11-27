@@ -1,6 +1,7 @@
 """A bound preview stays passive and only its exact path can enter the planned execution."""
 
 from types import SimpleNamespace
+from contextlib import contextmanager
 
 import pytest
 
@@ -11,7 +12,7 @@ from test_map_snapshots import GRID
 
 
 @pytest.mark.parametrize("change", [None, "grid", "same_grid_reload", "pose", "mode", "attempt", "cancel",
-                                   "controller", "controller_after_mode", "mode_listener"])
+                                   "controller", "controller_after_mode", "mode_listener", "deadline"])
 def test_bound_plan_checks_live_scope_before_motion(client, monkeypatch, change):
     tc, svc = client
     monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
@@ -41,7 +42,24 @@ def test_bound_plan_checks_live_scope_before_motion(client, monkeypatch, change)
     assert command_source("POST", "/api/v1/navigation/bound-plan") is None
     assert svc.modes.mode.value == "IDLE" and not sent
 
-    if change == "grid":
+    if change == "deadline":
+        from core_api_web.api.v1 import navigation
+        from core_features.navigation import goal_contract
+        now = [10.]
+        clock = SimpleNamespace(monotonic=lambda: now[0])
+        monkeypatch.setattr(navigation, "time", clock)
+        monkeypatch.setattr(goal_contract, "time", clock)
+        original = navigation.localized_start
+
+        @contextmanager
+        def delayed(service):
+            now[0] += 4.
+            with original(service):
+                yield
+
+        monkeypatch.setattr(navigation, "localized_start", delayed)
+        body["admit_within_s"] = 3.
+    elif change == "grid":
         svc.state.set_map_id("s3-map", "occupancy:changed")
     elif change == "same_grid_reload":
         svc.state.invalidate_map_grid()
@@ -73,6 +91,8 @@ def test_bound_plan_checks_live_scope_before_motion(client, monkeypatch, change)
     if change is not None:
         assert response.status_code == (503 if change.startswith("controller") else 409), response.text
         assert response.json()["error"]["detail"] == {"plan_id": plan["plan_id"], "native_admitted": False}
+        if change == "deadline":
+            assert response.json()["error"]["code"] == "MOTION_ADMIT_DEADLINE_EXCEEDED"
         assert not sent and svc.modes.mode.value == "IDLE"
         assert svc.state.snapshot().mode.value == "IDLE"
         return
@@ -84,7 +104,8 @@ def test_bound_plan_checks_live_scope_before_motion(client, monkeypatch, change)
 
 
 @pytest.mark.parametrize("controller_ready", [False, True])
-def test_planned_handoff_keeps_lane_stop_until_controller_admission(robot, controller_ready):
+@pytest.mark.parametrize("expired", [False, True])
+def test_planned_handoff_keeps_lane_stop_until_controller_admission(robot, controller_ready, expired, monkeypatch):
     tc, svc, _ = robot
     assert _open(tc).status_code == 200
     assert tc.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=FLEET).status_code == 200
@@ -109,11 +130,32 @@ def test_planned_handoff_keeps_lane_stop_until_controller_admission(robot, contr
     assert response.status_code == 200, response.text
     assert line.active and not sent
     owner = tc.get("/api/v1/navigation/state", headers=VIEWER).json()["owner"]
+    if expired:
+        from core_api_web.api.v1 import navigation
+        from core_features.navigation import goal_contract
+        now = [10.]
+        clock = SimpleNamespace(monotonic=lambda: now[0])
+        monkeypatch.setattr(navigation, "time", clock)
+        monkeypatch.setattr(goal_contract, "time", clock)
+        original = navigation.localized_start
+
+        @contextmanager
+        def delayed(service):
+            now[0] += 4.
+            with original(service):
+                yield
+
+        monkeypatch.setattr(navigation, "localized_start", delayed)
     response = tc.post("/api/v1/navigation/line-handoff-goal", headers=FLEET, json={
+        "admit_within_s": 3.,
         **body, **stop, "plan_id": response.json()["plan_id"], "expected_boot_id": owner["boot_id"],
         "expected_owner_generation": owner["owner_generation"],
     })
-    if controller_ready:
+    if expired and controller_ready:
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "MOTION_ADMIT_DEADLINE_EXCEEDED"
+        assert line.active and line.status().state == "HOLD" and not sent
+    elif controller_ready:
         assert response.status_code == 200, response.text
         assert sent == [(path, response.json()["operation"]["run_id"], False)]
     else:

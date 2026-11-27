@@ -81,6 +81,10 @@ def reserve_planned_goal(self, plan_id: UUID, spec, *, scope: PlannedPathScope, 
     from .manager import NavigationError
 
     with self._lock:
+        try:
+            self.native.expect(expected_boot_id, expected_owner_generation)
+        except ValueError as exc:
+            raise NavigationError(str(exc), str(exc)) from exc
         plan = self._prepared_path
         if (plan is None or plan.public.plan_id != plan_id or plan.target != _target(spec) or spec.via
                 or plan.scope != scope or plan.owner != self.native.owner() or not _backend_current(self, plan)

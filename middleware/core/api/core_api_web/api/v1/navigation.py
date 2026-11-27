@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import datetime, timezone
+import time
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 from uuid import UUID
 
@@ -33,11 +35,27 @@ from core_api_web.api.v1.navigation_handover import navigation_handover
 from core_api_web.api.v1.navigation_plan import plan_scope, verify_plan_start
 
 
-navigation_router = APIRouter(prefix="/api/v1", tags=["navigation"])
+class MotionReceivedRoute(APIRoute):
+    def get_route_handler(self):
+        handle = super().get_route_handler()
+
+        async def received(request):
+            # Count body parsing, dependencies and the sync threadpool queue before the handler runs.
+            request.state.motion_received_at = time.monotonic()
+            return await handle(request)
+
+        return received
+
+
+navigation_router = APIRouter(prefix="/api/v1", tags=["navigation"], route_class=MotionReceivedRoute)
 navigation_router.add_api_route('/navigation/handover', navigation_handover, methods=['POST'])
 
 
-class GoalRequest(BaseModel):
+class MotionAdmitRequest(BaseModel):
+    admit_within_s: float | None = Field(default=None, gt=0, le=10, allow_inf_nan=False)
+
+
+class GoalRequest(MotionAdmitRequest):
     x: float | None = None
     y: float | None = None
     yaw: float | None = 0.0
@@ -73,7 +91,7 @@ class BoundPlanRequest(BoundGoalRequest):
     line_stop: PlanLineStop | None = None
 
 
-class HomeRequest(BaseModel):
+class HomeRequest(MotionAdmitRequest):
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
     lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
     expected_boot_id: UUID | None = None
@@ -109,15 +127,17 @@ def _goal_gates(body, auth: AuthContext, svc: CoreServicesLike) -> None:
 
 
 @navigation_router.post("/navigation/goal")
-def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
+def navigation_goal(body: GoalRequest, request: Request, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
-    return _navigation_goal(body, auth, svc)
+    received = request.state.motion_received_at
+    return _navigation_goal(body, auth, svc, admit_before=_admit_before(body, received))
 
 
 @navigation_router.post("/navigation/bound-goal")
-def bound_navigation_goal(body: BoundGoalRequest, auth: AuthContext = Depends(operator),
+def bound_navigation_goal(body: BoundGoalRequest, request: Request, auth: AuthContext = Depends(operator),
                           svc: CoreServicesLike = Depends(get_services)):
-    return _bound_execution(body, auth, svc)
+    received = request.state.motion_received_at
+    return _bound_execution(body, auth, svc, admit_before=_admit_before(body, received))
 
 
 @navigation_router.post("/navigation/bound-plan")
@@ -138,12 +158,17 @@ def prepare_bound_path(body: BoundPlanRequest, auth: AuthContext = Depends(opera
 
 
 @navigation_router.post("/navigation/line-handoff-goal")
-def line_handoff_navigation_goal(body: LineHandoffGoalRequest, auth: AuthContext = Depends(operator),
+def line_handoff_navigation_goal(body: LineHandoffGoalRequest, request: Request, auth: AuthContext = Depends(operator),
                                  svc: CoreServicesLike = Depends(get_services)):
-    return _bound_execution(body, auth, svc, line_stop=body)
+    received = request.state.motion_received_at
+    return _bound_execution(body, auth, svc, line_stop=body, admit_before=_admit_before(body, received))
 
 
-def _bound_execution(body, auth, svc, *, line_stop=None):
+def _admit_before(body, received):
+    return None if body.admit_within_s is None else received + body.admit_within_s
+
+
+def _bound_execution(body, auth, svc, *, line_stop=None, admit_before=None):
     admitted = False
 
     def record_admission():
@@ -152,7 +177,7 @@ def _bound_execution(body, auth, svc, *, line_stop=None):
 
     try:
         return _navigation_goal(body, auth, svc, expected_grid=body.expected_map_grid_id, line_stop=line_stop,
-                                record_admission=record_admission)
+                                record_admission=record_admission, admit_before=admit_before)
     except (ApiError, NavigationError) as exc:
         if admitted or body.plan_id is None:
             raise
@@ -162,7 +187,8 @@ def _bound_execution(body, auth, svc, *, line_stop=None):
         raise ApiError(exc.code, status, str(exc), detail=detail) from exc
 
 
-def _navigation_goal(body, auth, svc, *, expected_grid=None, line_stop=None, record_admission=None):
+def _navigation_goal(body, auth, svc, *, expected_grid=None, line_stop=None, record_admission=None,
+                     admit_before=None):
     _goal_gates(body, auth, svc)
     gate = svc.state.map_grid_gate if expected_grid is not None else nullcontext()
     with gate, localized_start(svc):
@@ -239,7 +265,7 @@ def _navigation_goal(body, auth, svc, *, expected_grid=None, line_stop=None, rec
 
                 svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
                              lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
-                             receipt_sink=record, **extra)
+                             receipt_sink=record, admit_before=admit_before, **extra)
         except TripLeaseError as exc:
             raise ApiError("NAVIGATION_HANDOFF_LEASE_CHANGED", 409, str(exc)) from exc
         except (ApiError, NavigationError):
@@ -283,7 +309,7 @@ class RoutePointRequest(BaseModel):
     kind: Literal["pass", "stop"] = "stop"
 
 
-class RouteRequest(BaseModel):
+class RouteRequest(MotionAdmitRequest):
     road_speed_controlled: bool = Field(default=False, strict=True)
     points: list[RoutePointRequest] = Field(min_length=1, max_length=MAX_POINTS)
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
@@ -297,20 +323,23 @@ class BoundRouteRequest(RouteRequest):
 
 
 @navigation_router.post("/navigation/route")
-def navigation_route(body: RouteRequest, auth: AuthContext = Depends(operator),
+def navigation_route(body: RouteRequest, request: Request, auth: AuthContext = Depends(operator),
                      svc: CoreServicesLike = Depends(get_services)):
     """NAV-008 (D-1009): an ordered route of pass/stop points as one navigation owner and one lease."""
-    return _navigation_route(body, auth, svc)
+    received = request.state.motion_received_at
+    return _navigation_route(body, auth, svc, admit_before=_admit_before(body, received))
 
 
 @navigation_router.post("/navigation/bound-route")
-def bound_navigation_route(body: BoundRouteRequest, auth: AuthContext = Depends(operator),
+def bound_navigation_route(body: BoundRouteRequest, request: Request, auth: AuthContext = Depends(operator),
                            svc: CoreServicesLike = Depends(get_services)):
+    received = request.state.motion_received_at
     require_calibration_owner(svc, auth, "navigation")
-    return _navigation_route(body, auth, svc, expected_grid=body.expected_map_grid_id)
+    return _navigation_route(body, auth, svc, expected_grid=body.expected_map_grid_id,
+                             admit_before=_admit_before(body, received))
 
 
-def _navigation_route(body, auth, svc, *, expected_grid=None):
+def _navigation_route(body, auth, svc, *, expected_grid=None, admit_before=None):
     if body.road_speed_controlled and not (body.correlation_id and body.lease_ttl_s and auth.token_id):
         raise ApiError("VALIDATION_ERROR", 400, "road speed control requires an owned goal lease")
     _goal_gates(body, auth, svc)
@@ -326,7 +355,7 @@ def _navigation_route(body, auth, svc, *, expected_grid=None):
             enter_navigation_mode(svc, auth)
             svc.nav.route(points, road_speed_controlled=body.road_speed_controlled, source=f"api:{auth.role}", correlation_id=body.correlation_id,
                           lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
-                          receipt_sink=receipt.append)
+                          receipt_sink=receipt.append, admit_before=admit_before)
         finally:
             svc.nav.release_goal_reservation(token)
     return {
@@ -367,16 +396,25 @@ def _navigation_readback(svc, run_id=None):
     return result
 
 
+class NavigationCancelRequest(BaseModel):
+    advance_generation: bool = Field(default=False, strict=True)
+
+
 @navigation_router.post("/navigation/cancel")
-def navigation_cancel(auth: AuthContext = Depends(operator),
+def navigation_cancel(body: NavigationCancelRequest | None = None,
+                      auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     receipt = []
-    svc.nav.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
+    advance = body is not None and body.advance_generation
+    svc.nav.cancel(source=f"api:{auth.role}", advance_generation=advance, receipt_sink=receipt.append)
     stop_ends_trip_lease(svc, auth)
+    readback = _navigation_readback(svc)
     result = {"navigation": svc.nav.nav_state.value,
               "operation": receipt[0].model_dump(mode="json") if receipt else None}
+    if advance:
+        result["owner"] = readback["owner"]
     if not receipt and result["navigation"] == "IDLE":
-        idle = _navigation_readback(svc).get("idle_owner")
+        idle = readback.get("idle_owner")
         if idle:
             result["idle_owner"] = idle
             result["idle_observed_at"] = datetime.now(timezone.utc).isoformat()
@@ -399,10 +437,12 @@ def navigation_cancel_scoped(body: ScopedNavigationCancelRequest,
 
 
 @navigation_router.post("/navigation/home")
-def navigation_home(auth: AuthContext = Depends(operator),
+def navigation_home(request: Request, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services),
                     body: HomeRequest | None = None):
+    received = request.state.motion_received_at
     body = body or HomeRequest()
+    admit_before = _admit_before(body, received)
     if body.lease_ttl_s is not None and body.correlation_id is None:
         raise ApiError("VALIDATION_ERROR", 400, "lease_ttl_s needs a correlation_id")
     require_manual_released(svc)
@@ -419,7 +459,7 @@ def navigation_home(auth: AuthContext = Depends(operator),
             enter_navigation_mode(svc, auth)
             svc.nav.home(source=f"api:{auth.role}", correlation_id=body.correlation_id,
                          lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
-                         receipt_sink=receipt.append)
+                         receipt_sink=receipt.append, admit_before=admit_before)
         finally:
             svc.nav.release_goal_reservation(token)
     return {"accepted": True, "mode": svc.modes.mode.value,

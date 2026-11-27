@@ -193,7 +193,8 @@ def relabel_token(token_id: str, body: TokenLabelRequest, auth: AuthContext = De
 def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     truth = runtime_truth(svc.config, svc.state, svc.readiness)
     data = withhold_hardware_flags(svc.capability.to_dict(), truth.reasons)
-    data.setdefault("navigation", {}).update(bound_route=True, route_speed_authority=True)
+    data.setdefault("navigation", {}).update(
+        bound_route=True, route_speed_authority=True, admit_deadline=True, generation_fence=True)
     loc = getattr(svc, "localization", None)
     if loc is not None and loc.reporting and loc.search_window_available:
         data.setdefault("localization", {})["search_window"] = True

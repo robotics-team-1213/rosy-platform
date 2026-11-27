@@ -15,7 +15,8 @@ from uuid import uuid4
 from core_common.protocol.schemas import NavigationState
 from core_common.protocol.native_receipts import NativeReceipts
 from .lease import expire_goal_lease, renew_goal_lease
-from .goal_contract import NavExecutor as NavExecutor, NavGoalSpec as NavGoalSpec, NavigationError as NavigationError
+from .goal_contract import (NavExecutor as NavExecutor, NavGoalSpec as NavGoalSpec,
+                            NavigationError as NavigationError, check_admit_deadline)
 from .backend_events import on_backend_unknown, on_correlated_result, on_goal_accepted, on_result
 from .native_handover import handoff_output_blocked, native_readback, observe_twist, with_terminal_navigation
 from .planned_path import path_for_reservation, prepare_path, reserve_planned_goal
@@ -241,7 +242,8 @@ class NavigationManager:
              *, kind: str = "navigate", receipt_sink=None, lease_owner: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
-             reservation: UUID | None = None, _execution_ticket=None, handoff_admission=None) -> None:
+             reservation: UUID | None = None, _execution_ticket=None, handoff_admission=None,
+             admit_before: float | None = None) -> None:
         with self._lock:
             self._execution('entry', locals())
         if lease_ttl_s is not None:
@@ -279,8 +281,10 @@ class NavigationManager:
             if self.native.current is not None and self.native.current.phase != "TERMINAL":
                 raise NavigationError("NAVIGATION_ACTIVE", "native run has unresolved backend evidence")
             planned_path = path_for_reservation(self, reservation, spec, lease_owner, correlation_id)
+            check_admit_deadline(admit_before)
             if handoff_admission is not None and handoff_admission() is not True:
                 raise NavigationError("OWNER_GENERATION_CHANGED", "handoff admission was revoked")
+            check_admit_deadline(admit_before)
             if reservation is not None:
                 self._admitting = self._reserved_path = None
                 self._native_mutate(self._advance_generation)
@@ -407,13 +411,13 @@ class NavigationManager:
              lease_ttl_s: float | None = None, *, receipt_sink=None, lease_owner: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
-             reservation: UUID | None = None) -> None:
+             reservation: UUID | None = None, admit_before: float | None = None) -> None:
         spec = self.resolve_goal(waypoint="__home__")
         self.goal(spec, source=source, correlation_id=correlation_id, lease_owner=lease_owner,
                   lease_ttl_s=lease_ttl_s, kind="home", receipt_sink=receipt_sink,
                   expected_boot_id=expected_boot_id,
                   expected_owner_generation=expected_owner_generation,
-                  reservation=reservation)
+                  reservation=reservation, admit_before=admit_before)
 
     # --- NAV-005 Mapping 세션 -------------------------------------------------
 
@@ -472,7 +476,8 @@ class NavigationManager:
     def cancel(self, source: str = "api", close_session: bool = True,
                session: Optional[int] = None,
                correlation_id: Optional[str] = None, *, run_id: UUID | None = None,
-               expected_boot_id: UUID | None = None, receipt_sink=None) -> bool:
+               expected_boot_id: UUID | None = None, advance_generation: bool = False,
+               receipt_sink=None) -> bool:
         """Cancel only the matching run/session/correlation; True iff sent.
 
         Moving sessions cancel even from an idle facade state (a preempted
@@ -497,7 +502,7 @@ class NavigationManager:
                 return False
             if run_id is None and session is None and correlation_id is None and expected_boot_id is None:
                 self._prepared_path = None
-                if self._admitting is not None:
+                if self._admitting is not None or advance_generation:
                     self._admitting = self._reserved_path = None
                     self._native_mutate(self._advance_generation)
             session = self._moving_session

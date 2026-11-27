@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+import math
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -10,10 +11,44 @@ import httpx
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.protocol.native.operation import NativeOperation
 from fleet.server.channel.execution.outcomes.evidence import safe_proof
+from rosy.world.state.projections.map_pose_samples import parse_utc
 
 
 # Nothing from before this instant is required: used where CORE keeps no terminal timestamp.
 _BEFORE_ALL = datetime.min.replace(tzinfo=timezone.utc)
+STOPPED_NAVIGATION = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})
+
+
+def measured_stop_proof(state, robot_id, after, now, *, idle_only=False):
+    """The closed-trip measured standstill predicate, shared with uncertain-motion recovery."""
+    if not isinstance(state, dict):
+        return None
+    sample = (state.get("evidence") or {}).get("velocity") or {}
+    stamp = parse_utc(sample.get("sampled_at"))
+    vel = state.get("velocity") or {}
+    # CORE snapshots omit goal; use mode, navigation, line_follow and fresh measured velocity.
+    if (sample.get("evidence") != "fresh" or stamp is None or stamp <= after
+            or not 0 <= now - stamp < STALE_POSE_S
+            or state.get("robot_id") != robot_id or state.get("goal") is not None
+            or (state.get("line_follow") or {}).get("mode") != "OFF"
+            or state.get("navigation") not in STOPPED_NAVIGATION
+            or state.get("mode") not in {"IDLE", "NAVIGATION"}
+            or idle_only and (state["mode"] != "IDLE" or state["navigation"] != "IDLE")
+            or any(type(vel.get(k)) not in (float, int) or not math.isfinite(vel[k]) for k in ("linear", "angular"))
+            or abs(vel["linear"]) > 0.01 or abs(vel["angular"]) > 0.02):
+        return None
+    return {"sampled_at": sample["sampled_at"], "navigation": state["navigation"],
+            "goal": None, "velocity": {"linear": 0.0, "angular": 0.0}}
+
+
+def confirmed_estop(state):
+    """The live hardware-estop custody-release check; an HTTP stop ACK alone is insufficient."""
+    if not isinstance(state, dict):
+        return False
+    safety, line = state.get("safety"), state.get("line_follow")
+    return (isinstance(safety, dict) and isinstance(line, dict)
+            and safety.get("estop") is True and state.get("mode") == "EMERGENCY"
+            and line.get("mode") == "OFF" and NamedStopMotion._zero_sample(state, ("EMERGENCY",)) is not None)
 
 
 @dataclass
@@ -160,7 +195,8 @@ class NamedStopMotion:
             return None
         return self.repark_run_id, generation, mode_epoch, operation["result"], stamp
 
-    def _zero_sample(self, state, allowed_modes):
+    @staticmethod
+    def _zero_sample(state, allowed_modes):
         """The sample time of a fresh measured standstill in an allowed mode, else None."""
         velocity = state.get("velocity") or {}
         evidence = (state.get("evidence") or {}).get("velocity") or {}
@@ -290,11 +326,7 @@ async def verify_release_proof(claim: NamedStopMotion, client, physical_isolatio
                          f"hardware_estop_latched requires live CORE state confirming estop ({exc!r})") from exc
         if not isinstance(state, dict):
             raise refuse("PHYSICAL_ISOLATION_CONTRADICTED", "hardware_estop_latched contradicted by live CORE state")
-        safety = state.get("safety")
-        line = state.get("line_follow")
-        if (not isinstance(safety, dict) or not isinstance(line, dict)
-                or safety.get("estop") is not True or state.get("mode") != "EMERGENCY"
-                or line.get("mode") != "OFF" or claim._zero_sample(state, ("EMERGENCY",)) is None):
+        if not confirmed_estop(state):
             raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
                          "hardware_estop_latched contradicted by live CORE state")
         return "physical_isolation:hardware_estop_latched"

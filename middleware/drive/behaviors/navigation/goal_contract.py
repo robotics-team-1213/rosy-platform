@@ -1,6 +1,7 @@
 """Nav2 goal data and the ROS-independent executor contract."""
 
 from dataclasses import dataclass
+import time
 from typing import Protocol
 
 
@@ -26,3 +27,9 @@ class NavigationError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+def check_admit_deadline(admit_before):
+    # D-1079: real monotonic time, including lock/gate waits, never the replaceable ROS clock.
+    if admit_before is not None and time.monotonic() > admit_before:
+        raise NavigationError("MOTION_ADMIT_DEADLINE_EXCEEDED", "motion admission deadline exceeded")

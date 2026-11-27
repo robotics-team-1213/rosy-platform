@@ -296,6 +296,8 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
         registry 의 ``StateSnapshot`` 으로 답하고 REST GET 은 미연결·stale 로봇의
         폴백이다. 응답 모양은 REST 와 같다(스키마 불변)."""
+        if robot_id in self.goal_leases._uncertain_motion:
+            return await self.goal_leases.read_motion_state(robot_id, self._client(robot_id)), "rest"
         row = self._hub.registry.find(robot_id)
         if (row is not None and row.online and row.snapshot is not None
                 and row.last_heartbeat_monotonic is not None

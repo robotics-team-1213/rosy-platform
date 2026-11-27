@@ -20,26 +20,22 @@ import logging
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager, nullcontext
-from contextvars import ContextVar
+from contextlib import nullcontext
 from typing import Callable, Optional
 
 from fleet.server.road_route_lease import RoadRouteLeases
 from fleet.server.named_stop_motion import (NamedStopMotion, _is_unreachable, current_repark_alignment,
                                              verify_release_proof)
 from fleet.server.peer_motion_wire import PeerMotionWire
+from fleet.server.uncertain_motion import _REPARK_PATH, _prepared_wire, _repark_wire
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
-from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
 from fleet.swarm.navigation_transport import goal_lease_supported
 
 logger = logging.getLogger("fleet.goal_lease")
 
 SOURCES = ("operator", "dispatch", "yield", "trip")
 HANDOFF_LEASE_TTL_S = 5.0  # D-550 10 CORE maximum; handoff must expire even with no reply.
-_prepared_wire = ContextVar("prepared_stop_wire", default=None)
-_repark_wire = ContextVar("named_stop_repark_wire", default=None)
-_REPARK_PATH = "/api/v1/motion/repark/run"
 
 
 class CustodyReleaseRefused(RuntimeError):
@@ -53,6 +49,8 @@ class NavigationStopped(RuntimeError):
 
 
 class GoalLeases(PeerMotionWire, RoadRouteLeases, dict):
+    _navigation_stopped = NavigationStopped
+
     def __init__(self, ttl_s: float, clients: dict, clock: Callable[[], float] = time.monotonic,
                  yielding: Callable[[str], bool] = lambda _robot_id: False) -> None:
         super().__init__()
@@ -80,54 +78,7 @@ class GoalLeases(PeerMotionWire, RoadRouteLeases, dict):
         self._custody_missing = ""
         self.motion_epoch = 0
         self._motion_requests = 0
-        self._uncertain_motion: set[str] = set()
-
-    @contextmanager
-    def _check_motion_wire(self, robot_id, method, path, body):
-        if (method.upper() == "POST" and path in PREPARED_GOALS) or starts_or_sustains_motion(method, path, body):
-            if (reason := getattr(self, "station_stop_reason", lambda _: None)(robot_id)):
-                raise RobotApiError(robot_id, 409, reason, "the assigned station operation is awaiting external release")
-        if method.upper() == "POST" and path in PREPARED_GOALS:
-            permit = _prepared_wire.get()
-            if permit is None or permit[0] is not self or permit[1:] != (robot_id, (body or {}).get("plan_id")):
-                raise RobotApiError(robot_id, 409, "NAMED_STOP_SITE_RESERVED", "prepared motion needs the site reservation")
-            yield
-            return
-        claim = self._named_stop_motion
-        if (path == "/api/v1/navigation/goal/lease" and claim is not None and claim.robot_id == robot_id
-                and (body or {}).get("correlation_id") == claim.correlation_id):
-            yield
-            return
-        if method.upper() == "POST" and path == _REPARK_PATH:
-            permit = _repark_wire.get()
-            if (claim is None or permit is None or permit[0] is not self or permit[1] is not claim
-                    or claim.robot_id != robot_id or permit[2] is not body
-                    or claim.repark_correlation_id != body.get("correlation_id")):
-                raise RobotApiError(robot_id, 409, "NAMED_STOP_SITE_RESERVED", "repark needs the exact site reservation")
-            yield
-            return
-        if not starts_or_sustains_motion(method, path, body):
-            yield
-            return
-        def unresolved():
-            self._uncertain_motion.add(robot_id)
-            self.motion_epoch += 1
-
-        try:
-            with self.motion_request():
-                yield unresolved
-        except NavigationStopped as exc:
-            raise RobotApiError(robot_id, 409, "NAMED_STOP_SITE_RESERVED", str(exc)) from exc
-
-    @contextmanager
-    def motion_request(self):
-        self.check_motion()
-        self.motion_epoch += 1
-        self._motion_requests += 1
-        try:
-            yield
-        finally:
-            self._motion_requests -= 1
+        self._uncertain_motion: dict[str, dict] = {}
 
     def restore_named_stop(self, store) -> None:
         self._named_stop_motion = store.current()
@@ -354,24 +305,31 @@ class GoalLeases(PeerMotionWire, RoadRouteLeases, dict):
             self._custody_missing = "this Fleet has no client for the robot (not on its roster)"
             return
         new_boot = False
-        try:
-            stopped = await claim.stopped(client)
-            self._custody_missing = claim.missing
-        except Exception as exc:
-            stopped = False
-            self._custody_missing = f"CORE readback of the run failed: {exc!r}"
-            if repark is not None:
-                claim.stopped_epoch = claim.terminal_at = claim.zero_at = None
-            try:  # a rebooted robot no longer knows the run, which is not a reason to hold forever
-                new_boot = await claim.new_boot_stopped(client)
-                self._custody_missing += "; robot reachable with another boot_id but not yet proved standing still"
-            except Exception as exc2:
-                self._custody_missing += f"; robot unreachable: {exc2!r}"
-        if (self._named_stop_motion is not claim or self._clients.get(claim.robot_id) is not client
-                or claim.repark_correlation_id != repark):
-            return
-        if not self._bind_discovered_run(claim, repark, known_run):
-            return
+        with self._motion_readback(claim.robot_id, client) as confirmed:
+            fenced = (claim.robot_id in self._uncertain_motion
+                      and await self._verify_uncertain_release_fence(claim.robot_id, client))
+            try:
+                stopped = await claim.stopped(client)
+                self._custody_missing = claim.missing
+            except Exception as exc:
+                stopped = False
+                self._custody_missing = f"CORE readback of the run failed: {exc!r}"
+                if repark is not None:
+                    claim.stopped_epoch = claim.terminal_at = claim.zero_at = None
+                try:  # a rebooted robot no longer knows the run, which is not a reason to hold forever
+                    new_boot = await claim.new_boot_stopped(client)
+                    self._custody_missing += "; robot reachable with another boot_id but not yet proved standing still"
+                except Exception as exc2:
+                    self._custody_missing += f"; robot unreachable: {exc2!r}"
+            if (self._named_stop_motion is not claim or self._clients.get(claim.robot_id) is not client
+                     or claim.repark_correlation_id != repark):
+                return
+            if not self._bind_discovered_run(claim, repark, known_run):
+                return
+            sample = claim.new_boot_sample[1] if new_boot else claim.zero_at if stopped else None
+            if (fenced and sample is not None and not new_boot
+                    and await self._verify_uncertain_release_fence(claim.robot_id, client)):
+                confirmed("CORE proved exact custody standstill", sampled_at=sample.timestamp())
         if new_boot:
             self._release_named_stop(claim, "robot runs a new boot_id and CORE shows it standing still with no owner run")
         elif stopped and (repark is not None or not claim.precision_required or not claim.nav_succeeded):

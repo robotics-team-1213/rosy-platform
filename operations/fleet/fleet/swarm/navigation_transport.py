@@ -13,8 +13,9 @@ def goal_lease_supported(caps: dict | None) -> bool:
 
 
 class NavigationTransport:
-    async def navigation_cancel(self) -> dict:
-        return await self._post("/api/v1/navigation/cancel")
+    async def navigation_cancel(self, *, advance_generation: bool = False) -> dict:
+        return await self._post("/api/v1/navigation/cancel",
+                                {"advance_generation": True} if advance_generation else None)
 
     async def navigation_cancel_scoped(self, *, expected_boot_id, run_id, correlation_id) -> dict:
         body = ScopedNavigationCancelRequest(expected_boot_id=expected_boot_id, run_id=run_id,

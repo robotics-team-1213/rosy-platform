@@ -117,7 +117,8 @@ def _validated(points) -> list[RoutePoint]:
 def route(self, points, source: str = "api", correlation_id: str | None = None,
           lease_ttl_s: float | None = None, *, receipt_sink=None, lease_owner: str | None = None,
           expected_boot_id: UUID | None = None, expected_owner_generation: int | None = None,
-          reservation: UUID | None = None, road_speed_controlled: bool = False) -> RouteRun:
+          reservation: UUID | None = None, road_speed_controlled: bool = False,
+          admit_before: float | None = None) -> RouteRun:
     """Admit a route like a goal (same gates, receipt and lease) and send its first leg."""
     from .manager import NavigationError
     from .road_speed import RoadSpeedAuthority
@@ -131,7 +132,7 @@ def route(self, points, source: str = "api", correlation_id: str | None = None,
         self.goal(_leg_spec(self, run), source=source, correlation_id=correlation_id,
                   lease_ttl_s=lease_ttl_s, lease_owner=lease_owner, receipt_sink=receipt_sink,
                   expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation,
-                  reservation=reservation)
+                  reservation=reservation, admit_before=admit_before)
         current = self.native.current
         run.run_id = current.run_id if current is not None else None
         run.actions = 1
