@@ -4,4 +4,5 @@
 - 증거: `test/test_omx_policy_belt_pose.py`(합성 프레임 오프셋·yaw 접기, 범위 밖·인식 실패 거절, 10칸 불변, dry run 기록, 실물 run 4·6 top 프레임), 원격 `test/test_omx_lerobot_shadow.py`·`test/test_omx_policy_drive.py` 외
 - gate 변화: 없음. 가드 한계·기존 게이트 그대로, 새 거절만 더함
 - 결정: 팔 좌표·셀 보정 지도 대신 시뮬 top 카메라 모델로 fixture 좌표를 직접 얻는다(시뮬 팔 받침은 사진 추정값, arm_a 17 mm 차이 기록)
-- 교훈: 없음. 미해결: 11-27 실물 프레임의 벨트 컨테이너는 시뮬 벨트 사이트에서 dy 약 −34 mm(1~5회차)·−49 mm(6회차)라 Panel L 범위(±8 mm) 밖이다
+- 후속(조정 세션 검토): 셀에는 tools/sim이 배포되지 않으므로 런타임을 자립시켰다. `ENV_STATE.json` belt_reference가 belt_site·belt_top_m·container·footprint_tol_m을 반드시 선언하고 런타임은 그 값만 쓴다. 검출은 `cell_belt_vision.py`(omx_real2sim 사본, 원본 대조 시험)로 한다. 선언 생성기 `tools/sim/omx_env_state.py`를 더했고, `package_cell_bundle`이 파일을 복사하며 policy_revision은 그대로임을 시험했다.
+- 교훈: 없음. 미해결(조정 세션 관찰 포함: 벨트에 가이드가 없어 컨테이너가 폭 80 mm 안 한쪽 가장자리에 놓임, 학습 범위 dy ±8 mm가 벨트 폭을 덮지 못함): 11-27 실물 프레임의 벨트 컨테이너는 시뮬 벨트 사이트에서 dy 약 −34 mm(1~5회차)·−49 mm(6회차)라 Panel L 범위(±8 mm) 밖이다

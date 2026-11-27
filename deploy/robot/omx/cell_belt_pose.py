@@ -4,26 +4,24 @@
 The checkpoint's observation.environment_state ends with BELT_NAMES: the container's offset from the nominal belt site in
 the sim fixture frame, (x m / 0.01, y m / 0.01, long-axis yaw rad / 0.2), the yaw folded into +-90 deg. It is measured once
 from one top frame before the run (arm home) and held for the episode, as the sim data holds it (make_panel_l.py,
-eval_panel_l.py). The frame is read through the bundle's own top camera model (the sim pinhole the training views were
-rendered with, ENV_STATE.json belt_reference.top_camera) onto the container top above the belt, so the result is in the
-fixture frame directly: no arm frame, no cell calibration map. The nominal site is the sim's: omx_two_arm_sites.Layout(preset)
-.sites["belt"] (belt stop and centreline from the 11-14 top photo, BELT_PHOTO_1114, through the same kind of camera model).
-Detection reuses omx_real2sim (blobs, lane_blobs). A missing reference, a failed read, no container, two or more, or a
-container-coloured blob that is not the trained container is BELT_POSE_UNKNOWN; a value past the training range plus a
-margin is BELT_POSE_OUT_OF_RANGE. Neither is clamped; either refuses the run before any motion."""
+eval_panel_l.py). Everything the reading needs comes from the checkpoint's ENV_STATE.json belt_reference, written at
+training time by tools/sim/omx_env_state.py from the sim layout: the top camera model the training views were rendered
+with, the belt site (omx_two_arm_sites.Layout(preset).sites["belt"]), the belt top height, the container size and the
+footprint tolerances. The frame is back-projected through that camera onto the container top, so the result is in the
+fixture frame directly: no arm frame, no cell calibration map, no tools/sim on the cell (cell_belt_vision is the cell copy
+of the omx_real2sim detection). A missing reference, a failed read, no container, two or more, or a container-coloured blob
+that is not the trained container is BELT_POSE_UNKNOWN; a value past the training range plus a margin is
+BELT_POSE_OUT_OF_RANGE. Neither is clamped; either refuses the run before any motion."""
 from __future__ import annotations
 
 import hashlib
 import math
-from pathlib import Path
-import sys
 
 BELT_NAMES = ("belt_dx_cm", "belt_dy_cm", "belt_yaw_x5")
 SCALE = (0.01, 0.01, 0.2)  # m, m, rad per feature unit (make_panel_l.py)
 # Panel L/I collection: x -1..+13 mm, y +-8 mm, yaw +-12 deg; the gate adds 1 mm / 1 deg (task spec 2026-11-27)
 RANGE = ((-0.002, 0.014), (-0.009, 0.009), (-math.radians(13.0), math.radians(13.0)))
 NEAR_M = 0.06  # a container-coloured blob this close to the belt site is a belt container
-SITE_TOL = (0.0005, math.radians(0.5))  # declared belt site vs this checkout's Layout
 UNKNOWN, OUT_OF_RANGE = "BELT_POSE_UNKNOWN", "BELT_POSE_OUT_OF_RANGE"
 CAMERA_KEYS = ("eye", "focus", "up", "f_px", "width", "height")
 
@@ -32,59 +30,50 @@ def _refuse(code: str, reason: str, **evidence) -> dict:
     return {"ok": False, "reason_code": code, "reason": reason, **evidence}
 
 
-def _reference(doc) -> tuple[dict, str, dict | None]:
-    """(top camera, preset, declared belt site) from ENV_STATE.json belt_reference; ValueError names what is missing."""
+def _numbers(value, n: int, what: str, positive: bool = False) -> list[float]:
+    vals = list(value) if isinstance(value, (list, tuple)) else None
+    if (vals is None or len(vals) != n or not all(type(v) in (int, float) and math.isfinite(v) for v in vals)
+            or (positive and min(vals) <= 0)):
+        raise ValueError(f"belt_reference.{what} needs {n} finite{' positive' if positive else ''} numbers")
+    return [float(v) for v in vals]
+
+
+def _reference(doc) -> dict:
+    """The belt_reference fields as numbers; ValueError names what is missing (the run is then NOT_AVAILABLE)."""
     if not isinstance(doc, dict):
         raise ValueError("checkpoint ENV_STATE.json has no belt_reference")
-    preset, cam = doc.get("preset"), doc.get("top_camera")
-    if not isinstance(preset, str) or not preset:
-        raise ValueError("belt_reference.preset (the sim layout the data was collected in) is missing")
+    cam, site, box, tol = (doc.get(k) or {} for k in ("top_camera", "belt_site", "container", "footprint_tol_m"))
     if not isinstance(cam, dict) or any(key not in cam for key in CAMERA_KEYS):
         raise ValueError(f"belt_reference.top_camera needs {', '.join(CAMERA_KEYS)}")
-    flat = [*cam["eye"], *cam["focus"], *cam["up"], cam["f_px"], cam["width"], cam["height"]]
-    if len(flat) != 12 or not all(type(v) in (int, float) and math.isfinite(v) for v in flat) or cam["f_px"] <= 0:
-        raise ValueError("belt_reference.top_camera is not a finite pinhole")
-    site = doc.get("belt_site")
-    if site is not None and not (isinstance(site, dict) and len(site.get("xy") or ()) == 2
-                                 and all(type(v) in (int, float) for v in (*site["xy"], site.get("yaw")))):
-        raise ValueError("belt_reference.belt_site must be {xy: [x, y], yaw}")
-    return cam, preset, site
+    _numbers([*cam["eye"], *cam["focus"], *cam["up"]], 9, "top_camera eye/focus/up")
+    _numbers([cam["f_px"], cam["width"], cam["height"]], 3, "top_camera f_px/width/height", positive=True)
+    return {"camera": cam, "preset": doc.get("preset"),
+            "site_xy": _numbers(site.get("xy"), 2, "belt_site.xy"), "site_yaw": _numbers([site.get("yaw")], 1, "belt_site.yaw")[0],
+            "belt_top": _numbers([doc.get("belt_top_m")], 1, "belt_top_m")[0],
+            "box": _numbers([box.get(k) for k in ("length_m", "width_m", "height_m")], 3, "container", positive=True),
+            "tol": _numbers([tol.get(k) for k in ("length", "width", "partial_min")], 3, "footprint_tol_m", positive=True)}
 
 
 def measure(frame, reference) -> dict:
     """One BGR top frame -> {ok, features, ...evidence} or a refusal {ok: False, reason_code, reason, ...}."""
     try:
-        cam_doc, preset, declared = _reference(reference)
-    except ValueError as error:
+        ref = _reference(reference)
+    except (ValueError, TypeError, AttributeError) as error:
         return _refuse(UNKNOWN, f"NOT_AVAILABLE: {error}")
+    cam_doc, site_xy = ref["camera"], ref["site_xy"]
     if frame is None or getattr(frame, "ndim", 0) != 3 or frame.shape[2] != 3:
         return _refuse(UNKNOWN, "no top frame")
     if tuple(frame.shape[:2]) != (int(cam_doc["height"]), int(cam_doc["width"])):
         return _refuse(UNKNOWN, f"top frame {frame.shape[1]}x{frame.shape[0]} is not the reference camera's "
                                 f"{cam_doc['width']}x{cam_doc['height']}")
-    sim_tools = str(Path(__file__).resolve().parents[3] / "tools/sim")
-    if sim_tools not in sys.path:
-        sys.path.insert(0, sim_tools)
-    import omx_two_arm_sites as sites
-    from omx_real2sim_helpers import LANE, SIZE_TOL, Camera, blobs, fold, lane_blobs, rect
+    from cell_belt_vision import Camera, containers, fold
 
-    try:
-        layout = sites.Layout(preset=preset)
-    except (KeyError, ValueError) as error:
-        return _refuse(UNKNOWN, f"NOT_AVAILABLE: sim preset {preset!r}: {error}")
-    site = layout.sites["belt"]
-    if declared is not None and (math.dist(declared["xy"], site["xy"]) > SITE_TOL[0]
-                                 or abs(fold(declared["yaw"] - site["yaw"])) > SITE_TOL[1]):
-        return _refuse(UNKNOWN, f"NOT_AVAILABLE: trained belt site {declared} differs from this checkout's "
-                                f"{preset} site {site['xy']}, yaw {site['yaw']}")
-    box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
-    cam = Camera(cam_doc, frame.shape[:2])
-    evidence = {"frame_sha256": hashlib.sha256(frame.tobytes()).hexdigest(), "preset": preset,
-                "belt_site_mm": [round(v * 1000, 1) for v in site["xy"]]}
-    near = lambda xy: math.dist(xy, site["xy"]) < NEAR_M  # noqa: E731
-    seen = [rect(cam.to_plane(px, layout.belt_top + box_h)) for kind, px in blobs(frame) if kind == "container"]
-    seen = [s for s in seen if near(s[0])]
-    found = [b for b in lane_blobs(frame, cam, layout.belt_top, box_h) if b["kind"] == "container" and near(b["xy"])]
+    box, tol = ref["box"], ref["tol"]
+    evidence = {"frame_sha256": hashlib.sha256(frame.tobytes()).hexdigest(), "preset": ref["preset"],
+                "belt_site_mm": [round(v * 1000, 1) for v in site_xy]}
+    near = lambda xy: math.dist(xy, site_xy) < NEAR_M  # noqa: E731
+    seen, found = containers(frame, Camera(cam_doc, frame.shape[:2]), ref["belt_top"], box, tol)
+    seen, found = [s for s in seen if near(s[0])], [b for b in found if near(b["xy"])]
     if not seen:
         return _refuse(UNKNOWN, "no container at the belt end in the top frame", **evidence)
     if len(seen) != len(found) or any(b["partial"] for b in found):
@@ -93,9 +82,9 @@ def measure(frame, reference) -> dict:
     if len(found) > 1:
         return _refuse(UNKNOWN, f"{len(found)} containers at the belt end", **evidence)
     b = found[0]
-    offset = (b["xy"][0] - site["xy"][0], b["xy"][1] - site["xy"][1], fold(b["yaw"] - site["yaw"]))
-    # score: 1 at the trained footprint, 0 at lane_blobs' own acceptance edge
-    size_err = (abs(b["size"][0] - LANE[0]) / SIZE_TOL[0], abs(b["size"][1] - LANE[1]) / (SIZE_TOL[1] + 0.004))
+    offset = (b["xy"][0] - site_xy[0], b["xy"][1] - site_xy[1], fold(b["yaw"] - ref["site_yaw"]))
+    # score: 1 at the trained footprint, 0 at the footprint tolerance edge
+    size_err = (abs(b["size"][0] - box[0]) / tol[0], abs(b["size"][1] - box[1]) / tol[1])
     evidence.update(centre_mm=[round(v * 1000, 1) for v in b["xy"]], offset_mm=[round(v * 1000, 1) for v in offset[:2]],
                     yaw_deg=round(math.degrees(offset[2]), 1), size_mm=[round(v * 1000, 1) for v in b["size"]],
                     score=round(max(0.0, 1.0 - max(size_err)), 3),

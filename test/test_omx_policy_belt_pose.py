@@ -13,8 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy" / "robot" / "omx"))
 sys.path.insert(0, str(ROOT / "tools" / "sim"))
 import cell_belt_pose as bp  # noqa: E402
+import cell_belt_vision as vision  # noqa: E402
 import cell_lerobot_shadow as lrs  # noqa: E402
 from cell_policy_goals import GOALS  # noqa: E402
+import omx_env_state  # noqa: E402
 
 cv2 = pytest.importorskip("cv2")
 FIXTURES = ROOT / "test" / "fixtures" / "omx_belt_pose_1127"
@@ -22,8 +24,9 @@ PRESET = "v24-20261126-real-home"
 # top_refit.json of 2026-11-27 (the camera Panel L views were rendered around; rms 1.65 mm over 4 anchors)
 TOP = {"eye": [0.026, -0.0045, 0.6837], "focus": [0.0528, 0.0122, 0.1847], "up": [0.9971, -0.0556, 0.0516],
        "f_px": 618.5, "width": 640, "height": 480}
-REFERENCE = {"preset": PRESET, "top_camera": TOP, "belt_site": {"xy": [0.207, -0.003], "yaw": 0.0}}
 NAMES = [*GOALS, *bp.BELT_NAMES]
+INFO = {"features": {lrs.GOAL: {"shape": [13], "names": NAMES}}}
+REFERENCE = omx_env_state.build(INFO, {"ok": True, "camera": TOP}, PRESET)["belt_reference"]
 CONFIG = {"type": "act",
           "input_features": {"observation.state": {"shape": [6]}, "observation.images.top": {"shape": [3, 8, 12]}},
           "output_features": {"action": {"shape": [6]}}}
@@ -118,7 +121,9 @@ def test_past_the_training_range_refuses_with_the_unclamped_value(box, name):
     (scene((0.006, 0, 0), size=(0.05, 0.05)), REFERENCE, "footprint"),
     (scene((0.006, 0, 0)), None, "NOT_AVAILABLE"),
     (scene((0.006, 0, 0)), {**REFERENCE, "top_camera": {"eye": [0, 0, 1]}}, "NOT_AVAILABLE"),
-    (scene((0.006, 0, 0)), {**REFERENCE, "belt_site": {"xy": [0.2, -0.003], "yaw": 0.0}}, "differs"),
+    (scene((0.006, 0, 0)), {k: v for k, v in REFERENCE.items() if k != "belt_site"}, "belt_site"),
+    (scene((0.006, 0, 0)), {**REFERENCE, "container": {"length_m": 0.09, "width_m": 0.03}}, "container"),
+    (scene((0.006, 0, 0)), {**REFERENCE, "belt_top_m": float("nan")}, "belt_top_m"),
     (np.zeros((240, 320, 3), np.uint8), REFERENCE, "320x240"),
     (None, REFERENCE, "no top frame"),
 ])
@@ -135,6 +140,87 @@ def test_real_belt_frames_read_one_container_off_the_belt_centre():
     assert six["offset_mm"][1] == pytest.approx(-49, abs=4) and six["yaw_deg"] == pytest.approx(6, abs=3)
     four = bp.measure(cv2.imread(str(FIXTURES / "real4-before-top.jpg")), REFERENCE)
     assert four["reason_code"] == bp.OUT_OF_RANGE and four["offset_mm"][1] == pytest.approx(-34.5, abs=4)
+
+
+def test_generator_fills_the_reference_from_the_sim_layout(tmp_path):
+    import omx_two_arm_sites as sites
+
+    layout = sites.Layout(preset=PRESET)
+    assert REFERENCE["belt_site"] == {"xy": list(layout.sites["belt"]["xy"]), "yaw": layout.sites["belt"]["yaw"]}
+    assert REFERENCE["belt_top_m"] == layout.belt_top and REFERENCE["top_camera"] == TOP and REFERENCE["preset"] == PRESET
+    assert list(REFERENCE["container"].values()) == list(sites.CONTAINER[layout.choices["ship_source"]])
+    (tmp_path / "info.json").write_text(json.dumps(INFO))
+    (tmp_path / "top_refit.json").write_text(json.dumps({"ok": True, "camera": TOP, "rms_mm": 1.65}))
+    argv = ["--info", str(tmp_path / "info.json"), "--top-camera", str(tmp_path / "top_refit.json"), "--preset", PRESET]
+    assert omx_env_state.main([*argv, "--out", str(tmp_path / "ENV_STATE.json")]) == 0
+    assert json.loads((tmp_path / "ENV_STATE.json").read_text()) == {"names": NAMES, "belt_reference": REFERENCE}
+    for info, top, why in ((INFO, {"ok": False, "camera": TOP}, "not ok"), (INFO, {"eye": [0, 0, 1]}, "needs"),
+                           ({"features": {lrs.GOAL: {"shape": [10], "names": list(GOALS)}}}, TOP, "end with")):
+        with pytest.raises(ValueError, match=why):
+            omx_env_state.build(info, top, PRESET)
+
+
+def _sim_containers(frame):
+    """The tools/sim original: container blobs and lane_blobs' accepted containers (the cell copy must match it)."""
+    import omx_two_arm_sites as sites
+    from omx_real2sim_helpers import Camera, blobs, lane_blobs, rect
+
+    layout = sites.Layout(preset=PRESET)
+    cam, h = Camera(TOP, frame.shape[:2]), sites.CONTAINER[layout.choices["ship_source"]][2]
+    seen = [rect(cam.to_plane(px, layout.belt_top + h)) for kind, px in blobs(frame) if kind == "container"]
+    return seen, [{k: b[k] for k in ("xy", "yaw", "size", "partial")} for b in lane_blobs(frame, cam, layout.belt_top, h)
+                  if b["kind"] == "container"]
+
+
+@pytest.mark.parametrize("name", ["real4-before-top.jpg", "real6-before-top.jpg", "synthetic", "synthetic-odd"])
+def test_cell_detection_matches_the_tools_sim_original(name):
+    from omx_real2sim_helpers import LANE, PARTIAL_MIN, SIZE_TOL
+
+    frame = {"synthetic": lambda: scene((0.006, 0.004, 10.0), (-0.03, 0.05, 80.0)),
+             "synthetic-odd": lambda: scene((0.006, 0.0, -20.0), size=(0.06, 0.03))}.get(name, lambda: cv2.imread(str(FIXTURES / name)))()
+    box = (LANE[0], LANE[1], REFERENCE["container"]["height_m"])
+    seen, found = vision.containers(frame, vision.Camera(TOP, frame.shape[:2]), REFERENCE["belt_top_m"], box,
+                                    (SIZE_TOL[0], SIZE_TOL[1] + 0.004, PARTIAL_MIN))
+    sim_seen, sim_found = _sim_containers(frame)
+    assert len(seen) == len(sim_seen) >= 1 and len(found) == len(sim_found)
+    for mine, theirs in zip(seen, sim_seen):
+        assert np.allclose(np.hstack([*mine[0], mine[1], *mine[2]]), np.hstack([*theirs[0], theirs[1], *theirs[2]]), atol=1e-9)
+    for mine, theirs in zip(found, sim_found):
+        assert mine["partial"] == theirs["partial"]
+        assert np.allclose([*mine["xy"], mine["yaw"], *mine["size"]], [*theirs["xy"], theirs["yaw"], *theirs["size"]], atol=1e-9)
+    shipped = bp.measure(frame, REFERENCE)  # the generator's container width (0.02998) against the original's 0.030 lane
+    if "centre_mm" in shipped:
+        site = REFERENCE["belt_site"]["xy"]
+        theirs = min(sim_found, key=lambda b: math.dist(b["xy"], site))
+        assert shipped["centre_mm"] == pytest.approx([v * 1000 for v in theirs["xy"]], abs=0.15)
+        assert shipped["yaw_deg"] == pytest.approx(math.degrees(theirs["yaw"]), abs=0.1)
+
+
+def test_cell_reading_needs_no_tools_sim(tmp_path):
+    """The cell release has deploy/robot/omx but no tools/sim: import and measure with tools/sim unimportable."""
+    import subprocess
+
+    frame = scene((0.006, 0.004, 10.0))
+    np.save(tmp_path / "frame.npy", frame)
+    (tmp_path / "ref.json").write_text(json.dumps(REFERENCE))
+    code = (
+        "import importlib.abc, json, sys\n"
+        "class Block(importlib.abc.MetaPathFinder):\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name.startswith(('omx_two_arm', 'omx_real2sim', 'omx_env_state', 'mapped_stack_fixture')):\n"
+        "            raise ImportError('tools/sim is not on the cell: ' + name)\n"
+        "sys.meta_path.insert(0, Block())\n"
+        f"sys.path = [p for p in sys.path if 'tools' not in p.replace(chr(92), '/').split('/')]\n"
+        f"sys.path.insert(0, {str(ROOT / 'deploy' / 'robot' / 'omx')!r})\n"
+        "import numpy as np, cell_belt_pose, cell_lerobot_shadow\n"
+        f"out = cell_belt_pose.measure(np.load({str(tmp_path / 'frame.npy')!r}), json.load(open({str(tmp_path / 'ref.json')!r})))\n"
+        "assert not any(m.startswith(('omx_two_arm', 'omx_real2sim')) for m in sys.modules)\n"
+        "print(json.dumps(out))\n"
+    )
+    run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=tmp_path, timeout=120)
+    assert run.returncode == 0, run.stderr
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["ok"] and out["features"] == bp.measure(frame, REFERENCE)["features"]
 
 
 class ReceiptCell:

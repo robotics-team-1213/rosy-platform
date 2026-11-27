@@ -1471,7 +1471,10 @@ arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너
 Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. 앞 10칸은 위 표 순서의 목표 one-hot이다.
 뒤 3칸은 `belt_dx_cm`, `belt_dy_cm`, `belt_yaw_x5`다.
 
-- **선언:** 체크포인트 폴더의 `ENV_STATE.json`이 이름을 선언한다. `package_cell_bundle`은 이 파일을 그대로 복사한다.
+- **선언:** 체크포인트 폴더의 `ENV_STATE.json`이 이름과 측정 기준을 선언한다. 학습 쪽에서 `package_cell_bundle` 전에
+  `tools/sim/omx_env_state.py --info <데이터셋>/meta/info.json --top-camera top_refit.json --preset <preset> --out <체크포인트>/ENV_STATE.json`
+  으로 만든다. `package_cell_bundle`은 이 파일을 그대로 복사한다. `policy_revision`(가중치 sha256)은 바뀌지 않고
+  `checkpoint_sha256`과 파일 목록에는 이 파일이 들어간다.
   파일이 없거나 `names`의 마지막 3개가 위 이름과 다르면 기존 동작(폭 전체를 one-hot 목표로 읽음)을 유지한다.
   파일이 있는데 `names`가 없거나 길이가 폭과 다르면 체크포인트를 읽지 않는다.
   선언이 있으면 앞 10개 이름이 위 표의 슬롯 이름과 같아야 한다. 다르면 시작하지 않는다.
@@ -1480,16 +1483,20 @@ Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. �
   {"names": ["ship-h1r0-l0", "...", "tray", "belt_dx_cm", "belt_dy_cm", "belt_yaw_x5"],
    "belt_reference": {"preset": "v24-20261126-real-home",
                       "top_camera": {"eye": [], "focus": [], "up": [], "f_px": 618.5, "width": 640, "height": 480},
-                      "belt_site": {"xy": [0.207, -0.003], "yaw": 0.0}}}
+                      "belt_site": {"xy": [0.207, -0.003], "yaw": 0.0}, "belt_top_m": 0.017,
+                      "container": {"length_m": 0.09, "width_m": 0.02998, "height_m": 0.0324},
+                      "footprint_tol_m": {"length": 0.012, "width": 0.011, "partial_min": 0.04}}}
   ```
 
 - **정의 (학습·시뮬 평가와 같음):** 시뮬 fixture 좌표에서 (컨테이너 중심 − 공칭 벨트 사이트) x, y [m] / 0.01과
   (컨테이너 장축 yaw − 사이트 yaw, ±90°로 접음) [rad] / 0.2이다. 공칭 사이트는
   `omx_two_arm_sites.Layout(preset).sites["belt"]`다. 11-14 top 사진의 벨트 끝·중심선(`BELT_PHOTO_1114`)과
-  fixture 집기 위치에서 정해진다. `belt_site`를 함께 적으면 이 checkout의 값과 0.5 mm·0.5° 안에서 같아야 한다.
+  fixture 집기 위치에서 정해진다. 생성기가 이 값과 벨트 윗면 높이·컨테이너 크기·크기 허용오차를 Layout에서 채운다.
+  셀에는 `tools/sim`이 배포되지 않으므로 런타임은 선언 값만 쓴다(`preset`은 기록용). 필드가 하나라도 없으면 `NOT_AVAILABLE`이다.
 - **측정:** `cell_policy_drive.py`가 동작 전(팔 홈)에 top 프레임 한 장으로 한 번 잰다. 그 값을 에피소드 내내 고정한다.
   프레임은 출처 시각이 있는 새 프레임(`frame_receipt`, 2초 이내)만 쓴다.
-  컨테이너는 `omx_real2sim`의 `blobs`·`lane_blobs`로 찾는다. 위치는 `top_camera`(학습 영상을 렌더한 시뮬 pinhole,
+  컨테이너는 `cell_belt_vision.py`로 찾는다. `omx_real2sim`의 `blobs`·`lane_blobs`를 numpy·cv2만으로 옮긴 사본이며,
+  시험이 실물 프레임 2장과 합성 입력에서 원본과 결과가 같은지 비교한다. 한쪽을 고치면 다른 쪽도 고친다. 위치는 `top_camera`(학습 영상을 렌더한 시뮬 pinhole,
   예: `top_refit.json`)로 벨트 위 컨테이너 윗면 높이에 역투영해 fixture 좌표로 바로 얻는다.
   팔 좌표와 셀 보정 지도는 거치지 않는다. 시뮬 팔 받침 위치는 사진 추정값이고 arm_a에서 17 mm 차이가 확인되었다
   (2026-11-17). 두 팔이 같은 top 카메라와 같은 벨트 사이트를 쓰므로 arm_a와 arm_b가 같은 값을 받는다.
@@ -1502,7 +1509,9 @@ Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. �
   오프셋(`offset_mm`), `yaw_deg`, 크기(`size_mm`), 크기 점수(`score`), 프레임 sha256을 남긴다. dry run도 같다.
 - **현재 실물 값 (2026-11-27 프레임, `top_refit.json` 기준):** 실물 1~5회차 컨테이너는 dy 약 −34 mm,
   6회차는 dy −49 mm, yaw +6°에 있었다. 모두 `BELT_POSE_OUT_OF_RANGE`로 거절된다.
-  컨테이너를 벨트 중심(사이트 y)에 두거나 학습 범위를 넓혀야 한다.
+  조정 세션 관찰: 1~6회차 사진에서 컨테이너는 벨트 폭(약 80 mm) 안 한쪽 가장자리에 놓였다(벨트에 가이드가 없다).
+  dy −34 mm는 측정 오류보다 실제 놓인 위치일 가능성이 높다.
+  **미해결:** 학습 범위(dy ±8 mm)가 실물 벨트 폭을 덮지 못한다. 범위 확대는 학습 쪽 과제이며 이 변경의 범위 밖이다.
 - 원격 정책(`--endpoint-url`)과 이를 쓰는 양팔 정책(`cell_two_arm_policy`)은 이 입력을 보내지 않는다. 서버가 이름 선언을
   알리지 않으므로 13칸 체크포인트는 `--goal-site`·Job API에서 10칸 목표 검사로 거절되지만, CLI `--goal-slot`과 양팔
   `--goal-a`·`--goal-b`는 기존처럼 13칸 one-hot을 보낸다. 이 체크포인트를 원격·양팔 경로에 쓰지 않는다.

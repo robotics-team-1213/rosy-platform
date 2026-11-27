@@ -1513,6 +1513,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_drive.py
   - deploy/robot/omx/cell_policy_goals.py
   - deploy/robot/omx/cell_belt_pose.py
+  - deploy/robot/omx/cell_belt_vision.py
   - deploy/robot/omx/cell_policy_shape.py
   - deploy/robot/omx/cell_policy_timing.py
   - deploy/robot/omx/cell_policy_retreat.py
