@@ -5,6 +5,7 @@ import math
 import sys
 from uuid import UUID
 
+from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.server import traffic
@@ -65,11 +66,15 @@ def _point(state):
 TRAY_TURN_RADIUS_M = 0.144
 
 
-def _body(console, robot):
-    """Nominal body of the robot's advertised kind from the kept capability read, or None (unknown)."""
+def _trip(console, robot):
     display = getattr(console, "_capability_display", None)
     caps = display._kept(robot, console.clients().get(robot)) if display is not None else None
-    trip = trip_caps(caps) if caps else None
+    return trip_caps(caps) if caps else None
+
+
+def _body(console, robot):
+    """Nominal body of the robot's advertised kind from the kept capability read, or None (unknown)."""
+    trip = _trip(console, robot)
     return nominal_body_for(trip.kind) if trip is not None else None
 
 
@@ -138,6 +143,38 @@ def _check_terminal(maps, site, scope, path, fit_error, *, check_walls=False):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_PATH_CROSSWALK")
 
 
+#: A moving peer's claim must end at its leased goal and the peer must still be on it (Nav2 may bend around an
+#: obstacle; farther off, the straight claim no longer says where it goes and the dock waits as before).
+CLAIM_GOAL_MATCH_M = 0.05
+CLAIM_FOLLOW_M = 0.10
+
+
+def _check_moving_peer(console, robot, state, position, path, site_map_id, unknown_body, turn):
+    """A moving peer clears the mover's path only by its fresh position and Fleet's claimed route for its goal.
+
+    The whole remaining route must stay one tray-inclusive turn clearance (both bodies) plus the distance the peer can
+    drive at its trip speed cap while its pose ages (STALE_POSE_S) away from every point of the mover's path. Goals
+    sent later meet the mover's own claim (rear-bay claims, D-1010). No leased goal, a claim for another goal, a
+    peer off its claim, unknown body or speed: it waits. CORE's LiDAR stop stays the last guard either way.
+    """
+    claim = getattr(console, "_site_claims", {}).get(robot)
+    own, goal = getattr(console, "_claims", {}).get(robot), getattr(console, "_goals", {}).get(robot)
+    lease = console.goal_leases.get(robot) if hasattr(console.goal_leases, "get") else None
+    trip = _trip(console, robot)
+    # The claim must be the one written for the goal Fleet leases now (claims outlive arrival), and the peer on it.
+    if (claim is None or claim[0] != site_map_id or not claim[1] or trip is None or unknown_body
+            or (lease or {}).get("state") != "leased" or not own or not goal
+            or math.dist(own[-1], (goal["x"], goal["y"])) > CLAIM_GOAL_MATCH_M
+            or ((state.get("evidence") or {}).get("pose") or {}).get("evidence") != "fresh"
+            or not all(map(_geometry_point, claim[1]))
+            or traffic.polyline_distance([position], claim[1]) > CLAIM_FOLLOW_M):
+        raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_MOTION_UNVERIFIED")
+    reach = turn + trip.max_speed * STALE_POSE_S
+    gap = traffic.polyline_distance(path, [position, *claim[1]])
+    if gap is None or gap < reach:
+        raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")
+
+
 def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None):
     clients, observed = peers
     marker_clearance = getattr(console, "_site_marker_clearance", None)
@@ -189,10 +226,14 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
                     raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")
             continue
         line = state.get("line_follow") or {}
-        if (robot in console.goal_leases.pending or robot in console._goal_busy
-                or state.get("navigation") not in ("IDLE", "ARRIVED", "CANCELED", "FAILED")
-                or state.get("mode") not in ("IDLE", "EMERGENCY") or line.get("mode") != "OFF"
-                or not _fresh_stopped(state)):
+        settled = (robot not in console.goal_leases.pending and robot not in console._goal_busy
+                   and line.get("mode") == "OFF")
+        # A cancel can leave the mode word NAVIGATION with no goal (PR #1122): inert navigation and zero velocity decide.
+        standing = (settled and state.get("navigation") in ("IDLE", "ARRIVED", "CANCELED", "FAILED")
+                    and state.get("mode") in ("IDLE", "EMERGENCY", "NAVIGATION") and _fresh_stopped(state))
+        # A peer driving a Fleet goal elsewhere on the site is judged by its claimed route below (2026-11-27 rosy_42 C2).
+        moving = not standing and settled and state.get("mode") == "NAVIGATION"
+        if not (standing or moving):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_MOTION_UNVERIFIED")
         peer_fit = fit_for(robot, state)
         position = peer_fit.apply(_point(state))
@@ -211,6 +252,9 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
             # 0.226 m apart, so the lane term leaves ~1 cm: CORE keeps the body inside its lane and stops on LiDAR.
             lane = bodies[0].half_width_m + bodies[1].rotation_radius_m + error
             turn = sum(max(body.rotation_radius_m, TRAY_TURN_RADIUS_M) for body in bodies) + error  # either tray may face the other
+        if moving:
+            _check_moving_peer(console, robot, state, position, path, site[0], None in bodies, turn)
+            continue
         if (any(_point_segment(position, a, b) < lane for a, b in zip(path, path[1:]))
                 or any(math.dist(position, point) < turn for point in path[:-1])):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")

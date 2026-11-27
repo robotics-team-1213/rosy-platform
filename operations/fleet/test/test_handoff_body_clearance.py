@@ -18,19 +18,29 @@ def _state(x, y):
                 evidence={channel: {"evidence": "fresh"} for channel in ("pose", "velocity")})
 
 
-def _run(peer_xy, *, peer_caps=PINKY_CAPS, fit_error=.037, peer_shift=.001):
+class _Leases(dict):
+    def __init__(self, leases=(), pending=None):
+        super().__init__(leases)
+        self.pending = pending or {}
+
+
+def _run(peer_xy, *, peer_caps=PINKY_CAPS, fit_error=.037, peer_shift=.001, peer_state=None, claims=None, pending=None,
+         leases=None, goals=None, own=None):
     fit = Fit(0., 0., 0., (fit_error,))
     # A different transform for the peer by default (its error counts); peer_shift=0 shares the mover's.
     fits = {"mover": fit, "peer": Fit(0., peer_shift, 0., (fit_error,))}
     clients = {"mover": NS(), "peer": NS()}
     kept = {"mover": PINKY_CAPS, "peer": peer_caps}
     console = NS(clients=lambda: clients, robot_ids=clients.keys(), _clearance_m=.7,
-                 goal_leases=NS(pending={}), _goal_busy=set(),
+                 goal_leases=_Leases(leases if leases is not None else {"peer": {"state": "leased"}}, pending),
+                 _goal_busy=set(), _site_claims=claims or {},
+                 _claims=own if own is not None else {"peer": [(-1.0, -.55), (.8, -.21)]},
+                 _goals=goals if goals is not None else {"peer": {"x": .8, "y": -.21, "yaw": 0.}},
                  _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda robot, *_: (fits[robot], None))),
                  _capability_display=NS(_kept=lambda robot, _client: kept[robot]))
     # C1-like bay entry: from P1 (y .04) to staging (y .15) then reversing to the seat (y .47).
     mover = _state(-.42, .04)
-    peers = ({"peer": clients["peer"]}, {"peer": _state(*peer_xy)})
+    peers = ({"peer": clients["peer"]}, {"peer": _state(*peer_xy) | (peer_state or {})})
     site_corridor(console, "mover", mover, {"site_map_id": "m", "site_map_version": 1}, None, (-.42, .47),
                   peers, route=[(-.42, .15)])
 
@@ -83,3 +93,52 @@ def test_stopped_deadband_and_offline_absent_peer_do_not_block():
     with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
         site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1},
                       None, (-.42, .47), peers, route=[(-.42, .15)])
+
+
+DRIVING = {"mode": "NAVIGATION", "navigation": "NAVIGATING", "velocity": {"linear": .06, "angular": .27}}
+# Bottom loop towards the cell: 0.59 m from P1, past 0.288 + 0.074 (binding errors) + 0.1 m/s x 2 s = 0.562 m.
+LOOP_CLAIM = ("m", [(-1.0, -.55), (.16, -.55), (.8, -.21)])
+
+
+def test_peer_driving_a_claimed_route_far_from_the_bay_does_not_block():
+    # 2026-11-27: rosy_42 waited at bay 2 staging while rosy_46 drove the bottom loop about 0.6 m away.
+    _run((-1.0, -.5), peer_state=DRIVING, claims={"peer": LOOP_CLAIM})
+
+
+def test_peer_left_in_navigation_mode_after_a_cancel_does_not_block_when_stopped():
+    _run((.30, -.29), peer_state={"mode": "NAVIGATION", "navigation": "CANCELED"})
+
+
+@pytest.mark.parametrize("peer_xy, claims, state, code", [
+    ((-1.0, -.33), {}, DRIVING, "PEER_MOTION_UNVERIFIED"),                                  # no Fleet claim
+    ((-1.0, -.33), {"peer": ("other", LOOP_CLAIM[1])}, DRIVING, "PEER_MOTION_UNVERIFIED"),  # claim in another map
+    ((-1.0, -.33), {"peer": ("m", [(-1.0, -.33), (-.42, .0)])}, DRIVING, "ROUTE_OCCUPIED"),  # route ends at P1
+    ((-.42, -.2), {"peer": ("m", [(-.42, -.2), *LOOP_CLAIM[1][1:]])}, DRIVING, "ROUTE_OCCUPIED"),  # 0.24 m from P1
+    ((-1.0, -.30), {"peer": LOOP_CLAIM}, DRIVING, "PEER_MOTION_UNVERIFIED"),   # 0.25 m off its claimed route
+    ((-1.0, -.5), {"peer": LOOP_CLAIM}, DRIVING | {"mode": "MANUAL"}, "PEER_MOTION_UNVERIFIED"),
+    ((-1.0, -.5), {"peer": LOOP_CLAIM}, DRIVING | {"line_follow": {"mode": "LANE"}}, "PEER_MOTION_UNVERIFIED"),
+    ((-1.0, -.5), {"peer": LOOP_CLAIM},
+     DRIVING | {"evidence": {"pose": {"evidence": "stale"}, "velocity": {"evidence": "fresh"}}}, "PEER_MOTION_UNVERIFIED"),
+])
+def test_moving_peer_without_a_far_claimed_route_blocks(peer_xy, claims, state, code):
+    with pytest.raises(HubError, match="LINE_HANDOFF_" + code):
+        _run(peer_xy, peer_state=state, claims=claims)
+
+
+def test_moving_peer_of_unknown_kind_or_with_a_goal_on_the_wire_blocks():
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _run((-1.0, -.5), peer_state=DRIVING, claims={"peer": LOOP_CLAIM}, peer_caps=None)
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _run((-1.0, -.5), peer_state=DRIVING, claims={"peer": LOOP_CLAIM}, pending={"peer": 1})
+
+
+@pytest.mark.parametrize("kw", [
+    {"leases": {}},                                                  # no Fleet lease: not Fleet's goal
+    {"leases": {"peer": {"state": "unbounded"}}},
+    {"goals": {}},
+    {"goals": {"peer": {"x": .16, "y": -.55, "yaw": 0.}}},           # the claim was written for an older goal
+    {"own": {}},
+])
+def test_moving_peer_claim_must_belong_to_its_leased_goal(kw):
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _run((-1.0, -.5), peer_state=DRIVING, claims={"peer": LOOP_CLAIM}, **kw)
