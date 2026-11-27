@@ -73,6 +73,10 @@ def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
     rpp = controller["FollowPath"]
     lookahead = rpp["min_lookahead_dist"]
     assert tolerance == 0.03  # 11-27 field: 0.08 stopped ~7 cm short of the stop line
+    # 11-28: the stop heading must match the place yaw (S3 ended 5-11 deg off at 0.25 rad); one control tick of the
+    # 0.8 rad/s goal rotation at the Pi's ~9 Hz worst case must stay inside the +-tolerance band or it hunts.
+    yaw_tol = controller["general_goal_checker"]["yaw_goal_tolerance"]
+    assert yaw_tol <= 0.06 and rpp["rotate_to_heading_angular_vel"] / 9.0 < 2 * yaw_tol
     assert tolerance < lookahead  # a carrot inside the goal ball makes RPP rotate without driving
     # 11-27 tight U-turn (R~0.135 m): lookahead 0.09 cuts the arc by L^2/(8R) ~ 0.8 cm.
     # 11-27: speed-scaled lookahead, 0.09 on slowed U-turn arcs, up to 0.16 on straights (wall zigzag fix).
