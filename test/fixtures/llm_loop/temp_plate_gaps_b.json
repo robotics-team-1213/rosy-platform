@@ -1,0 +1,176 @@
+{
+ "id": "temp_plate_gaps_b",
+ "evidence": "belt-xyz/auto_pick_dry_run-20261127-171235-2d0766.json",
+ "note": "arm_b temp_plate_b: gaps 3..9 mm beside every box, finger needs 10 mm. Not a pick.",
+ "raw": {
+  "arm": "arm_b",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_b_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "temp_plate_b",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "temp_plate_b",
+       "to": "pallet",
+       "attempts": [
+        {
+         "observed": 7,
+         "refused": [
+          {
+           "centre_mm": [
+            60.7,
+            -153.1
+           ],
+           "object": "container-2",
+           "colour": "orange",
+           "why": "neighbour clearance: 6.0 / 3.0 mm free beside it"
+          },
+          {
+           "centre_mm": [
+            37.9,
+            -212.4
+           ],
+           "object": null,
+           "colour": "red",
+           "why": "tangled blob"
+          },
+          {
+           "centre_mm": [
+            10.3,
+            -122.8
+           ],
+           "object": null,
+           "colour": "orange",
+           "why": "no catalogue match"
+          },
+          {
+           "centre_mm": [
+            6.1,
+            -222.7
+           ],
+           "object": null,
+           "colour": "red",
+           "why": "no catalogue match"
+          },
+          {
+           "centre_mm": [
+            -32.6,
+            -123.3
+           ],
+           "object": null,
+           "colour": "orange",
+           "why": "no catalogue match"
+          },
+          {
+           "centre_mm": [
+            -41.1,
+            -213.8
+           ],
+           "object": "container-3",
+           "colour": "yellow",
+           "why": "neighbour clearance: 3.0 / 5.0 mm free beside it"
+          },
+          {
+           "centre_mm": [
+            -103,
+            -191
+           ],
+           "object": null,
+           "colour": "orange",
+           "why": "tangled blob"
+          }
+         ],
+         "error": "no usable object (neighbour clearance)"
+        }
+       ],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 0.5,
+        "inliers": 598
+       },
+       "result": "stopped: no usable object (neighbour clearance)"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}
