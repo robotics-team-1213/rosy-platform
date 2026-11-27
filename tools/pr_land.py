@@ -285,13 +285,21 @@ def session_name() -> str:
 
 
 def safety_lines(cwd: Path, base: str) -> list[str]:
-    """The `Safety-Review:` lines of the branch's own commits. The queue's merge commit is checked too (a file
-    that main and the branch both changed shows in it), and its message comes from the PR body (#991 failed there)."""
+    """The `Safety-Review:` lines of the branch's own commits, for the PR body (the record a reader sees). The queue's merge
+    commit does not carry them: see queue_merge_overlap."""
     seen: list[str] = []
     for line in _run(["git", "log", "--no-merges", "--format=%B", f"{base}..HEAD"], cwd).splitlines():
         if re.match(r"Safety-Review:[ \t]*\S", line) and line.strip() not in seen:
             seen.append(line.strip())
     return seen
+
+
+def queue_merge_overlap(cwd: Path) -> list[str]:
+    """Files both origin/main and the branch changed since they parted. The queue's merge commit shows these, and its message is
+    the PR title alone (repo setting PR_TITLE), so a safety-tagged one fails CI's Safety-Review check there (2026-11-27, #1123)."""
+    fork = _run(["git", "merge-base", "origin/main", "HEAD"], cwd)
+    ours = set(_run(["git", "diff", "--name-only", fork, "HEAD"], cwd).splitlines())
+    return sorted(ours & set(_run(["git", "diff", "--name-only", fork, "origin/main"], cwd).splitlines()))
 
 
 def build_body(summary: str, self_review: str, safety: list[str] = ()) -> str:
@@ -346,7 +354,11 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         raise SystemExit("[pr-land] refs/remotes/origin/main is missing; run 'git fetch origin main' (the size check needs its merge base)")
     safety = safety_lines(cwd, base)
     if safety:
-        print(f"[pr-land] safety-tagged branch: {len(safety)} Safety-Review line(s) go into the PR body for the queue's merge commit")
+        print(f"[pr-land] safety-tagged branch: {len(safety)} Safety-Review line(s) go into the PR body")
+        if both := queue_merge_overlap(cwd):
+            raise SystemExit("[pr-land] main and this safety-tagged branch both changed: " + ", ".join(both[:5])
+                             + "\n[pr-land] the queue's merge commit would show them without a Safety-Review line (its message is the PR title);"
+                             " run 'git merge origin/main' with the Safety-Review line in the merge message, then submit again")
     preflight(cwd, base, build_body(args.body, args.self_review, safety))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
