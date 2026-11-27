@@ -920,7 +920,7 @@ def test_sample_nav2_route_ends_mid_edge_at_a_hold_point():
 
 
 
-@pytest.mark.parametrize("held", ["traffic_hold", "fenced_hold", None, "resolved"])
+@pytest.mark.parametrize("held", ["traffic_hold", "fenced_hold", "resolved_then_fenced", None, "resolved"])
 def test_held_short_of_a_table_cut_on_the_last_segment_is_no_arrival(monkeypatch, held):
     """TripSteps reports arrival only without a table cut (``traffic_hold``) and once a hold-point receipt was
     resolved by the real route: a cancelled hold whose replacement waits for standstill is no arrival."""
@@ -945,10 +945,13 @@ def test_held_short_of_a_table_cut_on_the_last_segment_is_no_arrival(monkeypatch
             live.view["detail"]["traffic_hold"] = {"waiting_for": ["rosy_46"], "refused_at_m": 0.3}
         elif held:  # the cut cleared; the cancelled hold route's replacement waits for standstill evidence
             live.view["detail"]["wait_prefix"] = {"kind": "hold_point", "state": "superseded", "fence": True,
-                                                  **({"resolved": True} if held == "resolved" else {})}
+                                                  **({"resolved": True} if held != "fenced_hold" else {})}
+            if held == "resolved":
+                live.view["detail"]["wait_prefix"].pop("fence")  # standstill seen and the final goal sent
 
     monkeypatch.setattr(trip_steps, "step_nav2_route", step)
     ex, ey, eyaw = arc.point_at(arc.length_m - 0.02)
     pose["v"] = MapPose(ex, ey, eyaw, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
     run(runner.tick())
-    assert runner.view("p-held")["state"] == ("running" if held in ("traffic_hold", "fenced_hold") else "arrived")
+    waiting = ("traffic_hold", "fenced_hold", "resolved_then_fenced")
+    assert runner.view("p-held")["state"] == ("running" if held in waiting else "arrived")

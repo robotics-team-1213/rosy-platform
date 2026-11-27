@@ -317,8 +317,8 @@ def hold_snapshot(lengths=((S_FROM, S_TO), (0., .5)), authority=.867):
               renewals=renewals, guards=guards, owned=owned, table_row=table_row, curve=curve, clock=clock)
 
 
-def _drive(monkeypatch, h, s, nav="IDLE", stopped=False):
-    """One trip period at arc metre ``s`` of segment 0 (the robot projected on the lane centre)."""
+def _drive(monkeypatch, h, s, nav="IDLE", stopped=False, seg=0):
+    """One trip period at arc metre ``s`` of segment ``seg`` (the robot projected on the lane centre)."""
     monkeypatch.setattr(nav2, "ready_free_goal", lambda *_: asyncio.sleep(0, result=True))
     monkeypatch.setattr(nav2, "observe_lane_departure", lambda *_: asyncio.sleep(0, result=False))
     monkeypatch.setattr(nav2, "_convert_points", lambda runner, live, active, pts, pose, state: (pts, None))
@@ -329,10 +329,10 @@ def _drive(monkeypatch, h, s, nav="IDLE", stopped=False):
     if stopped:
         h.state.update(velocity={"linear": 0., "angular": 0.},
                        evidence={"pose": {"evidence": "fresh"}, "velocity": {"evidence": "fresh"}})
-    x = S_FROM + h.live.progress(0, s)
-    h.live.at = (0, s)
+    x = S_FROM + h.live.progress(seg, s)
+    h.live.at = (seg, s)
     h.live.view["pose"] = {"state": "LOCALIZED", "x": x, "y": 0.}
-    run(nav2.step_nav2_route(h.runner, h.live, 0, s, NS(x=x, y=0., yaw=0., odom_stamp=h.clock())))
+    run(nav2.step_nav2_route(h.runner, h.live, seg, s, NS(x=x, y=0., yaw=0., odom_stamp=h.clock())))
 
 
 def _stalled(h, s):
@@ -664,3 +664,33 @@ def test_arrived_off_the_hold_point_keeps_waiting_under_the_cut(monkeypatch):
     assert not _stalled(h, hold_s - .3)
     h.clock.advance(25.)
     assert not _stalled(h, hold_s - .3) and h.live.view["detail"]["traffic_hold"]["waiting_for"] == ["rosy_46"]
+
+
+
+# ---- review round 4 (PR #1140) ---------------------------------------------------------------------------------
+
+def test_a_second_cut_fence_blocks_arrival_until_standstill_and_the_final_goal(monkeypatch):
+    """Codex round 4: the first cut clears (receipt resolved), a second cut cancels the ordinary route 14 cm short
+    of the destination and fences it; the cut clears before fresh velocity evidence: still no arrival."""
+    from fleet.server.peer_wait_prefix import hold_pending
+    h = hold_snapshot()
+    detail = h.live.view["detail"]
+    _drive(monkeypatch, h, S_FROM)  # first cut: a hold point
+    h.clock.advance(1.)
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, .4, nav="NAVIGATING")  # cleared mid-drive: cancel, fence
+    _drive(monkeypatch, h, .4, nav="CANCELED", stopped=True)  # standstill: the real route to P3
+    assert len(h.sent) == 2 and detail["wait_prefix"]["resolved"] and not hold_pending(detail)
+    h.clock.advance(1.)
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, .36, nav="NAVIGATING", seg=1)  # 14 cm short of P3
+    h.table_row(occupied_ahead_m=h.live.progress(1, .5) + .06)  # second cut: 6 cm past the destination
+    _drive(monkeypatch, h, .36, nav="NAVIGATING", seg=1)
+    assert h.cancels == ["rosy_45", "rosy_45"] and detail["wait_prefix"]["fence"] and hold_pending(detail)
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])  # the cut clears before fresh velocity evidence
+    _drive(monkeypatch, h, .36, nav="CANCELED", seg=1)
+    assert len(h.sent) == 2 and "traffic_hold" not in detail and hold_pending(detail)  # never an arrival here
+    _drive(monkeypatch, h, .36, nav="CANCELED", stopped=True, seg=1)  # standstill: the final goal goes out
+    assert len(h.sent) == 3 and h.sent[-1][0][-1]["x"] == pytest.approx(S_FROM + h.live.progress(1, .5))
+    assert not hold_pending(detail)

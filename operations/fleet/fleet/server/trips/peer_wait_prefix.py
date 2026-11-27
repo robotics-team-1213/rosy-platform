@@ -338,7 +338,9 @@ def hold_or_wait(runner, live, active, index, s, seg, names):
 def fence(live, index, names) -> None:
     """A route was cancelled or ended under a cut: nothing replaces it before fresh standstill evidence."""
     detail = live.view["detail"]
-    detail["wait_prefix"] = {**(detail.get("wait_prefix") or held_receipt(index, "replacing", names)), "fence": True}
+    # A real route must go out again after the fence before an arrival counts (an earlier resolve no longer does).
+    detail["wait_prefix"] = {**(detail.get("wait_prefix") or held_receipt(index, "replacing", names)),
+                             "fence": True, "resolved": False}
 
 
 def fenced(live, state, nav) -> bool:
@@ -373,9 +375,11 @@ def hold_receipt(runner, live, seg, stop, xy, names) -> None:
 
 
 def hold_pending(detail) -> bool:
-    """A table cut stands, or a hold-point receipt is not yet resolved by the real route: never an arrival."""
+    """A table cut stands, a standstill fence is pending, or a hold-point receipt is not yet resolved by the real
+    route sent after it: never an arrival."""
     receipt = detail.get("wait_prefix") or {}
-    return bool(detail.get("traffic_hold") or (receipt.get("kind") == "hold_point" and not receipt.get("resolved")))
+    return bool(detail.get("traffic_hold") or receipt.get("fence")
+                or (receipt.get("kind") == "hold_point" and not receipt.get("resolved")))
 
 
 async def supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg, autonomous, cancel) -> bool:
