@@ -166,6 +166,9 @@ class TripConfig:
     #: verdict is REPARK and the move is inside CORE's fine re-park caps; 0 leaves every correction to an operator.
     #: CORE's named-stop custody takes one re-park per approach, so a larger value changes nothing today.
     named_stop_auto_corrections: int = 1
+    #: 2026-11-27: a cell top-view stop (S3) corrects up to this many times, each re-read from the camera. CORE's
+    #: named-stop custody still takes one re-park per approach, so a larger value changes nothing today.
+    cell_topview_corrections: int = 3
     #: D-495 1: CORE turns at most this much at a junction.
     max_turn_deg: float = 150.0
     #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
@@ -220,9 +223,9 @@ class TripConfig:
                         math.isfinite(value) and 0.0 <= value <= 0.12):
                     raise ValueError("fleet.trip.nav2_off_lane_margin_m must be in [0.0, 0.12]")
                 continue
-            if item.name == "named_stop_auto_corrections":  # 0 leaves every correction to an operator
+            if item.name in ("named_stop_auto_corrections", "cell_topview_corrections"):  # 0 leaves it to an operator
                 if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-                    raise ValueError("fleet.trip.named_stop_auto_corrections must be a whole number, 0 or more")
+                    raise ValueError(f"fleet.trip.{item.name} must be a whole number, 0 or more")
                 continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):

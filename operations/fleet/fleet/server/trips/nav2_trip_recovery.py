@@ -46,7 +46,7 @@ def _in_scope(runner, live, reason, stop_detail, state) -> bool:
             and runner._strict_named_stop(live, index) is None
             and runner._cancel_goal is not None and isinstance(state, dict)
             and (state.get("safety") or {}).get("estop") is False and state.get("mode") not in ("MANUAL", "ESTOP")
-            and not _excluded(live, index, state)                                     # charge bay, parking, DOCKING
+            and not _excluded(runner, live, index, state)                                   # charge bay, parking, DOCKING
             and active is not None and active[0] == live.view["map_version"])
 
 

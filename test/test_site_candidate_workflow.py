@@ -290,3 +290,7 @@ def test_push_builds_automatically_look_up_latest_signed_base_candidate():
     assert 'git merge-base --is-ancestor "$BASE_COMMIT" "$COMMIT"' in build_step["run"]
     # A dispatch with an empty base_commit is a full build: only pushes look up a base.
     assert '[[ "$EVENT_NAME" == "push" && -z "$base_commit"' in _run_text(check)
+    # Incremental only on a newest signed release that is itself full (manifest_version 1) and recent;
+    # otherwise a full build keeps a full release in the retained set (11-27 skip-missing-base fix).
+    run = _run_text(check)
+    assert "FULL_MAX_AGE_S=21600" in run and '"$ver" == 1' in run and "age <= FULL_MAX_AGE_S" in run

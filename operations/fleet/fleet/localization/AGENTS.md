@@ -21,6 +21,7 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 | `arbiter.py` | `Weights`, `Context`, `score()`, `Arbiter.observe()` → `LocalizationDecision` |
 | (not in this folder) | MapPose lives in `rosy.world.state.projections.map_pose`. Import it directly (D-752). This folder does not re-export it. Fleet service, transaction, and admission stay in `server/` |
 | `lane_compliance.py` | D-511 2: signed lateral offset (left +), body margin `width_m/2 − (|d| + half width)` from `core_common.robot_body`, `LaneComplianceTracker` (OK/WARN/ACT/UNKNOWN, `persist_n`), `LaneComplianceConfig` (`fleet.lane_compliance`, provisional defaults). Observe only |
+| `topview_pose.py` | 2026-11-27: Pinky offset from the model S training spot read from the arm cell's top camera (SIFT registration to a stored reference frame, orange tray, px-to-site map in `deploy/site/cell-topview/*.json`); `solve_px_to_site` self-calibration. Lazy cv2, no network. Used by `server/trips/named_stop_topview.py` |
 | `wall_grid.py` | SLAM fallback: active site map walls -> Nav2 trinary map in the site frame (0.025 m, walls >= 1 cell, pure stdlib, deterministic sha256), served by `GET /api/fleet/site-map/wall-grid` |
 | `wall_tiebreak.py` | D-1046 bounded exception to "overhead never decides alone": two ~180-degree twin loc_assist candidates, both scan fit >= 0.85, picked by ceiling camera position (>= 1 m apart, 2 s hold); allowed only while CORE reports `slam_fallback.phase` WAITING_LOCALIZATION, never ACTIVE |
 
