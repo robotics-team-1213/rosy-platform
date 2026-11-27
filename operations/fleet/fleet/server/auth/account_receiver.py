@@ -142,6 +142,7 @@ def install_account_receiver(app, *, config):
     client = load_account_client(config, destinations=DESTINATIONS)
     sessions = FleetAccountSessions(client)
     app.state.account_client = client
+    app.state.account_cookie = COOKIE  # read by safety-side routes that must not import this module (D-430 §3)
 
     async def invoke(fn, *args, **kwargs):
         try:
