@@ -7,7 +7,7 @@ cancel → ack → resend of the current route, whose resend is ``sample_nav2_ro
 
 Classification, every tick of a navigating route (``detail['lane_departure']['kind']``):
 ``excluded`` charge-bay leg, parking handoff or DOCKING (D-972) · ``location`` robot state unread, robot localization
-not LOCALIZED, no approved-SLAM trip pose, or SLAM-vs-camera gap > ``GAP_MAX_M`` (robot-d3's transient_loc_hold owns
+not LOCALIZED, no bound SLAM pose to read (the trip's own, or the robot's through its binding), or SLAM-vs-camera gap > ``GAP_MAX_M`` (robot-d3's transient_loc_hold owns
 the answer; nothing here acts) · ``camera_unavailable`` / ``camera_stale`` (recorded and warned only) ·
 ``on_lane`` / ``near_edge`` (margin < ``NEAR_EDGE_M``, recorded) / ``departed`` (margin < 0). The margin is
 D-511's body margin (``lane_offset``) of the ceiling-camera pose, never the robot's AMCL pose.
@@ -24,8 +24,11 @@ from __future__ import annotations
 import inspect
 import logging
 import math
+from types import SimpleNamespace
 
 from fleet.localization.lane_compliance import BODY_HALF_WIDTH_M, lane_offset
+from fleet.localization.map_binding import bound_pose
+from fleet.server.named_stop_map_pose import fresh_native_slam
 from fleet.server.trip_geometry import _wall_clearance
 
 GAP_MAX_M = 0.05            # robot SLAM pose vs ceiling-camera pose: farther apart is a location problem
@@ -85,6 +88,23 @@ async def observe(runner, live, index: int, pose, state, nav) -> bool:
         return False
 
 
+def _bound_slam(runner, live, state, active, now):
+    """The robot's fresh native SLAM pose through its approved map binding, on the active site map: ``(pose, None)``
+    or ``(None, why)``. The same read a bound Nav2 trip drives on (``read_precision_pose_status``), without a trip scope."""
+    try:
+        bindings = runner._store.map_bindings
+        fit, why = bindings.matching_fit(live.view["robot_id"], state, (active[1].map_id, active[0]))
+    except Exception as exc:  # noqa: BLE001 - no binding store or an unreadable one is "no SLAM pose", never a failure
+        return None, type(exc).__name__
+    if fit is None:
+        return None, why or "MAP_BINDING_REQUIRED"
+    sample = fresh_native_slam(state, now)
+    if sample is None:
+        return None, "SLAM_POSE_STALE"
+    x, y, yaw = bound_pose(fit, sample[0])
+    return SimpleNamespace(x=x, y=y, yaw=yaw, source="approved_slam"), None
+
+
 async def _observe(runner, live, index: int, pose, state, nav) -> bool:
     detail = live.view["detail"]
     last = detail.get("lane_departure") or {}
@@ -127,12 +147,15 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
     if age is None or not 0.0 <= age < CAMERA_MAX_AGE_S or not 0.0 <= cam.dead_reckon_m <= CAMERA_BRIDGE_MAX_M:
         return note("camera_stale", camera_age_s=age, bridged_m=cam.dead_reckon_m)
     if getattr(pose, "source", None) != "approved_slam":
-        return note("location", "SLAM_POSE_UNBOUND", camera_age_s=round(age, 3))
+        # A trip that does not drive on the bound SLAM pose (its pose is the camera's): read the robot's own.
+        pose, why = _bound_slam(runner, live, state, active, now)
+        if pose is None:
+            return note("location", "SLAM_POSE_UNBOUND", camera_age_s=round(age, 3), slam_reason=why)
     gap = math.hypot(pose.x - cam.x, pose.y - cam.y)
     if gap > GAP_MAX_M:
         return note("location", "SLAM_CAMERA_GAP", camera_age_s=round(age, 3), gap_m=round(gap, 4))
     lat, margin, tangent = lane_offset(live.arc(index), cam.x, cam.y, BODY_HALF_WIDTH_M)
-    yaw = cam.yaw if cam.yaw is not None else pose.yaw
+    yaw = pose.yaw if pose.yaw is not None else cam.yaw   # the robot's own heading: the camera's is off at the edges
     turn = None if yaw is None else abs(math.degrees((tangent - yaw + math.pi) % (2 * math.pi) - math.pi))
     fields = {"lat_m": round(lat, 4), "margin_m": round(margin, 4), "camera_age_s": round(age, 3),
               "gap_m": round(gap, 4), "heading_deg": None if turn is None else round(turn, 1)}
