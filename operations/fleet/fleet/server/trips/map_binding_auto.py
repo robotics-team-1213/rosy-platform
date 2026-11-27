@@ -18,6 +18,7 @@ robot. The last attempt's reason is kept in ``store.auto_notes`` for the map-bin
 
 from __future__ import annotations
 
+import json
 import math
 import time
 from typing import Awaitable, Callable, Mapping, Optional
@@ -80,7 +81,9 @@ class AutoRebind:
             if _standing(state) and state.get("mode") == "IDLE":
                 sig = await read_signature(self._grid, self._state, robot_id, state, old["robot_grid_id"])
                 if sig is not None:
-                    bindings.set_grid_sig(old["binding_id"], sig)
+                    with bindings._lock, bindings._db:  # once, for a binding approved without a signature
+                        bindings._db.execute("UPDATE robot_map_bindings SET grid_sig = ? WHERE binding_id = ? AND grid_sig "
+                                             "IS NULL AND revoked_at IS NULL", (json.dumps(sig), old["binding_id"]))
             return False
         try:
             detail = await self._attempt(robot_id, state, site, old)

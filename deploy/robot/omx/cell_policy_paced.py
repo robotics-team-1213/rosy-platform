@@ -250,7 +250,7 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                        "proposed_last": proposed[-1].tolist(), **({"converted_chunk": converted.tolist()} if dry_run else {})}
                 force_all = jaw_spec is not None and in_jaw_zone(live_poses, kin, jaw_spec)
                 try:
-                    frames_cell = shape_chunk(proposed, state, low, high, fastest, trim_backtrack=True, ease=True)
+                    frames_cell = shape_chunk(proposed, state, low, high, fastest, trim_backtrack=True, ease=True, jaw_floor=closed)
                 except ValueError as error:
                     if dry_run:
                         row["envelope"] = {"ok": False, "reason": str(error)}

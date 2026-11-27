@@ -75,10 +75,8 @@ class MapBindingStore:
                     robot_grid_id TEXT NOT NULL, site_map_id TEXT NOT NULL, site_map_version INTEGER NOT NULL,
                     fit TEXT NOT NULL, approved_by TEXT NOT NULL, approved_at REAL NOT NULL,
                     revoked_by TEXT, revoked_at REAL, revoke_reason TEXT, site_frame_sha256 TEXT, grid_sig TEXT)""")
-            columns = {row[1] for row in self._db.execute("PRAGMA table_info(robot_map_bindings)")}
-            for column in ("site_frame_sha256", "grid_sig"):
-                if column not in columns:
-                    self._db.execute(f"ALTER TABLE robot_map_bindings ADD COLUMN {column} TEXT")
+            for column in {"site_frame_sha256", "grid_sig"} - {r[1] for r in self._db.execute("PRAGMA table_info(robot_map_bindings)")}:
+                self._db.execute(f"ALTER TABLE robot_map_bindings ADD COLUMN {column} TEXT")
 
     def approve(self, robot_id: str, state: Mapping, site: tuple[str, int], pairs, holdout,
                 principal_id: str, grid_sig: Optional[dict] = None) -> dict:  # grid_sig: map_binding.grid_signature
@@ -103,11 +101,6 @@ class MapBindingStore:
             self._event("map_binding_approve", principal_id, {"robot_id": robot_id, "binding_id": binding_id,
                         "robot_grid_id": grid, "site_map_version": int(site[1]), "residual_max_m": fit.max})
         return self.active(robot_id)
-
-    def set_grid_sig(self, binding_id: str, grid_sig: dict) -> bool:  # once, for a binding approved without one
-        with self._lock, self._db:
-            return bool(self._db.execute("UPDATE robot_map_bindings SET grid_sig = ? WHERE binding_id = ? AND "
-                                         "grid_sig IS NULL AND revoked_at IS NULL", (json.dumps(grid_sig), binding_id)).rowcount)
 
     def revoke(self, robot_id: str, principal_id: str, reason: str = "revoked") -> bool:
         with self._lock, self._db:

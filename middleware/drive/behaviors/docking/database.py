@@ -355,6 +355,25 @@ class DockDatabase:
         return taught
 
     @_synchronized
+    def reframe(self, dock_id: str, map_id: str, grid_id: str, generation: int, *, expected_map_id: str,
+                expected_grid_id: Optional[str], binding_id: Optional[str], new_binding_id: str) -> DockInstance:
+        """Move a dock's map identity tags to the frame now, pose unchanged (the caller verified the pose in that frame).
+        Compare-and-set: the caller must name the tags and binding the dock holds now, so it cannot bless a dock it did not just read."""
+        if not self.frame_key or self.frame_key() != map_id:
+            raise DockError("MAP_FRAME_CHANGED", "map changed before reframe")
+        dock = self.get(dock_id)
+        held = dock.metadata.get("binding_id")
+        if (dock.map_id, dock.metadata.get("commissioned_grid_id")) != (expected_map_id, expected_grid_id) or (
+                held is not None and held != binding_id):
+            raise DockError("MAP_FRAME_CHANGED", f"dock '{dock_id}' changed since it was read")
+        metadata = {**dock.metadata, "map_epoch": map_id, "binding_id": new_binding_id}
+        if "commissioned_grid_id" in metadata:
+            metadata.update(commissioned_grid_id=grid_id, commissioned_map_generation=generation)
+        self._docks[dock_id] = dock = dock.model_copy(update={"map_id": map_id, "metadata": metadata})
+        self._save()
+        return dock
+
+    @_synchronized
     def only(self) -> Optional[DockInstance]:
         """도크가 정확히 하나면 그것 — 1:1 배치에서 이름 없이 "그 도크"를 묻는 길.
 

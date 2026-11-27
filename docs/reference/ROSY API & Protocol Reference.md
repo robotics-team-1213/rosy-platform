@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.491
+**Version:** v1.492
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.492 OMX readiness: 오래된 팔 상태는 알 수 없음 (Cell)
+
+`GET /readiness`(`rosy.cell-readiness.v1`)와 `GET /api/fleet/pipeline/cells/{cell_id}/readiness`(`rosy.fleet-cell-readiness.v1`)는 오래된 팔 상태를 현재 값으로 내지 않는다(v1.492).
+
+- 각 팔에 `state_unknown`(`null` 또는 `{reason, last_observed_at}`)을 더한다. 값이 있으면 `folded` 는 `null` 이다.
+- 셀 API: `folded` 는 15초 안의 `live.json`, 또는 같은 나이 안의 수동 motor-health가 접힘을 증명할 때만 값을 갖는다. `reason` 은 `board_missing`(관측기 env의 보드 by-id 링크 없음, 신선한 행보다 우선) \| `stale` \| `never_observed`. 이때 `blocking_refusals` 에 `<arm>:state_unknown` 이 들어가 `allowed_tiers_now` 에서 2가 빠지고, 실패 컨텍스트 대체 동작 fence도 대상 팔과 A/B 상대 팔의 `state_unknown` 을 거절한다.
+- Fleet: `folded` 는 15초 안의 접힘 보고일 때만 값을 갖는다(부팅 기본값 포함하지 않음). `reason` 은 `stale` \| `never_observed`.
 
 ### v1.491 Cell job cancel as a cooperative stop (D-1081) (Cell)
 
@@ -5212,6 +5220,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.492 | 2026-11-27 | [Cell] Additive: readiness arms[].state_unknown, 오래된 folded 는 null |
 | v1.491 | 2026-11-27 | [Cell] [Cell] Additive: POST /jobs/<id>/cancel |
 | v1.490 | 2026-11-27 | [Fleet] [Fleet] Additive: cell-task motion object (free_pick, push), claim capabilities, cell-task-worker scope |
 | v1.489 | 2026-11-27 | [Fleet] Additive: ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH=1 시 POST /api/fleet/pipeline/cell-tasks 즉시 QUEUED 투입 및 claim 입회 면제 |

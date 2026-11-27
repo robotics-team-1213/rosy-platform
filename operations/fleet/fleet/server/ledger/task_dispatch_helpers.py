@@ -192,6 +192,15 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
 
     if explicit_stop is not None:
         stop = waypoints_site[-1] if waypoints_site else {}
+        if explicit_stop.precision_stop is None and stop:
+            # A plain stop is halted at the stop-line offset, not on the place (routing/stop_line.py, trip_steps).
+            stop_line = _il.import_module(".".join(("fleet", "routing", "stop_line")))
+            cost = _il.import_module(".".join(("fleet", "routing", "cost")))
+            goals = stop_line.stop_goals(active[2], place_id, target_yaw, routing_cfg or cost.RoutingConfig(),
+                                         stop_line.FALLBACK_FRONT_M)
+            hit = next((xy for _a, _s, xy in goals if _math.hypot(stop.get("x", 1e9) - xy[0], stop.get("y", 1e9) - xy[1]) <= 0.001), None)
+            if hit is not None:
+                target_x, target_y = hit
         if (stop.get("kind") != "stop"
                 or _math.hypot(stop["x"] - target_x, stop["y"] - target_y) > 0.0001
                 or abs(_math.remainder(stop["yaw"] - target_yaw, 2 * _math.pi)) > 0.0001):

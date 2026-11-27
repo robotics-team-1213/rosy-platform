@@ -151,6 +151,9 @@ def test_select_fallback_menu_limits_and_escalate_to_request(tmp_path):
 def _make_api_client(tmp_path, monkeypatch, *, gen: int = 1, bundle: dict | None = None, held: bool = False):
     wd = tmp_path / "cell"
     wd.mkdir(exist_ok=True)
+    for letter in "sab":  # current arm rows: an arm nobody observes is refused as state_unknown
+        (wd / f"chunk-io-{letter}").mkdir(exist_ok=True)
+        (wd / f"chunk-io-{letter}" / "live.json").write_text(json.dumps({"t": time.time()}), encoding="utf-8")
     bundle_root = tmp_path / "bundles"
     if bundle is not None:
         cfc.write_bundle(bundle_root, bundle, {"top-00.jpg": JPG})
