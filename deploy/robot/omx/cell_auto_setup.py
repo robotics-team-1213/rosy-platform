@@ -66,6 +66,8 @@ def validate_pick_args(args) -> None:
         raise SystemExit("--stop-proof cannot be combined with --commissioning/--person-at-switch")
     if getattr(args, "at_px", None) and not (str(args.source).startswith("free:") and re.fullmatch(r"\d{1,4},\d{1,4}", args.at_px)):
         raise SystemExit("--at-px U,V (pixels) needs --from free:<site>")
+    if str(args.source).startswith("free:") and getattr(args, "layers_below", None) is not None:
+        raise SystemExit("--layers-below is not supported with a free source (--from free:<site>)")
     if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
         raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
 

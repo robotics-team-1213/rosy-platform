@@ -64,8 +64,8 @@ def _run_auto_core(
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     anchor = cell_free_source.anchor_of(source)  # --from free:<site>: a measured position; that site only gives the map and the surface height
-    if (anchor or source) not in config["sites"]:
-        return {**out, "result": f"refused: source {source!r} is not a site in the config"}
+    if (why := cell_free_source.source_error(config, source, dest)):
+        return {**out, "result": why}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], anchor or source, dest)):  # before any camera or arm step
@@ -93,7 +93,7 @@ def _run_auto_core(
         config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     )
     episode, failed_yaws, gate, dest_view = None, [], None, None
-    attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
+    attempts = 1 if anchor else int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts  # the height was measured once: a retry is a new run
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
@@ -156,6 +156,8 @@ def _run_auto_core(
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"stopped: {row['error']}", **reach_fix_of(refused)}
             target = usable[0]
+            if anchor and (free_error := cell_free_source.chosen_error(config, source, target)):
+                return {**out, "result": free_error}
             use_blend = bool((config.get("calibrate") or {}).get("blend_bias"))
             known = cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"), blend=use_blend)
             bias_data, problem = self_calibrate(
