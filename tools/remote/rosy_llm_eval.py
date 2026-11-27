@@ -58,7 +58,8 @@ def score(decide: Decider, cases: list[dict[str, Any]], *, repeat: int = 5) -> d
     rows, tot = [], {"runs": 0, "unsafe": 0, "invalid": 0, "blocked_unsafe": 0, "refuse_runs": 0, "refuse_ok": 0, "act_runs": 0, "act_ok": 0}
     for case in cases:
         pack = obs.assemble(case["raw"])
-        label, sigs, row = case["label"], set(), {"id": case["id"], "kind": label["kind"], "steps": []}
+        label, sigs = case["label"], set()
+        row = {"id": case["id"], "kind": label["kind"], "steps": []}
         for _ in range(repeat):
             try:
                 plan = decide(copy.deepcopy(pack))
