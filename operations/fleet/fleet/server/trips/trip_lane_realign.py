@@ -13,7 +13,11 @@ the answer; nothing here acts) · ``camera_unavailable`` / ``camera_stale`` (rec
 D-511's body margin (``lane_offset``) of the ceiling-camera pose, never the robot's AMCL pose.
 
 The slow cap ends when the camera sees the robot back (``REALIGNED_*``), on an excluded leg, or ``SLOW_EVIDENCE_S``
-after the last fresh ``departed`` judgement.
+after the last fresh ``departed`` or ``wall_side`` judgement.
+
+Prevention (D-1082 ladder, user 2026-11-28): still inside the lane, a robot at least WALL_SIDE_M off the centre whose
+wall clearance is WALL_CLOSER_M below the centreline's for PERSIST_TICKS judged ticks gets the slow cap only
+(``wall_side_at``); no route is replaced, a resend there would zigzag. A map with no walls is never judged.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ from types import SimpleNamespace
 from fleet.localization.lane_compliance import BODY_HALF_WIDTH_M, lane_offset
 from fleet.localization.map_binding import bound_pose
 from fleet.server.named_stop_map_pose import fresh_native_slam
+from fleet.server.trip_geometry import _wall_clearance
 
 GAP_MAX_M = 0.05            # robot SLAM pose vs ceiling-camera pose: farther apart is a location problem
 #: The camera anchor must be this fresh to act. On site the anchor is 0.4-0.6 s old (2026-11-27), so 0.5 s threw
@@ -45,6 +50,8 @@ REALIGNED_DEG = 10.0
 #: The slow cap lives on fresh camera evidence of a departure: this long without one (camera lost, a location
 #: problem, or back inside the lane but not yet aligned) it is lifted, so no robot crawls on without a reason.
 SLOW_EVIDENCE_S = 10.0
+WALL_SIDE_M = 0.02          # off the centre toward a wall by this much (rosy_45 2026-11-27: 0.03 m, wall 0.13 m)
+WALL_CLOSER_M = 0.02        # and its wall clearance this much below the centreline's
 _RUNNING = ("NAVIGATING", "PLANNING")
 
 _LOG = logging.getLogger("fleet.server.trip_runner")
@@ -58,6 +65,16 @@ def _excluded(runner, live, index: int, state) -> bool:
     return (charge or arc.edge_id.startswith("bay_") or live.view["detail"].get("parking_handoff") is not None
             or (topview is not None and topview.covers(arc.end_place))  # the approach into it, not the way out
             or (isinstance(state, dict) and state.get("mode") == "DOCKING"))
+
+
+def _wall_side(arc, x: float, y: float, walls) -> tuple[float, float] | None:
+    """(wall clearance here, at the lane centre beside it), or None with no wall on the map."""
+    if not walls:
+        return None
+    _dist, s, _t = arc.project(x, y)
+    px, py, _ = arc.point_at(s)
+    here, centre = _wall_clearance(x, y, walls), _wall_clearance(px, py, walls)
+    return (round(here, 4), round(centre, 4)) if math.isfinite(here) and math.isfinite(centre) else None
 
 
 async def observe(runner, live, index: int, pose, state, nav) -> bool:
@@ -93,9 +110,11 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
     last = detail.get("lane_departure") or {}
     now = runner._clock()
     out = {"at": now, "slow": bool(last.get("slow")), "replaced": last.get("replaced", 0),
-           "replaced_at": last.get("replaced_at"), "departed_at": last.get("departed_at"), "ticks": 0}
+           "replaced_at": last.get("replaced_at"), "departed_at": last.get("departed_at"), "ticks": 0,
+           "wall_side_at": last.get("wall_side_at")}
     detail["lane_departure"] = out
-    if out["slow"] and (out["departed_at"] is None or now - out["departed_at"] >= SLOW_EVIDENCE_S):
+    seen = max((t for t in (out["departed_at"], out["wall_side_at"]) if t is not None), default=None)
+    if out["slow"] and (seen is None or now - seen >= SLOW_EVIDENCE_S):
         out.update(slow=False, slow_expired_at=now)
 
     def note(kind, reason=None, **fields):
@@ -142,7 +161,14 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
               "gap_m": round(gap, 4), "heading_deg": None if turn is None else round(turn, 1)}
     if out["slow"] and abs(lat) <= REALIGNED_LAT_M and turn is not None and turn <= REALIGNED_DEG:
         out.update(slow=False, realigned_at=now)
+    clear = _wall_side(live.arc(index), cam.x, cam.y, getattr(active[1], "walls", None))
+    if clear is not None:
+        fields.update(wall_clear_m=clear[0], centre_wall_clear_m=clear[1])
     if margin >= 0.0:
+        near = clear is not None and abs(lat) >= WALL_SIDE_M and clear[0] <= clear[1] - WALL_CLOSER_M
+        out["wall_ticks"] = last.get("wall_ticks", 0) + 1 if near else 0
+        if out["wall_ticks"] >= PERSIST_TICKS and nav in _RUNNING:
+            out.update(slow=True, wall_side_at=now)   # slow only: no resend
         return note("on_lane" if margin >= NEAR_EDGE_M else "near_edge", **fields)
     out["ticks"] = (last.get("ticks", 0) if last.get("kind") == "departed" else 0) + 1
     note("departed", **fields)

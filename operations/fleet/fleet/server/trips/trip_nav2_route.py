@@ -15,6 +15,7 @@ from fleet.server.held_lidar_observation import inspect_held_route
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
+from fleet.server.nav2_recovery_ladder import recovery_resend
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait, road_centerline
 from fleet.server.peer_wait_prefix import blockers as _blockers, fence, fenced, footprint_end, held_receipt, hold_guard
 from fleet.server.peer_wait_prefix import hold_or_wait, hold_receipt, supervise_wait_prefix, traffic_hold
@@ -422,7 +423,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if prefix is not None:
         end_index = prefix
     site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()),
-                                 here=(pose.x, pose.y), end_s=hold_s)
+                                 here=(pose.x, pose.y), end_s=hold_s, recentre=recovery_resend(live))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
         if (frame_err or {}).get("binding") == "ROBOT_NOT_LOCALIZED":
