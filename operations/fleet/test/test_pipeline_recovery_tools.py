@@ -111,6 +111,20 @@ def _seed_ready_amr(app, robot_id="rosy_46"):
     )
 
 
+def test_act_fallback_refuses_a_motion_task_instead_of_dropping_its_free_position(tmp_path, monkeypatch):
+    app, client = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="op-kim", role="operator"))
+    _seed_abort(app, "belt-m", cell_id="cell_ab", arm_id="arm_b")
+    app.state.omx_cell_tasks["belt-m"].update(src_site="belt", dst_site="ship-h1r0-l0", robot_kind="pinky", motion={"kind": "free_pick"})
+    failure = client.get("/api/fleet/pipeline/recovery-tools").json()["active_failures"][0]
+    res = client.post("/api/fleet/pipeline/recovery-tools/invoke", json={
+        "tool_name": "enqueue_vla_act_fallback", "arguments": {"mode": "act", "max_chunks": 2},
+        "caller_kind": "operator", "request_id": "act-m-1", "expected_context_sha256": failure["context_sha256"],
+        "root_task_id": "belt-m", "rationale": "retry",
+    })
+    assert res.status_code == 409 and res.json()["detail"]["code"] == "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"
+    assert list(app.state.omx_cell_tasks) == ["belt-m"]
+
+
 def test_unrepresentable_route_refused_on_act_admission_and_recovery(tmp_path, monkeypatch):
     app, client = _app(tmp_path, monkeypatch)
     for task_id, cell, arm, src, dst, disp, reason in (

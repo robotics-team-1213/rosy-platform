@@ -22,6 +22,7 @@ import cell_site_target
 from cell_route_check import pick_site
 from cell_task_act import plan_act_policy_task
 from cell_task_act_run import execute_act_policy_task
+from cell_task_motion import free_pick_request, run_job
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 _DEFAULT_URLOPEN = urlopen
@@ -213,6 +214,10 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     if hold.get("held"):
         return {"arm": arm_id, "error": f"ARM_INCIDENT_HELD:{hold.get('reason')}",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
+    motion = handoff.get("motion")
+    if motion is not None and not (isinstance(motion, dict) and motion.get("kind") == "free_pick" and handoff.get("cell_id") == "cell_ab"):
+        return {"arm": arm_id, "error": "CELL_MOTION_NOT_EXECUTABLE",  # a push is propose-only: its completion check and approval rule are not decided
+                "stop_event": {"command": "stop", "ok": False, "folded": False}}
     wrapper, cfg, cat, default_roi, default_src = _arm_run_spec(arm_id, prep_dir)
     if handoff.get("execution_mode") == "act_policy":
         if handoff.get("displaced_to") not in (None, ""):
@@ -289,9 +294,15 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                              env={**os.environ, "TOOLS_ROOT": str(tools_root()),
-                                   "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
+        if motion is not None:  # free-position pick: the cell job API decides and moves, not a subprocess of ours
+            proc, refusal = run_job(handoff, *free_pick_request(motion, arm_id=arm_id, config=cfg.name, catalog=cat_path.name, roi=roi, src=src, dst=dst))
+            if refusal:
+                return {"arm": arm_id, "error": refusal, "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},
+                        "stop_event": {"command": "stop", "ok": False, "folded": False}}
+        else:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                                  env={**os.environ, "TOOLS_ROOT": str(tools_root()),
+                                       "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
     except subprocess.TimeoutExpired:
         return {"arm": arm_id, "error": "SUBPROCESS_TIMEOUT",
                 "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},

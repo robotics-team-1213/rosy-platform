@@ -84,7 +84,7 @@ JOBS = {
     },
     "auto_pick": {
         "script": "cell_auto_pick.py",
-        "moving": True,
+        "moving": True, "machine_ids": ("cell-task-worker",),  # Fleet worker's free pick: stop proof still measured (cell_job_worker.py)
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(SOURCE), "dest": _match(NAME)},
