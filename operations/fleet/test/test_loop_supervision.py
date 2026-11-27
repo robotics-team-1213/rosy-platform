@@ -304,7 +304,7 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
         supervisor = LoopSupervisor()
         app = SimpleNamespace(state=SimpleNamespace(
             arm_transfer_dispatcher=Service(), stuck_resolver=Service(),
-            trip_runner=Service(), charge_runtime=Service(), job_trips=Service(),
+            trip_runner=Service(), charge_runtime=Service(), job_trips=Service(), trip_reissue=Service(),
             tether_watch=Tether(), paths=Service(), lane_compliance=object(), charge_bays_tick=hang))
         console = SimpleNamespace(
             _signals=Service(), goal_leases=SimpleNamespace(ttl_s=4.0),
