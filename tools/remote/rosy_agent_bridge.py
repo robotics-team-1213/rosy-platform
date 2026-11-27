@@ -19,9 +19,13 @@ import urllib.request
 if __package__:
     from .rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
     from .rosy_agent_tools import OPERATIONS_MCP_TOOLS, TOOL_MAP, TOOL_SPECS, _CELLS, _VIEWS, _obj_schema
+    from .rosy_observe import observe as _observe
+    from .rosy_verify import verify_after as _verify_after
 else:
     from rosy_agent_proposal_context import check_proposal_context, validate_proposal_args
     from rosy_agent_tools import OPERATIONS_MCP_TOOLS, TOOL_MAP, TOOL_SPECS, _CELLS, _VIEWS, _obj_schema
+    from rosy_observe import observe as _observe
+    from rosy_verify import verify_after as _verify_after
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_ERROR_BYTES = 65_536
@@ -277,6 +281,13 @@ class RosyAgentBridge:
         fu, ft, fc = self.cfg.fleet_url.rstrip("/"), self.cfg.fleet_token, self.cfg.fleet_cookie
         lu, lt = self.cfg.learning_url.rstrip("/"), self.cfg.learning_token
 
+        if name == "cell_observe":  # read-only composite: frames, dry runs, readiness; no job that moves
+            kw = {k: a[k] for k in ("repeat", "layers_below", "max_age_s") if k in a}
+            pack, jpeg = _observe(self.call_tool, a["arm"], **kw)
+            res = {"ok": True, "status": 200, "data": pack}
+            return {**res, "image_b64": base64.b64encode(jpeg).decode("ascii"), "mime_type": "image/jpeg"} if jpeg else res
+        if name == "cell_verify_after":
+            return {"ok": True, "status": 200, "data": _verify_after(a["before"], a["after"], a["step"], job_exit=a.get("job_exit"))}
         if name == "cell_readiness":
             return self._http("GET", f"{cu}/readiness", token=ct)
         if name == "cell_failure_context":

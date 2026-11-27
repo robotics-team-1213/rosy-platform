@@ -207,7 +207,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         assert replies[0]["result"]["protocolVersion"] == "2025-03-26"
         assert replies[1]["result"] == {}
-        assert len(replies[2]["result"]["tools"]) == 21
+        assert len(replies[2]["result"]["tools"]) == 23
         assert json.loads(replies[3]["result"]["content"][0]["text"])["data"]["cell_state_gen"] == 5
         frame_content = replies[4]["result"]["content"]
         assert len(frame_content) == 2 and frame_content[1]["type"] == "image" and frame_content[1]["mimeType"] == "image/jpeg"

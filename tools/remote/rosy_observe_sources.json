@@ -1,0 +1,194 @@
+{
+ "schema": "rosy.observe-sources.v1",
+ "note": "Per-arm observation table (2026-11-27 recorded dry runs): config/catalog/roi/dest are the cell job params, not guesses. trusted:false = the map misreads this site, so every candidate there is ask_human only. role:dest sites are observed for verify_after only. Extend here, nowhere else.",
+ "image_px": [
+  640,
+  480
+ ],
+ "grid_px": 50,
+ "arms": {
+  "arm_a": {
+   "object": "container-1,container-2,container-3",
+   "catalog": "catalog-board-live-1113.json",
+   "neighbour_clear_mm": 10,
+   "reach": {
+    "x_m": [
+     0.055,
+     0.232
+    ],
+    "y_abs_max_m": 0.155,
+    "note": "area_xyz bounds, informational: auto_pick on low-zone sites such as belt plans outside them"
+   },
+   "peer": "arm_b",
+   "top_view": "top",
+   "views": [
+    "top",
+    "side",
+    "arm_a_wrist"
+   ],
+   "config": "cell-arm-a-policy.json",
+   "dests": [
+    "pallet",
+    "ship-h1r0",
+    "ship-h1r1",
+    "ship-h1r2"
+   ],
+   "sites": [
+    {
+     "site": "temp_plate_a",
+     "roi": [
+      387,
+      344,
+      621,
+      479
+     ],
+     "dest": "pallet",
+     "role": "source"
+    },
+    {
+     "site": "belt",
+     "roi": [
+      284,
+      17,
+      383,
+      169
+     ],
+     "dest": "pallet",
+     "role": "source"
+    },
+    {
+     "site": "pallet",
+     "roi": [
+      266,
+      147,
+      418,
+      409
+     ],
+     "dest": "ship-h1r2",
+     "role": "dest"
+    }
+   ]
+  },
+  "arm_b": {
+   "object": "container-1,container-2,container-3",
+   "catalog": "catalog-board-live-1113.json",
+   "neighbour_clear_mm": 10,
+   "reach": {
+    "x_m": [
+     0.055,
+     0.232
+    ],
+    "y_abs_max_m": 0.155,
+    "note": "area_xyz bounds, informational: auto_pick on low-zone sites such as belt plans outside them"
+   },
+   "peer": "arm_a",
+   "top_view": "top",
+   "views": [
+    "top",
+    "side",
+    "arm_b_wrist"
+   ],
+   "config": "cell-arm-b-policy.json",
+   "dests": [
+    "pallet"
+   ],
+   "sites": [
+    {
+     "site": "temp_plate_b",
+     "roi": [
+      41,
+      336,
+      257,
+      479
+     ],
+     "dest": "pallet",
+     "role": "source"
+    },
+    {
+     "site": "belt",
+     "roi": [
+      285,
+      15,
+      385,
+      168
+     ],
+     "dest": "pallet",
+     "role": "source"
+    },
+    {
+     "site": "plate_b",
+     "roi": [
+      132,
+      228,
+      290,
+      416
+     ],
+     "dest": "pallet",
+     "role": "source",
+     "trusted": false,
+     "why": "polygon covers the arm base: the table seen through the plate hole reads as a container (2026-11-27 empty picks)"
+    },
+    {
+     "site": "pallet",
+     "roi": [
+      264,
+      146,
+      427,
+      409
+     ],
+     "dest": "pallet",
+     "role": "dest"
+    }
+   ]
+  },
+  "arm_s": {
+   "object": "container-1,container-2,container-3",
+   "catalog": "catalog-board-live-1113.json",
+   "neighbour_clear_mm": 10,
+   "reach": {
+    "x_m": [
+     -0.15,
+     0.232
+    ],
+    "y_abs_max_m": 0.22,
+    "note": "area_xyz bounds, informational"
+   },
+   "peer": null,
+   "top_view": "arm_s_top",
+   "views": [
+    "arm_s_top",
+    "arm_s_wrist"
+   ],
+   "config": "cell-auto-arm-s-live.json",
+   "free_pick": false,
+   "dests": [
+    "belt",
+    "pinky"
+   ],
+   "sites": [
+    {
+     "site": "pinky",
+     "roi": [
+      9,
+      76,
+      288,
+      262
+     ],
+     "dest": "belt",
+     "role": "source"
+    },
+    {
+     "site": "belt",
+     "roi": [
+      279,
+      99,
+      639,
+      200
+     ],
+     "dest": "pinky",
+     "role": "source"
+    }
+   ]
+  }
+ }
+}
