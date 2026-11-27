@@ -66,17 +66,20 @@ def _resolve_arm_files(workdir: Path, arm: str, config_name: str | None = None, 
 
 
 def _load_runtime(cfg_p: Path, cat_p: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
-    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
-    if cfg.get("params_path") and Path(cfg["params_path"]).expanduser().is_file():
-        cfg["params"] = prm.load(cfg["params_path"])["values"]
-    elif not isinstance(cfg.get("params"), dict):
-        cfg["params"] = {}
-    cal_path = cfg.get("calibration_path")
-    if not cal_path:
-        raise ValueError("calibration_path missing from cell config")
-    calibration = cell_pivot.with_site_maps(cfg, cal.load(Path(cal_path).expanduser()))
-    catalog = cell_objects.load_catalog(cat_p)
-    return cfg, calibration, catalog
+    try:
+        cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+        if cfg.get("params_path") and Path(cfg["params_path"]).expanduser().is_file():
+            cfg["params"] = prm.load(cfg["params_path"])["values"]
+        elif not isinstance(cfg.get("params"), dict):
+            cfg["params"] = {}
+        cal_path = cfg.get("calibration_path")
+        if not cal_path:
+            raise ValueError("calibration_path missing from cell config")
+        calibration = cell_pivot.with_site_maps(cfg, cal.load(Path(cal_path).expanduser()))
+        catalog = cell_objects.load_catalog(cat_p)
+        return cfg, calibration, catalog
+    except SystemExit as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def fetch_viewer_frame(viewer_url: str, view: str, *, urlopen_fn=urllib.request.urlopen, timeout: float = 2.0):

@@ -52,8 +52,9 @@ def _scene_jpg(rects, colour=(60, 160, 60), surface=(200, 200, 200)) -> bytes:
 
 
 def _seed_cell_workdir(tmp_path: Path) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     cal_file = tmp_path / "cal.json"
-    cal_file.write_text(json.dumps({"sites": {"temp_plate_a~fine": RECORD}, "cameras": {"top": None}}), encoding="utf-8")
+    cal_file.write_text(json.dumps({"schema": cal.SCHEMA, "sites": {"temp_plate_a~fine": RECORD}, "cameras": {"top": None}}), encoding="utf-8")
     cfg = {
         "arm_id": "arm_a",
         "calibration_path": str(cal_file),
@@ -290,6 +291,7 @@ def test_bench_record_http_objects_recording_and_strict_8781_proxy(tmp_path, mon
     assert wd == bench.prep
     tok_p = tmp_path / "job-api.token"
     tok_p.write_text("h" * 32, encoding="utf-8")
+    tok_p.chmod(0o600)
 
     # 503 when :8781 token not configured, unreadable, or raises SystemExit
     bench._config["job_api_token_file"] = str(tmp_path / "missing.token")
