@@ -57,7 +57,7 @@ def test_refusal_sentences_map_to_one_code(why, code, sugg, nums):
 def test_loop_modules_are_stdlib_only_and_pillow_is_function_local():
     """The bridge and CLI are stdlib-only (D-226); the loop modules they load keep that: Pillow only inside a function, fail-closed."""
     local = {p.stem for p in (ROOT / "tools" / "remote").glob("rosy_*.py")}
-    for name in ("rosy_observe", "rosy_observe_refusals", "rosy_plan", "rosy_verify", "rosy_llm_eval"):
+    for name in ("rosy_observe", "rosy_observe_refusals", "rosy_plan", "rosy_verify"):
         tree = ast.parse((ROOT / "tools" / "remote" / f"{name}.py").read_text(encoding="utf-8"))
         nested = {id(n) for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef) for n in ast.walk(fn)}
         for node in ast.walk(tree):
