@@ -29,9 +29,11 @@ and crosswalk gate still win. A CORE without the route answers 404 and is asked 
 
 D-1084 (amends D-511, user 2026-11-28): a still robot, and one on a parking or bay edge, in DOCKING or in a
 parking handoff, is not judged: no WARN/ACT (its counts freeze), `exempt` says why, `return.state` is
-PARKING there, and its cue only says ON_LANE (a docking verdict still goes). A moving robot is past the
-edge only when the camera pose and its approved-binding SLAM pose both are; one alone is POSE_MISMATCH
-(`pose_mismatch`, `pose_gap_m`) and no correction is sent. Side and direction use the SLAM yaw first.
+PARKING there, and its cue only says ON_LANE (a docking verdict still goes) - unless the last cue sent was
+not ON_LANE: then the tracked state goes on as before, so no CORE latch is released off the lane. A moving
+robot is past the edge (ACT, OFF_LANE) only when the camera pose and its approved-binding SLAM pose both
+are; a camera-only OFF_LANE is POSE_MISMATCH (no correction), any one-sided margin is `pose_mismatch`.
+Side and direction use the SLAM yaw first.
 """
 
 from __future__ import annotations
@@ -45,7 +47,7 @@ from typing import Callable, Iterable, Optional
 
 from fastapi import HTTPException
 
-from fleet.localization.lane_compliance import (OFF_LANE, OFF_MAP, ON_LANE, ON_LINE, PARKING, POSE_MISMATCH, UNKNOWN, UNSEEN,
+from fleet.localization.lane_compliance import (OFF_LANE, OFF_MAP, ON_LANE, PARKING, POSE_MISMATCH, UNKNOWN, UNSEEN,
                                                 LaneComplianceConfig, LaneComplianceTracker, ReturnTracker, classify,
                                                 evaluate_bay_dock, map_bounds, parking_edge, sample)
 from fleet.localization.lap_context import build_lap, context as lap_context
@@ -139,8 +141,12 @@ class LaneComplianceMonitor:
                             " (LED track without a motion heading yet: nearest arc, no heading gate)"
                             if heading == "none" else "")
             state = self._cached_state(robot_id)
-            body, body_reason = (self._body_pose(robot_id, state, active) if robot_id in movers
-                                 else (None, "not_moving"))
+            try:
+                body, body_reason = (self._body_pose(robot_id, state, active) if robot_id in movers
+                                     else (None, "not_moving"))
+            except Exception:  # noqa: BLE001 - an odd binding record never stops the watch: camera alone
+                logger.debug("lane compliance %s: SLAM pose not read", robot_id, exc_info=True)
+                body, body_reason = None, "error"
             # D-1084: side and direction from the robot's own yaw; the ceiling yaw is off +4-8 deg in the north bays.
             judged = pose if body is None or getattr(pose, "x", None) is None else replace(pose, yaw=body.yaw)
             back = self._return(robot_id, judged, robot_id in movers, graph, crosswalks, bounds, now)
@@ -190,10 +196,10 @@ class LaneComplianceMonitor:
             back["exempt"] = exempt
             if exempt == "parking" and back["state"] != OFF_MAP:
                 back["state"] = PARKING
-            elif exempt is None and gap is not None and back["state"] in (ON_LANE, ON_LINE, OFF_LANE):
-                body_state = classify(body.x, body.y, body.yaw, None, graph, crosswalks, cfg,
-                                      tracker.body_half_width_m, bounds).state
-                if (back["state"] == OFF_LANE) != (body_state == OFF_LANE):
+            elif exempt is None and gap is not None and back["state"] == OFF_LANE:
+                # Only the camera's departure is doubted; a camera ON_LINE keeps its correction as before.
+                if classify(body.x, body.y, body.yaw, None, graph, crosswalks, cfg,
+                            tracker.body_half_width_m, bounds).state != OFF_LANE:
                     back["state"], back["pose_gap_m"] = POSE_MISMATCH, gap
         return result, {"exempt": exempt, "pose_mismatch": mismatch, "pose_gap_m": gap,
                         "body_pose": None if body is None else {
@@ -267,9 +273,14 @@ class LaneComplianceMonitor:
 
     async def _send_cue(self, robot_id: str, back: dict, now: float) -> None:
         if back["state"] in (PARKING, POSE_MISMATCH) or (back.get("exempt") and back["state"] != OFF_MAP):
-            # D-1084: not a departure, so no correction: CORE hears "on the lane" (its cue clears); docking still goes.
-            back = {**back, "state": ON_LANE, "side": None, "bearing_deg": None, "turn_deg": None,
-                    "offset_m": None, "turn_spot": False}
+            if self._cue_sent.get(robot_id, ON_LANE) != ON_LANE:
+                # D-430 review: an ON_LANE would release a CORE latch (fleet_wrong_way, a turn) on a robot that
+                # stopped off the lane, so after a non-normal cue the tracked state goes as before until it is back.
+                back = {**back, "state": self._returns[robot_id].state}
+            else:
+                # D-1084: not a departure, so no correction; the docking verdict still goes.
+                back = {**back, "state": ON_LANE, "side": None, "bearing_deg": None, "turn_deg": None,
+                        "offset_m": None, "turn_spot": False}
         state = back["state"]
         if back["raw"] == UNSEEN and state != OFF_MAP:
             return                     # not judged now: CORE's cue expires, the robot drives as today

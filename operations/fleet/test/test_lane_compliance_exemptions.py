@@ -175,6 +175,22 @@ def test_body_yaw_decides_the_side_and_the_bay_verdict_keeps_the_camera_input(tm
     assert client.sent[-1]["docking"] == view["return"]["docking"] and client.sent[-1]["state"] == ON_LANE
 
 
+def test_a_robot_that_stops_off_the_lane_is_never_told_on_lane_before_it_is_back():
+    # D-430 review: ON_LANE releases CORE's latches (fleet_wrong_way, a turn); a robot that stopped off the
+    # lane after a real departure keeps hearing the tracked state until the lane is under it again.
+    clock, client = [100.0], Client()
+    poses = Poses({"r": cam(1.0, 0.25, 0.0)}, moving={"r"})
+    monitor = LaneComplianceMonitor(lambda: ["r"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(return_persist_s=0.0), wall=lambda: clock[0],
+                                    clients=lambda: {"r": client})
+    _run(monitor, clock, 2)
+    assert client.sent[-1]["state"] == OFF_LANE
+    poses.moving.clear()
+    _run(monitor, clock, 4)
+    assert monitor.view("r")["exempt"] == "still"
+    assert [body["state"] for body in client.sent] == [OFF_LANE] * len(client.sent)
+
+
 def test_docking_mode_and_parking_handoff_are_parking():
     clock = [100.0]
     poses = Poses({"r": cam(1.0, 0.15, 0.0)}, moving={"r"})
