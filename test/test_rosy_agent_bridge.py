@@ -207,7 +207,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         assert replies[0]["result"]["protocolVersion"] == "2025-03-26"
         assert replies[1]["result"] == {}
-        assert len(replies[2]["result"]["tools"]) == 20
+        assert len(replies[2]["result"]["tools"]) == 21
         assert json.loads(replies[3]["result"]["content"][0]["text"])["data"]["cell_state_gen"] == 5
         frame_content = replies[4]["result"]["content"]
         assert len(frame_content) == 2 and frame_content[1]["type"] == "image" and frame_content[1]["mimeType"] == "image/jpeg"
@@ -343,6 +343,11 @@ def test_bridge_schemas_match_cell_job_specs():
     stage = cmjs.MEDIA_JOBS["stage_policy_bundle"]
     st_props = set(br.TOOL_MAP["learning_stage_bundle"]["inputSchema"]["properties"].keys())
     assert set(stage["params"]) <= st_props
+
+    push = cjs.JOBS["push_dry_run"]
+    push_schema = br.TOOL_MAP["cell_push_dry_run"]["inputSchema"]
+    assert set(push_schema["required"]) == set(push["params"])
+    assert set(push_schema["properties"]) == (set(push["params"]) | set(push["optional"])) - {"operator", "proposer"}
 
     area = cjs.AREA_JOBS["area_xyz_pick"]
     area_schema = br.TOOL_MAP["cell_area_dry_run"]["inputSchema"]

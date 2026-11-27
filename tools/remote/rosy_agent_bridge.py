@@ -323,6 +323,8 @@ class RosyAgentBridge:
             return self._http("POST", f"{cu}/jobs/upkeep_check", token=ct, body=a)
         if name == "cell_dry_run":
             return self._http("POST", f"{cu}/jobs/auto_pick_dry_run", token=ct, body=a)
+        if name == "cell_push_dry_run":
+            return self._http("POST", f"{cu}/jobs/push_dry_run", token=ct, body=a)
         if name == "cell_area_dry_run":
             return self._http("POST", f"{cu}/jobs/area_xyz_pick", token=ct, body={**a, "dry_run": True})
         if name == "fleet_state":
