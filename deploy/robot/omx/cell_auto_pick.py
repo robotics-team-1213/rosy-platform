@@ -169,7 +169,9 @@ def _run_auto_core(
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {bias_error}"}
             cd.bias(known, problem, target["object"]["raw_m"])
-            if problem and not dry_run:
+            if problem and config.get("_map_only"):
+                tried["map_only"] = problem  # operator chose the fresh measured map alone (--map-only); guards and Gate unchanged
+            elif problem and not dry_run:
                 tried["locate"] = {"found": True, "arm_m": target["object"]["raw_m"]}
                 tried["fail"] = {"stage": "calibrate", "class": problem}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)

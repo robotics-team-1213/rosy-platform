@@ -51,6 +51,7 @@ def pick_parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
     ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
     ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
+    ap.add_argument("--map-only", action="store_true", help="pick on the measured site map without a pivot bias region near the object (recorded)")
     return ap
 
 
@@ -87,6 +88,7 @@ def open_cell(args, commissioning=False):
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
     config["_verify_zones"] = bool(getattr(args, "verify_zones", False))
+    config["_map_only"] = bool(getattr(args, "map_only", False))
     if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
         print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
