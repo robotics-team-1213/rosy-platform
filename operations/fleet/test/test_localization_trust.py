@@ -49,9 +49,9 @@ def test_an_untrusted_robot_without_a_trusted_pose_blocks_every_route():
 
 def test_an_untrusted_robot_blocks_routes_within_the_keep_out_of_its_last_trusted_pose():
     route = [(0.0, 0.0), (2.0, 0.0)]                  # one long segment: distance is to the segment
-    assert trust.blocks(route, (1.0, 0.19)) is True
-    assert trust.blocks(route, (1.0, 0.21)) is False
-    assert trust.UNTRUSTED_KEEP_OUT_M == 0.20
+    assert trust.blocks(route, (1.0, 0.17)) is True
+    assert trust.blocks(route, (1.0, 0.19)) is False
+    assert trust.UNTRUSTED_KEEP_OUT_M == 0.18   # one keep-out value (user decision 2026-11-27)
 
 
 def test_an_unknown_route_is_not_blocked_by_a_located_obstacle():
