@@ -6283,6 +6283,7 @@
       "consumers": [
         "applications/fleet/web/devices/device-discovery.js",
         "applications/fleet/web/devices/enrollment.js",
+        "applications/fleet/web/work/update-alerts.js",
         "applications/fleet/web/maintenance/host-services.js",
         "applications/fleet/web/maintenance/db-maintenance.js",
         "applications/fleet/web/installation/install-line.js",
@@ -6397,6 +6398,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/peers"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/update-alerts.js",
+          "expression": "/api/fleet/updates",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/updates"
           ]
         },
         {

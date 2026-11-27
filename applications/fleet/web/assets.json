@@ -262,6 +262,10 @@
       "path": "inbox.js",
       "media_type": "application/javascript"
     },
+    "update-alerts.js": {
+      "path": "work/update-alerts.js",
+      "media_type": "application/javascript"
+    },
     "work-view.js": {
       "path": "work/work-view.js",
       "media_type": "application/javascript"

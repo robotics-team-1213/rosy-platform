@@ -93,8 +93,10 @@ def install_host_control_routes(app, *, require_operator, require_named_operator
     if require_viewer is not None:
         @app.get("/api/fleet/updates", tags=["fleet"])
         def update_overview(principal=Depends(require_viewer)):
-            # D-871: every role sees each PC's update state and release; reasons stay in /api/fleet/hosts
-            return update_summary(read_json_object(GUARD_STATUS), time.time())
+            # D-871: every role sees each PC's update state and release; only an operator gets a stall's reason code
+            permits = getattr(principal, "permits_site", None)
+            operator = bool(permits and permits("fleet.operate", {"operator"}))
+            return update_summary(read_json_object(GUARD_STATUS), time.time(), reasons=operator)
 
     @app.post("/api/fleet/hosts/{host_id}/control", tags=["fleet"])
     def control_host(host_id: str, body: HostControlRequest,

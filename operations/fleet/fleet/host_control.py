@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -103,12 +104,43 @@ def _number(value):
     return value if type(value) in (int, float) and value == value and abs(value) != float("inf") else None
 
 
-def update_summary(guard: dict | None, now: float) -> dict:
-    """D-871: each PC's update channels for every signed-in role: state and release only, no reasons.
+# Update channels whose stall becomes one row in the console queue (the D-632 alert surface). 3600 s is six
+# missed 10-minute runs, so a single transient or rate_limited run never alerts.
+ALERT_UNITS = frozenset({"rosy-omx-devices-autoupdate.service"})
+ALERT_AFTER_ENV = "ROSY_FLEET_UPDATE_ALERT_AFTER_S"
+ALERT_AFTER_S = 3600.0
+
+
+def _alert_after_s() -> float:
+    try:
+        value = float(os.environ.get(ALERT_AFTER_ENV) or ALERT_AFTER_S)
+    except ValueError:
+        value = 0.0
+    if 0 < value < float("inf"):
+        return value
+    _LOG.warning("%s is not a positive number; using %s", ALERT_AFTER_ENV, ALERT_AFTER_S)
+    return ALERT_AFTER_S
+
+
+def _update_alert(last: dict, healthy: float | None, at: float, after_s: float) -> dict | None:
+    """No healthy step (switched / up_to_date) for after_s, whatever the reason, including an updater that
+    logs nothing. A stale green-main pointer alerts at once: the cell already waited platform_max_age_s.
+    shortcut: healthy_at comes from the report's last 400 journal lines (about 8 h), then reads as unknown."""
+    age = None if healthy is None else max(0, int(at - healthy))
+    pointer_stale = last.get("step") == "transient" and last.get("reason") == "stale"
+    if age is not None and age < after_s and not pointer_stale:
+        return None
+    return {"age_s": age}
+
+
+def update_summary(guard: dict | None, now: float, *, reasons: bool = False) -> dict:
+    """D-871: each PC's update channels for every signed-in role: state and release; the stalled channel's
+    reason code only with reasons=True (operators).
 
     `ok` = a healthy step within STUCK_AFTER_S, `off` = its timer is not enabled, `stuck` = otherwise.
     A PC whose report is missing or malformed is `unknown`; nothing is inferred from silence."""
     hosts = []
+    after_s = _alert_after_s()
     for name, row in sorted((guard or {}).items()):
         if not isinstance(row, dict) or "updates" not in row:
             continue  # robots and older guard rows are not update hosts
@@ -124,8 +156,16 @@ def update_summary(guard: dict | None, now: float) -> dict:
             healthy = _number(item.get("healthy_at"))
             fresh = healthy is not None and now - healthy <= STUCK_AFTER_S
             state = "off" if item.get("timer") != "enabled" else "ok" if fresh else "stuck"
-            channels.append({"unit": item["unit"], "state": state, "release": _word(last.get("release")),
-                             "at": _number(last.get("at"))})
+            channel = {"unit": item["unit"], "state": state, "release": _word(last.get("release")),
+                       "at": _number(last.get("at"))}
+            # A frozen or missing gate is a deliberate or separately shown stop; judged at the report's own time.
+            if item["unit"] in ALERT_UNITS and item.get("timer") == "enabled" and report.get("gate") == "open":
+                alert = _update_alert(last, healthy, _number(report.get("time")) or now, after_s)
+                if alert:
+                    if reasons:
+                        alert["reason"] = _word(last.get("reason")) or _word(last.get("step"))
+                    channel["alert"] = alert
+            channels.append(channel)
         stack = report.get("site_stack") if isinstance(report.get("site_stack"), dict) else None
         if stack:
             channels.append({"unit": "rosy-site-autoupdate", "state": "ok" if _word(stack.get("result")) else "unknown",

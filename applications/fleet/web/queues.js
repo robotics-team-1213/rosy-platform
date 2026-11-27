@@ -293,7 +293,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       if (name.className !== cls) name.className = cls;
       const text = line.querySelector(".queue-text");
       patchText(text, queueRowText(row.text, named));
-      const next = nextStepFor(robotById?.get(row.robotId), row.text);
+      const next = row.next || nextStepFor(robotById?.get(row.robotId), row.text);
       const stepEl = line.querySelector(".queue-next-step");
       if (stepEl) {
         patchHidden(stepEl, !next);
@@ -378,6 +378,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }
+    rows.warn.push(...(view.updateAlerts || []));  // stalled cell updater (D-871); not a robot, so stale state keeps it
     rows.crit.sort((a, b) => (Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)))
       || (Number(Boolean(b.decision)) - Number(Boolean(a.decision))));
     rows.warn = groupRows(rows.warn);

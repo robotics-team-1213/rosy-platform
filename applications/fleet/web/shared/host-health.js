@@ -90,7 +90,7 @@ const UPDATE_STALE_S = 6 * 3600;
 const CHANNEL_LABEL = {ok: "정상", off: "꺼짐", stuck: "멈춤", unknown: "미확인"};
 const GATE_LABEL = {open: "업데이트 허용", frozen: "업데이트 동결", missing: "동결 관문 없음"};
 
-function unitName(unit) {
+export function unitName(unit) {
   return String(unit || "").replace(/^rosy-/, "").replace(/(-autoupdate|-update)?\.service$/, "");
 }
 

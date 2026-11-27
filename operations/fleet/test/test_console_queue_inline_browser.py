@@ -615,6 +615,31 @@ def _shot(page, name, *, full_page=False):
         page.screenshot(path=str(Path(out) / name), full_page=full_page)
 
 
+def test_a_stalled_updater_is_one_row_in_the_alert_drawer_and_leaves_with_the_stall(site):
+    """D-871: the console reads /api/fleet/updates once a minute; a stall is one warn row, gone when it ends."""
+    from playwright.sync_api import expect
+
+    channel = {"unit": "rosy-omx-devices-autoupdate.service", "state": "ok", "release": "r1", "at": 0,
+               "alert": {"age_s": 7200, "reason": "observer_stale"}}
+    api = {**API, "/api/fleet/updates": {"hosts": [{"host": "arm-cell", "state": "ok", "channels": [channel]}]}}
+    browser, page, errors = _open(None, site, api, [])
+    try:
+        page.locator("#fleet-inbox").click()
+        row = page.locator('#warning-list li[data-key="update|arm-cell|rosy-omx-devices-autoupdate.service"]')
+        expect(row).to_have_count(1)
+        expect(row).to_contain_text("자동 갱신 멈춤 — omx-devices · 2시간째 정상 단계 없음 · observer_stale")
+        expect(row.locator("a.queue-next-link")).to_have_attribute("href", "/console/maintenance#host-services")
+        _shot(page, "console-update-stall.png")
+        page.clock.run_for(65_000)
+        expect(row).to_have_count(1)
+        del channel["alert"]
+        page.clock.run_for(65_000)
+        expect(row).to_have_count(0)
+        assert not errors
+    finally:
+        browser.close()
+
+
 def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scroll(site):
     """D-540 7 / C25: opening the bell drawer keeps all five decision buttons on screen at desktop widths,
     with no document horizontal overflow or nested roster scroll. Queue text is never cut."""

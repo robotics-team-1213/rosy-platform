@@ -8,6 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/roster.js");
 const { groupRows, groupText, openDecisionKey, queueRowText, createQueues } = await import("../../../../applications/fleet/web/queues.js");
 const { createInboxPanel } = await import("../../../../applications/fleet/web/inbox.js");
+const { updateAlertRows } = await import("../../../../applications/fleet/web/work/update-alerts.js");
 const { createTripReplan, deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
@@ -338,6 +339,25 @@ test("T-D: fillQueues sorts critical rows as overdue -> decision -> admin-held e
   fillQueues();
   const keys = el("critical-list").children.map((n) => n.dataset.key);
   assert.deepEqual(keys, ["r_over|stuck", "r_stuck|stuck", "r_admin|0"]);
+});
+
+test("a stalled updater is one warn row with its link, also when robot state is unavailable, and leaves with the stall", (t) => {
+  const { el } = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [];
+  view.stateUnavailable = true;
+  view.updateAlerts = updateAlertRows({ hosts: [{ host: "arm-cell", channels: [
+    { unit: "rosy-omx-devices-autoupdate.service", alert: { age_s: 7200, reason: "observer_stale" } }] }] });
+  fillQueues();
+  fillQueues();
+  const rows = el("warning-list").children;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].dataset.key, "update|arm-cell|rosy-omx-devices-autoupdate.service");
+  assert.equal(rows[0].querySelector(".queue-next-link").getAttribute("href"), "/console/maintenance#host-services");
+  view.updateAlerts = [];
+  fillQueues();
+  assert.equal(el("warning-list").children.length, 0);
 });
 
 test("createTripReplan confirms resume and confirm-replan while keeping cancel 1-click", async (t) => {
