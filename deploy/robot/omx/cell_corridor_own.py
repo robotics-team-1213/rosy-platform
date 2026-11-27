@@ -12,6 +12,7 @@ gripper resting at a surface's edge counted its own footprint as unseen. Two mea
   `reference_top_sha256`). What changed is an object, what did not is the cell's own furniture. A moved camera or
   changed light reads as changed, so it refuses. shortcut: an object the colour of what it covers, or one already in
   the reference, is not seen; upgrade with depth. No bound reference: the colour rule.
+- `with_outside` (the fold only): a lane that leaves the ROI is unseen there, not clear.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ import numpy as np
 
 import cell_params as prm
 
+PAD_PX = 1024  # wider than any top frame; shortcut: a lane further than this from the ROI is not counted
 OWN_HALF_MM = 40.0  # a link's half width from above with its wrist camera; arm_a's real silhouette, 2026-11-27
 
 
@@ -66,6 +68,24 @@ def own_mask(config: dict, site: str, to_px, poses, shape, roi, tcp_x_m: float |
         for p in line:
             cv2.circle(out, (int(p[0]), int(p[1])), int(round(radius)), 1, -1)
     return out
+
+
+def with_outside(verdict: dict, tcp, to_px, shape, roi, params=None) -> dict:
+    """The verdict with the lane's pixels outside the ROI counted as unseen. `cell_corridor.corridor` draws only inside
+    the ROI, so what leaves it was never looked at: arm_a's fold on 2026-11-27 16:51 passed a belt-sized ROI with
+    95 % of its lane outside it."""
+    import cell_corridor
+
+    get = lambda k, d: prm.get(params, k, d)  # noqa: E731
+    low, high = cell_corridor.runs(tcp, get("corridor.clear_z_m", cell_corridor.CLEAR_Z_M),
+                                   get("corridor.base_m", cell_corridor.BASE_M))
+    h, w = shape[:2]
+    lane = cell_corridor.corridor(low + high, to_px, (h + 2 * PAD_PX, w + 2 * PAD_PX),
+                                  (roi[0] - PAD_PX, roi[1] - PAD_PX),
+                                  get("corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
+    lane[PAD_PX:PAD_PX + h, PAD_PX:PAD_PX + w] = 0
+    outside = int(lane.sum())
+    return dict(verdict, clear=False, off_surface=verdict["off_surface"] + outside) if outside else verdict
 
 
 def _reference(config: dict, calibration: dict | None, shape):
