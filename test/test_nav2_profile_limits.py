@@ -1,5 +1,6 @@
 """Device profile and Nav2 motion-limit contracts."""
 
+import math
 import sys
 from pathlib import Path
 
@@ -77,8 +78,13 @@ def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
     # 11-27 tight U-turn (R 0.11-0.135 m): chord sagitta at L 0.13 is ~1.6-2 cm; the 10-12 cm cut was RemovePassedGoals 0.09.
     # Speed-scaled lookahead floors at 0.13 on slowed U-turn arcs (v <= 0.08), up to 0.18 on straights.
     assert (rpp["lookahead_dist"], lookahead, rpp["max_lookahead_dist"]) == (0.14, 0.13, 0.18)
-    assert (rpp["curvature_lookahead_dist"], rpp["lookahead_time"]) == (0.09, 1.5)
+    assert (rpp["curvature_lookahead_dist"], rpp["lookahead_time"]) == (0.09, 1.8)
     assert rpp["rotate_to_heading_min_angle"] == 0.80
+    # effective lookahead clamp(v*time, min, max): the weave fix needs it long at crawl speed, and the
+    # U-turn carrot bearing asin(L/2R) at the 0.08 m/s curve cap must stay under the in-place rotation angle.
+    eff = lambda v: min(max(v * rpp["lookahead_time"], lookahead), rpp["max_lookahead_dist"])
+    assert eff(0.05) >= 0.13 and eff(0.08) >= 0.14 and eff(0.15) == rpp["max_lookahead_dist"]
+    assert math.asin(eff(0.08) / (2 * 0.116)) < rpp["rotate_to_heading_min_angle"]  # left U-turn R ~0.116 m
     assert rpp["use_regulated_linear_velocity_scaling"] is True
 
 
