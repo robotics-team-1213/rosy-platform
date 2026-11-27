@@ -1474,6 +1474,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor_own.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_auto_fold_fallback.py
   - deploy/robot/omx/cell_auto_fold_stages.py
   - deploy/robot/omx/cell_camera_telemetry_sync.py
   - deploy/robot/omx/cell_bound_home_request.py

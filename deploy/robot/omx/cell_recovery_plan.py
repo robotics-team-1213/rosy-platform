@@ -6,6 +6,13 @@ import math
 import time
 from pathlib import Path
 
+from cell_auto_fold_fallback import (  # noqa: E402
+    append_lift_candidates,
+    candidate_family,
+    extended_candidate_names,
+    unwedge_pull_dips,
+)
+
 STEP_MAX = 5.0  # matches chunk_runner_guards.JOG_MAX (never emit a single jog > 5.0)
 SHOULDER_LIFT_STEP = 1.2  # avoids transient acceleration PWM spikes when lifting under gravity
 ELBOW_LIFT_STEP = 2.5
@@ -137,17 +144,6 @@ def _best_z_dir(cur: list[float], axis: int, z_now: float, bounds, tcp_x_m: floa
     return max(opts, key=lambda item: item[0])[1]
 
 
-def unwedge_pull_dips(state: list[float], target: list[float], home: list[float], size: float,
-                      clear_z_m: float, tcp_x_m: float | None = None) -> bool:
-    """Return True if an elbow_flex pull would dip TCP z below clear_z_m while lift can still rise."""
-    z_now = fk_z(state, tcp_x_m=tcp_x_m)
-    if z_now >= clear_z_m or (home[1] - target[1]) * (home[1] - state[1]) <= 0:
-        return False
-    probe = list(state)
-    probe[2] += max(-size, min(size, home[2] - target[2]))
-    return fk_z(probe, tcp_x_m=tcp_x_m) < z_now - 0.001
-
-
 def _norm_arm(val) -> str | None:
     if not isinstance(val, str):
         return None
@@ -226,23 +222,6 @@ def fk_lift_plan(
     return cmds, frames, cur
 
 
-def candidate_family(name: str) -> str:
-    """Group recovery candidates sharing one physical lift/release strategy for distinct runtime fallback."""
-    if name.startswith("open_elbow_lift_"):
-        return "open_elbow_lift"
-    if name.startswith("elbow_lift_"):
-        return "elbow_lift"
-    if name.startswith("lift_"):
-        return "shoulder_lift"
-    if name.startswith("elbow_clear_"):
-        return "elbow_clear"
-    if name.startswith("pan"):
-        return "pan"
-    if name in ("park", "fold-from-hold"):
-        return "park"
-    return name
-
-
 def classify_situation(state: list[float], target: list[float], home: list[float], closed: float, *,
                        low_ok: bool, is_holding: bool, open_margin: float = 4.0) -> str:
     """Classify the arm recovery situation cleanly before candidate generation."""
@@ -273,39 +252,12 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
         return out
 
     raw: list[tuple[str, list[str], list[list[float]]]] = []
-
-    def _plan_lift(**extra):
-        return (fk_lift_plan(cur, clear_z_m=clear_z_m + 0.015, bounds=bounds, tcp_x_m=tcp_x_m, home=home, **extra)
-                or fk_lift_plan(cur, clear_z_m=clear_z_m, bounds=bounds, tcp_x_m=tcp_x_m, home=home, **extra))
-
-    lift = _plan_lift()
-    elbow_axis = ((2, "elbow_flex.pos"), (1, "shoulder_lift.pos"))
-    elbow_cap = {2: ELBOW_FIRST_CAP}
-    elbow_lift = _plan_lift(axis_order=elbow_axis, per_axis_cap=elbow_cap)
-    can_open_wider = (situation == "low_open_jaws" and grip_open is not None and not isinstance(grip_open, bool)
-                      and math.isfinite(float(grip_open)) and float(grip_open) > cur[5] + 1.0)
-    open_elbow = _plan_lift(axis_order=elbow_axis, per_axis_cap=elbow_cap, grip_open=float(grip_open)) if can_open_wider else None
-
-    def add_lift_group(prefix: str, lift_tuple) -> None:
-        if lift_tuple is None:
-            return
-        l_cmds, l_frames, l_pose = lift_tuple
-        raw.append((f"{prefix}_then_park", list(l_cmds), [list(cur), *l_frames[1:], *plan(l_pose)]))
-        for d in (10.0, -10.0):
-            p_pose = [l_pose[0] + d, *l_pose[1:]]
-            cmds = [*l_cmds, *chunk_jog_commands("shoulder_pan.pos", d)]
-            frames = [list(cur), *l_frames[1:], *interpolate_pose(l_pose, p_pose, max_step=STEP_MAX), *plan(p_pose)]
-            raw.append((f"{prefix}_pan{d:+g}", cmds, frames))
-
-    if situation == "low_open_jaws":
-        add_lift_group("lift", lift)
-        add_lift_group("open_elbow_lift", open_elbow)
-        add_lift_group("elbow_lift", elbow_lift)
-        raw.append(("park", [], list(plan(cur))))
-    else:
-        raw.append(("park", [], list(plan(cur))))
-        add_lift_group("lift", lift)
-        add_lift_group("elbow_lift", elbow_lift)
+    append_lift_candidates(
+        cur, home, plan, bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m,
+        situation=situation, grip_open=grip_open, fk_lift_fn=fk_lift_plan,
+        chunk_jog_fn=chunk_jog_commands, interp_fn=interpolate_pose,
+        step_max=STEP_MAX, elbow_cap=ELBOW_FIRST_CAP, raw=raw,
+    )
 
     for d in (5.0, -5.0, 10.0, -10.0, 15.0, -15.0):
         moved = [cur[0] + d, *cur[1:]]
@@ -325,18 +277,6 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
         if ok:
             filtered.append(cand)
     return filtered or ([("park", [], list(plan(cur)))] if frames_within_bounds(plan(cur), bounds, start=cur)[0] else [])
-
-
-def extended_candidate_names() -> list[str]:
-    """Return every tier-1 candidate name that `build_candidates(..., extended=True)` may produce."""
-    return [
-        "park",
-        "lift_then_park", "lift_pan+10", "lift_pan-10",
-        "open_elbow_lift_then_park", "open_elbow_lift_pan+10", "open_elbow_lift_pan-10",
-        "elbow_lift_then_park", "elbow_lift_pan+10", "elbow_lift_pan-10",
-        "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15",
-        "elbow_clear_then_park",
-    ]
 
 
 def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 25,

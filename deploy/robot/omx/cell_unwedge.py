@@ -271,7 +271,8 @@ def decide(last: str | None, blocked: str | None, lifted: float) -> str:
 
 def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
             clear_z_m: float | None = None, tcp_x_m: float | None = None) -> dict:
-    from cell_recovery_plan import fk_z, unwedge_pull_dips
+    from cell_auto_fold_fallback import unwedge_pull_or_ascend
+    from cell_recovery_plan import fk_z
 
     status = cell.act("state")
     if status.get("ok") is not True or lags(status) is None:
@@ -284,30 +285,11 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
     for step in range(round(MAX_STEPS * STEP / size)):
         lifted = lift_direction * (status["state"][1] - initial_lift)
         action = decide(last, blocked, lifted)
-        joint = ACTIONS[action]
-        index = BODY.index(joint)
-        remaining = home[index] - status["target"][index]  # jog changes the held target, not the measured pose
-        delta = None
-        if clear_z_m is not None and action == "pull" and unwedge_pull_dips(
-                status["state"], status["target"], home, size, clear_z_m, tcp_x_m):
-            if blocked != "lift":
-                action = "lift"
-                joint = ACTIONS[action]
-                index = BODY.index(joint)
-                remaining = home[index] - status["target"][index]
-            else:
-                opp_delta = -max(-size, min(size, home[2] - status["target"][2]))
-                probe = list(status["state"])
-                probe[2] += opp_delta
-                if (abs(opp_delta) > 1e-6 and -100.0 <= status["target"][2] + opp_delta <= 100.0
-                        and fk_z(probe, tcp_x_m=tcp_x_m) > fk_z(status["state"], tcp_x_m=tcp_x_m) + 1e-5):
-                    delta = opp_delta
-                else:
-                    return {"result": "stuck", "at": step, "error": "pull would dip below clear_z_m while lift is blocked", "rows": rows}
-        if delta is None:
-            if remaining * (home[index] - status["state"][index]) <= 0:
-                return {"result": "stopped", "error": f"{joint} reached home before clearance", "rows": rows}
-            delta = max(-size, min(size, remaining))
+        action, joint, index, delta, err_res = unwedge_pull_or_ascend(
+            status, action, home, size, clear_z_m, tcp_x_m, blocked, actions=ACTIONS, body=BODY,
+        )
+        if err_res is not None:
+            return {**err_res, **({"at": step} if err_res["result"] == "stuck" else {}), "rows": rows}
         status = cell.act(f"jog {joint}.pos {delta}")
         if not status.get("ok"):
             return {"result": "stopped", "at": step, "error": status.get("error"), "rows": rows}

@@ -34,7 +34,7 @@ def _code_digest() -> str:
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_pipeline_liveness.py", "cell_attempts.py",
         "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_auto_fold.py", "cell_recovery_plan.py", "cell_recovery_advisor.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_bound_home_placement.py", "cell_recovery_placement.py", "cell_recovery_placement_live.py",
-        "cell_recovery_placement_live_view.py", "cell_recovery_placement_trial.py", "cell_auto_fold_stages.py",
+        "cell_recovery_placement_live_view.py", "cell_recovery_placement_trial.py", "cell_auto_fold_fallback.py", "cell_auto_fold_stages.py",
         "cell_route_surface.py", "cell_route_depth.py", "cell_route_check.py", "cell_depth_slots.py",
         "cell_recovery_cargo.py", "cell_recovery_placement_context.py", "cell_recovery_placement_journal.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",

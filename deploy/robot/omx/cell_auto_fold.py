@@ -84,9 +84,9 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
     if stage not in ("full", "release_and_lift", "park_only"):
         raise ValueError(f"unsupported stage: {stage}")
-    from cell_pipeline_io import fold_from_hold, park_succeeded
-    from cell_recovery_plan import build_candidates, candidate_family, classify_situation, run_detour_jogs
-    from chunk_runner_recover import ensure_live_unlatch, is_recoverable_fault, request_live_unlatch
+    from cell_auto_fold_fallback import attempt_runtime_fallback, rank_candidates, try_candidate
+    from cell_recovery_plan import build_candidates, candidate_family, classify_situation
+    from chunk_runner_recover import ensure_live_unlatch
     steps, known, moved = [], {"state": None}, {"yes": False}  # known: last state seen; moved: any release/jog/park sent
     latched = {"started": False, "active": False}
 
@@ -186,57 +186,14 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     runtime_tries = 0
     advisor_tried = False
 
-    def _try_candidate(name, before, frames, *, allow_direct: bool, sit: str):
-        can_fold_direct = allow_direct and not before
-        cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
-        cand_name = "fold-from-hold" if can_fold_direct else name
-        verdict = look(cand_frames)
-        note({"step": "check", "candidate": cand_name, "clear": verdict.get("clear"), "low": len(verdict.get("low") or []),
-              "high": len(verdict.get("high") or []), "off_map": verdict.get("off_map"), "off_surface": verdict.get("off_surface")})
-        if not verdict.get("clear"):
-            return None
-        if load_check is not None:
-            lc = load_check(cand_frames)
-            note({"step": "load_check", "candidate": cand_name, "ok": lc.get("ok"), "verdict": lc.get("verdict")})
-            if not lc.get("ok"):
-                return None
-        if not (booked := reserve(cand_frames)).get("ok"):
-            note({"step": "reserve", "candidate": cand_name, "refused": booked.get("reason")})
-            return None
-        if can_fold_direct:
-            known["state"] = None
-            mark_moved()
-            try:
-                parked = fold_from_hold(cell, status)
-            except Exception as exc:  # noqa: BLE001
-                parked = {"ok": False, "error": str(exc)}
-            at = known["state"] = _ok_state(parked)
-            note({"step": "fold_from_hold", "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
-                  "error": parked.get("error"), "contact": parked.get("contact")})
-            if park_succeeded(parked) and at is not None and folded(at, home):
-                release()
-                return "folded", {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at,
-                                  "steps": steps, "corridor": verdict, "unlatched_live_hold": True}
-            return "failed", "PARK_NOT_HOME", cand_name, parked.get("error")
-        ok_u, err_u = ensure_live_unlatch(cell, latched, note)
-        if not ok_u:
-            release()
-            return "failed", "UNLATCH_REFUSED", name, err_u
-        known["state"] = None  # from the first command the arm is no longer where it was read
-        mark_moved()
-        ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
-        if not ok_jog:
-            return "failed", (err_reason or "DETOUR_REFUSED"), name, (err_ack or {}).get("error")
-        parked = cell.act("park-slow" if latched["started"] else "park")
-        at = known["state"] = _ok_state(parked)
-        note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
-              "error": parked.get("error"), "contact": parked.get("contact")})
-        ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
-        if ok_park and at is not None and folded(at, home):
-            release()
-            return "folded", {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
-                              "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
-        return "failed", "PARK_NOT_HOME", name, parked.get("error")
+    def _run_cand(name, before, frames, *, allow_direct: bool):
+        return try_candidate(
+            cell, name, before, frames, state=state, status=status, home=home, held_plan=held_plan,
+            allow_direct=allow_direct, look=look, load_check=load_check, reserve=reserve,
+            release=release, latched=latched, known=known, steps=steps, note=note,
+            mark_moved=mark_moved, ok_state_fn=_ok_state, folded_fn=folded,
+            settle_tol=SETTLE_TOL, sleep=sleep, schema=SCHEMA,
+        )
 
     while True:
         park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
@@ -246,31 +203,19 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                              clear_z_m=clear_z_m, situation=situation, extended=True, grip_open=grip_open)
             if extended_detours else list(candidates(list(target[:6]), park_fn))
         )  # the runner parks from its held target
-        tries = [c for c in raw_tries if candidate_family(c[0]) not in tried_families]
         prefer_direct = bool(
             latched["active"] and held_plan is not None and library_sha256
             and status.get("library_sha256") == library_sha256
             and status.get("torque_hold_commanded") is True and not status.get("holding")
         )
-        rank = (
-            {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
-            if (tries and order is not None) else {name: i for i, (name, _, _) in enumerate(tries)}
+        tries = rank_candidates(
+            [c for c in raw_tries if candidate_family(c[0]) not in tried_families],
+            order=order, prefer_direct=prefer_direct, situation=situation,
         )
-
-        def _prio(name: str) -> int:
-            if prefer_direct and name == "park":
-                return 0
-            if situation == "low_open_jaws" and name.startswith("lift_"):
-                return 1
-            if situation == "low_open_jaws" and name.startswith(("open_elbow_lift_", "elbow_lift_")):
-                return 2
-            return 3
-
-        tries.sort(key=lambda c: (_prio(c[0]), rank.get(c[0], len(rank))))
 
         fallback_ready = False
         for name, before, frames in tries:
-            outcome = _try_candidate(name, before, frames, allow_direct=prefer_direct, sit=situation)
+            outcome = _run_cand(name, before, frames, allow_direct=prefer_direct)
             if outcome is None:
                 continue
             if outcome[0] == "folded":
@@ -282,29 +227,14 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             tried_families.add(candidate_family(fail_cand))
             if runtime_tries >= max_runtime_tries or fail_reason == "UNLATCH_REFUSED":
                 return hold(fail_reason, candidate=fail_cand, error=fail_err)
-            cell.act("human-hold")
-            fresh = cell.act("state")
-            fresh_state = _ok_state(fresh)
-            recoverable = (
-                fresh_state is not None
-                and not fresh.get("holding")
-                and not (require_empty_gripper and fresh.get("holding") is not False)
-                and is_recoverable_fault(fresh.get("fault"))
+            refreshed, held_out = attempt_runtime_fallback(
+                cell, fail_reason, fail_cand, fail_err, latched=latched, known=known,
+                require_empty_gripper=require_empty_gripper, low=low, note=note,
+                release=release, hold=hold, ok_state_fn=_ok_state,
             )
-            if not recoverable:
-                return hold(fail_reason, candidate=fail_cand, error=fail_err)
-            ok_u, ack_u = request_live_unlatch(cell, fresh)
-            note({"step": "strategy_fallback", "failed_candidate": fail_cand, "failed_family": candidate_family(fail_cand),
-                  "reason": fail_reason, "unlatched": ok_u, "error": ack_u.get("error") if not ok_u else None})
-            if not ok_u:
-                return hold(fail_reason, candidate=fail_cand, error=ack_u.get("error") or fail_err)
-            release()
-            latched["started"], latched["active"] = True, False
-            state = known["state"] = _ok_state(ack_u) or fresh_state
-            raw_t = (ack_u if isinstance(ack_u, dict) else {}).get("target") or fresh.get("target")
-            target = list(raw_t[:6]) if isinstance(raw_t, list) and len(raw_t) >= 6 else list(state)
-            is_low = bool(low(state))
-            status = ack_u if isinstance(ack_u, dict) and ack_u.get("state") else fresh
+            if held_out is not None:
+                return held_out
+            state, target, is_low, status = refreshed
             fallback_ready = True
             break
         if fallback_ready:
@@ -319,7 +249,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                 adv = {"audit": {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
             note({"step": "advisor", **(adv.get("audit") or {})})
             if (cand := adv.get("candidate") if isinstance(adv, dict) else None) is not None:
-                outcome = _try_candidate(*cand, allow_direct=False, sit=situation)
+                outcome = _run_cand(*cand, allow_direct=False)
                 if outcome is not None:
                     if outcome[0] == "folded":
                         return outcome[1]
