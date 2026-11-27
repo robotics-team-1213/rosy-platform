@@ -71,7 +71,8 @@ def authorize_principal(
     if principal.role != ROLE_MACHINE:
         return eff, {"code": 403, "error_code": "FORBIDDEN_ROLE", "error": f"unsupported principal role {principal.role}"}
     opt = job.get("optional") or ()
-    if moves_arm_fn(job, eff) and not (bool(job.get("reviewed_only")) or ("reviewed_auto" in opt and eff.get("reviewed_auto") is True)):
+    if moves_arm_fn(job, eff) and not (bool(job.get("reviewed_only")) or ("reviewed_auto" in opt and eff.get("reviewed_auto") is True)
+                                       or principal.principal_id in job.get("machine_ids", ())):  # D-1079: recover_hold by hold-retry
         return eff, {
             "code": 403,
             "error_code": "MACHINE_COMMISSIONING_FORBIDDEN",

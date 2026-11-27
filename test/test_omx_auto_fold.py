@@ -288,6 +288,7 @@ def test_launch_is_off_without_its_config(tmp_path, monkeypatch):
 
 
 def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_incident(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_JOB_PRINCIPAL", "human:operator")  # a person's recover_hold (an automatic one refuses an unchecked load, D-1079)
     import cell_corridor
     import cell_objects
     import cell_pipeline as cp

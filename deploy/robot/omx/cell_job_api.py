@@ -28,6 +28,7 @@ from cell_job_guards import (  # noqa: E402
 )
 from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
 from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
+import cell_hold_retry  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
@@ -389,6 +390,7 @@ def main():
     machine_token = read_token(a.machine_token_file) if a.machine_token_file else None
     runner = Runner(a.workdir.expanduser(), fleet_r_url=a.fleet_r_url, fleet_token_file=a.fleet_token_file, ca_file=a.ca_file)
     server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token)
+    cell_hold_retry.start(runner, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)  # D-1079: no hold waits for a person
     print(f"cell job API on {a.bind}:{a.port}", flush=True)
     server.serve_forever()
 

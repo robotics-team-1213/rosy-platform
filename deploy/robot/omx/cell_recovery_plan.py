@@ -311,8 +311,13 @@ def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settl
     return True, None, last_ack
 
 
+_UNCHECKED = lambda frames: {"ok": False, "verdict": "unknown", "report": {"why": "no load model: an automatic recovery refuses it"}}  # noqa: E731
+
+
 def make_load_checker(config: dict, library: dict, params: dict | None = None):
-    """Build an optional `load_predict.check_chunk` gate for fold candidates, or None."""
+    """Build an optional `load_predict.check_chunk` gate for fold candidates, or None. A recovery no person started (D-1079:
+    hold-retry, omx_incident's launch; ROSY_JOB_PRINCIPAL not human:) refuses an unknown load and one it cannot check."""
+    refuse = not __import__("os").environ.get("ROSY_JOB_PRINCIPAL", "").startswith("human:")
     lm_path = config.get("load_model_path")
     port = config.get("port") or (config.get("follower") or {}).get("port") or (config.get("robot") or {}).get("port")
     if not port and config.get("record_config_path"):
@@ -322,17 +327,17 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         except (OSError, ValueError):
             port = None
     if not lm_path or not port:
-        return None
+        return _UNCHECKED if refuse else None
     import cell_params as prm
     import load_predict
 
     model = load_predict.load(Path(str(lm_path)).expanduser())
     arm = model["arms"].get(load_predict.arm_for(model, port))
     if arm is None:
-        return None
+        return _UNCHECKED if refuse else None
     fps = int(library.get("fps", 30))
     caps = config.get("caps")
-    refuse_unknown = bool(prm.get(params, "loadcheck.refuse_unknown"))
+    refuse_unknown = refuse or bool(prm.get(params, "loadcheck.refuse_unknown"))
 
     def check_frames(frames) -> dict:
         rep = load_predict.check_chunk(arm, frames, fps, params, caps)
