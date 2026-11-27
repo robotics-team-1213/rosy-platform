@@ -175,6 +175,7 @@ EXHAUSTED = {"recovery": {"state": "exhausted", "waiting_for": None, "attempts":
     (_view("failed", "GOAL_LEASE_NOT_ACTIVE"), "goal_lease_ended"),
     (_view(reason="stall", detail=EXHAUSTED), "recovery_exhausted"),
     (_view(reason="navigation", detail={**EXHAUSTED, "recovery_end": "window"}), "recovery_exhausted"),
+    (_view(reason="stall", detail={"recovery": {**EXHAUSTED["recovery"], "same_spot": {"count": 4}}}), "same_spot"),
 ])
 def test_eligible_ends(view, kind):
     assert ri.eligible(view, NAV2) == kind
@@ -197,7 +198,6 @@ def test_eligible_ends(view, kind):
     (_view(reason="stall", detail={"recovery": {"state": "exhausted", "waiting_for": None}}), NAV2),   # no ladder
     (_view(reason="stall", detail={"recovery": {**EXHAUSTED["recovery"], "waiting_for": "robot_stopped"}}), NAV2),
     (_view("failed", "TRIP_ROBOT_UNREACHABLE", {"kind": "RuntimeError"}), NAV2),     # a Fleet fault, not the link
-    (_view(reason="stall", detail={"recovery": {**EXHAUSTED["recovery"], "same_spot": {"count": 4}}}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "estop"}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "out_of_scope"}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "wait_s"}), NAV2),    # never proven stopped

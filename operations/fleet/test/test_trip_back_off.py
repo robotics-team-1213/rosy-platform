@@ -13,8 +13,8 @@ from test_nav2_trip_recovery import _trip
 
 
 def _cam(x, y, yaw, odom_stamp=0.0):
-    return MapPose(x, y, yaw, "LOCALIZED", "bridged", 0.02, 0.1, odom_stamp, "site-loop",
-                   anchor_age_s=0.1, anchor_source="sighting")
+    return MapPose(x, y, yaw, "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=0.1, map_id="site-loop",
+                   odom_stamp=odom_stamp, anchor_source="sighting")
 
 
 SAME_SPOT = {"state": "exhausted", "waiting_for": None, "same_spot": {"count": 4, "lat_m": -0.03, "wall_clear_m": 0.10},
