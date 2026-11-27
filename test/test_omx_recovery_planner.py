@@ -381,3 +381,74 @@ def test_build_multi_site_look_deduplicates_tiers_and_avoids_gap_false_positives
     img_gap[80:120, 285:325] = [20, 20, 220]
     res_obs = crp.build_multi_site_look(_Cell(img_gap), multi_cfg, {}, "a", ROI, None, _to_px, 0.0740)(hi_frames)
     assert not res_obs["clear"] and len(res_obs["high"]) >= 1
+
+
+def test_ascending_departure_allows_vertical_lift_edge_and_under_jaw_blob_only():
+    belt_site = [[280, 60], [375, 60], [375, 220], [280, 220]]
+    pallet_site = [[280, 230], [400, 230], [400, 380], [280, 380]]
+    hull = cc.transit_hull_polygon([belt_site, pallet_site], extra_pts=[_to_px((0.0, 0.0))])
+    # Strictly ascending vertical departure near belt right edge (x=0.165, y=-0.060 -> px (365, 140), local (95, 90))
+    dep_tcp = [(0.165 - 0.001 * i, -0.060 - 0.001 * i, -0.01 + 0.007 * i) for i in range(18)] + [
+        (0.14 - 0.005 * i, -0.06 + 0.02 * i, 0.13) for i in range(1, 10)
+    ]
+    roi = (270, 50, 410, 390)
+    empty = np.zeros((roi[3] - roi[1], roi[2] - roi[0]), np.uint8)
+    # 1) Default (allow_ascending_departure=False) blocks on dilated fringe off_surface
+    blocked = cc.check(dep_tcp, empty, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull)
+    assert not blocked["clear"] and blocked["off_surface"] > 0
+    # 2) allow_ascending_departure=True clears edge fringe AND small under-jaw blob inside seen_low & r_px
+    mask = empty.copy()
+    mask[94:102, 80:90] = 1  # 80 px, global x=350..360, y=144..152 inside belt_site, within r_px=30 of (95,90)
+    cleared = cc.check(
+        dep_tcp, mask, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull,
+        allow_ascending_departure=True,
+    )
+    assert cleared["clear"] and cleared["low"] == [] and cleared["high"] == [] and cleared["off_surface"] == 0
+
+    # 3) Negative guards: high blob, large blob, border blob, off-seen_low blob, distant blob, non-ascending, and outside seen_low center
+    high_obs = empty.copy()
+    hx, hy = _to_px((0.12, 0.04))
+    high_obs[int(hy) - roi[1] - 8:int(hy) - roi[1] + 8, int(hx) - roi[0] - 8:int(hx) - roi[0] + 8] = 1
+    res_high = cc.check(dep_tcp, high_obs, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_high["clear"] and res_high["high"]
+
+    large_obs = empty.copy()
+    large_obs[62:112, 55:99] = 1  # 2200 px > MAX_DEPARTURE_BLOB_PX (1800) inside belt_site under start_px
+    res_large = cc.check(dep_tcp, large_obs, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_large["clear"] and res_large["low"]
+
+    roi_tight = (270, 120, 410, 390)
+    border_obs = np.zeros((roi_tight[3] - roi_tight[1], roi_tight[2] - roi_tight[0]), np.uint8)
+    border_obs[0:15, 85:95] = 1  # touches top ROI border y=0 inside belt_site right beside start_px=(365,140)
+    res_border = cc.check(dep_tcp, border_obs, roi_tight, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_border["clear"] and res_border["low"]
+
+    outside_seen_low = empty.copy()
+    outside_seen_low[92:102, 100:112] = 1  # global x=370..382 crosses belt_site right edge 375
+    res_outside = cc.check(dep_tcp, outside_seen_low, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_outside["clear"] and res_outside["low"]
+
+    far_obs = empty.copy()
+    far_obs[52:60, 62:72] = 1  # > r_px=30 away from start_px=(95,90), overlaps top end of low[0] at (80,75)
+    res_far = cc.check(dep_tcp, far_obs, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_far["clear"] and res_far["low"]
+
+    elong_obs = empty.copy()
+    elong_obs[75:105, 70:100] = 1  # 900 px under start_px=(95,90)
+    elong_obs[85:95, 15:70] = 1    # +550 px -> 1450 px <= 1800 inside belt_site, centroid within r_px, far end at x=15 (80px > r_px)
+    res_elong = cc.check(dep_tcp, elong_obs, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_elong["clear"] and res_elong["low"]
+
+    horiz_tcp = [(0.165 - 0.005 * i, -0.06, 0.02) for i in range(15)] + [(0.095, -0.06, 0.13)] * 5
+    res_horiz = cc.check(horiz_tcp, mask, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_horiz["clear"] and (res_horiz["low"] or res_horiz["off_surface"] > 0)
+
+    horiz_small_tcp = [(0.165 - 0.005 * i, -0.06, 0.02) for i in range(11)] + [
+        (0.115, -0.06, 0.02 + 0.01 * i) for i in range(1, 10)
+    ]  # 0.050 m sideways sweep (<= 0.06 m) before vertical rise must still block
+    res_horiz_sm = cc.check(horiz_small_tcp, mask, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_horiz_sm["clear"] and res_horiz_sm["low"]
+
+    outside_center_tcp = [(0.180, -0.06, -0.01 + 0.01 * i) for i in range(13)] + [(0.14, 0.04, 0.13)] * 5  # x_px=380 > 375
+    res_out_c = cc.check(outside_center_tcp, empty, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
+    assert not res_out_c["clear"] and res_out_c["off_surface"] > 0
