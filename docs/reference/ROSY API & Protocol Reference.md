@@ -5,9 +5,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.490
+**Version:** v1.491
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.491 Cell job cancel as a cooperative stop (D-1081) (Cell)
+
+`POST /jobs/<id>/cancel` (cell job API, empty body) asks a running, moving `auto_pick` to stop at its next guarded step: the API writes a per-job stop marker, `Guarded.act` sees it and takes its existing park-and-abort path with torque ON. It sends no signal and kills nothing, and it is not an emergency stop: an in-flight chunk finishes first.
+
+- Allowed: the human principal, or the principal that started the job (the `cell-task-worker` principal may cancel only its own job). Another principal gets `403 CANCEL_FORBIDDEN`.
+- `200` with the job state and `cancel_requested` (true while it runs). Repeating it is idempotent; the first request is one `cancel_requested` row in `audit.jsonl`. A finished job returns its state and writes nothing (`cancel_requested: false`).
+- `404` for an unknown id; `409 JOB_NOT_CANCELLABLE` for a job without a cooperative stop (every job except a moving `auto_pick`).
+- The marker is removed when the job is reaped. The child sees its path in `ROSY_CELL_JOB_STOP_FILE`; a run without it (direct or manual) behaves as before.
 
 ### v1.490 Fleet cell-task motion, claim capabilities and cell job worker principal (D-1081) (Fleet)
 
@@ -5203,6 +5212,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.491 | 2026-11-27 | [Cell] [Cell] Additive: POST /jobs/<id>/cancel |
 | v1.490 | 2026-11-27 | [Fleet] [Fleet] Additive: cell-task motion object (free_pick, push), claim capabilities, cell-task-worker scope |
 | v1.489 | 2026-11-27 | [Fleet] Additive: ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH=1 시 POST /api/fleet/pipeline/cell-tasks 즉시 QUEUED 투입 및 claim 입회 면제 |
 | v1.488 | 2026-11-26 | [Cell] Additive: SITE_NOT_MEASURED hardware refusal for registered slots |
