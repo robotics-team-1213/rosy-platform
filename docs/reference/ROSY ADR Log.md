@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1080 | Nav2 도로 trip이 차선을 벗어나면 Fleet은 멈추지 않고 감속하고 차선 복귀 경로를 다시 보낸다 (D-511 M0 개정). [전문](../adr/D-1080-fleet-nav2-lane-departure-realign.md) | Accepted (2026-11-27, 사용자 결정 "코너·경로 이상은 Fleet이 감지하고 신호를 준다", "즉시 정지 말고 도로를 다시 찾게", "다시 정렬해도 되잖아"; 세 세션 토론 합의). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1079 | 멈춘 팔은 사람을 기다리지 않고 자동 복구를 계속 다시 시도한다 (D-1048·D-1077 보충). [전문](../adr/D-1079-held-arm-recovery-retried-without-a-person.md) | Accepted (2026-11-27, 사용자 결정 "human hold 는 이제 없어야해". 폴백은 "토크 ON 대기+자동 재시도", 범위는 "OMX 셀 전체"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1078 | AI 자율 판단·폴백·학습 정책 무승인 즉시 실행 및 `rosy` 직접 Pick-and-Place 파이프라인 (1단계). [전문](../adr/D-1078-ai-autonomous-cell-dispatch-and-rosy-pick.md) | Accepted (2026-11-27, 사용자 지시: "무승인정책도 바로 되어야해. 우리가 말을 하면 바로 동작하게끔 까지 가야해" — 1단계: AI 자율 판단·폴백·정책까지 전면 무승인 자동 실행, 고정 사이트/프리셋 기반 `cell_s` + `cell_ab`, 물리 안전가드 유지). |
 | D-1077 | 입회 요구를 실행 직전 측정하는 정지 능력 증명으로 바꾼다 (D-911·D-1024·D-793 보충). [전문](../adr/D-1077-stop-capability-proof-replaces-presence.md) | Accepted (2026-11-27, 사용자 지시 "입회 요구는 최대한 걷어내고 기록은 유지, 병목 자체를 없애라"; 패널 판정 A·E, `presence-removal-panel-1127/verdict.md`). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
