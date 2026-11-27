@@ -180,7 +180,7 @@ test("nextStepFor and createQueues render next-step hints and /console/install#r
     view, render: () => {}, streamEvidence: () => null,
   });
   fillQueues();
-  const estopRows = warnList.children.filter((li) => li.textContent.includes("비상정지 해제"));
+  const estopRows = critList.children.filter((li) => li.textContent.includes("비상정지 해제"));
   assert.equal(estopRows.length, 2, "E-stop rows with per-robot link are not merged");
   assert.equal(estopRows[0].querySelector(".queue-next-link").getAttribute("href"), "/console/install#robots");
 });

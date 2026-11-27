@@ -326,6 +326,20 @@ test("a pending CORE pause proof blocks resume while cancel stays available", ()
   assert.equal(replanView({ hold }, { operator: true }).confirmReason, "");
 });
 
+test("T-D: fillQueues sorts critical rows as overdue -> decision -> admin-held estop", (t) => {
+  const { el } = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [
+    { robot_id: "r_admin", online: true, state: { safety: { estop: true } } },
+    { robot_id: "r_stuck", online: true, line_stuck: { resolver: { escalated: "waiting", age_s: 5 } }, state: { safety: { estop: false } } },
+    { robot_id: "r_over", online: true, line_stuck: { resolver: { escalated: "waiting", age_s: 45 } }, state: { safety: { estop: false } } },
+  ];
+  fillQueues();
+  const keys = el("critical-list").children.map((n) => n.dataset.key);
+  assert.deepEqual(keys, ["r_over|stuck", "r_stuck|stuck", "r_admin|0"]);
+});
+
 test("createTripReplan confirms resume and confirm-replan while keeping cancel 1-click", async (t) => {
   const { document } = fakeConsole(t);
   const slotReplan = new El("div"); slotReplan.dataset.decisionSlot = "a|replan";

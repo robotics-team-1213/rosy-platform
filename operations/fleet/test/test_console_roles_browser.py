@@ -496,7 +496,9 @@ def test_robot_card_sleeps_and_wakes_a_robot_through_fleet(fleet_site):
     with sync_playwright() as playwright:
         browser, page, errors, posts = _login(playwright, origin)
         try:
-            button = _card(page, "rosy_02").locator("ui-button[data-power-action]")
+            card02 = _card(page, "rosy_02")
+            card02.locator("details.robot-util-details > summary").click()
+            button = card02.locator("ui-button[data-power-action]")
             expect(button).to_have_attribute("data-power-action", "sleep", timeout=15000)
             expect(button).to_have_text("절전")
             button.click()
@@ -507,7 +509,7 @@ def test_robot_card_sleeps_and_wakes_a_robot_through_fleet(fleet_site):
             assert ("/api/fleet/robots/rosy_02/power", '{"action":"sleep"}') in posts
 
             robots["rosy_02"]._state["power"] = {"mode": "STANDBY", "motion_ready": False}
-            button = _card(page, "rosy_02").locator('ui-button[data-power-action="wake"]')
+            button = card02.locator('ui-button[data-power-action="wake"]')
             expect(button).to_have_text("깨우기", timeout=15000)
             button.click()
             deadline = time.monotonic() + 10
@@ -518,7 +520,9 @@ def test_robot_card_sleeps_and_wakes_a_robot_through_fleet(fleet_site):
             # A robot that is working cannot be put to sleep from the card.
             robots["rosy_03"]._state["mode"] = "NAVIGATION"
             robots["rosy_03"]._state["power"] = {"mode": "ACTIVE", "motion_ready": True}
-            busy = _card(page, "rosy_03").locator('ui-button[data-power-action="sleep"]')
+            card03 = _card(page, "rosy_03")
+            card03.locator("details.robot-util-details > summary").click()
+            busy = card03.locator('ui-button[data-power-action="sleep"]')
             expect(busy).to_have_attribute("reason", "일하는 로봇은 절전할 수 없습니다", timeout=15000)
             assert errors == []
         finally:

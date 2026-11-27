@@ -42,10 +42,12 @@ function marksOf(profile) {
     });
   }
   if (profile.alarm) {
+    const count = Number(profile.alarm.count);
     marks.push({
       kind: "alarm",
       state: profile.alarm.tag || profile.alarm.level || "unknown",
       text: profile.alarm.text || EVIDENCE_LABEL.unavailable,
+      ...(Number.isFinite(count) && count > 1 ? { count } : {}),
     });
   }
   return marks;

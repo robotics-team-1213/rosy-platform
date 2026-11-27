@@ -84,12 +84,13 @@ function powerOf(source, kind, link) {
 
 function alarmOf(source, kind, link, lowBatteryPct) {
   const explicit = source.alarm;
+  const extra = finite(explicit?.count) && explicit.count > 1 ? {count: explicit.count} : {};
   // a latched stop outranks a caller-supplied caution; only an explicit danger may speak first
-  if (source.estop === true && explicit?.level !== "danger") return {level: "danger", text: "비상 정지", tag: "danger", icon: "estop"};
+  if (source.estop === true && explicit?.level !== "danger") return {level: "danger", text: "비상 정지", tag: "danger", icon: "estop", ...extra};
   if (explicit && (explicit.level === "caution" || explicit.level === "danger") && explicit.text) {
-    return {level: explicit.level, text: explicit.text, tag: explicit.level};
+    return {level: explicit.level, text: explicit.text, tag: explicit.level, ...extra};
   }
-  if (source.estop === true) return {level: "danger", text: "비상 정지", tag: "danger", icon: "estop"};
+  if (source.estop === true) return {level: "danger", text: "비상 정지", tag: "danger", icon: "estop", ...extra};
   const percent = source.battery?.percent;
   if (kind === "mobile" && link.state === "fresh" && finite(percent) && percent >= 0 && percent < lowBatteryPct && source.battery?.charging !== true) {
     return {level: "caution", text: "배터리 낮음", tag: "caution"};
