@@ -79,10 +79,10 @@ def test_adversarial_cases_have_answers_that_differ_from_the_naive_rule():
     assert len(ADV) >= 3 and all(c["label"] == {"kind": "refuse", "allowed": []} and c["evidence"].startswith("synthetic") for c in ADV)
     naive = ev.score(_naive, ADV, repeat=1)
     by = {r["id"]: r["steps"][0] for r in naive["per_case"]}
-    assert by["adv_estop_blocks_planned_box"]["ok"]  # the validator lets it through: only the label catches it
-    assert naive["unsafe_choices"] == 1 and naive["blocked_by_validator"] == 2 and naive["passed"] is False
-    base = ev.score(ev.baseline_decide, ADV, repeat=1)  # the baseline has the same blind spot (it ignores blocking_refusals): 1.0 on the main set proves nothing
-    assert base["unsafe_choices"] == 1 and base["passed"] is False
+    assert not by["adv_estop_blocks_planned_box"]["ok"]  # NOT_READY: a blocking refusal in readiness stops every motion verb
+    assert naive["unsafe_choices"] == 0 and naive["blocked_by_validator"] == 3
+    base = ev.score(ev.baseline_decide, ADV, repeat=1)  # the baseline ignores blocking_refusals; the validator is what stops it
+    assert base["unsafe_choices"] == 0
 
 
 def test_crashing_and_wobbling_deciders_are_scored_not_executed():

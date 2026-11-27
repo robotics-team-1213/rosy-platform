@@ -167,6 +167,9 @@ def validate_plan(plan: Any, pack: dict[str, Any], *, now: float | None = None, 
         errs.append(_e("ARM_MISMATCH", f"step arm {step['arm']} but the pack is for {pack.get('arm')}"))
     verb = step["verb"]
     if verb in MOTION:
+        ready = pack.get("readiness") or {}
+        if not ready.get("ok") or ready.get("blocking_refusals") or ready.get("incident_held"):  # the cell would refuse; do not let a plan say otherwise
+            errs.append(_e("NOT_READY", f"readiness blocks motion: {ready.get('blocking_refusals') or ready.get('error') or 'incident held'}: only idle or ask_human"))
         if not pack.get("observable"):
             errs.append(_e("UNOBSERVABLE", f"{pack.get('reason')}: only idle or ask_human"))
         else:
