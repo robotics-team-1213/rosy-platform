@@ -332,7 +332,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
 
         result = recover_fn(
             cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
-            release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n: choices.ranked(choice_key, n),
+            release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n, ctx: choices.ranked_in_context(choice_key, n, ctx),
             release_unmoved=bool(args.supervised and not args.unlatch_hold), moved_out=moved_out, latched_out=latched_out,
             allow_live_unlatch=args.unlatch_hold, advisor=advisor, load_check=load_check,
             bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True,
