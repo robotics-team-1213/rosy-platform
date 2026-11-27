@@ -376,12 +376,16 @@ def jaw_zone_error(frames, kin, spec: dict | None, *, force_all: bool = False) -
 
 
 def shape_chunk(chunk, start, low, high, fastest: float, *, trim_backtrack: bool = False,
-                ease: bool = False) -> list[list[float]]:
+                ease: bool = False, jaw_floor: float | None = None) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`.
-    `ease` joins a policy chunk to `start` (see `ease_start`); reviewed waypoints keep their exact rows."""
+    `ease` joins a policy chunk to `start` (see `ease_start`); reviewed waypoints keep their exact rows.
+    `jaw_floor` (policy callers only) lifts the jaw column to the reviewed empty-jaw stop before the envelope check."""
     arr = np.asarray(chunk, dtype=float)
     if arr.ndim != 2 or arr.shape[1] != JOINTS or not np.isfinite(arr).all():
         raise ValueError("policy chunk is not finite (n, 6)")
+    if jaw_floor is not None:  # below the empty stop the jaw stalls on nothing and reads as HOLDING; library close_target is floor+1, so unaffected
+        arr = arr.copy()
+        arr[:, 5] = np.maximum(arr[:, 5], jaw_floor)
     lo, hi = np.asarray(low) - MARGIN, np.asarray(high) + MARGIN
     refuse_outside(arr, lo, hi, lrs.JOINT_NAMES)
     if trim_backtrack:
