@@ -145,5 +145,7 @@ def test_lane_mask_is_graded_non_lethal_and_aligned_with_wall_grid(tmp_path):
     payload = res.json()
     assert payload["sha256"] == sha256(base64.b64decode(payload["pgm_base64"])).hexdigest()
     assert client.get("/api/fleet/site-map/lane-mask").status_code in (401, 403)
-    client_no_map, _ = _client(tmp_path, None)
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    client_no_map, _ = _client(empty_dir, None)
     assert client_no_map.get("/api/fleet/site-map/lane-mask", headers=OP).status_code == 404

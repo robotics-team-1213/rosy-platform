@@ -31,7 +31,7 @@ from navigation.profile_limits import (
     validate_nav2_parameters,
     validate_requested_limits,
 )
-from navigation.site_map import resolve_keepout_mask, resolve_occupancy_map
+from navigation.site_map import resolve_occupancy_map, resolve_keepout_mask
 
 
 def _opt_arg(context, name: str, default: str = "") -> str:
