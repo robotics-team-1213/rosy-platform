@@ -19,7 +19,7 @@ def _pr5_api():
         "image_size_px": [640, 480],
         "status": "cell_local_reference",
         "arm_s_top": {
-            "pinky_tray": {"label": "S3 짐칸 ROI", "top_roi_px": [10, 40, 260, 240]},
+            "amr_bed": {"label": "S3 짐칸 ROI", "top_roi_px": [10, 40, 260, 240]},
             "belt_center": {"label": "벨트 인입 중앙", "top_roi_px": [240, 90, 460, 270]},
         },
         "arm_ab_top": {
@@ -65,7 +65,7 @@ def test_omx_inspector_renders_pixel_roi_svg_and_toggles_visibility(site):
         expect(svg).to_be_visible()
         expect(svg).to_have_attribute("viewBox", "0 0 640 480")
         expect(svg).to_have_attribute("preserveAspectRatio", "xMidYMid slice")
-        expect(svg.locator('rect[data-roi-key="pinky_tray"]')).to_have_count(1)
+        expect(svg.locator('rect[data-roi-key="amr_bed"]')).to_have_count(1)
         expect(svg.locator('rect[data-roi-key="belt_center"]')).to_have_count(1)
 
         zoom_btn = inspector.locator(".omx-inspector-zoom")

@@ -427,12 +427,13 @@ def test_cell_site_pixels_matches_omx_recovery_and_outbound_specs(tmp_path):
     from omx_two_arm_sites import OUTBOUND_STAND_SPEC
 
     for key, spec in pixels["cameras"]["arm_s_top"].items():
-        assert tuple(spec["top_roi_px"]) == tuple(CELL_S_EXTENDED_ZONES[key]["top_roi_px"])
+        zone_key = {"amr_bed": "pinky_tray"}.get(key, key)
+        assert tuple(spec["top_roi_px"]) == tuple(CELL_S_EXTENDED_ZONES[zone_key]["top_roi_px"])
     assert tuple(pixels["cameras"]["arm_ab_top"]["outbound_stand"]["top_roi_px"]) == tuple(OUTBOUND_STAND_SPEC["top_roi_px"])
 
     client, store = _client_and_store(tmp_path)
     _activate_map_and_rules(store, _base_v348_map(), {"return": {"exit_place": "S1"}, "stops": [{"place": "S3", "role": "unload"}]})
     full = client.get("/api/fleet/site-points?view=full", headers=VIEWER).json()
-    assert full["cameras"]["arm_s_top"]["pinky_tray"]["top_roi_px"] == [10, 40, 260, 240]
+    assert full["cameras"]["arm_s_top"]["amr_bed"]["top_roi_px"] == [10, 40, 260, 240]
     assert full["cameras"]["arm_ab_top"]["belt_pickup"]["top_px"] == [341, 112]
     assert full["coordinate_frames"]["cell_ab_fixture"]["stand"]["top_roi_px"] == [410, 30, 570, 125]

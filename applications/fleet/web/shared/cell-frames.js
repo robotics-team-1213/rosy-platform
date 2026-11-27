@@ -128,7 +128,7 @@ export function createCellFrameFeed({
       // A node bound before it is attached stays until it has been seen connected once.
       if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
       seen.add(img);
-      const sibling = img.nextElementSibling?.classList?.contains('omx-inspector-cam-standby') ? img.nextElementSibling : null;
+      const sibling = img.parentElement?.querySelector(':scope > .omx-inspector-cam-standby') || null;
       paintCameraFrameHold(img.parentElement, img, sibling, snap);
       if (img.dataset && img.dataset.frameStateText !== snap.text) img.dataset.frameStateText = snap.text;
     }

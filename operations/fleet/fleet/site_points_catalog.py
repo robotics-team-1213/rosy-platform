@@ -219,7 +219,7 @@ def build_coordinate_frames(
         "vehicle_tray": {
             "xyz_mm": [53.5, 172.0, 20.0],
             "yaw_deg": -85.0,
-            "top_roi_px": list(cam_s["pinky_tray"]["top_roi_px"]),
+            "top_roi_px": list(cam_s["amr_bed"]["top_roi_px"]),
             "bridge_vehicle_stop": "S3",
         },
         "belt_in": {

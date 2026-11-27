@@ -11,9 +11,8 @@ export function buildInspectorCamFrame(img, standbyText = "영상 확인 중", r
   const wrap = node("div", "", "omx-inspector-cam-frame");
   const standby = node("span", standbyText, "omx-inspector-cam-standby");
   standby.setAttribute("role", "status");
-  wrap.append(img);
+  wrap.append(img, standby);
   if (roiSvg) wrap.append(roiSvg);
-  wrap.append(standby);
   return wrap;
 }
 

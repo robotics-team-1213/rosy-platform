@@ -72,8 +72,5 @@ export function syncCamRoiOverlay(frameEl, camView, cameraRois, showRoi = true) 
   frameEl.querySelector(".omx-cam-roi-overlay")?.remove();
   if (!showRoi || !cameraRois) return;
   const svg = buildCamRoiSvg(camView, cameraRois);
-  if (!svg) return;
-  const standby = frameEl.querySelector(".omx-inspector-cam-standby");
-  if (standby) frameEl.insertBefore(svg, standby);
-  else frameEl.append(svg);
+  if (svg) frameEl.append(svg);
 }

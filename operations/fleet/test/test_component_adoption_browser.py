@@ -242,6 +242,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
     api["/api/fleet/peers"] = {"peers": []}
     api["/api/fleet/dispatch-control"] = {"paused": False}
     api["/api/fleet/work"] = {"rows": []}
+    api["/api/fleet/site-points"] = {"schema_version": "rosy.site-points.v1", "view": "full", "points": [], "zones": {}}
     api["/api/fleet/cells/cell_ab/jobs/options"] = {"cell": "cell_ab", "arms": ["arm_a", "arm_b"], "models": []}
     api["/api/fleet/cells/cell_ab/jobs/readiness"] = {"arms": {}}
     api["/api/fleet/workcell-observations"] = {

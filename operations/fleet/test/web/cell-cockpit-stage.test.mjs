@@ -142,7 +142,7 @@ test("cameraRoiEntries and renderOmxInspector attach pixel ROI overlays only on 
   const cameraRois = {
     schema: "rosy.cell-site-pixels.v1",
     image_size_px: [640, 480],
-    arm_s_top: { pinky_tray: { label: "S3 짐칸 ROI", top_roi_px: [10, 40, 260, 240] } },
+    arm_s_top: { amr_bed: { label: "S3 짐칸 ROI", top_roi_px: [10, 40, 260, 240] } },
     arm_ab_top: { belt_pickup: { label: "벨트 픽업", top_px: [341, 112] }, outbound_stand: { label: "반출대", top_roi_px: [410, 30, 570, 125] } },
   };
   assert.equal(cameraRoiEntries({ id: "arm_s_top", label: "S3 상단" }, cameraRois).entries.length, 1);
@@ -185,10 +185,15 @@ test("cameraRoiEntries and renderOmxInspector attach pixel ROI overlays only on 
       showRoi: true,
       onToggleRoi: () => { toggled += 1; },
     });
+    const frames = findAll(container, (n) => n.attributes.class === "omx-inspector-cam-frame" || n.className === "omx-inspector-cam-frame");
+    const mainFrame = frames[0];
+    assert.equal(mainFrame.children[0].tagName, "IMG");
+    assert.equal(mainFrame.children[1].className, "omx-inspector-cam-standby");
+    assert.equal(mainFrame.children[2].attributes.class, "omx-cam-roi-overlay");
     const svgs = findAll(container, (n) => n.tagName === "SVG" && n.attributes.class === "omx-cam-roi-overlay");
     assert.equal(svgs.length, 1);
     assert.equal(svgs[0].attributes.viewBox, "0 0 640 480");
-    const rects = findAll(svgs[0], (n) => n.tagName === "RECT" && n.attributes["data-roi-key"] === "pinky_tray");
+    const rects = findAll(svgs[0], (n) => n.tagName === "RECT" && n.attributes["data-roi-key"] === "amr_bed");
     assert.equal(rects.length, 1);
     const roiBtn = findAll(container, (n) => n.tagName === "UI-BUTTON" && n.dataset.roiToggle === "true")[0];
     assert.ok(roiBtn);
