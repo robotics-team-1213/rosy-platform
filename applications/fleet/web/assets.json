@@ -158,6 +158,14 @@
       "path": "cell/cell-cam-roi.js",
       "media_type": "application/javascript"
     },
+    "cell-cam-objects.js": {
+      "path": "cell/cell-cam-objects.js",
+      "media_type": "application/javascript"
+    },
+    "cell-pick-place-staging.js": {
+      "path": "cell/cell-pick-place-staging.js",
+      "media_type": "application/javascript"
+    },
     "cell-cam-roi.css": {
       "path": "cell/cell-cam-roi.css",
       "media_type": "text/css"

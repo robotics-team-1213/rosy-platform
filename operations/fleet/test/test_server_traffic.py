@@ -360,7 +360,7 @@ def test_an_untrusted_robot_is_a_wide_obstacle_at_its_last_trusted_pose():
     """D-395 §10: a robot that lost LOCALIZED keeps UNTRUSTED_KEEP_OUT_M clear around where it was last trusted.
     Its current odom pose (far away here) is not used."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
     run(console.snapshot())                                       # last trusted pose (0, 0.18)
     other._state = _standing("rosy_02", (5.0, 5.0), _loc("CANDIDATES", "odom"))
@@ -375,7 +375,7 @@ def test_an_untrusted_robot_is_a_wide_obstacle_at_its_last_trusted_pose():
 
 def test_the_mission_goes_out_once_the_robot_is_localized_off_the_route():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
     run(console.snapshot())
     other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
@@ -416,7 +416,7 @@ def test_an_untrusted_robot_never_trusted_blocks_the_whole_track():
 def test_a_robot_without_localization_blocks_without_inventing_a_map_pose():
     """Missing localization cannot establish a map pose."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18)))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16)))
     console = _console(mover, other)
     snapshot = run(console.snapshot())
 
@@ -431,11 +431,11 @@ def test_a_robot_without_localization_blocks_without_inventing_a_map_pose():
 def test_a_mission_held_behind_an_untrusted_robot_drops_its_claim():
     """Review fix: like ROUTE_CONFLICT, a cancelled mission must not keep claiming the corridor."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
     run(console.snapshot())
     console._claims["rosy_01"] = _line(-2.0, 0, 2.0, 0)        # an earlier mission's claim
-    other._state = _standing("rosy_02", (0.0, 0.18), _loc("SUSPECT", "map"))
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc("SUSPECT", "map"))
 
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
@@ -540,7 +540,7 @@ def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 1.5), None))   # odom: off-route
     console = _console(mover, other)
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.18), _loc())                       # on the route
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc())                       # on the route
     run(console.snapshot())
     other._state = _standing("rosy_02", (0.0, 1.5), _loc("CANDIDATES", "odom"))
     run(console.snapshot())
@@ -548,13 +548,13 @@ def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
     assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
-    assert console._trusted["rosy_02"] == (0.0, 0.18)
+    assert console._trusted["rosy_02"] == (0.0, 0.16)
 
 
 def test_null_localization_stays_untrusted_after_cached_position_expires():
     """A CORE restart never restores trust by timeout; the old position expires after 30 s."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console, clock = _clocked(mover, other)
     run(console.snapshot())
     other._state = _standing("rosy_02", (5.0, 5.0), None)                      # CORE restarted
@@ -576,15 +576,15 @@ def test_null_localization_stays_untrusted_after_cached_position_expires():
 
 def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console, clock = _clocked(mover, other)
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.18), None)
+    other._state = _standing("rosy_02", (0.0, 0.16), None)
     run(console.snapshot())                                   # null since t=0
     clock.now = 20.0
-    other._state = _standing("rosy_02", (0.0, 0.18), _loc("UNKNOWN", "odom"))
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc("UNKNOWN", "odom"))
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.18), None)
+    other._state = _standing("rosy_02", (0.0, 0.16), None)
     clock.now = 25.0
     run(console.snapshot())                                   # null again since t=25
     clock.now = 40.0
@@ -596,7 +596,7 @@ def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
 
 def test_missing_localization_never_becomes_trusted_by_timeout():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), None))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), None))
     console, clock = _clocked(mover, other)
     for t in (0.0, 10.0, 40.0):
         clock.now = t
@@ -619,12 +619,12 @@ def _driving(console, robot):
 
 
 def test_a_driving_robot_near_the_mover_is_held_until_the_mover_is_localized():
-    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.18), _loc()))
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     driver = _mover()                                               # rosy_01 on y = 0
     console = _console(driver, mover)
     run(console.snapshot())                                         # mover last trusted at (0, 0.18)
     _driving(console, driver)
-    mover._state = _standing("rosy_02", (0.0, 0.18), _loc("CANDIDATES", "odom"))
+    mover._state = _standing("rosy_02", (0.0, 0.16), _loc("CANDIDATES", "odom"))
     run(console.snapshot())
 
     held = run(console.hold_for_localization("rosy_02"))

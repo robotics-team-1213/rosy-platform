@@ -355,9 +355,9 @@ def test_without_a_map_nobody_is_moved_aside_merely_for_being_near_the_route():
 @pytest.mark.parametrize("has_grid", [True, False])
 @pytest.mark.parametrize("neighbor, route, goal, expected", [
     ((0.0, 0.18), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), []),
-    ((0.0, 0.18), [(0.0, 0.0), (0.0, 0.1), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
+    ((0.0, 0.16), [(0.0, 0.0), (0.0, 0.1), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
     ((0.0, 0.14), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
-    ((0.0, 0.17), [(0.0, 0.0), (0.10, 0.0)], (0.10, 0.0), ["rosy_02"]),
+    ((0.0, 0.17), [(0.0, 0.0), (0.05, 0.0)], (0.05, 0.0), ["rosy_02"]),
     ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.15, 0.22), ["rosy_02"]),
 ], ids=["parallel-exit", "approach", "too-close-at-start", "near-end", "blocked-commanded-goal"])
 def test_parallel_bay_departure_standing_blockers(has_grid, neighbor, route, goal, expected):

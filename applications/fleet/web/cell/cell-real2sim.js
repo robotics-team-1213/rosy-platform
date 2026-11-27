@@ -377,6 +377,13 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
       }
       if (expectedGen !== generation) return;
       lastPlansBody = plansBody;
+      try {
+        const objsBody = await request('/api/fleet/pipeline/cell-objects');
+        if (expectedGen === generation && objsBody) state.cellObjects = { ...objsBody, fetchedAtMs: Date.now() };
+      } catch {
+        // Optional telemetry: absent until a cell observer publishes catalog objects.
+      }
+      if (expectedGen !== generation) return;
       renderCellTasks({
         ...body,
         live_joint_arms: freshJointArmIds(),

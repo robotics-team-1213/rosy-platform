@@ -14,20 +14,15 @@ from fleet.pipeline.cell_site_targets import act_route_refusal, expand_multi_tie
 from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled, install_pinky_dispatch
-from fleet.server.pipeline_port_events import (
-    IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity,
-)
+from fleet.server.pipeline_port_events import IDENTITY_INPUT_FIELDS, TASK_IDENTITY_FIELDS, has_identity_input, task_view_for_request, validate_task_identity
 from core_common.profile import LEGACY_VEHICLE_SITE
 from .pipeline_cell_task_presets import cell_task_presets
-from .pipeline_governance_store import (
-    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id,
-    prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
-)
+from .pipeline_governance_store import (admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id,
+                                        prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key)
+from fleet.server.pipeline.pipeline_target_object import validate_target_object_for_create
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
-from fleet.server.sitemap.pipeline_unload_release import (
-    install_unload_release_routes, manifest_count,
-)
+from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count
 from fleet.server.pipeline_recovery_tools import collect_unresolved_failures
 from fleet.server.rfid_receipts import is_inbound_supply
 
@@ -170,6 +165,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
+        target_obj = validate_target_object_for_create(app, cell_id, spec)
         tier, pose = checked_task_pose({**spec, "tier": targets["tier"]}, station)
         arm_id = targets["arm_id"]
         tier_hint = spec.get("tier_hint")
@@ -232,6 +228,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint", "requires_presence_confirm")
                if k in spec},
             **{k: spec[k] for k in ("execution_mode", "max_chunks") if spec.get(k) is not None},
+            **({"target_object": target_obj} if target_obj else {}),
             **gov_meta,
             "pose": pose,
             "status": target_status,
@@ -316,6 +313,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
         with (gov._lock if gov is not None else nullcontext()):
             if scoped_key and gov is not None and (cached := gov.check_idempotency(scoped_key, body_hash)):
                 return cached[1]
+            preset_key = body.get("preset")
+            if body.get("target_object") is not None and (
+                body.get("tiers") is not None or "steps" in (CELL_TASK_PRESETS.get(str(preset_key or "")) or {})
+            ):
+                raise HTTPException(422, detail={"code": "TARGET_OBJECT_SINGLE_TASK_ONLY"})
             if body.get("tiers") is not None:
                 base_id = str(body.get("task_id") or (deterministic_idempotency_id("stack", scoped_key) if scoped_key else f"stack-{uuid.uuid4().hex[:6]}"))
                 try:
@@ -481,6 +483,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier", *TASK_IDENTITY_FIELDS) if k in orig}
         if orig.get("placement_attempt_id") or orig.get("motion"):  # a motion is proposed again, never rebuilt as a fixed-site pick
             raise HTTPException(409, detail={"code": "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN"})
+        if orig.get("target_object"):
+            raise HTTPException(409, detail={"code": "TARGET_OBJECT_REQUIRES_FRESH_PLAN"})
         spec.update({k: orig.get(k) for k in ("depends_on", "displaced_to", "preset", "zone_id") if k in orig})
         spec.update({"task_id": new_id, **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None}})
         retried, = _enqueue_many(active, [spec], principal_id=principal_id, retry_of=orig)

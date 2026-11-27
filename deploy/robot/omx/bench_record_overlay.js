@@ -180,6 +180,7 @@ function renderCamGoalOverlay(){
   svg.innerHTML=inner;
 }
 
+window.fitCamOverlayToImage=fitOverlayToImage;
 window.renderCamGoalOverlay=renderCamGoalOverlay;
-window.addEventListener('resize',()=>{const cur=$('cam-grid')?.querySelector('.cam-box[data-cam-box="top"]');if(cur)fitOverlayToImage(cur,cur.querySelector('img[data-cam="top"]'),cur.querySelector('svg.cam-goal-overlay'));});
+window.addEventListener('resize',()=>{const cur=$('cam-grid')?.querySelector('.cam-box.cam-primary');if(cur)fitOverlayToImage(cur,cur.querySelector('img[data-cam]'),cur.querySelector('svg.cam-goal-overlay'));if(typeof window.renderCamObjectsOverlay==='function')window.renderCamObjectsOverlay();});
 })();
