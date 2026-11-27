@@ -900,3 +900,58 @@ def test_nav2_off_lane_margin_and_two_tick_persistence():
     assert sev["state"] == "stopped" and sev["reason"] == "pose" and "off_lane_m" in sev["detail"]
 
 
+
+
+
+def test_sample_nav2_route_ends_mid_edge_at_a_hold_point():
+    """A table-cut hold point ends the route at ``end_s``, never at the segment end (2026-11-27)."""
+    from fleet.routing.execute import arc_id
+
+    graph = SiteMapStore(clock=FakeClock())
+    graph.import_if_empty(_south_loop_map(), source="test")
+    graph = graph.active()[2]
+    seg = {"edge_id": "upper_west", "forward": True, "s_from": 0.0228, "s_to": graph.arcs["upper_west:fwd"].length_m}
+    arc = graph.arcs[arc_id(seg)]
+    pts = sample_nav2_route(graph, [seg], 0, 0.0228, 0, end_s=0.77)
+    assert pts[-1][3] == "stop" and math.dist(pts[-1][:2], arc.point_at(0.77)[:2]) < 1e-9
+    assert all(arc.project(x, y)[1] <= 0.77 + 1e-9 for x, y, _yaw, _kind in pts)
+    # Already at or past the hold point: the fallback stays at it, never the segment end.
+    assert sample_nav2_route(graph, [seg], 0, 0.8, 0, end_s=0.77) == [(*arc.point_at(0.77), "stop")]
+
+
+
+@pytest.mark.parametrize("held", ["traffic_hold", "fenced_hold", "resolved_then_fenced", None, "resolved"])
+def test_held_short_of_a_table_cut_on_the_last_segment_is_no_arrival(monkeypatch, held):
+    """TripSteps reports arrival only without a table cut (``traffic_hold``) and once a hold-point receipt was
+    resolved by the real route: a cancelled hold whose replacement waits for standstill is no arrival."""
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+    from fleet.server import trip_steps
+
+    robot = RouteFakeRobot("rosy_42")
+    _clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    arc = graph.arcs["loop_left:fwd"]
+    x, y, yaw = arc.point_at(arc.length_m - 0.3)
+    pose["v"] = MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw), goal="S4",
+                                                  stop_offset=False), store.routing_config))
+    store.record_plan(plan_id="p-held", robot_id="rosy_42", principal_id="bob", map_version=plan["map_version"],
+                      request={"to": "S4", "drive_mode": "nav2"}, result={"plan": plan})
+    run(runner.start("p-held", "bob"))
+
+    async def step(_runner, live, _index, _s, _pose):  # the period's road step: standing, no route
+        live.active_route = None
+        if held == "traffic_hold":
+            live.view["detail"]["traffic_hold"] = {"waiting_for": ["rosy_46"], "refused_at_m": 0.3}
+        elif held:  # the cut cleared; the cancelled hold route's replacement waits for standstill evidence
+            live.view["detail"]["wait_prefix"] = {"kind": "hold_point", "state": "superseded", "fence": True,
+                                                  **({"resolved": True} if held != "fenced_hold" else {})}
+            if held == "resolved":
+                live.view["detail"]["wait_prefix"].pop("fence")  # standstill seen and the final goal sent
+
+    monkeypatch.setattr(trip_steps, "step_nav2_route", step)
+    ex, ey, eyaw = arc.point_at(arc.length_m - 0.02)
+    pose["v"] = MapPose(ex, ey, eyaw, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    waiting = ("traffic_hold", "fenced_hold", "resolved_then_fenced")
+    assert runner.view("p-held")["state"] == ("running" if held in waiting else "arrived")

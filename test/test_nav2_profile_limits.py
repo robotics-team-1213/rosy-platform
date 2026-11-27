@@ -48,6 +48,16 @@ def test_nav2_default_inflation_is_the_hardware_value():
     assert data["global_costmap"]["global_costmap"]["ros__parameters"]["footprint_padding"] == 0.005
 
 
+def test_footprint_is_the_true_body_plus_small_padding():
+    """11-27 field: the 0.12 m square + 0.01 padding read inflation cells 7.5 cm from a wall as a collision."""
+    data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
+    for costmap in ("local_costmap", "global_costmap"):
+        params = data[costmap][costmap]["ros__parameters"]
+        half = max(abs(v) for point in yaml.safe_load(params["footprint"]) for v in point)
+        assert 0.0566 <= half <= 0.06, f"{costmap} footprint half-width {half}"
+        assert params.get("footprint_padding") == 0.005, f"{costmap} footprint_padding"
+
+
 def test_factory_sim_inflation_is_wider_than_hardware_default():
     catalog = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "worlds.yaml"
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]

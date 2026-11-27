@@ -1589,14 +1589,8 @@ ROS setup은 필요하지 않다. 해당 Python의 격리 환경에서 OpenCV와
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
-**Arm S live-file 관측.** ROS가 없는 Arm S는 live/calibration/guard-health 파일을 가진 호스트에서
-`rosy-omx-arm-status.service`를 쓴다. `arm-status.env.example`을
-`~/.config/rosy/omx-arm-status.env`에 mode 0600으로 복사하고, Fleet manifest의
-`source_id`·`arm_id`, 실제 live·calibration·canonical health 경로, HTTPS origin·CA와
-해당 팔 전용 토큰을 설정한다. 빈 토큰은 시작을 거부한다. guard의
-`ROSY_OMX_MONITOR_OWNER`는 같은 arm_id여야 한다. 유닛을 user systemd 경로에 복사하고
-`daemon-reload` 뒤 `enable --now rosy-omx-arm-status.service`로 활성화한다.
-같은 source에 기존 ROS observation bridge를 동시에 연결하지 않는다.
+**Arm S 관측과 `rosy-omx-arm-status.service` 은퇴.** `observations.yaml`에 `omx_arm_s`가 등록된 셀에서는 `rosy-omx-observer@arm_s.service` + 세션 래퍼의 `ROSY_CHUNK_JOINT_TOPIC` → `workcell_observation_bridge.py` 단일 송신 경로를 사용한다(`rosy-omx-arm-status.service`는 은퇴·`disabled`/`inactive` 유지). `rosy-omx-arm-status.service`는 브리지 환경이 없는 단독(legacy/standalone) live-file 호스트 전용이며, `--forbid-bridge-env` 가드로 브리지 매니페스트와 같은 `source_id`를 탐지하면 exit 78(`RestartPreventExitStatus=78`)로 즉시 거부해 409 epoch 충돌을 막는다.
+같은 source에 기존 observation bridge와 `arm_status_bridge`를 동시에 연결하지 않는다.
 
 이 producer는 파일만 읽고 `ArmSender`로 보낸다. 보정 범위로 변환한 신선한 관절 위치와
 정본 `rosy.motor-health.v1`만 사용하며, 누락된 PWM·온도·목표를 만들지 않는다.

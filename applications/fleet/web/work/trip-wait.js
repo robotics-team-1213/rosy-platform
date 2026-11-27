@@ -1,7 +1,7 @@
 const WAIT_LABEL = {
   peer_pre_dispatch: '안전거리 확인 · 주행 명령 전송 전', peer_clearance: '통행 안전거리 확인',
   fleet_hold_unconfirmed: '일시정지 · 기체 정지 응답 확인 중', fleet_hold: '일시정지 · 정지 확인됨',
-  route_replan_hold: '변경 경로 확인', signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
+  route_replan_hold: '변경 경로 확인', traffic_hold: '앞 기체 비킬 때까지 정지 위치에서 대기', signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
 
 const DOCK_PREREQUISITE = {
   CHARGE_BAY_TARGET_NOT_TAUGHT: '도킹 위치 미등록', CHARGE_BAY_REAR_TYPE_REQUIRED: '후진 도킹 유형 확인 필요',

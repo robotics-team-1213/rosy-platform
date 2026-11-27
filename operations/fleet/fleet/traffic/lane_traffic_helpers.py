@@ -69,14 +69,25 @@ def unit_owners(state) -> dict[str, set[str]]:
     return owners
 
 
-def occupied_ahead(robot, state, owners) -> Optional[float]:
-    """Route metres where this robot's route first enters a unit it does not hold and another robot holds,
-    last covered or pins (the place cut for a Nav2 road route, D-1009); None when nothing is ahead."""
+def _occupied_span(robot, state, owners):
     if robot.d is None:
         return None
     held = state.held.get(robot.id, {})
-    return next((span.d0 for i, span in enumerate(robot.spans)
+    return next((span for i, span in enumerate(robot.spans)
                  if span.d1 > robot.d and i not in held and owners.get(span.unit, set()) - {robot.id}), None)
+
+
+def occupied_ahead(robot, state, owners) -> Optional[float]:
+    """Route metres where this robot's route first enters a unit it does not hold and another robot holds,
+    last covered or pins (the place cut for a Nav2 road route, D-1009); None when nothing is ahead."""
+    span = _occupied_span(robot, state, owners)
+    return None if span is None else span.d0
+
+
+def occupied_ahead_by(robot, state, owners) -> list[str]:
+    """The robots that own the unit ``occupied_ahead`` cut at: the blocker a held trip names."""
+    span = _occupied_span(robot, state, owners)
+    return [] if span is None else sorted(owners.get(span.unit, set()) - {robot.id})
 
 
 def route_occupants(robot, owners, fresh, map_id) -> dict[str, list]:

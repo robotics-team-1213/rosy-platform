@@ -70,20 +70,24 @@ def sample_nav2_route(
     walls=(),
     curve_step_m: float = NAV2_CURVE_STEP_M,
     here: tuple[float, float] | None = None,
+    end_s: float | None = None,
 ) -> list[tuple[float, float, float, str]]:
     """Sample road-centerline ``pass`` points ending with one ``stop`` point along ``segments[index..end_index]``.
 
-    ``here`` is the robot's site position: off the centreline the first pass point moves ahead (NAV2_RECENTRE_*)."""
+    ``here`` is the robot's site position: off the centreline the first pass point moves ahead (NAV2_RECENTRE_*).
+    ``end_s`` ends the last segment mid-edge (a table-cut hold point) instead of at its ``s_to``."""
     spans = []
     for k in range(index, end_index + 1):
         seg = segments[k]
         arc = graph.arcs[arc_id(seg)]
-        cur_s = min(max(seg["s_from"], s), seg["s_to"]) if k == index else seg["s_from"]
-        if seg["s_to"] - cur_s > 1e-6:
-            spans.append((arc, cur_s, seg["s_to"]))
+        stop_s = min(seg["s_to"], end_s) if k == end_index and end_s is not None else seg["s_to"]
+        cur_s = min(max(seg["s_from"], s), stop_s) if k == index else seg["s_from"]
+        if stop_s - cur_s > 1e-6:
+            spans.append((arc, cur_s, stop_s))
     if not spans:
         last_seg = segments[end_index]
-        fx, fy, fyaw = graph.arcs[arc_id(last_seg)].point_at(last_seg["s_to"])
+        stop_s = last_seg["s_to"] if end_s is None else min(last_seg["s_to"], end_s)  # never past a hold point
+        fx, fy, fyaw = graph.arcs[arc_id(last_seg)].point_at(stop_s)
         return [(fx, fy, fyaw, "stop")]
     start_xy = spans[0][0].point_at(spans[0][1])[:2]
     total_m = sum(s1 - s0 for _arc, s0, s1 in spans)
