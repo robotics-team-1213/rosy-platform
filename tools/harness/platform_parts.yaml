@@ -101,6 +101,7 @@ app_subtrees:
   tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
   tools/sim/world_*: site-fleet
+  tools/sim/coupled_sim_sandbox.py: site-fleet
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
   tools/publish*.py: tooling
