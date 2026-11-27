@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.494
+**Version:** v1.495
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.495 Map binding auto-rebind after a same-raster map swap (Fleet)
+
+Additive (D-1022): `GET /api/fleet/robots/{robot_id}/map-binding` gains `auto_rebind` (`{code, detail, at}` or null) — the last Fleet auto-rebind attempt. When a robot's map file is swapped but its raster frame is not (same origin, resolution, width, height within 1e-6; at most max(12, 2 % of the bound grid's occupied cells) cells of another class, and the bound grid is not within that budget of its own 180-degree turn or mirror), the standing IDLE robot is re-bound by Fleet as `fleet:auto-rebind` (old transform, ceiling-camera fix at most 2 s old as hold-out, site map revision unchanged); `code` is `APPROVED` or the refusal reason: `GRID_SIGNATURE_MISSING`·`GRID_FRAME_CHANGED`·`GRID_CELLS_CHANGED`·`GRID_SYMMETRIC`·`NOT_STANDING`·`NO_CAMERA_HOLDOUT` (no ceiling-camera fix, or older than 2 s)·`HOLDOUT` (the store's unchanged 0.05 m hold-out)·`SITE_REVISION_CHANGED`·`STATE_CHANGED`·`ROBOT_UNREADABLE`; the grid signature is stored with the binding row but not exposed by any route; audit action `map_binding_auto_rebind`. Site config `fleet.trip.map_auto_rebind` (default true) turns it off. The version number is assigned at landing.
 
 ### v1.494 Cell-task push executes, is auto-admitted and completes on measured displacement (D-1083) (Fleet)
 
@@ -5237,6 +5241,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.495 | 2026-11-27 | [Fleet] Additive (D-1022): GET /api/fleet/robots/{robot_id}/map-binding gains auto_rebind |
 | v1.494 | 2026-11-27 | [Fleet] [Fleet] Additive: push motion QUEUED like free_pick, claim capability "push", /complete needs stage_result.push |
 | v1.493 | 2026-11-27 | [CORE] POST /docking/docks/{id}/reframe re-tags a dock after a same-frame map swap |
 | v1.492 | 2026-11-27 | [Cell] Additive: readiness arms[].state_unknown, 오래된 folded 는 null |
