@@ -352,7 +352,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
             allow_live_unlatch=args.unlatch_hold, advisor=advisor, load_check=load_check,
             bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True,
             held_plan=lambda s: recovery_park_path(library, s, library["fps"]), library_sha256=digest(library),
-            hold_reason=hold_reason,
+            hold_reason=hold_reason, rehome=lambda c: cell_unwedge.rehome_before_work(c, library, config, required=True),
         )
         if "state_start" in result:  # records only: nothing decides on the start PWM yet
             import load_predict
