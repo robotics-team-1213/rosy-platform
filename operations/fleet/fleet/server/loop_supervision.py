@@ -198,6 +198,8 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
     path_task = supervisor.supervised("paths", app.state.paths.run())  # D-594
     job_task = (supervisor.supervised("job-trips", app.state.job_trips.run())
                 if getattr(app.state, "job_trips", None) else None)
+    reissue_task = (supervisor.supervised("trip-reissue", app.state.trip_reissue.run())  # D-1086
+                    if getattr(app.state, "trip_reissue", None) else None)
     dispatcher = (supervisor.supervised(
                       "task-dispatch",
                       _task_dispatch_loop(console, task_service, drive_cancel, supervisor=supervisor))
@@ -228,7 +230,7 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                                           localization_task, signal_task, resolver_task,
                                           trip_task, identity_task, lane_task, tether_task,
                                           lease_task, path_task, calibration_drift_task,
-                                          notification_task, job_task, charge_task,
+                                          notification_task, job_task, reissue_task, charge_task,
                                           physical_worker, bays_task, lag_task, auto_locate_task,
                                           *control_tasks)
                         if task is not None]
