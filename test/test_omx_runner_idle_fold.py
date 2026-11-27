@@ -193,8 +193,8 @@ def test_idle_open_grip_reads_the_session_env_within_range(monkeypatch):
         assert io.open_grip({}) == 0.0
 
 
-def test_only_the_arm_a_and_b_wrappers_turn_idle_open_on():
+def test_every_arm_session_wrapper_turns_idle_open_on():
     from pathlib import Path
     wrappers = Path(__file__).resolve().parents[1] / "deploy/robot/omx/session-wrappers"
     on = sorted(p.name for p in wrappers.glob("with-session-*.sh") if "ROSY_IDLE_OPEN_GRIP" in p.read_text(encoding="utf-8"))
-    assert on == ["with-session-arm-a-par.sh", "with-session-arm-b-par.sh"]
+    assert on == ["with-session-arm-a-par.sh", "with-session-arm-b-par.sh", "with-session-arm-s-live.sh"]

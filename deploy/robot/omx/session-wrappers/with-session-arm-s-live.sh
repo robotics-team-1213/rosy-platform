@@ -8,6 +8,7 @@ if ! { [ -p chunk-io-s/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   sleep 0.2
   flock -n ~/rosy-omx/session-arm_s.lock true || { echo "REFUSED: the arm session lock is held"; exit 2; }
   STATUS=chunk-io-s/chunk-status.jsonl
+  export ROSY_IDLE_OPEN_GRIP=${ROSY_IDLE_OPEN_GRIP:-58.5}  # idle fold opens empty jaws in place, then folds home; v2.1 white jaws open 30 mm at 58.1 (2026-11-27 user)
   for attempt in 1 2 3; do
     export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_s-$(date +%Y%m%d-%H%M%S).jsonl
     if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
