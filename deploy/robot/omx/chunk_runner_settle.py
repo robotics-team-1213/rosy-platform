@@ -18,9 +18,10 @@ if _HERE not in sys.path:
 
 import cell_params as prm  # noqa: E402
 from chunk_policy_playback import absorb_telemetry_error  # noqa: E402
-from chunk_runner_commands import EMPTY_MARGIN  # noqa: E402
+from chunk_runner_commands import EMPTY_MARGIN, _is_policy_lib  # noqa: E402
 from chunk_runner_guards import RECOVERY_PARKS, SETTLE_TOL, library_gripper_closed, safe_stderr  # noqa: E402
 from chunk_runner_interrupt import folded, interrupt_step, interrupt_tick  # noqa: E402
+from chunk_runner_idle_open import idle_fold, idle_open_pending  # noqa: E402
 
 SETTLE_S = 3.0
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
@@ -266,8 +267,7 @@ def check_runner_idle(runner, cr_attr) -> bool:
     quiet, idle_retry_s = runner.clock() - runner.last_input, cr_attr("IDLE_RETRY_S", IDLE_RETRY_S)
     idle_park_s, idle_stop_s = cr_attr("IDLE_PARK_S", IDLE_PARK_S), cr_attr("IDLE_STOP_S", IDLE_STOP_S)
     if runner.home_since is None:
-        from chunk_runner_commands import _is_policy_lib
-        if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library):
+        if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library) or idle_open_pending(runner):
             return False
         if runner.idle_parks >= 2:
             if runner.idle_parks == 2:
@@ -278,7 +278,7 @@ def check_runner_idle(runner, cr_attr) -> bool:
         wait = prm.get(runner.params, "runner.idle_retry_s", idle_retry_s) if runner.idle_parks else prm.get(runner.params, "runner.idle_park_s", idle_park_s)
         if quiet >= wait:
             runner.last_input, runner.idle_parks = runner.clock(), runner.idle_parks + 1
-            runner.command("park")
+            idle_fold(runner)
         return False
     pushed = (runner.fault or "").startswith("pushing at rest")
     if pushed or min(quiet, runner.clock() - runner.home_since) >= prm.get(runner.params, "runner.idle_stop_s", idle_stop_s):
