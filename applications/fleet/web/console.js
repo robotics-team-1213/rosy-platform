@@ -85,6 +85,7 @@ if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 const cockpitHud = createCockpitHud({ el });
 const selection = createSelection(null);
+const objectHighlight = createSelection(null);
 let cellStage = null;
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
@@ -220,6 +221,7 @@ const incidents = createIncidentView({scope: pageScope, el, view, call, log, aut
 const assistant = createAssistantPanel({
   scope: pageScope, call, el, readSelection: () => view.focusRobot,
   readRobots: () => view.robots, readPlaces: () => view.activeSiteMap?.map?.places || [],
+  objectHighlight,
   onSelectRobot: (id) => selection.set(id || null, { source: "assistant" }),
   onOpenRobot: (id) => { if (id) rosterWorkspace.open(id); },
   confirm: (options) => confirmedAction.run(options), log,
@@ -470,7 +472,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, objectHighlight, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };

@@ -58,4 +58,44 @@ async def build_context(app, principal, selected_robot_id, locale='ko-KR'):
             facts.append(AssistantFact(ref=f'cell:{safe_cid}', observed_at=now_s, text=text))
             if len(facts) > 64:
                 raise ValueError('ASSISTANT_CONTEXT_LIMIT')
+    detected = getattr(app.state, 'cell_detected_objects', None)
+    if isinstance(detected, dict) and detected:
+        now_s = time.time()
+        for cid in sorted(detected):
+            safe_cid = code(cid, locale)
+            arms_map = (detected.get(cid) or {}).get('by_arm') or {}
+            counts: dict[tuple[str, str, bool], int] = {}
+            for _aid, snap in sorted(arms_map.items()):
+                try:
+                    rec = float(snap.get('received_at', 0.0))
+                    obs = float(snap.get('observed_at', 0.0))
+                    ttl = float(snap.get('ttl_s', 15.0))
+                except (TypeError, ValueError):
+                    continue
+                if (now_s - rec) > ttl or (now_s - obs) > ttl or (now_s - obs) < -5.0:
+                    continue
+                for obj in snap.get('objects') or ():
+                    if not isinstance(obj, dict):
+                        continue
+                    cat = str(obj.get('catalog_id') or '').strip()
+                    if not cat or cat.lower() == 'unmatched':
+                        continue
+                    site = str(obj.get('site') or '').strip() or ('pinky' if cid == 'cell_s' else 'stand')
+                    key = (code(cat, locale), code(site, locale), bool(obj.get('pickable')))
+                    counts[key] = counts.get(key, 0) + 1
+            if not counts:
+                continue
+            items = sorted(counts.items())
+            shown, extra = items[:8], max(0, len(items) - 8)
+            if locale == 'en-US':
+                parts = [f'{cat}@{site}(x{n}, {"pickable" if ok else "blocked"})' for (cat, site, ok), n in shown]
+                suffix = f' (+ {extra} more)' if extra else ''
+                text = f'{safe_cid} catalog objects: ' + ', '.join(parts) + suffix
+            else:
+                parts = [f'{cat}@{site}({n}개, {"선택가능" if ok else "제한"})' for (cat, site, ok), n in shown]
+                suffix = f' (+ 외 {extra}종)' if extra else ''
+                text = f'{safe_cid} 카탈로그 객체: ' + ', '.join(parts) + suffix
+            facts.append(AssistantFact(ref=f'cell_objects:{safe_cid}', observed_at=now_s, text=text[:512]))
+            if len(facts) > 64:
+                raise ValueError('ASSISTANT_CONTEXT_LIMIT')
     return facts

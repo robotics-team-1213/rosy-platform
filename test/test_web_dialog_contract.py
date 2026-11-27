@@ -65,7 +65,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
     "applications/fleet/web/console.js": 3,  # Channel, neutral ARM review, and assistant navigation share confirmedAction.
-    "applications/fleet/web/assistant/panel.js": 1,  # LLM CONTROL explicit navigation confirms through confirmedAction.
+    "applications/fleet/web/assistant/panel.js": 2,  # LLM CONTROL navigation & bound object pick-place confirm through confirmedAction.
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/manual-control.js": 2,  # fixed MANUAL transition and 10 cm relative step
     "applications/fleet/web/map/named-stop-actions.js": 2,  # named-stop custody release and precision correction clearance

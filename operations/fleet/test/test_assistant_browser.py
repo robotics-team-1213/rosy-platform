@@ -294,3 +294,86 @@ def test_assistant_control_readonly_and_conflict_refusal_never_dispatch(site):
             assert not errors
         finally:
             browser.close()
+
+
+def test_assistant_catalog_object_syncs_camera_highlight_and_confirms_one_shot_task(site):
+    import copy
+    import json
+    import time
+    from playwright.sync_api import expect, sync_playwright
+
+    now_s = time.time()
+    api = copy.deepcopy(API)
+    api['/api/fleet/assistant/status'] = {'available': True, 'mode': 'READ_ONLY', 'reason': None, 'execution_enabled': True}
+    api['/api/fleet/charge-bays'] = {
+        'schema_version': 'rosy.charge-bays.v1',
+        'thresholds': {'go_percent': 15, 'leave_percent': 80},
+        'bays': [{'bay': 'C1', 'state': 'free', 'robot_id': None}],
+        'actions': [],
+        'omx_cells': {'cell_s': {'station': {'station_place': 'S3'}, 'gate': {'phase': 'IDLE'}}},
+        'omx_cell_tasks': [],
+    }
+    api['/api/fleet/pipeline/cell-objects'] = {
+        'schema': 'rosy.cell-detected-objects.v1',
+        'observed_at': now_s,
+        'cells': {
+            'cell_s': {
+                'cell_id': 'cell_s',
+                'cell_state_gen': 12,
+                'arms': {
+                    'arm_s': {
+                        'schema': 'rosy.cell-detected-objects.v1', 'cell_id': 'cell_s', 'arm_id': 'arm_s',
+                        'camera_role': 'arm_s_top', 'frame_wh': [640, 480], 'source_seq': 77,
+                        'observed_at': now_s, 'ttl_s': 15.0, 'cell_state_gen': 12, 'stale': False,
+                        'objects': [
+                            {'object_ref': 'det:77:0', 'catalog_id': 'container-1', 'site': 'pinky',
+                             'centre_mm': [14.0, -3.0], 'centre_px': [320.0, 240.0],
+                             'corners_px': [[290, 210], [350, 210], [350, 270], [290, 270]],
+                             'pickable': True, 'bind_tol_mm': 13.5},
+                            {'object_ref': 'det:77:1', 'catalog_id': 'unmatched', 'site': 'pinky', 'centre_mm': [0.0, 0.0], 'pickable': True},
+                        ],
+                    }
+                },
+            }
+        },
+        'by_arm': {},
+    }
+    ans = {'/api/fleet/pipeline/cell-tasks': (200, {'task': {'task_id': 'ct-ai-1', 'arm_id': 'arm_s', 'status': 'QUEUED'}})}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, answers=ans, size=(1440, 900))
+        try:
+            page.route('**/api/fleet/assistant/messages', lambda route: route.fulfill(status=202, json={
+                **route.request.post_data_json, 'state': 'ANSWERED', 'kind': 'CONTROL',
+                'response': 'cell_s에서 container-1 객체가 확인됩니다.',
+                'facts': [{'ref': 'cell_objects:cell_s', 'text': 'cell_s 카탈로그 객체: container-1@pinky(1개, 선택가능)', 'observed_at': 1000.}],
+                'created_at': 1000., 'completed_at': 9999999999., 'reason': None, 'action_admissible': False,
+            }))
+            inspector = page.locator('#omx-right-inspector details.omx-pipeline-disclosure')
+            inspector.locator('summary').click()
+            inspector.locator('[data-dual-cam-toggle="true"]').click()
+
+            page.locator('#assistant-quick-toggle').click()
+            page.locator('#assistant-input').fill('container-1 옮겨줘')
+            page.locator('#assistant-send').click()
+
+            chip = page.locator('[data-assistant-obj-chip="det:77:0"]')
+            expect(chip).to_be_visible()
+            assert page.locator('[data-assistant-obj-chip="det:77:1"]').count() == 0
+            chip.click()
+            expect(page.locator('#omx-right-inspector [data-cam-object="det:77:0"].ai-highlighted')).to_have_count(1)
+
+            page.locator('[data-assistant-obj-submit="true"]').click()
+            dialog = page.locator('dialog.ui-confirm')
+            expect(dialog).to_be_visible()
+            dialog.locator('ui-button[kind="irreversible"]').click()
+            expect(page.locator('#assistant-messages .assistant-receipt')).to_contain_text('ct-ai-1')
+
+            task_posts = [body for path, body in posts if path == '/api/fleet/pipeline/cell-tasks']
+            assert len(task_posts) == 1
+            sent = json.loads(task_posts[0])
+            assert sent['propose'] is False and sent['target_object']['catalog_id'] == 'container-1'
+            assert sent['target_object']['expected_cell_state_gen'] == 12
+            assert not errors
+        finally:
+            browser.close()

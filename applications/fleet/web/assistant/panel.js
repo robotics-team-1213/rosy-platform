@@ -5,6 +5,7 @@ import { randomUUID } from "/console/assets/uuid.js";
 import { createVoice } from "./assistant-voice.js";
 import { voicePlatform } from "/console/assets/app-runtime.js";
 import { KIND_META, elOf as mk, formatNavigationError, renderCommandCard } from "./assistant-command.js";
+import { createAssistantObjectsBridge, dispatchAssistantPickPlace, renderObjectPickPlaceCard } from "/console/assets/assistant-pick-place.js";
 
 const PROMPT_TEMPLATES = {
   status: (r) => r ? `${r} 현재 상태 알려줘` : "현재 전체 로봇 상태 알려줘",
@@ -52,7 +53,7 @@ export function createDialogue() {
 
 export function createAssistantPanel({
   scope, call, el, readSelection, readRobots = () => [], readPlaces = () => [],
-  onSelectRobot = null, onOpenRobot = null, confirm = null, log = null,
+  objectHighlight = null, onSelectRobot = null, onOpenRobot = null, confirm = null, log = null,
 }) {
   const dialogue = createDialogue();
   const panel = el("assistant-panel"), input = el("assistant-input"), list = el("assistant-messages");
@@ -62,6 +63,7 @@ export function createAssistantPanel({
   const promptButtons = panel ? [...panel.querySelectorAll("[data-assistant-prompt]")] : [];
   let identity = null, available = false, executionEnabled = false, timer = null, listening = false;
   let lastOpener = triggers[0] || null, selectedRobotId = null, lastSyncedFocus = null, listDirty = true;
+  const objBridge = createAssistantObjectsBridge({ scope, call, objectHighlight, getIdentity: () => identity, onChange: () => { listDirty = true; if (!panel?.hidden) paint(); } });
 
   const voice = createVoice({
     platform: voicePlatform,
@@ -132,9 +134,21 @@ export function createAssistantPanel({
     });
   }
 
+  async function submitObjectPickPlace(row, payload, opener) {
+    if (typeof confirm !== "function" || !available || !executionEnabled || !identity || dialogue.getNav(row.request_id)?.objSubmitting) return;
+    await confirm({
+      message: `선택 객체(${payload.object.catalog_id})를 ${payload.destSite}로 1회 집기·놓기 실행할까요?`,
+      kind: "assistant-pick-place", opener,
+      eligible: () => Boolean(identity && available && executionEnabled && !dialogue.getNav(row.request_id)?.objReceipt),
+      request: (owner) => dispatchAssistantPickPlace({ call, dialogue, row, payload, owner, log, randomUUID, onRender: renderMessages }),
+      onError: (e) => { dialogue.patchNav(row.request_id, { objSubmitting: false, objError: e?.message || "1회 집기·놓기 요청이 거부되었습니다." }); renderMessages(); },
+    });
+  }
+
   function renderMessages() {
     listDirty = false; list.replaceChildren();
     const places = Array.isArray(readPlaces()) ? readPlaces() : [];
+    const highlightedRef = objectHighlight?.get?.() ?? null;
     for (const row of identity ? dialogue.rows : []) {
       const item = mk("li"), userBubble = mk("div", "assistant-msg assistant-msg-user"), botBubble = mk("div", "assistant-msg assistant-msg-bot");
       userBubble.append(mk("p", "", "나: " + row.text));
@@ -152,13 +166,10 @@ export function createAssistantPanel({
         botBubble.append(facts);
       }
       const nav = dialogue.getNav(row.request_id) || {};
-      const card = renderCommandCard({
-        row, executionEnabled, available, identity, places, receipt: nav.receipt || null, errorText: nav.error || "",
-        submitting: Boolean(nav.submitting), draft: nav.draft || null,
-        onDraftChange: (draft) => dialogue.patchNav(row.request_id, { draft }),
-        onSubmit: (payload, opener) => { void submitNavigation(row, payload, opener); }, onOpenRobot,
-      });
+      const card = renderCommandCard({ row, executionEnabled, available, identity, places, receipt: nav.receipt || null, errorText: nav.error || "", submitting: Boolean(nav.submitting), draft: nav.draft || null, onDraftChange: (draft) => dialogue.patchNav(row.request_id, { draft }), onSubmit: (payload, opener) => { void submitNavigation(row, payload, opener); }, onOpenRobot });
       if (card) botBubble.append(card);
+      const objCard = renderObjectPickPlaceCard({ row, cellObjects: objBridge.get(), highlightedRef, executionEnabled, available, identity, receipt: nav.objReceipt || null, errorText: nav.objError || "", submitting: Boolean(nav.objSubmitting), draft: nav.objDraft || null, onHighlightObject: (ref) => objectHighlight?.set?.(ref, { source: "assistant" }), onDraftChange: (objDraft) => dialogue.patchNav(row.request_id, { objDraft }), onSubmit: (payload, opener) => { void submitObjectPickPlace(row, payload, opener); } });
+      if (objCard) botBubble.append(objCard);
       item.append(userBubble, botBubble); list.append(item);
     }
     list.scrollTop = list.scrollHeight;
@@ -173,14 +184,13 @@ export function createAssistantPanel({
       const result = await call("/api/fleet/assistant/status");
       if (owner !== identity) return;
       available = Boolean(result.available); executionEnabled = Boolean(result.execution_enabled);
-      status.textContent = !available ? "관제 AI 연결 준비 중입니다. 기존 관제 기능을 이용해 주세요."
-        : executionEnabled ? "상태 조회와 이동 명령 제안을 요청할 수 있습니다." : "상태 조회와 상황 설명을 요청할 수 있습니다.";
+      status.textContent = !available ? "관제 AI 연결 준비 중입니다. 기존 관제 기능을 이용해 주세요." : executionEnabled ? "상태 조회와 이동 명령 제안을 요청할 수 있습니다." : "상태 조회와 상황 설명을 요청할 수 있습니다.";
     } catch (error) {
       if (owner !== identity || error.name === "AbortError") return;
       available = false; executionEnabled = false;
       status.textContent = error.status === 403 ? "기명 운영자 접속이 필요합니다." : "관제 AI 연결 상태를 확인하지 못했습니다.";
     }
-    listDirty = true; paint();
+    listDirty = true; paint(); void objBridge.refresh();
   }
 
   async function poll(ticket) {
@@ -188,7 +198,7 @@ export function createAssistantPanel({
       const row = await call("/api/fleet/assistant/messages/" + encodeURIComponent(ticket.message.request_id));
       if (!dialogue.receive(ticket, row)) return;
       listDirty = true; paint();
-      if (dialogue.busy) timer = setTimeout(() => poll(ticket), 1000); else status.textContent = STATE_TEXT[row.state] || "상태 확인 필요";
+      if (dialogue.busy) timer = setTimeout(() => poll(ticket), 1000); else { status.textContent = STATE_TEXT[row.state] || "상태 확인 필요"; if (row.state === "ANSWERED") void objBridge.refresh(); }
     } catch (error) {
       if (!dialogue.failed(ticket) || error.name === "AbortError") return;
       status.textContent = "요청 상태를 확인하지 못했습니다. 같은 요청 확인을 눌러주세요."; el("assistant-retry").hidden = false;
@@ -202,7 +212,7 @@ export function createAssistantPanel({
       const row = await call("/api/fleet/assistant/messages", { method: "POST", body: JSON.stringify(ticket.message) });
       if (!dialogue.receive(ticket, row)) return;
       input.value = ""; listDirty = true; paint();
-      if (dialogue.busy) timer = setTimeout(() => poll(ticket), 1000); else status.textContent = STATE_TEXT[row.state] || "상태 확인 필요";
+      if (dialogue.busy) timer = setTimeout(() => poll(ticket), 1000); else { status.textContent = STATE_TEXT[row.state] || "상태 확인 필요"; if (row.state === "ANSWERED") void objBridge.refresh(); }
     } catch (error) {
       if (!dialogue.failed(ticket) || error.name === "AbortError") return;
       status.textContent = "접수 여부를 확인하지 못했습니다. 같은 요청 확인을 눌러주세요."; el("assistant-retry").hidden = false;

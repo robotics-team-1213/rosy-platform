@@ -66,6 +66,10 @@
       "path": "assistant/assistant-command.js",
       "media_type": "application/javascript"
     },
+    "assistant-pick-place.js": {
+      "path": "cell/assistant-pick-place.js",
+      "media_type": "application/javascript"
+    },
     "assistant.css": {
       "path": "assistant/panel.css",
       "media_type": "text/css"
