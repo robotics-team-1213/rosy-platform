@@ -95,6 +95,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.confirm_named_precision = None
         self.check_named_correction = None
         self.auto_named_correction = None
+        self.cell_topview = None  # 2026-11-27: CellTopview for the cell stops it covers (S3), else the SLAM verdict
         #: D-550 10: renews the robot's leased trip goal each step (console.renew_goal_leases).
         self._renew_lease = renew_lease
         #: Edges an operator or the traffic layer closed; a remaining one means "replan" (D-489 9).

@@ -40,11 +40,13 @@ _RUNNING = ("NAVIGATING", "PLANNING")
 _LOG = logging.getLogger("fleet.server.trip_runner")
 
 
-def _excluded(live, index: int, state) -> bool:
+def _excluded(runner, live, index: int, state) -> bool:
     arc = live.arc(index)
     places = getattr(live.graph, "places", None) or {}
     charge = any(getattr(places.get(p), "kind", None) == "charge" for p in (arc.start_place, arc.end_place))
+    topview = getattr(runner, "cell_topview", None)  # the top-view stop sits off the lane centre by design
     return (charge or arc.edge_id.startswith("bay_") or live.view["detail"].get("parking_handoff") is not None
+            or (topview is not None and topview.covers(arc.end_place))  # the approach into it, not the way out
             or (isinstance(state, dict) and state.get("mode") == "DOCKING"))
 
 
@@ -76,7 +78,7 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
         out.update(kind=kind, reason=reason, **fields)
         return False
 
-    if _excluded(live, index, state):
+    if _excluded(runner, live, index, state):
         out["slow"] = False     # D-972: no judgement and no action on the bay leg
         return note("excluded")
     if not isinstance(state, dict):
