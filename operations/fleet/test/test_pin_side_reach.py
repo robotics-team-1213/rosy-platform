@@ -3,10 +3,9 @@ bays, 0.226 m apart, each pinned its neighbours' bay lanes and all three waited 
 import math
 from types import SimpleNamespace as NS
 
-from core_common.robot_body import PINKY_PRO
 import pytest
 
-from core_common.robot_body import MARGIN_M
+from core_common.robot_body import MARGIN_M, PINKY_PRO
 from fleet.traffic.lane_traffic_helpers import units_under_pose
 from rosy.world.state.projections.map_pose import MapPose
 from test_lane_traffic import _ticks, _trip
@@ -86,7 +85,6 @@ def test_through_the_table_only_a_standing_robot_gets_the_body_reach():
     _ticks(runner, fleet, n=2)
     assert runner.traffic.pinned() == []               # the same pose again: it stands, and its body is off the lane
     for step in range(3):                              # moved 2 cm each period (a jog, a dock): u again
-        fleet.p["a"].pose = MapPose(*_beside(east, gap + 0.002 * (step % 2)), "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
         x, y, yaw = _beside(east, gap)
         fleet.p["a"].pose = MapPose(x + 0.02 * (step + 1) * math.cos(yaw), y + 0.02 * (step + 1) * math.sin(yaw), yaw,
                                     "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
