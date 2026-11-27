@@ -736,6 +736,12 @@ def test_a_rested_folded_arm_is_not_extended_when_the_fold_rule_agrees(tmp_path,
     assert oi.facts(json.loads(s.read_text()), S_HOME, "arm_s")["folded"] is False  # no library: HOME_TOL alone, as before
 
 
+def test_the_loose_fold_ranges_alone_do_not_fold_an_arm_far_from_its_home(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, [19.0] + REST[1:], {"chunks": {"home": [S_HOME]}})  # inside FOLD_TOL pan 20, outside REST_TOL
+    assert oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", {"chunks": {"home": [S_HOME]}})["folded"] is False
+
+
 def test_a_really_extended_arm_with_torque_off_still_opens_the_guarded_fold_incident(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     s = _torque_off_session(tmp_path, [0.22, -20.0, 20.0, 49.8, -4.7, 53.6], {"chunks": {"home": [S_HOME]}})

@@ -34,7 +34,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_decisions  # noqa: E402
 import omx_incident_reassess  # noqa: E402
-from cell_job_peer_health import fold_basis, live_folded  # noqa: E402
 import push_replay  # noqa: E402
 from omx_incident_fleet import (  # noqa: E402
     INCIDENTS,
@@ -55,7 +54,7 @@ from omx_incident_fleet import (  # noqa: E402
     send,
     upload_evidence,
 )
-from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
+from omx_incident_reading import rests_folded, rows, stop_reading  # noqa: E402  (split for size; names kept here)
 from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold, note_auto_clear  # noqa: E402
 
 HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electrical shock", 32: "overload"}
@@ -160,7 +159,7 @@ def facts(session: dict, home=None, arm: str | None = None, library=None) -> dic
             "last_command": last_row.get("command"), "flagged_total": len(flagged), "fault_records_total": len(kept),
             "torque_after": session.get("torque_after") or {}, "caps_restored": session.get("caps_restored"),
             "folded": bool(home and last and all(abs(a - b) <= HOME_TOL for a, b in zip(last[:n_arm], home[:n_arm])))
-            or bool(last and fold_basis(library) == "calibrated" and live_folded({"state": last}, library) is True),  # rested: arm_s elbow 50 -> 55 torque OFF
+            or rests_folded(last, home, library),
             "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "person_needed", "t")}
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
