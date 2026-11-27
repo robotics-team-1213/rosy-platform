@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from fleet.server.named_stop_map_pose import read_precision_pose_status
@@ -70,6 +72,21 @@ async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -
         return False
     runner._save(live)
     return True
+
+
+async def auto_rebind_before_dispatch(runner, live, robot_id: str) -> None:
+    """D-1022: one auto-rebind attempt (map_binding_auto) for a robot whose map was redrawn in the same frame,
+    before this trip has sent anything; the robot stands then. A mid-goal grid change still stops the trip."""
+    rebind = getattr(runner, "auto_rebind", None)
+    if (rebind is None or not runner.config.map_auto_rebind or runner._robot_state is None
+            or live.last_goal is not None or live.active_route is not None or live.sent is not None
+            or any(live.view["detail"].get(k) for k in ("goal_frame", "nav2_route"))):
+        return
+    try:  # the grid read is large: its own bound, not the 1.5 s port timeout
+        state = await runner._call(runner._robot_state(robot_id))
+        await asyncio.wait_for(rebind(robot_id, state or {}), 8.0)
+    except Exception:  # noqa: BLE001 - no proof, no rebind: the trip stops as before
+        pass
 
 
 async def hold_unreachable_pre_dispatch(runner, live, exc) -> bool:

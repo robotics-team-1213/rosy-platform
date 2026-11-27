@@ -327,6 +327,13 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
         renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
         align_gate=station_align_gate(app.state))
+    from fleet.server.map_binding_auto import AutoRebind, camera_sighting  # D-1022: same-frame grid swaps re-bind
+
+    async def fresh_state(robot_id):
+        return (await console._gather_state(robot_id))[0]
+
+    trip_runner.auto_rebind = AutoRebind(site_maps, grid=lambda robot_id: console.clients()[robot_id].map(),
+                                         state=fresh_state, camera=partial(camera_sighting, map_pose))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
 
     async def read_trip_navigation(robot_id, run_id):
