@@ -411,7 +411,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             detail["wait_prefix"] = {"state": "held", "reason": why, "waiting_on": wait["waiting_on"]}
     if prefix is not None:
         end_index = prefix
-    site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()))
+    site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()), here=(pose.x, pose.y))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
         if (frame_err or {}).get("binding") == "ROBOT_NOT_LOCALIZED":
