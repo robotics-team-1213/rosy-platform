@@ -94,11 +94,13 @@ controller_server:
       # 경로 추종 (Lookahead, 시선 두기)
       # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 주시 0.12~0.18 로 10-12 cm 안쪽으로 질러 갔다.
       # 호를 자르는 양은 L^2/(8R): 0.09 m 면 0.8 cm. 최소 주시는 목표 공 0.08 보다 커야 RPP 가 제자리 회전만 하지 않는다.
-      lookahead_dist: 0.09                   # [m] 기본 전방 주시 거리
+      # 11-27 벽 옆 지그재그: 고정 0.09 는 횡오차 2 cm 에 조향이 포화(이득 2/L^2 ≈ 247)했다. 속도 비례로 바꿔
+      # U턴(RPP 곡률 감속·Fleet 0.08 상한 → v≈0.04)에서는 0.09, 직선(v 0.06~0.08)에서는 0.12~0.16 으로 늘린다.
+      lookahead_dist: 0.12                   # [m] 기본 전방 주시 거리
       use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
-      lookahead_time: 0.6                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
-      min_lookahead_dist: 0.09               # [m] 최소 주시 거리 (xy_goal_tolerance 0.08 < 0.09)
-      max_lookahead_dist: 0.10               # [m] 최대 주시 거리
+      lookahead_time: 2.0                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
+      min_lookahead_dist: 0.09               # [m] 최소 주시 거리 (xy_goal_tolerance 0.03 < 0.09)
+      max_lookahead_dist: 0.16               # [m] 최대 주시 거리
       curvature_lookahead_dist: 0.09         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
       use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
 
@@ -167,7 +169,8 @@ controller_server:
       stateful: true
       # 차선 다음 점은 0.12 m 다. 당근이 이 공 안이면 RPP 는
       # 직진하지 않고 목표 각으로만 돈다. 그 회전에 옆 신호등과 벽이 정지로 읽힌다.
-      xy_goal_tolerance: 0.08                    # [m] 목표 지점 반경 0.08 m 안에 들어오면 도착 인정 (RemovePassedGoals 0.05 보다 큼: 마지막 목표만 이 공으로 도착 판정)
+      # 11-27 사용자: rosy_45가 정지선보다 약 7 cm 덜 감(0.08 공 안에서 도착 인정). 0.03 으로 좁힘(주시 0.09 보다 작아 제자리 회전만 하지 않음).
+      xy_goal_tolerance: 0.03                    # [m] 목표 지점 반경 0.03 m 안에 들어오면 도착 인정
       yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
 
     # ==========================================================
@@ -266,7 +269,7 @@ global_costmap:
       robot_base_frame: base_footprint
       #robot_radius: 0.22
       footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
-      resolution: 0.05
+      resolution: 0.025                     # 11-27: 0.05 격자 계획 경로에 5 cm 계단이 생겨 직선에서 조향을 흔들었다
       # 기동 경쟁 방어. nav2 는 활성화하며 map->base TF 를 기다리는데, 그 TF 는 AMCL 이
       # 첫 스캔을 처리한 뒤에야 나온다. 느린 기계(RTF 0.3)에서는 그것이 기본 대기시간을
       # 넘겨 global_costmap 이 활성화에 실패하고, planner_server 가 함께 죽는다 - 목표를

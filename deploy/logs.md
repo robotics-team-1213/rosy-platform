@@ -5152,3 +5152,28 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음(auto.neighbour_clear_mm·min_jaw_margin_mm·finger_mm 기본값, outside_blocks 그대로)
 - 결정: 2026-11-27 임시판 인식 패널 안전 조건
 - 교훈: 없음(셀 설정 값·판 기준점 측정·실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 정책 실행기 벨트 컨테이너 자세 입력(Panel L 13칸 environment_state)
+
+- 변경: 체크포인트의 `ENV_STATE.json`이 `belt_dx_cm`·`belt_dy_cm`·`belt_yaw_x5`를 끝 3칸으로 선언할 때만 `cell_lerobot_shadow`가 13칸(목표 one-hot 10 + 자세 3)을 만든다. 선언이 없거나 다르면 기존 동작이다. `cell_belt_pose.py`가 동작 전 top 프레임 한 장에서 컨테이너를 찾아(`omx_real2sim` `blobs`·`lane_blobs`), 번들의 top 카메라 모델로 fixture 좌표에 역투영하고 `Layout(preset).sites["belt"]`와의 차이를 낸다. 인식 실패·0개·2개 이상·크기 불일치·기준 없음은 `BELT_POSE_UNKNOWN`, 학습 범위+여유 밖은 `BELT_POSE_OUT_OF_RANGE`로 팔을 움직이지 않고 거절한다. 값을 자르지 않는다. `cell_policy_drive`가 세 숫자와 근거(중심·오프셋 mm, yaw, 크기 점수, 프레임 sha256)를 `policy-drive.jsonl`과 결과에 남긴다. 목표 인자 검사를 `cell_policy_goals.cli_goal`로 옮겨 drive를 400줄 아래로 유지했다(동작 동일).
+- 증거: `test/test_omx_policy_belt_pose.py`(합성 프레임 오프셋·yaw 접기, 범위 밖·인식 실패 거절, 10칸 불변, dry run 기록, 실물 run 4·6 top 프레임), 원격 `test/test_omx_lerobot_shadow.py`·`test/test_omx_policy_drive.py` 외
+- gate 변화: 없음. 가드 한계·기존 게이트 그대로, 새 거절만 더함
+- 결정: 팔 좌표·셀 보정 지도 대신 시뮬 top 카메라 모델로 fixture 좌표를 직접 얻는다(시뮬 팔 받침은 사진 추정값, arm_a 17 mm 차이 기록)
+- 후속(조정 세션 검토): 셀에는 tools/sim이 배포되지 않으므로 런타임을 자립시켰다. `ENV_STATE.json` belt_reference가 belt_site·belt_top_m·container·footprint_tol_m을 반드시 선언하고 런타임은 그 값만 쓴다. 검출은 `cell_belt_vision.py`(omx_real2sim 사본, 원본 대조 시험)로 한다. 선언 생성기 `tools/sim/omx_env_state.py`를 더했고, `package_cell_bundle`이 파일을 복사하며 policy_revision은 그대로임을 시험했다.
+- 교훈: 없음. 미해결(조정 세션 관찰 포함: 벨트에 가이드가 없어 컨테이너가 폭 80 mm 안 한쪽 가장자리에 놓임, 학습 범위 dy ±8 mm가 벨트 폭을 덮지 못함): 11-27 실물 프레임의 벨트 컨테이너는 시뮬 벨트 사이트에서 dy 약 −34 mm(1~5회차)·−49 mm(6회차)라 Panel L 범위(±8 mm) 밖이다
+
+## 2026-11-27 · uncommitted · OMX 자동 갱신의 신뢰 출처를 서명된 green-main 포인터로(GitHub REST API 대신)
+
+- 변경: omx_autoupdate.py에 trust_source(platform|github)를 더했다. platform이면 omx_autoupdate_platform.PlatformHost가 서명 PC의 green-main 포인터(ed25519, candidate_signing 봉투)에서 머리 커밋, ci-result, 커밋 서명 여부를 읽는다. 조상 확인은 커밋만 받은 로컬 git 미러로 한다. 포인터가 1시간보다 오래되면 거절한다. 포인터나 미러를 못 읽으면 transient로 끝나고 아무것도 바꾸지 않는다. 생산자는 deploy/site/green_main_pointer.py다. 검증기가 없는 옛 릴리스에서는 그 회차만 github로 받는다. platform_url이 없는 설정은 그대로 github다.
+- 증거: 원격 pytest test_omx_autoupdate*.py, test_site_green_main_pointer.py, test_model_pc_autoupdate.py, test_update_gate.py 325 passed(e5574a6df9). 서명 검증을 지운 변이에서 새 시험 2개 빨간불. 실제 저장소에 대한 생산자 --dry-run
+- gate 변화: 없음(ci-result 통과, 후손, hotfix floor, smoke, 셀 유휴 관문 그대로, 확인 주체만 서명 PC로 옮김)
+- 결정: D-805 7 '서명 키가 준비되면 같은 서명으로 맞춘다'의 실행. 셀 설정과 서명 PC 타이머는 병합 뒤 적용
+- 교훈: 없음(셀 수용 전)
+
+## 2026-11-27 · uncommitted · OMX cell-task-worker principal and motion worker (D-1081)
+
+- 변경: ADR D-1081 records the cell-task-worker principal, strict key allowlist and rollout order (cell API and worker first, switch after).
+- 증거: docs only; no host contacted
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

@@ -222,3 +222,32 @@ def test_road_speed_slows_a_departed_robot_and_caps_tight_curves():
     assert _grant(site, straight, {"lane_departure": {"slow": True}}) == (realign.REALIGN_SLOW_MPS, "lane_realign")
     limit, _ = _grant(site, [dict(edge_id="loop_right", forward=True, s_from=0., s_to=.4)])
     assert limit == pytest.approx(.08)
+
+
+@pytest.mark.parametrize("after", ["camera_stale", "location", "near_edge"])
+def test_the_slow_cap_is_lifted_when_no_fresh_departure_has_been_seen_for_a_while(after):
+    rig = Rig()
+    assert [rig.tick(0.06)[1]["slow"] for _ in range(2)][-1] is True
+
+    def tick():   # no fresh evidence of a departure any more
+        if after == "camera_stale":
+            return rig.tick(0.06, age=2.0)
+        if after == "location":
+            return rig.tick(0.06, state={"localization": {"state": "SUSPECT"}})
+        return rig.tick(0.03, yaw_off=math.radians(20))   # inside the lane, not aligned yet
+
+    slow = [tick()[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
+    assert all(slow[:int(realign.SLOW_EVIDENCE_S / 0.5) - 1]) and slow[-1] is False   # kept until 9.5 s, lifted at 10 s
+    assert rig.tick(0.06)[1]["slow"] is False and rig.tick(0.06)[1]["slow"] is True   # a new departure slows again
+
+
+def test_a_departure_that_lasts_keeps_the_slow_cap():
+    rig = Rig()
+    slow = [rig.tick(0.06)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 6)]
+    assert slow[0] is False and all(slow[1:])
+
+
+def test_a_record_from_before_the_expiry_field_does_not_keep_the_cap():
+    rig = Rig()
+    rig.live.view["detail"]["lane_departure"] = {"kind": "departed", "slow": True, "ticks": 2}   # no departed_at
+    assert rig.tick(0.06, age=2.0)[1]["slow"] is False

@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-11-27 · uncommitted · OMX cell-task-worker principal and motion worker (D-1081)
+- 2026-11-27 · uncommitted · OMX 자동 갱신의 신뢰 출처를 서명된 green-main 포인터로(GitHub REST API 대신)
+- 2026-11-27 · uncommitted · OMX 정책 실행기 벨트 컨테이너 자세 입력(Panel L 13칸 environment_state)
 - 2026-11-27 · uncommitted · OMX 임시판 칸 사전지식(cell_slot_prior)
 - 2026-11-27 · uncommitted · OMX 팔 사고 해제 자동 실행, 셀 기본 기준 99
-- 2026-11-26 · uncommitted · OMX 정책 실행 1회 제출 작업 cell_policy_run
-- 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 12px 미만 글자 전부 12px 이상
-- 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 결정 반영(녹화 중지 표기, 자동 복구 우선, 녹화 시작 중립, 공용 값 일치 시험, 좁은 폭 표시)

@@ -1,0 +1,139 @@
+{
+ "id": "incident_held_planned_box",
+ "evidence": "synthetic readiness on belt-xyz/arm_b-belt-pallet-20261127-140704-5ca247.json",
+ "note": "A good belt box but the arm has an open incident hold: no motion verb, no model verb clears it.",
+ "raw": {
+  "arm": "arm_b",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_b_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "belt",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "belt",
+       "to": "pallet",
+       "attempts": [
+        {
+         "observed": 1,
+         "refused": [],
+         "chosen": {
+          "object": "container-2",
+          "colour": "red",
+          "closing_axis_offset_deg": 85.5,
+          "bias_mm": [
+           0,
+           0
+          ],
+          "bias_region": null,
+          "approach_m": 0.045
+         },
+         "plan": {
+          "pick": {
+           "x": 0.1863,
+           "y": 0.1784,
+           "z": -0.0571,
+           "yaw_deg": -85.2
+          },
+          "place": {
+           "x": 0.153,
+           "y": -0.128,
+           "z": 0.005,
+           "yaw_deg": -90
+          }
+         },
+         "pivot_needed": "no clear pivot point within reach of the object",
+         "long_axis_deg": -89.7
+        }
+       ],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 0.7,
+        "inliers": 596
+       },
+       "result": "planned"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": true,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null,
+     "incident_reason": "torque"
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}

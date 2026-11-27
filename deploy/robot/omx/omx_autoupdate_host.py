@@ -112,14 +112,18 @@ def _clear_ephemeral_mirror(mirror: Path) -> None:
 
 def _release_paths(paths: list[str]) -> list[str]:
     out = list(paths)
-    if "deploy/robot/omx" in out and "contracts/learning/src" not in out:
-        out.append("contracts/learning/src")
+    if "deploy/robot/omx" in out:  # cell_collect_plan's contracts; the platform pointer's verifier
+        out += [p for p in ("contracts/learning/src", "deploy/site/candidate_signing.py") if p not in out]
     return out
 
 
 def _incomplete_release(release: Path, paths: list[str]) -> bool:
     """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
     return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
+
+
+class SourceUnavailable(Exception):
+    """The platform trust source could not be read or verified; the run changes nothing (omx_autoupdate_platform)."""
 
 
 class Host:

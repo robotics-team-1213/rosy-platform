@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence, fold_context, start_record
+from cell_fold_rehome import rehomed
 PAN_DETOURS = (5.0, -5.0, 10.0, -10.0)
 SETTLE_TOL = 3.0  # chunk_runner.SETTLE_TOL (kept here so the plan is testable without the runner)
 HOLDING_MARGIN = 4.0  # jaws stopped this far above their closing command are on something (cell_transfer.STILL_HOLDING_UNITS)
@@ -78,7 +79,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
             held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
-            require_empty_gripper: bool = False, hold_reason: str | None = None) -> dict:
+            require_empty_gripper: bool = False, hold_reason: str | None = None, rehome=None) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names, context)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it. hold_reason: the
     fault of the hold that started this fold (None: the live hold's own fault)."""
@@ -230,7 +231,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             at = known["state"] = _ok_state(parked)
             note({"step": "fold_from_hold", "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
                   "error": parked.get("error"), "contact": parked.get("contact")})
-            if park_succeeded(parked) and at is not None and folded(at, home):
+            if park_succeeded(parked) and (at := rehomed(cell, rehome, at, home, settle_tol=SETTLE_TOL, rest_tol=REST_TOL, note=note) or at) is not None and folded(at, home):
                 release()
                 return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps,
                         "corridor": verdict, "unlatched_live_hold": True}
@@ -249,7 +250,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
               "error": parked.get("error"), "contact": parked.get("contact")})
         ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
-        if ok_park and at is not None and folded(at, home):
+        if ok_park and (at := rehomed(cell, rehome, at, home, settle_tol=SETTLE_TOL, rest_tol=REST_TOL, note=note) or at) is not None and folded(at, home):
             release()
             return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
                     "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}

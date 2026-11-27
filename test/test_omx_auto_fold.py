@@ -339,6 +339,7 @@ def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_i
     monkeypatch.setattr(cell_corridor, "check", lambda *a, **k: {"clear": True, "low": [], "high": [], "off_map": 0, "off_surface": 0})
     monkeypatch.setattr(cell_corridor, "runs", lambda pts: (pts, []))
     monkeypatch.setattr(cell_corridor, "corridor", lambda *a, **k: "lane")
+    monkeypatch.setattr("cell_corridor_own.with_outside", lambda out, *a, **k: out)  # the lane is a stub here
     monkeypatch.setattr(cell_space, "Space", lambda *a: SimpleNamespace(
         reserve=lambda *a, **k: {"ok": True}, release=lambda *a: None))
     rc = af.main(["--supervised", "--arm", "arm_s", "--config", str(cfg), "--library", str(lib),

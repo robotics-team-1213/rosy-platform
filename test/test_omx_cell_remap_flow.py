@@ -207,3 +207,32 @@ def test_a_sibling_that_had_drifted_from_the_old_binding_stays_held(tmp_path):
     assert cb.sync_siblings(tmp_path / "cell-arm-b-stack.json", stack, cal, old) == {"synced": [], "held": ["cell-arm-b-policy.json"]}
     assert json.loads(policy_path.read_text(encoding="utf-8")) == drifted
     assert cb.sync_siblings(tmp_path / "cell-arm-b-stack.json", stack, cal, "") == {"synced": [], "held": ["cell-arm-b-policy.json"]}
+
+
+def test_move_regions_carries_every_pixel_region_not_only_surface_and_auto_roi():
+    """2026-11-27 arm_s: after a camera move the remap left belt.detect_roi, moving_px, markings_px and home_jaws_px at their old
+    pixels; detection then read a strip above the belt and every pick dry run saw 0 objects."""
+    cv2 = pytest.importorskip("cv2")
+    rng = np.random.default_rng(7)
+    ref = cv2.GaussianBlur((rng.random((480, 640)) * 255).astype(np.uint8), (5, 5), 0)
+    dx, dy = 12, 25
+    cur = cv2.warpAffine(ref, np.float32([[1, 0, dx], [0, 1, dy]]), (640, 480))
+    site = {"surface_px": [[300, 100], [600, 100], [600, 180], [300, 180]], "auto_roi": [290, 90, 610, 190],
+            "detect_roi": [400, 90, 610, 190], "moving_px": [290, 80, 610, 200],
+            "markings_px": [[[300, 60], [430, 60], [430, 200], [300, 200]]], "home_jaws_px": [360, 130]}
+    config = {"sites": {"belt": site, "bare": {"surface_px": [[50, 300], [90, 300], [90, 340]]}},
+              "scene_ignore_px": [[100, 100, 150, 200]], "calibrate": {"scene_ignore_px": [[200, 300, 260, 380]]}}
+    out = cc.move_regions(config, ref, cur)["sites"]["belt"]
+
+    def near(got, want):
+        return np.allclose(np.array(got, float), np.array(want, float) + np.resize([dx, dy], np.array(want).shape), atol=2)
+
+    assert all(near(out[k], v) for k, v in {"surface_px": [[300, 100], [600, 100], [600, 180], [300, 180]], "auto_roi": [290, 90, 610, 190],
+                                            "detect_roi": [400, 90, 610, 190], "moving_px": [290, 80, 610, 200],
+                                            "home_jaws_px": [360, 130]}.items()), out
+    assert near(out["markings_px"][0], [[300, 60], [430, 60], [430, 200], [300, 200]])
+    assert near(config["scene_ignore_px"][0], [100, 100, 150, 200]) and near(config["calibrate"]["scene_ignore_px"][0], [200, 300, 260, 380])
+    assert "detect_roi" not in config["sites"]["bare"]  # a site without the key gains none
+    gone = cc.move_regions({"sites": {"edge": {"auto_roi": [600, 440, 639, 479], "detect_roi": [630, 470, 639, 479]}}},
+                           ref, cv2.warpAffine(ref, np.float32([[1, 0, 30], [0, 1, 30]]), (640, 480)))["sites"]["edge"]
+    assert "detect_roi" not in gone and "auto_roi" in gone  # pushed out of the frame: dropped, not left as an empty box

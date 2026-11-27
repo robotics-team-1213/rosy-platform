@@ -173,6 +173,8 @@ def build_cell_readiness(
             "active_task_id": st.get("active_task_id"),
         }
     auth = gov.snapshot()
+    from fleet.server.pipeline.pipeline_cell_objects import latest_cell_state_gen
+
     core = {
         "schema": "rosy.fleet-cell-readiness.v1",
         "observed_at": round(time.time(), 3),
@@ -183,6 +185,7 @@ def build_cell_readiness(
         "authority_epoch": auth["authority_epoch"],
         "dispatch_generation": auth["dispatch_generation"],
         "stop_generation": auth["stop_generation"],
+        "cell_state_gen": latest_cell_state_gen(app, cell_id),
         "arms": arms,
         "blocking_refusals": refusals,
         "counts": {
@@ -520,9 +523,16 @@ def admit_cell_task_guarded(
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         if task.get("status") != "PROPOSED":
             raise HTTPException(409, detail={"code": "CELL_TASK_NOT_PROPOSED"})
+        if (task.get("motion") or {}).get("kind") == "push":
+            raise HTTPException(409, detail={"code": "PUSH_NOT_EXECUTABLE"})  # a push has no execution or completion path yet
         proposer = str(task.get("proposer") or "").strip()
         if not proposer or proposer == approver:
             raise HTTPException(403, detail={"code": "SELF_APPROVAL_FORBIDDEN"})
+        from fleet.server.pipeline.pipeline_target_object import check_target_object_fresh
+
+        ok_tgt, tgt_code = check_target_object_fresh(app, task)
+        if not ok_tgt:
+            raise HTTPException(409, detail={"code": tgt_code})
         rdy = build_cell_readiness(
             app, task["cell_id"], active_map_fn=active_map_fn, resolve_cells_fn=resolve_cells_fn,
             is_human_detected_fn=is_human_detected_fn, arm_live_catalog_fn=arm_live_catalog_fn, gov=gov,

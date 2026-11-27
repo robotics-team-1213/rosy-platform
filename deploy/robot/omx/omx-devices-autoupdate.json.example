@@ -1,6 +1,10 @@
 {
   "kind": "service",
   "idle_gate": "cell",
+  "trust_source": "platform",
+  "platform_url": "file:///home/<user>/.local/state/rosy/green-main/green-main.json",
+  "platform_public_key": "~/.config/rosy/green-main-ed25519.pub.pem",
+  "platform_key_id": "rosy-green-main-v1",
   "repo_url": "https://github.com/<owner>/rosy-platform.git",
   "github_repo": "<owner>/rosy-platform",
   "branch": "main",

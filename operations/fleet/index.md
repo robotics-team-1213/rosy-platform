@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
+- 2026-11-27 · uncommitted · Fleet cell-task motion (free_pick) and D-1081
+- 2026-11-27 · uncommitted · D-1082 Nav2 도로 trip 정지 복구
 - 2026-11-27 · uncommitted · pr3-custody-correction-step-resume: Fleet R custody release, precision correction clearance, robot step nudge, and explicit trip resume controls
 - 2026-11-27 · uncommitted · pr2-faults-panel-and-command-parity
 - 2026-11-27 · uncommitted · pr0-confirm-idempotency-gates
-- 2026-11-27 · uncommitted · pr1-stop-zone-overlay-and-next-steps
-- 2026-11-26 · 193197c657 · zone blueprint drawn on the active site map from station-zones YAML

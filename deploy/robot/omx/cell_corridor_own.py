@@ -12,6 +12,11 @@ gripper resting at a surface's edge counted its own footprint as unseen. Two mea
   `reference_top_sha256`). What changed is an object, what did not is the cell's own furniture. A moved camera or
   changed light reads as changed, so it refuses. shortcut: an object the colour of what it covers, or one already in
   the reference, is not seen; upgrade with depth. No bound reference: the colour rule.
+- `low_cargo` (the fold only, when the config names a `catalog_path`): a catalogue object whose top the depth camera
+  measures well under the travel floor may pass under high travel, as in the placement check; cargo on the ship lies
+  under every fold path (2026-11-27 runs 7-9). A catalogue match alone cannot tell a stack's height (a two-tier stack
+  matched as one container), so no depth, no match or a tall top excuses nothing.
+- `with_outside` (the fold only): a lane that leaves the ROI is unseen there, not clear.
 """
 from __future__ import annotations
 
@@ -23,6 +28,9 @@ import numpy as np
 
 import cell_params as prm
 
+PAD_PX = 1024  # wider than any top frame; shortcut: a lane further than this from the ROI is not counted
+KNOWN_MARGIN_M = 0.015  # a known object's measured top stays this far under the travel floor (corridor.clear_z_m)
+DEPTH_FRAMES = 3  # every one must agree; taken fresh at each look
 OWN_HALF_MM = 40.0  # a link's half width from above with its wrist camera; arm_a's real silhouette, 2026-11-27
 
 
@@ -66,6 +74,84 @@ def own_mask(config: dict, site: str, to_px, poses, shape, roi, tcp_x_m: float |
         for p in line:
             cv2.circle(out, (int(p[0]), int(p[1])), int(round(radius)), 1, -1)
     return out
+
+
+def low_cargo(config: dict, calibration: dict, img, roi, shape, params=None):
+    """0/1 mask (ROI-sized) of catalogue objects whose top, by the depth camera, is at least KNOWN_MARGIN_M under the
+    travel floor on every frame; None without `config["catalog_path"]` or a usable depth read. A surface whose bare
+    height the depth does not find where the calibration puts it (`cell_free_source`'s own check) excuses nothing on
+    it. shortcut: a deck mostly covered by cargo has no bare height and so excuses nothing; upgrade with a table
+    reference outside the deck."""
+    import cv2
+
+    import cell_corridor
+    import cell_free_source as fs
+    import cell_objects
+    import cell_pivot
+
+    try:
+        path = config.get("catalog_path")
+        frames = fs._depth_frames(config, DEPTH_FRAMES)[0] if path else None
+        if frames is None or not len(frames):
+            return None
+        camera, catalog = config["cameras"]["top"], cell_objects.load_catalog(Path(str(path)).expanduser())
+        maps = [fs._frame_heights(f, img, camera) for f in frames]
+        if any(m[0] is None or m[3] is None for m in maps):
+            return None
+        floor_mm = (prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M) - KNOWN_MARGIN_M) * 1000.0
+        out, done = np.zeros(shape[:2], np.uint8), []
+        for name, site in (config.get("sites") or {}).items():
+            poly = site.get("surface_px") if isinstance(site, dict) else None
+            if not poly or poly in done:
+                continue
+            done.append(poly)
+            base_mm = float(site["surface_z"]) * 1000.0
+            over_mm = float(camera["height_m"]) * 1000.0 - base_mm  # the camera over this bare surface, as calibrated
+            bare = [fs._mode(fs._sample(m[0], m[1], fs._polygon_pts(poly, img.shape))) for m in maps]
+            if any(h is None or share < fs.MODE_SHARE or abs(m[3] - h - over_mm) > fs.REF_TOL_MM
+                   for (h, share), m in zip(bare, maps)):
+                continue
+            for o in cell_objects.detect(img, roi, cell_pivot.map_record(calibration, name), camera, catalog,
+                                         site.get("surface_z", 0.0), params, poly, site.get("surface_lab")):
+                if not (o.get("matched") and o.get("hull_px")):
+                    continue
+                hull = np.asarray(o["hull_px"], np.int32)
+                face = np.zeros(img.shape[:2], np.uint8)
+                cv2.fillPoly(face, [hull], 1)
+                ys, xs = np.nonzero(face)
+                tops = [fs._sample(m[0], m[1], np.c_[xs, ys].astype(float)) for m in maps]
+                if any(len(t) < max(fs.MIN_FACE_PX, len(xs) // 2) for t in tops):
+                    continue  # depth holes: not measured
+                # the 95th percentile: a hand or a taller neighbour over part of the outline counts as its top
+                if max(base_mm + float(np.percentile(t, 95)) - h for t, (h, _) in zip(tops, bare)) <= floor_mm:
+                    cv2.fillPoly(out, [hull - [roi[0], roi[1]]], 1)
+        return out
+    except Exception:  # noqa: BLE001 - a broken catalogue, map or depth read excuses nothing; the fold judges as before
+        return None
+
+
+def fold_view(config: dict, calibration: dict, site: str, to_px, pose, img, shape, roi, tcp_x_m=None, params=None) -> dict:
+    """What only the fold tells `cell_corridor.check`: its own links and the cargo measured low enough to pass over."""
+    return {"own": own_mask(config, site, to_px, (pose,), shape, roi, tcp_x_m),
+            "known": low_cargo(config, calibration, img, roi, shape, params)}
+
+
+def with_outside(verdict: dict, tcp, to_px, shape, roi, params=None) -> dict:
+    """The verdict with the lane's pixels outside the ROI counted as unseen. `cell_corridor.corridor` draws only inside
+    the ROI, so what leaves it was never looked at: arm_a's fold on 2026-11-27 16:51 passed a belt-sized ROI with
+    95 % of its lane outside it."""
+    import cell_corridor
+
+    get = lambda k, d: prm.get(params, k, d)  # noqa: E731
+    low, high = cell_corridor.runs(tcp, get("corridor.clear_z_m", cell_corridor.CLEAR_Z_M),
+                                   get("corridor.base_m", cell_corridor.BASE_M))
+    h, w = shape[:2]
+    lane = cell_corridor.corridor(low + high, to_px, (h + 2 * PAD_PX, w + 2 * PAD_PX),
+                                  (roi[0] - PAD_PX, roi[1] - PAD_PX),
+                                  get("corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
+    lane[PAD_PX:PAD_PX + h, PAD_PX:PAD_PX + w] = 0
+    outside = int(lane.sum())
+    return dict(verdict, clear=False, off_surface=verdict["off_surface"] + outside) if outside else verdict
 
 
 def _reference(config: dict, calibration: dict | None, shape):

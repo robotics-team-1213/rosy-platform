@@ -13,6 +13,7 @@ from fleet.server.berth_parking_helpers import BAY_DOCK_SPECS
 from fleet.server.trip_ports import TripError
 from fleet.server.named_stop_map_pose import read_precision_pose
 from fleet.hub.hub import HubError
+from fleet.swarm.transport import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 
 
@@ -27,6 +28,28 @@ def rear_bay(graph, destination):
         raise TripError(422, "CHARGE_BAY_APPROACH_UNAVAILABLE", {"bay_id": destination, "staging_place_id": staging})
     return {"bay_id": destination, "staging_place_id": staging, "dock_id": spec["dock_id"],
             "owner": "core_docking", "terminal_motion": "rear_dock"}
+
+
+# CORE's provisional docking.site_pose limits are 15 s and 0.08 m and CORE judges again. The age here leaves 5 s for the
+# checks between this read and the dock POST (CORE cannot add that delay). The camera-to-SLAM agreement reuses 0.08 m as a
+# placeholder until a measured fleet value replaces it.
+SITE_POSE_MAX_AGE_S, SITE_POSE_MAX_RESIDUAL_M = 10.0, 0.08
+
+
+def site_pose_evidence(camera, bound, core_map_id):
+    """CORE's SitePoseEvidence from the ceiling-camera map pose, or None. Only a sighting or track anchor counts; the robot's own
+    SLAM pose through the binding (`bound`) is never evidence, it only has to agree with the camera position. CORE compares
+    no position: map_id echoes CORE's own id, and the real identity guard is Fleet's binding and taught-grid checks."""
+    if (camera is None or camera.state != "LOCALIZED" or camera.anchor_source not in ("sighting", "track") or not core_map_id
+            or camera.map_id is None or camera.map_id != bound.map_id):
+        return None
+    age, residual = camera.anchor_age_s, camera.camera_residual_m
+    if (age is None or residual is None or not 0 <= age <= SITE_POSE_MAX_AGE_S or not 0 <= residual <= SITE_POSE_MAX_RESIDUAL_M
+            or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (camera.x, camera.y))
+            or math.dist((camera.x, camera.y), (bound.x, bound.y)) > SITE_POSE_MAX_RESIDUAL_M):
+        return None
+    return {"anchor_source": camera.anchor_source, "anchor_age_s": age, "camera_residual_m": residual,
+            "map_id": core_map_id, "at": time.time()}
 
 
 class RearBayPort:
@@ -114,7 +137,9 @@ class RearBayPort:
         goal = target["x"], target["y"]
         staging = goal[0] - offset * math.cos(target["yaw"]), goal[1] - offset * math.sin(target["yaw"])
         binding = {"site_map_id": site[0], "site_map_version": site[1]}
-        site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging])
+        held = frozenset(rid for rid, lv in getattr(runner, "_live", {}).items() if lv.open and robot in (
+            (lv.view["detail"].get("traffic_hold") or {}).get("waiting_for") or ()))
+        site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging], held_by_fleet=held)
         native = [(snapshot["pose"]["x"], snapshot["pose"]["y"]), staging, goal]
         route = (site[0], [fit.apply(point) for point in native])
         nearest = min((p for p in live.graph.places.values() if p.kind == "charge"),
@@ -139,7 +164,7 @@ class RearBayPort:
                 raise TripError(409, "CHARGE_BAY_PEER_CHANGED")
             if self.console._claim_blocker(robot, native, site_route=route)[0] is not None:
                 raise TripError(409, "CHARGE_BAY_ROUTE_OCCUPIED")
-            site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging])
+            site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging], held_by_fleet=held)
         clear_at_wire()
         return snapshot, route, clear_at_wire
 
@@ -195,6 +220,10 @@ class RearBayPort:
             owner = view.get("owner") or {}
             if owner.get("owner_run_id", "unknown") is not None or type(owner.get("owner_generation")) is not int:
                 raise TripError(409, "CHARGE_BAY_DOCK_OWNER_BUSY")
+            try:
+                evidence = site_pose_evidence(await runner.map_pose(robot), pose, state_map)
+            except RobotApiError:
+                evidence = None    # no evidence is today's dock: CORE falls back to the LiDAR bay fit alone
             # The last asynchronous read precedes the local stop fence and the native owner compare-and-set.
             if not live.open:
                 return
@@ -226,7 +255,8 @@ class RearBayPort:
                 check()
                 receipt = await client._post("/api/v1/docking/dock", {
                     "dock": info["dock_id"], "correlation_id": plan_id, "expected_boot_id": str(UUID(owner["boot_id"])),
-                    "expected_owner_generation": owner["owner_generation"]})
+                    "expected_owner_generation": owner["owner_generation"],
+                    **({"site_pose_evidence": evidence} if evidence else {})})
             op = NativeOperation.model_validate(receipt.get("operation")).model_dump(mode="json")
             if (op["kind"], op["correlation_id"], op["boot_id"]) != ("dock", plan_id, owner["boot_id"]):
                 raise TripError(409, "CHARGE_BAY_DOCK_RECEIPT_UNVERIFIED")

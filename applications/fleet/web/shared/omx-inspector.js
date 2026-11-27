@@ -2,17 +2,20 @@
 import { setOffBy } from "/common/cause-line.js";
 import { node, uiTag } from "/common/control-dom.js";
 import { buildCamRoiSvg } from "/console/assets/cell-cam-roi.js";
+import { buildCamObjectsSvg } from "/console/assets/cell-cam-objects.js";
+import { buildInspectorStagingBar } from "/console/assets/cell-pick-place-staging.js";
 
 const TIER_CHOICES = [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]];
 const DISP_CHOICES = [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]];
 
 /** Build a frame box with a permanent standby layer so paint() updates never re-create layout nodes. */
-export function buildInspectorCamFrame(img, standbyText = "영상 확인 중", roiSvg = null) {
+export function buildInspectorCamFrame(img, standbyText = "영상 확인 중", roiSvg = null, objSvg = null) {
   const wrap = node("div", "", "omx-inspector-cam-frame");
   const standby = node("span", standbyText, "omx-inspector-cam-standby");
   standby.setAttribute("role", "status");
   wrap.append(img, standby);
   if (roiSvg) wrap.append(roiSvg);
+  if (objSvg) wrap.append(objSvg);
   return wrap;
 }
 
@@ -54,6 +57,8 @@ export function renderOmxInspector(container, {
   tagText = null, tagStatus = "neutral", disclosure = null, runButtonLabel = null, quickDispatchReason = "",
   actionChoices = null, actionsClass = "omx-inspector-actions", onSelectTarget = () => {}, onToggleDual = () => {},
   onToggleRoi = null, onSelectCam = () => {}, onQuickDispatch = async () => {}, onRenderAction = null, onDisclosureToggle = null,
+  cellObjects = null, selectedObjectRef = null, aiHighlightRef = null, selectedObjectDest = null, objectBusy = false, objectStatusText = "",
+  onSelectObject = null, onSelectObjectDest = null, onClearObject = null, onDispatchTargetObject = null,
 }) {
   if (!container || !targets.length) return;
   const active = targets.find((t) => t.id === activeId) || targets[0];
@@ -88,11 +93,13 @@ export function renderOmxInspector(container, {
 
   const stage = node("div", "", "omx-inspector-stage");
   const cameraBindings = [];
+  let visibleCams = [activeCam];
   if (dualCamMode && camViews.length >= 2) {
     const dualGrid = node("div", "", "omx-inspector-dual-grid");
     const [idA, idB] = active.dualPair || [camViews[0].id, camViews[1].id];
     const viewA = camViews.find((v) => v.id === idA) || camViews[0];
     const viewB = camViews.find((v) => v.id === idB && v.id !== viewA.id) || camViews.find((v) => v.id !== viewA.id) || camViews[1];
+    visibleCams = [viewA, viewB];
     for (const dv of [viewA, viewB]) {
       const pane = node("div", "", "omx-inspector-dual-pane");
       const dImg = node("img", "", "omx-inspector-main-cam omx-inspector-cam");
@@ -100,7 +107,8 @@ export function renderOmxInspector(container, {
       dImg.loading = "lazy";
       const dCap = node("small", `[${dv.label}]`, "omx-inspector-cam-badge");
       cameraBindings.push([dImg, dv, dCap, `[${dv.label}]`]);
-      pane.append(buildInspectorCamFrame(dImg, standbyText, showRoi ? buildCamRoiSvg(dv, cameraRois) : null), dCap);
+      const dObjSvg = cellObjects ? buildCamObjectsSvg(dv, cellObjects, { selectedRef: selectedObjectRef, aiHighlightRef, onSelectObject }) : null;
+      pane.append(buildInspectorCamFrame(dImg, standbyText, showRoi ? buildCamRoiSvg(dv, cameraRois) : null, dObjSvg), dCap);
       dualGrid.append(pane);
     }
     stage.append(dualGrid);
@@ -118,9 +126,11 @@ export function renderOmxInspector(container, {
     zoomBtn.setAttribute("aria-expanded", "false");
     zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
     const roiSvg = showRoi ? buildCamRoiSvg(activeCam, cameraRois) : null;
+    const objSvg = cellObjects ? buildCamObjectsSvg(activeCam, cellObjects, { selectedRef: selectedObjectRef, aiHighlightRef, onSelectObject }) : null;
     const applyZoom = (zoomed) => {
       mainImg.classList.toggle("focused", zoomed);
       roiSvg?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice");
+      objSvg?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice");
       zoomBtn.setAttribute("aria-expanded", String(zoomed));
       zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
       zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
@@ -136,7 +146,7 @@ export function renderOmxInspector(container, {
     });
     stageBar.append(mainCap, zoomBtn);
     cameraBindings.push([mainImg, activeCam, mainCap, `[${activeCam.label}]`]);
-    wrap.append(buildInspectorCamFrame(mainImg, standbyText, roiSvg), stageBar);
+    wrap.append(buildInspectorCamFrame(mainImg, standbyText, roiSvg, objSvg), stageBar);
     stage.append(wrap);
   }
 
@@ -192,6 +202,10 @@ export function renderOmxInspector(container, {
   });
   const quickDispatchBar = node("div", "", "omx-inspector-quick-dispatch");
   quickDispatchBar.append(tier.field, disp.field, runBtn);
+  const stagingBar = cellObjects ? buildInspectorStagingBar(visibleCams, cellObjects, {
+    selectedRef: selectedObjectRef, selectedDest: selectedObjectDest, opReason: quickDispatchReason, busy: objectBusy,
+    statusText: objectStatusText, onSelectDest: onSelectObjectDest, onClear: onClearObject, onDispatch: onDispatchTargetObject,
+  }) : null;
 
   const actions = node("div", "", actionsClass);
   const choices = actionChoices || active.buttons || [];
@@ -212,12 +226,12 @@ export function renderOmxInspector(container, {
   if (disclosure) {
     const details = node("details", "", "omx-pipeline-disclosure");
     details.open = Boolean(disclosure.open);
-    details.append(node("summary", disclosure.summaryText), tabs, head, stage, detailNode, quickDispatchBar, actions);
+    details.append(node("summary", disclosure.summaryText), tabs, head, stage, detailNode, ...(stagingBar ? [stagingBar] : []), quickDispatchBar, actions);
     details.addEventListener("toggle", () => onDisclosureToggle?.(details.open, bindCameras));
     container.replaceChildren(details);
     if (framesActive && details.open) bindCameras();
   } else {
-    container.replaceChildren(tabs, head, stage, detailNode, quickDispatchBar, actions);
+    container.replaceChildren(tabs, head, stage, detailNode, ...(stagingBar ? [stagingBar] : []), quickDispatchBar, actions);
     if (framesActive) bindCameras();
   }
   return { bindCameras };
