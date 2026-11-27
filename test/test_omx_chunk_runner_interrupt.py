@@ -601,52 +601,69 @@ def test_gated_close_closes_once_when_allowed_and_only_after_a_release_when_not(
     assert closed == ["off", "off"] and len(slept) == 2
 
 
-@pytest.mark.skipif(not hasattr(signal, "pthread_sigmask"), reason="Linux only: pthread_sigmask")
+GATE_PROBE = r"""
+import json, os, signal, sys, threading, time
+from pathlib import Path
+sys.path[:0] = sys.argv[3:]
+import main_thread_signals as mts
+mts.route()  # as chunk_runner.py: every later Python thread starts with the interrupts blocked
+import chunk_runner_interrupt as ci
+mts.unblock_main()
+stop = threading.Event()
+threading.Thread(target=stop.wait, name="boundary-watch", daemon=True).start()  # as guarded_native_watch
+approved, hold = sys.argv[1] == "approved", Path(sys.argv[2])
+ci.OPERATOR_RELEASE = signal.SIGUSR2
+signals, rounds = [], []
+ci.install(signals)
+for _ in range(20):
+    signals.clear()
+    seen, released = [], []
+    if not approved:
+        signals.append(signal.SIGINT)  # an interrupt already on record: the gate refuses
+
+    def close():  # disable_torque would run here: give a stray delivery every chance to run the handler
+        os.kill(os.getpid(), signal.SIGTERM)
+        deadline = time.monotonic() + 0.05
+        while time.monotonic() < deadline:
+            sum(range(200))
+        seen.append(list(signals))
+
+    def sleep(s):
+        time.sleep(0.01)
+        if not released:
+            released.append(True)
+            os.kill(os.getpid(), signal.SIGUSR2)
+
+    r = type("R", (), {"hold_file": hold, "_off_approved": "park settled and home" if approved else None})()
+    ci.gated_close(r, signals, None, close, sleep=sleep)
+    for _ in range(100):
+        if signal.SIGTERM in signals:
+            break
+        time.sleep(0.01)
+    rounds.append({"during_close": seen, "after": signal.SIGTERM in signals})
+print(json.dumps({"unrouted": mts.unrouted_threads(), "rounds": rounds}))
+stop.set()
+"""
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_sigmask") or not Path("/proc/self/task").is_dir(),
+                    reason="Linux only: pthread_sigmask and /proc/self/task")
 @pytest.mark.parametrize("approved", [True, False])
 def test_a_sigterm_between_the_gate_and_torque_off_waits_until_the_verdict_has_been_carried_out(tmp_path, approved):
-    """Codex round 6: SIGTERM injected right after the gate passed, just before disable_torque."""
-    import os
-    import time
+    """Codex round 6: SIGTERM sent inside the close, after the verdict. A fresh interpreter routed as chunk_runner.py
+    with a worker thread: pytest-xdist's own threads accept signals, so in-process the outcome was luck (CI 11-27)."""
+    import subprocess
 
-    signals, seen_during_close = [], []
-    saved = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM, signal.SIGUSR2)}
-    monkey_release = ci.OPERATOR_RELEASE
-    try:
-        ci.OPERATOR_RELEASE = signal.SIGUSR2
-        ci.install(signals)
-        r = type("R", (), {"hold_file": tmp_path / "hold.json",
-                           "_off_approved": "park settled and home" if approved else None})()
-
-        def close():
-            os.kill(os.getpid(), signal.SIGTERM)  # lands between the verdict and the torque OFF
-            for _ in range(1000):
-                pass
-            seen_during_close.append(list(signals))  # disable_torque would run here
-
-        if approved:
-            ci.gated_close(r, signals, None, close)
-        else:
-            signals.append(signal.SIGINT)  # an interrupt already on record: the gate refuses
-            released = []
-
-            def sleep(s):
-                time.sleep(0.01)
-                if not released:
-                    released.append(True)
-                    os.kill(os.getpid(), signal.SIGUSR2)
-
-            ci.gated_close(r, signals, None, close, sleep=sleep)
-        for _ in range(100):
-            if signal.SIGTERM in signals:
-                break
-            time.sleep(0.01)
-        # the handler did not run between the verdict and disable_torque; it ran after, the verdict carried out
-        assert seen_during_close == [[] if approved else [signal.SIGINT, signal.SIGUSR2]]
-        assert signal.SIGTERM in signals
-    finally:
-        ci.OPERATOR_RELEASE = monkey_release
-        for s, handler in saved.items():
-            signal.signal(s, handler)
+    adapter = Path(__file__).parents[1] / "middleware/devices/omx/adapter"
+    done = subprocess.run([sys.executable, "-c", GATE_PROBE, "approved" if approved else "refused",
+                           str(tmp_path / "hold.json"), str(OMX), str(adapter)],
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert out["unrouted"] == []
+    # every round: the handler did not run between the verdict and disable_torque; it ran after, the verdict carried out
+    want = [[] if approved else [signal.SIGINT, signal.SIGUSR2]]
+    assert out["rounds"] == [{"during_close": want, "after": True}] * 20
 
 
 @pytest.mark.parametrize("hold_at,sig", [(20, signal.SIGINT), (22, signal.SIGTERM)])
