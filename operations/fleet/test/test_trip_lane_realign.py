@@ -23,7 +23,8 @@ def _at(arc, s, left, yaw_off=0.0):
 
 
 def _camera(xy, age=0.1, source="sighting"):
-    return MapPose(*xy, "LOCALIZED", source, 0.0, 0.1, anchor_age_s=age, map_id="site-loop")
+    # A moving robot's pose reads source "bridged": the anchor (what the camera set) carried on by odom.
+    return MapPose(*xy, "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=age, map_id="site-loop", anchor_source=source)
 
 
 def _slam(xy):
@@ -70,7 +71,7 @@ def test_classification_and_only_a_trusted_departure_acts(cam, slam, state, kind
         assert record["lat_m"] == pytest.approx(0.06) and record["margin_m"] < 0 and record["gap_m"] == pytest.approx(0.03)
 
 
-@pytest.mark.parametrize("age, source, kind", [(0.6, "sighting", "camera_stale"), (None, "sighting", "camera_stale"),
+@pytest.mark.parametrize("age, source, kind", [(1.1, "sighting", "camera_stale"), (None, "sighting", "camera_stale"),
                                                 (0.1, "auto_locate", "camera_unavailable")])
 def test_stale_or_untrusted_camera_is_recorded_never_acted_on(age, source, kind):
     rig = Rig()
@@ -97,7 +98,7 @@ def test_two_fresh_ticks_then_one_resend_per_cooldown_then_release():
 def test_a_stale_tick_breaks_the_two_tick_count():
     rig = Rig()
     rig.tick(0.06, 0.04)
-    rig.tick(0.06, 0.04, age=0.7)
+    rig.tick(0.06, 0.04, age=1.2)
     assert rig.tick(0.06, 0.04)[0] is False and rig.live.view["detail"]["lane_departure"]["ticks"] == 1
 
 
@@ -251,3 +252,26 @@ def test_a_record_from_before_the_expiry_field_does_not_keep_the_cap():
     rig = Rig()
     rig.live.view["detail"]["lane_departure"] = {"kind": "departed", "slow": True, "ticks": 2}   # no departed_at
     assert rig.tick(0.06, age=2.0)[1]["slow"] is False
+
+
+def test_a_camera_anchor_counts_whether_or_not_odom_carried_it_on():
+    """2026-11-27 live run on R: the moving robot's pose source is "bridged", and every tick read camera_unavailable."""
+    rig = Rig()
+    for source, anchor, kind in (("bridged", "sighting", "departed"), ("sighting", "sighting", "departed"),
+                                 ("bridged", "track", "departed"), ("bridged", "operator_pin", "camera_unavailable"),
+                                 ("bridged", None, "camera_unavailable")):
+        rig.cam = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", source, 0.02, 0.1, anchor_age_s=0.1,
+                          map_id="site-loop", anchor_source=anchor)
+        run(realign.observe(rig.runner, rig.live, 0, _slam(_at(rig.arc, 0.4, 0.06)), LOCALIZED, "NAVIGATING"))
+        assert rig.live.view["detail"]["lane_departure"]["kind"] == kind, (source, anchor)
+
+
+def test_the_site_camera_age_acts_and_a_long_odom_bridge_does_not():
+    rig = Rig()
+    assert [rig.tick(0.06, age=0.6)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # 0.4-0.6 s on site
+    assert rig.live.view["detail"]["lane_departure"]["slow"] is True
+    rig.cam = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", "bridged", 0.2, 0.1, anchor_age_s=0.6,
+                      map_id="site-loop", anchor_source="sighting")   # 0.2 m carried by odom since the camera saw it
+    run(realign.observe(rig.runner, rig.live, 0, _slam(_at(rig.arc, 0.4, 0.06)), LOCALIZED, "NAVIGATING"))
+    record = rig.live.view["detail"]["lane_departure"]
+    assert record["kind"] == "camera_stale" and record["bridged_m"] == 0.2
