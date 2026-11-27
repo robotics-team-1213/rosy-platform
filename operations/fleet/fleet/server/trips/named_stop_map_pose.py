@@ -1,6 +1,5 @@
 """Read an approved SLAM pose for surveyed stop and bound Nav2 trips."""
 
-import inspect
 import math
 from typing import Optional
 
@@ -100,8 +99,8 @@ def precision_line_fence(runner, live, pose):
     return check
 
 
-async def traffic_watch_pose(runner, robot_id: str) -> Optional[MapPose]:
-    """Cached approved-SLAM site pose for idle block-table pinning (avoids camera bay distortion), else driving pose."""
+def traffic_watch_pose(runner, robot_id: str) -> Optional[MapPose]:
+    """Cached approved-SLAM site pose for idle block-table pinning (avoids camera bay distortion), else None."""
     poses = getattr(runner, "_poses", None)
     sampler = getattr(poses, "cached_motion_sample", None)
     active = runner._store.active() if getattr(runner, "_store", None) is not None else None
@@ -118,5 +117,4 @@ async def traffic_watch_pose(runner, robot_id: str) -> Optional[MapPose]:
                     x, y, yaw = bound_pose(fit, native_pose)
                     return MapPose(x, y, yaw, LOCALIZED, "approved_slam", 0., age_s,
                                    anchor_age_s=age_s, map_id=active[1].map_id, odom_stamp=odom_stamp)
-    pose = runner._driving_pose(robot_id)
-    return await pose if inspect.isawaitable(pose) else pose
+    return None

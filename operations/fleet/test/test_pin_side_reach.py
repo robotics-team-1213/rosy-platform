@@ -94,7 +94,6 @@ def test_through_the_table_only_a_standing_robot_gets_the_body_reach():
 
 
 def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
-    import asyncio
     from datetime import datetime, timezone
     from core_common.protocol.evidence import STALE_POSE_S
     from fleet.localization.map_binding import Fit
@@ -120,9 +119,8 @@ def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
         _clock=lambda: now,
         _store=NS(active=lambda: (1, NS(map_id="site")), map_bindings=bindings),
         _poses=NS(cached_motion_sample=lambda _r: (state, now - 0.1, now)),
-        _driving_pose=lambda _r: MapPose(-9.0, -9.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site"),
     )
-    watched = asyncio.run(traffic_watch_pose(fake_runner, "rosy_42"))
+    watched = traffic_watch_pose(fake_runner, "rosy_42")
     assert watched.source == "approved_slam" and watched.x == pytest.approx(0.25)
-    fake_runner._poses = NS()  # no cached sample -> fallback to driving pose
-    assert asyncio.run(traffic_watch_pose(fake_runner, "rosy_42")).x == -9.0
+    fake_runner._poses = NS()  # no cached sample -> None so trip_runner falls back to _driving_pose
+    assert traffic_watch_pose(fake_runner, "rosy_42") is None
