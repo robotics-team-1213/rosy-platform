@@ -1,0 +1,90 @@
+{
+ "id": "dark_top_frame",
+ "evidence": "arm_s/nc-check-20261127-193125-219d2d.json",
+ "note": "arm_s top camera black (mean 0.0): every observing job refused. Only idle or ask_human.",
+ "raw": {
+  "arm": "arm_s",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "arm_s_top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 0,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_s_wrist": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 0,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "belt",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "belt",
+       "to": "pinky",
+       "result": "refused",
+       "error": "light top: mean 0.0 < 15.0: the room lights are off or the lens is covered - a person turns them on"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}

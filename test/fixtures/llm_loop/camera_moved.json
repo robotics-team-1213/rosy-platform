@@ -1,0 +1,95 @@
+{
+ "id": "camera_moved",
+ "evidence": "belt-xyz/auto_pick_dry_run-20261127-202306-9dfb34.json",
+ "note": "arm_s dry run held: top camera moved since the map reference. Nothing is observable.",
+ "raw": {
+  "arm": "arm_s",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "arm_s_top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_s_wrist": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "belt",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "belt",
+       "to": "board",
+       "attempts": [],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 29.4,
+        "inliers": 518
+       },
+       "result": "held: top camera moved since map reference"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}

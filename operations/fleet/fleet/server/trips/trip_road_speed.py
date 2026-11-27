@@ -70,7 +70,7 @@ class RoadSpeed:
         stamp = pose.odom_stamp
         reason = "route_profile"
         if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
-            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: until the camera sees it back on the lane
+            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: while a departure is fresh evidence
         leader = None
         gap_m = None
         geometry = await self.geometry.get(active)

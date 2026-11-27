@@ -23,7 +23,7 @@ from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
 from fleet.server.transient_loc_hold import (consume_transient_wait, handle_unlocalized_pose,
-                                              recheck_binding)
+                                              hold_unreachable_pre_dispatch, recheck_binding)
 from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.server.named_stop_confirm import (GoalRefused, confirm_free_stop, confirm_lane_stop,
@@ -268,7 +268,8 @@ class TripSteps:
             return
         except (HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
             # D-760 4: a leased trip waits only on no answer (Safety-Review HIGH-1); any other error ends it
-            if not (isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc))):
+            if not ((isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc)))
+                    or await hold_unreachable_pre_dispatch(self, live, exc)):  # no lease, no goal sent yet: bounded wait
                 await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
             return
         if not live.open:

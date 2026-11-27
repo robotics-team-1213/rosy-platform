@@ -106,6 +106,14 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
          "catalog": {"type": "string"}, "object": {"type": "string"},
      }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
 )
+TOOL_SPECS += (
+    {"name": "cell_observe", "description": "Non-moving observation pack for one arm (runs camera-only dry-run jobs on the cell and takes its one camera slot; repeat is at most 5): fresh frames, annotated top frame, measured candidates with refusal CODE and suggestions, readiness, live verbs. observable=false (reason only) when a camera is dark, stale or missing.",
+     "inputSchema": _obj_schema({"arm": {"type": "string", "enum": ["arm_a", "arm_b", "arm_s"]}, "repeat": {"type": "integer", "maximum": 5},
+                                 "layers_below": {"type": "integer"}}, ["arm"])},
+    {"name": "cell_verify_after", "description": "Camera verdict for one step: compare the observation pack before with a fresh one this tool takes itself (source cleared, arrived at dest, nothing else moved, arm folded, no incident). A job exit code is never success.",
+     "inputSchema": _obj_schema({"before": {"type": "object"}, "step": {"type": "object"}, "job_exit": {"type": "integer"}},
+                                ["before", "step"])},
+)
 TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
 OPERATIONS_MCP_TOOLS = frozenset({
     "cell_readiness", "cell_failure_context", "cell_failure_asset", "cell_frame", "cell_queue",
