@@ -7,6 +7,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import threading
@@ -17,11 +18,23 @@ from typing import Any, Callable
 SCHEMA = "rosy.omx-auto-fold.v1"
 CHOICE = "auto_fold.candidate"  # cell_choices name the candidates compete under
 LIFT_FAR = 50.0  # shoulder_lift units past home: the forearm lever that latched shoulder_lift on 2026-11-27
+# A load joint overloaded/pushing/stalled: resting on something (15:15, 15:30); other contact (16:51 wrist) is its own bucket.
+SUPPORTED = re.compile(r"pushing at rest|(shoulder_lift|elbow_flex).*(overload|push|stall)|(overload|push|stall).*(shoulder_lift|elbow_flex)", re.I)
+CONTACT = re.compile(r"contact|overload|push|stall", re.I)
 
 
-def fold_context(state, home, is_low: bool) -> str:
-    """The coarse situation (4 buckets) whose own record orders the candidates: resting low or not, lift near or far."""
-    return f"{'low' if is_low else 'high'}/{'far' if abs(float(state[1]) - float(home[1])) > LIFT_FAR else 'near'}"
+def fold_context(state, home, hold_reason: str | None = None) -> str:
+    """The coarse situation (4 buckets) whose own record orders the candidates: the hold's reason says the arm is supported
+    or not (no PWM threshold yet: fk_z was 'low' even at home), lift near or far."""
+    reason = str(hold_reason or "")
+    support = "supported" if SUPPORTED.search(reason) else "contact" if CONTACT.search(reason) else "unknown-support"
+    return f"{support}/{'far' if abs(float(state[1]) - float(home[1])) > LIFT_FAR else 'near'}"
+
+
+def start_record(state, status: dict, hold_reason: str | None) -> dict:
+    """What the fold started from, a record only (nothing decides on it): joints, measured PWM, the hold's reason."""
+    health = status.get("health") if isinstance(status.get("health"), dict) else {}
+    return {"state_start": [round(float(v), 2) for v in state[:6]], "start_pwm": health.get("pwm"), "hold_reason": hold_reason}
 
 
 def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float, *,

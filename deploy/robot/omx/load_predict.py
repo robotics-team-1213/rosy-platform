@@ -91,6 +91,16 @@ def gravity_pwm(arm, pose, min_cell: int = 5) -> dict[str, float]:
     return predict(arm, pose)
 
 
+def start_load(arm, pose, pwm) -> dict:
+    """A record only (no threshold): the predicted gravity hold at the fold's start pose and measured/predicted per pitch joint."""
+    try:  # a record must never turn a finished fold into a hold (malformed health, a model missing keys)
+        expected = {j: round(v, 1) for j, v in gravity_pwm(arm, pose).items()}
+        ratio = {j: round(float(pwm[BODY.index(j)]) / v, 2) for j, v in expected.items() if isinstance(pwm, list) and abs(v) >= 1.0}
+    except Exception:  # noqa: BLE001 - any failure here is only a missing record
+        return {"gravity_pwm_expected": None, "pwm_ratio": None}
+    return {"gravity_pwm_expected": expected, "pwm_ratio": ratio}
+
+
 def check_chunk(arm, frames, fps, params=None, caps=None):
     """{verdict, joints: {joint: {pwm, at, share}}, unknown: first reason or None} for one chunk. Every pose a
     second apart plus the last frame is judged (a hold is where the arm rests; the path between is not a hold)."""

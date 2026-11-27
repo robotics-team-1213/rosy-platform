@@ -345,6 +345,7 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         ok = verdict != "risky" and not (verdict == "unknown" and refuse_unknown)
         return {"ok": ok, "verdict": verdict, "report": rep}
 
+    check_frames.arm = arm  # the fold's start record reads the same model (gravity_pwm_expected)
     return check_frames
 
 
