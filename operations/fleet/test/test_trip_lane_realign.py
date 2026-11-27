@@ -185,8 +185,8 @@ def test_departure_resends_the_recentring_route_and_the_trip_keeps_running():
 def test_a_fault_in_the_watch_is_recorded_and_never_fails_the_trip():
     rig = Rig()
     rig.live.arc = lambda _i: 1 / 0
-    rig.cam = _camera((0.0, -0.3))
-    assert run(realign.observe(rig.runner, rig.live, 0, _slam((0.0, -0.3)), LOCALIZED, "NAVIGATING")) is False
+    rig.cam = _camera((0.0, -0.3, math.pi))
+    assert run(realign.observe(rig.runner, rig.live, 0, _slam((0.0, -0.3, math.pi)), LOCALIZED, "NAVIGATING")) is False
     assert rig.live.view["detail"]["lane_departure"]["kind"] == "error"
 
 
