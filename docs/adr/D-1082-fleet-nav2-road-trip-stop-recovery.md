@@ -25,9 +25,9 @@
 1. **범위.** `drive_mode: nav2` 도로 trip만. 다음은 제외하고 종전대로 끝난다: 충전 칸 간선·parking handoff·DOCKING, 정밀 정차(strict named stop) 구간, 카메라 차선 대체 구간, wait-prefix(대기 칸 예약) 경로, hold 중(일시 정지·replan·nav2_problem), link_wait.
 2. **복구 사유.** `TripRunner._stop(live, "stopped", reason)`의 `reason`이 `stall`·`navigation`이고, 정지 detail에 `link_wait`(기체 응답 없음)가 없을 때. `pose`는 다루지 않는다(위 transient_loc_hold 행). 진입 조건: 기체 상태를 읽었고 `safety.estop`이 `false`, 모드가 MANUAL·ESTOP 아님, 활성 지도 버전이 trip과 같음.
 3. **진입.** `_stop` 대신 현재 경로를 취소하고 취소 확인(`_cancel_ack`)을 받는다. 확인이 없으면 종전대로 끝난다. trip은 `running`이고 `detail.recovery = {state: waiting, label: "복구 중", reason, attempt, since, entered_at, waiting_for, stop_detail}`를 남긴다.
-4. **해소.** 매 tick `step_nav2_route` 앞에서 본다. trip 자세는 이미 LOCALIZED·신선해야 이 지점에 온다(기존 `_progress_pose`; 아니면 transient_loc_hold가 맡는다). 진입 뒤 2 s(`NAV2_TRANSIENT_RETRY_S`) 경과, 기체 정지 확인(신선한 속도 0, NAVIGATING·PLANNING 아님), `estop: false`.
+4. **해소.** 매 tick `step_nav2_route` 앞에서 본다. trip 자세는 이미 LOCALIZED·신선해야 이 지점에 온다(기존 `_progress_pose`; 아니면 transient_loc_hold가 맡는다). 진입 뒤 2 s(`NAV2_TRANSIENT_RETRY_S`) 경과, 서로 다른 두 tick의 기체 상태 읽기에서 연속으로 정지 확인(신선한 속도 0, NAVIGATING·PLANNING 아님). 대기 중에도 매 tick 진입 조건(estop, MANUAL·ESTOP·DOCKING, hold, 제외 구간, 지도 버전)을 다시 보고, 어긋나면 종전 사유로 끝낸다(`detail.recovery_end`: `estop`·`out_of_scope`). 상태를 읽지 못한 tick은 재전송하지 않고 기다린다.
    - 해소되면 `state: resumed`로 바꾸고 기존 step 루프가 지금 위치에서 차선 복귀 경로를 보낸다.
-5. **한도.** 한 번의 대기는 45 s, 한 사건(episode)은 복구 3회 또는 첫 복구 뒤 5분 중 먼저 닿는 쪽. 넘으면 종전 사유와 종전 detail로 끝난다(`recovery.state: exhausted`). 대기 중 E-stop이 보이면 바로 끝난다.
+5. **한도.** 한 번의 대기는 45 s, 한 사건(episode)은 복구 3회 또는 첫 복구 뒤 5분 중 먼저 닿는 쪽. 넘으면 종전 사유와 종전 detail로 끝난다(`recovery.state: exhausted`, 대기 한도는 `recovery_end: wait_s`·`window`). 대기 중 E-stop이 보이면 바로 끝난다.
 6. **사건 종료.** 재전송 뒤 1.0 m를 진행하면 사건을 닫는다(`detail.last_recovery`, 횟수·5분 창 초기화). 1.0 m는 차선 복귀 보정보다 길어서, 한 지점에서 계속 실패하는 기체는 한도를 다 쓰고 끝난다.
 7. **값.** `operations/fleet/fleet/server/trips/nav2_trip_recovery.py`의 모듈 상수(`MAX_ATTEMPTS`, `WINDOW_S`, `WAIT_S`, `SETTLE_S`, `RESET_M`).
 
