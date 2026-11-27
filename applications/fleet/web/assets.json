@@ -810,6 +810,10 @@
       "path": "map/zone-blueprint-geometry.js",
       "media_type": "application/javascript"
     },
+    "zone-blueprint-staging.js": {
+      "path": "map/zone-blueprint-staging.js",
+      "media_type": "application/javascript"
+    },
     "zone-blueprint-model.js": {
       "path": "map/zone-blueprint-model.js",
       "media_type": "application/javascript"
@@ -829,6 +833,10 @@
     "zone-blueprint.css": {
       "path": "map/zone-blueprint.css",
       "media_type": "text/css"
+    },
+    "named-stop-actions.js": {
+      "path": "map/named-stop-actions.js",
+      "media_type": "application/javascript"
     }
   }
 }

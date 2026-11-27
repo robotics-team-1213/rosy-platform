@@ -66,7 +66,8 @@ PINNED_CONFIRMS = {
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
     "applications/fleet/web/console.js": 2,  # Channel and neutral ARM review use the same confirmedAction owner.
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
-    "applications/fleet/web/manual-control.js": 1,  # selected robot's fixed MANUAL transition
+    "applications/fleet/web/manual-control.js": 2,  # fixed MANUAL transition and 10 cm relative step
+    "applications/fleet/web/map/named-stop-actions.js": 2,  # named-stop custody release and precision correction clearance
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "applications/fleet/web/maintenance/host-services.js": 1,  # named operator host control, shared confirmation
     "applications/fleet/web/roster.js": 1,
@@ -82,6 +83,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "applications/fleet/web/installation/tracking-relearn.js": 1,
     "applications/fleet/web/localization-panel.js": 1,  # Pinky confirm, relocalize, map-binding approve/revoke share confirmedAction via onAction
+    "applications/fleet/web/map/zone-blueprint-inspector.js": 1,  # 2-click cell task dispatch from metric slot overlay
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

@@ -2297,6 +2297,38 @@
         "test_policy_drive_carries_the_named_operator_and_fleet_side_files"
       ],
       "source_revision": "08d6ae12723dcc3e23f7ad5ed28cfe87c21c689b"
+    },
+    "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_named_stop_custody_operator_release.py",
+        "test_operator_release_stops_first_verifies_core_proof_releases_and_audits"
+      ],
+      "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3"
+    },
+    "POST:/api/fleet/robots/{robot_id}/step": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_nudge_step.py",
+        "test_a_forward_step_with_a_distance"
+      ],
+      "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3"
+    },
+    "POST:/api/fleet/trips/{trip_id}/correction-clearance": {
+      "status": 202,
+      "test": [
+        "operations/fleet/test/test_precision_correction_dispatch.py",
+        "test_approved_trip_dispatches_at_most_one_exact_repark"
+      ],
+      "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3"
+    },
+    "POST:/api/fleet/trips/{trip_id}/resume": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_nav2_recovery.py",
+        "test_http_pause_and_resume_with_guided_blocked_edges"
+      ],
+      "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3"
     }
   }
 }

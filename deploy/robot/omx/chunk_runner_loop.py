@@ -69,7 +69,7 @@ def run(runner, lines) -> None:
                 raise
             arrived = []
         if arrived:
-            runner.last_input, runner.idle_parks = started, 0
+            runner.last_input, runner.idle_parks, runner._idle_open_at = started, 0, None
         runner.pending += arrived
         hold_lines = [line.strip() for line in runner.pending if line.strip().split()[:1] == ["human-hold"]]
         watch = getattr(runner, "lease_watch", None)  # D-1024 3: a policy runs only on a renewed lease; no renewal is a human-hold

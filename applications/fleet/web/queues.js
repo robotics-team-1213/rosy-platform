@@ -15,6 +15,7 @@ import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
 import { personHeadline, requestsFor } from "./person-request.js";
 import { armIncidentAlertRows } from "/console/assets/arm-incident-clear.js";
+import { hasPendingCorrection } from "/console/assets/named-stop-actions.js";
 
 /** A row's text after its robot name. Rows read "<b>rosy_41</b>: …"; a later row of the same robot hides the
  * name, so it drops the leading ": " (field check 2026-10-10: ": Rosy Cam이 …" with no name). */
@@ -161,6 +162,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (ended) items.push({ severity: "warn", text: `: ${ended}` });
     const trip = openTrip(view, robot.robot_id);  // D-763 rev 2 Q7: past its bound a warn row; 개입 is the resolver's hand-off
     if (trip?.wait?.over_bound) items.push({ severity: "warn", text: `: ${tripWaitText(trip)}` });
+    if (hasPendingCorrection(trip)) {
+      items.push({ severity: "crit", decision: "correction", text: ": 정밀 정지 보정 승인 대기" });
+    }
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const localization = localizationAttention(robot.localization, staleS === null ? state.localization : null,
@@ -202,7 +206,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       items.push({ severity: back.state === "ON_LINE" ? "warn" : "crit", text: `: ${backText}${side}` });
     }
     const custody = robot.named_stop_custody;
-    if (custody?.motion_refused_site_wide || custody?.operator_action) {
+    if (custody?.reservation_id) {
+      items.push({ severity: "crit", decision: "custody",
+        text: `: 정밀 정지 점유 보류${custody.missing_proof ? ` (${custody.missing_proof})` : ""}` });
+    } else if (custody?.motion_refused_site_wide || custody?.operator_action) {
       items.push({ severity: "warn", text: `: 정밀 정지 점유 보류${custody.missing_proof ? ` (${custody.missing_proof})` : ""}` });
     }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.

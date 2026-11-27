@@ -157,6 +157,8 @@ function normalizeTasks(cellTasks) {
     state: String(task?.state || task?.status || ""),
     srcSite: String(task?.src_site || task?.source || ""),
     dstSite: String(task?.dst_site || task?.target || ""),
+    srcSiteId: String(task?.src_site_id || ""),
+    dstSiteId: String(task?.dst_site_id || ""),
     armId: String(task?.arm_id || ""),
     cellId: String(task?.cell_id || ""),
   })).filter((t) => t.id || t.srcSite || t.dstSite);

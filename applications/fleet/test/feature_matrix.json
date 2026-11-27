@@ -2096,6 +2096,7 @@
         "applications/fleet/web/incident-view.js",
         "applications/fleet/web/installation/peer-picker.js",
         "applications/fleet/web/line-stuck.js",
+        "applications/fleet/web/map/named-stop-actions.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/map/trail-view.js",
         "applications/fleet/web/roster.js",
@@ -2163,6 +2164,22 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "PUT:/api/fleet/robots/{robot_id}/speed-limits"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/manual-control.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/step",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/step"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/named-stop-actions.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/named-stop-custody/release",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release"
           ]
         },
         {
@@ -2928,6 +2945,42 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/named-stop-custody/release",
+          "implementation": "operations/fleet/fleet/server/named_stop_custody_routes.py",
+          "handler": "release_named_stop_custody",
+          "expected_statuses": [
+            200,
+            409
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; named operator release with CORE standstill proof and refusal cases",
+          "contract_tests": [
+            "operations/fleet/test/test_named_stop_custody_operator_release.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/named-stop-custody/release"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/step",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/step",
+          "implementation": "operations/fleet/fleet/server/pose/nudge_routes.py",
+          "handler": "robot_step",
+          "expected_statuses": [
+            200,
+            409
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; named operator relative 10 cm step forward/backward and traffic/cable refusals",
+          "contract_tests": [
+            "operations/fleet/test/test_nudge_step.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/step"
         }
       ],
       "flows": [
@@ -2947,6 +3000,60 @@
           "sample_status": "verified",
           "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+        },
+        {
+          "id": "monitoring.fleet_r_custody_step.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release",
+                "POST:/api/fleet/robots/{robot_id}/step"
+              ],
+              "screen_assertion": "점유 해제 및 10 cm 단계 이동 확인 후 완료 상태를 표시한다"
+            }
+          ],
+          "scenario_id": "monitoring.fleet_r_custody_step.happy",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_custody_release_happy_and_refused",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium console flow over fake /api routes with confirmedAction dialogs"
+        },
+        {
+          "id": "monitoring.fleet_r_custody_step.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release",
+                "POST:/api/fleet/robots/{robot_id}/step"
+              ],
+              "screen_assertion": "409 거절 시 경고 배너를 표시하고 성공으로 간주하지 않는다"
+            }
+          ],
+          "scenario_id": "monitoring.fleet_r_custody_step.refused",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_step_nudge_happy_and_refused",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium console flow verifying 409 refusal and non-MANUAL step dispatch"
+        },
+        {
+          "id": "monitoring.fleet_r_custody_step.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/robots/{robot_id}/named-stop-custody/release",
+                "POST:/api/fleet/robots/{robot_id}/step"
+              ],
+              "screen_assertion": "완료 후 재조회 스냅샷에 점유 해제 및 정지 상태가 반영된다"
+            }
+          ],
+          "scenario_id": "monitoring.fleet_r_custody_step.terminal",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_custody_release_happy_and_refused",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium readback removes resolved custody row after terminal state update"
         },
         {
           "id": "monitoring.refused",
@@ -3204,6 +3311,7 @@
       "consumers": [
         "applications/fleet/web/cell/cell-channel-mission.js",
         "applications/fleet/web/map/map-polling.js",
+        "applications/fleet/web/map/named-stop-actions.js",
         "applications/fleet/web/map/trail-view.js",
         "applications/fleet/web/roster.js",
         "applications/fleet/web/shared/cell-context-panel.js",
@@ -3311,7 +3419,24 @@
           "request_ids": [
             "POST:/api/fleet/trips/{plan_id}/start",
             "POST:/api/fleet/trips/{trip_id}/cancel",
-            "POST:/api/fleet/trips/{trip_id}/confirm-replan"
+            "POST:/api/fleet/trips/{trip_id}/confirm-replan",
+            "POST:/api/fleet/trips/{trip_id}/resume"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/named-stop-actions.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/correction-clearance",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/trips/{trip_id}/correction-clearance"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/named-stop-actions.js",
+          "expression": "/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/trips/{trip_id}/cancel"
           ]
         },
         {
@@ -3488,6 +3613,42 @@
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/confirm-replan"
         },
         {
+          "id": "POST:/api/fleet/trips/{trip_id}/resume",
+          "method": "POST",
+          "path": "/api/fleet/trips/{trip_id}/resume",
+          "implementation": "operations/fleet/fleet/server/trips/trip_routes.py",
+          "handler": "fleet_trip_resume",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; resume paused or nav2-problem held trip with optional blocked edges",
+          "contract_tests": [
+            "operations/fleet/test/test_trip_nav2_recovery.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/resume"
+        },
+        {
+          "id": "POST:/api/fleet/trips/{trip_id}/correction-clearance",
+          "method": "POST",
+          "path": "/api/fleet/trips/{trip_id}/correction-clearance",
+          "implementation": "operations/fleet/fleet/server/trips/precision_correction_routes.py",
+          "handler": "correction_clearance",
+          "expected_statuses": [
+            202,
+            403,
+            409
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; scoped precision repark clearance with handover and refusal checks",
+          "contract_tests": [
+            "operations/fleet/test/test_precision_correction_dispatch.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/correction-clearance"
+        },
+        {
           "id": "GET:/api/fleet/trip-requests",
           "method": "GET",
           "path": "/api/fleet/trip-requests",
@@ -3522,6 +3683,60 @@
           "sample_status": "verified",
           "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+        },
+        {
+          "id": "work.fleet_r_correction_resume.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/trips/{trip_id}/correction-clearance",
+                "POST:/api/fleet/trips/{trip_id}/resume"
+              ],
+              "screen_assertion": "체크박스·확인 후 정밀 보정 및 운행 재개 완료를 표시한다"
+            }
+          ],
+          "scenario_id": "work.fleet_r_correction_resume.happy",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_correction_clearance_and_trip_resume_flows",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium console flow for correction-clearance and trip resume"
+        },
+        {
+          "id": "work.fleet_r_correction_resume.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/trips/{trip_id}/correction-clearance",
+                "POST:/api/fleet/trips/{trip_id}/resume"
+              ],
+              "screen_assertion": "409 범위 변경 또는 재개 거절 시 오류 alert를 표시하고 성공으로 간주하지 않는다"
+            }
+          ],
+          "scenario_id": "work.fleet_r_correction_resume.refused",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_correction_clearance_and_trip_resume_flows",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium refusal path for SCOPE_CHANGED and PAUSE_STOP_UNCONFIRMED"
+        },
+        {
+          "id": "work.fleet_r_correction_resume.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/trips/{trip_id}/correction-clearance",
+                "POST:/api/fleet/trips/{trip_id}/cancel"
+              ],
+              "screen_assertion": "1클릭 운행 취소 또는 완료 재조회 이후 대기 행이 사라진다"
+            }
+          ],
+          "scenario_id": "work.fleet_r_correction_resume.terminal",
+          "browser_test": "operations/fleet/test/test_fleet_r_recovery_actions_browser.py::test_correction_clearance_and_trip_resume_flows",
+          "sample_status": "verified",
+          "source_revision": "2220772d96ba30167b8fa1bb3f2a04735500d9c3",
+          "test_scope": "Real Chromium terminal cancel and readback verification"
         },
         {
           "id": "work.refused",
@@ -4445,7 +4660,8 @@
           "expression": "/api/fleet/pipeline/cell-tasks",
           "resolution": "literal-or-template",
           "request_ids": [
-            "GET:/api/fleet/pipeline/cell-tasks"
+            "GET:/api/fleet/pipeline/cell-tasks",
+            "POST:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
@@ -5420,7 +5636,7 @@
         },
         {
           "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
-          "expression": "/api/fleet/site-points",
+          "expression": "/api/fleet/site-points?view=full",
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-points"
@@ -5448,6 +5664,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/guide",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/guide"
           ]
         },
         {
