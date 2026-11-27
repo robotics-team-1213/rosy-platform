@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-11-28 · uncommitted · feat(omx): the Fleet worker runs a push through the cell job API and completes it on measured displacement (D-1083)
 - 2026-11-28 · uncommitted · 셀 readiness는 오래된 팔 상태를 알 수 없음으로 낸다
 - 2026-11-28 · uncommitted · OMX 벨트 자세 범위를 번들이 선언(Panel N)
 - 2026-11-27 · uncommitted · OMX 사건 보고: 토크 끈 쉬는 접힌 팔을 "펴진 팔"로 오판하지 않게(좁힌 규칙)
 - 2026-11-27 · uncommitted · OMX 홈 복귀가 집게가 열리는 시간을 기다린다
-- 2026-11-27 · uncommitted · OMX cell-task-worker principal and motion worker (D-1081)
