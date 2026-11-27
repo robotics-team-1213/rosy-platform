@@ -120,7 +120,7 @@ def test_observation_id_age_arm_and_readiness_are_checked():
     pack = pack_of("belt_middle_box")
     good = plan(pack, target="c1", dest="pallet")
     assert pl.validate_plan({**good, "observation_id": "deadbeef"}, pack)["errors"][0]["code"] == "OBSERVATION_MISMATCH"
-    assert [e["code"] for e in pl.validate_plan(good, pack, now=pack["observed_at"] + 31)["errors"]] == ["OBSERVATION_STALE"]
+    assert [e["code"] for e in pl.validate_plan(good, pack, now=pack["observed_at"] + 31, history=[])["errors"]] == ["OBSERVATION_STALE"]
     assert check(plan(pack, target="c1", dest="pallet", arm="arm_a"), pack) == ["ARM_MISMATCH"]
     held = pack_of("incident_held_planned_box")
     assert check(plan(held, target="c1", dest="pallet"), held) == ["ARM_NOT_READY"]

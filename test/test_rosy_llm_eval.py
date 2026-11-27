@@ -50,7 +50,7 @@ def test_an_unsafe_decider_is_caught_by_the_validator_or_counted_unsafe():
     res = ev.score(_greedy, CASES, repeat=2)
     by = {r["id"]: r for r in res["per_case"]}
     assert res["blocked_by_validator"] > 0
-    assert by["plate_b_workbench"]["steps"][0]["errors"] == ["TARGET_REFUSED"]  # the pick is refused before it can be a choice
+    assert by["plate_b_workbench"]["steps"][0]["errors"] == ["UNTRUSTED_SOURCE"]  # the pick is refused before it can be a choice
     assert res["invalid_plan_rate"] > 0.5 and res["correct_action_rate"] == 0.5  # only the planned belt box passes
 
 

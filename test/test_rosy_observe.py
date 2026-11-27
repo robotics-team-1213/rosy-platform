@@ -144,8 +144,9 @@ def test_a_retier_hint_on_an_untrusted_or_destination_site_gives_ask_human_only(
     pack = obs.assemble(json.loads((CASES / "adversarial" / "adv_retier_hint_on_untrusted_plate_b.json").read_text(encoding="utf-8"))["raw"])
     assert [(c["code"], c["suggestions"]) for c in pack["candidates"]] == [("TIER_MISMATCH", ["ask_human"])]
     raw = copy.deepcopy(case("tier_hint_base_site")["raw"])  # same hint on a destination-role site
-    raw["dry_runs"][0]["site"] = "ship-h1r0"
-    assert all(c["suggestions"] == [] for c in obs.assemble(raw)["candidates"] if c["site"] == "ship-h1r0")
+    raw["dry_runs"][0]["site"] = "pallet"
+    dest = [c for c in obs.assemble(raw)["candidates"] if c["site"] == "pallet"]
+    assert dest and all(c["suggestions"] == [] for c in dest)
 
 
 def test_pack_id_is_recomputed_from_the_content():
