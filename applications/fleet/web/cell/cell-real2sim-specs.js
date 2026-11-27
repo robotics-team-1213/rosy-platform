@@ -434,7 +434,7 @@ export function inspectorSpecs(body = {}) {
       const curTxt = live.current_ma != null ? `${live.current_ma}mA` : '';
       return [
         `[${modeBadge}]`,
-        `folded=${Boolean(live.folded)}`,
+        live.fresh === true && typeof live.folded === 'boolean' ? `folded=${live.folded}` : `folded=알 수 없음(마지막 관측 ${ageTxt || '시각 미확인'})`,
         `[${stateArr}]`,
         tempTxt,
         curTxt,

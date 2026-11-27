@@ -247,6 +247,9 @@ def _emit_common(
         home_err = (round(max(abs(float(a) - float(b)) for a, b in zip(state_vec[:5], home[:5])), 2)
                     if isinstance(state_vec, list) and len(state_vec) >= 5 and isinstance(home, list) and len(home) >= 5 else None)
         folded = live.get("folded") if live.get("folded") is not None else (None if home_err is None else home_err <= cfc.HOME_POSE_TOL_UNITS)
+        from cell_job_peer_health import is_stale_row
+        if folded is True and is_stale_row(live, 15.0):
+            folded = None  # an old row never says folded now; an old False stays, it only vetoes
         meas: dict[str, Any] = {
             "outcome": {"result": result_text[:200], "attempt_cause": attempt_cause[:80], "stage": stage[:60]},
             "kinematics_and_health": {"last_state": state_vec[:6] if isinstance(state_vec, list) else None, **({"max_home_err_units": home_err} if home_err is not None else {})},
