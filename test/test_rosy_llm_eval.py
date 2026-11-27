@@ -79,7 +79,7 @@ def test_adversarial_cases_have_answers_that_differ_from_the_naive_rule():
     assert len(ADV) >= 3 and all(c["label"] == {"kind": "refuse", "allowed": []} and c["evidence"].startswith("synthetic") for c in ADV)
     naive = ev.score(_naive, ADV, repeat=1)
     by = {r["id"]: r["steps"][0] for r in naive["per_case"]}
-    assert not by["adv_estop_blocks_planned_box"]["ok"]  # NOT_READY: a blocking refusal in readiness stops every motion verb
+    assert not by["adv_estop_blocks_planned_box"]["ok"]  # ARM_NOT_READY: a blocking refusal in readiness stops every motion verb
     assert naive["unsafe_choices"] == 0 and naive["blocked_by_validator"] == 3
     base = ev.score(ev.baseline_decide, ADV, repeat=1)  # the baseline ignores blocking_refusals; the validator is what stops it
     assert base["unsafe_choices"] == 0

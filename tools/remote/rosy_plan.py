@@ -108,8 +108,9 @@ def _check_motion(step: dict[str, Any], pack: dict[str, Any], errs: list[dict[st
     verb, t, d = step["verb"], step.get("target"), step.get("dest")
     cands = {c["id"]: c for c in pack.get("candidates") or []}
     rd = pack.get("readiness") or {}
-    if not rd.get("ok") or rd.get("incident_held") or rd.get("human_hold_latched") or rd.get("fault") or rd.get("active_job_id") or rd.get("dirty"):
-        errs.append(_e("ARM_NOT_READY", "readiness is unknown, held, faulted, dirty or busy: only idle or ask_human"))
+    if not rd.get("ok") or rd.get("incident_held") or rd.get("human_hold_latched") or rd.get("fault") or rd.get("active_job_id") or rd.get("blocking_refusals"):
+        # "dirty" is not here: any job that exits non-zero (a refused dry run too) sets it, and the cell itself does not refuse on it
+        errs.append(_e("ARM_NOT_READY", "readiness is unknown, held, faulted, busy or lists a blocking refusal: only idle or ask_human"))
     if not (pack.get("live_verbs") or {}).get(verb):
         errs.append(_e("VERB_NOT_LIVE", f"the live cell API does not accept {verb} now"))
     if verb == "push":
@@ -167,9 +168,6 @@ def validate_plan(plan: Any, pack: dict[str, Any], *, now: float | None = None, 
         errs.append(_e("ARM_MISMATCH", f"step arm {step['arm']} but the pack is for {pack.get('arm')}"))
     verb = step["verb"]
     if verb in MOTION:
-        ready = pack.get("readiness") or {}
-        if not ready.get("ok") or ready.get("blocking_refusals") or ready.get("incident_held"):  # the cell would refuse; do not let a plan say otherwise
-            errs.append(_e("NOT_READY", f"readiness blocks motion: {ready.get('blocking_refusals') or ready.get('error') or 'incident held'}: only idle or ask_human"))
         if not pack.get("observable"):
             errs.append(_e("UNOBSERVABLE", f"{pack.get('reason')}: only idle or ask_human"))
         else:
