@@ -205,7 +205,7 @@ def assemble(raw: dict[str, Any], *, max_age_s: float = MAX_AGE_S) -> dict[str, 
             reason = reason or f"FRAME_UNDECODABLE:{v}"
         elif f.get("luma") is not None and f["luma"] < MIN_LUMA:
             if v == cfg["top_view"]:
-                reason = reason or f"DARK_FRAME:{v}:{f['luma']}"
+                reason = reason or f"DARK_FRAME:{v}:{float(f['luma'])}"
             else:
                 warnings.append(f"dark {v}: mean {f['luma']}")
     top = raw["frames"].get(cfg["top_view"]) or {}

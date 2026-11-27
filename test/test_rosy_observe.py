@@ -1,6 +1,7 @@
 """Observation pack: refusal codes, offline assembly from recorded cases, fetch through a fake cell, bridge tool, CLI."""
 from __future__ import annotations
 
+import ast
 import base64
 import copy
 import io
@@ -51,6 +52,20 @@ def pack_of(name: str, **patch: Any) -> dict[str, Any]:
 def test_refusal_sentences_map_to_one_code(why, code, sugg, nums):
     out = ref.classify(why)
     assert (out["code"], out["suggestions"], out["numbers"]) == (code, sugg, nums)
+
+
+def test_loop_modules_are_stdlib_only_and_pillow_is_function_local():
+    """The bridge and CLI are stdlib-only (D-226); the loop modules they load keep that: Pillow only inside a function, fail-closed."""
+    local = {p.stem for p in (ROOT / "tools" / "remote").glob("rosy_*.py")}
+    for name in ("rosy_observe", "rosy_observe_refusals", "rosy_plan", "rosy_verify", "rosy_llm_eval"):
+        tree = ast.parse((ROOT / "tools" / "remote" / f"{name}.py").read_text(encoding="utf-8"))
+        nested = {id(n) for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef) for n in ast.walk(fn)}
+        for node in ast.walk(tree):
+            mods = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+            for mod in mods:
+                top = mod.split(".")[0]
+                assert top in sys.stdlib_module_names or top in local or top == "" or (top == "PIL" and id(node) in nested), (name, mod)
+                assert top != "subprocess", name
 
 
 def test_plate_b_is_untrusted_so_the_planned_workbench_is_ask_human_only():
