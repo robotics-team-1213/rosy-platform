@@ -23,9 +23,17 @@ SAME_SPOT_M = 0.05
 SAME_SPOT_COUNT = 3
 
 
-def recovery_slow(detail: dict) -> bool:
+def first_leg(detail: dict, progress: float | None) -> bool:
+    """D-1087: a trip reissued after a back-off runs its first ``until_m`` of route slow and recentred."""
+    leg = detail.get("first_leg") or {}
+    return progress is not None and progress < leg.get("until_m", -1.0)
+
+
+def recovery_slow(detail: dict, progress: float | None = None) -> bool:
     """The resent route of attempt 2 or later runs slow until the episode closes (D-1082 RESET_M of progress past
     the resume): the cap lasts as long as the robot is still where it failed, and no fixed length guesses that."""
+    if first_leg(detail, progress):
+        return True
     rec = detail.get("recovery") or {}
     return rec.get("state") == "resumed" and rec.get("attempt", 0) >= SLOW_FROM_ATTEMPT
 
@@ -33,7 +41,10 @@ def recovery_slow(detail: dict) -> bool:
 def recovery_resend(live) -> bool:
     """True until a route sent after a recovery resumed is acknowledged (``resent_at``, set by resume_ready): that
     route recentres with no threshold, also when a first try is refused before it goes out."""
-    rec = live.view["detail"].get("recovery") or {}
+    detail = live.view["detail"]
+    if detail.get("first_leg") and live.at is not None and first_leg(detail, live.progress(*live.at)):
+        return True
+    rec = detail.get("recovery") or {}
     return rec.get("state") == "resumed" and rec.get("resent_at") is None
 
 

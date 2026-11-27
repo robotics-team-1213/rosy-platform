@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from fleet.server import trip_back_off as back
 from fleet.server.handoff_traffic import _fresh_stopped
 from fleet.server.trip_halts import error_code, halt_unconfirmed
 
@@ -63,8 +64,8 @@ def eligible(view: dict, request: dict) -> str | None:
     # "attempts" is the D-1082 ladder's record: without it a same-spot repeat could not be told, so no reissue.
     if (state == "stopped" and reason in ("stall", "navigation") and rec.get("state") == "exhausted"
             and detail.get("recovery_end") in _RECOVERY_ENDS and rec.get("waiting_for") is None
-            and "attempts" in rec and not rec.get("same_spot")):
-        return "recovery_exhausted"
+            and "attempts" in rec):
+        return "same_spot" if rec.get("same_spot") else "recovery_exhausted"   # same_spot: only after a back-off
     return None
 
 
@@ -140,11 +141,20 @@ class TripReissue:
         item = {"robot_id": view["robot_id"], "trip_id": view["trip_id"], "live": live, "request": request,
                 "principal": view.get("started_by"), "map_version": view.get("map_version"),
                 "binding_id": view["detail"].get("nav2_binding_id"), "reads": 0, "record": record,
-                "stops": self._stops(view["robot_id"]),
+                "stops": self._stops(view["robot_id"]), "chain": chain,
                 "root": chain.get("root", view["trip_id"])}
         if not item["principal"]:
             self._write(live, {**record, "state": "no_principal"})
             return
+        if kind == "same_spot":   # D-1087: the same request from the same spot fails the same way; back off first
+            count, total = chain.get("back_offs", 0), chain.get("back_off_m", 0.0)
+            if count >= back.MAX_BACK_OFFS or total + back.BACK_OFF_M > back.MAX_TOTAL_M + 1e-9:
+                rec = view["detail"].get("recovery") or {}
+                self._write(live, {**record, "state": "gave_up",
+                                   "gave_up": back.side_text(rec, rec.get("attempts") or [])})
+                return
+            item["back_off"] = record["back_off"] = {"phase": "pending", "attempt": count + 1,
+                                                     "distance_m": back.BACK_OFF_M, "total_m": total}
         record["next_at"] = now + REISSUE_DELAYS_S[attempt - 1]
         self.pending[view["robot_id"]] = item
         self._write(live, record)
@@ -156,7 +166,14 @@ class TripReissue:
             return
         if now < record["next_at"]:
             return
+        bo = item.get("back_off")
+        if bo is not None and bo["phase"] == "backing":
+            await self._backing(item, bo, now)
+            return
         why = await self._ready(item)
+        if why is None and bo is not None:   # D-1087: Fleet's own back-off conditions, then the look again
+            check = back.refusal if bo["phase"] == "pending" else back.looked_again
+            why = await check(self.runner, live, item["robot_id"], item["state"])
         if why is not None:   # wait one more interval; TOTAL_S still bounds the chain
             item["reads"] = 0
             record.update(waiting_for=why, checked_at=now, next_at=now + REISSUE_DELAYS_S[record["attempt"] - 1])
@@ -166,7 +183,53 @@ class TripReissue:
         item["reads"] += 1
         if item["reads"] < READY_READS:
             return
+        if bo is not None and bo["phase"] == "pending":
+            await self._step_back(item, bo, now)
+            return
         await self._start(item)
+
+    async def _step_back(self, item: dict, bo: dict, now: float) -> None:
+        """One CORE nudge_backward through the console's step; a refusal ends the chain (same spot stands)."""
+        robot_id = item["robot_id"]
+        me = await back._pose(self.runner, robot_id)
+        bo["before"] = None if me is None else [round(me.x, 4), round(me.y, 4)]
+        bo["lat_m"] = (item["live"].view["detail"].get("lane_departure") or {}).get("lat_m")
+        try:
+            answer = await self.runner.robot_step(robot_id, "backward", bo["distance_m"])
+        except Exception as exc:  # noqa: BLE001 - recorded; nothing moved
+            bo["result"] = _code(exc)
+            self._drop(item, "back_off_refused")
+            return
+        bo.update(phase="backing", started_at=now, mission=answer.get("state"), traffic_held=answer.get("traffic_held"))
+        item["reads"] = 0
+        self._write(item["live"], item["record"])
+        event = getattr(self.runner._store, "record_event", None)   # beside the console's own "step" events
+        if event is not None:
+            event("trip_back_off", item["principal"], {"robot_id": robot_id, "trip_id": item["trip_id"],
+                                                        "distance_m": bo["distance_m"], "attempt": bo["attempt"],
+                                                        "before": bo["before"], "by": "auto_reissue"})
+
+    async def _backing(self, item: dict, bo: dict, now: float) -> None:
+        """Wait for CORE to end the step; an end Fleet cannot read before the step's own bound is no reissue."""
+        limit = bo["distance_m"] / back.STEP_SPEED_MPS + back.STEP_SPARE_S
+        try:
+            status = await self.runner._call(self.runner.robot_step_status(item["robot_id"]))
+        except Exception:  # noqa: BLE001 - unread: CORE still ends the step on its own distance and time
+            status = None
+        state = (status or {}).get("state") if isinstance(status, dict) else None
+        if state in ("done", "aborted") and (status.get("kind") in (None, "nudge_backward")):
+            me = await back._pose(self.runner, item["robot_id"])
+            bo.update(result=state if state == "done" else f"aborted:{status.get('reason')}", ended_at=now,
+                      after=None if me is None else [round(me.x, 4), round(me.y, 4)])
+            if state != "done":
+                self._drop(item, "back_off_aborted")
+                return
+            bo["phase"] = "looking"
+            item["reads"] = 0
+            self._write(item["live"], item["record"])
+        elif now - bo["started_at"] >= limit:
+            bo.update(result="unconfirmed", ended_at=now)
+            self._drop(item, "back_off_unconfirmed")
 
     async def _ready(self, item: dict) -> str | None:
         """None when every condition holds on this read; else what is missing."""
@@ -179,6 +242,7 @@ class TripReissue:
             return "state_unread"
         if not isinstance(state, dict):
             return "state_unread"
+        item["state"] = state
         if (state.get("safety") or {}).get("estop") is not False:
             return "estop"
         if state.get("navigation") in _RUNNING or state.get("navigation") not in _SETTLED_NAV or not _fresh_stopped(state):
@@ -215,11 +279,17 @@ class TripReissue:
         record.update(state="reissued", next_trip_id=new_id, reissued_at=self.clock(), by="auto_reissue")
         self._write(item["live"], record)
         new = self.runner._find(new_id)
+        bo = item.get("back_off") or {}
+        backed = bo.get("result") == "done"
         if new is not None:
             new.view["detail"]["reissued_from"] = {
                 "trip_id": item["trip_id"], "root": item["root"], "attempt": record["attempt"],
                 "previous_reason": record["previous_reason"], "first_end_at": record["first_end_at"],
-                "by": "auto_reissue", "principal": item["principal"]}
+                "by": "auto_reissue", "principal": item["principal"],
+                "back_offs": item["chain"].get("back_offs", 0) + int(backed),
+                "back_off_m": round(item["chain"].get("back_off_m", 0.0) + (bo["distance_m"] if backed else 0.0), 3)}
+            if backed:   # D-1087: the first leg slow and recentred (nav2_recovery_ladder.first_leg)
+                new.view["detail"]["first_leg"] = {"until_m": back.FIRST_LEG_M, "why": "back_off"}
             self.runner._store.put_trip(new.view)
         _LOG.warning("trip %s: reissued as %s (%d/%d, %s)", item["trip_id"], new_id, record["attempt"],
                      MAX_REISSUES, record["kind"])
