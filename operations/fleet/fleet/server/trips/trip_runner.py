@@ -520,7 +520,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                     live._halt_retry_at = self._clock() + 2.0
                     self._inflight[robot_id] = asyncio.ensure_future(self._retry_unconfirmed_halt(live))
         self.halts.watch_handoff_stops(self._inflight)
-        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)))
+        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)),
+                           roster=self._roster() if self._roster is not None else ())
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)

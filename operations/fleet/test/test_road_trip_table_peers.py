@@ -15,7 +15,14 @@ from fleet.traffic.blocks import Layout, Robot, Span, TableState, Unit, step
 from fleet.traffic.lane_traffic import PAST_PLACE_M
 from fleet.traffic.lane_traffic_helpers import occupied_ahead
 from fakes import FakeClock, run
-from test_lane_traffic import _arc, _setup, _ticks, _trip
+from rosy.world.state.projections.map_pose import MapPose
+from fleet.server.peer_wait_prefix import traffic_end_index
+from fleet.server.site_map_store import SiteMapStore
+from fleet.server.trip_ports import TripConfig
+from fleet.server.trip_runner import TripRunner
+from test_lane_traffic import Fleet, _arc, _setup, _ticks, _trip
+from test_routing import demo_site
+from fakes import fresh_battery
 from test_trip_nav2_route import RouteFakeRobot
 
 BODY = PINKY_PRO.front_x_m - PINKY_PRO.rear_x_m
@@ -204,3 +211,46 @@ def test_an_offline_marker_peer_still_refuses_with_table_peers():
                                          clear=lambda *args: False)
     reply = run(console.route("rosy_42", PTS, lease_source="trip", table_peers=COUNTED))
     assert reply["accepted"] is False and mover.routes == []
+
+
+# ---- an idle robot the table never saw on a trip (Fleet restart) ---------------------------------
+
+def _restarted(peer_pose):
+    """A fresh table (no trip history); 'a' stands idle at ``peer_pose`` and is only on the roster."""
+    fleet = Fleet(("a", "b"))
+    store = SiteMapStore(None, clock=lambda: fleet.now)
+    store.import_if_empty(demo_site(), source="test")
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for,
+                        battery=fresh_battery, poses=fleet, junction=fleet, goal=fleet.goal,
+                        cancel_goal=fleet.cancel_goal, blocked=lambda: fleet.blocked, clock=lambda: fleet.now,
+                        config=TripConfig(), roster=lambda: ["a", "b"])
+    east = _arc(store, "east:fwd")
+    fleet.p["a"].pose = peer_pose(east)
+    return runner, store, fleet, east
+
+
+def test_an_idle_roster_robot_on_a_lane_is_pinned_and_a_road_route_ends_before_it():
+    runner, store, fleet, east = _restarted(lambda east: MapPose(
+        *east.point_at(east.length_m * 0.6), "LOCALIZED", "sighting", 0.0, 0.1, 0.1))
+    assert runner.traffic.pinned() == []
+    _trip(runner, store, fleet, "b", "east:fwd", east.length_m * 0.1)
+    _ticks(runner, fleet, n=2)
+    assert runner.traffic.pinned() == ["a"]
+    live = runner._live["b"]
+    assert "a" in live.traffic["peers"] and live.traffic["occupied_ahead_m"] is not None
+    live.traffic = {**live.traffic, "pose_stamp": fleet.now}  # this harness reads poses without a stamp
+    end = traffic_end_index(runner, live, live.view["segment_index"])
+    assert end is None or end < len(live.segments) - 1  # never sent into a's unit
+
+
+@pytest.mark.parametrize("pose", [
+    lambda east: MapPose(5.0, 5.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1),          # off the lanes
+    lambda east: MapPose(*east.point_at(1.0), "LOCALIZED", "sighting", 0.0, 30.0, 30.0),  # stale
+    lambda east: MapPose(*east.point_at(1.0), "UNKNOWN", "sighting", 0.0, 0.1, 0.1),      # not localized
+])
+def test_no_pin_from_an_off_lane_stale_or_unlocalized_idle_robot(pose):
+    runner, store, fleet, east = _restarted(pose)
+    _trip(runner, store, fleet, "b", "east:fwd", east.length_m * 0.1)
+    _ticks(runner, fleet, n=2)
+    assert runner.traffic.pinned() == []
+    assert "a" not in runner._live["b"].traffic["peers"]

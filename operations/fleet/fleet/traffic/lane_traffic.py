@@ -271,6 +271,11 @@ class TrafficService(SignalService):
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
             self._pin(robot_id)
         moving = {live.view["robot_id"] for live in lives if live.open}  # open trips on an old map
+        for robot_id in sorted(recent & set(fresh) & set(poses or {}) - set(trips) - moving - set(state.pinned)):
+            # A tripless robot read this period on a recent LOCALIZED pose: pinned where it stands (a lane
+            # unit under its body), like a robot that ended its trip. Without one the table does not know it.
+            if units := self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id)):
+                state.pinned[robot_id] = units
         for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
             units = self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id))
             if robot_id in moving:  # still driving: its pose may lag a period, so pins only grow
@@ -360,9 +365,10 @@ class TrafficService(SignalService):
                 return True
         return False
 
-    def watch(self, inflight: dict, busy, read) -> None:
-        """A pinned robot without a trip or a read in flight gets one (hub cache, no forced REST read)."""
-        for robot_id in self.pinned():
+    def watch(self, inflight: dict, busy, read, roster: Iterable[str] = ()) -> None:
+        """A pinned or roster robot without a trip or a read in flight gets one (hub cache, no forced REST read).
+        Roster robots let the table pin an idle robot it never saw on a trip (e.g. after a Fleet restart)."""
+        for robot_id in sorted({*self.pinned(), *roster}):
             task = inflight.get(robot_id)
             if not busy(robot_id) and (task is None or task.done()):
                 inflight[robot_id] = asyncio.ensure_future(self._watch(robot_id, read))
