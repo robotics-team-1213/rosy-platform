@@ -3,7 +3,7 @@
   1. replans at 2 Hz (stock 0.333 Hz): a path that became blocked is noticed in 0.5 s, while driving.
   2. RemovePassedGoals radius 0.05 m (stock 0.7 m): keeps 0.12 m route samples and 0.224 m 0-loop
      U-turn vertices from being swallowed early so the robot does not cut across the center line.
-     11-27 rosy_45: 0.09 let the robot cut the R~0.135 m right U-turn arc by 10-12 cm; 0.05 pairs with RPP lookahead 0.07.
+     11-27 rosy_45: 0.09 let the robot cut the R~0.135 m right U-turn arc by 10-12 cm; 0.05 pairs with RPP min lookahead 0.13.
      It runs on every BT tick, outside the 2 Hz RateController: at 0.15 m/s a 2 Hz check moves 7.5 cm between looks,
      so a robot passing 3-4 cm beside a sample never saw it inside 0.05 m, the sample stayed, and the next plan
      turned the robot back to it (11-27 rosy_45 lap: a 324 deg spin in place on lower_east).
