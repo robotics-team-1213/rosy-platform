@@ -37,6 +37,25 @@ def test_site_finger_params_override_global_params_for_finger_room(monkeypatch):
     assert "evidence" not in seen[0]
 
 
+def test_belt_site_without_start_orders_by_reach_instead_of_key_error(monkeypatch):
+    """2026-11-27: auto_pick_dry_run from the live belt site (moves, no start/place) died with KeyError 'start'."""
+    import cell_auto_pick_plan as cap
+
+    seen = []
+    monkeypatch.setattr(cap, "predicted_pixel", lambda *a: (100, 100))
+    monkeypatch.setattr(cap, "past_pan_limit", lambda *a: None)
+    monkeypatch.setattr(cap, "past_park_reach", lambda *a: None)
+    monkeypatch.setattr(cap, "finger_room", lambda _m, _r, _pf, o, *_a, **_kw: seen.append(o["raw_m"]) or {"margin_mm": None, "free_mm": [1.0, 1.0]})
+    monkeypatch.setattr(cap, "reachable_ends", lambda *a: [])
+    cfg = {"params": {"auto.neighbour_clear_mm": 0.0},
+           "sites": {"belt": {"z": -0.0401, "moves": True, "moving_px": [260, 0, 370, 170], "auto_roi": [285, 15, 385, 168]}}}
+    far = {"raw_m": [0.20, 0.10], "matched": True, "object": "c2", "long_axis_deg": 0.0, "centre_mm": [200, 100]}
+    near = {"raw_m": [0.12, 0.05], "matched": True, "object": "c2", "long_axis_deg": 0.0, "centre_mm": [120, 50]}
+    cat = [{"id": "c2", "length_mm": 60, "width_mm": 30}]
+    usable, refused = cap.choose(None, cfg, {}, "belt", "pallet", [0.1, -0.05], [0, 0, 300, 300], [far, near], None, cat, {}, [], None, set(), None)
+    assert not usable and len(refused) == 2
+    assert seen == [[0.12, 0.05], [0.20, 0.10]]  # nearest to the arm axis first
+
 def _beltend_room_fixture(tmp_path):
     import copy
     import json
