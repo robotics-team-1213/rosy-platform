@@ -54,6 +54,10 @@
 .context-panel .formation { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel .ops-block { grid-template-columns: minmax(0, 1fr); }
 #context-tools .ops-block > * { grid-column: 1; grid-row: auto; }
+.context-shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); align-items: stretch; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); background: var(--surface-canvas); }
+.context-shortcuts > * { min-width: 0; width: 100%; justify-content: center; text-align: center; }
+.context-shortcuts > a { display: inline-flex; align-items: center; padding: 0 var(--space-3); border: 1px solid var(--control-line); border-radius: var(--radius-button); background: var(--surface-flat); color: var(--text-primary); text-decoration: none; }
+.context-shortcuts > a:hover { border-color: var(--border-strong); background: var(--surface-raised); }
 #inbox-messages pre, .stuck-result pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-micro); }
 
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
@@ -189,7 +193,7 @@ main {
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
   #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
-  .ops-block { gap: var(--space-2); }
+  .ops-block { gap: var(--space-2); padding-block: var(--space-2); }
   .ops-block > h2 { margin: 0; }
   /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */
   .ops-block > .formation { margin-top: 0; }
@@ -210,11 +214,6 @@ main {
   border: 1px solid var(--line-06);
   border-radius: var(--radius-panel);
   padding: var(--space-4) var(--space-4) var(--space-4);
-}
-@media (width >= 64rem) {
-  .console-secondary { gap: var(--space-2); }
-  .ops-block { gap: var(--space-1); padding-block: var(--space-2); }
-  .formation .diag-readout { margin: 0; }
 }
 
 .panel h2 { font-weight: var(--weight-strong); font-size: var(--text-title); margin: 0 0 var(--space-3); }
@@ -436,14 +435,18 @@ main {
 .signals:not(:has(> .signal-cards > *)) .hint { display: none; }
 .signals:not(:has(> .signal-cards > *)) { min-height: 0; }
 
-/* D-415 — 신호등 빈 상태 */
-
-/* D-415 — 진단 패널 */
-.console-diagnostics { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
-.console-diagnostics > summary { margin-bottom: var(--space-2); }
-.diag-readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); font-size: var(--text-micro); }
-.diag-readout dt { font-family: var(--mono); color: var(--text-secondary); letter-spacing: var(--track-label); }
-.diag-readout dd { margin: 0; font-family: var(--mono); color: var(--text-primary); overflow-wrap: break-word; }
+/* D-415 — 신호등 빈 상태 & 진단 패널 */
+.console-diagnostics { margin: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-button); background: var(--surface-canvas); }
+.console-diagnostics > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; border: 0; border-radius: var(--radius-button); background: transparent; padding: var(--space-2) var(--space-3); }
+.console-diagnostics > summary::after { content: "▸"; color: var(--text-secondary); font-family: var(--mono); }
+.console-diagnostics > summary:hover, .console-diagnostics[open] > summary { background: var(--surface-flat); }
+.console-diagnostics[open] > summary { border-bottom: 1px solid var(--border-subtle); border-radius: var(--radius-button) var(--radius-button) 0 0; }
+.console-diagnostics[open] > summary::after { content: "▾"; color: var(--text-primary); }
+.diag-readout { display: grid; grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr); margin: 0; padding: var(--space-2) var(--space-3); border-radius: 0 0 var(--radius-button) var(--radius-button); background: var(--surface-recessed); font-size: var(--text-micro); font-variant-numeric: tabular-nums; line-height: var(--leading-body); }
+.diag-readout dt { padding-block: var(--space-1); border-bottom: 1px solid var(--border-subtle); font-family: var(--mono); color: var(--text-secondary); letter-spacing: var(--track-label); white-space: nowrap; }
+.diag-readout dd { margin: 0; padding-block: var(--space-1); padding-inline-start: var(--space-3); border-bottom: 1px solid var(--border-subtle); font-family: var(--mono); color: var(--text-primary); text-align: end; overflow-wrap: anywhere; }
+.diag-readout :is(dt:last-of-type, dd:last-of-type) { border-bottom: 0; }
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) { .context-shortcuts > *, .console-diagnostics > summary { min-height: var(--target-tool); } }
 
 .note {
   margin: var(--space-3) 0 0;
