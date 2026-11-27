@@ -30,6 +30,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const motorHealth = createFleetMotorHealth({view, scope});
   const profiles = createRobotProfiles({call, scope, render});
   const expandedMoreIds = new Set();
+  const expandedUtilIds = new Set();
   const summary = createRosterSummary({view, attentionItems, motorHealth, expandedMoreIds});
   const workspaceCards = new Map();
   function openCard(robotId, opts = {}) {
@@ -476,18 +477,27 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       }
     }));
     const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason });
-    actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
+    actions.prepend(aim, trip.toggle(robot), cancel);
+    let moveBtn = null;
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
-      const move = document.createElement("ui-button");
-      move.setAttribute("kind", "quiet");
-      move.type = "button";
-      move.dataset.moveRobotId = robot.robot_id;
-      move.textContent = "새 주소로 옮기기…";
-      setOffBy(move, moveAddressBlocked());
-      move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
-      actions.append(move);
+      moveBtn = document.createElement("ui-button");
+      moveBtn.setAttribute("kind", "quiet");
+      moveBtn.type = "button";
+      moveBtn.dataset.moveRobotId = robot.robot_id;
+      moveBtn.textContent = "새 주소로 옮기기…";
+      setOffBy(moveBtn, moveAddressBlocked());
+      moveBtn.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
     }
+    const utilDetails = document.createElement("details");
+    utilDetails.className = "robot-util-details";
+    utilDetails.open = expandedUtilIds.has(robot.robot_id);
+    utilDetails.addEventListener("toggle", () => {
+      if (utilDetails.open) expandedUtilIds.add(robot.robot_id); else expandedUtilIds.delete(robot.robot_id);
+    });
+    const utilActions = node("div", "", "robot-actions");
+    utilActions.append(pin, identify, powerButton, ...(moveBtn ? [moveBtn] : []));
+    utilDetails.append(node("summary", "보조 조작 (위치 찍기 · LED · 전원)", "ui-disclosure-row"), utilActions);
     if (more.childElementCount) {
       const toggle = Object.assign(node("button", "자세히", "link"), { type: "button" });
       toggle.dataset.moreToggle = more.dataset.moreBody = "";
@@ -500,7 +510,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       }));
       article.append(toggle, more);
     }
-    article.appendChild(actions);
+    article.append(actions, utilDetails);
     const tripForm = view.stateUnavailable ? null : trip.section(robot);
     if (tripForm) article.appendChild(tripForm);
     if (goalSafetyReason) article.append(node("p", goalSafetyReason, "hint"));

@@ -11,6 +11,7 @@ import { createMotorHealthState, renderMotorHealth } from "/common/motor-health.
 import { robotProfile, armEffectivePose, armPositionLine, armCameraChannels, mobileCameraChannels } from "/console/assets/robot-profile.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { node } from "/common/control-dom.js";
+import { armIncidentAlertRows } from "/console/assets/arm-incident-clear.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
@@ -19,13 +20,15 @@ import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { rosterPower } from "./roster-presentation.js";
 import { staleAgeS } from "./state-age.js";
 
-export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "" }) {
+export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "", openQueueRow = null }) {
   const locPanel = createLocalizationPanel({ scope, view, auth, call, log, render, confirmedAction, isOperator, namedReason });
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
   const camFeed = createCellFrameFeed({ call, scope, intervalMs: 2000 });
   camFeed.setRunning(false);
   const armHealthState = createMotorHealthState();
+  const faultsBox = document.createElement("ul");
+  faultsBox.className = "robot-fault-list";
   const statusWrap = document.createElement("div");
   statusWrap.className = "robot-panel-status-wrap";
   const twinSlot = document.createElement("div");
@@ -65,6 +68,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   let yieldedForGoal = false;
   let sampleSeq = 0;
   let lastSampleStamp = "";
+  let lastFaultsSig = "";
   let lastArmStatusSig = "";
   let lastSettingsSig = "";
   let lastCamToggleSig = "";
@@ -84,6 +88,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   function clearInspectorHosts() {
     locPanel.clear();
     lastSampleStamp = "";
+    lastFaultsSig = "";
     lastArmStatusSig = "";
     lastSettingsSig = "";
     lastCamToggleSig = "";
@@ -168,11 +173,18 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       const evidence = view.stateUnavailable ? "unavailable"
         : !robot.online ? "disconnected"
         : staleS !== null ? "delayed" : "fresh";
-      const alarm = !view.stateUnavailable && robot.calibration
-        ? { level: "caution", text: "보정 중" }
-        : !view.stateUnavailable && robot.online && robot.error
-          ? { level: "caution", text: robot.error.code || "오류" }
-          : undefined;
+      const attn = view.stateUnavailable ? [] : (roster.attentionItems?.(robot) || []);
+      const critN = attn.filter((i) => i.severity === "crit").length;
+      const warnN = attn.length - critN;
+      const alarm = critN > 0
+        ? { level: "danger", text: `최우선 ${critN}건`, count: attn.length }
+        : warnN > 0
+          ? { level: "caution", text: `주의 ${warnN}건`, count: attn.length }
+          : !view.stateUnavailable && robot.calibration
+            ? { level: "caution", text: "보정 중" }
+            : !view.stateUnavailable && robot.online && robot.error
+              ? { level: "caution", text: robot.error.code || "오류" }
+              : undefined;
       const guideRow = !view.stateUnavailable
         ? (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id) || null
         : null;
@@ -244,11 +256,11 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         servo: { currentMa: currentMa ?? undefined, temperatureC: tempC ?? undefined },
         place: armPositionLine(def, anc, cellId),
         task: anc.cell_status || (obsArm?.fresh ? "실시간 관측" : obsArm ? "대기" : undefined),
-        alarm: hold && obsArm?.heldIncidents?.length ? { level: "caution", text: `보류 ${obsArm.heldIncidents.length}건` }
-          : hwFault ? { level: "danger", text: "모터 고장" }
+        alarm: hwFault ? { level: "danger", text: "모터 고장" }
+          : hold && obsArm?.heldIncidents?.length ? { level: "danger", text: `보류 ${obsArm.heldIncidents.length}건`, count: obsArm.heldIncidents.length }
           : obsArm?.homeRecoveries?.length ? { level: "caution", text: "홈 복구 대기" }
           : hold ? { level: "caution", text: "홀드 중" }
-          : obsArm?.openIncidents?.length ? { level: "caution", text: `사건 ${obsArm.openIncidents.length}건` }
+          : obsArm?.openIncidents?.length ? { level: "caution", text: `사건 ${obsArm.openIncidents.length}건`, count: obsArm.openIncidents.length }
           : undefined,
       });
       return { profile, detail: { def, anc, obsArm, cellId, effectivePose: pose, currentMa, tempC, pwmPct } };
@@ -315,6 +327,38 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       render();
     },
     sections: {
+      faults(profile, detail) {
+        if (view.stateUnavailable) return null;
+        const armRows = profile.kind === "arm" ? armIncidentAlertRows(view.workcellObs) : null;
+        const matchId = detail?.obsArm?.sourceId || profile.id;
+        const raw = armRows ? [...armRows.crit, ...armRows.warn].filter((r) => r.arm?.id === profile.id || r.arm?.sourceId === matchId || r.robotId === matchId || r.robotId === profile.id)
+          : (detail?.robot ? (roster.attentionItems?.(detail.robot) || []) : []);
+        const rows = raw.map((r) => ({
+          severity: r.severity === "crit" ? "crit" : "warn",
+          text: String(r.text || "").replace(/^:\s*/, ""),
+          key: r.key || (r.decision ? `${profile.id}|${r.decision}` : null),
+        }));
+        if (!rows.length) return null;
+        const sig = `${profile.id}:${JSON.stringify(rows)}`;
+        if (sig !== lastFaultsSig) {
+          lastFaultsSig = sig;
+          faultsBox.replaceChildren(...rows.map((r) => {
+            const li = node("li", "", "robot-fault-item");
+            li.dataset.severity = r.severity;
+            const t = node("ui-tag", r.severity === "crit" ? "최우선" : "주의");
+            t.setAttribute("status", r.severity); t.setAttribute("variant", "inline");
+            const btn = node("ui-button", "알림 서랍 열기");
+            btn.type = "button";
+            btn.setAttribute("kind", "quiet");
+            btn.addEventListener("click", scope.guard(() => (
+              r.key && openQueueRow ? openQueueRow(r.key) : (el("queues-panel")?.dataset.open !== "true" && el("fleet-inbox")?.click())
+            )));
+            li.append(t, node("span", r.text), btn);
+            return li;
+          }));
+        }
+        return faultsBox;
+      },
       status(profile, detail) {
         syncTwin(profile, detail);
         if (profile.kind === "arm") {
