@@ -158,7 +158,7 @@ function mountRobotVideoPanel({doc = document} = {}) {
   if (!anchor || doc.getElementById("robot-video")) return null;
   ensureVideoCss(doc);
   // 접힌 채 시작한다: 펼치기 전에는 Fleet에 아무것도 묻지 않고(상태 폴링에 요청을 더하지 않는다) 영상도 열지 않는다.
-  const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video"});
+  const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video", "data-unit-scope": "drive"});
   const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading", class: "ui-disclosure-row"});
   const picker = el(doc, "fieldset", null, {"data-robot-video-picker": ""});
   picker.append(el(doc, "legend", `로봇 선택(최대 ${MAX_TILES}대)`));

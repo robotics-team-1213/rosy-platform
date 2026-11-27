@@ -77,19 +77,37 @@ def test_pick_free_anchor_needs_the_frame_and_the_destination(drop):
 PUSH_ARGV = ["push", "--site", "belt", "--px", "300,200", "--dir", "1,0", "--mm", "10", "--frame-seq", "41", "--frame-sha256", SHA]
 
 
-def test_push_is_always_the_propose_tool_and_needs_approval():
-    bridge = Bridge()
+def test_push_uses_the_dispatch_tool_like_pick_and_the_propose_flag_keeps_the_propose_tool():
+    """Owner decision 2026-11-28: a push is auto-admitted like the free pick when the site switch is on; --propose asks a human."""
+    bridge = Bridge({"ok": True, "data": {"task": {"task_id": "t", "status": "QUEUED"}}})
     res = cli.cmd_push(bridge, _args([*PUSH_ARGV, "--arm", "arm_a"]))
     (name, payload), = bridge.calls
-    assert name == "fleet_propose_cell_task" and res["needs_approval"] is True
+    assert name == "fleet_dispatch_cell_task" and "needs_approval" not in res
     assert payload == {"cell_id": "cell_ab", "arm_id": "arm_a", "motion": {
         "kind": "push", "site": "belt", "px": [300, 200], "dir": [1.0, 0.0], "mm": 10.0, "frame_seq": 41, "frame_sha256": SHA}}
-    assert br._validate_args(br.TOOL_MAP["fleet_propose_cell_task"], payload) is None
+    assert br._validate_args(br.TOOL_MAP["fleet_dispatch_cell_task"], payload) is None
+    proposed = Bridge()  # the fake's default answer is a PROPOSED task
+    res = cli.cmd_push(proposed, _args([*PUSH_ARGV, "--propose"]))
+    assert proposed.calls[0][0] == "fleet_propose_cell_task" and res["needs_approval"] is True
+    assert br._validate_args(br.TOOL_MAP["fleet_propose_cell_task"], proposed.calls[0][1]) is None
+
+
+def test_push_follows_pick_for_the_auto_admit_flag_and_a_switch_off_answer_still_reports_needs_approval():
+    bridge = Bridge()
+    res = cli.cmd_push(bridge, _args([*PUSH_ARGV, "--auto-admit"]))
+    (name, payload), = bridge.calls
+    assert name == "fleet_dispatch_cell_task" and payload["auto_admit"] is True
+    assert res["needs_approval"] is True  # Fleet answered PROPOSED (switch off or not a service principal): a named human still has to admit it
+    pick = Bridge()
+    cli.cmd_pick(pick, _args([*FREE_ARGV, "--auto-admit"]))
+    assert pick.calls[0][0] == name and pick.calls[0][1]["auto_admit"] is True  # the same tool and flag as rosy pick
 
 
 def test_push_dry_run_sends_nothing_and_a_failed_call_is_not_marked_approved():
     bridge = Bridge()
-    assert cli.cmd_push(bridge, _args([*PUSH_ARGV, "--dry-run"]))["dry_run"] is True and bridge.calls == []
+    dry = cli.cmd_push(bridge, _args([*PUSH_ARGV, "--dry-run"]))
+    assert dry["dry_run"] is True and dry["tool"] == "fleet_dispatch_cell_task" and bridge.calls == []
+    assert cli.cmd_push(bridge, _args([*PUSH_ARGV, "--dry-run", "--propose"]))["tool"] == "fleet_propose_cell_task"
     bad = cli.cmd_push(Bridge({"ok": False, "status": 422}), _args(PUSH_ARGV))
     assert bad["ok"] is False and "needs_approval" not in bad
     assert cli.cmd_push(Bridge(), _args([a for a in PUSH_ARGV if a != "--frame-sha256" and a != SHA]))["error_code"] == "INVALID_ARGS"

@@ -18,7 +18,7 @@ function buildObjectStagingBar({
   wrap.setAttribute("role", "region");
   wrap.setAttribute("aria-label", "선택 객체 1회 집기·놓기");
 
-  const status = node("p", "", "cell-obj-staging-status");
+  const status = node("div", "", "cell-obj-staging-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
 
@@ -37,7 +37,12 @@ function buildObjectStagingBar({
   else if (!selectedObject.pickable) lockReason = `집기 제한: ${selectedObject.veto_reason || "선택 불가"}`;
   else if (busy) lockReason = "요청 처리 중";
 
-  status.textContent = statusText || (lockReason ? `${metaTxt} — ${lockReason}` : metaTxt);
+  const head = node("div", "", "cell-obj-staging-head");
+  const badge = node("ui-tag", !fresh ? "만료" : !selectedObject.pickable ? "제한" : "① 선택됨");
+  badge.setAttribute("variant", "inline");
+  badge.setAttribute("status", fresh && selectedObject.pickable ? "active" : "warn");
+  head.append(badge, node("code", metaTxt, "cell-obj-staging-meta"));
+  status.append(head, node("span", statusText || lockReason || `카탈로그 일치 · ${selectedObject.site} 파지 준비됨`));
   wrap.append(status);
 
   const controls = node("div", "", "cell-obj-staging-controls");

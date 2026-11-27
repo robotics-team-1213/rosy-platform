@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from fleet.localization.map_binding import BindingError, bound_pose, fit_rigid, propose_from_walls
 from fleet.localization.wall_grid import build as build_wall_grid
 from fleet.server.http_errors import http_error
+from fleet.server.map_binding_auto import read_signature
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_routes import site_map_error
 from fleet.swarm.transport import RobotApiError
@@ -142,7 +143,7 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
         fit, reason = bindings.matching_fit(robot_id, state, _site(site_maps))
         body = {"active": bindings.active(robot_id), "history": bindings.history(robot_id),
                 "matches": reason == "", "reason": reason or None,
-                "robot_grid_id": state.get("map_grid_id")}
+                "robot_grid_id": state.get("map_grid_id"), "auto_rebind": bindings.auto_notes.get(robot_id)}
         pose = state.get("pose") or {}
         if fit is not None and all(isinstance(pose.get(k), (int, float)) for k in ("x", "y", "yaw")):
             # The robot's own SLAM pose in site coordinates beside the camera's: read-only, it moves nothing.
@@ -181,7 +182,8 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
             if state.get("map_grid_id") != expected.robot_grid_id:
                 raise site_map_error(409, "MAP_BINDING_GRID_CHANGED", "samples belong to a different robot grid")
         try:
-            return bindings.approve(robot_id, state, site, body.pairs, body.holdout, principal.principal_id)
+            sig = await read_signature(lambda rid: console._client(rid).map(), state_of, robot_id, state)  # for auto-rebind
+            return bindings.approve(robot_id, state, site, body.pairs, body.holdout, principal.principal_id, grid_sig=sig)
         except BindingError as exc:
             raise fail(exc) from exc
 

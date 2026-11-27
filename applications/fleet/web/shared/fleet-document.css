@@ -8,6 +8,6 @@ body { margin: 0; }
 .fleet-document #account-list ui-button { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
 /* 계정 표는 칸을 쪼개지 않고, 좁으면 표 영역이 가로로 스크롤한다. */
 #account-list td { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.fleet-document table td, .fleet-document table th { padding: var(--space-2) var(--space-3); }
+.fleet-document table td, .fleet-document table th { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line-06); font-variant-numeric: tabular-nums; }
 /* nowrap 표가 넓어져도 sr-only 머리글 같은 절대 위치 자식이 문서 폭을 늘리지 않게 한다. */
 .ui-table-scroll { position: relative; }

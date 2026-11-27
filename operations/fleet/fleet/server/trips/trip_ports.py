@@ -190,6 +190,8 @@ class TripConfig:
     #: D-1022: a free goal needs an approved map binding for the robot's loaded grid and the active
     #: site map version; the robot's own map_id equal to the site's no longer proves one frame.
     map_binding_required: bool = False
+    #: A robot whose map file was redrawn in the same frame is re-bound by Fleet after its own proof (map_binding_auto).
+    map_auto_rebind: bool = True
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -212,7 +214,7 @@ class TripConfig:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
-            if item.name in ("lane_camera_check", "auto_align", "map_binding_required"):
+            if item.name in ("lane_camera_check", "auto_align", "map_binding_required", "map_auto_rebind"):
                 if not isinstance(value, bool):
                     raise ValueError(f"fleet.trip.{item.name} must be true or false")
                 continue

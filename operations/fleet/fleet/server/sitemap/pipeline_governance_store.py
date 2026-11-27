@@ -164,10 +164,15 @@ def build_cell_readiness(
         held = bool(h.get("held"))
         if held:
             refusals.append(f"{aid}:incident_held")
+        stamp = st["folded_updated_at"] if "folded_updated_at" in st else st.get("updated_at")
+        current = bool(st.get("observed")) and stamp is not None and 0 <= time.time() - float(stamp) <= 15.0
         arms[aid] = {
             "held": held,
             "reason": h.get("reason"),
-            "folded": st.get("folded"),
+            "folded": st.get("folded") if current else None,
+            "state_unknown": None if current else {
+                "reason": "stale" if st.get("observed") else "never_observed",
+                "last_observed_at": stamp if st.get("observed") else None},
             "observed": bool(st.get("observed")),
             "fresh": bool(st.get("fresh")),
             "active_task_id": st.get("active_task_id"),
@@ -523,8 +528,6 @@ def admit_cell_task_guarded(
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         if task.get("status") != "PROPOSED":
             raise HTTPException(409, detail={"code": "CELL_TASK_NOT_PROPOSED"})
-        if (task.get("motion") or {}).get("kind") == "push":
-            raise HTTPException(409, detail={"code": "PUSH_NOT_EXECUTABLE"})  # a push has no execution or completion path yet
         proposer = str(task.get("proposer") or "").strip()
         if not proposer or proposer == approver:
             raise HTTPException(403, detail={"code": "SELF_APPROVAL_FORBIDDEN"})

@@ -57,6 +57,12 @@ LOCALIZED = "LOCALIZED"
 HELD_PER_ROBOT = blocks.HELD_PER_ROBOT
 #: Before its junction instruction goes out a robot asks for the block just past the place.
 PAST_PLACE_M = 0.05
+#: A robot counts as standing when two poses a period apart are this close: only then is its pin's side reach the
+#: body's own (a tripless robot may still be moved by a jog, a dock or a recovery; that keeps u).
+STANDING_M = 0.01
+#: Past the radius a standing body sweeps: the body margin (URDF and calibration error, floor slip), the same
+#: 0.02 m as core_common.robot_body.MARGIN_M, which is not part of the safety public API.
+STANDING_SIDE_M = 0.02
 #: D-517 9 M3 (Safety-Review): the most a convoy member may reverse below the farthest point it reached,
 #: added to the follower's moving-block gap. D-407 stuck back-off: one ``recovery_back_m`` (default 0.08,
 #: config cap 0.20; a next attempt needs that much forward travel first); then a D-468 retrace: ≤ 0.15 m
@@ -144,9 +150,14 @@ class TrafficService(SignalService):
             self._busy, self._occupancy = None, {}
         return self._layout
 
-    def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float], extra: float = 0.0) -> dict[str, bool]:
-        """``{unit: forward}`` a robot body at ``pose`` (± its length, u and ``extra`` along the lane) may touch."""
-        return units_under_pose(layout, graph, pose, self._length, self._u_max, extra)
+    def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float], extra: float = 0.0,
+               *, fresh: bool = False) -> dict[str, bool]:
+        """``{unit: forward}`` a robot body at ``pose`` (± its length, u and ``extra`` along the lane) may touch.
+        ``fresh``: a LOCALIZED pose read this period of a standing robot: beside a lane it counts by the radius
+        its body sweeps at any heading plus the body margin (0.0826 + 0.02), never more than u. With u a robot in one
+        charge bay pinned the bays 0.226 m to either side too. Along the lane the reach is the same."""
+        side = min(self._u_max, self._body.rotation_radius_m + STANDING_SIDE_M) if fresh else None
+        return units_under_pose(layout, graph, pose, self._length, self._u_max, extra, side)
 
     def _pin(self, robot_id: str) -> None:
         """Its trip left the table: grants and last body stay as pins (D-517 6)."""
@@ -253,6 +264,8 @@ class TrafficService(SignalService):
                   if p and type(p.get("age_s")) in (int, float) and 0 <= p["age_s"] < STALE_POSE_S}
         fresh = {robot_id: (p["x"], p["y"], p["yaw"]) for robot_id, p in fresh.items()
                  if p and p.get("state") == LOCALIZED and p.get("x") is not None and p.get("y") is not None}
+        still = {robot_id for robot_id, pose in fresh.items() if robot_id in recent and robot_id in self._last_pose
+                 and math.dist(pose[:2], self._last_pose[robot_id][:2]) <= STANDING_M}
         self._last_pose.update(fresh)
         active = self._store.active()
         layout = self._layout_for(active)
@@ -275,10 +288,12 @@ class TrafficService(SignalService):
         for robot_id in sorted(recent & set(fresh) & set(poses or {}) - set(trips) - moving - set(state.pinned)):
             # A tripless robot read this period on a recent LOCALIZED pose: pinned where it stands (a lane
             # unit under its body), like a robot that ended its trip. Without one the table does not know it.
-            if units := self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id)):
+            if units := self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id),
+                                    fresh=robot_id in still):
                 state.pinned[robot_id] = units
         for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
-            units = self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id))
+            units = self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id),
+                                fresh=robot_id in still and robot_id not in moving)
             if robot_id in moving:  # still driving: its pose may lag a period, so pins only grow
                 state.pinned[robot_id] = {**state.pinned[robot_id], **units}
             elif units:  # where it stands now replaces the pins

@@ -1546,6 +1546,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
   - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_push_measure.py
   - deploy/robot/omx/cell_pivot.py
   - deploy/robot/omx/cell_step.py
   - deploy/robot/omx/cell_z_shuttle.py

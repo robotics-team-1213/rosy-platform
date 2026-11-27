@@ -32,7 +32,7 @@ from fleet.server.map_pose_service import MapPoseService, install_map_pin_route,
 from fleet.server.offline_marker import OfflineMarkerClearance
 from fleet.server.offline_pin import OfflinePinStore, mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
-from fleet.server.nudge_routes import install_nudge_step_route
+from fleet.server.nudge_routes import install_nudge_step_route, request_step
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore
@@ -327,6 +327,13 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
         renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
         align_gate=station_align_gate(app.state))
+    from fleet.server.map_binding_auto import AutoRebind, camera_sighting  # D-1022: same-frame grid swaps re-bind
+
+    async def fresh_state(robot_id):
+        return (await console._gather_state(robot_id))[0]
+
+    trip_runner.auto_rebind = AutoRebind(site_maps, grid=lambda robot_id: console.clients()[robot_id].map(),
+                                         state=fresh_state, camera=partial(camera_sighting, map_pose))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
 
     async def read_trip_navigation(robot_id, run_id):
@@ -421,6 +428,10 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event, cable_inhibited=cable_inhibited)
+    # D-1087: the reissue's back-off takes the console's own step (same checks) and reads CORE's mission state
+    trip_runner.robot_step = partial(request_step, console, trip_busy=trip_runner.robot_busy,
+                                     cable_inhibited=cable_inhibited)
+    trip_runner.robot_step_status = lambda robot: console.clients()[robot].localization_mission_status()
 
     trip_runner.bay_cable_inhibited = cable_inhibited
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
@@ -441,6 +452,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
         tracking=tracking if tracking is not None and tracking.enabled else None,
         sightings=sightings, zones=trip_runner.traffic.zone_edges)
+    lane = getattr(app.state, "lane_compliance", None)
+    if lane is not None:   # D-1084: the lane watch skips parking handoffs; the guide reads its judgement
+        lane.parking_handoff = lambda robot_id: any(
+            view.get("robot_id") == robot_id and view["detail"].get("parking_handoff") is not None
+            for view in trip_runner.open_trips())
+        app.state.guide.lane_view = lane.view
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
     return trip_runner
 

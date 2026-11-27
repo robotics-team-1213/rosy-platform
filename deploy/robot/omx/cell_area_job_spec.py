@@ -47,7 +47,8 @@ _PUSH = {  # cell_push.py: one closed-jaw push of a top box or a box on a flat s
 }
 
 AREA_JOBS = {
-    "push": {**_PUSH, "moving": True, "commissioning": True},
+    # Fleet worker's push (owner decision 2026-11-28): the stop proof is still measured. Not cancellable: cell_push drives a bare FifoCell, so Guarded.act's stop marker is never read.
+    "push": {**_PUSH, "moving": True, "commissioning": True, "machine_ids": ("cell-task-worker",)},
     "push_dry_run": {**_PUSH, "moving": False, "argv": [*_PUSH["argv"], "--dry-run"]},
     "area_xyz_pick": {
         "script": "cell_area_pick_cli.py",

@@ -63,8 +63,8 @@ def arm_library_path(workdir: Path, arm: str) -> Path | None:
     return None
 
 
-def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
-    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range."""
+def live_folded(row: dict[str, Any], *sources: Any, include_wrist_roll: bool = True) -> bool | None:
+    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, body joints sit in range."""
     if isinstance(row.get("folded"), bool):
         return row["folded"]
     st = row.get("state")
@@ -74,7 +74,8 @@ def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
         if not (float(st[1]) <= -50.0 and float(st[2]) >= 45.0):
             return False
         ranges = fold_ranges(*sources)
-        return ranges is None or all(lo <= float(st[i]) <= hi for i, (lo, hi) in enumerate(ranges))
+        limit = 5 if include_wrist_roll else 4
+        return ranges is None or all(lo <= float(st[i]) <= hi for i, (lo, hi) in enumerate(ranges[:limit]))
     return None
 
 
@@ -136,9 +137,44 @@ def passive_motor_health_folded(
             and (gripper_max is None or pose[5] <= gripper_max))
 
 
-def calibrated_positions_folded(positions, cal, library: Any = None) -> bool:
+def board_missing(arm: str, env_dir: Path | None = None) -> bool:
+    """True only when the arm's observer env names a board by-id link that is not there; no env file proves nothing."""
+    from observer_handoff_io import HandoffError, unit_env
+
+    try:
+        device = unit_env(arm, env_dir)["ROSY_OBSERVER_DEVICE"]
+    except (HandoffError, UnicodeError):
+        return False
+    return not Path(device).exists()
+
+
+def unknown_state(arm: str, live: dict[str, Any] | None, health_dir: Path, reason: str,
+                  read_json_fn: Callable[[Path], dict[str, Any] | None]) -> dict[str, Any]:
+    """Why the arm's current state is unknown, with the newest source clock of live.json or motor-health."""
+    docs = ((live, "t"), (read_json_fn(health_dir / f"{arm}.json"), "observed_at"))
+    stamps = [v for doc, key in docs if isinstance(doc, dict) and (v := finite_float(doc.get(key))) is not None]
+    return {"reason": reason if stamps or reason == "board_missing" else "never_observed",
+            "last_observed_at": max(stamps, default=None)}
+
+
+def current_fold(arm: str, runner, live: dict[str, Any] | None, now: float, folded: bool | None, stale_latch: bool, *,
+                 max_age_s: float, read_json_fn: Callable[[Path], dict[str, Any] | None]) -> tuple[bool | None, dict[str, Any] | None]:
+    """(`folded`, unknown): only from a current reading, a fresh live.json row or a fresh passive proof of folded."""
+    health = getattr(runner, "motor_health_dir", None) or (Path.home() / ".local" / "state" / "rosy" / "motor-health")
+    if board_missing(arm, getattr(runner, "observer_env_dir", None)):
+        return None, unknown_state(arm, live, health, "board_missing", read_json_fn)
+    stamp = finite_float(live.get("t")) if isinstance(live, dict) else None
+    if stale_latch or (stamp is not None and -2.0 <= now - stamp <= max_age_s):
+        return folded, None
+    if passive_motor_health_folded(arm, health, max_age_s=max_age_s, read_json_fn=read_json_fn,
+                                   calibration_dir=getattr(runner, "calibration_dir", None)):
+        return True, None
+    return None, unknown_state(arm, live, health, "stale", read_json_fn)
+
+
+def calibrated_positions_folded(positions, cal, library: Any = None, *, include_wrist_roll: bool = True) -> bool:
     pose = calibrated_pose(positions, cal)
-    return pose is not None and live_folded({"state": pose}, library) is True
+    return pose is not None and live_folded({"state": pose}, library, include_wrist_roll=include_wrist_roll) is True
 
 
 def calibrated_pose(positions, cal) -> list[float] | None:

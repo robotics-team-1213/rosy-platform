@@ -46,6 +46,10 @@ test('chip text names the robot and its uncertainty', () => {
   // D-593: an operator pin says so, with its anchor age
   assert.equal(poseLabel({robot_id: 'rosy_40', pose: {u_m: 0.12, state: 'LOCALIZED', anchor_source: 'operator_pin', anchor_age_s: 3.6}}),
     'rosy_40 · ±0.12 m · 운영자 핀 4 s');
+  // D-1084: the lane watch's info findings ride in the chip, never as an alert colour
+  const pose = {u_m: 0.12, state: 'LOCALIZED'};
+  assert.equal(poseLabel({robot_id: 'rosy_45', pose, findings: [{code: 'PARKING', severity: 'info'}]}), 'rosy_45 · ±0.12 m · 주차/도킹');
+  assert.equal(poseLabel({robot_id: 'rosy_42', pose, findings: [{code: 'POSE_MISMATCH', severity: 'info'}]}), 'rosy_42 · ±0.12 m · 위치 불일치');
 });
 
 test('fitView keeps robot rings inside the view at every turn', () => {
