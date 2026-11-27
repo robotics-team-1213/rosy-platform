@@ -38,6 +38,17 @@ def camera_frame(bench, label):
         return stream.read()
 
 
+def camera_frame_meta(bench, label) -> tuple[bytes, dict[str, str]]:
+    preview = active_preview(bench)
+    if preview is not None:
+        jpg = preview.frame(label)
+        if jpg and active_preview(bench) is preview:
+            return jpg, {}
+    with urllib.request.urlopen(f"{VIEWER}/frame/{label}.jpg", timeout=1.5) as stream:
+        hdrs = {k: str(v) for k in ("X-Frame-Seq", "X-Source-Stamp") if (v := stream.headers.get(k)) is not None}
+        return stream.read(), hdrs
+
+
 def fleet_clear_target(origin, source_id):
     """Link to Fleet's authenticated operator workflow, without passing credentials."""
     if not isinstance(origin, str) or not isinstance(source_id, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,64}", source_id):
@@ -58,12 +69,15 @@ def fleet_clear_target(origin, source_id):
 
 def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False, fleet_console_origin=None):
     class Handler(BaseHTTPRequestHandler):
-        def reply(self, code, value, kind="application/json"):
+        def reply(self, code, value, kind="application/json", headers=None):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
             try:
                 self.send_response(code); self.send_header("Content-Type", kind)
                 self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store")
-                self.send_header("X-Frame-Options", "DENY"); self.end_headers(); self.wfile.write(body)
+                self.send_header("X-Frame-Options", "DENY")
+                for k, v in (headers or {}).items():
+                    self.send_header(k, v)
+                self.end_headers(); self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError, TimeoutError):
                 self.close_connection = True
 
@@ -102,10 +116,28 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 if not re.fullmatch(r"[a-zA-Z0-9_-]+", label):
                     return self.reply(400, {"error": "invalid camera label"})
                 try:
-                    jpg = camera_frame(bench, label)
+                    jpg, hdrs = camera_frame_meta(bench, label)
                 except Exception:
                     return self.reply(503, {"error": "camera frame unavailable"})
-                return self.reply(200, jpg, "image/jpeg")
+                return self.reply(200, jpg, "image/jpeg", hdrs)
+            if path == "/api/objects":
+                import cell_object_view
+
+                qs = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                arm = (qs.get("arm") or ["arm_a"])[0]
+                if arm not in cell_object_view.ARMS:
+                    return self.reply(400, {"error": f"unsupported arm {arm!r}"})
+                if active_preview(bench) is not None:
+                    return self.reply(200, {"schema": cell_object_view.SCHEMA, "arm_id": arm, "status": "recording_active", "objects": []})
+                try:
+                    return self.reply(200, cell_object_view.detect_for_bench(
+                        bench, arm=arm, site=(qs.get("site") or [None])[0],
+                        config_name=(qs.get("config") or [None])[0], catalog_name=(qs.get("catalog") or [None])[0], viewer_url=VIEWER,
+                    ))
+                except ValueError as exc:
+                    return self.reply(400, {"error": str(exc)})
+                except Exception as exc:
+                    return self.reply(502, {"error": f"object detection unavailable: {exc}"})
             if path == "/api/arms":
                 return self.reply(200, bench.arms_status())
             if path == "/api/leader_check":
@@ -207,6 +239,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_overlay.js": lambda: ((HERE / "bench_record_overlay.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_objects.js": lambda: ((HERE / "bench_record_objects.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_review.js": lambda: ((HERE / "bench_record_review.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
                       "/status.json": lambda: (bench.status(), "application/json")}
@@ -296,6 +329,11 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.auto_recover(body))
                 if self.path == "/api/defaults/reset":
                     return self.reply(200, bench.reset_defaults(body))
+                if self.path == "/api/pick_place":
+                    import cell_object_view
+
+                    code, res = cell_object_view.proxy_pick_place(bench, body, header_idem_key=self.headers.get("Idempotency-Key"))
+                    return self.reply(code, res)
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)
