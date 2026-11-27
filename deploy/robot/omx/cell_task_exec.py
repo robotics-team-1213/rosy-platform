@@ -38,6 +38,7 @@ def make_ca_urlopen(ca_file: str | Path | None = None):
         kwargs.pop("context", None)
         return urlopen(req, context=ctx, **kwargs)
 
+    _open.raw_urlopen = lambda req, **kw: urlopen(req, **kw)
     return _open
 
 
@@ -324,6 +325,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
     if placed:
         write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone, cat_path=cat_path)
+        from cell_objects_sync import bump_state_gen_after_pick
+        bump_state_gen_after_pick(prep_dir, arm_id=arm_id, placed=True, task_id=str(handoff.get("task_id") or ""))
     zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     if dst_res and not dst_res["is_legacy_pallet"]:
