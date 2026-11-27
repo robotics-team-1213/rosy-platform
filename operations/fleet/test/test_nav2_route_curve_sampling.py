@@ -7,7 +7,7 @@ import math
 from types import SimpleNamespace as NS
 
 from fleet.server.nav2_route_sampling import (
-    NAV2_CURVE_STEP_M, NAV2_ROUTE_STEP_M, sample_nav2_route)
+    NAV2_CURVE_STEP_M, NAV2_RECENTRE_AHEAD_M, NAV2_RECENTRE_MAX_M, NAV2_ROUTE_STEP_M, sample_nav2_route)
 
 R = 0.135
 
@@ -60,3 +60,34 @@ def test_dense_curves_that_do_not_fit_fall_back_to_one_even_spacing():
     assert len(pts) <= 14 and pts[-1][3] == "stop"
     assert math.dist(pts[-1][:2], graph.arcs["out:fwd"].point_at(0.6)[:2]) < 1e-9
     assert max(math.dist(a[:2], b[:2]) for a, b in zip(pts, pts[1:])) <= 0.16
+
+
+def _first_ahead(pts, here, yaw):
+    return (pts[0][0] - here[0]) * math.cos(yaw) + (pts[0][1] - here[1]) * math.sin(yaw)
+
+
+def test_off_a_straight_lane_the_first_point_moves_ahead_with_the_offset():
+    graph, segs = _track()
+    for lat, reach in ((0.04, NAV2_RECENTRE_AHEAD_M + 0.08), (0.08, NAV2_RECENTRE_MAX_M)):
+        here = (0.1, -R + lat)
+        pts = sample_nav2_route(graph, segs, 0, 0.1, 2, here=here)
+        assert abs(_first_ahead(pts, here, 0.0) - reach) < 1e-6 and abs(pts[0][1] + R) < 1e-9  # on the centreline
+    on_lane = sample_nav2_route(graph, segs, 0, 0.1, 2, here=(0.1, -R + 0.02))
+    assert on_lane == sample_nav2_route(graph, segs, 0, 0.1, 2)
+
+
+def test_off_a_tight_curve_the_first_point_stays_the_base_distance_ahead():
+    graph, segs = _track()
+    s = 0.2 * math.pi * R
+    sx, sy, yaw = graph.arcs["turn:fwd"].point_at(s)
+    here = (sx + 0.08 * (0.6 - sx) / R, sy + 0.08 * (0.0 - sy) / R)  # 8 cm towards the arc centre
+    pts = sample_nav2_route(graph, segs, 1, s, 2, here=here)
+    first = math.dist(pts[0][:2], (sx, sy))  # chord from the projection, along the arc about 0.10 m
+    assert 0.09 < first <= NAV2_RECENTRE_AHEAD_M + 1e-6
+
+
+def test_progress_that_lags_the_robot_does_not_put_the_first_point_behind_it():
+    graph, segs = _track()
+    here = (0.3, -R + 0.05)  # progress 0.1 is stale: the robot is at 0.3
+    pts = sample_nav2_route(graph, segs, 0, 0.1, 2, here=here)
+    assert abs(_first_ahead(pts, here, 0.0) - (NAV2_RECENTRE_AHEAD_M + 0.10)) < 1e-6

@@ -11,6 +11,11 @@ NAV2_ROUTE_STEP_M = 0.12
 #: the road step, 0.09-0.14 m with this one.
 NAV2_CURVE_RADIUS_M = 0.30
 NAV2_CURVE_STEP_M = 0.05
+#: Off the lane centre by more than NAV2_ROUTE_MIN_GAP_M the first route point lies this far ahead of the robot
+#: plus twice the offset (at most NAV2_RECENTRE_MAX_M), so it rejoins at a shallow angle, never by a turn on the
+#: spot at its own projection. On a tight curve only the base distance: farther ahead cuts the arc again.
+NAV2_RECENTRE_AHEAD_M = 0.10
+NAV2_RECENTRE_MAX_M = 0.20
 NAV2_ROUTE_MAX_POINTS = 64
 NAV2_ROUTE_MIN_GAP_M = 0.03
 NAV2_CLOSED_LOOP_SPLIT_M = 0.60
@@ -64,8 +69,11 @@ def sample_nav2_route(
     max_points: int = NAV2_ROUTE_MAX_POINTS,
     walls=(),
     curve_step_m: float = NAV2_CURVE_STEP_M,
+    here: tuple[float, float] | None = None,
 ) -> list[tuple[float, float, float, str]]:
-    """Sample road-centerline ``pass`` points ending with one ``stop`` point along ``segments[index..end_index]``."""
+    """Sample road-centerline ``pass`` points ending with one ``stop`` point along ``segments[index..end_index]``.
+
+    ``here`` is the robot's site position: off the centreline the first pass point moves ahead (NAV2_RECENTRE_*)."""
     spans = []
     for k in range(index, end_index + 1):
         seg = segments[k]
@@ -97,7 +105,14 @@ def sample_nav2_route(
             return min(curve, spacing) if abs(_wrap_angle(ahead - yaw)) * NAV2_CURVE_RADIUS_M > spacing else spacing
 
         out: list[tuple[float, float, float, str]] = []
-        d = step_after(0.0, point_at_distance(0.0)[2])
+        sx, sy, syaw = point_at_distance(0.0)
+        d = step_after(0.0, syaw)
+        if here is not None:
+            ahead = (sx - here[0]) * math.cos(syaw) + (sy - here[1]) * math.sin(syaw)  # < 0: progress lags the robot
+            lat = abs((sy - here[1]) * math.cos(syaw) - (sx - here[0]) * math.sin(syaw))
+            if lat > NAV2_ROUTE_MIN_GAP_M:
+                reach = NAV2_RECENTRE_AHEAD_M if d < spacing else min(NAV2_RECENTRE_AHEAD_M + 2 * lat, NAV2_RECENTRE_MAX_M)
+                d = max(d, reach - ahead)
         while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(out) < max_points - 1:
             px, py, pyaw = point_at_distance(d)
             if not out or math.hypot(px - out[-1][0], py - out[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
