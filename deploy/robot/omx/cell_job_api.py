@@ -28,9 +28,8 @@ from cell_job_guards import (  # noqa: E402
 )
 from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
 from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
-import cell_hold_retry  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
-import cell_incident_release  # noqa: E402
+import cell_hold_retry, cell_incident_release  # noqa: E401,E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
