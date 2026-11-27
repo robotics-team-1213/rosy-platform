@@ -296,7 +296,7 @@ def test_a_trip_on_the_camera_pose_reads_the_robots_bound_slam_instead(monkeypat
         return replace, rig.live.view["detail"]["lane_departure"]
 
     assert [tick(0.06)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # both poses past the line
-    version, site, _graph = rig.store.active()
+    version, site = rig.store.active()[:2]
     assert asked[-1] == ("r1", LOCALIZED, (site.map_id, version))                   # this robot, its state, this map
     native["v"] = _at(rig.arc, 0.4, 0.0)                                             # the robot's own pose is on the lane
     record = tick(0.06)[1]
