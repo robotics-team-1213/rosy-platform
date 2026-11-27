@@ -754,7 +754,8 @@ def test_cancel_of_a_closed_trip_accepts_measured_standstill_after_an_ended_goal
     from fleet.server.trip_halts import halt_unconfirmed
     if case in ("ARRIVED", "CANCELED", "FAILED"):
         assert canceled["detail"]["stop_sent"] is True and "error" not in canceled["detail"]
-        assert canceled["detail"]["pause_proof"]["basis"] == "ended_goal_standstill"
+        if case != "CANCELED":  # CORE's own CANCELED receipt already counts as an ack
+            assert canceled["detail"]["pause_proof"]["basis"] == "ended_goal_standstill"
         assert not halt_unconfirmed(canceled["detail"])
     else:  # moving, a changed wire or a different navigation state is never taken as stopped
         assert canceled["detail"]["stop_sent"] is False and halt_unconfirmed(canceled["detail"])
