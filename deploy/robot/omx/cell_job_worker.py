@@ -2,7 +2,7 @@
 
 It is a machine principal with its own token, so the shared cell-job-machine token (AI bridge, Fleet proxy) gains no right.
 auto_pick lists it in machine_ids (the D-1079 recover_hold precedent): the job still measures the stop proof and only then
-adds --commissioning --person-at-switch. Beyond that, only the narrow free-position pick below is allowed.
+adds --commissioning --person-at-switch. Beyond that, only the narrow free-position pick and the push below are allowed.
 """
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from pathlib import Path
 WORKER_ID = "cell-task-worker"
 TOKEN_ENV = "ROSY_CELL_JOB_WORKER_TOKEN_FILE"
 ALLOWED_KEYS = frozenset({"arm", "config", "catalog", "roi", "source", "dest", "at_px", "map_only", "object", "colour", "verify_zones"})
+PUSH_KEYS = frozenset({"arm", "config", "site", "roi", "catalog", "px_x", "px_y", "dir_x", "dir_y", "mm"})  # exactly these, all required
+PUSH_MM = (5, 20)  # the job spec's own bound, repeated so the scope never depends on it
 
 
 def read_worker_token(*others: str | None) -> str | None:
@@ -44,10 +46,14 @@ def authenticate_worker(auth_header: str, worker_token: str | None):
 
 
 def worker_scope_error(job_name: str, params: dict, principal) -> dict | None:
-    """403 unless this principal asks for a free-position pick on the measured map alone, with exactly the keys it sends (a strict allowlist)."""
+    """403 unless this principal asks for a free-position pick on the measured map alone, or a push, with exactly the keys it sends (strict allowlists)."""
     if principal.principal_id != WORKER_ID:
         return None
-    ok = (job_name == "auto_pick" and set(params) <= ALLOWED_KEYS and str(params.get("source", "")).startswith("free:")
-          and params.get("map_only") is True and bool(params.get("at_px")) and params.get("verify_zones", True) is True)
+    mm = params.get("mm")
+    if job_name == "push":  # no operator, proposer or reviewed_auto: the key set is closed
+        ok = set(params) == PUSH_KEYS and type(mm) in (int, float) and PUSH_MM[0] <= mm <= PUSH_MM[1]
+    else:
+        ok = (job_name == "auto_pick" and set(params) <= ALLOWED_KEYS and str(params.get("source", "")).startswith("free:")
+              and params.get("map_only") is True and bool(params.get("at_px")) and params.get("verify_zones", True) is True)
     return None if ok else {"code": 403, "error_code": "WORKER_SCOPE_FORBIDDEN",
-                            "error": "cell-task-worker may only start auto_pick from free:<site> with map_only, at_px and the keys it sends (verify_zones only true)"}
+                            "error": "cell-task-worker may only start auto_pick from free:<site> with map_only, at_px and the keys it sends (verify_zones only true), or push with exactly its keys and mm 5..20"}
