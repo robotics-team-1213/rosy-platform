@@ -412,3 +412,18 @@ def test_home_waits_for_a_slow_gripper_but_a_jaw_stuck_short_still_stops(rate, s
     cell = SlowJaw([0.8, -62.2, 53.1, 51.6, 45.2, 40.0], rate, stop)
     out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None, log=None)
     assert out["result"] == result
+
+
+def test_home_grip_wait_stops_when_the_live_state_is_refused():
+    class FaultAfterGrip(SlowJaw):
+        def act(self, command):
+            out = super().act(command)
+            if command == "state" and self.goal is not None:
+                out["fault"] = "overload"
+            return out
+
+    cell = FaultAfterGrip([0.8, -62.2, 53.1, 51.6, 45.2, 40.0], 2.8)
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None, log=None)
+    assert out["result"] == "stopped" and out["error"] == "live state refused while the grip settled"
+    last_grip = max(i for i, c in enumerate(cell.commands) if c.startswith("grip "))
+    assert not [c for c in cell.commands[last_grip + 1:] if c.startswith(("grip ", "jog "))]
