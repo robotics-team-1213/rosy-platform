@@ -203,6 +203,29 @@ def peer_observations(objects: Sequence, observer: cues.Pose,
     return out
 
 
+#: 2026-11-28 user decision: a lost robot turns in place on its own (the rotate rung only; homing still needs a
+#: press). Both trays' in-place sweep (0.144 + 0.144) plus unmeasured camera error must stay clear of every other
+#: robot Fleet knows. People, boxes and unregistered robots are not in this gate: CORE's rotate_in_place keeps its
+#: own LiDAR body-clearance refusal and in-turn obstacle stop (D-424).
+AUTO_ROTATE_CLEAR_M = 0.40  # shortcut: not tied to a measured camera error; re-derive when one is measured
+AUTO_ROTATE_SIGHTING_S = 1.0
+
+
+def auto_rotate_ok(state, own_xy, peers_xy, expected_peers) -> bool:
+    """True when the rotate rung may run without an operator: undocked, not charging, no e-stop or manual mode,
+    its own fresh camera position known, and every other known robot seen fresh and farther than the clearance."""
+    state = state or {}
+    velocity = state.get("velocity") or {}
+    if (((state.get("docking") or {}).get("state")) != "UNDOCKED"
+            or ((state.get("battery_status") or {}).get("charging")) is not False
+            or ((state.get("safety") or {}).get("estop")) is not False
+            or state.get("mode") != "IDLE" or state.get("navigation") in ("NAVIGATING", "PLANNING")
+            or not all(type(velocity.get(k)) in (int, float) and abs(velocity[k]) < 0.01 for k in ("linear", "angular"))
+            or own_xy is None or not set(expected_peers) <= set(peers_xy)):
+        return False
+    return all(math.dist(own_xy, xy) >= AUTO_ROTATE_CLEAR_M for xy in peers_xy.values())
+
+
 @dataclass
 class MotionGate:
     """Wheel-moving rungs (`MOTION_RUNGS`) run only within `allow_s` of a named operator's

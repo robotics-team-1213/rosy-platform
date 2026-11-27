@@ -15,6 +15,9 @@ LOC_RECOVERY_WAIT_S = 45.0
 # rosy_42: pose DEGRADED, trip stopped/pose). It cannot drift while standing, so wait for a re-sighting.
 POSE_WAIT_S = 120.0  # shortcut: fixed bound, not tied to the traffic hold (the hold is not re-read while pose-less)
 UNREACHABLE_GAP_S = 5.0  # failures further apart than this are separate outages
+# 2026-11-28 user: a lost robot recovers on its own (camera cue + the rotate rung, which starts 10 s into the
+# localization ladder and runs up to 30 s), so the standing trip waits past one full rotate before it ends.
+LOC_LADDER_WAIT_S = 60.0
 
 
 def loc_diag_from_state(
@@ -66,8 +69,34 @@ async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -
         wait = {"since": now}
         detail["localization_wait"] = wait
     wait.update({"updated_at": now, "loc_state": diag.get("loc_state"), "loc_reason": diag.get("loc_reason")})
-    if now - wait["since"] >= LOC_RECOVERY_WAIT_S:
+    if now - wait["since"] >= LOC_LADDER_WAIT_S:
         return False
+    runner._save(live)
+    return True
+
+
+def hold_own_untrusted_goal(runner, live, robot_id: str, reply: dict, state) -> bool:
+    """CORE's admission refused this robot's own goal for LOCALIZATION_UNTRUSTED before anything was sent: wait
+    for the localization recovery (same bound as hold_transient_localization) and resend, instead of failing."""
+    safety = (state or {}).get("safety") or {}
+    if not (live.open and live.nav2 and reply.get("reason") == "LOCALIZATION_UNTRUSTED"
+            and reply.get("blocked_by") == robot_id
+            and (reply.get("dispatch_attempted") is False or reply.get("cancel_confirmed") is True)
+            and safety.get("estop") is not True and (state or {}).get("mode") not in ("MANUAL", "ESTOP")):
+        return False
+    now = runner._clock()
+    detail = live.view["detail"]
+    wait = detail.get("localization_wait")
+    if not isinstance(wait, dict):
+        wait = detail["localization_wait"] = {"since": now}
+    wait.update({"updated_at": now, "loc_state": ((state or {}).get("localization") or {}).get("state"),
+                 "loc_reason": "goal_admission"})
+    if now - wait["since"] >= LOC_LADDER_WAIT_S:
+        return False
+    detail["goal_admission"] = {"blocked_by": reply.get("blocked_by"), "waiting_on": list(reply.get("waiting_on") or ()),
+                                "dispatch_attempted": bool(reply.get("dispatch_attempted")),
+                                "cancel_confirmed": bool(reply.get("cancel_confirmed"))}
+    live.active_route, live.progress_at = None, now
     runner._save(live)
     return True
 

@@ -896,7 +896,7 @@ def test_transient_candidates_holds_bound_nav2_trip_until_recovery_or_timeout():
 
     # Sustained CANDIDATES past timeout cleanly stops with structured diagnostic detail
     loc_state.update(state="CANDIDATES", reason="fit_drop")
-    for _ in range(100):
+    for _ in range(200):  # LOC_LADDER_WAIT_S (60 s, 2026-11-28) at 0.5 s ticks, with room
         ports.now += 0.5
         run(runner.tick())
         if runner.view("p1")["state"] not in ("started", "running"):
@@ -977,7 +977,7 @@ def test_opportunistic_binding_holds_transient_candidates_across_ticks_even_near
     assert live.progress_at == pytest.approx(ports.now)
 
     # Sustained CANDIDATES past the recovery wait cleanly stops even with opportunistic binding
-    for _ in range(100):
+    for _ in range(200):  # LOC_LADDER_WAIT_S (60 s, 2026-11-28) at 0.5 s ticks, with room
         ports.now += 0.5
         run(runner.tick())
         if runner.view("p1")["state"] not in ("started", "running"):
