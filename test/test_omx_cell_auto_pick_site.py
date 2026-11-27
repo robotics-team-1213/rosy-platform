@@ -310,3 +310,32 @@ def test_run_auto_passes_blend_flag_matching_choose(tmp_path, monkeypatch):
     assert len(choose_calls) == 1  # blend=True matched target["bias_region"], so choose() was not called twice
     assert bias_calls == [(False, True), (False, True)]
     assert orig_bias_at is not None
+
+
+def _tier_cfg(layers_below, layer=0):
+    return {"sites": {"plate": {"surface_z": 0.011, "layers_below": layers_below, "layer": layer, "place": [0.1, 0.1]}}}
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_layers_below_on_a_base_site_is_refused_before_any_step_and_names_the_tier_site(tmp_path, monkeypatch, dry_run):
+    import cell_auto_pick as cap_main
+    import cell_choices
+
+    monkeypatch.setattr(cap_main.cell_bundle_emit, "emit_pick_failure", lambda *a, **kw: None)
+    cell = type("C", (), {"act": lambda self, cmd: pytest.fail("no cell step"), "frame": lambda self, cam: pytest.fail("no frame")})()
+    res = cap_main.run_auto(cell, _tier_cfg(2), {"sites": {}}, tmp_path / "cal.json", [], [0, 0, 100, 100], "plate", "plate",
+                            tmp_path, cell_choices.Choices(tmp_path / "ch.json"), dry_run=dry_run, attempts=1)
+    assert res["result"] == ("stopped: tier mismatch: layers_below=2 on base site plate plans at plate height; "
+                             "use source plate-l2")
+
+
+def test_tier_site_and_stack_top_site_are_not_refused_by_the_tier_check():
+    import cell_place_fit
+
+    cfg, _ = cell_place_fit.with_tiers(_tier_cfg(2))
+    assert cell_place_fit.tier_mismatch(cfg, "plate") is not None
+    assert cell_place_fit.tier_mismatch(cfg, "plate-l2") is None  # a tier site plans as before
+    top, _ = cell_place_fit.with_tiers(_tier_cfg(2, layer=2))  # the site's z is already the stack top
+    assert cell_place_fit.tier_mismatch(top, "plate") is None
+    low, _ = cell_place_fit.with_tiers(_tier_cfg(0))
+    assert cell_place_fit.tier_mismatch(low, "plate") is None

@@ -212,3 +212,32 @@ def test_a_narrow_push_leads_with_one_finger_pad_and_looks_behind_for_the_traili
     d = np.array([0.0, 1.0])
     assert cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []
     assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10 + back, tail_mm=2 * back)} == {"behind"}
+
+
+def _push_params():
+    return {"arm": "arm_a", "config": "cell-auto-arm-a.json", "site": "plate_a", "roi": [10, 20, 300, 400],
+            "px_x": 228, "px_y": 330.5, "dir_x": 0, "dir_y": -1, "mm": 12}
+
+
+def test_push_jobs_map_every_param_to_the_script_flag_and_bound_the_distance(tmp_path):
+    import cell_job_spec as spec
+
+    (tmp_path / "cell-auto-arm-a.json").write_text("{}")
+    dry = spec.build_argv(spec.JOBS["push_dry_run"], {**_push_params(), "half_mm": 20, "half_width_mm": 12}, tmp_path)
+    tail = dry[dry.index("cell_push.py") + 1:]
+    assert tail == ["--config", "cell-auto-arm-a.json", "--site", "plate_a", "--roi", "10", "20", "300", "400",
+                    "--px", "228,330.5", "--dir", "0,-1", "--mm", "12", "--dry-run", "--half-mm", "20", "--half-width-mm", "12"]
+    assert not spec.moves_arm(spec.JOBS["push_dry_run"], _push_params())
+    for bad in (25, 4):
+        with pytest.raises(ValueError, match="mm"):
+            spec.build_argv(spec.JOBS["push_dry_run"], {**_push_params(), "mm": bad}, tmp_path)
+    live = spec.build_argv(spec.JOBS["push"], {**_push_params(), "person_at_switch": True}, tmp_path)  # supervised, like area_xyz_pick
+    assert spec.moves_arm(spec.JOBS["push"], _push_params()) and live[-2:] == ["--commissioning", "--person-at-switch"]
+    assert "--dry-run" not in live and "dry_run" not in spec.JOBS["push"].get("optional", {})
+    with pytest.raises(ValueError, match="mm"):
+        spec.build_argv(spec.JOBS["push"], {**_push_params(), "mm": 25, "person_at_switch": True}, tmp_path)
+
+
+def test_a_zero_push_direction_is_refused_before_anything_is_read():
+    with pytest.raises(SystemExit, match="--dir must not be zero"):
+        cpu.main(["--config", "x.json", "--roi", "0", "0", "9", "9", "--px", "1,1", "--dir", "0,0", "--dry-run"])

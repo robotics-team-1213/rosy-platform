@@ -64,8 +64,8 @@ def _run_auto_core(
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     anchor = cell_free_source.anchor_of(source)  # --from free:<site>: a measured position; that site only gives the map and the surface height
-    if (why := cell_free_source.source_error(config, source, dest)):
-        return {**out, "result": why}
+    if (why := cell_free_source.source_error(config, source, dest) or ((tier := cell_place_fit.tier_mismatch(config, source, catalog)) and f"stopped: {tier}")):
+        return {**out, "result": why}  # both before any camera or arm step, dry run and real run
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], anchor or source, dest)):  # before any camera or arm step

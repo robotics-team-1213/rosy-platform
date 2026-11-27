@@ -29,6 +29,22 @@ def tier_step_m(site: dict, catalog: list | None = None) -> float:
     return heights[0] if heights else 0.03
 
 
+def tier_mismatch(config: dict, source: str, catalog: list | None = None) -> str | None:
+    """A layers_below hint on a base site plans at plate height, not at the stack top (2026-11-27: a 3-tier box planned
+    at pick z 0.011, dry run "planned"). Refuse when the hinted tier site `<source>-l<hint>` exists (after with_tiers) and
+    its top is more than half a container height above the base site's z; a site whose own z is already the stack top
+    (layer == hint, or any hint within half a tier) is unchanged. Tier sites themselves never reach this."""
+    site = (config.get("sites") or {}).get(source) or {}
+    hint = int(site.get("layers_below") or 0)
+    tier = (config.get("sites") or {}).get(f"{source}-l{hint}")
+    if hint <= 0 or site.get("tier_of") or tier is None or "surface_z" not in site:
+        return None
+    if tier["surface_z"] - site["surface_z"] <= tier_step_m(site, catalog) / 2:
+        return None
+    return (f"tier mismatch: layers_below={hint} on base site {source} plans at plate height; "
+            f"use source {source}-l{hint}")
+
+
 def with_tiers(config: dict, calibration: dict | None = None, catalog: list | None = None) -> tuple[dict, dict | None]:
     """Expand every site `<name>` that has `surface_z` into `<name>-l0` (1단), `<name>-l1` (2단), `<name>-l2` (3단)
     sharing `<name>`'s map (`tier_of`), so 1단/2단/3단 pick and place need no duplicate config files."""
