@@ -1473,6 +1473,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_corridor_own.py
   - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_unwedge_rise.py
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
   - deploy/robot/omx/cell_fold_rehome.py
