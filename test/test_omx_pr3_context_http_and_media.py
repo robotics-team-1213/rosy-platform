@@ -529,6 +529,9 @@ def test_pr3_b1_path_confinement_and_b2_canonical_list_manifest(tmp_path, monkey
 
 def test_pr3_b3_readiness_cell_ab_fleet_two_arm_and_session_lock(tmp_path, monkeypatch):
     wd = _make_workdir(tmp_path)
+    for letter in "sab":  # current arm rows: an arm nobody observes is refused as state_unknown
+        (wd / f"chunk-io-{letter}").mkdir()
+        (wd / f"chunk-io-{letter}" / "live.json").write_text(json.dumps({"t": time.time()}), encoding="utf-8")
     bundle_root = tmp_path / "bundles"
     monkeypatch.setattr(api, "_check_arm_incident", lambda _arm: None)
     monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: False)

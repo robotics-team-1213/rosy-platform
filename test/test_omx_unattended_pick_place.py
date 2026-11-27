@@ -230,7 +230,7 @@ def test_cell_s_sends_one_observation_before_the_claim_and_cell_ab_none(tmp_path
 
 def test_the_claim_says_the_worker_understands_motions(tmp_path):
     _, calls = _poll(tmp_path, "cell_ab", lambda task: pytest.fail("observed a cell A/B task"), claimed=False)
-    assert [c[2] for c in calls if c[1].endswith("/claim")] == [{"cell_id": "cell_ab", "task_id": "t-1", "capabilities": ["motion"]}]
+    assert [c[2] for c in calls if c[1].endswith("/claim")] == [{"cell_id": "cell_ab", "task_id": "t-1", "capabilities": ["motion", "push"]}]
 
 
 @pytest.mark.parametrize("fault", ["observe_raises", "observe_returns_junk", "post_fails"])

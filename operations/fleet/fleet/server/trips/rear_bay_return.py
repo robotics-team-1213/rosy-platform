@@ -17,6 +17,9 @@ from fleet.swarm.transport import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 
 
+REFRAME_POS_M, REFRAME_YAW_RAD = 0.02, 0.05    # a dock's site_pose through the current fit vs its robot-frame pose
+
+
 def rear_bay(graph, destination):
     place = graph.places.get(destination) if isinstance(destination, str) else None
     spec = BAY_DOCK_SPECS.get(destination) if place is not None and place.kind == "charge" else None
@@ -82,6 +85,30 @@ class RearBayPort:
         if type(offset) not in (int, float) or not math.isfinite(offset) or offset <= 0:
             raise TripError(409, "CHARGE_BAY_REAR_TYPE_REQUIRED", info)
         return dock, offset
+
+    async def reframe(self, runner, live, client, snapshot, target):
+        """Re-tag a bay dock to the robot's map now when the CURRENT approved binding puts its site_pose on the dock's robot-frame pose.
+        A same-frame map swap changes only the grid id; a dock in a different frame (rotated or shifted binding, other site map) stays refused."""
+        robot, store = live.view["robot_id"], runner._store
+        fit, _reason = store.map_bindings.matching_fit(robot, snapshot, (store.active()[1].map_id, live.view["map_version"]))
+        metadata = target.get("metadata") or {}
+        site = metadata.get("site_pose")
+        if fit is None or not metadata.get("binding_id") or not isinstance(site, dict):
+            return False
+        try:
+            x, y = fit.inverse((site["x"], site["y"]))
+            yaw = site["yaw"] - fit.yaw - target["yaw"]
+            if not (math.dist((x, y), (target["x"], target["y"])) <= REFRAME_POS_M
+                    and abs(math.atan2(math.sin(yaw), math.cos(yaw))) <= REFRAME_YAW_RAD):
+                return False
+            await client._post(f"/api/v1/docking/docks/{target['id']}/reframe", {
+                "robot_id": snapshot.get("robot_id") or robot, "map_id": snapshot["map_id"],
+                "map_grid_id": snapshot["map_grid_id"], "map_generation": snapshot["map_generation"],
+                "expected_map_id": target["map_id"], "expected_grid_id": metadata.get("commissioned_grid_id"),
+                "binding_id": metadata["binding_id"], "new_binding_id": store.map_bindings.active(robot)["binding_id"]})
+        except (KeyError, TypeError, RobotApiError, HubError):
+            return False
+        return True
 
     async def prerequisites(self, robot, info):
         """Read native dock registration and owner capabilities independently of traffic admission."""
@@ -207,9 +234,13 @@ class RearBayPort:
             metadata = target.get("metadata") or {}
             frame = metadata.get("map_epoch")
             taught_grid, generation = metadata.get("commissioned_grid_id"), metadata.get("commissioned_map_generation")
-            if (not grid or not state_map or target.get("map_id") not in (state_map, grid)
-                    or (frame is not None and frame not in (grid, state_map))
-                    or (taught_grid is not None and (taught_grid, generation) != (grid, snapshot.get("map_generation")))):
+            stale = (not grid or not state_map or target.get("map_id") not in (state_map, grid)
+                     or (frame is not None and frame not in (grid, state_map))
+                     or (taught_grid is not None and (taught_grid, generation) != (grid, snapshot.get("map_generation"))))
+            if stale and grid and state_map and taught_grid != grid and await self.reframe(runner, live, client, snapshot, target):
+                info.update(phase="waiting_for_commission", reason="CHARGE_BAY_DOCK_REFRAMED", next_check_at=runner._clock() + 1)
+                return                                    # CORE now holds the re-tagged dock; the next tick re-reads it
+            if stale:
                 info.update(phase="waiting_for_commission", reason="CHARGE_BAY_TARGET_FRAME_UNVERIFIED",
                             next_check_at=runner._clock() + 3)
                 return

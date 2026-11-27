@@ -5802,3 +5802,27 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-28 · uncommitted · D-1082 복구 사다리 1단계
+
+- 변경: trips/nav2_recovery_ladder.py 추가. 복구 재전송은 문턱 없이 재중심(sample_nav2_route recentre=True), 2회차부터 road_speed 상한 0.05(에피소드 종료 RESET_M까지), exhausted에 마지막 정지·시도별 조건·같은 지점 반복(same_spot) 기록. trip_lane_realign은 차선 안이라도 벽 쪽 치우침이 2틱 이어지면 감속만 켠다(경로 교체 없음)
+- 증거: test_nav2_recovery_ladder.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1082 범위 안(사용자 2026-11-28 재시도 개선 지시)
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · D-1086 trip 재발행 폴백
+
+- 변경: trips/trip_reissue.py 추가. 비안전 사유(pose·위치 재확정 만료·연결 불가·goal lease 끝·D-1082 exhausted)로 끝난 Nav2 도로 trip을 원 principal·같은 요청으로 다시 계획·시작한다. 정지 증명·estop·LOCALIZED·지도·결속을 두 번 읽고, 10/20/40 s, 3회, 10분 한도, 다른 trip이 열리면 대기를 버린다
+- 증거: test_trip_reissue.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1086
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · feat(fleet): a push cell task is auto-admitted like the free pick and completes on measured displacement (D-1083)
+
+- 변경: `cell_motion.restrict_motion_admission`가 밀기와 자유 위치 집기를 같은 조건(스위치 켜짐 + service + propose 없음)으로 `QUEUED`로 둔다. `PUSH_NOT_EXECUTABLE`(생성·`/admit`)을 없앴다. `claim_refusal`은 밀기에 `capabilities`의 `"push"`를 요구한다(`WORKER_LACKS_PUSH_CAPABILITY`, 작업은 `QUEUED`). `/complete`는 밀기에서 `push_completion_verified`(정확한 증거 키, 명령 거리와 같음, 방향 변위 0.5~1.5×mm+3, 옆 6 mm 이하, 합 일치)로 증거를 직접 검사한다. 밀기에는 화물 신원 필드를 못 싣는다.
+- 증거: remote_pytest `operations/fleet/test`·`test_cell_motion_tasks.py`(허용·거절 매트릭스, 표지 게이트, 실제 `/complete` 경로) — 실행 기록은 구현 보고서
+- gate 변화: 없음(밀기 완료 가드가 새로 생김, 다른 가드는 그대로)
+- 결정: D-1083
+- 교훈: 없음(셀 수용 전)

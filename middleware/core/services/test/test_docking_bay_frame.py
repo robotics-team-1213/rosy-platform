@@ -107,3 +107,31 @@ def test_every_core_entry_rechecks_the_commissioned_grid_and_slam_origin():
     p.manager._commission_frame = lambda: ("grid",3)
     p.manager.dock("bay1")
     assert p.manager.state is DockState.DOCKING
+
+
+def test_reframe_moves_only_the_map_tags_and_the_dock_is_accepted_in_the_new_frame(tmp_path):
+    from core_features.docking.database import DockDatabase, DockInstance, DockType
+    db = DockDatabase(tmp_path/"docks.json")
+    db.frame_key = lambda: "occupancy:aaa"
+    db.commission(DockType(name="line", approach="line", detector="camera_line"),
+                  DockInstance(id="bay_c2", type="line", x=.2, y=.3, yaw=1., map_id="occupancy:aaa",
+                               metadata={"commissioned_grid_id": "ga", "commissioned_map_generation": 1, "site_pose": {"x": .2}}), "occupancy:aaa")
+    cas = dict(expected_map_id="occupancy:aaa", expected_grid_id="ga", binding_id=None, new_binding_id="b2")
+    db.frame_key = lambda: "occupancy:ccc"
+    with pytest.raises(DockError, match="map changed"):
+        db.reframe("bay_c2", "occupancy:bbb", "gb", 7, **cas)
+    db.frame_key = lambda: "occupancy:bbb"
+    for bad in ({"expected_map_id": "x"}, {"expected_grid_id": "x"}):
+        with pytest.raises(DockError, match="changed since"):
+            db.reframe("bay_c2", "occupancy:bbb", "gb", 7, **{**cas, **bad})
+    assert db.get("bay_c2").map_id == "occupancy:aaa"
+    moved = db.reframe("bay_c2", "occupancy:bbb", "gb", 7, **cas)
+    assert (moved.x, moved.y, moved.yaw) == (.2, .3, 1.) and moved.map_id == "occupancy:bbb"
+    assert moved.metadata == {"commissioned_grid_id": "gb", "commissioned_map_generation": 7, "site_pose": {"x": .2},
+                              "map_epoch": "occupancy:bbb", "binding_id": "b2"}
+    moved.require_map("occupancy:bbb")
+    assert DockDatabase(tmp_path/"docks.json").get("bay_c2") == moved
+    with pytest.raises(DockError):
+        db.reframe("nope", "occupancy:bbb", "gb", 7, **cas)
+    with pytest.raises(DockError, match="changed since"):      # the dock holds binding b2: a caller naming another one is refused
+        db.reframe("bay_c2", "occupancy:bbb", "gb", 7, expected_map_id="occupancy:bbb", expected_grid_id="gb", binding_id="b9", new_binding_id="b3")

@@ -176,8 +176,8 @@ def test_pose_request_overhead_is_on_by_default_apart_from_the_arbiter_cue(tmp_p
     robots.write_text("robots: []" + chr(10), encoding="utf-8")
     base = ["console", "--robots", str(robots)]
     args = cli.parse_args(base)
-    assert args.pose_request_overhead is True and args.localization_overhead_cue is False
-    args = cli.parse_args(base + ["--no-pose-request-overhead"])
+    assert args.pose_request_overhead is True and args.localization_overhead_cue is True   # user 2026-11-28
+    args = cli.parse_args(base + ["--no-pose-request-overhead", "--no-localization-overhead-cue"])
     assert args.pose_request_overhead is False and args.localization_overhead_cue is False
     console = type("C", (), {"clients": staticmethod(lambda: {})})()
     svc = build_localization_service(console, None)
