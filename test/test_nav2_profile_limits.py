@@ -34,7 +34,7 @@ def test_local_costmap_resolution_matches_map_and_window_stays_small():
     """0.05 m quantised the lane wall into a lethal band 0.09 m from the robot (rosy_45, 11-27)."""
     p = yaml.safe_load(NAV2.read_text(encoding="utf-8"))["local_costmap"]["local_costmap"]["ros__parameters"]
     assert p["resolution"] == 0.025
-    assert round(p["width"] / p["resolution"]) * round(p["height"] / p["resolution"]) <= 14400  # Pi-class CPU budget
+    assert round(p["width"] / p["resolution"]) * round(p["height"] / p["resolution"]) <= 6400  # Pi-class CPU budget (2x2 m window)
 
 
 def test_nav2_default_inflation_is_the_hardware_value():
