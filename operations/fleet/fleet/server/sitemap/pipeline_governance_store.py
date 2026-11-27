@@ -12,7 +12,7 @@ from typing import Any
 
 from core_common.protocol.cell_failure_context import FALLBACK_VERBS
 from fastapi import HTTPException
-from fleet.server.pipeline.pipeline_autonomous_policy import (
+from fleet.server.pipeline_autonomous_policy import (
     allow_autonomous_policy_fallback, autonomous_approver,
     prepare_proposer_and_fallback, resolve_autonomous_status,
     validate_cas_fields as _validate_cas_fields,

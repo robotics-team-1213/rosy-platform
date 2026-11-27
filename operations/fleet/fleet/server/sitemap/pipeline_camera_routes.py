@@ -20,7 +20,7 @@ from fleet.server.pipeline_port_events import (
     flush_pending_port_events_async,
     strip_task_for_claim,
 )
-from fleet.server.pipeline.pipeline_autonomous_policy import skip_claim_presence_check
+from fleet.server.pipeline_autonomous_policy import skip_claim_presence_check
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
