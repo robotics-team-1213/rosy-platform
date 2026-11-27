@@ -21,7 +21,7 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
+from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, hold_pending, step_nav2_route
 from fleet.server.nav2_trip_recovery import resume_ready
 from fleet.server.transient_loc_hold import (consume_transient_wait, handle_unlocalized_pose,
                                               hold_unreachable_pre_dispatch, recheck_binding)
@@ -235,6 +235,7 @@ class TripSteps:
                     return
             live.view["detail"].pop("localization_wait", None)
             if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and not hold_pending(live.view["detail"])  # held short of a table cut is no arrival
                     and off is None and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)

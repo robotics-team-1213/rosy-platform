@@ -121,6 +121,12 @@ def test_an_occupied_unit_in_the_first_segment_sends_nothing():
     runner, live = _live({"occupied_ahead_m": 0.3})
     assert nav2._traffic_end_index(runner, live, 0) is None
     assert nav2._held_at_m(live) == 0.3  # 2026-11-27 live run: refused_at_m is None here and float(None) ended the trip
+    # No room to advance: the occupied unit starts within the hold margin of the robot, so no hold point is sent.
+    from fleet.server.peer_wait_prefix import hold_point
+    from test_nav2_peer_wait_prefix import S_FROM, hold_snapshot
+    h = hold_snapshot()
+    h.table_row(occupied_ahead_m=0.3)
+    assert hold_point(h.runner, h.live, h.active, 0, S_FROM) == (None, "no_room_to_advance")
 
 
 @pytest.mark.parametrize("row, at", [({"refused_at_m": 0.2, "occupied_ahead_m": 0.3}, 0.2), ({}, 0.0), (None, 0.0)])
@@ -254,3 +260,36 @@ def test_no_pin_from_an_off_lane_stale_or_unlocalized_idle_robot(pose):
     _ticks(runner, fleet, n=2)
     assert runner.traffic.pinned() == []
     assert "a" not in runner._live["b"].traffic["peers"]
+
+
+
+@pytest.mark.parametrize("peer", ["trusted", "untrusted", "other_map"])
+def test_a_hold_point_send_still_meets_the_real_console_trust_and_frame_gates(peer):
+    """A table-cut hold point goes out under the wait-prefix guard. The peer stands 0.8 m off the guarded path, so
+    clearance never refuses it: a trusted same-map peer lets the send through, an untrusted or other-map one does not."""
+    from datetime import datetime, timezone
+    from fleet.server.peer_wait_prefix import prefix_guard
+    console, mover = _console()
+    now = datetime.now(timezone.utc)
+
+    def native(x, y):
+        return {"pose": {"x": x, "y": y, "yaw": 0.0}, "pose_frame": "map", "map_id": "native-map",
+                "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+                "odom_pose": {"x": x, "y": y, "yaw": 0.0, "stamp": now.timestamp()},
+                "evidence": {"pose": {"evidence": "fresh", "received_at": now.isoformat()}}}
+    mover._state.update(native(0.0, 0.0))
+    peer_robot = console._clients["rosy_45"]
+    peer_robot._state.update(native(0.4, 0.8))
+    if peer == "untrusted":
+        peer_robot._state.update(pose_frame="odom", localization={"state": "UNKNOWN", "pose_frame": "odom"})
+    console.site["rosy_45"] = ("other" if peer == "other_map" else "site", 0.4, 0.8, 0.0)
+    line = [(0.0, 0.0), (0.4, 0.0), (0.8, 0.0)]
+    token = prefix_guard.set(("rosy_42", "site", set(), lambda: True, line, line))
+    try:
+        reply = run(console.route("rosy_42", PTS, lease_source="trip", table_peers={"rosy_45": ["site", 0.4, 0.8]}))
+    finally:
+        prefix_guard.reset(token)
+    if peer == "trusted":
+        assert reply.get("accepted") is True and len(mover.routes) == 1, reply
+    else:
+        assert reply["accepted"] is False and mover.routes == []
