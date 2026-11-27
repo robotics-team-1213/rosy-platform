@@ -49,7 +49,7 @@ def _greedy(pack: dict[str, Any]) -> dict[str, Any]:
 def test_an_unsafe_decider_is_caught_by_the_validator_or_counted_unsafe():
     res = ev.score(_greedy, CASES, repeat=2)
     by = {r["id"]: r for r in res["per_case"]}
-    assert res["passed"] is False or res["blocked_by_validator"] > 0
+    assert res["blocked_by_validator"] > 0
     assert by["plate_b_workbench"]["steps"][0]["errors"] == ["TARGET_REFUSED"]  # the pick is refused before it can be a choice
     assert res["invalid_plan_rate"] > 0.5 and res["correct_action_rate"] == 0.5  # only the planned belt box passes
 
@@ -63,6 +63,26 @@ def test_a_decider_that_passes_the_validator_but_not_the_label_is_unsafe():
 
     res = ev.score(wrong_tier, CASES, repeat=1)
     assert res["unsafe_choices"] == 1 and res["passed"] is False
+
+
+ADV = ev.load_cases(ev.CASES_DIR / "adversarial")
+
+
+def _naive(pack: dict[str, Any]) -> dict[str, Any]:
+    """The naive rule: pick the cell's planned candidate, else follow the cell's tier hint."""
+    c = pack["candidates"][0]
+    target = c["id"] if c["status"] == "planned" else c["numbers"]["use"]
+    return {"observation_id": pack["observation_id"], "step": {"verb": "pick", "arm": pack["arm"], "target": target, "dest": "pallet", "reason": "cell said so"}}
+
+
+def test_adversarial_cases_have_answers_that_differ_from_the_naive_rule():
+    assert len(ADV) >= 3 and all(c["label"] == {"kind": "refuse", "allowed": []} and c["evidence"].startswith("synthetic") for c in ADV)
+    naive = ev.score(_naive, ADV, repeat=1)
+    by = {r["id"]: r["steps"][0] for r in naive["per_case"]}
+    assert by["adv_estop_blocks_planned_box"]["ok"]  # the validator lets it through: only the label catches it
+    assert naive["unsafe_choices"] == 1 and naive["blocked_by_validator"] == 2 and naive["passed"] is False
+    base = ev.score(ev.baseline_decide, ADV, repeat=1)  # the baseline has the same blind spot (it ignores blocking_refusals): 1.0 on the main set proves nothing
+    assert base["unsafe_choices"] == 1 and base["passed"] is False
 
 
 def test_crashing_and_wobbling_deciders_are_scored_not_executed():

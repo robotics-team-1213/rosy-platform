@@ -23,6 +23,7 @@ except ImportError:  # run as a script from tools/remote
 SCHEMA = "rosy.omx-observation.v1"
 SOURCES = json.loads(Path(__file__).with_name("rosy_observe_sources.json").read_text(encoding="utf-8"))
 MAX_AGE_S = 2.0  # D-1057 MAX_FRAME_AGE_S
+MAX_REPEAT = 5  # dry runs take the one shared camera slot: a caller may not hold it
 MIN_LUMA = 15.0  # the cell's own "light top" threshold
 SAME_MM, SAME_SPREAD_MM = 3.0, 2.0  # repeat runs: same blob / same clearance
 Call = Callable[[str, dict], dict]
@@ -89,7 +90,7 @@ def _dry(call: Call, cfg: dict[str, Any], site: dict[str, Any], sleep: Callable[
 def _probe(call: Call, tool: str, extra: dict[str, Any]) -> dict[str, Any]:
     """A request the cell rejects while validating (no such config file), so no job starts either way."""
     res = call(tool, {**extra})
-    return {"status": res.get("status"), "text": json.dumps(res.get("detail"), ensure_ascii=False)[:300].lower()}
+    return {"status": res.get("status"), "error_code": res.get("error_code"), "text": json.dumps(res.get("detail"), ensure_ascii=False)[:300].lower()}
 
 
 def fetch_raw(call: Call, arm: str, *, repeat: int = 1, layers_below: int | None = None, now: Callable[[], float] = time.time,
@@ -102,7 +103,7 @@ def fetch_raw(call: Call, arm: str, *, repeat: int = 1, layers_below: int | None
         raw["frames"][v], jpeg = _frame(call, v, now)
         top = jpeg if v == cfg["top_view"] else top
     for s in cfg["sites"]:
-        raw["dry_runs"].append({"site": s["site"], "results": [_dry(call, cfg, s, sleep, poll_s, layers_below) for _ in range(max(1, repeat))]})
+        raw["dry_runs"].append({"site": s["site"], "results": [_dry(call, cfg, s, sleep, poll_s, layers_below) for _ in range(min(max(1, repeat), MAX_REPEAT))]})
     r = call("cell_readiness", {})
     raw["readiness"] = r.get("data") if r.get("ok") else {"error": _err(r)}
     raw["probe"] = {"at_px": _probe(call, "cell_dry_run", {**_PROBE_ARGS, "at_px": "1,1"}),
@@ -146,17 +147,14 @@ def _parse_run(res: dict[str, Any], site: dict[str, Any]) -> tuple[dict[str, Any
         c.update(site=site["site"], at_px=None, matched_id=c["object"], untrusted=untrusted)
     for c, r in zip(cands[1 if ch and plan else 0:], att.get("refused") or []):
         c["at_px"] = r.get("at_px") or r.get("centre_px")
-    if site["role"] == "dest":
-        for c in cands:
-            c["suggestions"] = []  # a destination is observed for verification only
-    elif untrusted:
-        for c in cands:
-            c["suggestions"] = ["ask_human"]
     if result != "planned" or not cands:
         info["refusal"] = _best(sr.get("error"), result)
         if any(s.startswith("retier(") for s in info["refusal"]["suggestions"]):  # a run-level hint becomes a candidate to follow
             cands.append({"object": None, "colour": None, "centre_mm": None, "status": "refused", "site": site["site"], "at_px": None,
                           "matched_id": None, "untrusted": untrusted, **info["refusal"]})
+    if site["role"] == "dest" or untrusted:  # after the retier candidate is added, so no hint survives here
+        for c in cands:
+            c["suggestions"] = [] if site["role"] == "dest" else ["ask_human"]  # a destination is observed for verification only
     return info, cands
 
 
@@ -181,12 +179,13 @@ def _readiness(raw: dict[str, Any], arm: str, peer: str | None) -> dict[str, Any
 
 def _live_verbs(raw: dict[str, Any], cfg: dict[str, Any], any_dry_ok: bool) -> dict[str, bool]:
     at_px, push = (raw.get("probe") or {}).get("at_px") or {}, (raw.get("probe") or {}).get("push") or {}
-    rejected = at_px.get("status") == 400 and "unknown params" in str(at_px.get("text"))
-    return {"pick": any_dry_ok, "free_pick": bool(cfg.get("free_pick", True)) and at_px.get("status") == 400 and not rejected,
-            "push": push.get("status") == 400, "idle": True, "ask_human": True}
+    # only the cell's own validation answer counts: a client-side INVALID_ARGS never reached the cell
+    cell_400 = lambda p: p.get("status") == 400 and p.get("error_code") != "INVALID_ARGS" and "no such file" in str(p.get("text"))  # noqa: E731
+    return {"pick": any_dry_ok, "free_pick": bool(cfg.get("free_pick", True)) and cell_400(at_px), "push": cell_400(push), "idle": True, "ask_human": True}
 
 
 def assemble(raw: dict[str, Any], *, max_age_s: float = MAX_AGE_S) -> dict[str, Any]:
+    max_age_s = min(max_age_s, MAX_AGE_S)  # a caller can tighten the freshness gate, never widen it
     arm = raw["arm"]
     cfg = arm_cfg(arm)
     frames: dict[str, Any] = {}
@@ -236,8 +235,14 @@ def assemble(raw: dict[str, Any], *, max_age_s: float = MAX_AGE_S) -> dict[str, 
     return _seal(pack)
 
 
+def pack_id(pack: dict[str, Any]) -> str:
+    """Hash of the pack content without its id: plan-check and verify recompute it, so an edited pack no longer matches."""
+    body = {k: v for k, v in pack.items() if k != "observation_id"}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+
+
 def _seal(pack: dict[str, Any]) -> dict[str, Any]:
-    pack["observation_id"] = hashlib.sha256(json.dumps(pack, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+    pack["observation_id"] = pack_id(pack)
     return pack
 
 

@@ -141,6 +141,8 @@ def _check_type(ps: dict[str, Any], val: Any, key: str) -> str | None:
     elif t == "integer":
         if isinstance(val, bool) or not isinstance(val, int):
             return f"{key}: expected integer"
+        if "maximum" in ps and val > ps["maximum"]:
+            return f"{key}: at most {ps['maximum']}"
     elif t == "number":
         if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(float(val)):
             return f"{key}: expected finite number"
@@ -282,12 +284,16 @@ class RosyAgentBridge:
         lu, lt = self.cfg.learning_url.rstrip("/"), self.cfg.learning_token
 
         if name == "cell_observe":  # read-only composite: frames, dry runs, readiness; no job that moves
-            kw = {k: a[k] for k in ("repeat", "layers_below", "max_age_s") if k in a}
+            kw = {k: a[k] for k in ("repeat", "layers_below") if k in a}  # the freshness gate is not a model argument
             pack, jpeg = _observe(self.call_tool, a["arm"], **kw)
             res = {"ok": True, "status": 200, "data": pack}
             return {**res, "image_b64": base64.b64encode(jpeg).decode("ascii"), "mime_type": "image/jpeg"} if jpeg else res
         if name == "cell_verify_after":
-            return {"ok": True, "status": 200, "data": _verify_after(a["before"], a["after"], a["step"], job_exit=a.get("job_exit"))}
+            arm = a["step"].get("arm")
+            if arm not in ("arm_a", "arm_b", "arm_s"):
+                return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": "step.arm must be arm_a, arm_b or arm_s"}
+            after, _ = _observe(self.call_tool, arm)  # the camera is read here, never taken from the caller
+            return {"ok": True, "status": 200, "data": _verify_after(a["before"], after, a["step"], job_exit=a.get("job_exit"))}
         if name == "cell_readiness":
             return self._http("GET", f"{cu}/readiness", token=ct)
         if name == "cell_failure_context":

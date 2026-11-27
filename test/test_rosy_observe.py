@@ -56,8 +56,8 @@ def test_refusal_sentences_map_to_one_code(why, code, sugg, nums):
 
 def test_loop_modules_are_stdlib_only_and_pillow_is_function_local():
     """The bridge and CLI are stdlib-only (D-226); the loop modules they load keep that: Pillow only inside a function, fail-closed."""
-    local = {p.stem for p in (ROOT / "tools" / "remote").glob("rosy_*.py")}
-    for name in ("rosy_observe", "rosy_observe_refusals", "rosy_plan", "rosy_verify"):
+    local = {"rosy_observe", "rosy_observe_refusals", "rosy_plan", "rosy_verify"}  # exactly the loop siblings, not any rosy_*.py
+    for name in sorted(local):
         tree = ast.parse((ROOT / "tools" / "remote" / f"{name}.py").read_text(encoding="utf-8"))
         nested = {id(n) for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef) for n in ast.walk(fn)}
         for node in ast.walk(tree):
@@ -119,6 +119,10 @@ def test_live_verbs_follow_the_probe_not_the_code():
     raw["probe"]["push"] = {"status": 404, "text": "null"}
     v = obs.assemble(raw)["live_verbs"]
     assert (v["free_pick"], v["push"]) == (False, False)
+    for tool in ("at_px", "push"):  # a client-side schema failure never reached the cell: not a live verb
+        raw = copy.deepcopy(case("belt_middle_box")["raw"])
+        raw["probe"][tool] = {"status": 400, "error_code": "INVALID_ARGS", "text": "\"missing required arguments: ['x']\""}
+        assert obs.assemble(raw)["live_verbs"]["push" if tool == "push" else "free_pick"] is False
     raw = copy.deepcopy(case("belt_middle_box")["raw"])
     raw["readiness"] = {"error": "down"}
     assert obs.assemble(raw)["readiness"]["ok"] is False
@@ -134,6 +138,35 @@ def test_repeat_runs_that_disagree_are_unstable_and_ask_human_only():
     raw["dry_runs"] = [run_two]
     unstable = [c for c in obs.assemble(raw)["candidates"] if c.get("unstable")]
     assert unstable and all(c["suggestions"] == ["ask_human"] for c in unstable)
+
+
+def test_a_retier_hint_on_an_untrusted_or_destination_site_gives_ask_human_only():
+    pack = obs.assemble(json.loads((CASES / "adversarial" / "adv_retier_hint_on_untrusted_plate_b.json").read_text(encoding="utf-8"))["raw"])
+    assert [(c["code"], c["suggestions"]) for c in pack["candidates"]] == [("TIER_MISMATCH", ["ask_human"])]
+    raw = copy.deepcopy(case("tier_hint_base_site")["raw"])  # same hint on a destination-role site
+    raw["dry_runs"][0]["site"] = "ship-h1r0"
+    assert all(c["suggestions"] == [] for c in obs.assemble(raw)["candidates"] if c["site"] == "ship-h1r0")
+
+
+def test_pack_id_is_recomputed_from_the_content():
+    pack = pack_of("belt_middle_box")
+    assert pack["observation_id"] == obs.pack_id(pack)
+    pack["candidates"].append({"id": "c9", "site": "belt", "suggestions": ["pick"]})
+    assert pack["observation_id"] != obs.pack_id(pack)
+
+
+def test_the_model_cannot_widen_freshness_or_hold_the_camera():
+    raw = copy.deepcopy(case("belt_middle_box")["raw"])
+    raw["frames"]["top"]["source_stamp"] -= 60
+    assert obs.assemble(raw, max_age_s=1e9)["reason"].startswith("STALE_FRAME:top:")  # clamped to the default
+    props = br.TOOL_MAP["cell_observe"]["inputSchema"]["properties"]
+    assert "max_age_s" not in props and props["repeat"]["maximum"] == obs.MAX_REPEAT
+    bridge = br.RosyAgentBridge(br.BridgeConfig(cell_token="t", timeout_s=1.0))
+    assert bridge.call_tool("cell_observe", {"arm": "arm_b", "max_age_s": 1e9})["error_code"] == "INVALID_ARGS"
+    assert bridge.call_tool("cell_observe", {"arm": "arm_b", "repeat": 1000})["error_code"] == "INVALID_ARGS"
+    cell = FakeCell("belt_middle_box", stamp=1000.0)
+    obs.observe(cell, "arm_b", repeat=1000, now=lambda: 1000.4)
+    assert cell.calls.count("cell_dry_run") <= obs.MAX_REPEAT * len(obs.arm_cfg("arm_b")["sites"]) + 1  # +1 probe
 
 
 def _jpeg(level: int) -> bytes:
@@ -185,6 +218,16 @@ def test_bridge_tool_cell_observe_validates_args_and_returns_image(monkeypatch):
     monkeypatch.setattr(bridge, "call_tool", lambda name, a=None, _orig=bridge.call_tool: cell(name, a or {}) if name != "cell_observe" else _orig(name, a))
     res = bridge.call_tool("cell_observe", {"arm": "arm_b"})
     assert res["ok"] and res["data"]["observable"] and res["mime_type"] == "image/jpeg" and base64.b64decode(res["image_b64"])[:2] == b"\xff\xd8"
+
+
+def test_bridge_verify_after_observes_the_after_pack_itself(monkeypatch):
+    cell = FakeCell("belt_middle_box")
+    bridge = br.RosyAgentBridge(br.BridgeConfig(cell_token="t", timeout_s=1.0))
+    before, step = pack_of("belt_middle_box"), {"verb": "pick", "arm": "arm_b", "target": "c1", "dest": "pallet", "reason": "t"}
+    assert bridge.call_tool("cell_verify_after", {"before": before, "after": before, "step": step})["error_code"] == "INVALID_ARGS"
+    monkeypatch.setattr(bridge, "call_tool", lambda name, a=None, _orig=bridge.call_tool: cell(name, a or {}) if name != "cell_verify_after" else _orig(name, a))
+    res = bridge.call_tool("cell_verify_after", {"before": before, "step": step})
+    assert res["ok"] and res["data"]["verdict"] == "NOT_MOVED" and res["data"]["after"] != before["observation_id"]  # the box is still on the belt
 
 
 class _StubBridge:

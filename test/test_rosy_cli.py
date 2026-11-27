@@ -204,6 +204,6 @@ def test_rosy_cli_is_stdlib_only_no_subprocess_and_d226_clean():
             imports.update(a.name.split(".")[0] for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".")[0])
-    assert (imports - {"rosy_agent_bridge", "rosy_plan", "rosy_verify"}) <= set(sys.stdlib_module_names)  # the loop's stdlib-only siblings
+    assert (imports - {"rosy_agent_bridge", "rosy_plan"}) <= set(sys.stdlib_module_names)  # the loop's stdlib-only siblings
     assert "subprocess" not in imports
     assert scan_files([cli_path, Path(__file__)], root=ROOT) == []

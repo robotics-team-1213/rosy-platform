@@ -6,8 +6,8 @@ suggested), or {anchor, at_px} for free_pick/push. Deterministic checks only; th
 """
 from __future__ import annotations
 
-import json
 import re
+import time
 from typing import Any
 
 try:
@@ -18,6 +18,7 @@ except ImportError:  # run as a script from tools/remote
 VERBS = ("pick", "free_pick", "push", "idle", "ask_human")
 MOTION = frozenset({"pick", "free_pick", "push"})
 MAX_PLAN_AGE_S = 30.0  # lens C: a plan older than this re-observes
+SAME_PX = 10  # a free_pick/push pixel this close to a failed one is the same step
 _SITE = r"[a-z0-9_][a-z0-9_.-]{0,62}"
 PLAN_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False, "required": ["observation_id", "step"],
@@ -59,6 +60,8 @@ def _check_shape(plan: Any, errs: list[dict[str, str]]) -> dict[str, Any] | None
     for k in step:
         if k not in PLAN_SCHEMA["properties"]["step"]["properties"]:
             errs.append(_e("FORBIDDEN_FIELD" if _FORBIDDEN.match(str(k)) else "UNKNOWN_FIELD", f"step.{k}"))
+    if step.get("arm") not in ("arm_a", "arm_b", "arm_s"):
+        errs.append(_e("BAD_ARM", "arm is arm_a, arm_b or arm_s"))
     if step.get("verb") not in VERBS:
         errs.append(_e("BAD_VERB", f"verb must be one of {list(VERBS)}"))
     if not isinstance(step.get("reason"), str) or not step["reason"].strip() or len(step["reason"]) > 200:
@@ -80,6 +83,25 @@ def _check_shape(plan: Any, errs: list[dict[str, str]]) -> dict[str, Any] | None
 def _sites(pack: dict[str, Any]) -> set[str]:
     base = {r["site"] for r in pack.get("regions") or []}
     return base | {f"{s}-l{n}" for s in base for n in range(3)}
+
+
+def _source_ok(pack: dict[str, Any], site: str) -> bool:
+    """A pick source is a trusted source region (a retier site -lN counts as its base site); never a destination or workbench."""
+    base = re.sub(r"-l[0-9]+$", "", site)
+    return any(r["site"] == base and r.get("role") == "source" and r.get("trusted") is not False for r in pack.get("regions") or [])
+
+
+def _same_step(a: Any, b: Any) -> bool:
+    """Action identity: verb, arm, target, dest. The reason is not part of it; pixel targets match within SAME_PX."""
+    try:
+        if any(a.get(k) != b.get(k) for k in ("verb", "arm", "dest")):
+            return False
+        ta, tb = a.get("target"), b.get("target")
+        if isinstance(ta, dict) and isinstance(tb, dict):
+            return ta["anchor"] == tb["anchor"] and all(abs(p - q) <= SAME_PX for p, q in zip(ta["at_px"], tb["at_px"]))
+        return ta == tb
+    except (AttributeError, KeyError, TypeError):
+        return True  # a malformed history row counts as a match: fail closed
 
 
 def _check_motion(step: dict[str, Any], pack: dict[str, Any], errs: list[dict[str, str]]) -> None:
@@ -111,10 +133,14 @@ def _check_motion(step: dict[str, Any], pack: dict[str, Any], errs: list[dict[st
             if verb == "free_pick" and obs.arm_cfg(pack["arm"]).get("free_pick") is False:
                 errs.append(_e("VERB_NOT_ALLOWED_FOR_ARM", f"{pack['arm']} has no depth camera: no free_pick"))
     elif t in cands:
-        if verb not in cands[t]["suggestions"]:
-            errs.append(_e("TARGET_REFUSED", f"{t} allows {cands[t]['suggestions']}, not {verb}"))
-    elif verb == "pick" and any(f"retier({t})" in c["suggestions"] for c in cands.values()):
-        pass
+        c = cands[t]
+        if c.get("untrusted") or c.get("unstable") or not _source_ok(pack, c["site"]):
+            errs.append(_e("UNTRUSTED_SOURCE", f"{t} is on an untrusted, unstable or destination site: only ask_human"))
+        elif verb not in c["suggestions"]:
+            errs.append(_e("TARGET_REFUSED", f"{t} allows {c['suggestions']}, not {verb}"))
+    elif verb == "pick" and any(f"retier({t})" in c["suggestions"] and not (c.get("untrusted") or c.get("unstable")) for c in cands.values()):
+        if not _source_ok(pack, str(t)):
+            errs.append(_e("UNTRUSTED_SOURCE", f"{t} is on an untrusted or destination site: only ask_human"))
     elif re.fullmatch(r"c[0-9]+", str(t)):
         errs.append(_e("TARGET_NOT_IN_PACK", f"candidate {t} is not in observation {pack.get('observation_id')}"))
     elif t in _sites(pack):
@@ -124,15 +150,18 @@ def _check_motion(step: dict[str, Any], pack: dict[str, Any], errs: list[dict[st
 
 
 def validate_plan(plan: Any, pack: dict[str, Any], *, now: float | None = None, max_age_s: float = MAX_PLAN_AGE_S,
-                  history: tuple[dict[str, Any], ...] | list[dict[str, Any]] = ()) -> dict[str, Any]:
-    """{ok, errors:[{code, detail}], step, needs_human_approval}. history: [{step, verdict}] of this episode."""
+                  history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """{ok, errors:[{code, detail}], step, needs_human_approval}. history: [{step, verdict}] of this episode; [] says
+    "first step", None (omitted) refuses every motion verb because a past failure could be hidden."""
     errs: list[dict[str, str]] = []
     step = _check_shape(plan, errs)
     if step is None or errs:
         return {"ok": False, "errors": errs, "step": None, "needs_human_approval": False}
+    if pack.get("observation_id") != obs.pack_id(pack):
+        return {"ok": False, "errors": [_e("PACK_TAMPERED", "the pack does not match its observation_id: observe again")], "step": None, "needs_human_approval": False}
     if plan["observation_id"] != pack.get("observation_id"):
         errs.append(_e("OBSERVATION_MISMATCH", f"plan cites {plan['observation_id']}, pack is {pack.get('observation_id')}"))
-    if now is not None and now - float(pack.get("observed_at") or 0) > max_age_s:
+    if (time.time() if now is None else now) - float(pack.get("observed_at") or 0) > max_age_s:
         errs.append(_e("OBSERVATION_STALE", f"observation older than {max_age_s} s: observe again"))
     if step["arm"] != pack.get("arm"):
         errs.append(_e("ARM_MISMATCH", f"step arm {step['arm']} but the pack is for {pack.get('arm')}"))
@@ -144,7 +173,8 @@ def validate_plan(plan: Any, pack: dict[str, Any], *, now: float | None = None, 
             _check_motion(step, pack, errs)
     elif step.get("target") is not None or step.get("dest") is not None:
         errs.append(_e("BAD_TARGET", f"{verb} takes no target or dest"))
-    canon = json.dumps(step, sort_keys=True)
-    if any(json.dumps(h.get("step"), sort_keys=True) == canon and h.get("verdict") != "VERIFIED" for h in history):
+    if verb in MOTION and history is None:
+        errs.append(_e("HISTORY_REQUIRED", "pass the episode history ([] for the first step): a past failure must be visible"))
+    if any(_same_step(h.get("step"), step) and h.get("verdict") != "VERIFIED" for h in history or [] if isinstance(h, dict)):
         errs.append(_e("REPEAT_AFTER_FAILURE", "the same step already failed in this episode: re-observe and choose another"))
     return {"ok": not errs, "errors": errs, "step": step, "needs_human_approval": verb == "push"}

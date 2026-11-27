@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
@@ -86,6 +88,7 @@ def test_arm_state_and_unobservable_after_come_first():
 def test_destination_not_observed_is_inconclusive_never_verified():
     after = raw_of(EMPTY, EMPTY, dt=10)
     after["runs"] = [r for r in after["runs"] if r["site"] != "pallet"]
+    obs._seal(after)
     assert vf.verify_after(BEFORE, after, STEP)["verdict"] == "INCONCLUSIVE"
 
 
@@ -98,9 +101,49 @@ def test_push_is_verified_by_a_small_shift_and_nothing_else_moving():
     assert vf.verify_after(before, raw_of(edge, EMPTY, dt=10), step)["verdict"] == "NOT_MOVED"
 
 
-def test_cli_verify_exit_code(tmp_path):
-    for name, obj in (("b.json", BEFORE), ("a.json", raw_of(EMPTY, sr(blob(153.0, -128.0)), dt=10)), ("s.json", STEP), ("n.json", raw_of(PLANNED, EMPTY, dt=10))):
+def test_an_edited_pack_is_never_trusted():
+    after = raw_of(EMPTY, sr(blob(155.0, -126.0)), dt=10)
+    after["candidates"].append({"id": "c9", "site": "pallet", "suggestions": []})  # edited after sealing
+    out = vf.verify_after(BEFORE, after, STEP)
+    assert out["verdict"] == "UNOBSERVABLE" and "observation_id" in out["checks"]["why"]
+    forged_before = {**BEFORE, "readiness": {"ok": True}}
+    assert vf.verify_after(forged_before, raw_of(EMPTY, sr(blob(155.0, -126.0)), dt=10), STEP)["verdict"] == "UNOBSERVABLE"
+
+
+def test_source_dry_run_that_errored_is_inconclusive_never_cleared():
+    after = raw_of(EMPTY, sr(blob(155.0, -126.0)), dt=10)
+    for r in after["runs"]:
+        if r["site"] == "belt":
+            r["result"] = "error"  # e.g. 409 camera busy: no candidates, but also no observation
+    obs._seal(after)
+    out = vf.verify_after(BEFORE, after, STEP)
+    assert out["verdict"] == "INCONCLUSIVE" and not out["ok"]
+
+
+def test_free_pick_and_retier_steps_are_unverifiable_not_collateral():
+    for step in ({"verb": "free_pick", "arm": "arm_b", "target": {"anchor": "belt", "at_px": [330, 100]}, "dest": "pallet", "reason": "t"},
+                 {"verb": "pick", "arm": "arm_b", "target": "belt-l1", "dest": "pallet", "reason": "t"}):
+        out = vf.verify_after(BEFORE, raw_of(EMPTY, sr(blob(155.0, -126.0)), dt=10), step)
+        assert (out["verdict"], out["ok"], out["next"]) == ("UNVERIFIABLE", False, ["re_observe", "ask_human"])
+
+
+def test_a_minimum_push_of_six_mm_is_seen():
+    edge = json.loads((CASES / "belt_edge_box.json").read_text(encoding="utf-8"))["raw"]["dry_runs"][0]["results"][0]["structured_result"]
+    before, step = raw_of(edge, EMPTY), {"verb": "push", "arm": "arm_b", "target": "c1", "reason": "t"}
+    assert vf.verify_after(before, raw_of(sr(blob(191.0, 174.0, None, "no catalogue match")), EMPTY, dt=10), step)["verdict"] == "VERIFIED"
+    assert vf.verify_after(before, raw_of(sr(blob(191.0, 178.0, None, "no catalogue match")), EMPTY, dt=10), step)["verdict"] == "NOT_MOVED"
+
+
+class _StubBridge:
+    def call_tool(self, name, args):
+        assert name == "cell_verify_after" and "after" not in args
+        return {"ok": True, "data": vf.verify_after(BEFORE, raw_of(EMPTY, sr(blob(153.0, -128.0)), dt=10), STEP, job_exit=args.get("job_exit"))}
+
+
+def test_cli_verify_exit_code_takes_no_after_file(tmp_path):
+    for name, obj in (("b.json", BEFORE), ("s.json", STEP)):
         (tmp_path / name).write_text(json.dumps(obj), encoding="utf-8")
-    base = ["verify", "--before", str(tmp_path / "b.json"), "--step", str(tmp_path / "s.json"), "--job-exit", "0"]
-    assert cli.main([*base, "--after", str(tmp_path / "a.json")]) == 0
-    assert cli.main([*base, "--after", str(tmp_path / "n.json")]) == 1
+    ns = type("A", (), {"before": str(tmp_path / "b.json"), "step": str(tmp_path / "s.json"), "job_exit": 0})()
+    assert cli.cmd_verify(_StubBridge(), ns)["ok"] is True
+    with pytest.raises(SystemExit):
+        cli.main(["verify", "--before", "b", "--step", "s", "--after", "a"])  # an after file is no longer accepted

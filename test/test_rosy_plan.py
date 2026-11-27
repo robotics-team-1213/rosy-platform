@@ -31,6 +31,7 @@ def plan(pack: dict[str, Any], verb: str = "pick", **step: Any) -> dict[str, Any
 
 
 def check(p: dict[str, Any], pack: dict[str, Any], **kw: Any) -> list[str]:
+    kw.setdefault("history", [])
     res = pl.validate_plan(p, pack, now=pack["observed_at"] + 1, **kw)
     assert res["ok"] == (not res["errors"])
     return [e["code"] for e in res["errors"]]
@@ -81,7 +82,7 @@ def test_a_refused_candidate_only_allows_what_the_pack_suggested():
     assert pl.validate_plan(plan(edge, "push", target="c1"), edge)["needs_human_approval"] is True
     assert check(plan(edge, "push", target="c1", dest="pallet"), edge) == ["BAD_DEST"]
     wb = pack_of("plate_b_workbench")
-    assert check(plan(wb, target="c1", dest="pallet"), wb) == ["TARGET_REFUSED"]
+    assert check(plan(wb, target="c1", dest="pallet"), wb) == ["UNTRUSTED_SOURCE"]
 
 
 def test_retier_site_is_allowed_only_when_the_pack_suggested_it():
@@ -145,12 +146,53 @@ def test_second_identical_step_after_a_failure_is_refused():
     assert check(plan(pack, "ask_human"), pack, history=failed) == []
 
 
+def test_repeat_rule_ignores_the_reason_and_pixel_jitter_and_needs_history():
+    pack = pack_of("belt_middle_box")
+    p = plan(pack, target="c1", dest="pallet")
+    failed = [{"step": {**p["step"], "reason": "another wording"}, "verdict": "NOT_MOVED"}]
+    assert check(p, pack, history=failed) == ["REPEAT_AFTER_FAILURE"]
+    assert check(p, pack, history=[{"step": "garbage", "verdict": "NOT_MOVED"}]) == ["REPEAT_AFTER_FAILURE"]  # malformed row: fail closed
+    assert check(p, pack, history=None) == ["HISTORY_REQUIRED"] and check(plan(pack, "idle"), pack, history=None) == []
+    edge = pack_of("belt_edge_box")
+    fp = lambda uv: plan(edge, "free_pick", target={"anchor": "belt", "at_px": uv}, dest="pallet")  # noqa: E731
+    assert check(fp([331, 101]), edge, history=[{"step": fp([330, 100])["step"], "verdict": "NOT_MOVED"}]) == ["REPEAT_AFTER_FAILURE"]
+    assert check(fp([360, 100]), edge, history=[{"step": fp([330, 100])["step"], "verdict": "NOT_MOVED"}]) == []
+
+
+def test_untrusted_and_destination_sources_never_give_a_pick_whatever_the_suggestion_says():
+    adv = pack_of("plate_b_workbench")
+    assert check(plan(adv, target="plate_b-l1", dest="pallet"), adv) == ["SITE_NOT_SUGGESTED"]
+    hinted = obs.assemble(json.loads((CASES / "adversarial" / "adv_retier_hint_on_untrusted_plate_b.json").read_text(encoding="utf-8"))["raw"])
+    assert check(plan(hinted, target="plate_b-l1", dest="pallet"), hinted) == ["SITE_NOT_SUGGESTED"]
+    assert check(plan(hinted, target="c1", dest="pallet"), hinted) == ["UNTRUSTED_SOURCE"]
+    forged = copy.deepcopy(hinted)  # a hint smuggled in after the pack was built: the id no longer matches
+    forged["candidates"][0]["suggestions"] = ["retier(plate_b-l1)"]
+    assert check(plan(hinted, target="plate_b-l1", dest="pallet"), forged) == ["PACK_TAMPERED"]
+    resealed = obs._seal(forged)  # even a resealed pack cannot make an untrusted site a pick source
+    assert check(plan(resealed, target="plate_b-l1", dest="pallet"), resealed) == ["SITE_NOT_SUGGESTED"]
+    assert check(plan(resealed, target="c1", dest="pallet"), resealed) == ["UNTRUSTED_SOURCE"]
+
+
+def test_edited_pack_stale_clock_and_missing_arm_are_clean_refusals():
+    pack = pack_of("belt_middle_box")
+    good = plan(pack, target="c1", dest="pallet")
+    forged = copy.deepcopy(pack)
+    forged["candidates"].append({"id": "c9", "site": "belt", "suggestions": ["pick"]})
+    assert check(plan(pack, target="c9", dest="pallet"), forged) == ["PACK_TAMPERED"]
+    assert "OBSERVATION_STALE" in [e["code"] for e in pl.validate_plan(good, pack, history=[])["errors"]]  # now=None is the real clock
+    noarm = {"observation_id": pack["observation_id"], "step": {"verb": "idle", "reason": "r"}}
+    assert check(noarm, pack) == ["BAD_ARM"]
+
+
 def test_cli_plan_check_exit_code(tmp_path, capsys):
     pack = pack_of("belt_middle_box")
     pack["observed_at"] = __import__("time").time()
+    obs._seal(pack)
     (tmp_path / "pack.json").write_text(json.dumps(pack), encoding="utf-8")
     (tmp_path / "plan.json").write_text(json.dumps(plan(pack, target="c1", dest="pallet")), encoding="utf-8")
-    assert cli.main(["plan-check", "--pack", str(tmp_path / "pack.json"), "--plan", str(tmp_path / "plan.json")]) == 0
+    (tmp_path / "plan.json").write_text(json.dumps(plan(pack, target="c1", dest="pallet")), encoding="utf-8")
+    assert cli.main(["plan-check", "--pack", str(tmp_path / "pack.json"), "--plan", str(tmp_path / "plan.json")]) == 1  # no history: refused
+    assert cli.main(["plan-check", "--pack", str(tmp_path / "pack.json"), "--plan", str(tmp_path / "plan.json"), "--first-step"]) == 0
     (tmp_path / "bad.json").write_text(json.dumps(plan(pack, target="c1", dest="pallet", x=1)), encoding="utf-8")
-    assert cli.main(["plan-check", "--pack", str(tmp_path / "pack.json"), "--plan", str(tmp_path / "bad.json")]) == 1
+    assert cli.main(["plan-check", "--pack", str(tmp_path / "pack.json"), "--plan", str(tmp_path / "bad.json"), "--first-step"]) == 1
     assert "FORBIDDEN_FIELD" in capsys.readouterr().out
