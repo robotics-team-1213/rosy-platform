@@ -94,9 +94,9 @@ def _run_auto_core(
         config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     )
     episode, failed_yaws, gate, dest_view = None, [], None, None
+    attempts = 1 if anchor else int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts  # the height was measured once: a retry is a new run
     binding = config.get("_target_binding")
-    # Retry disabled when anchored (depth measured once) or target-bound (one-shot single carry).
-    attempts = 1 if (anchor or binding or config.get("_one_shot")) else (int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts)
+    attempts = 1 if (binding or config.get("_one_shot")) else attempts
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
