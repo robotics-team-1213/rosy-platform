@@ -37,13 +37,8 @@ _LOG = logging.getLogger("fleet.server.trip_runner")
 def _excluded(runner, live, index: int, state) -> bool:
     if live.view["detail"].get("parking_handoff") is not None or state.get("mode") == "DOCKING":
         return True
-    segs = getattr(live, "segments", None)
-    if segs is not None and not (0 <= index < len(segs)):
-        return False
-    arc = live.arc(index)
     topview = getattr(runner, "cell_topview", None)
-    return (getattr(live.graph.places.get(arc.end_place), "kind", None) == "charge"
-            or (topview is not None and topview.covers(arc.end_place)))
+    return topview is not None and topview.covers(live.arc(index).end_place)
 
 
 def _in_scope(runner, live, reason, stop_detail, state) -> bool:
