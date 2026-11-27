@@ -574,25 +574,24 @@ def test_catalog_object_click_stages_and_dispatches_one_shot_cell_task(site):
 
     with sync_playwright() as pw:
         posts = []
-        browser, page, errors = _open(pw, site, api, posts, size=(1440, 900))
+        ans = {"/api/fleet/pipeline/cell-tasks": (200, {"task": {"task_id": "ct-obj-1", "status": "QUEUED"}})}
+        browser, page, errors = _open(pw, site, api, posts, answers=ans, size=(1440, 900))
         inspector = page.locator("#omx-right-inspector details.omx-pipeline-disclosure")
         expect(inspector).to_be_visible()
         inspector.locator("summary").click()
         inspector.locator('[data-dual-cam-toggle="true"]').click()
-
         page.locator('[data-cam-object="det:88:0"]').first.click()
         staging = page.locator(".cell-obj-staging")
         expect(staging).to_be_visible()
         expect(staging).to_contain_text("container-1")
         staging.locator('[data-obj-dispatch="true"]').click()
-
         dialog = page.locator("dialog.ui-confirm")
         expect(dialog).to_be_visible()
         dialog.locator('ui-button[kind="irreversible"]').click()
-
-        task_posts = [p for p in posts if p["path"] == "/api/fleet/pipeline/cell-tasks"]
+        expect(staging).to_contain_text("ct-obj-1")
+        task_posts = [body for path, body in posts if path == "/api/fleet/pipeline/cell-tasks"]
         assert len(task_posts) == 1
-        sent = json.loads(task_posts[0]["body"])
+        sent = json.loads(task_posts[0])
         assert sent["target_object"]["catalog_id"] == "container-1"
         assert sent["target_object"]["expected_cell_state_gen"] == 7
         assert sent["propose"] is False
