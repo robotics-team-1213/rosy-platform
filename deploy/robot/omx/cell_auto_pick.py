@@ -169,6 +169,8 @@ def _run_auto_core(
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {bias_error}"}
             cd.bias(known, problem, target["object"]["raw_m"])
+            if config.get("_neighbour_clear_mm") is not None:
+                tried["neighbour_clear_mm"] = config["_neighbour_clear_mm"]  # the operator's per-run margin (--neighbour-clear-mm)
             if problem and config.get("_map_only"):
                 tried["map_only"] = problem  # operator chose the fresh measured map alone (--map-only); guards and Gate unchanged
             elif problem and not dry_run:

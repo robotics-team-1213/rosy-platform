@@ -38,6 +38,7 @@ def parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
     ap.add_argument("--layers-below", type=int, help="tier hint: layers under the source stack top; raises, never lowers, the site value")
     ap.add_argument("--verify-zones", action="store_true", help="record destination zone_verification even without --task-id")
+    ap.add_argument("--neighbour-clear-mm", type=float, help="this run's auto.neighbour_clear_mm, 10..30 (never below the 8 mm finger); recorded")
     return ap
 
 
@@ -104,6 +105,10 @@ def open_cell(args, commissioning=False):
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
     config["_verify_zones"] = bool(getattr(args, "verify_zones", False))
     config["_map_only"] = bool(getattr(args, "map_only", False))
+    if (clear := getattr(args, "neighbour_clear_mm", None)) is not None:
+        if not 10.0 <= clear <= 30.0:
+            raise SystemExit("--neighbour-clear-mm must be 10..30")
+        config["params"], config["_neighbour_clear_mm"] = {**config["params"], "auto.neighbour_clear_mm": float(clear)}, float(clear)
     if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
         print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
