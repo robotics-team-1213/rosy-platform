@@ -11,7 +11,11 @@ footprint tolerances. The frame is back-projected through that camera onto the c
 fixture frame directly: no arm frame, no cell calibration map, no tools/sim on the cell (cell_belt_vision is the cell copy
 of the omx_real2sim detection). A missing reference, a failed read, no container, two or more, or a container-coloured blob
 that is not the trained container is BELT_POSE_UNKNOWN; a value past the training range plus a margin is
-BELT_POSE_OUT_OF_RANGE. Neither is clamped; either refuses the run before any motion."""
+BELT_POSE_OUT_OF_RANGE. Neither is clamped; either refuses the run before any motion.
+
+The range is RANGE unless the bundle's belt_reference.range = {"dx_m": [lo, hi], "dy_m": [lo, hi], "yaw_rad": [lo, hi]}
+declares the trained range plus margin (a newer training set, e.g. Panel N). A declared range that is malformed or past
+CEILING is refused (NOT_AVAILABLE), never replaced by RANGE."""
 from __future__ import annotations
 
 import hashlib
@@ -21,6 +25,9 @@ BELT_NAMES = ("belt_dx_cm", "belt_dy_cm", "belt_yaw_x5")
 SCALE = (0.01, 0.01, 0.2)  # m, m, rad per feature unit (make_panel_l.py)
 # Panel L/I collection: x -1..+13 mm, y +-8 mm, yaw +-12 deg; the gate adds 1 mm / 1 deg (task spec 2026-11-27)
 RANGE = ((-0.002, 0.014), (-0.009, 0.009), (-math.radians(13.0), math.radians(13.0)))
+# hard ceiling a bundle-declared range may not exceed: dx, |dy|, |yaw| (a bundle cannot widen the gate past this)
+CEILING = ((-0.01, 0.04), (-0.035, 0.035), (-math.radians(20.0), math.radians(20.0)))
+RANGE_KEYS = ("dx_m", "dy_m", "yaw_rad")
 NEAR_M = 0.06  # a container-coloured blob this close to the belt site is a belt container
 UNKNOWN, OUT_OF_RANGE = "BELT_POSE_UNKNOWN", "BELT_POSE_OUT_OF_RANGE"
 CAMERA_KEYS = ("eye", "focus", "up", "f_px", "width", "height")
@@ -38,6 +45,19 @@ def _numbers(value, n: int, what: str, positive: bool = False) -> list[float]:
     return [float(v) for v in vals]
 
 
+def _range(declared) -> tuple:
+    """RANGE when the bundle declares none, else the declared (lo, hi) per axis; ValueError when malformed or past CEILING."""
+    if declared is None:
+        return RANGE
+    if not isinstance(declared, dict) or set(declared) != set(RANGE_KEYS):
+        raise ValueError(f"belt_reference.range needs exactly {', '.join(RANGE_KEYS)}")
+    out = tuple(tuple(_numbers(declared[k], 2, f"range.{k}")) for k in RANGE_KEYS)
+    for key, (lo, hi), (c_lo, c_hi) in zip(RANGE_KEYS, out, CEILING):
+        if not c_lo <= lo <= hi <= c_hi:
+            raise ValueError(f"belt_reference.range.{key} [{lo}, {hi}] must be lo <= hi inside the ceiling [{c_lo:.4f}, {c_hi:.4f}]")
+    return out
+
+
 def _reference(doc) -> dict:
     """The belt_reference fields as numbers; ValueError names what is missing (the run is then NOT_AVAILABLE)."""
     if not isinstance(doc, dict):
@@ -51,6 +71,7 @@ def _reference(doc) -> dict:
             "site_xy": _numbers(site.get("xy"), 2, "belt_site.xy"), "site_yaw": _numbers([site.get("yaw")], 1, "belt_site.yaw")[0],
             "belt_top": _numbers([doc.get("belt_top_m")], 1, "belt_top_m")[0],
             "box": _numbers([box.get(k) for k in ("length_m", "width_m", "height_m")], 3, "container", positive=True),
+            "range": _range(doc.get("range")),
             "tol": _numbers([tol.get(k) for k in ("length", "width", "partial_min")], 3, "footprint_tol_m", positive=True)}
 
 
@@ -89,10 +110,12 @@ def measure(frame, reference) -> dict:
                     yaw_deg=round(math.degrees(offset[2]), 1), size_mm=[round(v * 1000, 1) for v in b["size"]],
                     score=round(max(0.0, 1.0 - max(size_err)), 3),
                     features=[round(v / s, 4) for v, s in zip(offset, SCALE)], names=list(BELT_NAMES))
-    outside = [name for name, v, (lo, hi) in zip(BELT_NAMES, offset, RANGE) if not lo <= v <= hi]
+    lim = ref["range"]
+    outside = [name for name, v, (lo, hi) in zip(BELT_NAMES, offset, ref["range"]) if not lo <= v <= hi]
     if outside:
-        return _refuse(OUT_OF_RANGE, f"{', '.join(outside)} past the training range (dx -2..14 mm, dy +-9 mm, "
-                                     f"yaw +-13 deg): offset {evidence['offset_mm']} mm, yaw {evidence['yaw_deg']} deg",
+        return _refuse(OUT_OF_RANGE, f"{', '.join(outside)} past the training range (dx {lim[0][0] * 1000:.1f}..{lim[0][1] * 1000:.1f} mm, "
+                                     f"dy {lim[1][0] * 1000:.1f}..{lim[1][1] * 1000:.1f} mm, yaw {math.degrees(lim[2][0]):.1f}.."
+                                     f"{math.degrees(lim[2][1]):.1f} deg): offset {evidence['offset_mm']} mm, yaw {evidence['yaw_deg']} deg",
                        **evidence)
     return {"ok": True, **evidence}
 
