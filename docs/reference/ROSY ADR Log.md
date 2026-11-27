@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1081 | 미교시 지점 자유 위치 집기를 사람 승인 없이 Fleet 셀 작업 motion으로 투입한다 (D-911 2항 개정). [전문](../adr/D-1081-free-position-pick-as-fleet-cell-task-motion.md) | Accepted (2026-11-27, 소유자 결정 "free-position picks run without per-task human approval, wide scope; guards stay"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 없다. |
 | D-1082 | Nav2 도로 trip이 위험이 아닌 이유로 멈추면 Fleet은 trip을 끝내지 않고 복구해 지금 위치에서 다시 보낸다. [전문](../adr/D-1082-fleet-nav2-road-trip-stop-recovery.md) | Accepted (2026-11-27, 사용자 요청 "멈췄을 때 경로 복구하고 다시 따라가는 게 당연히 있어야 하는데 없다, 조정·처리해 줘"; 사용자 원칙 "로직 결함·일시 문제로 운행을 끝내거나 사람을 기다리게 하지 않는다, 실제 위험 정지는 유지, 가드 값 완화 금지"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1080 | Nav2 도로 trip이 차선을 벗어나면 Fleet은 멈추지 않고 감속하고 차선 복귀 경로를 다시 보낸다 (D-511 M0 개정). [전문](../adr/D-1080-fleet-nav2-lane-departure-realign.md) | Accepted (2026-11-27, 사용자 결정 "코너·경로 이상은 Fleet이 감지하고 신호를 준다", "즉시 정지 말고 도로를 다시 찾게", "다시 정렬해도 되잖아"; 세 세션 토론 합의). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1079 | 멈춘 팔은 사람을 기다리지 않고 자동 복구를 계속 다시 시도한다 (D-1048·D-1077 보충). [전문](../adr/D-1079-held-arm-recovery-retried-without-a-person.md) | Accepted (2026-11-27, 사용자 결정 "human hold 는 이제 없어야해". 폴백은 "토크 ON 대기+자동 재시도", 범위는 "OMX 셀 전체"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
