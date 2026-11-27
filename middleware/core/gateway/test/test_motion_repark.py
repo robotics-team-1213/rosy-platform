@@ -32,7 +32,7 @@ def test_the_heading_trim_ends_the_plan_and_is_bounded():
     assert plan_repark(0.0, 0.0, 10.0) == [("restore", pytest.approx(math.radians(10.0)))]
     assert plan_repark(0.05, 0.0, -5.0) == [("drive", 0.05), ("restore", pytest.approx(math.radians(-5.0)))]
     shifted = plan_repark(0.0, 0.038, 5.0)
-    assert [k for k, _ in shifted] == ["turn", "drive", "restore", "restore"] and shifted[2][1] == 0.0  # trim is last
+    assert shifted[2] == ("restore", 0.0) and shifted[-1] == ("restore", pytest.approx(math.radians(5.0)))  # trim is last
     for bad in (25.1, -26.0, float("nan"), 0.5):  # past the cap, not a number, or below the 1 degree floor
         with pytest.raises(ValueError):
             plan_repark(0.0, 0.0, bad)

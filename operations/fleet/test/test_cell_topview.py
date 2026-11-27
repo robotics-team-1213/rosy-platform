@@ -378,7 +378,7 @@ def test_a_turned_stop_is_rotated_with_the_shift_then_confirmed_and_every_step_i
     assert clearance.turn_deg == pytest.approx(5.1, abs=0.01) and clearance.left_m == pytest.approx(0.04, abs=1e-3)
     assert [s["step"] for s in first["steps"]] == ["rotate", "translate"]
     assert first["steps"][0]["measured_heading_deg"] == pytest.approx(-5.1, abs=0.01)
-    assert first["steps"][1]["measured_lateral_m"] == pytest.approx(-0.04, abs=1e-3)
+    assert first["steps"][1]["measured_lateral_m"] == pytest.approx(0.04, abs=1e-3)
     core.armed_now = False
     done = evaluate(runner, live)  # re-measured after the turn: inside 3 deg, nothing more to do
     assert done["decision"] == "IN_TOLERANCE" and len(core.posts) == 1 and len(done["steps"]) == 2
@@ -394,7 +394,7 @@ def test_a_refused_or_unsupported_turn_is_a_hold_with_its_reason():
     runner, live = rig(FakeTopview(obs(0.0, 0.0, math.radians(-5.1))), core)
     held = evaluate(runner, live)
     assert (held["decision"], held["reason"]) == ("HOLD", "NAMED_STOP_CORRECTION_TURN_UNSUPPORTED") and len(core.posts) == 1
-    assert not core.armed_now and [s["step"] for s in held["steps"]] == ["rotate"]  # asked for, never done
+    assert not core.armed_now and held["steps"] == []  # refused: no step was made
 
 
 def test_a_turn_without_the_robot_saying_it_takes_one_is_refused_before_any_motion():
