@@ -9,7 +9,7 @@ deploy/robot/omx/cell_belt_pose.py reads, since the cell has no tools/sim.
 belt_yaw_x5). --top-camera: the camera the training views were rendered around (top_refit.json, {"ok": true, "camera": {..}},
 or a bare camera dict). --preset: the sim layout the data was collected in; the belt site, belt top and container size come
 from omx_two_arm_sites.Layout(preset), the footprint tolerances from omx_real2sim_helpers (lane_blobs' container rule).
-Optional --range "dx_lo,dx_hi,dy_abs,yaw_abs_deg" (m, m, m, deg) declares belt_reference.range, the range the
+Optional --range="dx_lo,dx_hi,dy_abs,yaw_abs_deg" (write it with "=": dx_lo is usually negative) (m, m, m, deg) declares belt_reference.range, the range the
 cell's gate uses instead of its default (past a hard ceiling in cell_belt_pose it is refused here and on the cell).
 Write it into the checkpoint folder before package_cell_bundle, which copies it unchanged; the bundle's policy_revision
 (model.safetensors sha256) does not change, its checkpoint_sha256 and file list do."""

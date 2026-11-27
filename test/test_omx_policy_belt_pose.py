@@ -187,7 +187,7 @@ def test_generator_fills_the_reference_from_the_sim_layout(tmp_path):
     assert omx_env_state.main([*argv, "--out", str(tmp_path / "ENV_STATE.json")]) == 0
     assert json.loads((tmp_path / "ENV_STATE.json").read_text()) == {"names": NAMES, "belt_reference": REFERENCE}
     out = tmp_path / "wide.json"
-    assert omx_env_state.main([*argv, "--range", "-0.003,0.032,0.027,16", "--out", str(out)]) == 0
+    assert omx_env_state.main([*argv, "--range=-0.003,0.032,0.027,16", "--out", str(out)]) == 0
     assert json.loads(out.read_text())["belt_reference"] == {**REFERENCE, "range": {
         "dx_m": [-0.003, 0.032], "dy_m": [-0.027, 0.027], "yaw_rad": [-math.radians(16), math.radians(16)]}}
     for bad in ("-0.003,0.032,0.027", "a,b,c,d", "0,0.05,0.01,5", "0,0.01,0.01,25"):
