@@ -1675,6 +1675,28 @@ place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진�
 
 셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.
 
+### 임시판 칸 사전지식 (`slots`, 2026-11-27)
+
+임시판(`temp_plate_a`·`temp_plate_b`)은 부채꼴 칸 3개(CAD `temp_slot_plate.scad` v12: 칸 30.8 × 96 mm, 층 32.4 mm)로 나뉜다.
+사이트에 `slots`가 있으면 `cell_auto_pick_plan.observe`가 자유 덩어리 검출 뒤에 `cell_slot_prior`를 적용한다. 사전지식은 측정을
+설명할 뿐 대신하지 않는다. `slots`가 없으면 동작은 이전과 같다.
+
+| 키 | 뜻 |
+|---|---|
+| `slots` | `[{"name", "xy" (m, 팔 좌표, 칸 중심), "yaw_deg" (칸 긴 축), "pocket_mm" [폭, 길이]}]`. 판을 놓을 때마다 기준점 F1–F4로 잰다 |
+| `slots_fit` | `{"residual_mm", "residual_deg"}`: 그 측정의 기준점 잔차. 없거나 3 mm·1°를 넘으면 사전지식을 끈다 |
+| `finger_params` | 칸에 맞춰진 물체에만 적용한다. 칸 밖 물체는 셀 기본값(예 `auto.neighbour_clear_mm` 14)을 그대로 쓴다 |
+
+적용 순서는 다음과 같다.
+
+1. 층수는 상단 D435 깊이로 칸마다 정한다(`n = round(높이 / tier_step_m)`, ±7 mm 밖이면 모름). 측면값이 주어지면 깊이와 반 단(16 mm) 이상 다른 칸은 보류한다.
+2. 모든 칸 윤곽(바닥~맨 위 층) 밖의 덩어리는 표적이 아니다(노란 테이블 조각). 판 위인데 어느 칸에도 없는 전경이 있으면 사전지식을 끈다.
+3. 칸 윤곽 안을 맨 위 층 높이로 다시 잰다. 카탈로그 일치가 정확히 하나이고 칸 중심 8 mm·각도 5°·가로 4 mm 안이면 칸 축에 맞춘다(`slot`, `dz_m`로 맨 위 층을 집음). 아니면 그 칸 덩어리는 기존 경로로 판정한다.
+4. 맞춰진 물체도 이웃 칸이 더 높거나 높이를 모르면(3단으로 간주) `finger_params`를 쓰지 않는다. 집게는 칸 축에 수직(±3°)으로만 닫고, 화면 밖 쪽은 계속 막힘으로 본다. 등록 사이트로 아직 측정되지 않은 칸은 `SITE_NOT_MEASURED`로 거절한다.
+
+`slots`·`slots_fit`·`finger_params` 값은 셀 설정에 아직 없다. 판 기준점 측정 도구와 측면 카메라 층수 읽기는 후속 작업이다.
+고정 입력 시험: `test/test_omx_temp_plate_prior.py`(2026-11-27 상단 프레임, `test/fixtures/omx_temp_plate_1127/`).
+
 ### 판정 구역 표 덮어쓰기와 제안 도구 (D-1057)
 
 `cell_area_zones`의 구역 표(`TOP_ROI_BY_COL_ROW`, `SIDE_ROI_BY_COL_TIER`)는 카메라 위치에 묶여 있다. 셀 설정에 `zone_rois`가
