@@ -54,3 +54,13 @@ def test_rest_diagnosis_reports_basis():
     assert timing.rest_diagnosis(status, HOME)["fold_basis"] == "coarse"
     out = timing.rest_diagnosis({**status, "state": WRIST_OUT}, HOME, LIB)
     assert out["fold_basis"] == "calibrated" and out["folded"] is False
+
+
+def test_roll_free_skips_roll_only_for_the_torque_off_caller():
+    roll52 = [0.0, -58.0, 50.0, 50.0, 52.0, 58.1]
+    assert ph.live_folded({"state": roll52}, LIB) is False  # default unchanged
+    assert ph.live_folded({"state": roll52}, LIB, roll_free=True) is True
+    assert len(ph.fold_ranges(LIB, roll_free=True)) == 4 and len(ph.fold_ranges(LIB)) == 5
+    assert ph.live_folded({"state": [0.0, -58.0, 50.0, 50.0, 95.0, 58.1]}, LIB, roll_free=True) is False  # roll cap
+    for ext in (WRIST_OUT, [0.0, -30.0, 50.0, 50.0, 52.0, 0], [40.0, -58.0, 50.0, 50.0, 52.0, 0]):
+        assert ph.live_folded({"state": ext}, LIB, roll_free=True) is False

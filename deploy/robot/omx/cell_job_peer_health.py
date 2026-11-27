@@ -42,12 +42,12 @@ def _poses(source: Any) -> list[list[float]]:
     return out
 
 
-def fold_ranges(*sources: Any) -> list[tuple[float, float]] | None:
+def fold_ranges(*sources: Any, roll_free: bool = False) -> list[tuple[float, float]] | None:
     """Per-joint (lo, hi) allowed while folded, from the arm's own library/config; None means no usable pose (coarse rule)."""
     poses = [p for src in sources for p in _poses(src)]
     if not poses:
         return None
-    return [(min(p[i] for p in poses) - FOLD_TOL[i], max(p[i] for p in poses) + FOLD_TOL[i]) for i in range(5)]
+    return [(min(p[i] for p in poses) - FOLD_TOL[i], max(p[i] for p in poses) + FOLD_TOL[i]) for i in range(4 if roll_free else 5)]  # roll_free: torque-off release only, no roll bound
 
 
 def fold_basis(*sources: Any) -> str:
@@ -63,8 +63,14 @@ def arm_library_path(workdir: Path, arm: str) -> Path | None:
     return None
 
 
-def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
-    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range."""
+ROLL_FREE_MAX = 90.0  # roll_free still refuses an implausible roll reading
+
+
+def live_folded(row: dict[str, Any], *sources: Any, roll_free: bool = False) -> bool | None:
+    """Folded when lift/elbow pass the coarse rule and, given the arm's library/config, every joint sits in its own range.
+
+    roll_free (torque-off release only): wrist roll and gripper are not judged beyond |roll| <= ROLL_FREE_MAX; a roll axis cannot drop a folded arm
+    and a USB drop left arm_s at roll +52 (11-28), which deadlocked the release."""
     if isinstance(row.get("folded"), bool):
         return row["folded"]
     st = row.get("state")
@@ -73,7 +79,9 @@ def live_folded(row: dict[str, Any], *sources: Any) -> bool | None:
     ):
         if not (float(st[1]) <= -50.0 and float(st[2]) >= 45.0):
             return False
-        ranges = fold_ranges(*sources)
+        if roll_free and abs(float(st[4])) > ROLL_FREE_MAX:
+            return False
+        ranges = fold_ranges(*sources, roll_free=roll_free)
         return ranges is None or all(lo <= float(st[i]) <= hi for i, (lo, hi) in enumerate(ranges))
     return None
 
@@ -136,9 +144,9 @@ def passive_motor_health_folded(
             and (gripper_max is None or pose[5] <= gripper_max))
 
 
-def calibrated_positions_folded(positions, cal, library: Any = None) -> bool:
+def calibrated_positions_folded(positions, cal, library: Any = None, *, roll_free: bool = False) -> bool:
     pose = calibrated_pose(positions, cal)
-    return pose is not None and live_folded({"state": pose}, library) is True
+    return pose is not None and live_folded({"state": pose}, library, roll_free=roll_free) is True
 
 
 def calibrated_pose(positions, cal) -> list[float] | None:

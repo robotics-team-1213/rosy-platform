@@ -57,7 +57,7 @@ def run_baseline(device: str, out_dir: Path) -> int:
 def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_dir, result=None, library=None) -> dict:
     """Result dict; raises Refused with a reason code. `session` supplies torque_off_until_confirmed/check_idle."""
     result = {} if result is None else result  # the caller keeps it, so a refusal still reports before/after
-    result.update(arm=arm, device=device, fold_basis=fold_basis(library))
+    result.update(arm=arm, device=device, fold_basis=fold_basis(library) + ("-roll-free" if fold_basis(library) == "calibrated" else ""))
     try:
         guard = lock(arm)
     except SystemExit as exc:
@@ -78,7 +78,7 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
         already_off = all(before[m]["torque"] == 0 for m in MOTORS)
         result["already_torque_off"] = already_off
         if not already_off:  # the fold rule guards the torque cut; an arm already OFF only gets its caps written (no motion)
-            if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration, library):
+            if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration, library, roll_free=True):
                 raise Refused("NOT_FOLDED", "arm is not folded: torque is not cut on an extended arm")
             try:  # the pose may have changed since the first read: judge again right before the write
                 bus = open_bus()
@@ -88,7 +88,7 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
                     bus.close()
             except Exception as exc:
                 raise Refused("READ_FAILED", f"cannot re-read follower: {exc}", ERROR) from None
-            if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration, library):
+            if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration, library, roll_free=True):
                 raise Refused("NOT_FOLDED", "arm left the folded pose before torque OFF")
             ok, state = session.torque_off_until_confirmed()
             if not ok:

@@ -54,7 +54,7 @@ class Guard:
         Guard.closed = True
 
 
-def run(positions=FOLDED, *, torque=1, pwm=20, stuck=False, lock=None, baseline=None, cal=CAL):
+def run(positions=FOLDED, *, torque=1, pwm=20, stuck=False, lock=None, baseline=None, cal=CAL, library=None):
     state = motors(positions, torque, pwm)
     bus = Bus(state, stuck)
     clock = iter(range(0, 1000, 10))
@@ -71,7 +71,7 @@ def run(positions=FOLDED, *, torque=1, pwm=20, stuck=False, lock=None, baseline=
     Guard.closed = False
     try:
         res = job.release("arm_s", "/dev/serial/by-id/x", open_bus=lambda: bus, lock=lock or (lambda arm: Guard()),
-                          session=session, calibration=cal, baseline=baseline or fix, out_dir=Path("o"))
+                          session=session, calibration=cal, baseline=baseline or fix, out_dir=Path("o"), library=library)
         return res, bus, calls, None
     except job.Refused as exc:
         return None, bus, calls, exc
@@ -211,3 +211,20 @@ def test_main_keeps_the_torque_off_result_when_the_release_raises(tmp_path, caps
                   calibration=CAL, release=boom)
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert rc == 0 and out["ok"] is True and out["incident_release"]["cleared"] is False and "fleet down" in out["incident_release"]["why"]
+
+
+LIB = {"chunks": {"home": [[0.0, -75.0, 75.0, 0.0, -5.0, 50.0]]}}  # FOLDED's lift/elbow/flex/pan with roll -5
+ROLL52, ROLL95 = 3040, 3900  # raw roll for +52 / +95 on the 0..4000 range
+
+
+def test_roll_far_from_home_is_released_with_calibrated_library():  # 11-28 arm_s: USB drop left roll +52, home -5
+    res, bus, _, err = run([2000, 500, 3500, 2000, ROLL52, 2000], library=LIB)
+    assert err is None and res["fold_basis"] == "calibrated-roll-free"
+    assert [w for w in bus.writes if w[1] == "torque"] and res["folded_after"] is False  # reported, not a gate
+
+
+def test_implausible_roll_and_extended_arm_still_refused_with_library():
+    for pos in ([2000, 500, 3500, 2000, ROLL95, 2000], [2000, 2000, 2000, 2000, ROLL52, 2000],
+                [2000, 500, 3500, 3500, ROLL52, 2000], [3500, 500, 3500, 2000, ROLL52, 2000]):  # roll cap, lift, flex, pan
+        _, bus, _, err = run(pos, library=LIB)
+        assert err.code == "NOT_FOLDED" and bus.writes == []
