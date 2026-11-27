@@ -93,11 +93,13 @@ export function renderOmxInspector(container, {
 
   const stage = node("div", "", "omx-inspector-stage");
   const cameraBindings = [];
+  let visibleCams = [activeCam];
   if (dualCamMode && camViews.length >= 2) {
     const dualGrid = node("div", "", "omx-inspector-dual-grid");
     const [idA, idB] = active.dualPair || [camViews[0].id, camViews[1].id];
     const viewA = camViews.find((v) => v.id === idA) || camViews[0];
     const viewB = camViews.find((v) => v.id === idB && v.id !== viewA.id) || camViews.find((v) => v.id !== viewA.id) || camViews[1];
+    visibleCams = [viewA, viewB];
     for (const dv of [viewA, viewB]) {
       const pane = node("div", "", "omx-inspector-dual-pane");
       const dImg = node("img", "", "omx-inspector-main-cam omx-inspector-cam");
@@ -200,7 +202,7 @@ export function renderOmxInspector(container, {
   });
   const quickDispatchBar = node("div", "", "omx-inspector-quick-dispatch");
   quickDispatchBar.append(tier.field, disp.field, runBtn);
-  const stagingBar = cellObjects ? buildInspectorStagingBar(activeCam, cellObjects, {
+  const stagingBar = cellObjects ? buildInspectorStagingBar(visibleCams, cellObjects, {
     selectedRef: selectedObjectRef, selectedDest: selectedObjectDest, opReason: quickDispatchReason, busy: objectBusy,
     statusText: objectStatusText, onSelectDest: onSelectObjectDest, onClear: onClearObject, onDispatch: onDispatchTargetObject,
   }) : null;

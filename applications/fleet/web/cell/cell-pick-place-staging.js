@@ -121,9 +121,11 @@ export function buildTargetObjectTaskBody({ cellId, armId, snap, object, destSit
 
 export function buildInspectorStagingBar(camView, cellObjects, {
   selectedRef = null, selectedDest = null, opReason = "", busy = false, statusText = "",
-  nowMs = Date.now(), onSelectDest = () => {}, onClear = () => {}, onDispatch = () => {},
+  nowMs = null, onSelectDest = () => {}, onClear = () => {}, onDispatch = () => {},
 } = {}) {
-  const { cellId, snap, objects } = objectsForCamView(camView, cellObjects);
+  const views = Array.isArray(camView) ? camView : [camView];
+  const resolved = views.map((v) => objectsForCamView(v, cellObjects)).find((r) => r.cellId && r.snap) || objectsForCamView(views[0], cellObjects);
+  const { cellId, snap, objects } = resolved;
   if (!cellId || (!objects.length && !statusText)) return null;
   const selectedObject = objects.find((o) => o.object_ref === selectedRef) || null;
   return buildObjectStagingBar({
