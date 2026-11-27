@@ -14,6 +14,7 @@ D-511's body margin (``lane_offset``) of the ceiling-camera pose, never the robo
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import math
 
@@ -41,7 +42,7 @@ def _excluded(live, index: int, state) -> bool:
             or (isinstance(state, dict) and state.get("mode") == "DOCKING"))
 
 
-def observe(runner, live, index: int, pose, state, nav) -> bool:
+async def observe(runner, live, index: int, pose, state, nav) -> bool:
     """Record ``detail['lane_departure']``; True when the current route is to be replaced by a recentring one."""
     detail = live.view["detail"]
     last = detail.get("lane_departure") or {}
@@ -65,7 +66,11 @@ def observe(runner, live, index: int, pose, state, nav) -> bool:
     loc = (state.get("localization") or {}).get("state")
     if loc != "LOCALIZED":
         return note("location", "ROBOT_NOT_LOCALIZED", loc_state=loc)
-    cam = runner._poses.arbitrated_pose(live.view["robot_id"])
+    try:
+        cam = runner._poses.arbitrated_pose(live.view["robot_id"])   # MapPosePort: sync or async
+        cam = await cam if inspect.isawaitable(cam) else cam
+    except Exception:  # noqa: BLE001 - an unreadable camera pose is no camera pose, never a trip failure
+        cam = None
     active = runner._store.active()
     if (cam is None or cam.state != "LOCALIZED" or cam.x is None or cam.y is None
             or cam.source not in CAMERA_SOURCES or active is None or cam.map_id not in (None, active[1].map_id)):

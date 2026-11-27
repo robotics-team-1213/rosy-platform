@@ -46,7 +46,7 @@ class Rig:
              yaw_off=0.0):
         self.cam = _camera(_at(self.arc, 0.4, cam_left, yaw_off), age, source)
         slam = _slam(_at(self.arc, 0.4, cam_left if slam_left is None else slam_left, yaw_off))
-        replace = realign.observe(self.runner, self.live, 0, slam, state, nav)
+        replace = run(realign.observe(self.runner, self.live, 0, slam, state, nav))
         self.clock.advance(0.5)
         return replace, self.live.view["detail"]["lane_departure"]
 

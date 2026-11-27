@@ -362,7 +362,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 return
         if nav is not None and live.active_route is not None:
             live.active_route["nav_state"] = nav
-        if live.active_route is not None and observe_lane_departure(runner, live, index, pose, state, nav):
+        if live.active_route is not None and await observe_lane_departure(runner, live, index, pose, state, nav):
             live.active_route = {**live.active_route, "superseded": True}  # D-1080: cancel, ack, resend from here
         verdict = _route_finished(runner, live, index, s, nav, target_end=target_end, pose=pose)
         if verdict == "aborted":
