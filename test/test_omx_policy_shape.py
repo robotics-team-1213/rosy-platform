@@ -203,7 +203,9 @@ def test_ease_refuses_eased_frame_outside_envelope():
     low, high = [-30.0, -60.0, 0.0, 20.0, -35.0, 40.0], [30.0, 20.0, 60.0, 60.0, 50.0, 65.0]
     start = [0.0, -50.0, 45.0, 45.0, 0.0, 50.0]
     chunk = [[0.0, -50.0, 62.0, 45.0, 0.0, 50.0], [0.0, -50.0, 62.0, 45.0, 0.0, 50.0], [0.0, -50.0, 40.0, 45.0, 0.0, 50.0]]
-    # elbow row 1: 62 + w*(45-62) stays inside; a start past the envelope pushes it out
+    # the start is never envelope-checked; easing toward a start far below it moves elbow row 1 to 62 - 0.5 * 162 = -19
+    far = [0.0, -50.0, -100.0, 45.0, 0.0, 50.0]
+    assert shape.shape_chunk(chunk, far, low, high, FASTEST)[-1] == pytest.approx(chunk[-1])
     with pytest.raises(ValueError, match="outside reviewed"):
-        shape.shape_chunk(chunk, [0.0, -50.0, 0.0 - 40.0, 45.0, 0.0, 50.0], low, high, FASTEST, ease=True)
+        shape.shape_chunk(chunk, far, low, high, FASTEST, ease=True)
     assert shape.shape_chunk(chunk, start, low, high, FASTEST, ease=True)[-1] == pytest.approx(chunk[-1])
