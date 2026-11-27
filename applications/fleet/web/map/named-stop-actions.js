@@ -119,6 +119,7 @@ export function createNamedStopActions({ scope, view, call, log, isOperator, nam
       message: `${robot.robot_id} 정밀 정지 점유(${custody.reservation_id})를 해제할까요?`,
       opener,
       eligible: () => {
+        if (view.stateUnavailable) return false;
         const current = (view.robots || []).find((r) => r.robot_id === robot.robot_id);
         return Boolean(current?.named_stop_custody?.reservation_id === custody.reservation_id)
           && !custodyView(current, {
@@ -177,6 +178,7 @@ export function createNamedStopActions({ scope, view, call, log, isOperator, nam
       message: `${trip.robot_id} 정밀 정지 보정(${forwardM.toFixed(3)} m)을 실행할까요?`,
       opener,
       eligible: () => {
+        if (view.stateUnavailable) return false;
         const current = (view.trafficTrips || []).find((t) => t.trip_id === trip.trip_id);
         return hasPendingCorrection(current)
           && !correctionView(current, {

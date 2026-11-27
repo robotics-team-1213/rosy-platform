@@ -49,7 +49,8 @@ def test_custody_release_happy_and_refused(site):
         page.locator("#fleet-inbox").click()
         row = page.locator('li[data-key="rosy_01|custody"] > .queue-row')
         expect(row).to_be_visible()
-        row.click()
+        if row.get_attribute("aria-expanded") != "true":
+            row.click()
         slot = page.locator('[data-decision-slot="rosy_01|custody"]')
         expect(slot).to_be_visible()
 

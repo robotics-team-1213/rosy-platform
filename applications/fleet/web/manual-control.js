@@ -147,11 +147,11 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
             body: JSON.stringify({direction, distance_m: 0.1}),
           });
           owner.check();
-          notice = `${robotId} ${label} 완료 (${result?.state || "요청됨"})`;
+          notice = `${robotId} ${label} ${result?.state === "ACCEPTED" || result?.state === "RUNNING" ? "요청" : "완료"}`;
           await refreshState();
         } finally { stepPending = false; update(); }
       },
-      onError: error => { failure = `${label} 거절: ${error.code ? `${error.code} · ` : ""}${error.message}`; update(); },
+      onError: error => { const prefix = error.code ? `${error.code} · ` : ""; failure = `${label} 거절: ${prefix}${error.message}`; update(); },
     });
   }
   for (const {direction, label, button} of stepButtons) {
@@ -290,7 +290,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     const age = robot && Number.isFinite(robot.state_age_s)
       ? `상태 ${evidenceAgeText(Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)).slice(3)}` : "상태 시각 없음";
     pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
-    if (!active && !stopping) reason.textContent = [failure, why || stepWhy].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
+    if (!active && !stopping) reason.textContent = [failure, notice, stepWhy || (!notice ? why : "")].filter(Boolean).join(" · ") || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
   }
   scope.interval(update, 100);
   return {root, update, stop};
