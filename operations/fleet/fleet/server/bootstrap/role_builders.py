@@ -294,6 +294,9 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     from fleet.server.map_binding_routes import install_map_binding_routes  # D-1022
     install_map_binding_routes(app, console=console, site_maps=site_maps, read_guard=read_guard,
                                require_named_operator=require_named_operator)
+    from fleet.server.master_map_routes import install_master_map_routes
+    install_master_map_routes(app, console=console, site_maps=site_maps, read_guard=read_guard,
+                              require_named_operator=require_named_operator)
 
     async def _preview_trip_caps(robot_id: str):
         display = console._capability_display

@@ -36,3 +36,5 @@ python tools/calibration/urdf_nominal.py --check
 Needs numpy, PyYAML and `mcap`; tests inject fakes for CORE and SSH.
 
 <!-- MANUAL: -->
+
+`fleet_map_exchange.py` (2026-11-23): operator CLI for pulling `/api/fleet/robots/{robot_id}/map/bundle`, uploading sealed `master_map_fuse.py --seal-bundle` bundles via `PUT /api/fleet/site-map/master-grid`, pushing/activating via `POST /api/fleet/robots/{robot_id}/master-map/push`, and verifying stationary `LOCALIZED` + matching `grid_id` convergence.

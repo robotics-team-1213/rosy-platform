@@ -41,6 +41,7 @@ from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
+from core_features.site_map_gate import SiteMapRefused, require_stopped_for_site_map
 from core_features.navigation.manager import GOAL_LEASE_MAX_S, NavigationError
 from core_features.navigation.planned_path import PlannedPathScope
 from core_features.navigation.route import MAX_POINTS, RoutePoint
@@ -115,6 +116,7 @@ class CoreServicesLike(Protocol):
     fleet_agent: Any
     fleet_loss: Any
     host_files: Any
+    host_agent: Any
     identity: Any
     inventory: Any
     maps: Any

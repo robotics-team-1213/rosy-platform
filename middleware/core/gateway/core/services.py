@@ -140,6 +140,7 @@ class CoreServices:
     # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
     calibration: CalibrationSessionManager
     trip_lease: TripLeaseManager  # D-541: fences non-owner motion; ends with the trip's driving
+    host_agent: Any = field(default=None, repr=False)
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
     pilot_recording: PilotRecordingGuard = field(default_factory=PilotRecordingGuard)  # D-411 A
     vision_stream: DriverStreamGate = field(default_factory=DriverStreamGate)  # D-368

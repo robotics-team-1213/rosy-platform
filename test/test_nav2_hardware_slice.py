@@ -589,7 +589,18 @@ def test_map_bundle_occupancy_grid_id_matches_core_features(monkeypatch, tmp_pat
             "data": data,
         }
     )
-    assert mb.occupancy_grid_id(site_yaml) == occupancy_map_id(frame.to_dict())
+    f32_frame = GridFrame.from_dict(
+        {
+            "width": 6,
+            "height": 6,
+            "resolution": 0.05000000074505806,
+            "origin": {"x": -0.0, "y": -0.0, "yaw": -0.0},
+            "data": data,
+        }
+    )
+    expected = mb.occupancy_grid_id(site_yaml)
+    assert expected == occupancy_map_id(frame.to_dict())
+    assert expected == occupancy_map_id(f32_frame.to_dict())
 
 
 def test_start_after_tf_reports_missing_requirements_and_retries_bounded():

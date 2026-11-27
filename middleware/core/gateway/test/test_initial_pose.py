@@ -65,3 +65,12 @@ def test_occupancy_map_id_changes_with_grid_content():
     assert occupancy_map_id(GRID).startswith("occupancy:")
     assert occupancy_map_id(GRID) != occupancy_map_id(other)
     assert occupancy_map_id(GRID) == occupancy_map_id(dict(GRID))
+
+
+def test_occupancy_map_id_matches_ros_float32_resolution_and_neg_zero():
+    float32_grid = {
+        **GRID,
+        "resolution": 0.05000000074505806,
+        "origin": {"x": -1.0, "y": -0.5, "yaw": -0.0},
+    }
+    assert occupancy_map_id(GRID) == occupancy_map_id(float32_grid)

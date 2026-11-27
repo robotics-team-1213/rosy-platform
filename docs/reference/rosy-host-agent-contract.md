@@ -185,6 +185,9 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | `navigation_fallback.status` | — | viewer | 불필요 |
 | `navigation_fallback.stage` | — | machine | 불필요 |
 | `navigation_fallback.switch` | `reason` (식별자형 사유 코드) | machine | 불필요 |
+| `site_map.status` | — | viewer | 불필요 |
+| `site_map.stage` | — | machine | 불필요 |
+| `site_map.activate` | — | machine | 불필요 |
 | `lane_perception.status` | — | viewer | 불필요 |
 | `lane_perception.set` | `paint_source`: threshold / denoise / learned | administrator | 불필요 |
 | `network.apply_profile` | `profile_id` (등록된 프로파일 id만) | administrator | 필요 |
@@ -238,7 +241,8 @@ denoise / learned / denoise_fallback이며 `applied_source_age_s`가 수신 나�
 stale 수신 또는 camera 재시작 전 증거는 null이다. 이는 주행 정책에 입력하지 않는다.
 
 native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`,
-`navigation_approval.*`(D-986), `navigation_fallback.*`(SLAM 대체 지도 자동 전환, 2026-11-18)만 활성화한다.
+`navigation_approval.*`(D-986), `navigation_fallback.*`(SLAM 대체 지도 자동 전환, 2026-11-18),
+`site_map.*`(사이트 마스터 지도 스테이징·활성화, 2026-11-23)만 활성화한다.
 `machine` 등급은 로그인이 아니라 CORE의 자동 전환 감독기가 보내는 신원이며, `machine`은 `viewer`·`machine` 명령만
 보낼 수 있고 operator·administrator 명령은 거부된다. 반대로 `machine` 명령은 `machine`만 보낼 수 있다.
 `navigation_fallback.switch`는 CORE가 쓴 정지 증거(속도 0 2초 이상·목표 없음·같은 부팅의 monotonic 시계로 3초 이내 기록,
