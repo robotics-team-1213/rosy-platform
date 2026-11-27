@@ -1549,6 +1549,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
+  - deploy/robot/omx/cell_target_binding.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
   - deploy/robot/omx/cell_area_job_spec.py

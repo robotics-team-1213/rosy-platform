@@ -47,6 +47,7 @@ from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 from cell_job_peer_health import arm_library_path
 from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job
+from cell_target_binding import TARGET_OPTIONAL_PARAMS, append_cli_args as append_target_args
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
 AB_ARMS = {"arm_a", "arm_b"}
@@ -75,11 +76,10 @@ JOBS = {
         "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)}, "optional": {"targets": _targets, "route": _route},
     },
     "auto_pick_dry_run": {
-        "script": "cell_auto_pick.py",
-        "camera": True,
+        "script": "cell_auto_pick.py", "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}", "--dry-run"],
         "params": {"config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
-        "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5), "neighbour_clear_mm": _num(10.0, 30.0)},
+        "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5), "neighbour_clear_mm": _num(10.0, 30.0), **TARGET_OPTIONAL_PARAMS},
     },
     "pivot_near": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
@@ -109,20 +109,11 @@ JOBS = {
         "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
     },
     "auto_pick": {
-        "script": "cell_auto_pick.py",
-        "moving": True,
-        "camera": True,
+        "script": "cell_auto_pick.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
-        "optional": {
-            "operator": _match(NAME),
-            "proposer": _match(NAME),
-            "reviewed_auto": _bool,
-            "verify_zones": _bool, "map_only": _bool, "neighbour_clear_mm": _num(10.0, 30.0),
-            "object": _match(FILTER_OBJ),
-            "colour": _match(FILTER_COL),
-            "layers_below": _int_range(0, 5),
-        },
+        "optional": {"operator": _match(NAME), "proposer": _match(NAME), "reviewed_auto": _bool, "verify_zones": _bool, "map_only": _bool,
+                     "neighbour_clear_mm": _num(10.0, 30.0), "object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5), **TARGET_OPTIONAL_PARAMS},
     },
     "cell_policy_drive": {
         "script": "cell_policy_drive.py",
@@ -374,6 +365,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    append_target_args(args, opt_checked)
     if job["script"] == "cell_torque_off_folded.py" and (lib := arm_library_path(workdir, checked["arm"])):
         args += ["--library", lib.name]  # the arm's own fold poses; none in the workdir: the coarse rule, as before
     if job["script"] == "cell_media_jobs.py":

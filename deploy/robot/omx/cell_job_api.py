@@ -33,39 +33,14 @@ import cell_incident_release  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
     CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
+    session_lock_held as _session_lock_held, whole_cell_lock_held as _whole_cell_lock_held,
 )
 from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm, with_camera_heal  # noqa: E402,F401
-
-try:
-    import fcntl
-except ImportError:  # Windows unit tests
-    fcntl = None
+import cell_target_binding  # noqa: E402
 
 JOB_TTL_S, LIVE_MAX_AGE_S = 900.0, 15.0
 _REAL_POPEN = subprocess.Popen
 _check_arm_incident, _check_depth_lock_held = check_arm_incident_hold, is_depth_lock_held
-
-
-def _flock_held(lock_path: Path, mode: int) -> bool:
-    if fcntl is None or not lock_path.exists():
-        return False
-    with open(lock_path, "a+") as fh:
-        try:
-            fcntl.flock(fh.fileno(), mode | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-    return False
-
-
-def _session_lock_held(arm: str, lock_dir: Path | None = None) -> bool:
-    """True when another process holds ~/rosy-omx/session-<arm>.lock."""
-    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / f"session-{arm}.lock", fcntl.LOCK_EX)
-
-
-def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
-    """True when an exclusive whole-cell ~/rosy-omx/session.lock is held by another process."""
-    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
 
 
 _tools_tree = tools_tree_name
@@ -177,6 +152,8 @@ class Runner:
                     return {"code": 202, "id": existing_jid, "idempotent_replay": True}
                 if kind == "conflict":
                     return {"code": 409, "error_code": "IDEMPOTENCY_KEY_CONFLICT", "error": "Idempotency-Key conflict"}
+            if bind_err := cell_target_binding.check_admission(eff_params, self._state_gen.current()):
+                return bind_err
             fleet_online = False
             held_skip, release_enabled = set(), moving and not job.get("recovery_home") and self._incident_check_fn is None
             inc_check = lambda x: None if x in held_skip else self._check_incident(x)  # noqa: E731
@@ -343,7 +320,7 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
                 return self._send(code, body, ctype, extra_headers=hdrs)
             if routed := handle_get_route(
                 self.path, runner,
-                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held,
+                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held, viewer_url=viewer,
             ):
                 code, body, ctype, hdrs = routed
                 return self._send(code, body, ctype, extra_headers=hdrs)
