@@ -50,7 +50,7 @@ def test_bay_undock_waits_for_fresh_scan_then_drives_forward_to_undocked():
             break
 
     assert p.manager.state is DockState.UNDOCKED
-    assert p.world.travelled_m() >= p.manager.database.type_of("bay-line").undock_distance_m
+    assert p.world.travelled_m() >= p.manager.database.type_of("bay1").undock_distance_m
     non_zero = [cmd for _, cmd in p.world.commands if cmd != (0.0, 0.0)]
     assert non_zero and all(v > 0.0 and w == 0.0 for v, w in non_zero)
 
@@ -66,7 +66,7 @@ def test_bay_undock_waits_for_fresh_scan_then_drives_forward_to_undocked():
 def test_bay_undock_fails_closed_on_front_obstacle_or_empty_or_missing_lidar(scan_args, expected_fragment):
     p = _dock_into_bay()
     p.manager.undock()
-    for _ in range(40):
+    for _ in range(60):  # > bay_scan_wait_s (2.0 s) at DT = 0.05 s
         if scan_args is None:
             _step_undock(p)
         else:
