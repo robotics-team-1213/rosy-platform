@@ -31,7 +31,7 @@ EXPECTED_LOOPS = {
     "notifications", "arm-transfer-dispatcher", "signals", "stuck-resolver",
     "localization", "calibration-drift", "trip-runner", "charge-runtime",
     "goal-lease-renew", "identity", "lane-compliance", "tether-watch", "paths",
-    "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
+    "job-trips", "trip-reissue", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
     "event-loop-lag", "auto-locate",
