@@ -52,9 +52,14 @@ CUE_TTL_S = 1.0
 #: The near bar this close ahead of base_footprint counts as "at the crosswalk": body front
 #: 0.06 m (URDF) + the IR row and the zone uncertainty, rounded up.
 AT_CROSSWALK_M = 0.15
-#: D-430 review 1: 404 (no route), 500 (route without wiring), 403 (not the site seat), 501: the
-#: robot cannot take the cue; it is asked again after this long.
-UNSUPPORTED = (400, 403, 404, 422, 500, 501)   # 400/422: an older strict lane-cue schema
+#: Explicit contract/seat refusals; server errors remain transient.
+UNSUPPORTED = (400, 403, 404, 422)   # 400/422: an older strict lane-cue schema
+UNSUPPORTED_SERVER = (500, 501)      # route without wiring or not implemented: short mute
+#: Support evidence lasts four 2 Hz ticks; transport faults get at most three tries or two seconds.
+CUE_SUPPORT_S = 4 * PERIOD_S
+CUE_FAILURE_S = 2.0
+CUE_FAILURE_N = 3
+CUE_SERVER_RETRY_S = 5.0
 #: A robot whose CORE cannot take the cue is asked again after this long.
 CUE_RETRY_S = 60.0
 
@@ -74,6 +79,8 @@ class LaneComplianceMonitor:
         self._lap: tuple = (None, None)          # (map version, Lap) for the rev 6 context
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
+        self._cue_accepted_at: dict[str, float] = {}
+        self._cue_failures: dict[str, tuple[int, float]] = {}  # count, first transport failure
         self._cue_mute: dict[str, float] = {}    # robot -> wall time an unsupported CORE is asked again
         self._cue_refused: dict[str, Optional[str]] = {}   # robot -> last refusal reason (log once)
         self._last_stamp: dict[str, float] = {}  # robot -> last odom stamp sent (an OFF_MAP cue reuses it)
@@ -183,13 +190,13 @@ class LaneComplianceMonitor:
         return back.get("crosswalk") is not None or (
             ahead.get("near_m") is not None and ahead["near_m"] <= AT_CROSSWALK_M)
 
-    async def _send_cue(self, robot_id: str, back: dict, now: float) -> None:
+    async def _send_cue(self, robot_id: str, back: dict, now: float, *, force: bool = False):
         state = back["state"]
         if back["raw"] == UNSEEN and state != OFF_MAP:
             return                     # not judged now: CORE's cue expires, the robot drives as today
         if back["pose_stamp"] is None and state != OFF_MAP:
             return                     # D-430 review 7: CORE measures a turn from the odom at pose_stamp
-        if (state == ON_LANE and not back["moving"] and back.get("docking") is None
+        if (not force and state == ON_LANE and not back["moving"] and back.get("docking") is None
                 and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
             return                     # still on the lane: nothing to guide, nothing to clear
         if self._cue_mute.get(robot_id, 0.0) > now:
@@ -216,17 +223,30 @@ class LaneComplianceMonitor:
             reply = await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch
             status = getattr(exc, "status", None)
-            if status in UNSUPPORTED:
-                self._cue_mute[robot_id] = now + CUE_RETRY_S
-                logger.info("lane cue %s: CORE answered %s (no lane cue, wiring or seat); again in %.0f s",
-                            robot_id, status, CUE_RETRY_S)
+            if isinstance(status, int) and 400 <= status < 500 and status not in (408, 429):
+                self._cue_failures.pop(robot_id, None)
+                self._cue_refused[robot_id] = getattr(exc, "code", None) or "unknown"
+                if status in UNSUPPORTED:
+                    self._cue_mute[robot_id] = now + CUE_RETRY_S
+                    logger.info("lane cue %s: CORE answered %s (no lane cue, wiring or seat); again in %.0f s",
+                                robot_id, status, CUE_RETRY_S)
             else:
-                logger.debug("lane cue %s failed: %s", robot_id, exc)
+                count, since = self._cue_failures.get(robot_id, (0, self._wall()))
+                self._cue_failures[robot_id] = count + 1, since
+                if status in UNSUPPORTED_SERVER and (count + 1 >= CUE_FAILURE_N
+                                                     or self._wall() - since >= CUE_FAILURE_S
+                                                     or self._cue_accepted_at.get(robot_id, -math.inf) == -math.inf):
+                    self._cue_mute[robot_id] = now + CUE_SERVER_RETRY_S
+                    logger.info("lane cue %s: CORE answered %s (no lane cue wiring); again in %.0f s",
+                                robot_id, status, CUE_SERVER_RETRY_S)
+                else:
+                    logger.debug("lane cue %s failed: %s", robot_id, exc)
             return
-        if isinstance(reply, dict) and reply.get("accepted") is False:
+        self._cue_failures.pop(robot_id, None)
+        if not isinstance(reply, dict) or reply.get("accepted") is not True:
             # D-430 re-review 1: a refused cue did not take effect; say why and try again next tick
             # ("disabled": that robot's CORE does not read cues, asked again after CUE_RETRY_S).
-            reason = reply.get("reason")
+            reason = (reply.get("reason") if isinstance(reply, dict) else None) or "unknown"
             if reason == "disabled":
                 self._cue_mute[robot_id] = now + CUE_RETRY_S
             if self._cue_refused.get(robot_id) != reason:
@@ -234,11 +254,26 @@ class LaneComplianceMonitor:
             self._cue_refused[robot_id] = reason
             return
         self._cue_refused.pop(robot_id, None)
+        self._cue_accepted_at[robot_id] = self._wall()
         if back["pose_stamp"] is not None:
             self._last_stamp[robot_id] = back["pose_stamp"]
         if self._cue_sent.get(robot_id) != state:
             logger.info("lane cue %s: %s side=%s turn=%s", robot_id, state, back["side"], back["turn_deg"])
         self._cue_sent[robot_id] = state
+        return reply
+
+    async def check_cue(self, robot_id: str) -> Optional[str]:
+        """Probe the existing cue API while stopped; past acceptance cannot admit a new lane owner."""
+        if not self.config.return_cue or self._clients is None:
+            return "disabled"
+        latest, now = self.view(robot_id) or {}, self._wall()
+        back = latest.get("return")
+        if not back or not 0 <= now - latest.get("at", -math.inf) < 2 * PERIOD_S:
+            return "unknown"
+        reply = await self._send_cue(robot_id, back, now, force=True)
+        if not isinstance(reply, dict) or reply.get("accepted") is not True:
+            return self.cue_refusal(robot_id) or "pending"
+        return None
 
     def _input_pose(self, robot_id: str, arbitrated, moving: bool) -> tuple:
         """(pose to judge, pose_source, heading_source): the map pose, else a fresh LED track."""
@@ -260,6 +295,28 @@ class LaneComplianceMonitor:
             heading = "none" if yaw is None else "track_motion"
         return (MapPose(x, y, yaw, LOCALIZED, "led_track", 0.0, track["age_s"], map_id=track.get("map_id")),
                 "led_track", heading)
+
+    def cue_refusal(self, robot_id: str) -> Optional[str]:
+        """Recent support, immediate refusal, or a bounded pending transport retry."""
+        if not self.config.return_cue or self._clients is None:
+            return "disabled"
+        if robot_id in self._cue_refused:
+            return self._cue_refused[robot_id] or "unknown"
+        if self._cue_mute.get(robot_id, 0.0) > self._wall():
+            return "unknown"
+        now = self._wall()
+        failure = self._cue_failures.get(robot_id)
+        if failure and (failure[0] >= CUE_FAILURE_N or now - failure[1] >= CUE_FAILURE_S):
+            return "unknown"
+        accepted = self._cue_accepted_at.get(robot_id, -math.inf)
+        if 0 <= now - accepted < CUE_SUPPORT_S:
+            return None
+        back = (self.view(robot_id) or {}).get("return") or {}
+        if (accepted > -math.inf and not failure and back.get("state") == ON_LANE
+                and not back.get("moving") and back.get("docking") is None
+                and self._cue_sent.get(robot_id) == ON_LANE):
+            return None
+        return "pending" if failure else "unknown"
 
     def view(self, robot_id: str) -> Optional[dict]:
         return self._latest.get(robot_id)

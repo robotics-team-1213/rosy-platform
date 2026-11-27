@@ -311,7 +311,8 @@ class TripHalts:
         lane = False if handoff_pending is True else (trip.get("drive_mode") == "lane")
         place = None if handoff_pending is True else trip.get("next_place")
         hp = bool((trip.get("detail") or {}).get("named_stop_handoff_pending")) if handoff_pending is None else handoff_pending
-        if (trip.get("detail") or {}).get("camera_lane_fallback"):
+        detail = trip.get("detail") or {}
+        if detail.get("camera_lane_fallback") or (detail.get("uturn_handoff") or {}).get("phase") == "starting":
             lane, place, hp = False, None, True
         try:
             if self.dock_owned(trip):

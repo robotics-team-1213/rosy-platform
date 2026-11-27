@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from fleet.hub.hub import HubError
 from fleet.localization import trust
 from fleet.routing.brief import route_context
-from fleet.routing.execute import arc_id, plan_body
+from fleet.routing.execute import arc_id, plan_body, uturn_lane_index
 from fleet.routing.snap import PlanError
 from fleet.routing.trip import ARRIVED_M, PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
@@ -249,42 +249,69 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
-        if bound_nav2 and (caps is None or not caps.bound_route):
-            detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
-            record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
-            raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
-        if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
-            detail = {"drive_mode": "free"}
-            record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
-            raise _refuse("TRIP_MODE_UNSUPPORTED", detail)
-        bounds = {} if caps is None else {
-            "robot_kind": caps.kind,
-            "drive_modes": (frozenset(("lane", "free")) if nav2 else caps.modes) if caps.max_speed > 0 else frozenset(),
-            "max_speed_mps": caps.max_speed or None}
-        request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
-                              via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
-                              blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
-                              body_front_m=body_front_m(bounds.get("robot_kind")),
-                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
-                              ignore_arrive_heading=nav2,
-                              nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0,
-                              # Rear-bay staging within the trip's arrive radius is reached: CORE docks from there.
-                              # A shorter Nav2 goal ends before its first lease renewal, and snapping onto the exit
-                              # lane plans a whole loop back to the same staging place.
-                              arrived_m=max(ARRIVED_M, runner.config.arrive_free_m) if parking and not body.via
-                              else None, **bounds)
-        try:
-            plan = plan_trip(active[2], request, routing_config)
-        except PlanError as exc:
-            record({"error": exc.code, "detail": exc.detail})
-            raise _refuse(exc.code, exc.detail) from exc
-        except Exception as exc:  # a planner bug is a coded 500, logged once, never a bare traceback
-            if active[0] not in failed_versions:
-                failed_versions.add(active[0])
-                _LOG.exception("trip planner failed on site map v%s", active[0])
-            record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
-            raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
-        plan_data = plan_body(plan)
+        requested_nav2 = nav2
+        lane_plan = None
+        for _ in range(2):  # a discovered U-turn changes the execution mode once
+            if bound_nav2 and (caps is None or not caps.bound_route):
+                detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
+                record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
+                raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
+            if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
+                detail = {"drive_mode": "free"}
+                record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
+                raise _refuse("TRIP_MODE_UNSUPPORTED", detail)
+            bounds = {} if caps is None else {
+                "robot_kind": caps.kind,
+                "drive_modes": (frozenset(("lane", "free")) if nav2 else caps.modes) if caps.max_speed > 0 else frozenset(),
+                "max_speed_mps": caps.max_speed or None}
+            request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
+                                  via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
+                                  blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
+                                  body_front_m=body_front_m(bounds.get("robot_kind")),
+                                  stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2,
+                                  ignore_arrive_heading=nav2,
+                                  nav2_off_lane_margin_m=runner.config.nav2_off_lane_margin_m if nav2 else 0.0,
+                                  # Rear-bay staging within the trip's arrive radius is reached: CORE docks from there.
+                                  # A shorter Nav2 goal ends before its first lease renewal, and snapping onto the exit
+                                  # lane plans a whole loop back to the same staging place.
+                                  arrived_m=max(ARRIVED_M, runner.config.arrive_free_m) if parking and not body.via
+                                  else None, **bounds)
+            try:
+                plan = plan_trip(active[2], request, routing_config)
+            except PlanError as exc:
+                record({"error": exc.code, "detail": exc.detail})
+                raise _refuse(exc.code, exc.detail) from exc
+            except Exception as exc:  # a planner bug is a coded 500, logged once, never a bare traceback
+                if active[0] not in failed_versions:
+                    failed_versions.add(active[0])
+                    _LOG.exception("trip planner failed on site map v%s", active[0])
+                record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
+                raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
+            plan_data = plan_body(plan)
+            cusp = uturn_lane_index(active[2], plan_data["segments"], routing_config)
+            if nav2:
+                if not requested_nav2 and cusp is None and lane_plan is not None:
+                    plan, plan_data, cusp = lane_plan
+                    nav2 = False
+                    summary["drive_mode"] = body.drive_mode
+                break
+            if cusp is None:
+                break
+            lane_plan = (plan, plan_data, cusp)
+            nav2 = True
+            summary["drive_mode"] = "nav2"
+        if cusp is not None:
+            if binding_id is None and runner.config.map_binding_required:
+                bound = await read_precision_pose(runner, robot_id, active[0])
+                if bound is None:
+                    detail = {"reason": "APPROVED_SLAM_POSE_REQUIRED"}
+                    record({"error": "TRIP_POSE_UNTRUSTED", "detail": detail})
+                    raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
+                map_pose, binding_id = bound
+            bound_nav2 = binding_id is not None
+            if bound_nav2 and (caps is None or not caps.bound_route):
+                record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED"})
+                raise _refuse("NAV2_BOUND_ROUTE_UNSUPPORTED", status=409)
         if parking:
             plan_data["parking_handoff"] = parking
             staging_distance = math.dist(pose[:2], active[2].place_xy(goal))
@@ -293,12 +320,12 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 parking["plan_prerequisites"] = await runner.rear_bay_port.prerequisites(robot_id, parking)
         if bound_nav2:
             plan_data["nav2_binding_id"] = binding_id
-        elif binding_id is not None:
+        if binding_id is not None and precision is not None:
             if not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
                 record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
                 raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
             plan_data["precision_binding_id"] = binding_id
-        if not nav2 and any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in plan_data["segments"]):
+        if (not nav2 or cusp is not None) and any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in plan_data["segments"]):
             try:  # D-601 B: no lane trip for a robot whose line camera is not live
                 await runner.camera_check(robot_id, caps)
             except TripError as exc:

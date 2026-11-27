@@ -47,6 +47,12 @@ class TripProgress:
         while True:
             arc = live.arc(index)
             dist, s, _t = arc.project(pose.x, pose.y)
+            handoff = live.view["detail"].get("uturn_handoff") or {}
+            if handoff.get("phase") == "approaching" and index == handoff["index"]:
+                break  # XY projection cannot prove the opposite-heading native stop finished
+            if (handoff.get("phase") == "running" and index + 1 < len(live.segments)
+                    and not live.segment_is_lane(index) and live.segment_is_lane(index + 1)):
+                break  # prove free arrival and start CAMERA_LINE before consuming this boundary
             if index + 1 >= len(live.segments) or live.view["hold"] is not None:
                 break
             if self._named_stop_handoff(live, index + 1):
@@ -120,7 +126,8 @@ class TripProgress:
         terminal = len(live.segments) - 1
         stop = self._strict_named_stop(live, terminal)
         return (stop is not None and stop.precision_stop is not None
-                and (live.nav2 or live.arc(terminal).drive_mode != "free" or live.place(terminal) != stop.id))
+                and ((live.nav2 and not live.view["detail"].get("uturn_handoff"))
+                     or live.arc(terminal).drive_mode != "free" or live.place(terminal) != stop.id))
 
     def _named_stop_handoff(self, live: LiveTrip, index: int) -> bool:
         return (index > 0 and live.segment_is_lane(index - 1)

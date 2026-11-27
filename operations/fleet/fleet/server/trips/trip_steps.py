@@ -21,7 +21,10 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
+from fleet.server.trip_nav2_route import step_nav2_route
+from fleet.server.trip_uturn_lane import (check_camera_fallback, check_uturn_lane_cue, finish_camera_line,
+                                          handle_step_error, step_free_uturn_handoff, stop_or_hold_stalled,
+                                          uturn_free_goal, uturn_handoff_or_hold)
 from fleet.server.transient_loc_hold import (consume_transient_wait, handle_unlocalized_pose,
                                               recheck_binding)
 from fleet.server.trip_ports import TripError, pose_diagnostics
@@ -103,6 +106,9 @@ class TripSteps:
                 return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
             await handle_unlocalized_pose(self, live, robot_id, pose)
             return
+        if (live.view["detail"].get("uturn_handoff") or {}).get("phase") == "starting":
+            await uturn_handoff_or_hold(self, live, live.view["segment_index"])
+            return
         prev_loc_wait_at = (live.view["detail"].get("localization_wait") or {}).get("updated_at")
         try:
             if live.segment_is_lane(live.view["segment_index"]):
@@ -136,14 +142,7 @@ class TripSteps:
             remaining = live.segments[index]["s_to"] - s
             lane = live.segment_is_lane(index)
             camera = live.view["detail"].get("camera_lane_fallback")
-            if camera and live.view["hold"] is not None:
-                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_HELD")
-                return
-            if camera and not camera_body_inside(live, index, pose):
-                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_BODY_OUTSIDE_LANE")
-                return
-            if camera and (not lane or self._clock() - camera["started_at"] > 2 * self.config.stall_s):
-                await self._stop(live, "stopped", "TRIP_CAMERA_FALLBACK_TIMEOUT")
+            if await check_camera_fallback(self, live, index, lane, pose):
                 return
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
                 live.waiting_since = None
@@ -210,6 +209,8 @@ class TripSteps:
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
+                if check_uturn_lane_cue(self, live):
+                    return
                 await self._step_lane(live, index, remaining, pose)
                 if (not last and live.open and live.view["hold"] is None
                         and self._named_stop_handoff(live, index + 1)
@@ -227,6 +228,8 @@ class TripSteps:
                 if live.view["detail"].get("camera_lane_fallback"):
                     return  # the next tick must read the replacement lane owner before checking arrival
             else:
+                if await step_free_uturn_handoff(self, live, index, remaining, pose):
+                    return
                 await self._step_free(live, index, pose)
                 if consume_transient_wait(self, live, prev_loc_wait_at):
                     return
@@ -253,23 +256,8 @@ class TripSteps:
             await self._stop(live, "stopped", "junction", {"junction_state": "aborted",
                                                            "junction_seq": exc.args[0] if exc.args else None})
             return
-        except _GoalRefused as exc:
-            await self._stop(live, "failed", "TRIP_GOAL_REFUSED", exc.detail)
-            return
-        except TripError as exc:
-            await self._stop(live, "failed", exc.code, exc.detail)
-            return
-        except RobotApiError as exc:
-            if exc.status == 429 and await self._link_wait(live, "rate_limited"):
-                return
-            lane = live.segment_is_lane(live.view["segment_index"])
-            code = "TRIP_ROBOT_JUNCTION_UNSUPPORTED" if lane and exc.status == 404 else exc.code
-            await self._stop(live, "failed", code, {"status": exc.status})
-            return
-        except (HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
-            # D-760 4: a leased trip waits only on no answer (Safety-Review HIGH-1); any other error ends it
-            if not (isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc))):
-                await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
+        except (_GoalRefused, TripError, RobotApiError, HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
+            await handle_step_error(self, live, exc)
             return
         if not live.open:
             return  # canceled while the step was in flight
@@ -295,8 +283,7 @@ class TripSteps:
             return
         prior_best = live.best_progress
         if self._stalled(live, index, s):
-            await self._stop(live, "stopped", "stall", {"stall_s": self.config.stall_s,
-                                                        "progress_m": round(live.best_progress, 3)})
+            await stop_or_hold_stalled(self, live)
             return
         if (live.nav2 and prior_best > -math.inf and live.progress(index, s) >= prior_best + self.config.stall_m
                 and live.view["hold"] is None and live.active_route is not None
@@ -467,7 +454,7 @@ class TripSteps:
                              {"map_version": live.view["map_version"],
                               "active_version": None if active is None else active[0]})
             return
-        x, y, yaw = live.arc(index).point_at(segment["s_to"])
+        x, y, yaw = uturn_free_goal(live, index)
         stop = self._strict_named_stop(live, index)
         requires_binding = self.config.map_binding_required or stop is not None
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:

@@ -130,6 +130,19 @@ def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig)
     return classify(theta(graph, segments, index), config)
 
 
+def uturn_lane_index(graph: Graph, segments: list, config: RoutingConfig) -> Optional[int]:
+    """First U-turn with painted road remaining: Nav2 must stop here before handing back to lanes."""
+    if any(arc_id(s) not in graph.arcs for s in segments):
+        return None
+    for i in range(len(segments) - 1):
+        place = graph.places.get(ends_at_place(graph, segments[i]))
+        if (place is not None and place.kind == "turnaround"
+                and classify(theta(graph, segments, i), config) == UTURN
+                and any(graph.arcs[arc_id(s)].drive_mode == "lane" for s in segments[i + 1:])):
+            return i
+    return None
+
+
 def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, junction_turn: bool,
                 config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False,
                 final_place: Optional[str] = None, nav2: bool = False) -> Optional[dict]:
@@ -144,11 +157,12 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
     if not nav2 and repeat and any(graph.arcs[arc_id(s)].drive_mode == "lane" for s in segments if arc_id(s) in graph.arcs) \
             and not any(ends_at_place(graph, s) for s in segments if arc_id(s) in graph.arcs):
         return {"edge_id": segments[-1]["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
+    cusp = uturn_lane_index(graph, segments, config) if nav2 else None
     for i, segment in enumerate(segments):
         arc = graph.arcs.get(arc_id(segment))
         if arc is None:
             return {"edge_id": segment["edge_id"], "reason": "UNKNOWN_EDGE"}
-        if nav2:
+        if (nav2 and cusp is None) or (cusp is not None and i <= cusp):
             if "free" not in modes or (arc.robot_kinds is not None and kind not in arc.robot_kinds):
                 return {"edge_id": segment["edge_id"], "drive_mode": "free"}
             continue

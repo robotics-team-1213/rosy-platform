@@ -17,7 +17,7 @@ from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
 from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN, TRACK
 from fleet.server.named_stop_map_pose import precision_map_pose
-from fleet.routing.execute import arc_id, unsupported
+from fleet.routing.execute import arc_id, unsupported, uturn_lane_index
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.server.trip_runner_helpers import _ROBOT_ERRORS
 from fleet.swarm.transport import RobotApiError
@@ -197,7 +197,9 @@ class TripAdmission:
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``. ``detail``: the trip's
         detail dict that takes the D-763 10 (c) ``regulation_caps_unknown`` warning."""
         map_id = self._store.active()[1].map_id
-        lane = (not nav2) and any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
+        cusp = uturn_lane_index(graph, segments, self._routing) if nav2 else None
+        lane_segments = segments[cusp + 1:] if cusp is not None else segments
+        lane = (not nav2 or cusp is not None) and any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in lane_segments)
         caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
         if caps is None:
             raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
@@ -222,8 +224,8 @@ class TripAdmission:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         # D-763 10 (c): a lane route over a crosswalk or a signalled zone needs CORE's matching rule on, else
         # the rule would silently not run there. A CORE announcing it off is refused.
-        need = {"lane_crosswalk_gate": crosswalks_on(graph, segments, getattr(self._store.active()[1], "crosswalks", ())),
-                "lane_junction_signal": signals_on(self.traffic, segments)} if lane else {}
+        need = {"lane_crosswalk_gate": crosswalks_on(graph, lane_segments, getattr(self._store.active()[1], "crosswalks", ())),
+                "lane_junction_signal": signals_on(self.traffic, lane_segments)} if lane else {}
         missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is False}
         if missing:
             raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})

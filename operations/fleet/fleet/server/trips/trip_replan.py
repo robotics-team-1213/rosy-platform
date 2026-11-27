@@ -11,7 +11,8 @@ from typing import Optional
 from fleet.routing.cost import STOP
 from fleet.routing.execute import plan_again, replan_hold
 from fleet.server.trip_admission import LOCALIZED
-from fleet.server.trip_halts import _cancel_ack, error_code as _code, idle_cancel_owner, pre_dispatch_wait
+from fleet.server.trip_halts import (_cancel_ack, ended_cancel_state, error_code as _code,
+                                     idle_cancel_owner, pre_dispatch_wait)
 from fleet.server.trip_laps import carry_on, hold_back_m, next_lap
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import TripError
@@ -66,20 +67,27 @@ class TripReplan:
         stop["confirmed"] = False
         stop.pop("proof", None)
         retry_s = min(2.0, self.config.restart_retry_s)
+        handoff, route = live.view["detail"].get("uturn_handoff") or {}, live.active_route or {}
+        arrived_uturn = handoff.get("phase") != "starting" and bool(handoff) and (
+            stop.get("ended_navigation") is not None or stop.get("idle_owner") is not None or (
+                handoff.get("phase") == "approaching" and route.get("end_index") == handoff.get("index")
+                and route.get("nav_state") == "ARRIVED" and not route.get("superseded")) or (
+                handoff.get("stopped_index") == live.view["segment_index"] and live.last_goal is not None))
         try:
             pred = live.active_route is None and live.last_goal is None and pre_dispatch_wait(live.view)
-            if not pred:
+            if not pred and not arrived_uturn:
                 stop.pop("idle_owner", None)
-            if not stop.get("cancel_ack") and not stop.get("idle_owner"):
+            if not stop.get("cancel_ack") and not stop.get("idle_owner") and not stop.get("ended_navigation"):
                 last = stop.get("attempted_at")
                 if last is not None and self._clock() - last < retry_s:
                     return False
                 stop["attempted_at"] = self._clock()
-                wire = self.halts.idle_wire(robot_id) if pred else None
+                wire = self.halts.idle_wire(robot_id) if pred or arrived_uturn else None
                 try:
                     receipt = await self._call(self._cancel_goal(robot_id)) if self._cancel_goal else None
                 finally:
-                    if live.view["detail"].get("camera_lane_fallback"):
+                    if (live.view["detail"].get("camera_lane_fallback")
+                            or live.view["detail"].get("uturn_handoff")):
                         # A lost handoff reply leaves either controller holding the wheels.
                         await self._call(self._junction.hold(robot_id))
                 stop["cancel_ack"] = _cancel_ack(receipt)
@@ -87,10 +95,15 @@ class TripReplan:
                 if observed is not None:
                     owner, after = observed
                     stop.update(idle_owner=owner, wire_epoch=wire, idle_ack_at=after)
+                elif arrived_uturn and wire is not None and (ended := ended_cancel_state(receipt)):
+                    stop.update(ended_navigation=ended, wire_epoch=wire, idle_ack_at=self._clock())
                 elif not stop["cancel_ack"]:
                     stop["error"] = "CANCEL_UNCONFIRMED"
                     return False
-            if stop.get("idle_owner"):
+            if stop.get("ended_navigation"):
+                proof = await self.halts.measured_ended_stop(
+                    robot_id, stop["idle_ack_at"], stop["ended_navigation"], stop["wire_epoch"])
+            elif stop.get("idle_owner"):
                 proof = await self.halts.measured_idle_stop(robot_id, stop["idle_ack_at"], stop["idle_owner"], stop["wire_epoch"])
             else:
                 proof = await self.halts.measured_stop(robot_id, stop["attempted_at"])
@@ -99,6 +112,7 @@ class TripReplan:
                 if self._clock() - stop["attempted_at"] >= self.config.restart_retry_s:
                     stop["cancel_ack"] = False
                     stop.pop("idle_owner", None)
+                    stop.pop("ended_navigation", None)
                 return False
             stop.update(confirmed=True, proof=proof)
             stop.pop("error", None)
@@ -177,6 +191,10 @@ class TripReplan:
                 live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
                 live.sent = None
                 live.reset_nav2_recovery()
+            if (hold.get("stop") and live.view["detail"].get("uturn_handoff")
+                    and live.segment_is_lane(live.view["segment_index"])):
+                live.view["detail"]["uturn_handoff"]["phase"] = "starting"
+                live.view["detail"]["line_follow_started"] = False
             if hold.get("stop") and live.view["detail"].pop("camera_lane_fallback", None):
                 live.view["detail"]["line_follow_started"] = False
             live.view["detail"]["resumed_by"] = principal_id
@@ -194,6 +212,13 @@ class TripReplan:
             raise TripError(409, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
         live.view.update(plan=hold["plan"], map_version=hold["map_version"], segment_index=0, hold=None)
         live.graph = active[2]
+        if live.nav2:
+            from fleet.routing.execute import uturn_lane_index
+            cusp = uturn_lane_index(live.graph, live.segments, self._routing)
+            if cusp is None:
+                live.view["detail"].pop("uturn_handoff", None)
+            else:
+                live.view["detail"]["uturn_handoff"] = {"index": cusp, "phase": "approaching"}
         live.route_rev += 1
         live.bends_done.clear()  # the plan is renumbered (review); D-507 addendum: a new lap drives its bends again
         if "lap_route" in hold:  # D-517 2: the operator took the changed lap

@@ -343,6 +343,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.road_speed = RoadSpeed(map_pose, console.goal_leases.update_road_speed)
     trip_runner.navigation_readback = read_trip_navigation
     trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
+    trip_runner.lane_cue_refusal = app.state.lane_compliance.cue_refusal
+    trip_runner.lane_cue_check = app.state.lane_compliance.check_cue
     trip_runner.halts.read_stop_state = trip_runner.named_stop_state
     trip_runner.halts.read_navigation = lambda rid: console.clients()[rid]._get("/api/v1/navigation/state")
     trip_runner.halts.wire_epoch = console.goal_leases.idle_wire_epoch
