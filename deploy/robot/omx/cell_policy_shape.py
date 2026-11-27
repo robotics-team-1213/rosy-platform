@@ -114,7 +114,7 @@ def finite_float(raw) -> float | None:
 
 
 from cell_policy_entry import trained_grasp_mismatch, wrist_roll_warning  # noqa: E402,F401
-from cell_policy_pre_home import trim_backtrack_prefix  # noqa: E402,F401
+from cell_policy_pre_home import ease_start, refuse_outside, trim_backtrack_prefix  # noqa: E402,F401
 
 
 def _params_rim_z(params) -> float | None:
@@ -375,28 +375,6 @@ def jaw_zone_error(frames, kin, spec: dict | None, *, force_all: bool = False) -
     return None
 
 
-def ease_start(chunk, start, *, joints: int = 5) -> np.ndarray:
-    """Fade the body offset between `start` and the chunk's first action out over the chunk (smoothstep), last row kept.
-
-    Sim-trained ACT actions lead the sim state (the sim arm lags its command), so on the real arm, which tracks closely,
-    each chunk's first action sits ~15 units ahead of the measured pose (real5 2026-11-27): shaped as is, the chunk opens
-    with a full-speed sprint from rest and shoulder_lift trips the following-error fault. The jaw column is untouched."""
-    arr = np.array(chunk, dtype=float)
-    if len(arr) < 2:
-        return arr
-    s = np.linspace(0.0, 1.0, len(arr))
-    weight = 1.0 - s * s * (3.0 - 2.0 * s)
-    arr[:, :joints] += weight[:, None] * (np.asarray(start, dtype=float)[:joints] - arr[0, :joints])
-    return arr[1:]  # row 0 is now `start` itself
-
-
-def _check_envelope(arr, lo, hi) -> None:
-    outside = np.argwhere((arr < lo) | (arr > hi))
-    if len(outside):
-        i, j = outside[0]
-        raise ValueError(f"frame {i} {lrs.JOINT_NAMES[j]}={arr[i, j]:.1f} outside reviewed {lo[j]:.1f}..{hi[j]:.1f}")
-
-
 def shape_chunk(chunk, start, low, high, fastest: float, *, trim_backtrack: bool = False,
                 ease: bool = False) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`.
@@ -405,12 +383,12 @@ def shape_chunk(chunk, start, low, high, fastest: float, *, trim_backtrack: bool
     if arr.ndim != 2 or arr.shape[1] != JOINTS or not np.isfinite(arr).all():
         raise ValueError("policy chunk is not finite (n, 6)")
     lo, hi = np.asarray(low) - MARGIN, np.asarray(high) + MARGIN
-    _check_envelope(arr, lo, hi)
+    refuse_outside(arr, lo, hi, lrs.JOINT_NAMES)
     if trim_backtrack:
         arr = trim_backtrack_prefix(arr, start, tol=MARGIN, joints=JOINTS)
     if ease:
         arr = ease_start(arr, start)
-        _check_envelope(arr, lo, hi)
+        refuse_outside(arr, lo, hi, lrs.JOINT_NAMES)
     path = np.vstack([np.asarray(start, dtype=float)[None, :], arr])
     out = []
     for a, b in zip(path[:-1], path[1:]):
