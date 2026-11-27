@@ -4,7 +4,7 @@ The worker is its own machine principal there ("cell-task-worker", own token fil
 reviewed_auto or person_at_switch, and never falls back to another token or URL (it passes both to the client itself, so
 ROSY_CELL_JOB_TOKEN / ROSY_CELL_JOB_URL cannot override them; the URL is ROSY_CELL_JOB_WORKER_URL): the cell's Gate, contact/torque guards, finger room, depth
 bounds, incident holds and stop proof (measured before --commissioning is added) stay the one place that decides.
-The cell API has no cancel or stop call for a job: a lost job is reported as CELL_JOB_LOST with its id, nothing is invented. A push is mapped (push_request) but not run: see cell_task_exec.execute_guarded_cell_task.
+A lost or timed-out job is asked once to stop (client.cancel: a park at its next guarded step, best effort, errors swallowed) and is still reported as CELL_JOB_LOST with its id. A push is mapped (push_request) but not run: see cell_task_exec.execute_guarded_cell_task.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ TOKEN_ENV = "ROSY_CELL_JOB_WORKER_TOKEN_FILE"
 URL_ENV = "ROSY_CELL_JOB_WORKER_URL"  # worker-only; the shared ROSY_CELL_JOB_URL is never read
 LOOPBACK_URL = "http://127.0.0.1:8781"  # default only: the live cell API listens on the host's tailnet address, so the unit sets the env var
 WAIT_S = 330.0  # as long as the guarded pick's own subprocess limit plus the API's start-up
+CANCEL_TIMEOUT_S = 5.0
 _KEY_BAD = re.compile(r"[^A-Za-z0-9_.:-]")
 
 
@@ -64,5 +65,10 @@ def run_job(handoff: dict[str, Any], job: str, params: dict, *, client: CellJobC
     except CellJobError as exc:
         return None, f"CELL_JOB_REFUSED:{exc.status_code}:{exc.detail}"[:200]
     except (OSError, TimeoutError, ValueError, KeyError) as exc:
+        if jid:
+            try:
+                client.cancel(jid, timeout=CANCEL_TIMEOUT_S)
+            except Exception:  # noqa: BLE001 - best effort: the job may be done, the link may be down
+                pass
         return None, f"CELL_JOB_{'LOST' if jid else 'UNREACHABLE'}:{jid or ''}:{type(exc).__name__}"[:200]
     return SimpleNamespace(stdout=json.dumps(done.get("structured_result") or {}), returncode=done.get("exit")), None
