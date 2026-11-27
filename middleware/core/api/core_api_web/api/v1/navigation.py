@@ -127,17 +127,15 @@ def _goal_gates(body, auth: AuthContext, svc: CoreServicesLike) -> None:
 
 
 @navigation_router.post("/navigation/goal")
-def navigation_goal(body: GoalRequest, request: Request, auth: AuthContext = Depends(operator),
-                    svc: CoreServicesLike = Depends(get_services)):
-    received = request.state.motion_received_at
-    return _navigation_goal(body, auth, svc, admit_before=_admit_before(body, received))
+def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
+                    svc: CoreServicesLike = Depends(get_services), request: Request = None):
+    return _navigation_goal(body, auth, svc, admit_before=_admit_before(body, request))
 
 
 @navigation_router.post("/navigation/bound-goal")
-def bound_navigation_goal(body: BoundGoalRequest, request: Request, auth: AuthContext = Depends(operator),
-                          svc: CoreServicesLike = Depends(get_services)):
-    received = request.state.motion_received_at
-    return _bound_execution(body, auth, svc, admit_before=_admit_before(body, received))
+def bound_navigation_goal(body: BoundGoalRequest, auth: AuthContext = Depends(operator),
+                          svc: CoreServicesLike = Depends(get_services), request: Request = None):
+    return _bound_execution(body, auth, svc, admit_before=_admit_before(body, request))
 
 
 @navigation_router.post("/navigation/bound-plan")
@@ -158,14 +156,18 @@ def prepare_bound_path(body: BoundPlanRequest, auth: AuthContext = Depends(opera
 
 
 @navigation_router.post("/navigation/line-handoff-goal")
-def line_handoff_navigation_goal(body: LineHandoffGoalRequest, request: Request, auth: AuthContext = Depends(operator),
-                                 svc: CoreServicesLike = Depends(get_services)):
-    received = request.state.motion_received_at
-    return _bound_execution(body, auth, svc, line_stop=body, admit_before=_admit_before(body, received))
+def line_handoff_navigation_goal(body: LineHandoffGoalRequest, auth: AuthContext = Depends(operator),
+                                 svc: CoreServicesLike = Depends(get_services), request: Request = None):
+    return _bound_execution(body, auth, svc, line_stop=body, admit_before=_admit_before(body, request))
 
 
-def _admit_before(body, received):
-    return None if body.admit_within_s is None else received + body.admit_within_s
+def _admit_before(body, request):
+    if body.admit_within_s is None:
+        return None
+    # Direct callers (POST /do) have no route receipt: the deadline still applies, measured from this call.
+    state = getattr(request, "state", None)
+    received = getattr(state, "motion_received_at", None)
+    return (time.monotonic() if received is None else received) + body.admit_within_s
 
 
 def _bound_execution(body, auth, svc, *, line_stop=None, admit_before=None):
@@ -323,20 +325,18 @@ class BoundRouteRequest(RouteRequest):
 
 
 @navigation_router.post("/navigation/route")
-def navigation_route(body: RouteRequest, request: Request, auth: AuthContext = Depends(operator),
-                     svc: CoreServicesLike = Depends(get_services)):
+def navigation_route(body: RouteRequest, auth: AuthContext = Depends(operator),
+                     svc: CoreServicesLike = Depends(get_services), request: Request = None):
     """NAV-008 (D-1009): an ordered route of pass/stop points as one navigation owner and one lease."""
-    received = request.state.motion_received_at
-    return _navigation_route(body, auth, svc, admit_before=_admit_before(body, received))
+    return _navigation_route(body, auth, svc, admit_before=_admit_before(body, request))
 
 
 @navigation_router.post("/navigation/bound-route")
-def bound_navigation_route(body: BoundRouteRequest, request: Request, auth: AuthContext = Depends(operator),
-                           svc: CoreServicesLike = Depends(get_services)):
-    received = request.state.motion_received_at
+def bound_navigation_route(body: BoundRouteRequest, auth: AuthContext = Depends(operator),
+                           svc: CoreServicesLike = Depends(get_services), request: Request = None):
     require_calibration_owner(svc, auth, "navigation")
     return _navigation_route(body, auth, svc, expected_grid=body.expected_map_grid_id,
-                             admit_before=_admit_before(body, received))
+                             admit_before=_admit_before(body, request))
 
 
 def _navigation_route(body, auth, svc, *, expected_grid=None, admit_before=None):
@@ -401,9 +401,9 @@ class NavigationCancelRequest(BaseModel):
 
 
 @navigation_router.post("/navigation/cancel")
-def navigation_cancel(body: NavigationCancelRequest | None = None,
-                      auth: AuthContext = Depends(operator),
-                      svc: CoreServicesLike = Depends(get_services)):
+def navigation_cancel(auth: AuthContext = Depends(operator),
+                      svc: CoreServicesLike = Depends(get_services),
+                      body: NavigationCancelRequest | None = None):
     receipt = []
     advance = body is not None and body.advance_generation
     svc.nav.cancel(source=f"api:{auth.role}", advance_generation=advance, receipt_sink=receipt.append)
@@ -437,12 +437,11 @@ def navigation_cancel_scoped(body: ScopedNavigationCancelRequest,
 
 
 @navigation_router.post("/navigation/home")
-def navigation_home(request: Request, auth: AuthContext = Depends(operator),
+def navigation_home(auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services),
-                    body: HomeRequest | None = None):
-    received = request.state.motion_received_at
+                    body: HomeRequest | None = None, request: Request = None):
     body = body or HomeRequest()
-    admit_before = _admit_before(body, received)
+    admit_before = _admit_before(body, request)
     if body.lease_ttl_s is not None and body.correlation_id is None:
         raise ApiError("VALIDATION_ERROR", 400, "lease_ttl_s needs a correlation_id")
     require_manual_released(svc)

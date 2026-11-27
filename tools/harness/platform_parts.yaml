@@ -1804,7 +1804,11 @@ safety_anchors:
   - {symbol: fleet.server.goal_lease.NavigationStopped, public: true}  # D-1051 the stop a correction route reports
   - {symbol: fleet.server.goal_lease.CustodyReleaseRefused, public: true}  # named-stop custody release refusal
   - {symbol: fleet.server.named_stop_motion.NamedStopMotion, public: true}  # D-1051 named-stop custody claim
+  - {symbol: fleet.server.named_stop_motion.measured_stop_proof, public: true}  # closed-trip standstill check shared with uncertain-motion recovery
   - {symbol: fleet.swarm.motion_ingress.starts_or_sustains_motion}  # D-1051 motion-ingress gate
+  - {symbol: fleet.swarm.motion_ingress.ADMIT_DEADLINE_PATHS, public: true}  # D-1079 navigation starts carrying admit_within_s
+  - {symbol: fleet.swarm.motion_ingress.MOTION_ADMIT_WITHIN_S, public: true}  # D-1079 CORE admission budget on transport starts
+  - {symbol: fleet.swarm.motion_ingress.MOTION_TIMEOUT_S, public: true}  # D-1079 default HTTP motion delivery budget
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}

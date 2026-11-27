@@ -27,10 +27,10 @@ def uncertain(leases, robot="r", admit_within_s=3.0, *, boot_id=BOOT, owner_gene
         unresolved()
 
 
-def setup(monkeypatch):
+def _make_leases(monkeypatch):
     mono, wall = FakeClock(), FakeClock()
     wall.now = 1800000000.0
-    monkeypatch.setattr("fleet.server.goal_lease.time.time", wall)
+    monkeypatch.setattr("fleet.server.uncertain_motion.time.time", wall)
     leases = GoalLeases(0, {}, clock=mono)
     return leases, mono, wall
 
@@ -80,7 +80,7 @@ async def prepared(leases, robot):
 
 
 def test_time_clear_and_unconfirmed_cancel_never_resolve(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -100,7 +100,7 @@ def test_time_clear_and_unconfirmed_cancel_never_resolve(monkeypatch):
 
 @pytest.mark.parametrize("navigation", ["IDLE", "CANCELED"])
 def test_cancel_of_already_terminal_navigation_keeps_uncertainty(monkeypatch, navigation):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -116,7 +116,7 @@ def test_cancel_of_already_terminal_navigation_keeps_uncertainty(monkeypatch, na
 
 @pytest.mark.parametrize("kind", ["state", "cancel"])
 def test_readback_exception_keeps_uncertainty(monkeypatch, kind):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -140,7 +140,7 @@ def test_readback_exception_keeps_uncertainty(monkeypatch, kind):
 
 @pytest.mark.parametrize("evidence", ["idle", "ended", "estop"])
 def test_later_proof_restores_peer_epoch_and_prepared_admission(monkeypatch, evidence, caplog):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -162,7 +162,7 @@ def test_later_proof_restores_peer_epoch_and_prepared_admission(monkeypatch, evi
     {"mode": "EMERGENCY", "safety": {"estop": True}, "velocity": {"linear": .001, "angular": 0.}},
 ])
 def test_state_without_existing_stop_proof_keeps_uncertainty(monkeypatch, updates):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -176,7 +176,7 @@ def test_state_without_existing_stop_proof_keeps_uncertainty(monkeypatch, update
 @pytest.mark.parametrize("race", ["before_marker", "new_uncertainty", "new_wire", "pending_wire", "client_replaced"])
 def test_inflight_observation_cannot_resolve_a_newer_motion(monkeypatch, kind, race):
     async def exercise():
-        leases, mono, wall = setup(monkeypatch)
+        leases, mono, wall = _make_leases(monkeypatch)
         robot = Robot(wall)
         leases._clients["r"] = robot
         entered, resume = asyncio.Event(), asyncio.Event()
@@ -214,7 +214,7 @@ def test_inflight_observation_cannot_resolve_a_newer_motion(monkeypatch, kind, r
 
 
 def test_old_velocity_sample_is_not_post_marker_proof(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     robot.updates = {"evidence": state(wall)["evidence"]}
@@ -226,7 +226,7 @@ def test_old_velocity_sample_is_not_post_marker_proof(monkeypatch):
 
 
 def test_future_velocity_sample_is_not_stop_proof(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -238,7 +238,7 @@ def test_future_velocity_sample_is_not_stop_proof(monkeypatch):
 
 
 def test_readback_started_during_a_pending_wire_cannot_resolve_it(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     body = {"admit_within_s": 3.0, "expected_boot_id": BOOT, "expected_owner_generation": 1}
@@ -253,7 +253,7 @@ def test_readback_started_during_a_pending_wire_cannot_resolve_it(monkeypatch):
 
 @pytest.mark.parametrize("estop", [False, True])
 def test_fresh_post_marker_encoder_sample_can_precede_the_get(monkeypatch, estop):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -269,7 +269,7 @@ def test_fresh_post_marker_encoder_sample_can_precede_the_get(monkeypatch, estop
 
 
 def test_peer_uncertainty_still_blocks_site_wide_admission(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases)
@@ -282,7 +282,7 @@ def test_peer_uncertainty_still_blocks_site_wide_admission(monkeypatch):
 
 
 def test_navigation_cancel_does_not_settle_non_navigation_uncertainty(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     with leases.motion_wire("r", "POST", "/api/v1/teleop", {"linear": .1, "angular": 0.}) as unresolved:
@@ -300,7 +300,7 @@ def test_console_gather_bypasses_shared_and_heartbeat_caches_while_uncertain(mon
     from fleet.server.console import FleetConsole
     from fleet.swarm.robots import RobotEndpoint
 
-    _, mono, wall = setup(monkeypatch)
+    _, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     console = FleetConsole([RobotEndpoint("r", "http://127.0.0.1:8080", "t")], [robot], clock=mono)
     row = console.hub.registry.record("r")
@@ -324,7 +324,7 @@ def test_console_gather_bypasses_shared_and_heartbeat_caches_while_uncertain(mon
 
 @pytest.mark.parametrize("old_first_sample", [False, True])
 def test_exact_custody_stop_requires_post_marker_velocity_samples(monkeypatch, old_first_sample):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     terminal = datetime.fromtimestamp(wall() - 10., timezone.utc)
@@ -360,7 +360,7 @@ def test_exact_custody_stop_requires_post_marker_velocity_samples(monkeypatch, o
 
 @pytest.mark.parametrize("started, cleared", [(8.499, False), (8.5, True), (8.501, True)])
 def test_admission_window_requires_readback_started_at_or_after_boundary(monkeypatch, started, cleared):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     t0 = mono()  # FakeClock does not start at 0
@@ -373,7 +373,7 @@ def test_admission_window_requires_readback_started_at_or_after_boundary(monkeyp
 
 
 def test_readback_finishing_after_deadline_cannot_clear_if_started_before_it(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     original = robot.state
@@ -390,7 +390,7 @@ def test_readback_finishing_after_deadline_cannot_clear_if_started_before_it(mon
 
 
 def test_old_core_cannot_clear_even_with_late_measured_stop(monkeypatch, caplog):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases, admit_within_s=None)
@@ -401,7 +401,7 @@ def test_old_core_cannot_clear_even_with_late_measured_stop(monkeypatch, caplog)
 
 
 def test_later_shorter_deadline_does_not_reduce_earlier_uncertainty(monkeypatch):
-    leases, mono, _wall = setup(monkeypatch)
+    leases, mono, _wall = _make_leases(monkeypatch)
     t0 = mono()
     uncertain(leases, admit_within_s=10.)
     mono.advance(.5)
@@ -411,7 +411,7 @@ def test_later_shorter_deadline_does_not_reduce_earlier_uncertainty(monkeypatch)
 
 @pytest.mark.parametrize("path", ["/api/v1/teleop", "/api/v1/localization/mission"])
 def test_deadline_field_on_unsupported_motion_is_not_a_release_contract(monkeypatch, path):
-    leases, _mono, _wall = setup(monkeypatch)
+    leases, _mono, _wall = _make_leases(monkeypatch)
     with leases.motion_wire("r", "POST", path, {"linear": .1, "admit_within_s": 3.}) as unresolved:
         unresolved()
     assert leases._uncertain_motion["r"]["admit_within_s"] is None
@@ -424,7 +424,7 @@ def test_cached_capability_with_old_core_or_changed_boot_does_not_release(monkey
     from fleet.swarm.transport import HttpRobotClient
 
     OTHER_BOOT = "99ab4cdc-c6d6-4a6f-81ea-25b5714187c9"
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     boot = [BOOT]
     gen = [3]
 
@@ -470,7 +470,7 @@ def test_release_requires_and_records_advanced_generation_fence(monkeypatch):
     from fleet.swarm.robots import RobotEndpoint
     from fleet.swarm.transport import HttpRobotClient
 
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     gen = [5]
     cancel_bodies = []
 
@@ -512,7 +512,7 @@ def test_release_requires_and_records_advanced_generation_fence(monkeypatch):
 
 
 def test_late_admission_between_stop_sample_and_verify_does_not_release(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases, owner_generation=5)
@@ -532,7 +532,7 @@ def test_late_admission_between_stop_sample_and_verify_does_not_release(monkeypa
 
 
 def test_missing_expected_generation_keeps_uncertain_marker_unbounded(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases, owner_generation=None)
@@ -543,7 +543,7 @@ def test_missing_expected_generation_keeps_uncertain_marker_unbounded(monkeypatc
 
 
 def test_active_navigation_is_not_canceled_by_fence_until_inactive(monkeypatch):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     cancels = []
@@ -569,7 +569,7 @@ def test_active_navigation_is_not_canceled_by_fence_until_inactive(monkeypatch):
 
 @pytest.mark.parametrize("mode", ["type_error", "missing_owner"])
 def test_fence_rejects_external_generation_bump_without_cancel_owner(monkeypatch, mode):
-    leases, mono, wall = setup(monkeypatch)
+    leases, mono, wall = _make_leases(monkeypatch)
     robot = Robot(wall)
     leases._clients["r"] = robot
     uncertain(leases, owner_generation=2)
