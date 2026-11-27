@@ -173,8 +173,11 @@ class RearBayPort:
                       key=lambda p: math.dist(route[1][-1], (p.x, p.y)))
         approach = next((arc for arc in live.graph.arcs.values() if (arc.start_place, arc.end_place)
                          == (info["staging_place_id"], info["bay_id"])), None)
+        sx, sy = live.graph.place_xy(info["staging_place_id"])
+        arrive_m = getattr(getattr(runner, "config", None), "arrive_free_m", 0.15)
         if (nearest.id != info["bay_id"] or approach is None
-                or not _inside_corridor(route[1], approach.polyline, approach.width_m / 2 - fit.max)):
+                or math.dist(route[1][0], (sx, sy)) > arrive_m
+                or not _inside_corridor(route[1][1:], approach.polyline, approach.width_m / 2 - fit.max)):
             raise TripError(409, "CHARGE_BAY_TAUGHT_POSE_MISMATCH")
         blocker, _ = self.console._claim_blocker(robot, native, site_route=route)
         if blocker is not None:
@@ -243,13 +246,33 @@ class RearBayPort:
                 return
             sx, sy = live.graph.place_xy(info["staging_place_id"])
             velocity = snapshot.get("velocity") or {}
-            if (pose is None or pose.state != "LOCALIZED" or math.dist((pose.x, pose.y), (sx, sy)) > runner.config.arrive_free_m
-                    or velocity.get("linear") != 0 or velocity.get("angular") != 0
-                    or snapshot.get("navigation") not in ("IDLE", "ARRIVED")
-                    or (snapshot.get("line_follow") or {}).get("mode") != "OFF"):
+            if (pose is None or pose.state != "LOCALIZED"
+                    or not (math.isfinite(pose.x) and math.isfinite(pose.y))
+                    or math.dist((pose.x, pose.y), (sx, sy)) > runner.config.arrive_free_m):
+                info.pop("staging_wait_since", None)
+                if info["phase"] == "waiting_for_clearance":
+                    info["phase"] = "staging_confirmed"
                 raise TripError(409, "CHARGE_BAY_STAGING_STOP_UNVERIFIED")
+            lin, ang = velocity.get("linear"), velocity.get("angular")
+            still = (all(type(v) in (int, float) and math.isfinite(v) for v in (lin, ang))
+                     and abs(lin) < 0.01 and abs(ang) <= 0.02)
+            if (not still or snapshot.get("navigation") not in ("IDLE", "ARRIVED")
+                    or (snapshot.get("line_follow") or {}).get("mode") != "OFF"):
+                if info.get("reason") != "CHARGE_BAY_STAGING_STOP_UNVERIFIED":
+                    info.pop("staging_wait_since", None)
+                since = info.setdefault("staging_wait_since", runner._clock())
+                if runner._clock() - since <= 10.0:
+                    info.update(phase="waiting_for_clearance", reason="CHARGE_BAY_STAGING_STOP_UNVERIFIED",
+                                next_check_at=runner._clock() + 1)
+                    return
+                info.pop("staging_wait_since", None)
+                info["phase"] = "staging_confirmed"
+                raise TripError(409, "CHARGE_BAY_STAGING_STOP_UNVERIFIED")
+            info.pop("staging_wait_since", None)
             owner = view.get("owner") or {}
             if owner.get("owner_run_id", "unknown") is not None or type(owner.get("owner_generation")) is not int:
+                if info["phase"] == "waiting_for_clearance":
+                    info["phase"] = "staging_confirmed"
                 raise TripError(409, "CHARGE_BAY_DOCK_OWNER_BUSY")
             try:
                 evidence = site_pose_evidence(await runner.map_pose(robot), pose, state_map)
@@ -262,6 +285,7 @@ class RearBayPort:
             runner._graph_for(live.view["map_version"])
             info.pop("reason", None)
             info.pop("next_check_at", None)
+            info.pop("staging_wait_since", None)
             token = self.console.goal_leases.stop_token(robot)
             def check():
                 try:
