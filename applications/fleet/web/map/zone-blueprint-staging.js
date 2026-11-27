@@ -1,6 +1,6 @@
 // Pure helper model for Zone Blueprint metric slot overlays, live guide robots, and 2-click cell task staging.
 
-export const TASK_STATE_LABEL = {
+const TASK_STATE_LABEL = {
   RUNNING: "실행 중",
   QUEUED: "대기",
   PROPOSED: "제안",
@@ -35,10 +35,10 @@ function taskStateFor(tasks, matchIds) {
   let best = null;
   let bestScore = -1;
   for (const task of tasks || []) {
+    if (!Object.prototype.hasOwnProperty.call(TASK_STATE_LABEL, task.state)) continue;
+    const candidates = [task.dstSite, task.srcSite, task.dstSiteId, task.srcSiteId].filter(Boolean);
     const hits = matchIds.some((id) =>
-      task.dstSite === id || task.srcSite === id
-      || task.dstSite.startsWith(`${id}-`) || task.srcSite.startsWith(`${id}-`)
-      || task.dstSite.startsWith(`${id}:`) || task.srcSite.startsWith(`${id}:`));
+      candidates.some((c) => c === id || c.startsWith(`${id}-`) || c.startsWith(`${id}:`)));
     if (!hits) continue;
     const score = priority[task.state] ?? -1;
     if (score > bestScore) {
@@ -99,6 +99,7 @@ export function buildBlueprintSlotOverlays(model, guide = null) {
       const polygon = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
       const arms = Array.isArray(slot.arms) && slot.arms.length ? slot.arms : (zone.arms || []);
       const maxTier = Math.max(1, (slot.tiers || []).length || Number(zone.grid?.tiers) || 1);
+      const simItems = (slot.tiers || []).map((t) => t?.item).filter(Boolean);
       slots.push({
         id: slot.id,
         slotId: slot.id,
@@ -109,9 +110,10 @@ export function buildBlueprintSlotOverlays(model, guide = null) {
         arms,
         status: slot.status || zone.status || "planned_unverified",
         maxTier,
+        simItems,
         polygon,
         center: [(x0 + x1) / 2, (y0 + y1) / 2],
-        taskState: taskStateFor(tasks, [slot.id]),
+        taskState: taskStateFor(tasks, [slot.id, ...simItems]),
       });
     }
   }
@@ -156,6 +158,7 @@ export function buildBlueprintSlotOverlays(model, guide = null) {
     if (!siteRef) return null;
     const hit = slots.find((s) =>
       siteRef === s.id || siteRef === s.site
+      || (Array.isArray(s.simItems) && s.simItems.includes(siteRef))
       || (s.slotId && (siteRef === s.slotId || siteRef.startsWith(`${s.slotId}-`)))
       || (s.site === "pinky" && (siteRef === "pinky" || siteRef === "vehicle_tray"))
       || (s.site === "belt" && (siteRef === "belt" || siteRef === "belt-in")));
@@ -167,22 +170,24 @@ export function buildBlueprintSlotOverlays(model, guide = null) {
 
   const taskFlows = [];
   for (const task of tasks) {
-    const from = centerForSite(task.srcSite);
-    const to = centerForSite(task.dstSite);
+    if (!Object.prototype.hasOwnProperty.call(TASK_STATE_LABEL, task.state)) continue;
+    const from = centerForSite(task.srcSiteId) || centerForSite(task.srcSite);
+    const to = centerForSite(task.dstSiteId) || centerForSite(task.dstSite);
     if (!from || !to) continue;
-    taskFlows.push({ id: task.id, state: task.state, stateLabel: TASK_STATE_LABEL[task.state] || "활성", from, to, armId: task.armId });
+    taskFlows.push({ id: task.id, state: task.state, stateLabel: TASK_STATE_LABEL[task.state], from, to, armId: task.armId });
   }
 
   const robots = [];
   for (const row of guide?.robots || []) {
-    if (!row?.robot_id || !Number.isFinite(row.x) || !Number.isFinite(row.y)) continue;
+    const pose = row?.pose || row;
+    if (!row?.robot_id || !Number.isFinite(pose?.x) || !Number.isFinite(pose?.y)) continue;
     robots.push({
       robotId: row.robot_id,
-      x: row.x,
-      y: row.y,
-      yaw: Number.isFinite(row.yaw) ? row.yaw : 0,
-      moving: Boolean(row.moving),
-      placeId: row.place_id || null,
+      x: pose.x,
+      y: pose.y,
+      yaw: Number.isFinite(pose.yaw) ? pose.yaw : 0,
+      moving: Boolean(pose.state === "MOVING" || row.moving),
+      placeId: row.lane?.next_place?.place_id || row.place_id || null,
     });
   }
 

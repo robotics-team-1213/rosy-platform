@@ -111,17 +111,33 @@ def _pr4_api():
             "export_stations": [],
         },
         "/api/fleet/pipeline/cell-tasks": {
-            "tasks": [{
-                "task_id": "cell-live-1",
-                "status": "RUNNING",
-                "src_site": "belt",
-                "dst_site": "yard:r1-s1-t1",
-                "arm_id": "arm_a",
-                "cell_id": "cell_ab",
-            }],
+            "tasks": [
+                {
+                    "task_id": "cell-live-1",
+                    "status": "RUNNING",
+                    "src_site": "belt",
+                    "dst_site": "ship-h2r0-l0",
+                    "dst_site_id": "yard:r1-s1-t1",
+                    "arm_id": "arm_a",
+                    "cell_id": "cell_ab",
+                },
+                {
+                    "task_id": "cell-done-0",
+                    "status": "COMPLETED",
+                    "src_site": "belt",
+                    "dst_site": "ship-h2r0-l0",
+                    "dst_site_id": "yard:r1-s1-t1",
+                    "arm_id": "arm_a",
+                    "cell_id": "cell_ab",
+                },
+            ],
         },
         "/api/fleet/guide": {
-            "robots": [{"robot_id": "rosy_01", "x": 0.745, "y": -0.207, "yaw": 3.14159, "moving": False, "place_id": "S3"}],
+            "robots": [{
+                "robot_id": "rosy_01",
+                "pose": {"x": 0.745, "y": -0.207, "yaw": 3.14159, "state": "IDLE"},
+                "lane": {"next_place": {"place_id": "S3"}},
+            }],
         },
     }
 
@@ -179,6 +195,28 @@ def test_zone_blueprint_renders_slot_overlays_and_dispatches_2click_cell_task(si
             "propose": False,
         }
         expect(panel.locator('.zb-stage-result[role="status"]')).to_contain_text("cell-staged-2")
+        assert not errors
+    finally:
+        browser.close()
+
+
+def test_zone_blueprint_blocks_unnamed_operator_dispatch(site):
+    from playwright.sync_api import expect
+
+    api = {**_pr4_api(), "/api/fleet/session": {"principal_id": None, "role": "operator"}}
+    posts = []
+    browser, page, errors = _open(None, site, api, posts, {})
+    try:
+        page.locator("#zone-blueprint-open").click()
+        panel = page.locator("#zone-blueprint-panel")
+        expect(panel).to_be_visible()
+        panel.locator("ui-button[data-zb-stage-toggle]").click()
+        panel.locator('[data-layer="arm-slots"] [data-slot-id="station:belt"]').click()
+        panel.locator('[data-layer="arm-slots"] [data-slot-id="yard:r1-s1"]').click()
+        submit = panel.locator("ui-button[data-zb-stage-submit]")
+        expect(submit).to_be_disabled()
+        assert "운영자" in (submit.get_attribute("reason") or "")
+        assert posts == []
         assert not errors
     finally:
         browser.close()

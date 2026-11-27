@@ -224,7 +224,7 @@ const zoneBlueprint = createZoneBlueprintInspector({
   log,
   confirmedAction,
   isOperator: () => hasOperatorRole(auth.role),
-  namedReason: () => namedOperatorReason(auth),
+  namedReason,
 });
 if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 

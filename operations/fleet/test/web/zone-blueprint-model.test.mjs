@@ -323,18 +323,30 @@ test("the 2D map draws the lanes at their width and selectable footprints; 3D sh
 test("buildBlueprintSlotOverlays projects arm slots, stations, tasks, and guide robots; buildCellStagePayload builds valid POST payloads", () => {
   const model = siteModel({
     cellTasks: {
-      tasks: [{
-        task_id: "ct-1",
-        status: "RUNNING",
-        src_site: "belt",
-        dst_site: "yard:r1-s1-t1",
-        arm_id: "arm_a",
-        cell_id: "cell_ab",
-      }],
+      tasks: [
+        {
+          task_id: "ct-1",
+          status: "RUNNING",
+          src_site: "belt",
+          dst_site: "ship-h2r0-l0",
+          dst_site_id: "yard:r1-s1-t1",
+          arm_id: "arm_a",
+          cell_id: "cell_ab",
+        },
+        {
+          task_id: "ct-done",
+          status: "COMPLETED",
+          src_site: "belt",
+          dst_site: "ship-h2r0-l0",
+          dst_site_id: "yard:r1-s1-t1",
+          arm_id: "arm_a",
+          cell_id: "cell_ab",
+        },
+      ],
     },
   });
   const guide = {
-    robots: [{ robot_id: "rosy_01", x: 0.745, y: -0.207, yaw: Math.PI, moving: true, place_id: "S3" }],
+    robots: [{ robot_id: "rosy_01", pose: { x: 0.745, y: -0.207, yaw: Math.PI, state: "IDLE" }, lane: { next_place: { place_id: "S3" } } }],
   };
   const overlays = buildBlueprintSlotOverlays(model, guide);
   const slot = overlays.slots.find((s) => s.id === "yard:r1-s1");
@@ -342,7 +354,9 @@ test("buildBlueprintSlotOverlays projects arm slots, stations, tasks, and guide 
   assert.equal(slot.status, "planned_unverified");
   assert.equal(slot.taskState, "RUNNING");
   assert.equal(overlays.robots.length, 1);
+  assert.equal(overlays.robots[0].placeId, "S3");
   assert.equal(overlays.taskFlows.length, 1);
+  assert.equal(overlays.taskFlows[0].id, "ct-1");
   assert.equal(overlays.taskFlows[0].armId, "arm_a");
 
   const belt = overlays.slots.find((s) => s.id === "station:belt");
