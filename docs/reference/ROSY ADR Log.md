@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1090 | 영역별 파일 수 상한과 저장소 밖 증거 (D-226 4항 개정). [전문](../adr/D-1090-file-count-budget-and-evidence-outside-repo.md) | Accepted (2026-11-28, 사용자 승인 "좋아": 네 입장 병렬 토론 결론 1단계와 작업마다 문서를 쓰는 규칙 축소). 구현은 이 ADR과 같은 PR이다. |
 | D-1088 | 이벤트 기반 결합 시뮬레이션(Gazebo Pinky ↔ MuJoCo OMX) 및 경계 고장 주입 컨트롤러. [전문](../adr/D-1088-event-driven-coupled-sim-and-fault-controller.md) | Accepted (2026-11-28, 사용자 결정: 2단계 하이브리드 물리 루프 목표, 호스트별 스택 분리, 초기 현장 장애 토글 포함, World 읽기 전용 순수성 유지, 이벤트 기반 결합). 호스트 계약·시뮬 컨트롤러·단위 시험 범위이며 실물/현장 수용은 별도다. |
 | D-1089 | OMX 셀·Fleet·CORE 안전 가드와 복구 경로의 3단계 구조 통합 (공통 코어·기기별 프로필·3층 분리). [전문](../adr/D-1089-omx-fleet-structural-consolidation.md) | Accepted (2026-11-28, 사용자 승인 — 3층 분리·공통/기기별 경계·개발 단계 우회금지 `audit` 전환 확정; 단계별 PR로 구현, 실물 수용은 별도). |
 | D-1087 | 같은 지점에서 같은 이유로 되풀이 실패한 Nav2 도로 trip은 한 번 물러나 다시 본 뒤 다시 낸다. [전문](../adr/D-1087-fleet-reissue-back-off-and-look-again.md) | Accepted (2026-11-28, 사용자 승인 "그렇게 주행해도 돼. 후진하고 보는 것도 더 고민해서 해 봐"; 조정 세션 확정 방향). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. **Fleet이 스스로 기체를 후진시키는 첫 경로다.** |
