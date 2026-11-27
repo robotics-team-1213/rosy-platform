@@ -806,6 +806,10 @@
       "path": "map/zone-blueprint-geometry.js",
       "media_type": "application/javascript"
     },
+    "zone-blueprint-staging.js": {
+      "path": "map/zone-blueprint-staging.js",
+      "media_type": "application/javascript"
+    },
     "zone-blueprint-model.js": {
       "path": "map/zone-blueprint-model.js",
       "media_type": "application/javascript"

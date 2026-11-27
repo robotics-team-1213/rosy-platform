@@ -4660,7 +4660,8 @@
           "expression": "/api/fleet/pipeline/cell-tasks",
           "resolution": "literal-or-template",
           "request_ids": [
-            "GET:/api/fleet/pipeline/cell-tasks"
+            "GET:/api/fleet/pipeline/cell-tasks",
+            "POST:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
@@ -5635,10 +5636,18 @@
         },
         {
           "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
-          "expression": "/api/fleet/site-points",
+          "expression": "/api/fleet/site-points?view=full",
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/guide",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/guide"
           ]
         },
         {

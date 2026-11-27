@@ -1,0 +1,3 @@
+# 2026-11-27 PR 4 — 구역 도면 2D 슬롯 오버레이·실시간 로봇·2클릭 셀 작업 지정
+- 범위: `applications/fleet/web/map/zone-blueprint-staging.js` 신규, `zone-blueprint-2d.js`, `zone-blueprint-inspector.js`, `zone-blueprint.css`, `console.js`, `assets.json`, `test_document_imports.py`, `test_web_dialog_contract.py`, `feature_matrix.json`, `zone-blueprint-model.test.mjs`, `operations/fleet/test/test_zone_blueprint_staging_browser.py`
+- 변경: `GET /api/fleet/site-points?view=full`과 `GET /api/fleet/guide`를 도면 패널에 연결해 `arm_zones` 슬롯·활성 셀 작업 화살표·실시간 로봇 위치를 세계 미터 좌표 위에 그렸다. `planned_unverified` 점선 구분을 유지하고, 2클릭으로 출발·도착 슬롯과 적재 층을 고른 뒤 `confirmedAction.run` 확인 대화상자와 `Idempotency-Key`로 `POST /api/fleet/pipeline/cell-tasks`(`propose: false`)를 실행하도록 구성했다.
