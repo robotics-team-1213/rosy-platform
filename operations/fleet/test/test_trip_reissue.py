@@ -7,6 +7,7 @@ from fakes import run
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server import trip_reissue as ri
+from fleet.server.trip_ports import TripError
 from test_nav2_trip_recovery import _trip
 
 
@@ -152,7 +153,7 @@ def test_a_refused_start_is_recorded_and_spends_the_attempt(monkeypatch):
     run(reissue.tick())
 
     async def refuse(*_a, **_k):
-        raise ri.TripError(409, "TRIP_BATTERY_LOW")
+        raise TripError(409, "TRIP_BATTERY_LOW")
     monkeypatch.setattr(runner, "start", refuse)
     _poll(reissue, clock, ri.REISSUE_DELAYS_S[0] + 2)
     record = live.view["detail"]["reissue"]
@@ -164,7 +165,7 @@ def _view(state="stopped", reason="pose", detail=None, **extra):
 
 
 NAV2 = {"to": "S4", "drive_mode": "nav2"}
-EXHAUSTED = {"recovery": {"state": "exhausted"}}
+EXHAUSTED = {"recovery": {"state": "exhausted", "waiting_for": None, "attempts": [{}, {}, {}]}}
 
 
 @pytest.mark.parametrize("view, kind", [
@@ -193,7 +194,10 @@ def test_eligible_ends(view, kind):
         "TRIP_LEASE_UNSUPPORTED", "TRIP_PAUSE_STOP_UNCONFIRMED", "TRIP_GOAL_REFUSED", "TRIP_POSE_UNTRUSTED",
         "MAP_FRAME_MISMATCH", "TRIP_LOOP_ERROR")],
     (_view(reason="stall"), NAV2),                                                     # no recovery: link loss etc.
-    (_view(reason="stall", detail={"recovery": {"state": "exhausted", "same_spot": {"count": 4}}}), NAV2),
+    (_view(reason="stall", detail={"recovery": {"state": "exhausted", "waiting_for": None}}), NAV2),   # no ladder
+    (_view(reason="stall", detail={"recovery": {**EXHAUSTED["recovery"], "waiting_for": "robot_stopped"}}), NAV2),
+    (_view("failed", "TRIP_ROBOT_UNREACHABLE", {"kind": "RuntimeError"}), NAV2),     # a Fleet fault, not the link
+    (_view(reason="stall", detail={"recovery": {**EXHAUSTED["recovery"], "same_spot": {"count": 4}}}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "estop"}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "out_of_scope"}), NAV2),
     (_view(reason="stall", detail={**EXHAUSTED, "recovery_end": "wait_s"}), NAV2),    # never proven stopped
@@ -219,3 +223,29 @@ def test_forbidden_end_schedules_nothing():
     run(runner._stop(live, "stopped", "map_frame", {"binding": "MAP_FRAME_MISMATCH"}))
     _poll(reissue, clock, 60)
     assert calls == [] and "reissue" not in live.view["detail"] and reissue.pending == {}
+
+
+def test_an_estop_since_the_end_drops_the_reissue_even_when_released():
+    robot, clock, runner, live, reissue, calls = _rig()
+    _end_pose(runner, live)
+    run(reissue.tick())
+    runner.close_all("estop")                    # pressed and released while the reissue waited
+    _poll(reissue, clock, ri.REISSUE_DELAYS_S[0] + 5)
+    assert calls == [] and live.view["detail"]["reissue"]["dropped"] == "stopped_since"
+
+
+def test_a_line_follow_off_for_this_robot_drops_the_reissue():
+    robot, clock, runner, live, reissue, calls = _rig()
+    _end_pose(runner, live)
+    run(reissue.tick())
+    runner._start_cancels["rosy_42"] = runner._start_cancels.get("rosy_42", 0) + 1
+    _poll(reissue, clock, ri.REISSUE_DELAYS_S[0] + 5)
+    assert calls == [] and live.view["detail"]["reissue"]["dropped"] == "stopped_since"
+
+
+def test_a_fault_on_one_robot_does_not_end_the_poll(monkeypatch):
+    robot, clock, runner, live, reissue, calls = _rig()
+    _end_pose(runner, live)
+    monkeypatch.setattr(reissue, "_judge", lambda _live: 1 / 0)
+    run(reissue.tick())                          # logged, not raised
+    assert reissue.pending == {}

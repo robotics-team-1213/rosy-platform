@@ -22,8 +22,7 @@ import asyncio
 import logging
 
 from fleet.server.handoff_traffic import _fresh_stopped
-from fleet.server.trip_halts import halt_unconfirmed
-from fleet.server.trip_ports import TripError
+from fleet.server.trip_halts import error_code, halt_unconfirmed
 
 REISSUE_DELAYS_S = (10.0, 20.0, 40.0)
 MAX_REISSUES = len(REISSUE_DELAYS_S)
@@ -33,8 +32,10 @@ READY_READS = 2             # consecutive good reads, one per poll
 _RUNNING = ("NAVIGATING", "PLANNING")
 _SETTLED_NAV = ("IDLE", "ARRIVED", "CANCELED", "FAILED")
 #: D-1082 ends that may be reissued: the 4th stop (None) or the episode window; never an E-stop, a scope change or
-#: a robot that did not prove it stopped (wait_s).
+#: a robot that did not prove it stopped (wait_s, or a wait that ran out while still ``waiting_for`` it).
 _RECOVERY_ENDS = (None, "window")
+#: TRIP_ROBOT_UNREACHABLE also ends a step that raised these: a fault in Fleet, not a lost link.
+_NOT_LINK = ("RuntimeError", "ValueError")
 
 _LOG = logging.getLogger("fleet.server.trip_runner")
 
@@ -54,24 +55,22 @@ def eligible(view: dict, request: dict) -> str | None:
         return "pose_wait_expired"
     if (state, reason) == ("stopped", "map_frame") and detail.get("binding") == "ROBOT_NOT_LOCALIZED":
         return "relocalization_wait_expired"
-    if (state, reason) == ("failed", "TRIP_ROBOT_UNREACHABLE"):
+    if (state, reason) == ("failed", "TRIP_ROBOT_UNREACHABLE") and detail.get("kind") not in _NOT_LINK:
         return "robot_unreachable"
     if (state, reason) == ("failed", "GOAL_LEASE_NOT_ACTIVE"):
         return "goal_lease_ended"
     rec = detail.get("recovery") or {}
+    # "attempts" is the D-1082 ladder's record: without it a same-spot repeat could not be told, so no reissue.
     if (state == "stopped" and reason in ("stall", "navigation") and rec.get("state") == "exhausted"
-            and detail.get("recovery_end") in _RECOVERY_ENDS and not rec.get("same_spot")):
+            and detail.get("recovery_end") in _RECOVERY_ENDS and rec.get("waiting_for") is None
+            and "attempts" in rec and not rec.get("same_spot")):
         return "recovery_exhausted"
     return None
 
 
 def _code(exc) -> str:
-    if isinstance(exc, TripError):
-        return exc.code
-    detail = getattr(exc, "detail", None)
-    if isinstance(detail, dict) and detail.get("code"):
-        return detail["code"]
-    return getattr(exc, "code", None) or type(exc).__name__
+    detail = getattr(exc, "detail", None)   # a refused plan is an HTTPException whose detail carries the code
+    return detail["code"] if isinstance(detail, dict) and detail.get("code") else error_code(exc)
 
 
 class TripReissue:
@@ -99,16 +98,26 @@ class TripReissue:
             self.seen = {live.view["trip_id"] for live in lives if not live.open}
             return
         for live in lives:
-            robot_id, trip_id = live.view["robot_id"], live.view["trip_id"]
-            item = self.pending.get(robot_id)
-            if item is not None and trip_id != item["trip_id"]:
-                self._drop(item, "new_trip", by_trip=trip_id)        # someone else started a trip on it
-                continue
-            if item is not None:
-                await self._advance(item, live)
-            elif not live.open and trip_id not in self.seen:
-                self.seen.add(trip_id)
-                self._judge(live)
+            try:
+                await self._robot(live)
+            except Exception:  # noqa: BLE001 - one robot's fault must not starve the others
+                _LOG.exception("trip reissue: %s", live.view.get("robot_id"))
+
+    async def _robot(self, live) -> None:
+        robot_id, trip_id = live.view["robot_id"], live.view["trip_id"]
+        item = self.pending.get(robot_id)
+        if item is not None and trip_id != item["trip_id"]:
+            self._drop(item, "new_trip", by_trip=trip_id)        # someone else started a trip on it
+        elif item is not None and self._stops(robot_id) != item["stops"]:
+            self._drop(item, "stopped_since")   # an E-stop or line-follow OFF since the end, even if released
+        elif item is not None:
+            await self._advance(item, live)
+        elif not live.open and trip_id not in self.seen:
+            self.seen.add(trip_id)
+            self._judge(live)
+
+    def _stops(self, robot_id: str) -> tuple:
+        return self.runner._stop_epoch, self.runner._start_cancels.get(robot_id, 0)
 
     # ---- one ended trip -----------------------------------------------------------------
 
@@ -131,6 +140,7 @@ class TripReissue:
         item = {"robot_id": view["robot_id"], "trip_id": view["trip_id"], "live": live, "request": request,
                 "principal": view.get("started_by"), "map_version": view.get("map_version"),
                 "binding_id": view["detail"].get("nav2_binding_id"), "reads": 0, "record": record,
+                "stops": self._stops(view["robot_id"]),
                 "root": chain.get("root", view["trip_id"])}
         if not item["principal"]:
             self._write(live, {**record, "state": "no_principal"})
@@ -204,8 +214,8 @@ class TripReissue:
         new_id = trip["trip_id"]
         record.update(state="reissued", next_trip_id=new_id, reissued_at=self.clock(), by="auto_reissue")
         self._write(item["live"], record)
-        new = self.runner._live.get(robot_id)
-        if new is not None and new.view["trip_id"] == new_id:
+        new = self.runner._find(new_id)
+        if new is not None:
             new.view["detail"]["reissued_from"] = {
                 "trip_id": item["trip_id"], "root": item["root"], "attempt": record["attempt"],
                 "previous_reason": record["previous_reason"], "first_end_at": record["first_end_at"],
