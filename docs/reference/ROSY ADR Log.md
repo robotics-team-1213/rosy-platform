@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1086 | 위험이 아닌 이유로 끝난 Nav2 도로 trip은 Fleet이 같은 요청으로 다시 계획·시작한다. [전문](../adr/D-1086-fleet-trip-reissue-after-non-hazard-end.md) | Accepted (2026-11-28, 사용자 지시 "멈추면 재시도를 최소한 3번 정도는 같은 경로로 시도하는 폴백 로직이 필요"; 세 세션 토론으로 방향 확정). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
+| D-1084 | 차로 감시는 도로를 달리는 로봇만 판정하고, 이탈은 카메라 자세와 기체 SLAM 자세가 함께 말할 때만이다 (D-511 개정). [전문](../adr/D-1084-lane-watch-moving-road-only-camera-slam-agree.md) | Accepted (2026-11-28, 사용자 지시 "차선이탈 아닌데 차선이탈이라고 하는 거 해결해 주고, 서로 토론해 보고 더 고민하고 처리해 줘"; 세 세션 토론 합의). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
+| D-1083 | 밀기(push)를 Fleet 셀 작업 motion으로 실행하고 자유 위치 집기와 같은 조건으로 무승인 투입한다 (D-1077 7항·D-1081 3항 개정). [전문](../adr/D-1083-push-motion-executes-and-is-auto-admitted.md) | Accepted (2026-11-28, 소유자 결정). 구현은 이 ADR과 같은 PR이다. 실물 수용은 없다. |
 | D-1081 | 미교시 지점 자유 위치 집기를 사람 승인 없이 Fleet 셀 작업 motion으로 투입한다 (D-911 2항 개정). [전문](../adr/D-1081-free-position-pick-as-fleet-cell-task-motion.md) | Accepted (2026-11-27, 소유자 결정 "free-position picks run without per-task human approval, wide scope; guards stay"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 없다. |
 | D-1082 | Nav2 도로 trip이 위험이 아닌 이유로 멈추면 Fleet은 trip을 끝내지 않고 복구해 지금 위치에서 다시 보낸다. [전문](../adr/D-1082-fleet-nav2-road-trip-stop-recovery.md) | Accepted (2026-11-27, 사용자 요청 "멈췄을 때 경로 복구하고 다시 따라가는 게 당연히 있어야 하는데 없다, 조정·처리해 줘"; 사용자 원칙 "로직 결함·일시 문제로 운행을 끝내거나 사람을 기다리게 하지 않는다, 실제 위험 정지는 유지, 가드 값 완화 금지"). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
 | D-1080 | Nav2 도로 trip이 차선을 벗어나면 Fleet은 멈추지 않고 감속하고 차선 복귀 경로를 다시 보낸다 (D-511 M0 개정). [전문](../adr/D-1080-fleet-nav2-lane-departure-realign.md) | Accepted (2026-11-27, 사용자 결정 "코너·경로 이상은 Fleet이 감지하고 신호를 준다", "즉시 정지 말고 도로를 다시 찾게", "다시 정렬해도 되잖아"; 세 세션 토론 합의). 구현은 이 ADR과 같은 PR이다. 실물 수용은 남았다. |
