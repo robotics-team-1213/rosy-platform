@@ -203,7 +203,10 @@ def choose(
     fp = {**(p or {}), **site_fp} if site_fp else p
     require_clearance = prm.get(fp, "auto.neighbour_clear_mm") > 0
     plan_fn = _parent_attr("plan_pick", plan_pick)
-    for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
+    site_cfg = config["sites"][site]
+    # a moving belt site has no fixed start/place: order by reach from the arm axis (IK origin) instead
+    anchor = site_cfg.get("start") or site_cfg.get("place") or (0.0, 0.0)
+    for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], anchor))):
         why = fix = None
         px = pixel_fn(o["raw_m"])
         if o.get("tangled"):
