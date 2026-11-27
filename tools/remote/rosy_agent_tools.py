@@ -86,6 +86,13 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
      }, ["kind", "arm_id", "request_id", "params"])},
     {"name": "learning_stage_bundle", "description": "Fetch canonical bundle-manifest from :8768 and stage policy bundle onto :8781.",
      "inputSchema": _obj_schema({"run_id": {"type": "string"}, "target_dir": {"type": "string"}}, ["run_id", "target_dir"])},
+    {"name": "cell_push_dry_run", "description": "Plan a closed-jaw push (5..20 mm of one box) on :8781 without moving: push_dry_run.",
+     "inputSchema": _obj_schema({
+         "arm": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]}, "config": {"type": "string"}, "site": {"type": "string"},
+         "roi": {"type": "array", "items": {"type": "integer"}},
+         "px_x": {"type": "number"}, "px_y": {"type": "number"}, "dir_x": {"type": "number"}, "dir_y": {"type": "number"},
+         "mm": {"type": "number"}, "half_mm": {"type": "number"}, "half_width_mm": {"type": "number"}, "catalog": {"type": "string"},
+     }, ["arm", "config", "site", "roi", "px_x", "px_y", "dir_x", "dir_y", "mm"])},
     {"name": "cell_area_dry_run", "description": "Run observe/IK-plan only area_xyz_pick dry_run on :8781.",
      "inputSchema": _obj_schema({
          "arm": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]},

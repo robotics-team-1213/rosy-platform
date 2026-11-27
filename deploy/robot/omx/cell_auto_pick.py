@@ -66,6 +66,8 @@ def _run_auto_core(
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
+    if mismatch := cell_place_fit.tier_mismatch(config, source, catalog):  # dry run and real run, before any camera or arm step
+        return {**out, "result": f"stopped: {mismatch}"}
     if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], source, dest)):  # before any camera or arm step
         return {**out, "result": "refused", "error": refused}
     map_error = cell_auto_evidence.map_pose_preflight(cell, config, calibration, calibration_path, work, dry_run, out)
