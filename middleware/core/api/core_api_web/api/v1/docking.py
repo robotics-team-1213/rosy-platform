@@ -145,10 +145,19 @@ class CommissionDock(BaseModel):
     map_id: str = Field(min_length=1)
 
 
-@docking_router.post("/commission")
-def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
-                    svc: CoreServicesLike = Depends(get_services)):
-    """Register a stationary measurement in its exact native grid with create-only semantics."""
+class ReframeDock(BaseModel):
+    robot_id: str
+    map_grid_id: str = Field(min_length=1)
+    map_generation: int = Field(ge=0, strict=True)
+    map_id: str = Field(min_length=1)
+    expected_map_id: str = Field(min_length=1)          # the dock's stored tags now (compare-and-set)
+    expected_grid_id: str | None = None                 # its commissioned_grid_id, null when it has none
+    binding_id: str | None = None                       # its metadata.binding_id, required to match when it holds one
+    new_binding_id: str = Field(min_length=1)           # the binding Fleet proved the pose with; stored on the dock
+
+
+def _stationary_write(svc, body, write):
+    """Run a no-motion dock write only in the exact native grid the caller named, standing still, fenced against local motion admission."""
     def register():
         snapshot = svc.state.snapshot()
         if (snapshot.robot_id != body.robot_id or snapshot.map_id != body.map_id
@@ -164,9 +173,7 @@ def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
         if token is None:
             raise ApiError("STATIONARY_REQUIRED", 409, "native navigation is active or admitting a goal")
         try:
-            dock = DockInstance(**body.dock.model_dump())
-            dock.metadata.update(commissioned_grid_id=body.map_grid_id, commissioned_map_generation=body.map_generation)
-            return svc.docking.database.commission(DockType(**body.dock_type.model_dump()), dock, body.map_id).model_dump()
+            return write()
         finally:
             svc.nav.release_precision(token)
 
@@ -179,6 +186,27 @@ def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
                                             expected_owner_generation=owner["owner_generation"])
     except DockError as exc:
         raise _dock_error(exc)
+
+
+@docking_router.post("/commission")
+def commission_dock(body: CommissionDock, _: AuthContext = Depends(admin),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """Register a stationary measurement in its exact native grid with create-only semantics."""
+    def write():
+        dock = DockInstance(**body.dock.model_dump())
+        dock.metadata.update(commissioned_grid_id=body.map_grid_id, commissioned_map_generation=body.map_generation)
+        return svc.docking.database.commission(DockType(**body.dock_type.model_dump()), dock, body.map_id).model_dump()
+    return _stationary_write(svc, body, write)
+
+
+@docking_router.post("/docks/{dock_id}/reframe")
+def reframe_dock(dock_id: str, body: ReframeDock, _: AuthContext = Depends(operator),
+                 svc: CoreServicesLike = Depends(get_services)):
+    """Re-tag a dock to the native map frame now. The pose is NOT changed (unlike teach): the caller (Fleet) has checked it
+    through its approved site binding. Only the map identity tags move, so a same-frame map swap needs no dock rewrite."""
+    return _stationary_write(svc, body, lambda: svc.docking.database.reframe(
+        dock_id, body.map_id, body.map_grid_id, body.map_generation, expected_map_id=body.expected_map_id,
+        expected_grid_id=body.expected_grid_id, binding_id=body.binding_id, new_binding_id=body.new_binding_id).model_dump())
 
 
 @docking_router.delete("/docks/{dock_id}")
