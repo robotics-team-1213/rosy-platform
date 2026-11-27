@@ -1393,3 +1393,75 @@ def test_bridged_observer_exceeding_drift_or_turn_bounds_cannot_accuse_an_anchor
         state="LOCALIZED", source="bridged", bridge_turn_deg=2.0, dead_reckon_m=0.40) if rid == "r1" else None)
     ticks(svc, clock, 1.5)
     assert r2.suspects == []
+
+
+# --- 2026-11-28 user: a lost robot turns in place on its own --------------------------------
+
+
+def _undocked(robot_id, loc_state, **extra):
+    s = state(robot_id, loc_state, "odom")
+    s.update(docking={"state": "UNDOCKED"}, battery_status={"charging": False}, safety={"estop": False}, mode="IDLE",
+             navigation="IDLE", velocity={"linear": 0.0, "angular": 0.0})
+    s.update(extra)
+    return s
+
+
+def _lost_run(peer_xy, seconds, **lost_extra):
+    clock = FakeClock()
+    sightings = FakeSightings(clock)
+    lost = FakeRobot("r1", state=_undocked("r1", "CANDIDATES", **lost_extra))
+    peer = FakeRobot("r2", state=_undocked("r2", "LOCALIZED"))
+    svc = service(lost, peer, clock=clock, sightings=sightings)
+    svc.set_active_map_id(lambda: "site")
+    for _ in range(int(seconds / 0.5)):
+        sightings.see("r1", 0.0, 0.0, 0.0, map_id="site")
+        if peer_xy is not None:
+            sightings.see("r2", *peer_xy, 0.0, map_id="site")
+        ticks(svc, clock, 0.5)
+    return lost, svc
+
+
+def test_a_lost_robot_turns_in_place_without_a_press_when_the_camera_shows_it_clear():
+    lost, svc = _lost_run((1.0, 0.0), 60.0)
+    assert [m[0] for m in lost.missions] == ["rotate_in_place"]          # homing (drives off) still needs a press
+    assert svc.view("r1")["last_mission"]["result"] == "operator_required"
+
+
+@pytest.mark.parametrize("peer_xy, extra", [
+    ((0.38, 0.0), {}),                                  # a robot inside both trays' sweep plus margin
+    ((1.0, 0.0), {"mode": "NAVIGATION", "navigation": "NAVIGATING"}),   # driving a goal
+    ((1.0, 0.0), {"velocity": {"linear": 0.05, "angular": 0.0}}),        # still moving
+    (None, {}),                                         # the other robot is not seen: clearance unproven
+    ((1.0, 0.0), {"docking": {"state": "DOCKED"}}),     # on a charger
+    ((1.0, 0.0), {"battery_status": {"charging": True}}),
+    ((1.0, 0.0), {"safety": {"estop": True}}),
+])
+def test_a_lost_robot_waits_for_a_press_when_turning_is_not_proven_safe(peer_xy, extra):
+    lost, svc = _lost_run(peer_xy, 30.0, **extra)
+    assert lost.missions == []
+
+
+def test_auto_rotate_ok_needs_every_known_robot_seen():
+    ok = _undocked("r1", "CANDIDATES")
+    assert service_logic.auto_rotate_ok(ok, (0.0, 0.0), {"r2": (0.5, 0.0)}, {"r2"}) is True
+    assert service_logic.auto_rotate_ok(ok, (0.0, 0.0), {"r2": (0.5, 0.0)}, {"r2", "r3"}) is False
+    assert service_logic.auto_rotate_ok(ok, None, {}, set()) is False
+    assert service_logic.auto_rotate_ok(state("r1", "CANDIDATES"), (0.0, 0.0), {}, set()) is False  # docking unknown
+
+
+class _TwoRows(FakeSightings):
+    def snapshot(self):
+        rows = list(self.rows.values())
+        return {"sightings": rows + [dict(rows[0], x=5.0)]}   # a second camera row for r1
+
+
+def test_two_fresh_rows_for_the_lost_robot_mean_its_position_is_unknown():
+    clock = FakeClock()
+    sightings = _TwoRows(clock)
+    lost = FakeRobot("r1", state=_undocked("r1", "CANDIDATES"))
+    svc = service(lost, clock=clock, sightings=sightings)
+    svc.set_active_map_id(lambda: "site")
+    for _ in range(40):
+        sightings.see("r1", 0.0, 0.0, 0.0, map_id="site")
+        ticks(svc, clock, 0.5)
+    assert lost.missions == []

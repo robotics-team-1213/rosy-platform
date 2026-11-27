@@ -27,8 +27,8 @@ from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_lane_realign import observe as observe_lane_departure
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
-from fleet.server.transient_loc_hold import (hold_transient_localization, loc_diag_from_state,
-                                              recheck_binding)
+from fleet.server.transient_loc_hold import (hold_own_untrusted_goal, hold_transient_localization,
+                                              loc_diag_from_state, recheck_binding)
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_start_checks import crosswalks_on, signals_on, start_check
 from fleet.swarm.dispatch_guard import dispatch_guard
@@ -520,6 +520,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             runner._fence(robot_id)
             if peer_wait and reply.get("stage") == "pre_dispatch_peer_check" and reply.get("dispatch_attempted") is False:
                 await inspect_held_route(runner, live, state, payload)
+            return
+        if hold_own_untrusted_goal(runner, live, robot_id, reply, state):  # 2026-11-28: lost -> recover, resend
+            live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
+            live.view["detail"]["goal_wait"] = reason
             return
         raise _GoalRefused(reason, reply)
     if wait := detail.pop("peer_wait", None):
