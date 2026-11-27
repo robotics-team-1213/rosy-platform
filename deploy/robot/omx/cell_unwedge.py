@@ -167,6 +167,17 @@ def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
         sleep(HOME_SETTLE_S)
         if ack.get("ok") is not True:
             return _home_stop_result(ack), "grip refused"
+        # The jaws open at about 2.8 units/s (arm_s 11-27): wait until home or a plateau; a jaw stuck short still fails below.
+        last = status["state"][5]
+        for _ in range(6):
+            status = cell.act("state")
+            if not _home_state(status, context):
+                return _home_stop_result(status), "live state refused while the grip settled"
+            now = status["state"][5]
+            if abs(now - home[5]) <= SETTLE_TOL or abs(now - last) <= PLATEAU_TOL:
+                break
+            last = now
+            sleep(1.0)
     status = receipt["end"] = cell.act("state")
     if not _home_state(status, context):
         return _home_stop_result(status), "live state refused after grip"
