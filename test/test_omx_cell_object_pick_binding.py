@@ -61,7 +61,7 @@ def _seed_cell_workdir(tmp_path: Path) -> Path:
         "cameras": {"top": CAMERA},
         "plan": {"approach_m": 0.04, "limits": {"park_reach_m": 0.28}},
         "sites": {
-            "temp_plate_a": {"z": 0.0, "surface_z": 0.0, "detect_roi": list(ROI), "place": [0.1, 0.1], "yaw_deg": 0.0},
+            "temp_plate_a": {"z": TOP, "surface_z": 0.0, "detect_roi": list(ROI), "place": [0.1, 0.1], "yaw_deg": 0.0},
         },
     }
     (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps(cfg), encoding="utf-8")
