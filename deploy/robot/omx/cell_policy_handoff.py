@@ -51,6 +51,23 @@ class Authorization:
     def __init__(self, config):
         self.config = config
         self.calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
+        self._refresh_proof = None
+        self._session_id: str | None = None
+        self._proof_seq = 0
+
+    def bind_proof(self, cell, run_id: str, arm_id: str, log=None):
+        """Re-measure live stop-capability on each authorization so chunks past MAX_AGE_S fail closed on fresh state."""
+        import cell_stop_proof as stop_proof
+
+        def _refresh(state=None):
+            self._proof_seq += 1
+            proof = stop_proof.session_proof(cell, f"{run_id}:auth-{self._proof_seq}", arm_id, state=state)
+            if log is not None:
+                log({"stop_proof": proof, "stop_proof_refresh": True})
+            return proof
+
+        self._refresh_proof = _refresh
+        return self
 
     def __call__(self, library, state, sequence, *, check_home: bool = True):
         from cell_envelope import assess
@@ -59,9 +76,23 @@ class Authorization:
         limits = limit_error(dict(self.config, played_chunks=list(library["chunks"])), library)
         if limits:
             raise ValueError(limits)
-        result = assess(self.config, self.calibration, library, state, sequence=sequence, check_home=check_home)
+        ctx = state.get("operating_context") if isinstance(state, dict) else None
+        sid = ctx.get("session_id") if isinstance(ctx, dict) else None
+        if self._session_id is not None and sid is not None and sid != self._session_id:
+            raise ValueError("operating envelope refused: session_changed")
+        config = self.config
+        if self._refresh_proof is not None:
+            proof = self._refresh_proof(state)
+            if not isinstance(proof, dict) or not proof.get("ok"):
+                code = proof.get("code") if isinstance(proof, dict) else "unknown"
+                reason = proof.get("reason") if isinstance(proof, dict) else "invalid proof"
+                raise ValueError(f"no stop-capability proof ({code}): {reason}")
+            config = {**self.config, "_commissioning": {"stop_proof": proof}}
+        result = assess(config, self.calibration, library, state, sequence=sequence, check_home=check_home)
         if not result["allowed"]:
             raise ValueError(f"operating envelope refused: {result['reason']}")
+        if self._session_id is None and sid is not None:
+            self._session_id = sid
         return result
 
 

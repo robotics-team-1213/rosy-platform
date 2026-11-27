@@ -70,7 +70,8 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "applications/fleet/web/maintenance/host-services.js": 1,  # named operator host control, shared confirmation
     "applications/fleet/web/roster.js": 1,
-    "applications/fleet/web/charge-bays-view.js": 1,  # cancel a running cell task (releases the cell interlock)
+    "applications/fleet/web/charge-bays-view.js": 3,  # cancel task, choice dispatch, quick dispatch
+    "applications/fleet/web/trip-replan.js": 1,  # confirm resume or confirm-replan
     "applications/fleet/web/console-goal.js": 2,  # map goal and place-chip goal confirm the selected robot before dispatch
     "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)
     # Activation and profile replacement; D-655 camera replacement moved to its controller.

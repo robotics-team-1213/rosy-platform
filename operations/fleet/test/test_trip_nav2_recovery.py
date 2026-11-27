@@ -434,7 +434,7 @@ def test_multi_robot_nav2_claims_compare_in_site_frame_without_false_mismatch():
 
     # Crossing path in site frame triggers ROUTE_CONFLICT instead of false MAP_FRAME_MISMATCH.
     r2._state["navigation"] = "IDLE"
-    pts_cross = [{"x": 0.0, "y": 0.0, "kind": "pass"}, {"x": 0.5, "y": -1.8, "kind": "stop", "yaw": 0.0}]
+    pts_cross = [{"x": 0.0, "y": 0.0, "kind": "pass"}, {"x": 0.5, "y": -1.9, "kind": "stop", "yaw": 0.0}]
     conflict = run(console.route("rosy_46", pts_cross))
     assert conflict["accepted"] is False and conflict["reason"] == "ROUTE_CONFLICT"
 

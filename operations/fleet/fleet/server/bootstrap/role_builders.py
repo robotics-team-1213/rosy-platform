@@ -188,6 +188,7 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         if callable(getattr(localization_service, "set_search_reference_reader", None)):
             localization_service.set_search_reference_reader(map_pose.state_with_source)
     app.state.map_pose = map_pose
+    app.state.sightings = sightings
     if tracking is not None:
         tracking.map_pose = map_pose.arbitrated_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub, sightings=sightings,
@@ -432,7 +433,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                         require_named_operator=require_named_operator, runner=trip_runner, read_guard=read_guard)
     app.state.guide = GuideService(
         gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
-        tracking=tracking if tracking is not None and tracking.enabled else None, zones=trip_runner.traffic.zone_edges)
+        tracking=tracking if tracking is not None and tracking.enabled else None,
+        sightings=sightings, zones=trip_runner.traffic.zone_edges)
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
     return trip_runner
 

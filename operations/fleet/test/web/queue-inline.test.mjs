@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/roster.js");
 const { groupRows, groupText, openDecisionKey, queueRowText, createQueues } = await import("../../../../applications/fleet/web/queues.js");
 const { createInboxPanel } = await import("../../../../applications/fleet/web/inbox.js");
-const { deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
+const { createTripReplan, deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
 
@@ -140,6 +140,7 @@ class El {
   removeAttribute(name) { this.attributes.delete(name); }
   addEventListener(type, handler) { this.listeners[type] = handler; }
   focus() { this.focused = true; }
+  contains(node) { return node === this || this.children.some((child) => child.contains?.(node)); }
   scrollIntoView() {}
   click() {  // a DOM-enough click: handlers get a preventable event
     const event = {prevented: false, preventDefault() { this.prevented = true; }};
@@ -196,10 +197,11 @@ function fakeConsole(t) {
     },
   };
   document.activeElement = document.body;
-  const before = {document: globalThis.document, location: globalThis.location};
+  const before = {document: globalThis.document, location: globalThis.location, CSS: globalThis.CSS};
   globalThis.document = document;
   globalThis.location = {search: ""};
-  t.after(() => { globalThis.document = before.document; globalThis.location = before.location; });
+  globalThis.CSS ??= {escape: (s) => String(s)};
+  t.after(() => { globalThis.document = before.document; globalThis.location = before.location; globalThis.CSS = before.CSS; });
   return {el: (id) => document.getElementById(id), document};
 }
 
@@ -322,4 +324,80 @@ test("a pending CORE pause proof blocks resume while cancel stays available", ()
   assert.equal(pending.cancelReason, "");
   hold.stop.confirmed = true;
   assert.equal(replanView({ hold }, { operator: true }).confirmReason, "");
+});
+
+test("T-D: fillQueues sorts critical rows as overdue -> decision -> admin-held estop", (t) => {
+  const { el } = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [
+    { robot_id: "r_admin", online: true, state: { safety: { estop: true } } },
+    { robot_id: "r_stuck", online: true, line_stuck: { resolver: { escalated: "waiting", age_s: 5 } }, state: { safety: { estop: false } } },
+    { robot_id: "r_over", online: true, line_stuck: { resolver: { escalated: "waiting", age_s: 45 } }, state: { safety: { estop: false } } },
+  ];
+  fillQueues();
+  const keys = el("critical-list").children.map((n) => n.dataset.key);
+  assert.deepEqual(keys, ["r_over|stuck", "r_stuck|stuck", "r_admin|0"]);
+});
+
+test("createTripReplan confirms resume and confirm-replan while keeping cancel 1-click", async (t) => {
+  const { document } = fakeConsole(t);
+  const slotReplan = new El("div"); slotReplan.dataset.decisionSlot = "a|replan";
+  const slotDeadlock = new El("div"); slotDeadlock.dataset.decisionSlot = "b|replan";
+  document.body.append(slotReplan, slotDeadlock);
+  const baseQs = document.querySelector;
+  document.querySelector = (sel) => {
+    const m = /^\[data-decision-slot="(.+)"\]$/.exec(sel);
+    if (m) return [slotReplan, slotDeadlock].find((n) => n.dataset.decisionSlot === m[1]) ?? null;
+    return baseQs(sel);
+  };
+  const view = {
+    stateUnavailable: false,
+    traffic: null,
+    trafficAi: [],
+    trafficTrips: [
+      { trip_id: "t1", robot_id: "a", hold: { reason: "nav2_problem" } },
+      { trip_id: "t2", robot_id: "b", hold: { reason: "replan", plan: { places: ["S1", "S2"] }, length_m: 1.5, eta_s: 10 } },
+    ],
+  };
+  const posts = [];
+  const confirms = [];
+  let allow = false;
+  const replan = createTripReplan({
+    scope: { capture: () => ({ check() {}, current: () => true }), guard: (fn) => fn },
+    view,
+    call: async (path, opts) => { posts.push([path, opts?.method]); return {}; },
+    log: () => {},
+    isOperator: () => true,
+    namedReason: () => "",
+    confirmedAction: {
+      run: async ({ message, eligible, request }) => {
+        confirms.push(message);
+        if (allow && eligible()) await request();
+      },
+    },
+  });
+  replan.render();
+
+  const flush = () => new Promise((r) => setImmediate(r));
+  const btnOf = (slot, val) => slot.querySelectorAll("ui-button").find((b) => b.dataset.replan === val);
+  btnOf(slotReplan, "confirm").click();
+  btnOf(slotDeadlock, "confirm").click();
+  await flush();
+  assert.equal(confirms.length, 2);
+  assert.equal(posts.length, 0, "canceled confirms do not POST resume or confirm-replan");
+
+  allow = true;
+  btnOf(slotReplan, "confirm").click();
+  btnOf(slotDeadlock, "confirm").click();
+  await flush();
+  assert.deepEqual(posts, [
+    ["/api/fleet/trips/t1/resume", "POST"],
+    ["/api/fleet/trips/t2/confirm-replan", "POST"],
+  ]);
+
+  btnOf(slotReplan, "cancel").click();
+  await flush();
+  assert.equal(confirms.length, 4);
+  assert.deepEqual(posts.at(-1), ["/api/fleet/trips/t1/cancel", "POST"]);
 });

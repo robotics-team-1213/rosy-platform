@@ -3,6 +3,7 @@ import { iconSvg } from "/common/ui.js";
 import { batteryMeterState } from "/console/assets/cockpit-telemetry.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
 import { gridCellOf } from "./map-datum.js";
+import { stopZoneOccupants, stopZoneSummaryForRobot } from "./stop-zone-overlay.js";
 
 const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
 const mkEl = (tag, cls, txt) => {
@@ -61,17 +62,23 @@ export function renderHoverCard(entity, { el, view }) {
     const sensorPct = devices.length ? Math.round((readyCount / devices.length) * 100) : null;
     titleIcon = "robot";
     title = `${host} (${r.robot_id})`;
-    badge = r.online !== false ? (p.state || "온라인") : "오프라인";
-    badgeTone = r.online !== false ? "good" : "warn";
+    const hasCrit = robotObj?.state?.safety?.estop === true || Boolean(robotObj?.line_stuck);
+    const hasWarn = robotObj?.state?.docking?.state === "DOCK_FAILED" || Boolean(robotObj?.error);
+    badge = hasCrit ? "오류·보류" : hasWarn ? "주의 필요" : r.online !== false ? (p.state || "온라인") : "오프라인";
+    badgeTone = hasCrit ? "crit" : hasWarn || r.online === false ? "warn" : "good";
     const hasXY = Number.isFinite(p.x) && Number.isFinite(p.y), cell = hasXY ? ` · 칸 ${gridCellOf(p.x, p.y).label}` : "";
     const unc = typeof p.u_m === "number" ? ` (±${p.u_m.toFixed(2)}m)` : "";
     lines.push(["정밀 좌표 · 방위", `${hasXY ? `(${fmtCoord(p.x)}, ${fmtCoord(p.y)}) m` : "위치 모름"} · HEAD ${deg}${unc}${cell}`]);
     lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · ${devices.length ? `장치 ${readyCount}/${devices.length} 정상` : "장치 미수신"}`]);
+    const zone = stopZoneSummaryForRobot(robotObj, r, view.activeSiteMap?.map, view.trafficTrips);
+    if (zone) lines.push(["정지 구역", zone.label]);
     if (pctNum !== null) bars.push(["battery", "배터리", `${pctNum}%${volt ? ` · ${volt}` : ""}`, null, null, { percent: pctNum, charging, online: r.online !== false }]);
     else if (volt) lines.push(["배터리", volt]);
     if (alignPct !== null) bars.push(["pose", "차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn", null]);
     if (sensorPct !== null) bars.push(["notification", "센서 준비", `${sensorPct}% (${readyCount}/${devices.length})`, sensorPct, "good", null]);
-    footer = "클릭하여 선택 · 선택 후 지도 좌표/장소 클릭 시 핀 고정 및 도로 주행";
+    footer = hasCrit || hasWarn
+      ? "클릭 시 패널(오류·보류) 열기 · 선택 후 지도 좌표/장소 클릭 시 주행"
+      : "클릭하여 선택 · 선택 후 지도 좌표/장소 클릭 시 핀 고정 및 도로 주행";
   } else if (entity.kind === "omx_ai") {
     const anc = entity.anchor, cell = view.omxCells?.[anc.target_id];
     const obsArm = (view.workcellObs?.arms || []).find((o) => o.id === anc.target_id) || null;
@@ -83,8 +90,10 @@ export function renderHoverCard(entity, { el, view }) {
     const handoffMap = { arm_a: "S5 (1·3층 적재)", arm_b: "S5 (2층 적재)", arm_s: "S3 (하역 셔틀)" };
     titleIcon = "arm";
     title = anc.label || anc.target_id.toUpperCase();
+    const armHeld = Boolean(obsArm?.held || obsArm?.heldIncidents?.length);
+    const armFault = Boolean(obsArm?.hwFaultMotors);
     badge = anc.cell_status || (cell?.reachable ? "ARM-CELL ONLINE" : anc.live ? "VISION 4X" : "대기");
-    badgeTone = anc.live || anc.cell_status ? "good" : "neutral";
+    badgeTone = armFault ? "crit" : armHeld ? "warn" : anc.live || anc.cell_status ? "good" : "neutral";
     lines.push(["베이스 → 헤드", `(${fmtCoord(anc.base_x)}, ${fmtCoord(anc.base_y)}) → ${hasHead ? `(${fmtCoord(anc.head_x)}, ${fmtCoord(anc.head_y)}) m` : "미수신"} · ${deg}`]);
     lines.push(["관절 · 연계역", `${anc.joints_summary || (anc.live ? "관절 위치 수신" : "위치 미수신")} · Fleet 연계: ${handoffMap[anc.target_id] || "미배정"}`]);
     if (reachPct !== null) bars.push(["expand", "팔 뻗음", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info", null]);
@@ -92,7 +101,9 @@ export function renderHoverCard(entity, { el, view }) {
     if (anc.motor_summary) bars.push(["settings", "서보 버스", anc.motor_summary, 100, "good", null]);
     else if (mParts.length) lines.push(["서보 버스", mParts.join(" · ")]);
     if (confPct !== null) bars.push(["image", "4x 추적", `신뢰도 ${confPct}%`, confPct, "good", null]);
-    footer = `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "선택한 로봇"} 연계 정류장 즉시 호출 가능`;
+    footer = armFault || armHeld
+      ? "클릭 시 패널(오류·보류) 및 셀 상세 카드 열기"
+      : `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "선택한 로봇"} 연계 정류장 즉시 호출 가능`;
   } else if (entity.kind === "place") {
     const pl = entity.place, siteMapObj = view.activeSiteMap?.map;
     const edges = (siteMapObj?.edges || []).filter((e) => e.from === pl.id || e.to === pl.id);
@@ -105,6 +116,9 @@ export function renderHoverCard(entity, { el, view }) {
     title = `${pl.id} · ${pl.name || pl.id}`;
     badge = isCharger ? "충전 스테이션" : (String(pl.id).startsWith("P") ? "대기·분기점" : "작업 정류장");
     lines.push(["지도 좌표 · 도로", `X ${pl.x.toFixed(3)} m, Y ${pl.y.toFixed(3)} m · 칸 ${gridCellOf(pl.x, pl.y).label} · ${edgeDesc}`]);
+    if (Array.isArray(pl.stop_zone) && pl.stop_zone.length >= 3) {
+      lines.push(["정지 구역", stopZoneOccupants(pl, view.robots, view.guide?.robots, view.trafficTrips).label]);
+    }
     if (road) {
       const via = road.places?.length ? road.places.join(" → ") : pl.id;
       lines.push([`${activeId} 도로 경로`, `거리 ${road.length_m.toFixed(2)} m · 경유: ${via}`]);

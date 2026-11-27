@@ -26,10 +26,12 @@ export function queueRowText(text, named) {
  * B-1: a per-robot stale rollup (noGroup) never merges — its folded causes belong to that robot. */
 export function groupRows(rows, min = 2) {
   const same = new Map();
-  for (const row of rows) if (!row.decision && !row.noGroup) same.set(row.text, [...(same.get(row.text) || []), row]);
+  for (const row of rows) if (!row.decision && !row.noGroup && !String(row.text || "").includes("관리자가 해제해야 움직입니다")) {
+    same.set(row.text, [...(same.get(row.text) || []), row]);
+  }
   const out = [], done = new Set();
   for (const row of rows) {
-    const group = row.decision || row.noGroup ? null : same.get(row.text);
+    const group = row.decision || row.noGroup || String(row.text || "").includes("관리자가 해제해야 움직입니다") ? null : same.get(row.text);
     if (!group || group.length < min) { out.push(row); continue; }
     if (!done.has(row.text)) out.push({ severity: row.severity, text: row.text, robotId: "",
       group: group.map((r) => r.robotId), key: `group|${row.text}` });
@@ -103,6 +105,21 @@ export function stuckOverdue(stuck) {
     && typeof note.age_s === "number" && note.age_s >= HUMAN_DEADLINE_S);
 }
 
+export function nextStepFor(robot, kindOrText = "") {
+  const k = String(kindOrText || "");
+  if (k === "custody" || k.startsWith(": 정밀 정지 점유 보류")) {
+    return robot?.named_stop_custody?.operator_action ? { text: robot.named_stop_custody.operator_action } : null;
+  }
+  if ((k === "estop" || k.startsWith(": 비상 정지 걸림"))
+      && robot?.state?.safety?.estop === true && robot?.state?.safety?.releases_when_charged !== true) {
+    return { text: `로봇 등록 → ${robot.robot_id} → 비상정지 해제…`, href: "/console/install#robots", linkText: "로봇 등록 열기" };
+  }
+  if (k === "dock_failed" || k.startsWith(": 도킹 실패")) return { text: "충전 칸 정렬 확인 후 전진·재접안 또는 로봇 카드에서 다시 보내세요" };
+  if (k === "nav_failed" || k.startsWith(": 목표 실패")) return { text: "주변 장애물·위치 확인 후 지도에서 목표를 다시 지정하세요" };
+  if (k === "off_map" || k.startsWith(": 지도 밖")) return { text: "정지 확인 후 지도 위 운영자 핀으로 위치를 다시 잡으세요" };
+  return null;
+}
+
 export function createQueues({ scope, el, view, render, streamEvidence }) {
   // D-493 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
   // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
@@ -160,7 +177,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
     const source = motionSource(robot, view);
     if (source.attention) items.push({ severity: "crit", text: `: ${source.text} — ${source.title}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")}${state.safety.releases_when_charged === true ? "" : " — 관리자가 해제해야 움직입니다"}` });
+    if (state.safety?.estop === true) {
+      const auto = state.safety.releases_when_charged === true;
+      items.push({ severity: auto ? "warn" : "crit", text: `: ${estopText(state, "비상 정지 걸림")}${auto ? "" : " — 관리자가 해제해야 움직입니다"}` });
+    }
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패", snapshotWarn: true });
     // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).
@@ -180,6 +200,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (backText) {
       const side = back.side ? ` (${back.side === "left" ? "왼쪽" : "오른쪽"})` : "";
       items.push({ severity: back.state === "ON_LINE" ? "warn" : "crit", text: `: ${backText}${side}` });
+    }
+    const custody = robot.named_stop_custody;
+    if (custody?.motion_refused_site_wide || custody?.operator_action) {
+      items.push({ severity: "warn", text: `: 정밀 정지 점유 보류${custody.missing_proof ? ` (${custody.missing_proof})` : ""}` });
     }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
     items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
@@ -228,7 +252,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
   // urgent decision row. Rows are kept by key so a 1 s poll never drops focus or a confirm step.
-  function syncRows(list, rows, open) {
+  function syncRows(list, rows, open, robotById = null) {
     const old = new Map([...list.children].map((node) => [node.dataset.key, node]));
     const nodes = rows.map((row, index) => {
       if (row.group) return groupRow(old.get(row.key), row);
@@ -250,7 +274,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
           line.setAttribute("aria-controls", body.id);
           li.append(line, body);
         }
-        line.append(document.createElement("b"), node("span", "", "queue-text"));
+        const step = node("span", "", "queue-next-step");
+        step.hidden = true;
+        step.append(node("span", ""), node("a", "", "queue-next-link"));
+        line.append(document.createElement("b"), node("span", "", "queue-text"), step);
       }
       const line = row.decision ? li.firstElementChild : li;
       const name = line.querySelector("b");
@@ -259,6 +286,18 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       if (name.className !== cls) name.className = cls;
       const text = line.querySelector(".queue-text");
       patchText(text, queueRowText(row.text, named));
+      const next = nextStepFor(robotById?.get(row.robotId), row.text);
+      const stepEl = line.querySelector(".queue-next-step");
+      if (stepEl) {
+        patchHidden(stepEl, !next);
+        patchText(stepEl.firstElementChild, next?.text || "");
+        const link = stepEl.querySelector(".queue-next-link");
+        if (link) {
+          patchHidden(link, !next?.href);
+          if (next?.href) patchAttr(link, "href", next.href);
+          patchText(link, next?.linkText || "");
+        }
+      }
       if (row.decision) {
         patchAttr(line, "aria-expanded", String(open === row.key));
         patchHidden(li.lastElementChild, open !== row.key);
@@ -332,12 +371,14 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }
-    rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
+    rows.crit.sort((a, b) => (Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)))
+      || (Number(Boolean(b.decision)) - Number(Boolean(a.decision))));
     rows.warn = groupRows(rows.warn);
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);
-    syncRows(critList, rows.crit, open);
-    syncRows(warnList, rows.warn, open);
+    const robotById = new Map((view.robots || []).map((r) => [r.robot_id, r]));
+    syncRows(critList, rows.crit, open, robotById);
+    syncRows(warnList, rows.warn, open, robotById);
     setTriageHead("warning-head", "주의 요망", rows.warn);
     setTriageHead("critical-head", "최우선 개입 요망", rows.crit);
 

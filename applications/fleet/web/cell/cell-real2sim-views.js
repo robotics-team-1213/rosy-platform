@@ -1,10 +1,13 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import { setOffBy } from "/common/cause-line.js";
+import { randomUUID } from "/console/assets/uuid.js";
 import { buildCameraZoomHeading } from "./cell-camera-zoom.js";
 import { buildInspectorCamFrame, renderOmxInspector } from "/console/assets/omx-inspector.js";
 import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } from "./cell-real2sim-specs.js";
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
+  const matrixBtns = [];
   const frames = () => ctx.cellFrames;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
   const selectInspectorTarget = (...args) => ctx.selectInspectorTarget(...args);
@@ -28,6 +31,7 @@ export function createCellViews(ctx) {
       frames: frames(),
       framesActive: true,
       runButtonLabel: undefined,
+      quickDispatchReason: typeof ctx.namedReason === 'function' ? ctx.namedReason() : '',
       actionsClass: 'omx-inspector-actions',
       onSelectTarget: (id) => selectInspectorTarget(id),
       onToggleDual: () => {
@@ -38,19 +42,21 @@ export function createCellViews(ctx) {
         state.selectedInspectorCamByTarget[targetId] = camId;
         renderRightInspector(body);
       },
-      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId }) => {
-        const current = ctx.bump();
+      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId, button }) => {
+        const current = await ctx.confirmAndBump?.(`${targetArm} 맞춤 태스크(${targetCell} · ${tier}층${displacedTo ? ' · ' + displacedTo : ''})를 큐에 등록할까요?`, button);
+        if (!current) return;
         if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `우측 인스펙터 맞춤 태스크(${targetCell}/${targetArm})를 큐에 등록하는 중입니다.`;
         try {
           const res = await request(CELL_TASKS_PATH, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
             body: JSON.stringify({
               cell_id: targetCell,
               arm_id: targetArm,
               tier,
               displaced_to: displacedTo,
               robot_id: robotId || undefined,
+              propose: false,
             }),
           });
           if (current !== ctx.gen()) return;
@@ -213,9 +219,15 @@ export function createCellViews(ctx) {
     for (const args of pendingBinds) frames()?.bind(...args);
   }
 
-  function renderCameraMatrix() {
+  function renderCameraMatrix({ updateOnly = false } = {}) {
     const wall = $('cell-camera-matrix');
-    if (!wall || wall.childElementCount) return;
+    if (!wall) return;
+    const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
+    if (wall.childElementCount) {
+      for (const btn of matrixBtns) setOffBy(btn, reason);
+      return;
+    }
+    if (updateOnly) return;
     const pendingBinds = [];
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
@@ -252,11 +264,13 @@ export function createCellViews(ctx) {
         actBtn.setAttribute('kind', 'quiet');
         actBtn.setAttribute('type', 'button');
         actBtn.textContent = qAct.label;
+        setOffBy(actBtn, reason);
+        matrixBtns.push(actBtn);
         actBtn.addEventListener('click', ev => {
           ev.stopPropagation();
-          if (qAct.preset) void runQuickPreset(qAct.preset);
-          else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction);
-          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined);
+          if (qAct.preset) void runQuickPreset(qAct.preset, null, ev.currentTarget);
+          else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction, ev.currentTarget);
+          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined, ev.currentTarget);
         });
         card.append(actBtn);
       }

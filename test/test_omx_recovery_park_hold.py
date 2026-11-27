@@ -22,7 +22,7 @@ import chunk_runner as m  # noqa: E402
 import chunk_runner_interrupt as cri  # noqa: E402
 import judge_seat  # noqa: E402
 from cell_envelope import digest  # noqa: E402
-from omx_adapter.chunk_library import park_path, too_fast  # noqa: E402
+from omx_adapter.chunk_library import park_path, too_fast, transit_path  # noqa: E402
 
 HOME = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
 REACH = [30.0, -20.0, 20.0, 45.0, -5.0, 49.0]
@@ -278,15 +278,19 @@ def test_park_from_open_jaws_rises_first_and_closes_at_the_transit_height_never_
     assert all(f[5] == pytest.approx(56.0) for f in path[:closed])
     turning = next(i for i, f in enumerate(path) if abs(f[0] - start[0]) > 1e-6)
     assert closed < turning and path[-1][:5] == pytest.approx(home[:5]) and path[-1][5] == pytest.approx(46.6)
-    held = park_path([35.0, -10.0, 9.0, 41.0, 71.0, 52.0], home, 46.6, fps=30)
-    assert next(i for i, f in enumerate(held) if f[5] < 52.0 - 1e-6) < next(i for i, f in enumerate(held) if f[1] <= -26.0)
-    # 2026-11-27 arm_b (closed 48.8) & arm_a (closed 49.0): open jaws at ~55.7-55.8 must still rise before closing, while held (~54.5) closes first
-    for closed_g, open_g in ((48.8, 55.68), (49.0, 55.8)):
-        p_open = park_path([20.4, 12.6, 6.6, 30.8, -29.0, open_g], [0.8, -62.2, 53.1, 51.6, 45.2, closed_g], closed_g, fps=30)
+    # 2026-11-27 arm_b (closed 48.8) & arm_a (closed 49.0): ANY extended park_path wider than closed rises to transit first
+    for closed_g, open_g in ((46.6, 52.0), (48.8, 53.85), (48.8, 54.5), (48.8, 55.68), (49.0, 55.8)):
+        pose = [35.0, -10.0, 9.0, 41.0, 71.0, open_g] if closed_g == 46.6 else [20.4, 12.6, 6.6, 30.8, -29.0, open_g]
+        h = home if closed_g == 46.6 else [0.8, -62.2, 53.1, 51.6, 45.2, closed_g]
+        p_open = park_path(pose, h, closed_g, fps=30)
         c_idx = next(i for i, f in enumerate(p_open) if f[5] < open_g - 1e-6)
-        assert p_open[c_idx][1] <= -26.0 and all(f[5] == pytest.approx(open_g) for f in p_open[:c_idx])
-    p_held_b = park_path([20.4, 12.6, 6.6, 30.8, -29.0, 54.5], [0.8, -62.2, 53.1, 51.6, 45.2, 48.8], 48.8, fps=30)
-    assert next(i for i, f in enumerate(p_held_b) if f[5] < 54.5 - 1e-6) < next(i for i, f in enumerate(p_held_b) if f[1] <= -26.0)
+        t_idx = next(i for i, f in enumerate(p_open) if abs(f[0] - pose[0]) > 1e-6)
+        assert p_open[c_idx][1] <= -26.0 and c_idx < t_idx
+        assert all(f[5] == pytest.approx(open_g) for f in p_open[:c_idx])
+        assert all(f[5] <= open_g + 1e-6 for f in p_open)
+    # Direct transit_path keeps OPEN_JAW_MARGIN behavior for held carry transfers
+    held_transit = transit_path([35.0, -10.0, 9.0, 41.0, 71.0, 52.0], home, 46.6, fps=30)
+    assert next(i for i, f in enumerate(held_transit) if f[5] < 52.0 - 1e-6) < next(i for i, f in enumerate(held_transit) if f[1] <= -26.0)
 
 
 def test_unreadable_state_and_holding_margin_guards():
@@ -507,3 +511,53 @@ def test_pr2_park_chunk_absorbs_transient_bus_errors() -> None:
     r3 = _new_park_runner()
     sent, ok = cpp.send_with_jaw_gate(r3, dict(zip(m.NAMES, REACH)), None, None, list(REACH))
     assert sent is None and ok is False and r3.human_hold_latched is True
+
+
+def test_peer_folded_stale_status_and_wait_session_arm_matching(tmp_path) -> None:
+    import cell_job_guards as guards
+    import cell_job_peer_health as ph
+    import cell_recovery_plan as crp
+
+    wd = tmp_path / "wd"
+    io_b, leases, health, cal = wd / "chunk-io-b", tmp_path / "leases", tmp_path / "health", tmp_path / "cal"
+    for d in (io_b, leases, health, cal):
+        d.mkdir(parents=True)
+    cal_doc = {j: {"id": 11 + i, "drive_mode": 0, "homing_offset": 0, "range_min": 0, "range_max": 4095}
+               for i, j in enumerate(ph.FOLLOWER_JOINTS)}
+    (cal / "arm_b_follower.json").write_text(json.dumps(cal_doc), encoding="utf-8")
+    raw_home = [2063, 773, 3134, 3106, 2964, 2002]
+    mh_doc = {"schema_version": "rosy.motor-health.v1", "owner_id": "arm_b", "status": "active", "observed_at": time.time(),
+              "motors": [{"id": 11 + i, "present_raw": raw_home[i], "torque_enabled": False, "fault": False, "hardware_error": 0} for i in range(6)]}
+    (health / "arm_b.json").write_text(json.dumps(mh_doc), encoding="utf-8")
+    kw = dict(session_lock_held_fn=lambda *_: False, read_json_fn=guards.read_json_dict, live_max_age_s=15.0,
+              incident_check_fn=lambda _: None, motor_health_dir=health, calibration_dir=cal)
+
+    # Fresh, missing-t, locked, or unhealthy motor-health st_row still fails closed when live.json is missing.
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH, "t": time.time()}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (io_b / "chunk-status.jsonl").write_text(json.dumps({"command": "interrupt", "state": REACH, "t": time.time() - 60.0}) + "\n", encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **{**kw, "session_lock_held_fn": lambda *_: True}) == "peer arm_b is not folded at home"
+    bad_mh = {**mh_doc, "motors": [{**mh_doc["motors"][0], "torque_enabled": True}, *mh_doc["motors"][1:]]}
+    (health / "arm_b.json").write_text(json.dumps(bad_mh), encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) == "peer arm_b is not folded at home"
+    (health / "arm_b.json").write_text(json.dumps(mh_doc), encoding="utf-8")
+    assert guards.check_peer_ab_folded("arm_a", wd, leases, wd, **kw) is None
+
+    # wait_session_json resolves all real owner signatures while rejecting cross-arm, unknown, and conflicting files.
+    sp = tmp_path / "session.json"
+    now_t = time.time()
+    for arm, doc, ok in (
+        ("arm_a", {"operating_profile": {"device_id": "arm_a", "instance_id": "omx_follower_arm"}, "torque_after": {"11": 0}}, True),
+        ("arm_b", {"operating_profile": {"instance_id": "arm_b_follower"}, "torque_after": {"11": 0}}, True),
+        ("arm_b", {"operating_profile": {"instance_id": "omx_follower_arm"}, "motor_health_owner": "omx_follower_arm", "chunks": {"io": "/tmp/chunk-io-b"}, "torque_after": {"11": 0}}, True),
+        ("arm_a", {"motor_health_owner": "arm_b_follower", "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"device_id": "arm_b"}, "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"instance_id": "omx_follower_arm"}, "motor_health_owner": "omx_follower_arm", "torque_after": {"11": 0}}, False),
+        ("arm_a", {"operating_profile": {"device_id": "arm_a"}, "chunks": {"io": "/tmp/chunk-io-b"}, "torque_after": {"11": 0}}, False),
+        ("arm_a", {"arm": "arm_c", "chunks": {"io": "/tmp/chunk-io-a"}, "torque_after": {"11": 0}}, False),
+    ):
+        sp.write_text(json.dumps(doc), encoding="utf-8")
+        got, why = crp.wait_session_json(sp, arm, now_t, lambda _s: (_ for _ in ()).throw(AssertionError("should not sleep")) if ok else None)
+        assert (got is not None and why is None) if ok else (got is None and why is not None)

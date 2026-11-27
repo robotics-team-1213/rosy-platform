@@ -6,7 +6,7 @@ register('./resolve-console-assets.mjs', import.meta.url);
 const {
   capabilityReason, chooseConvoyLeader, chooseLeader, estopCause, estopText, motionCommandReason, formationReason, leaderPathKind,
   junctionTurnRefusalText, noRobotServesGrid,
-} = await import('../../../../applications/fleet/web/motion-readiness.js');
+} = await import('../../../../applications/fleet/web/map/motion-readiness.js');
 
 test('Fleet client renders the nested junction-turn refusal and preserves other errors', async () => {
   const related = {code: 'TRIP_MODE_UNSUPPORTED', detail: {reason: 'JUNCTION_TURN_UNSUPPORTED'}};

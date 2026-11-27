@@ -80,7 +80,7 @@ def _finding(code: str, severity: str, text: str, *, target: Optional[dict] = No
 def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mapping],
               camera_ok: Optional[str], graph, zone_of: Mapping[str, str], body_radius_m: float,
               body_half_width_m: float, stopped_s: float = 0.0, anonymous_seen: bool = False,
-              config: GuideConfig = GuideConfig()) -> dict:
+              active_map_id: Optional[str] = None, config: GuideConfig = GuideConfig()) -> dict:
     """One robot's record. ``pose`` is a ``MapPose`` (or None); ``camera_ok`` the id of a Rosy Cam
     source reporting OK, or None; ``stopped_s`` how long it has not moved (the service keeps it);
     ``anonymous_seen`` whether Rosy Cam shows a blob no robot is matched to (D-596: then the LED
@@ -98,7 +98,9 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
                           "anchor_source": getattr(pose, "anchor_source", None),
                           "anchor_age_s": getattr(pose, "anchor_age_s", None)}
     if not online:
-        if placed and graph is not None and getattr(pose, "map_id", None) == "world_261026":
+        pose_map = getattr(pose, "map_id", None)
+        same_map = (pose_map in (None, active_map_id) if active_map_id is not None else pose_map == "world_261026")
+        if placed and graph is not None and same_map:
             record["lane"] = lane_context(graph, pose.x, pose.y, pose.yaw, zone_of, config)
         return record          # the roster already says "연결 끊김"; a stale pose stays drawn faded
     status = (tracking_row or {}).get("status")

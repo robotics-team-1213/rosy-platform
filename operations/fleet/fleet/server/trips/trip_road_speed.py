@@ -102,9 +102,10 @@ class RoadSpeed:
                     ahead, away = loop.project(peer.x, peer.y)
                     if away > ON_LOOP_M:
                         continue
-                    stamp = min(stamp, peer.odom_stamp) if stamp is not None else None
                     gap = loop.gap(ahead, pos)
                     minimum = getattr(formation, "min_gap_m", None) or MIN_GAP_M
+                    if gap < max(cap, 0.25) * GRANT_S + minimum + 0.5:
+                        stamp = min(stamp, peer.odom_stamp) if stamp is not None else None
                     # No observed forward velocity is promised by a parked or braking leader.
                     allowed = min(follower_speed(0.0, gap, cap, target=minimum),
                                   max(0.0, (gap - minimum) / GRANT_S))

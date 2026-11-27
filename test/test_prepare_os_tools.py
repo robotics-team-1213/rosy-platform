@@ -172,6 +172,7 @@ def test_existing_extractor_is_verified_and_reused_without_execution(bootstrap, 
 
 def test_default_bootstrap_prepares_only_pinned_public_inputs(bootstrap, tmp_path, monkeypatch):
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
+    monkeypatch.delenv('ROSY_OS_TOOLS_CACHE', raising=False)
     monkeypatch.setattr(bootstrap, '_require_windows', lambda: None)
     directory, inputs, extraction = [], [], []
     monkeypatch.setattr(bootstrap, '_ensure_directory', directory.append)
@@ -187,3 +188,11 @@ def test_default_bootstrap_prepares_only_pinned_public_inputs(bootstrap, tmp_pat
     for local, (name, size, digest) in cloud['cloud'].items():
         actual = next(value for value, target in inputs if target.name == local)
         assert (actual['url'], actual['size_bytes'], actual['sha256']) == (cloud['cloud_base'] + name, size, digest)
+
+
+def test_default_cache_follows_rosy_os_tools_cache(bootstrap, tmp_path, monkeypatch):
+    monkeypatch.setenv('ROSY_OS_TOOLS_CACHE', str(tmp_path / 'd-cache'))
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'appdata'))
+    assert bootstrap.vm.default_cache() == tmp_path / 'd-cache'
+    monkeypatch.delenv('ROSY_OS_TOOLS_CACHE')
+    assert bootstrap.vm.default_cache() == tmp_path / 'appdata/Rosy/os-tools'

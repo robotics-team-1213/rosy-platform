@@ -142,7 +142,7 @@ def check_peer_ab_folded(
     lib_path = _arm_library_path(workdir, peer)
     lib = read_json_fn(lib_path) if lib_path else None  # the peer's own fold poses: no coarse judgement
     peer_lease = True if (lease is None and lease_path.is_file()) else bool(lease and cell_arm_lease.live(lease))
-    live_err = None
+    live_err, st_row = None, None
     health_dir = motor_health_dir if motor_health_dir is not None else (Path.home() / ".local" / "state" / "rosy" / "motor-health")
     if live is not None:
         if live.get("human_hold_latched") and not _stale_latch_superseded(peer, live, locked=peer_locked, leased=peer_lease, max_age_s=live_max_age_s, health_dir=health_dir, read_json_fn=read_json_fn, calibration_dir=calibration_dir):
@@ -154,7 +154,7 @@ def check_peer_ab_folded(
     elif (st_row := _latest_status_row(io_dir / "chunk-status.jsonl")) is not None and _live_folded(st_row, lib) is False:
         live_err = f"peer {peer} is not folded at home"
     if live_err is not None:
-        stale_live = _is_stale_row(live, live_max_age_s) if live is not None else False
+        stale_live = _is_stale_row(live, live_max_age_s) if live is not None else (st_row is not None and _is_stale_row(st_row, live_max_age_s))
         if not (not peer_locked and not peer_lease and stale_live
                 and _passive_motor_health_folded(
                     peer, health_dir, max_age_s=live_max_age_s,

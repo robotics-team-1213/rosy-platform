@@ -411,3 +411,30 @@ def test_pipeline_cell_action_maps_charge_c3(tmp_path, monkeypatch):
     assert res.status_code == 200
     task = res.json()["pinky_task"]
     assert (task["place_id"], task["target_place"], task["status"]) == ("C3", "C3", "QUEUED")
+
+
+def test_offline_sighted_robots_occupy_their_bays_and_leave_empty_bays_free():
+    bays = ChargeBays()
+    fleet = [
+        RobotView("rosy_45", True, 75.0, 8.2, (-0.97, -0.50), False, 0.0),
+        RobotView("rosy_42", False, None, None, None, sighted_pose=(BAYS[1].x + 0.01, BAYS[1].y)),
+        RobotView("rosy_46", False, None, None, None, sighted_pose=(BAYS[2].x - 0.01, BAYS[2].y)),
+    ]
+    bays.observe(0.0, fleet, BAYS)
+    plan = bays.plan(fleet, BAYS)
+    assert [(r["bay"], r["state"], r["robot_id"]) for r in plan["bays"]] == [
+        ("C1", "free", None),
+        ("C2", "planned", "rosy_42"),
+        ("C3", "planned", "rosy_46"),
+    ]
+    stale_fleet = [
+        fleet[0],
+        RobotView("rosy_42", False, None, None, None, sighted_pose=None),
+        fleet[2],
+    ]
+    stale_plan = bays.plan(stale_fleet, BAYS)
+    assert [(r["bay"], r["state"], r["robot_id"]) for r in stale_plan["bays"]] == [
+        ("C1", "unknown", None),
+        ("C2", "unknown", None),
+        ("C3", "planned", "rosy_46"),
+    ]

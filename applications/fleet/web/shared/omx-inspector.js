@@ -1,4 +1,5 @@
 // Shared pure-DOM OMX right inspector used by both Console charge-bays and Cell real2sim.
+import { setOffBy } from "/common/cause-line.js";
 import { node, uiTag } from "/common/control-dom.js";
 
 const TIER_CHOICES = [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]];
@@ -58,6 +59,7 @@ export function renderOmxInspector(container, {
   tagStatus = "neutral",
   disclosure = null,
   runButtonLabel = null,
+  quickDispatchReason = "",
   actionChoices = null,
   actionsClass = "omx-inspector-actions",
   onSelectTarget = () => {},
@@ -183,14 +185,18 @@ export function renderOmxInspector(container, {
   runBtn.setAttribute("kind", "primary");
   runBtn.setAttribute("type", "button");
   runBtn.setAttribute("data-work-read", "");
-  runBtn.addEventListener("click", () => onQuickDispatch({
-    targetCell,
-    targetArm,
-    tier: Number(tier.select.value || 1),
-    displacedTo: disp.select.value || null,
-    robotId: active.robot_id || undefined,
-    button: runBtn,
-  }));
+  if (quickDispatchReason) setOffBy(runBtn, quickDispatchReason);
+  runBtn.addEventListener("click", () => {
+    if (runBtn.hasAttribute("disabled")) return;
+    return onQuickDispatch({
+      targetCell,
+      targetArm,
+      tier: Number(tier.select.value || 1),
+      displacedTo: disp.select.value || null,
+      robotId: active.robot_id || undefined,
+      button: runBtn,
+    });
+  });
   const quickDispatchBar = node("div", "", "omx-inspector-quick-dispatch");
   quickDispatchBar.append(tier.field, disp.field, runBtn);
 

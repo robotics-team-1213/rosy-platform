@@ -208,8 +208,7 @@ def main(argv=None) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")
-    if not config.get("work_dir"):
-        config["work_dir"] = str(args.config.parent)
+    config["work_dir"] = config.get("work_dir") or str(args.config.parent)
     cfg_kind = (config.get("episodes") or {}).get("source_kind")
     if args.source_kind or cfg_kind:
         import cell_collect_plan
@@ -290,11 +289,11 @@ def main(argv=None) -> int:
             config["params"] = prm.load(config.get("params_path"))["values"]
             config.pop("_commissioning", None)
             if not args.dry_run:
-                proof = stop_proof.session_proof(cell, run_id, args.arm_id or str(config.get("arm_id") or "arm"))
+                proof = stop_proof.session_proof(cell, run_id, arm_id := args.arm_id or str(config.get("arm_id") or "arm"))
                 log({"stop_proof": proof})
                 if not proof["ok"]: raise SystemExit(f"no stop-capability proof ({proof['code']}): {proof['reason']}")
                 config["_commissioning"] = {"stop_proof": proof}
-                authorize = Authorization(config)
+                if (authorize := Authorization(config)) is not None: authorize.bind_proof(cell, run_id, arm_id, log)
             library = json.loads(args.library.read_text(encoding="utf-8"))
             source = args.site or "belt"
             rim_z_m = source_rim_z(config, source, library)

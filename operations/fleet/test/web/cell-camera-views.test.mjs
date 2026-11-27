@@ -7,7 +7,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 // 셀 S(arm_s·S3)에는 측면 카메라가 없고, Pinky 도킹은 천장 Cam ROI로 위에서 본다(D-136:
 // Fleet은 영상 바이트를 중계하지 않는다). 이 회귀 시험은 어떤 셀 S 카메라 목록에도 side가
 // 없고 도킹 뷰가 /side_camera를 쓰지 않음을 지킨다.
-const {chargeBayRows, inspectorTargetsFromRows} = await import("../../../../applications/fleet/web/charge-bays-model.js");
+const {chargeBayRows, inspectorTargetsFromRows} = await import("../../../../applications/fleet/web/cell/charge-bays-model.js");
 const {
   visualCardSpecs, inspectorSpecs, CAMERA_WALL_VIEWS, S3_VIEWS, S5_VIEWS,
 } = await import("../../../../applications/fleet/web/cell/cell-real2sim-specs.js");
