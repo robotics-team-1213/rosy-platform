@@ -344,6 +344,11 @@ def test_bridge_schemas_match_cell_job_specs():
     st_props = set(br.TOOL_MAP["learning_stage_bundle"]["inputSchema"]["properties"].keys())
     assert set(stage["params"]) <= st_props
 
+    push = cjs.JOBS["push_dry_run"]
+    push_schema = br.TOOL_MAP["cell_push_dry_run"]["inputSchema"]
+    assert set(push_schema["required"]) == set(push["params"])
+    assert set(push_schema["properties"]) == (set(push["params"]) | set(push["optional"])) - {"operator", "proposer"}
+
     area = cjs.AREA_JOBS["area_xyz_pick"]
     area_schema = br.TOOL_MAP["cell_area_dry_run"]["inputSchema"]
     assert set(area_schema["required"]) == set(area["params"].keys())
