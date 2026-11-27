@@ -90,4 +90,10 @@
 - 조치: `systemctl --user enable --now rosy-learning-center-update.timer`로 복구하고 1회 실행으로 검증했다(프리즈 게이트 통과, 센터가 꺼져 있어 설계대로 `idle`/`center_not_running`). 다른 전 표면(로봇·현장 PC 스택/도구·OMX 셀 도구·셀 카메라·AI PC 상황·모델 PC review/model-code)의 타이머는 모두 활성 상태였다.
 - 규칙: 호스트 사용자 유닛 설치는 `systemctl --user enable --now <unit>.timer`까지가 설치다. 또 업데이터 점검은 `systemctl --user list-timers --all 'rosy-*'`와 `~/.config/systemd/user/timers.target.wants/`까지 봐야 한다. 시스템 타이머(`systemctl list-timers`)만 보면 사용자 유닛 업데이터가 전부 빠져 이번처럼 "자동업데이트가 없다"는 오탐이 난다(모델 PC·AI PC에서 반복 확인).
 
+### 개정 2026-11-28 (멈춤 알림)
+
+- 셀 장치 업데이터가 11-27 밤 `deferred observer_stale`로 몇 시간 멈췄는데 아무도 몰랐다. `/api/fleet/updates`의 해당 채널에 `alert`를 더하고, 콘솔은 이를 기존 알림 창(D-632)의 `주의` 행 한 건으로 그린다. 새 서버 알림 API, 새 서비스, 셀 PC 변경은 없다.
+- 조건은 마지막 정상 단계(`switched`·`up_to_date`) 뒤 3600초(10분 타이머 6회, `ROSY_FLEET_UPDATE_ALERT_AFTER_S`) 이상이다. `deferred`·`transient`·`rate_limited` 연속과 로그가 끊긴 업데이터를 한 시간 조건이 함께 덮는다. 릴리스별 `deferred_s`는 main이 움직일 때마다 0이 되므로 쓰지 않는다. `transient (stale)`은 셀이 이미 포인터 나이 한도를 기다렸으므로 바로 알린다.
+- 3단계의 "사유는 `/api/fleet/hosts`에만"은 이 `alert`에 한해 바뀐다: 운영자 권한의 `/api/fleet/updates`에는 사유 코드가 붙고, viewer에는 붙지 않는다.
+
 **References:** D-805, D-852, D-530, D-441, D-446, D-454, D-270, D-757, D-785.

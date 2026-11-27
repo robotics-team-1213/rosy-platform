@@ -919,6 +919,66 @@ def test_update_summary_names_each_channel_ok_off_or_stuck_and_never_guesses_a_s
     assert "work_lock_busy" not in json.dumps(hosts)  # reasons are for operators (/api/fleet/hosts)
 
 
+DEVICES = "rosy-omx-devices-autoupdate.service"
+
+
+def _alert(*updaters, gate="open", reasons=True, now=NOW):
+    summary = update_summary({"arm-cell": {"updates": _report(*updaters, gate=gate)}}, now, reasons=reasons)
+    return [c.get("alert") for c in summary["hosts"][0]["channels"]]
+
+
+def test_a_cell_updater_without_a_healthy_step_for_an_hour_alerts_and_clears_when_it_switches(monkeypatch):
+    monkeypatch.delenv("ROSY_FLEET_UPDATE_ALERT_AFTER_S", raising=False)
+    stuck = _updater(DEVICES, healthy=NOW - 3600, step="deferred", reason="observer_stale")
+    assert _alert(stuck) == [{"age_s": 3600, "reason": "observer_stale"}]
+    assert _alert(stuck, reasons=False) == [{"age_s": 3600}]
+    # one bad run, or a streak shorter than the bound, stays quiet
+    for step, reason in (("rate_limited", None), ("transient", "unreachable"), ("deferred", "session_running")):
+        assert _alert(_updater(DEVICES, healthy=NOW - 3599, step=step, reason=reason)) == [None]
+    # a streak of them past the bound alerts with the step when there is no reason code
+    assert _alert(_updater(DEVICES, healthy=NOW - 7200, step="rate_limited")) == [{"age_s": 7200, "reason": "rate_limited"}]
+    assert _alert(_updater(DEVICES, healthy=None, step="deferred", reason="observer_stale"))[0]["age_s"] is None
+    # an updater that stopped logging after a healthy step is stalled too
+    assert _alert(_updater(DEVICES, healthy=NOW - 7200))[0]["age_s"] == 7200
+    assert _alert(_updater(DEVICES, healthy=NOW - 60, step="switched")) == [None]
+    # the age is judged at the report's own time: an old report does not age into an alert
+    assert _alert(_updater(DEVICES, healthy=NOW - 60), now=NOW + 7200) == [None]
+
+
+def test_a_stale_green_main_pointer_alerts_at_once():
+    assert _alert(_updater(DEVICES, healthy=NOW - 600, step="transient", reason="stale")) == [
+        {"age_s": 600, "reason": "stale"}]
+
+
+def test_update_alerts_skip_off_frozen_and_unwatched_channels_and_take_the_bound_from_the_environment(monkeypatch):
+    old = NOW - 7200
+    assert _alert(_updater(DEVICES, healthy=old, timer="disabled")) == [None]
+    assert _alert(_updater(DEVICES, healthy=old), gate="frozen") == [None]
+    assert _alert(_updater("rosy-model-code-update.service", healthy=old, step="held")) == [None]
+    monkeypatch.setenv("ROSY_FLEET_UPDATE_ALERT_AFTER_S", "10800")
+    assert _alert(_updater(DEVICES, healthy=old)) == [None]
+    for bad in ("soon", "0", "-1", "nan", "inf"):
+        monkeypatch.setenv("ROSY_FLEET_UPDATE_ALERT_AFTER_S", bad)
+        assert _alert(_updater(DEVICES, healthy=old)) != [None], bad
+
+
+def test_only_an_operator_reads_the_stall_reason(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    guard = tmp_path / "guard.json"
+    guard.write_text(json.dumps({"arm-cell": {"updates": _report(
+        _updater(DEVICES, healthy=NOW - 7200, step="deferred", reason="observer_stale"))}}), encoding="utf-8")
+    monkeypatch.setattr(routes, "GUARD_STATUS", guard)
+    for role, expected in (("viewer", None), ("operator", "observer_stale")):
+        def principal(role=role):
+            return SimpleNamespace(principal_id=role, permits_site=lambda _perm, roles=None: role == "operator")
+        app = FastAPI()
+        routes.install_host_control_routes(app, require_operator=principal, require_viewer=principal,
+                                           require_named_operator=principal, helper=UnavailableHostHelper())
+        alert = TestClient(app).get("/api/fleet/updates").json()["hosts"][0]["channels"][0]["alert"]
+        assert alert.get("reason") == expected
+
+
 def test_every_signed_in_role_reads_the_update_summary(tmp_path, monkeypatch):
     import fleet.server.host_control_routes as routes
 

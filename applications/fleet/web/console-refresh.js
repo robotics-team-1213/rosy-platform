@@ -5,6 +5,7 @@ import { patchAttr, patchData, patchHidden, patchText } from "/common/control-do
 import { namedOperatorReason, isOperator} from "/console/assets/authorization.js";
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
+import { createUpdateAlertReader } from "/console/assets/update-alerts.js";
 
 export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi, log, render, renderPoll = render, confirmedAction,
   dispatchGate, resetRobotApps, disarmGoal, openCard }) {
@@ -143,6 +144,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     view.cursor = null;
     document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close("cancel"));
   });
+  const refreshUpdateAlerts = createUpdateAlertReader(call, view);
+
   async function refreshState() {
     const life = pageScope.capture();
     life.check();
@@ -175,6 +178,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       }
       view.signals = snapshot.signals || {};
       showFleet(snapshot.fleet, snapshot.robots);
+      void refreshUpdateAlerts(life);  // not awaited: robot state never waits on it; the next render shows it
       const urgent = !wasLoaded || wasUnavail || Boolean(requestedRobotFocus) || view.robots.length !== prev.size
         || view.robots.some((r) => Boolean(r.online) !== prev.get(r.robot_id)?.[0] || r.state?.safety?.estop !== prev.get(r.robot_id)?.[2]
           || (view.calmPower && view.calmPower.read(r, { receivedAtMs: nowMs, nowMs, stateUnavailable: false }).percent !== prev.get(r.robot_id)?.[1]));

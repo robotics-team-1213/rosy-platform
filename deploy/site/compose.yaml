@@ -111,6 +111,8 @@ services:
       ROSY_FLEET_MEDIA_CONFIG: "${ROSY_FLEET_MEDIA_CONFIG:-}"
       ROSY_LEARNING_APPS_CONFIG: "${ROSY_LEARNING_APPS_CONFIG:-}"
       # D-1057 cell pipeline: owner principals and the cell_ab release switch; empty keeps both off.
+      # D-871: seconds the cell devices updater may lack a healthy step before the console queue says so; empty is 3600.
+      ROSY_FLEET_UPDATE_ALERT_AFTER_S: "${ROSY_FLEET_UPDATE_ALERT_AFTER_S:-}"
       ROSY_FLEET_CELL_OWNERS: "${ROSY_FLEET_CELL_OWNERS:-}"
       ROSY_FLEET_CELL_AB_RELEASE_ENABLED: "${ROSY_FLEET_CELL_AB_RELEASE_ENABLED:-}"
       ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH: "${ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH:-}"

@@ -57,6 +57,7 @@ SHARED = {
     "route-attention.js",
     "trip-preview-summary.js",  # Read-only preview distance from the plan pose to the parking staging place.
     "drawing-errors.js",
+    "host-health.js",  # D-871: update-channel reading shared by PC 정비 and the console queue's stalled-updater row
 }
 
 OWN = {
@@ -65,6 +66,7 @@ OWN = {
         "trip-geometry.js", "trip-receipts.js",
         "assistant.js", "assistant-voice.js", "assistant-command.js", "assistant-pick-place.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
+        "update-alerts.js",  # D-871: stalled-updater rows in the console queue
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
         "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
