@@ -150,7 +150,7 @@ def test_hazard_and_authority_stops_end_at_once(reason, detail):
     assert (live.view["state"], live.view["reason"]) == ("stopped", reason) and "recovery" not in live.view["detail"]
 
 
-@pytest.mark.parametrize("setup", ["estop", "estop_unknown", "pause", "parking", "camera", "lane_trip", "cancel_unacked",
+@pytest.mark.parametrize("setup", ["estop", "estop_unknown", "pause", "parking", "camera", "cancel_unacked",
                                    "map_changed"])
 def test_out_of_scope_or_unproven_stops_end_as_before(setup):
     robot, clock, store, *_rest, runner, live = _trip()
@@ -164,8 +164,6 @@ def test_out_of_scope_or_unproven_stops_end_as_before(setup):
         live.view["detail"]["parking_handoff"] = {"phase": "approaching"}
     elif setup == "camera":
         live.view["detail"]["camera_lane_fallback"] = {"phase": "running", "index": 0}
-    elif setup == "lane_trip":
-        live.request["drive_mode"] = "lane"
     elif setup == "cancel_unacked":
         async def no_ack(_rid):
             return {"ok": False}
@@ -174,6 +172,12 @@ def test_out_of_scope_or_unproven_stops_end_as_before(setup):
         store.active = lambda: None
     run(runner._stop(live, "stopped", "navigation", {"navigation": "FAILED"}))
     assert (live.view["state"], live.view["reason"]) == ("stopped", "navigation") and "recovery" not in live.view["detail"]
+
+
+def test_a_trip_not_driven_by_nav2_is_out_of_scope():
+    robot, clock, *_rest, runner, live = _trip()
+    live.request["drive_mode"] = "lane"
+    assert run(rec.recover_instead(runner, live, "navigation", {})) is False and "recovery" not in live.view["detail"]
 
 
 def test_a_charge_bay_leg_and_a_strict_named_stop_are_out_of_scope(monkeypatch):
