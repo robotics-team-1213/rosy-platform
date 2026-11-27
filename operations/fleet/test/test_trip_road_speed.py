@@ -13,7 +13,7 @@ def test_lease_409_after_core_arrived_is_arrival_not_failure():
         "edges": [{"id": "AB", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "direction": "one_way",
                    "width_m": .1, "speed_cap_mps": .15}]})
     pose = NS(x=.1, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
-    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
+    live = NS(request={}, repeat=False, open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
               route_rev=0, trim_m=0., segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=1.)],
               progress=lambda idx, s: s)
     state = {"navigation": "ARRIVED", "goal": None, "velocity": {"linear": 0.0, "angular": 0.0},
@@ -78,7 +78,7 @@ def test_ring_leader_gap_common_frame_and_expiry_bound_the_grant():
                                   ("C","D",[1,1],[0,1]), ("D","A",[0,1],[0,0])]]})
     pose = NS(x=.1,y=0.,map_id="road",state="LOCALIZED",odom_stamp=9.8)
     peer = NS(x=.35,y=0.,map_id="road",state="LOCALIZED",odom_stamp=9.9)
-    live = NS(open=True, active_route={"road_speed_owner":"run"}, view={"robot_id":"first","detail":{}},
+    live = NS(request={}, repeat=False, open=True, active_route={"road_speed_owner":"run"}, view={"robot_id":"first","detail":{}},
               route_rev=0, trim_m=0., segments=[dict(edge_id="AB",forward=True,s_from=0.,s_to=1.)],
               progress=lambda idx,s:s)
     calls = []
@@ -125,7 +125,7 @@ def test_road_speed_owner_changed_after_arrived_is_rescued():
         "edges": [{"id": "AB", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "direction": "one_way",
                    "width_m": .1, "speed_cap_mps": .15}]})
     pose = NS(x=.1, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
-    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
+    live = NS(request={}, repeat=False, open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
               route_rev=0, trim_m=0., segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=1.)],
               progress=lambda idx, s: s)
     state = {"navigation": "ARRIVED", "goal": None, "velocity": {"linear": 0.005, "angular": 0.01},
@@ -152,7 +152,7 @@ def test_trailing_peer_stale_odom_stamp_does_not_shrink_leader_grant():
                                      ("C", "D", [2, 2], [0, 2]), ("D", "A", [0, 2], [0, 0])]]})
     pose = NS(x=1.5, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
     trailing_peer = NS(x=0.2, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.0)  # gap ahead around loop is 6.7 m
-    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
+    live = NS(request={}, repeat=False, open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
               route_rev=0, trim_m=0., segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=2.)],
               progress=lambda idx, s: s)
     grants = []

@@ -5802,3 +5802,11 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-28 · uncommitted · Tight-lane speed steps
+
+- 변경: speed_table에 stop_place_ids 추가, 실주행 트립(비반복)은 도착 정지 장소와 slow 장소만 0.05 m/s 띠를 유지(통과 S4 등은 0.15 유지). lane_realign PERSIST_TICKS 2→4, COOLDOWN_S 3→8, REALIGN_SLOW_MPS 0.05→0.08(곡선 상한과 같아 새 속도 단차 없음)
+- 증거: 현장 2.5 grant 변화/m로 Nav2 lookahead 붕괴 관측(패널 D:/DevTemp/nav2-passed-goals/panel-tight r1/r2); 원격 pytest 해당 3개 파일
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
