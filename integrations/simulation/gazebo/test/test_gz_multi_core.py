@@ -98,15 +98,15 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     # SmacPlanner2D is orientationless.  Give both costmaps the padded
     # circumscribed radius so a square robot cannot enter a corner that only
     # fits at yaw=0 and then become "start occupied" while turning.
-    padded_radius = (2 * .06 ** 2) ** .5 + .005
+    padded_radius = (2 * .057 ** 2) ** .5 + .005
     global_params = params["global_costmap"]["global_costmap"]["ros__parameters"]
     assert "footprint" not in global_params
     assert global_params["robot_radius"] == pytest.approx(padded_radius)
     assert global_params["footprint_padding"] == pytest.approx(0.)
     # D-395 R4: the local costmap is RPP's collision checker, not the planner's. The
-    # padded circle (0.100 m) plus 5 cm cells keeps the device footprint for local RPP.
+    # padded circle (0.086 m) plus 5 cm cells keeps the device footprint for local RPP.
     local_params = params["local_costmap"]["local_costmap"]["ros__parameters"]
-    assert local_params["footprint"] == '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+    assert local_params["footprint"] == '[[0.057, 0.057], [0.057, -0.057], [-0.057, -0.057], [-0.057, 0.057]]'
     assert "robot_radius" not in local_params
     for costmap_params in (global_params, local_params):
         assert costmap_params["inflation_layer"]["inflation_radius"] == pytest.approx(.08)

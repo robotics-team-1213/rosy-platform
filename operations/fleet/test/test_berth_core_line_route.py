@@ -60,8 +60,8 @@ def test_selected_bay_preview_uses_its_own_spine_and_owner():
         asyncio.run(owner.target("rosy_42", rear_bay(graph, "C2")))
     assert err.value.code == "CHARGE_BAY_TARGET_NOT_TAUGHT"
 
-@pytest.mark.parametrize(("staging", "bay", "dock"), [("P2", "C2", "bay_c2"), ("P3", "C3", "bay_c3")])
-def test_stationary_staging_starts_only_its_taught_bay_and_waits_for_exact_docked_run(monkeypatch, staging, bay, dock):
+@pytest.mark.parametrize(("staging", "bay", "dock", "seen"), [("P2", "C2", "bay_c2", False), ("P3", "C3", "bay_c3", True)])
+def test_stationary_staging_starts_only_its_taught_bay_and_waits_for_exact_docked_run(monkeypatch, staging, bay, dock, seen):
     import asyncio
     from uuid import uuid4
     from datetime import datetime, timezone
@@ -97,8 +97,11 @@ def test_stationary_staging_starts_only_its_taught_bay_and_waits_for_exact_docke
                         "actuating_callback": False, "lease_active": False, "transport_generation": 1,
                         "quiescent": True, "observed_at": datetime.now(timezone.utc).isoformat()}}
     async def pose(*args):
-        return SimpleNamespace(x=sx, y=sy, state="LOCALIZED")
-    runner = SimpleNamespace(_progress_pose=pose, config=SimpleNamespace(arrive_free_m=.15),
+        return SimpleNamespace(x=sx, y=sy, state="LOCALIZED", map_id="site")
+    async def map_pose(_):
+        return SimpleNamespace(x=sx, y=sy, state="LOCALIZED", map_id="site", anchor_source="track", anchor_age_s=.4,
+                               camera_residual_m=.02) if seen else None
+    runner = SimpleNamespace(_progress_pose=pose, map_pose=map_pose, config=SimpleNamespace(arrive_free_m=.15),
                              _check_human_hold=lambda: None, _graph_for=lambda _: graph, _save=lambda _: None,
                              _clock=lambda: clock[0])
     park = dict(rear_bay(graph, bay), phase="staging_confirmed")
@@ -125,11 +128,27 @@ def test_stationary_staging_starts_only_its_taught_bay_and_waits_for_exact_docke
     blocked = False
     clock[0] += 2
     asyncio.run(port.step(runner, live))
-    assert calls == [("/api/v1/docking/dock", {"dock": dock, "correlation_id": "plan-id",
-                     "expected_boot_id": boot, "expected_owner_generation": 8})]
+    body = {"dock": dock, "correlation_id": "plan-id", "expected_boot_id": boot, "expected_owner_generation": 8}
+    if seen:   # the ceiling camera's fresh track reaches CORE as evidence, with CORE's own map id
+        body["site_pose_evidence"] = {"anchor_source": "track", "anchor_age_s": .4, "camera_residual_m": .02, "map_id": "map42",
+                                      "at": calls[0][1]["site_pose_evidence"]["at"]}
+    assert calls == [("/api/v1/docking/dock", body)]
     assert park["phase"] == "docking" and live.view["state"] == "running"
     asyncio.run(port.step(runner, live))
     assert live.view["state"] == "arrived" and park["phase"] == "docked" and len(calls) == 1
+
+def test_site_pose_evidence_only_from_a_fresh_independent_camera_anchor():
+    from fleet.server.rear_bay_return import site_pose_evidence
+    bound = SimpleNamespace(x=1., y=2., map_id="site")
+    cam = dict(x=1.03, y=2., state="LOCALIZED", map_id="site", anchor_source="sighting", anchor_age_s=3., camera_residual_m=.05)
+    ok = site_pose_evidence(SimpleNamespace(**cam), bound, "grid")
+    assert ok["anchor_source"] == "sighting" and ok["map_id"] == "grid" and ok["anchor_age_s"] == 3.
+    for bad in (dict(anchor_source="operator_pin"), dict(anchor_source="auto_locate"), dict(anchor_source=None),
+                dict(anchor_age_s=10.1), dict(anchor_age_s=None), dict(camera_residual_m=None), dict(camera_residual_m=.081),
+                dict(state="DEGRADED"), dict(map_id="other"), dict(x=1.2)):   # x=1.2: camera and SLAM disagree
+        assert site_pose_evidence(SimpleNamespace(**{**cam, **bad}), bound, "grid") is None, bad
+    assert site_pose_evidence(None, bound, "grid") is None and site_pose_evidence(SimpleNamespace(**cam), bound, None) is None
+
 
 def test_rear_bay_checks_traffic_again_at_the_transport():
     import asyncio

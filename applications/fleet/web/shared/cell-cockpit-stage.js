@@ -12,25 +12,23 @@ import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { syncCamRoiOverlay } from "/console/assets/cell-cam-roi.js";
 import { syncCamObjectsOverlay } from "/console/assets/cell-cam-objects.js";
-import {
-  JOINT_SHORT,
-  canonicalArmId,
-  isArmAttentionOrLive,
-  normalizeWorkcellObservations,
-  obsSignature,
-} from "/console/assets/cell-obs-model.js";
+import { createCellObjectStager } from "/console/assets/arm-cell-controls.js";
+import { JOINT_SHORT, canonicalArmId, isArmAttentionOrLive, normalizeWorkcellObservations, obsSignature } from "/console/assets/cell-obs-model.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
 
 export { isArmAttentionOrLive, canonicalArmId, normalizeWorkcellObservations };
 
 /** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
-function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = true, cellObjects = null }) {
+function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = true, cellObjects = null, stager = null }) {
   const imgRef = useRef(null), statusRef = useRef(null), standbyRef = useRef(null);
   useLayoutEffect(() => { frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label); }, [cam.source_id, cam.label, frames]);
   useLayoutEffect(() => { frames.repaint?.({ source: cam.source_id }); }, [liveOn, cam.source_id, frames]);
   useLayoutEffect(() => { syncCamRoiOverlay(imgRef.current?.parentElement, cam, cameraRois, showRoi, Boolean(imgRef.current?.classList.contains("focused"))); }, [cam.source_id, cam.role, cam.label, cameraRois, showRoi]);
-  useLayoutEffect(() => { syncCamObjectsOverlay(imgRef.current?.parentElement, cam, cellObjects, { zoomed: Boolean(imgRef.current?.classList.contains("focused")) }); }, [cam.source_id, cam.role, cam.label, cellObjects]);
+  useLayoutEffect(() => {
+    const zoomed = Boolean(imgRef.current?.classList.contains("focused"));
+    syncCamObjectsOverlay(imgRef.current?.parentElement, cam, cellObjects, stager ? stager.overlayOpts(cam, zoomed) : { zoomed });
+  }, [cam.source_id, cam.role, cam.label, cellObjects, stager?.sig(cellObjects)]);
   const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); for (const c of [".omx-cam-roi-overlay", ".omx-cam-objects-overlay"]) img.parentElement?.querySelector(c)?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
   const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); applyZoom(!img.classList.contains("focused")); };
   const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") applyZoom(false); };
@@ -71,22 +69,14 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
 }
 
 export function createCellCockpitStage({
-  scope,
-  call,
-  view,
-  auth,
-  selection,
-  contextHost = null,
-  isOperator = () => false,
-  namedReason = () => "",
-  onChanged,
-  onVisionSample,
-  onOpenBlueprint = null,
+  scope, call, view, auth, selection, contextHost = null, objectHighlight = null, confirmedAction = null, log = null,
+  isOperator = () => false, namedReason = () => "", onChanged, onVisionSample, onOpenBlueprint = null,
 }) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
   const camStates = new Map();
   let renderingStage = false;
   let notifyQueued = false;
+  const stager = createCellObjectStager({ scope, call, auth, objectHighlight, confirmedAction, isOperator, namedReason, log, onChange: () => { lastStageSig = ""; render(); }, onDispatched: () => { gate.reset(); void refresh(); } });
   const frames = createCellFrameFeed({
     call,
     scope,
@@ -247,7 +237,7 @@ export function createCellCockpitStage({
     const visibleArms = showAllArms ? arms : activeArms;
     const stageSig = JSON.stringify([
       unitId, parentText, revText, statText, liveStatus, liveText,
-      view.fleet?.name === "샘플 현장", liveOn, showRoi, Boolean(view.sitePointsCameras), view.cellObjects?.observed_at ?? null, selectedId, Boolean(auth.locked),
+      view.fleet?.name === "샘플 현장", liveOn, showRoi, Boolean(view.sitePointsCameras), stager.sig(view.cellObjects), selectedId, Boolean(auth.locked),
       showAllCams, showAllArms, activeCams.map((c) => c.source_id), camDiag, obsSignature(obs),
     ]);
     if (stageSig === lastStageSig) return;
@@ -292,9 +282,10 @@ export function createCellCockpitStage({
         <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
           ${cams.length
             ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn}
-                cameraRois=${view.sitePointsCameras || null} showRoi=${showRoi} cellObjects=${view.cellObjects || null} hidden=${!showAllCams && !isCamActive(cam)} />`)
+                cameraRois=${view.sitePointsCameras || null} showRoi=${showRoi} cellObjects=${view.cellObjects || null} stager=${stager} hidden=${!showAllCams && activeCams.length > 0 && !isCamActive(cam)} />`)
             : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
         </div>
+        <div class="cell-stage-obj-host" />
         ${arms.length && idleArmCount > 0
           ? html`<div class="cell-stage-standby">
               <p class="hint">
@@ -315,6 +306,7 @@ export function createCellCockpitStage({
             : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
         </div>
       `, section);
+      stager.renderStagingBar(section.querySelector(".cell-stage-obj-host"), cams, view.cellObjects);
     } finally {
       renderingStage = false;
     }
@@ -360,7 +352,7 @@ export function createCellCockpitStage({
       const nextObs = normalizeWorkcellObservations(payload, Date.now());
       view.workcellObs = nextObs;
       for (const arm of nextObs.arms) mhStateFor(arm.id).accept(arm.motorHealth, { receivedAtMs: nextObs.receivedAtMs });
-      const nextSig = obsSignature(nextObs);
+      const nextSig = `${obsSignature(nextObs)}|${JSON.stringify(stager.sig(view.cellObjects))}`;
       if (!notifiedOnce || nextSig !== lastObsSig) {
         lastObsSig = nextSig;
         notifiedOnce = true;

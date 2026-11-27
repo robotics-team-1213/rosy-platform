@@ -390,10 +390,10 @@ def build_multi_site_look(
             if gap.any():
                 bound = calibration if own_state is not None else None  # other callers keep the colour rule
                 mask = low_mask | cell_corridor_own.gap_foreground(config, bound, img, roi, gap, params)
-        own = (cell_corridor_own.own_mask(config, primary_site, to_px, (own_state(),), low_mask.shape, roi, tcp_x_m)
-               if own_state is not None else None)
+        fold = {} if own_state is None else cell_corridor_own.fold_view(
+            config, calibration, primary_site, to_px, own_state(), img, low_mask.shape, roi, tcp_x_m, params)
         return seen(cell_corridor.check(
             pts, mask, roi, to_px, params=params, surface_px=polys,
-            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, own=own), low_mask.shape)
+            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, **fold), low_mask.shape)
 
     return look

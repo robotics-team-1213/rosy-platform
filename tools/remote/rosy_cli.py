@@ -17,6 +17,7 @@ if _DIR not in sys.path:
 
 import rosy_agent_bridge as br  # noqa: E402
 import rosy_plan as plan_mod  # noqa: E402
+from rosy_cli_motion import add_pick_args, add_push_parser, cmd_push, free_pick_motion  # noqa: E402
 
 _CAS_KEYS = (
     "fallback_from_task_id",
@@ -349,8 +350,13 @@ def _poll_pick_tasks(bridge: br.RosyAgentBridge, task_ids: list[str], timeout_s:
 
 
 def cmd_pick(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
-    cell_id = _infer_pick_cell(args)
+    cell_id = "cell_ab" if args.free_anchor and not args.cell else _infer_pick_cell(args)
     payload: dict[str, Any] = {"cell_id": cell_id}
+    if args.free_anchor:  # free-position pick: pixels from a frame, never metres; the server derives the sites
+        payload["motion"], err = free_pick_motion(args)
+        if err:
+            return err
+        args.dst = None
     for cli_k, pay_k in (
         ("arm", "arm_id"), ("src", "src_site"), ("dst", "dst_site"), ("tier", "tier"),
         ("preset", "preset"), ("mode", "execution_mode"), ("max_chunks", "max_chunks"),
@@ -484,11 +490,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_pick.add_argument("--robot-id", default=None)
     p_pick.add_argument("--zone-id", default=None)
     p_pick.add_argument("--request-key", default=None)
+    add_pick_args(p_pick)
     p_pick.add_argument("--propose", action="store_true")
     p_pick.add_argument("--auto-admit", action="store_true")
     p_pick.add_argument("--dry-run", action="store_true")
     p_pick.add_argument("--wait", action="store_true")
     p_pick.add_argument("--wait-timeout-s", type=float, default=120.0)
+
+    add_push_parser(sub)
 
     p_schema = sub.add_parser("schema")
     p_schema.add_argument("tool", nargs="?", default=None)
@@ -501,6 +510,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # a Windows cp1252/cp949 console cannot print site labels
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.cmd == "schema":
@@ -528,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
         res = cmd_sites(bridge, args)
     elif args.cmd == "pick":
         res = cmd_pick(bridge, args)
+    elif args.cmd == "push":
+        res = cmd_push(bridge, args)
     else:
         if args.args_file is not None and args.args_json is not None:
             ap.error("--args-file and --args-json are mutually exclusive")

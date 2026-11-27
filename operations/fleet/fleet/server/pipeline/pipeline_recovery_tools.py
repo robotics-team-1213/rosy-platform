@@ -438,6 +438,8 @@ def install_recovery_tool_routes(app, ctx) -> None:
                 if principal_obj is not None and actor_role != "operator":
                     _refuse(403, "OPERATOR_APPROVAL_REQUIRED_FOR_FALLBACK_ENQUEUE")
                 orig = app.state.omx_cell_tasks[failure["task_id"]]
+                if orig.get("motion"):
+                    _refuse(409, "CORRELATED_PLACEMENT_REQUIRES_NEW_PLAN")  # same code as retry: propose a new motion instead
                 spec = {k: orig[k] for k in ("cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site",
                                              "tier", "col", "row", "tier_hint", "zone_id", "cable_guard_micro",
                                              "unload_batch_id", "unload_index", "unload_expected", *TASK_IDENTITY_FIELDS)

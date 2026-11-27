@@ -246,7 +246,7 @@ def resolve_cell_task_targets(
                                legacy_sites=legacy_sites) if (raw_src is None or raw_src != "") else None
     if src is None:
         raise ValueError("UNKNOWN_CELL_SITE")
-    if dst["site_id"] is not None and src["site_id"] == dst["site_id"]:
+    if dst["site_id"] is not None and src["site_id"] == dst["site_id"] and (spec.get("motion") or {}).get("kind") != "push":
         raise ValueError("INVALID_CELL_SITE")
 
     allowed_arms = tuple(a for a in dst["arms"] if a in src["arms"])
@@ -281,7 +281,7 @@ def expand_multi_tier_specs(
     legacy_sites: tuple[str, ...] | frozenset[str] = (),
 ) -> list[dict[str, Any]]:
     cell_id = str(body.get("cell_id") or "cell_s")
-    if cell_id != "cell_ab" or "tier" in body or body.get("preset"):
+    if cell_id != "cell_ab" or "tier" in body or body.get("preset") or body.get("motion") is not None:
         raise ValueError("INVALID_CELL_TASK_INPUT")
     tiers = body.get("tiers")
     if not isinstance(tiers, list) or not (1 <= len(tiers) <= 3):
