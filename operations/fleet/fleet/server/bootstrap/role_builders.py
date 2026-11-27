@@ -441,6 +441,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
         tracking=tracking if tracking is not None and tracking.enabled else None,
         sightings=sightings, zones=trip_runner.traffic.zone_edges)
+    lane = getattr(app.state, "lane_compliance", None)
+    if lane is not None:   # D-1084: the lane watch skips parking handoffs; the guide reads its judgement
+        lane.parking_handoff = lambda robot_id: any(
+            view.get("robot_id") == robot_id and view["detail"].get("parking_handoff") is not None
+            for view in trip_runner.open_trips())
+        app.state.guide.lane_view = lane.view
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
     return trip_runner
 
