@@ -191,12 +191,28 @@ def test_ease_starts_policy_chunk_from_rest_at_measured_pose():
     assert eased[-1] == pytest.approx(chunk[-1])
 
 
-def test_ease_keeps_jaw_and_short_chunks():
-    chunk = [[0.0, -50.0, 45.0, 45.0, 0.0, 60.0], [1.0, -45.0, 42.0, 44.0, 2.0, 45.0]]
-    eased = shape.ease_start(chunk, [0.0, -55.0, 45.0, 45.0, 0.0, 50.0])
-    assert eased.tolist() == [chunk[1]]
-    one = [[0.0, -50.0, 45.0, 45.0, 0.0, 60.0]]
-    assert shape.ease_start(one, [0.0] * 6).tolist() == one
+def test_ease_short_chunk_is_resampled_not_sprinted():
+    start = [0.0, -55.0, 45.0, 45.0, 0.0, 50.0]
+    one = [[0.0, -45.0, 45.0, 45.0, 0.0, 50.0]]  # one row left after a backtrack trim, 10 units off
+    eased = shape.ease_start(one, start)
+    assert len(eased) == shape.EASE_MIN_ROWS - 1 and eased[-1].tolist() == one[0]
+    lift = [start[1], *eased[:, 1]]
+    steps = np.diff(lift)
+    assert (steps > 0).all() and steps[0] < steps.max() / 2 and steps[-1] < steps.max() / 2  # speeds up, then slows down
+    out = shape.shape_chunk(one, start, LOW, HIGH, FASTEST, ease=True)
+    assert out[-1] == pytest.approx(one[0])
+    assert np.abs(np.diff(np.vstack([start, out]), axis=0)).max() <= FASTEST + 1e-9
+
+
+def test_ease_delays_jaw_close_until_body_arrives_never_opening():
+    start = [0.0, -55.0, 45.0, 45.0, 0.0, 60.0]
+    rows = [[0.0, -40.0 + k, 45.0, 45.0, 0.0, 60.0 if k < 2 else 45.0] for k in range(16)]  # closes at row 2, 15 off
+    eased = shape.ease_start(rows, start)
+    body_off = np.abs(eased[:, :5] - np.asarray(rows)[1:, :5]).max(axis=1)
+    assert (eased[body_off > 3.0, 5] == 60.0).all()  # no close while the body is still far from the policy's pose
+    assert eased[-1].tolist() == rows[-1]  # the close still happens by the chunk's end
+    holding = [[0.0, -40.0, 45.0, 45.0, 0.0, 40.0]] * 16  # squeezing a held box: measured jaw 45 above the policy's 40
+    assert (shape.ease_start(holding, [0.0, -55.0, 45.0, 45.0, 0.0, 45.0])[:, 5] == 40.0).all()  # never opened
 
 
 def test_ease_refuses_eased_frame_outside_envelope():
