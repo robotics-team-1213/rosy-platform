@@ -4,9 +4,10 @@ Description=ROSY Arm S read-only live state and guard health to Fleet
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-arm-status.env
-ExecStart=/bin/bash -c 'exec "$ROSY_ARM_STATUS_PYTHON" "$ROSY_ARM_STATUS_SOURCE" --live "$ROSY_ARM_STATUS_LIVE" --source-id "$ROSY_ARM_STATUS_SOURCE_ID" --arm-id "$ROSY_ARM_STATUS_ARM_ID" --calibration "$ROSY_ARM_STATUS_CALIBRATION" --health-file "$ROSY_ARM_STATUS_HEALTH_FILE" --fleet-url "$ROSY_ARM_STATUS_FLEET_URL" --ca-file "$ROSY_ARM_STATUS_CA_FILE" --token-env ROSY_ARM_S_TOKEN'
+ExecStart=/bin/bash -c 'exec "$ROSY_ARM_STATUS_PYTHON" "$ROSY_ARM_STATUS_SOURCE" --live "$ROSY_ARM_STATUS_LIVE" --source-id "$ROSY_ARM_STATUS_SOURCE_ID" --arm-id "$ROSY_ARM_STATUS_ARM_ID" --calibration "$ROSY_ARM_STATUS_CALIBRATION" --health-file "$ROSY_ARM_STATUS_HEALTH_FILE" --fleet-url "$ROSY_ARM_STATUS_FLEET_URL" --ca-file "$ROSY_ARM_STATUS_CA_FILE" --token-env ROSY_ARM_S_TOKEN --forbid-bridge-env "%h/.config/rosy/omx-observation-bridge.env"'
 # A crash must come back on its own: this is arm S's only sender (decision H4).
 Restart=on-failure
+RestartPreventExitStatus=78
 RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=10

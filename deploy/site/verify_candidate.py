@@ -72,6 +72,10 @@ class CandidateVerificationError(ValueError):
     """Candidate metadata or local host image state does not match."""
 
 
+class MissingBaseImageError(CandidateVerificationError):
+    """An incremental candidate reuses an image this host does not have."""
+
+
 def verified_services(value: object) -> tuple[str, ...]:
     """Canonicalize the base inventory and any optional independent images."""
     if isinstance(value, list) and all(isinstance(s, str) for s in value) and len(value) == len(set(value)):
@@ -468,8 +472,10 @@ def verify_candidate(
                 check=True, capture_output=True, text=True, timeout=30,
             )
         except (OSError, subprocess.SubprocessError):
-            raise CandidateVerificationError(
-                f"docker image inspection failed for {service}") from None
+            # A reused (incremental) image this host never had is a missing base, not a bad candidate.
+            error = MissingBaseImageError if service in summary["manifest"].get("reused_images", {}) \
+                else CandidateVerificationError
+            raise error(f"docker image inspection failed for {service}") from None
         identity = result.stdout.strip().split("|")
         if len(identity) != 3 or identity[0] not in accepted:
             raise CandidateVerificationError(f"{service} loaded image ID mismatch")

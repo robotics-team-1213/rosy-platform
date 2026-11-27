@@ -78,13 +78,16 @@ def own_mask(config: dict, site: str, to_px, poses, shape, roi, tcp_x_m: float |
 
 def low_cargo(config: dict, calibration: dict, img, roi, shape, params=None):
     """0/1 mask (ROI-sized) of catalogue objects whose top, by the depth camera, is at least KNOWN_MARGIN_M under the
-    travel floor on every frame; None without `config["catalog_path"]` or a usable depth read. A surface whose bare
-    height the depth does not find where the calibration puts it (`cell_free_source`'s own check) excuses nothing on
-    it. shortcut: a deck mostly covered by cargo has no bare height and so excuses nothing; upgrade with a table
-    reference outside the deck."""
+    travel floor on every frame; None without `config["catalog_path"]` or a usable depth read. The top is an absolute
+    height (the camera's calibrated height less its measured distance), so a deck covered by cargo needs no bare patch
+    of its own; but some measured surface must show its bare height where the calibration puts it on every frame
+    (`cell_free_source`'s own check), or the depth and the calibration disagree and nothing is excused. The depth is
+    registered to the colour image by the D435 factory record only: the edge-aligned fallback of
+    `cell_depth_pose.cal_eval_depth_setup` read a 29 mm container top 20-30 mm low on 7 of 18 live frames (2026-11-28)."""
     import cv2
 
     import cell_corridor
+    import cell_depth_pose
     import cell_free_source as fs
     import cell_objects
     import cell_pivot
@@ -95,24 +98,37 @@ def low_cargo(config: dict, calibration: dict, img, roi, shape, params=None):
         if frames is None or not len(frames):
             return None
         camera, catalog = config["cameras"]["top"], cell_objects.load_catalog(Path(str(path)).expanduser())
-        maps = [fs._frame_heights(f, img, camera) for f in frames]
-        if any(m[0] is None or m[3] is None for m in maps):
+        factory = fs._load(Path(str(camera["d435_factory"])).expanduser())  # no edge-aligned fallback: see the docstring
+        if not isinstance(factory, dict):
+            return None
+        if "stream.depth" in factory:
+            # shortcut: cell_depth_pose.calibration does not read the cell record's flat keys, so every other depth
+            # caller still falls back to edge alignment; move this there once those callers are checked against it
+            factory = {**factory, "stream": {"depth": factory["stream.depth"], "color": factory["stream.color"]}}
+        depth_roi = {"roi": tuple(camera["depth_roi"])} if camera.get("depth_roi") else {}
+        maps = [(h, np.eye(3), plane, float(plane["height_mm"]) if plane.get("ok") else None)
+                for h, plane in (cell_depth_pose.height_map_in_colour(f, factory, **depth_roi) for f in frames)]
+        if any(m[3] is None or m[0].shape != img.shape[:2] for m in maps):  # no table plane, or not the colour grid
             return None
         floor_mm = (prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M) - KNOWN_MARGIN_M) * 1000.0
-        out, done = np.zeros(shape[:2], np.uint8), []
+        camera_mm = float(camera["height_m"]) * 1000.0
+        out, surfaces = np.zeros(shape[:2], np.uint8), {}
         for name, site in (config.get("sites") or {}).items():
             poly = site.get("surface_px") if isinstance(site, dict) else None
-            if not poly or poly in done:
-                continue
-            done.append(poly)
-            base_mm = float(site["surface_z"]) * 1000.0
-            over_mm = float(camera["height_m"]) * 1000.0 - base_mm  # the camera over this bare surface, as calibrated
-            bare = [fs._mode(fs._sample(m[0], m[1], fs._polygon_pts(poly, img.shape))) for m in maps]
-            if any(h is None or share < fs.MODE_SHARE or abs(m[3] - h - over_mm) > fs.REF_TOL_MM
-                   for (h, share), m in zip(bare, maps)):
-                continue
+            if poly and poly not in [s["surface_px"] for _, s in surfaces.values()]:
+                surfaces[name] = (name, site)
+
+        def agrees(site) -> bool:  # this surface's bare height sits where the calibration puts it, on every frame
+            over_mm = camera_mm - float(site["surface_z"]) * 1000.0
+            bare = [fs._mode(fs._sample(m[0], m[1], fs._polygon_pts(site["surface_px"], img.shape))) for m in maps]
+            return all(h is not None and share >= fs.MODE_SHARE and abs(m[3] - h - over_mm) <= fs.REF_TOL_MM
+                       for (h, share), m in zip(bare, maps))
+
+        if not any(agrees(site) for _, site in surfaces.values()):
+            return out
+        for name, site in surfaces.values():
             for o in cell_objects.detect(img, roi, cell_pivot.map_record(calibration, name), camera, catalog,
-                                         site.get("surface_z", 0.0), params, poly, site.get("surface_lab")):
+                                         site.get("surface_z", 0.0), params, site["surface_px"], site.get("surface_lab")):
                 if not (o.get("matched") and o.get("hull_px")):
                     continue
                 hull = np.asarray(o["hull_px"], np.int32)
@@ -120,10 +136,10 @@ def low_cargo(config: dict, calibration: dict, img, roi, shape, params=None):
                 cv2.fillPoly(face, [hull], 1)
                 ys, xs = np.nonzero(face)
                 tops = [fs._sample(m[0], m[1], np.c_[xs, ys].astype(float)) for m in maps]
-                if any(len(t) < max(fs.MIN_FACE_PX, len(xs) // 2) for t in tops):
-                    continue  # depth holes: not measured
+                if any(len(t) < max(fs.MIN_FACE_PX, len(xs) // 4) for t in tops):
+                    continue  # depth holes: not measured (the factory projection fills about 0.4 of colour pixels)
                 # the 95th percentile: a hand or a taller neighbour over part of the outline counts as its top
-                if max(base_mm + float(np.percentile(t, 95)) - h for t, (h, _) in zip(tops, bare)) <= floor_mm:
+                if max(float(np.percentile(t, 95)) + camera_mm - m[3] for t, m in zip(tops, maps)) <= floor_mm:
                     cv2.fillPoly(out, [hull - [roi[0], roi[1]]], 1)
         return out
     except Exception:  # noqa: BLE001 - a broken catalogue, map or depth read excuses nothing; the fold judges as before

@@ -50,6 +50,7 @@ from fleet.localization.lane_compliance_helpers import (
     crosswalk_ahead,
     evaluate_bay_dock,
     map_bounds,
+    parking_edge,
 )
 
 OK, WARN, ACT, UNKNOWN = "OK", "WARN", "ACT", "UNKNOWN"
@@ -261,6 +262,11 @@ class LaneComplianceTracker:
         return LaneCompliance(level, lane.pose_state, lane.edge_id, lane.arc_id, lane.offset_m,
                               lane.margin_m, lane.width_m, self.body_half_width_m, self._warn, self._act)
 
+    def hold(self, lane: LaneSample) -> LaneCompliance:
+        """D-1084: a still or parking robot is not judged: OK (UNKNOWN without a lane), counts neither grow nor reset."""
+        return LaneCompliance(UNKNOWN if lane.margin_m is None else OK, lane.pose_state, lane.edge_id, lane.arc_id, lane.offset_m, lane.margin_m,
+                              lane.width_m, self.body_half_width_m, self._warn, self._act)
+
     def judge(self, pose, graph) -> LaneCompliance:
         return self.update(sample(pose, graph, self.body_half_width_m, self.config))
 
@@ -269,6 +275,9 @@ class LaneComplianceTracker:
 #: Where the body is against the map. ``UNSEEN`` is "no judgement yet" and is never sent.
 ON_LANE, ON_LINE, OFF_LANE, OFF_MAP, WRONG_WAY, UNSEEN = (
     "ON_LANE", "ON_LINE", "OFF_LANE", "OFF_MAP", "WRONG_WAY", "UNSEEN")
+#: D-1084 report-only states (never sent to CORE): on a parking or bay edge, docking or in a parking
+#: handoff; the camera and the bound SLAM pose disagree on whether the body left the lane.
+PARKING, POSE_MISMATCH = "PARKING", "POSE_MISMATCH"
 
 
 def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], graph, crosswalks=(),

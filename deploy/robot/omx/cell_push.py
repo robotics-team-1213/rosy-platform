@@ -34,6 +34,7 @@ import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
 import cell_preflight  # noqa: E402
+import cell_push_measure  # noqa: E402
 from cell_job_validators import _is_amr_bed_site  # noqa: E402
 from cell_observe import KEEP, keep, predicted_pixel  # noqa: E402
 
@@ -176,7 +177,8 @@ def run_push(cell, library_path: Path, friction: bool = False) -> dict:
             if not command.startswith("load"):
                 steps.append({"command": "park", "ok": cell.act("park").get("ok")})
             return {"result": "contact" if status.get("contact") else "stopped", "at": command, "steps": steps}
-    steps.append({"command": "park", "ok": cell.act("park").get("ok")})
+    status = cell.act("park")  # the fold readback (state, settled, fault) the worker and Fleet check
+    steps.append({"command": "park", **{k: status.get(k) for k in cp.STEP_KEYS}})
     return {"result": "pushed", "steps": steps}
 
 
@@ -233,8 +235,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if (args.px is None or args.dir is None) == (args.at is None or args.along is None):
         raise SystemExit("give --px and --dir, or --at and --along")
-    if args.dir is not None and not any(float(v) for v in args.dir.split(",")):
-        raise SystemExit("--dir must not be zero")
+    if args.dir is not None and not sum(float(v) ** 2 for v in args.dir.split(",")) ** 0.5 >= 0.1:  # NaN fails this too
+        raise SystemExit("--dir must not be zero or near zero")
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
     if not (args.dry_run or args.commissioning):
@@ -334,13 +336,21 @@ def main(argv=None):
             after = cell.frame("top")
             keep("push-after", after)
             if args.catalog:
-                objects = cell_objects.detect(after, args.roi, record, camera, cell_objects.load_catalog(args.catalog),
-                                              site["surface_z"], params, site.get("surface_px"), site.get("surface_lab"),
-                                              (config.get("objects") or {}).get("hsv"))
+                catalog = cell_objects.load_catalog(args.catalog)
+
+                def see(frame):  # the detection that planned the push, again
+                    return cell_objects.detect(frame, args.roi, record, camera, catalog, site["surface_z"], params,
+                                               site.get("surface_px"), site.get("surface_lab"), (config.get("objects") or {}).get("hsv"))
+
+                objects = see(after)
                 out["after"] = [{"centre_mm": o["centre_mm"], "object": o.get("object"), "matched": o["matched"],
                                  "tangled": o.get("tangled", False)} for o in objects]
+                if out.get("result") == "pushed":  # measured completion: where the object stood before (the first frame), where it is now
+                    out["displacement"] = cell_push_measure.displacement(
+                        see(img), objects, a * 1000, d, args.mm, max(args.half_mm, args.half_width_mm or 0.0) + 15.0)
+            out["park"] = cell_push_measure.last_park(out.get("steps") or [])
     if not args.dry_run and not hits:
-        cd.emit("push_outcome", {"result": out.get("result"), "at": out.get("at"), "after": out.get("after")},
+        cd.emit("push_outcome", {"result": out.get("result"), "at": out.get("at"), "after": out.get("after"), "displacement": out.get("displacement")},
                 ["pushed", "contact", "refused"], out.get("result"), "measurement", "what the run and the top camera showed")
     (work / f"{stamp}-push.result.json").write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps({k: v for k, v in out.items() if k != "steps"}, default=str))

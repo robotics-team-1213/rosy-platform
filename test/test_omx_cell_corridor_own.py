@@ -185,6 +185,7 @@ def test_fold_lane_outside_the_roi_is_unseen_not_clear(tmp_path):
 def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_travel_floor(monkeypatch, tmp_path):
     """2026-11-27 runs 7-9: cargo on the ship lies under every fold path, and a two-tier stack matched the catalogue as
     one container, so the match alone cannot tell how tall it stands."""
+    import cell_depth_pose
     import cell_free_source as fs
     import cell_objects
 
@@ -193,11 +194,13 @@ def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_tra
     found = [{"matched": True, "hull_px": hull}]
     heights = np.zeros(SHAPE, np.float32)
     monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (np.zeros((n, 1)), {}))
-    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (heights, [[1, 0, 0], [0, 1, 0]], [], 600.0))
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
+    monkeypatch.setattr(fs, "_load", lambda _path: {})
     monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
     monkeypatch.setattr(cell_pivot, "map_record", lambda _calibration, _name: {})
     monkeypatch.setattr(cell_objects, "detect", lambda _i, _r, _m, _c, _k, _z, _p, poly, _lab: found if poly == PALLET else [])
     config = {**_config(None), "catalog_path": str(tmp_path / "catalog.json")}
+    config["cameras"] = {"top": {**config["cameras"]["top"], "d435_factory": str(tmp_path / "factory.json")}}
 
     def cargo(cfg=config):
         return own.low_cargo(cfg, {}, img, ROI, SHAPE)
@@ -214,16 +217,38 @@ def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_tra
     heights[290:302, 310:322] = 120.0  # a hand over part of the outline
     assert not cargo().any()
     heights[:] = 0.0
-    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high: no bare surface to measure from
+    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high
     assert not cargo().any()
+    heights[250:350, 210:390] = 30.0  # covered one tier high (the real deck on 2026-11-25): the other surfaces vouch
+    assert cargo().any()
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 620.0}))
+    assert not cargo().any()  # no surface where the calibration puts it: the depth is not trusted
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
+    heights[280:321, 300:325] = np.nan  # 0.4 of the outline has a depth return, as the factory projection gives
+    assert cargo().any()
+    heights[280:321, 300:333] = np.nan  # more than three quarters of the outline without a depth return
+    assert not cargo().any()
+    assert own.low_cargo(config, {}, np.zeros((480, 640, 3), np.uint8), ROI, SHAPE) is None  # not the colour grid
+    heights[:] = 0.0
+    heights[280:321, 300:341] = 64.0
+    seen = iter(range(3))
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (
+        heights, {"ok": next(seen) != 1, "height_mm": 600.0}))
+    assert cargo() is None  # one bad frame of three
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
     heights[:] = 0.0
     heights[280:321, 300:341] = 64.0
     assert cargo().any()
     monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: (_ for _ in ()).throw(OSError("no catalogue")))
     assert cargo() is None
     monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
-    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (None, None, ["missing_depth"], None))
+    monkeypatch.setattr(fs, "_load", lambda _path: None)  # no readable factory record: no edge-aligned fallback
     assert cargo() is None
+    flat = {"stream.depth": {"fx": 1.0}, "stream.color": {"fx": 2.0}}  # the cell's record, keys as pyrealsense2 dumped them
+    monkeypatch.setattr(fs, "_load", lambda _path: flat)
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, factory, **_k: (
+        heights, {"ok": factory["stream"] == {"depth": {"fx": 1.0}, "color": {"fx": 2.0}}, "height_mm": 600.0}))
+    assert cargo().any()
     monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (None, "depth-d435.lock busy"))
     assert cargo() is None
 
@@ -242,3 +267,41 @@ def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_tra
     assert _look(img, reference)(across)["high"]
     monkeypatch.setattr(own, "low_cargo", lambda *_a, **_k: np.ones(SHAPE, np.uint8))
     assert _look(img, reference)(across)["clear"] is True
+
+
+def test_low_cargo_reads_the_cell_factory_record_and_real_depth(monkeypatch, tmp_path):
+    """2026-11-28 live: the cell's record has flat `stream.*` keys nothing read, so the depth was edge-aligned and a 29 mm
+    top read 20-30 mm low on 7 of 18 frames. Nothing of the depth path is stubbed here."""
+    import json
+
+    import cell_free_source as fs
+    import cell_objects
+
+    record = {"stream.depth": {"fx": 388.67, "fy": 388.67, "ppx": 320.99, "ppy": 244.98},
+              "stream.color": {"fx": 618.53, "fy": 618.67, "ppx": 322.32, "ppy": 236.60},
+              "depth_to_color": {"R": [0.99994296, -0.00552425, -0.00913963, 0.00552983, 0.99998456, 0.00058514,
+                                       0.00913625, -0.00063565, 0.99995804], "t": [0.01452328, -0.0000961, 0.00057678]},
+              "depth_scale": 0.001}
+    (tmp_path / "factory.json").write_text(json.dumps(record), encoding="utf-8")
+    deck = [[60, 300], [260, 300], [260, 440], [60, 440]]
+    hull = [[300, 215], [345, 215], [345, 260], [300, 260]]
+    config = {"sites": {"deck": {"z": 0.0, "surface_z": 0.0, "surface_px": deck, "surface_lab": [240, 128, 128]}},
+              "cameras": {"top": {"height_m": 0.6, "d435_factory": str(tmp_path / "factory.json")}},
+              "catalog_path": str(tmp_path / "catalog.json")}
+    frame = np.full((480, 640), 600, np.uint16)
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (np.array([frame] * n), {}))
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(cell_pivot, "map_record", lambda _calibration, _name: {})
+    monkeypatch.setattr(cell_objects, "detect", lambda *_a: [{"matched": True, "hull_px": hull}])
+    img, roi = np.zeros((480, 640, 3), np.uint8), [0, 0, 640, 480]
+
+    def cargo():
+        return own.low_cargo(config, {}, img, roi, img.shape)
+
+    frame[195:295, 270:370] = 536  # two tiers (64 mm) under the outline and well around it
+    assert cargo()[237, 322] == 1
+    frame[195:295, 270:370] = 501  # three tiers
+    assert not cargo().any()
+    frame[195:295, 270:370] = 536
+    frame[195:295, 300:370] = 0  # most of the top gives no return (it could be the tall part): too few returns to judge
+    assert not cargo().any()

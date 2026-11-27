@@ -23,6 +23,8 @@ REQUIRED = {"free_pick": ("anchor_site", "at_px", "dst_site", "frame_seq", "fram
             "push": ("site", "px", "dir", "mm", "frame_seq", "frame_sha256")}
 #: task fields a motion replaces or contradicts: the motion names its own sites and runs one guarded pass.
 CONFLICTS = ("preset", "tiers", "directive", "displaced_to", "depends_on", "tier_hint", "max_chunks")
+#: a push carries no cargo identity: a completion event for it would name a stored container that was only moved.
+PUSH_NO_IDENTITY = ("object_ref", "identity", "identity_observation_ref", "emit_release_permit")
 _FILTER = re.compile(r"[a-z0-9_,-]{1,120}")
 _SHA = re.compile(r"[0-9a-f]{64}")
 
@@ -71,6 +73,8 @@ def prepare_cell_motion(spec: dict[str, Any], *, cell_id: str, web_common: Path 
         _bad("MOTION_CELL_NOT_SUPPORTED")  # the free pick is for the A/B arms; arm_s stays on fixed sites
     if any(spec.get(k) is not None for k in CONFLICTS) or spec.get("execution_mode") not in (None, "guarded_pick"):
         _bad("MOTION_CONFLICTS_WITH_TASK_FIELDS")
+    if kind == "push" and any(k in spec for k in PUSH_NO_IDENTITY):
+        _bad("MOTION_CONFLICTS_WITH_TASK_FIELDS")
     m = {"kind": kind, "frame_seq": _int(raw["frame_seq"], 0, 2**53)}
     if not isinstance(raw["frame_sha256"], str) or not _SHA.fullmatch(raw["frame_sha256"]):
         _bad()
@@ -85,7 +89,7 @@ def prepare_cell_motion(spec: dict[str, Any], *, cell_id: str, web_common: Path 
         src, dst = m["anchor_site"], m["dst_site"]
     else:
         d = _pair(raw["dir"], -100, 100, False)
-        if d == [0, 0]:
+        if not (d[0] * d[0] + d[1] * d[1]) ** 0.5 >= 0.1:  # zero, near zero or NaN: no direction to normalise
             _bad()
         m.update(site=raw["site"], px=_pair(raw["px"], 0, 1280, True), dir=d, mm=_num(raw["mm"], 5, 20))
         src = dst = m["site"]  # a push stays on one site
@@ -98,19 +102,61 @@ def prepare_cell_motion(spec: dict[str, Any], *, cell_id: str, web_common: Path 
 
 
 def claim_refusal(task: dict[str, Any], body: dict[str, Any]) -> str | None:
-    """Rollout gate: an old worker ignores `motion` and would pick from the anchor, so only a worker whose claim lists "motion" gets one."""
-    caps = body.get("capabilities")
-    return None if task.get("motion") is None or (isinstance(caps, list) and "motion" in caps) else "WORKER_LACKS_MOTION_CAPABILITY"
+    """Rollout gate: an old worker ignores `motion` and would pick from the anchor, so only a worker whose claim lists "motion" gets one,
+    and a push only a worker that lists "push" (it runs and measures one). The task stays QUEUED, nothing is consumed."""
+    caps, motion = body.get("capabilities"), task.get("motion")
+    if motion is None:
+        return None
+    if not (isinstance(caps, list) and "motion" in caps):
+        return "WORKER_LACKS_MOTION_CAPABILITY"
+    return "WORKER_LACKS_PUSH_CAPABILITY" if motion.get("kind") == "push" and "push" not in caps else None
 
 
 def restrict_motion_admission(motion: dict | None, status: str, meta: dict[str, Any], principal_role: str | None) -> tuple[str, dict[str, Any]]:
-    """Owner decision 2026-11-27 (amends D-911 section 2): a free pick runs without per-task approval only when the D-1078
-    switch is on AND a service principal created it without propose (approved_by autonomous_policy). Everyone else waits
-    for a different named human on /admit: a creator never approves their own motion, and a push is never queued (it cannot run).
+    """Owner decisions 2026-11-27 and 2026-11-28 (amend D-911 section 2): a free pick or a push runs without per-task approval only
+    when the D-1078 switch is on AND a service principal created it without propose (approved_by autonomous_policy). Everyone else
+    waits for a different named human on /admit: a creator never approves their own motion.
     """
     if motion is None or status != "QUEUED":
         return status, meta
-    if motion["kind"] == "free_pick" and principal_role == "service" and meta.get("approved_by") == "autonomous_policy":
+    if principal_role == "service" and meta.get("approved_by") == "autonomous_policy":
         return status, meta
-    why = "HUMAN_APPROVAL_REQUIRED" if motion["kind"] == "free_pick" else "PUSH_NOT_EXECUTABLE"
-    return "PROPOSED", {**{k: v for k, v in meta.items() if k != "approval_mode"}, "approved_by": None, "motion_admission": why}
+    return "PROPOSED", {**{k: v for k, v in meta.items() if k != "approval_mode"}, "approved_by": None, "motion_admission": "HUMAN_APPROVAL_REQUIRED"}
+
+
+#: Measured push completion (mirrored by deploy/robot/omx/cell_task_motion.push_evidence_ok; test_push_thresholds pins both).
+PUSH_ALONG_MIN_FRAC = 0.5
+PUSH_ALONG_MAX_EXTRA_MM = 3.0
+PUSH_LATERAL_MAX_MM = 6.0
+PUSH_EVIDENCE_KEYS = frozenset({"result", "site", "measured", "commanded_mm", "moved_mm", "along_dir_mm", "lateral_mm"})
+
+
+def _finite_numbers(*values) -> bool:
+    return all(type(v) in (int, float) and math.isfinite(v) for v in values)
+
+
+def push_completion_verified(task: dict[str, Any], stage_result: dict[str, Any]) -> bool:
+    """A push completes only on the cell job's own measured displacement: the exact evidence shape, the task's commanded distance, the
+    object moved along the commanded direction by roughly that distance, little sideways drift, a self-consistent total. No boolean."""
+    motion, ev = task.get("motion"), stage_result.get("push")
+    if not isinstance(motion, dict) or motion.get("kind") != "push" or not isinstance(ev, dict):
+        return False
+    if set(ev) != PUSH_EVIDENCE_KEYS or ev["result"] != "pushed" or ev["measured"] is not True:
+        return False
+    mm, moved, along, lateral = (ev[k] for k in ("commanded_mm", "moved_mm", "along_dir_mm", "lateral_mm"))
+    if not _finite_numbers(mm, moved, along, lateral) or mm != motion.get("mm") or lateral < 0:
+        return False
+    if ev["site"] not in (motion.get("site"), task.get("src_site")):  # the cell names its resolved site; the task names both spellings
+        return False
+    return (PUSH_ALONG_MIN_FRAC * mm <= along <= 1.5 * mm + PUSH_ALONG_MAX_EXTRA_MM and lateral <= PUSH_LATERAL_MAX_MM
+            and abs(moved - math.hypot(along, lateral)) <= 0.5)
+
+
+def release_verified(task: dict[str, Any], stage_result: dict[str, Any], cell_id: str) -> bool:
+    """The task-kind part of /complete: a push needs measured displacement, every other task its zone verification (D-1057;
+    cell S has no side camera, so its top-camera zone check counts, user decision 2026-11-20)."""
+    if (task.get("motion") or {}).get("kind") == "push":
+        return push_completion_verified(task, stage_result)
+    verification = stage_result.get("verification") if isinstance(stage_result.get("verification"), dict) else {}
+    bases = ("predefined_side_and_top_target_zones", "top_camera_only_target_zone") if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",)
+    return verification.get("verified") is True and verification.get("basis") in bases

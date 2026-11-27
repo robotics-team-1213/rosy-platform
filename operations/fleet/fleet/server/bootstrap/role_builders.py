@@ -327,6 +327,13 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
         renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
         align_gate=station_align_gate(app.state))
+    from fleet.server.map_binding_auto import AutoRebind, camera_sighting  # D-1022: same-frame grid swaps re-bind
+
+    async def fresh_state(robot_id):
+        return (await console._gather_state(robot_id))[0]
+
+    trip_runner.auto_rebind = AutoRebind(site_maps, grid=lambda robot_id: console.clients()[robot_id].map(),
+                                         state=fresh_state, camera=partial(camera_sighting, map_pose))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
 
     async def read_trip_navigation(robot_id, run_id):
@@ -347,6 +354,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.halts.read_navigation = lambda rid: console.clients()[rid]._get("/api/v1/navigation/state")
     trip_runner.halts.wire_epoch = console.goal_leases.idle_wire_epoch
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
+    try:  # 2026-11-27: cell top-view evidence for S3; a bad configuration runs the SLAM verdict unchanged
+        from fleet.server.named_stop_topview import CellTopview
+        trip_runner.cell_topview = CellTopview.from_env()
+    except Exception:  # noqa: BLE001 - optional evidence source, never a start-up failure
+        import logging
+        logging.getLogger("fleet.server.trip_runner").exception("cell top view disabled: configuration unusable")
 
     from fleet.server.handoff_recovery import stopped_handoff
 
@@ -435,6 +448,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
         tracking=tracking if tracking is not None and tracking.enabled else None,
         sightings=sightings, zones=trip_runner.traffic.zone_edges)
+    lane = getattr(app.state, "lane_compliance", None)
+    if lane is not None:   # D-1084: the lane watch skips parking handoffs; the guide reads its judgement
+        lane.parking_handoff = lambda robot_id: any(
+            view.get("robot_id") == robot_id and view["detail"].get("parking_handoff") is not None
+            for view in trip_runner.open_trips())
+        app.state.guide.lane_view = lane.view
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
     return trip_runner
 

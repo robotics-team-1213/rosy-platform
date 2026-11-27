@@ -134,7 +134,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 actions = open_before_close(actions, open_g, model_closed)
             if model_fps != runner_fps:
                 actions = resample_chunk(actions, target, runner_fps)
-            frames = shape_chunk(actions, target, low, high, fastest)
+            frames = shape_chunk(actions, target, low, high, fastest, jaw_floor=closed)
             if home_roll is not None and (warning := wrist_roll_warning(frames, home_roll, roll_range=(low[4], high[4]))):
                 row["wrist_roll_warning"] = warning
                 if not dry_run:

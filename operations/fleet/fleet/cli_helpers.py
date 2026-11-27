@@ -128,9 +128,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
-    console.add_argument("--localization-overhead-cue", action="store_true", default=False,
+    console.add_argument("--localization-overhead-cue", action=argparse.BooleanOptionalAction, default=True,
                          help="D-395: feed overhead sightings to the localization arbiter and "
-                              "monitor. Off by default: the D-257 amendment is not accepted")
+                              "monitor. On by default (user decision 2026-11-28: a lost robot recovers "
+                              "from the ceiling camera); --no-localization-overhead-cue turns it off")
     console.add_argument("--pose-request-overhead", action=argparse.BooleanOptionalAction,
                          default=True,
                          help="D-546: answer a robot's pose request from the trusted overhead pose "

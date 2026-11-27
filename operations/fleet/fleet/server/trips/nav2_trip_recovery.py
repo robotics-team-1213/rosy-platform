@@ -5,7 +5,7 @@ The two reasons are ``stall`` (no progress) and ``navigation`` (Nav2 FAILED, or 
 Where ``TripRunner._stop`` would end the trip with one of them, ``recover_instead`` cancels the route (cancel -> ack,
 as ``_cancel_active_route``) and records ``detail['recovery']``; ``resume_ready`` waits until the robot is proven
 stopped and then lets the existing ``step_nav2_route`` resend from here (``sample_nav2_route(here=)``, the
-lane-return route). No new motion writer, no hold, no person. Everything else (E-stop, operator cancel or pause,
+lane-return route, recentred and from attempt 2 slowed: nav2_recovery_ladder). No new motion writer, no hold, no person. Everything else (E-stop, operator cancel or pause,
 off-lane backstop, frame or binding refusals, map change, unconfirmed stops, lease or road-speed ownership) never
 reaches here: a reason outside ``RECOVERABLE`` or a detail that marks the off-lane backstop or a link loss ends the
 trip as before.
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from fleet.server.nav2_recovery_ladder import attempt_entry, exhaust
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_lane_realign import _excluded
 from fleet.server.trip_nav2_route import NAV2_TRANSIENT_RETRY_S
@@ -46,7 +47,7 @@ def _in_scope(runner, live, reason, stop_detail, state) -> bool:
             and runner._strict_named_stop(live, index) is None
             and runner._cancel_goal is not None and isinstance(state, dict)
             and (state.get("safety") or {}).get("estop") is False and state.get("mode") not in ("MANUAL", "ESTOP")
-            and not _excluded(live, index, state)                                     # charge bay, parking, DOCKING
+            and not _excluded(runner, live, index, state)                                   # charge bay, parking, DOCKING
             and active is not None and active[0] == live.view["map_version"])
 
 
@@ -69,7 +70,7 @@ async def recover_instead(runner, live, reason: str, stop_detail: dict | None) -
     now = runner._clock()
     if rec is not None and rec["state"] == "waiting":   # the same cause has not cleared yet
         if now - rec["entered_at"] >= WAIT_S or now - rec["since"] >= WINDOW_S:
-            rec["state"] = "exhausted"
+            exhaust(live, rec, now)
             return False
         rec["checked_at"] = now
         live.progress_at = now
@@ -79,7 +80,7 @@ async def recover_instead(runner, live, reason: str, stop_detail: dict | None) -
     since = (rec or {}).get("since", now)
     if attempt > MAX_ATTEMPTS or now - since >= WINDOW_S:
         if rec is not None:
-            rec["state"] = "exhausted"
+            exhaust(live, rec, now, reason)
         return False
     nav = state.get("navigation")
     if (live.active_route is not None or nav in _RUNNING) and nav not in ("ARRIVED", "IDLE"):
@@ -97,6 +98,7 @@ async def recover_instead(runner, live, reason: str, stop_detail: dict | None) -
         "state": "waiting", "label": "복구 중", "reason": reason, "attempt": attempt, "max_attempts": MAX_ATTEMPTS,
         "since": since, "entered_at": now, "checked_at": now,
         "waiting_for": "robot_stopped", "stop_detail": dict(stop_detail or {}),
+        "attempts": [*(rec or {}).get("attempts", []), attempt_entry(live, reason, attempt, now)],
     }
     _LOG.warning("trip %s: %s stop recovered instead (attempt %d/%d)", live.view["trip_id"], reason, attempt, MAX_ATTEMPTS)
     runner._save(live)
@@ -113,6 +115,8 @@ async def resume_ready(runner, live, index: int, s: float) -> bool:
         return True
     now = runner._clock()
     if rec["state"] == "resumed":
+        if live.active_route is not None and rec.get("resent_at") is None:
+            rec["resent_at"] = now   # the recentred resend went out: later sends are plain
         if live.progress(index, s) >= rec["resumed_progress"] + RESET_M:
             detail["last_recovery"] = {**detail.pop("recovery"), "state": "recovered", "recovered_at": now}
         return True
@@ -123,7 +127,7 @@ async def resume_ready(runner, live, index: int, s: float) -> bool:
            else "out_of_scope" if readable and not _in_scope(runner, live, rec["reason"], rec["stop_detail"], state)
            else None)   # MANUAL, DOCKING, a hold or a map change since entry: no resend
     if end is not None:
-        rec["state"] = "exhausted"
+        exhaust(live, rec, now)
         await runner._stop(live, "stopped", rec["reason"], {**rec["stop_detail"], "recovery_end": end})
         return False
     live.progress_at = now

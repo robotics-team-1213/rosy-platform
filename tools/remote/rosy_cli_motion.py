@@ -39,7 +39,8 @@ def free_pick_motion(args: argparse.Namespace) -> tuple[dict[str, Any] | None, d
 
 
 def cmd_push(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
-    """A push is always a proposal: a named human approves it in the Fleet console."""
+    """Same dispatch as `rosy pick` (owner decision 2026-11-28): the dispatch tool runs without per-task approval when Fleet's
+    autonomous switch is on and this is a service principal; --propose asks for a named human's approval instead."""
     px, direction = _pair(args.px), _pair(args.dir, sep=float)
     if px is None or direction is None or args.frame_seq is None or not args.frame_sha256:
         return _motion_error("--site, --px U,V, --dir DX,DY, --mm, --frame-seq and --frame-sha256 are required")
@@ -49,12 +50,18 @@ def cmd_push(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, 
         payload["arm_id"] = args.arm
     if args.request_key:
         payload["request_key"] = args.request_key
+    if args.auto_admit:
+        payload["auto_admit"] = True
+    tool = "fleet_propose_cell_task" if args.propose else "fleet_dispatch_cell_task"
     if args.dry_run:
-        if err := br._validate_args(br.TOOL_MAP["fleet_propose_cell_task"], payload):
+        if err := br._validate_args(br.TOOL_MAP[tool], payload):
             return _motion_error(err)
-        return {"ok": True, "dry_run": True, "tool": "fleet_propose_cell_task", "payload": payload}
-    res = bridge.call_tool("fleet_propose_cell_task", payload)
-    return {**res, "needs_approval": True} if res.get("ok") else res
+        return {"ok": True, "dry_run": True, "tool": tool, "payload": payload}
+    res = bridge.call_tool(tool, payload)
+    data = res.get("data") or {}
+    tasks = data.get("tasks") or ([data["task"]] if isinstance(data.get("task"), dict) else [])
+    proposed = any(t.get("status") == "PROPOSED" for t in tasks if isinstance(t, dict))
+    return {**res, "needs_approval": True} if res.get("ok") and proposed else res
 
 
 def add_pick_args(p_pick: argparse.ArgumentParser) -> None:
@@ -77,4 +84,6 @@ def add_push_parser(sub) -> None:
     p_push.add_argument("--frame-seq", type=int, default=None)
     p_push.add_argument("--frame-sha256", default=None, help=FRAME_HELP)
     p_push.add_argument("--request-key", default=None)
+    p_push.add_argument("--propose", action="store_true")
+    p_push.add_argument("--auto-admit", action="store_true")
     p_push.add_argument("--dry-run", action="store_true")

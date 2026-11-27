@@ -14,6 +14,12 @@ if ! { [ -p chunk-io-s/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
     if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
     n0=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
     (
+      obs_dir=${ROSY_OBSERVATION_DIR:-}
+      if [ -z "$obs_dir" ]; then
+        obs_dir=$(systemctl --user show -p Environment --value rosy-omx-observation-bridge.service 2>/dev/null | tr ' ' '\n' | sed -n 's/^ROSY_OBSERVATION_DIR=//p' | tail -n 1)
+      fi
+      export ROSY_OBSERVATION_DIR=${obs_dir:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/rosy-observations}
+      export ROSY_CHUNK_JOINT_TOPIC=/omx_commissioning/arm_s/joint_states
       ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-s-live.json --caps caps-arm-s-nowindup.json --arm arm_s --chunks "${ROSY_SESSION_CHUNKS:-chunks-arm-s-inplace-live.json}" --io chunk-io-s --params cell-params-floor-1028.json --operating-profile arm-s-robot-profile-live.json </dev/null
       rc=$?
       if [ "$rc" -eq 0 ] && flock -n ~/rosy-omx/session-arm_s.lock true; then

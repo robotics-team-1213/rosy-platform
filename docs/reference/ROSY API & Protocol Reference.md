@@ -5,9 +5,47 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.490
+**Version:** v1.495
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.495 Map binding auto-rebind after a same-raster map swap (Fleet)
+
+Additive (D-1022): `GET /api/fleet/robots/{robot_id}/map-binding` gains `auto_rebind` (`{code, detail, at}` or null) — the last Fleet auto-rebind attempt. When a robot's map file is swapped but its raster frame is not (same origin, resolution, width, height within 1e-6; at most max(12, 2 % of the bound grid's occupied cells) cells of another class, and the bound grid is not within that budget of its own 180-degree turn or mirror), the standing IDLE robot is re-bound by Fleet as `fleet:auto-rebind` (old transform, ceiling-camera fix at most 2 s old as hold-out, site map revision unchanged); `code` is `APPROVED` or the refusal reason: `GRID_SIGNATURE_MISSING`·`GRID_FRAME_CHANGED`·`GRID_CELLS_CHANGED`·`GRID_SYMMETRIC`·`NOT_STANDING`·`NO_CAMERA_HOLDOUT` (no ceiling-camera fix, or older than 2 s)·`HOLDOUT` (the store's unchanged 0.05 m hold-out)·`SITE_REVISION_CHANGED`·`STATE_CHANGED`·`ROBOT_UNREADABLE`; the grid signature is stored with the binding row but not exposed by any route; audit action `map_binding_auto_rebind`. Site config `fleet.trip.map_auto_rebind` (default true) turns it off. The version number is assigned at landing.
+
+### v1.494 Cell-task push executes, is auto-admitted and completes on measured displacement (D-1083) (Fleet)
+
+A `motion.kind == "push"` cell task (`POST /api/fleet/pipeline/cell-tasks`) is no longer proposal-only (owner decision 2026-11-28; amends D-1077 section 7 and D-1081). With the D-1078 switch on, a `service` principal that does not send `propose: true` gets `QUEUED` (`approval_mode: autonomous_policy`), exactly as for `free_pick`. Otherwise it is `PROPOSED` with `motion_admission: HUMAN_APPROVAL_REQUIRED`, and `POST .../{task_id}/admit` accepts it from a different named operator. `PUSH_NOT_EXECUTABLE` (create answer and `/admit` 409) is removed.
+
+- A push task refuses `object_ref`, `identity`, `identity_observation_ref` and `emit_release_permit` (`422 MOTION_CONFLICTS_WITH_TASK_FIELDS`).
+- `POST .../claim`: a push is handed only to a claim whose `capabilities` list both `"motion"` and `"push"`; otherwise `{"claimed": false, "reason": "WORKER_LACKS_PUSH_CAPABILITY"}` and the task stays `QUEUED`. `free_pick` still needs only `"motion"`.
+- `POST .../{task_id}/complete` with `phase: RELEASED` for a push needs `stage_result.push` = `{result: "pushed", site, measured: true, commanded_mm, moved_mm, along_dir_mm, lateral_mm}` (exact keys, finite numbers): `commanded_mm` equals the task's `mm`, `along_dir_mm` between `0.5 x mm` and `1.5 x mm + 3`, `lateral_mm` between 0 and 6, `moved_mm` within 0.5 of `hypot(along, lateral)`. A push needs no `place` or zone `verification`; the usual `task_verified`, folded `stop_event` and owner-evidence checks still apply. Anything else is `422 UNVERIFIED_CELL_COMPLETION`.
+- Cell job API (:8781): the `cell-task-worker` principal may start `push` with exactly `arm, config, site, roi, catalog, px_x, px_y, dir_x, dir_y, mm` (mm 5..20); any other key is `403 WORKER_SCOPE_FORBIDDEN`. `push` is not cancellable (`POST /jobs/<id>/cancel` answers `409 JOB_NOT_CANCELLABLE`). The `cell_push.py` result adds `displacement` and `park`.
+
+### v1.493 Dock map-tag reframe (CORE)
+
+Operators can use `POST /api/v1/docking/docks/{dock_id}/reframe` to move a dock's map identity tags (`map_id`, `metadata.map_epoch`, `commissioned_grid_id` and generation) to the current native frame after a same-frame map swap. The pose does not change, so only a caller that has verified the pose in that frame (Fleet, through its approved site binding) should use it. Auth: operator.
+
+Body: `robot_id`, `map_id`, `map_grid_id`, `map_generation` (the frame now), `expected_map_id` and `expected_grid_id` (the dock's stored `map_id` and `commissioned_grid_id`, null if none), `binding_id` (must equal the dock's `metadata.binding_id` when it has one) and `new_binding_id` (stored on the dock).
+
+Errors: `404 NOT_FOUND` for an unknown dock. `409 MAP_FRAME_CHANGED` when the robot, grid or generation differs from the body, the dock database frame differs from `map_id`, or the dock's tags or binding differ from the expected ones. `409 STATIONARY_REQUIRED` when the robot is not localized, idle and standing still, or a native owner holds a run. The commission gates apply.
+
+### v1.492 OMX readiness: 오래된 팔 상태는 알 수 없음 (Cell)
+
+`GET /readiness`(`rosy.cell-readiness.v1`)와 `GET /api/fleet/pipeline/cells/{cell_id}/readiness`(`rosy.fleet-cell-readiness.v1`)는 오래된 팔 상태를 현재 값으로 내지 않는다(v1.492).
+
+- 각 팔에 `state_unknown`(`null` 또는 `{reason, last_observed_at}`)을 더한다. 값이 있으면 `folded` 는 `null` 이다.
+- 셀 API: `folded` 는 15초 안의 `live.json`, 또는 같은 나이 안의 수동 motor-health가 접힘을 증명할 때만 값을 갖는다. `reason` 은 `board_missing`(관측기 env의 보드 by-id 링크 없음, 신선한 행보다 우선) \| `stale` \| `never_observed`. 이때 `blocking_refusals` 에 `<arm>:state_unknown` 이 들어가 `allowed_tiers_now` 에서 2가 빠지고, 실패 컨텍스트 대체 동작 fence도 대상 팔과 A/B 상대 팔의 `state_unknown` 을 거절한다.
+- Fleet: `folded` 는 15초 안의 접힘 보고일 때만 값을 갖는다(부팅 기본값 포함하지 않음). `reason` 은 `stale` \| `never_observed`.
+
+### v1.491 Cell job cancel as a cooperative stop (D-1081) (Cell)
+
+`POST /jobs/<id>/cancel` (cell job API, empty body) asks a running, moving `auto_pick` to stop at its next guarded step: the API writes a per-job stop marker, `Guarded.act` sees it and takes its existing park-and-abort path with torque ON. It sends no signal and kills nothing, and it is not an emergency stop: an in-flight chunk finishes first.
+
+- Allowed: the human principal, or the principal that started the job (the `cell-task-worker` principal may cancel only its own job). Another principal gets `403 CANCEL_FORBIDDEN`.
+- `200` with the job state and `cancel_requested` (true while it runs). Repeating it is idempotent; the first request is one `cancel_requested` row in `audit.jsonl`. A finished job returns its state and writes nothing (`cancel_requested: false`).
+- `404` for an unknown id; `409 JOB_NOT_CANCELLABLE` for a job without a cooperative stop (every job except a moving `auto_pick`).
+- The marker is removed when the job is reaped. The child sees its path in `ROSY_CELL_JOB_STOP_FILE`; a run without it (direct or manual) behaves as before.
 
 ### v1.490 Fleet cell-task motion, claim capabilities and cell job worker principal (D-1081) (Fleet)
 
@@ -5203,6 +5241,11 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.495 | 2026-11-27 | [Fleet] Additive (D-1022): GET /api/fleet/robots/{robot_id}/map-binding gains auto_rebind |
+| v1.494 | 2026-11-27 | [Fleet] [Fleet] Additive: push motion QUEUED like free_pick, claim capability "push", /complete needs stage_result.push |
+| v1.493 | 2026-11-27 | [CORE] POST /docking/docks/{id}/reframe re-tags a dock after a same-frame map swap |
+| v1.492 | 2026-11-27 | [Cell] Additive: readiness arms[].state_unknown, 오래된 folded 는 null |
+| v1.491 | 2026-11-27 | [Cell] [Cell] Additive: POST /jobs/<id>/cancel |
 | v1.490 | 2026-11-27 | [Fleet] [Fleet] Additive: cell-task motion object (free_pick, push), claim capabilities, cell-task-worker scope |
 | v1.489 | 2026-11-27 | [Fleet] Additive: ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH=1 시 POST /api/fleet/pipeline/cell-tasks 즉시 QUEUED 투입 및 claim 입회 면제 |
 | v1.488 | 2026-11-26 | [Cell] Additive: SITE_NOT_MEASURED hardware refusal for registered slots |

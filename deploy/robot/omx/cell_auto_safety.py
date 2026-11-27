@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -52,6 +53,18 @@ def session_caps(config: dict):
 
 class Aborted(Exception):
     pass
+
+
+STOP_FILE_ENV = "ROSY_CELL_JOB_STOP_FILE"  # set by the cell job API (cell_job_cancel.py); unset on direct runs
+
+
+def stop_requested() -> str | None:
+    """A cancel marker for this job: a cooperative stop at the next guarded step. An unreadable path is no request."""
+    try:
+        path = os.environ.get(STOP_FILE_ENV)
+        return "job cancel requested" if path and os.path.exists(path) else None
+    except (OSError, ValueError):
+        return None
 
 
 class Monitor:
@@ -134,7 +147,11 @@ class Guarded:
         words, cached = command.split(), self._last_state
         self._last_state = None
         if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat", "human-hold"):
-            reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
+            reason = stop_requested()
+            if reason:
+                self.monitor.stop(reason, rule="job cancel")
+            else:
+                reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
             if reason:
                 cd.emit(
                     "safety",

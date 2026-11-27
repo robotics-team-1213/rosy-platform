@@ -1505,6 +1505,10 @@ Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. �
     2개 이상, 학습 컨테이너 크기(90×30 mm)와 다른 컨테이너 색 덩어리.
   - `BELT_POSE_OUT_OF_RANGE`: dx −2~+14 mm, dy ±9 mm, yaw ±13°를 벗어남(학습 범위 dx −1~+13 mm, dy ±8 mm, yaw ±12°에
     1 mm·1° 여유). 값을 잘라서 넣지 않는다.
+    번들의 `ENV_STATE.json`이 `belt_reference.range` = `{"dx_m": [lo, hi], "dy_m": [lo, hi], "yaw_rad": [lo, hi]}`를 선언하면
+    (학습 범위+여유, 생성기 `--range="dx_lo,dx_hi,dy_abs,yaw_abs_deg"`(m, m, m, 도; `=`로 붙여 쓴다), 예: Panel N `--range=-0.003,0.032,0.027,16`) 그 범위를 쓴다.
+    없으면 위 기본값이다. 선언이 형식에 맞지 않거나 상한(dx −10~+40 mm, |dy| 35 mm, |yaw| 20°)을 넘으면 기본값으로 되돌리지 않고
+    `BELT_POSE_UNKNOWN`(`NOT_AVAILABLE`)으로 거절한다. 거절 문구에는 실제로 쓴 범위가 찍힌다.
 - **기록:** `policy-drive.jsonl`의 `belt_pose` 행과 결과 JSON의 `belt_pose`에 세 숫자(`features`), fixture 중심(`centre_mm`),
   오프셋(`offset_mm`), `yaw_deg`, 크기(`size_mm`), 크기 점수(`score`), 프레임 sha256을 남긴다. dry run도 같다.
 - **현재 실물 값 (2026-11-27 프레임, `top_refit.json` 기준):** 실물 1~5회차 컨테이너는 dy 약 −34 mm,
@@ -1589,14 +1593,8 @@ ROS setup은 필요하지 않다. 해당 Python의 격리 환경에서 OpenCV와
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
-**Arm S live-file 관측.** ROS가 없는 Arm S는 live/calibration/guard-health 파일을 가진 호스트에서
-`rosy-omx-arm-status.service`를 쓴다. `arm-status.env.example`을
-`~/.config/rosy/omx-arm-status.env`에 mode 0600으로 복사하고, Fleet manifest의
-`source_id`·`arm_id`, 실제 live·calibration·canonical health 경로, HTTPS origin·CA와
-해당 팔 전용 토큰을 설정한다. 빈 토큰은 시작을 거부한다. guard의
-`ROSY_OMX_MONITOR_OWNER`는 같은 arm_id여야 한다. 유닛을 user systemd 경로에 복사하고
-`daemon-reload` 뒤 `enable --now rosy-omx-arm-status.service`로 활성화한다.
-같은 source에 기존 ROS observation bridge를 동시에 연결하지 않는다.
+**Arm S 관측과 `rosy-omx-arm-status.service` 은퇴.** `observations.yaml`에 `omx_arm_s`가 등록된 셀에서는 `rosy-omx-observer@arm_s.service` + 세션 래퍼의 `ROSY_CHUNK_JOINT_TOPIC` → `workcell_observation_bridge.py` 단일 송신 경로를 사용한다(`rosy-omx-arm-status.service`는 은퇴·`disabled`/`inactive` 유지). `rosy-omx-arm-status.service`는 브리지 환경이 없는 단독(legacy/standalone) live-file 호스트 전용이며, `--forbid-bridge-env` 가드로 브리지 매니페스트와 같은 `source_id`를 탐지하면 exit 78(`RestartPreventExitStatus=78`)로 즉시 거부해 409 epoch 충돌을 막는다.
+같은 source에 기존 observation bridge와 `arm_status_bridge`를 동시에 연결하지 않는다.
 
 이 producer는 파일만 읽고 `ArmSender`로 보낸다. 보정 범위로 변환한 신선한 관절 위치와
 정본 `rosy.motor-health.v1`만 사용하며, 누락된 PWM·온도·목표를 만들지 않는다.

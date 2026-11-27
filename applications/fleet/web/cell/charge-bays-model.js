@@ -177,7 +177,7 @@ export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText =
       : `신선도 미확인${ageTxt ? ` · ${ageTxt}` : ""}`;
   const tempTxt = st.temp_c != null ? `${st.temp_c}°C` : "";
   const curTxt = st.current_ma != null ? `${st.current_ma}mA` : "";
-  return [`[${liveBadge}]`, jointsStr, `folded=${Boolean(st.folded)}`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
+  return [`[${liveBadge}]`, jointsStr, st.fresh === true && typeof st.folded === "boolean" ? `folded=${st.folded}` : `folded=알 수 없음(마지막 관측 ${ageTxt || "시각 미확인"})`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
 }
 
 function resolveCameraSource(source, obs = null) {

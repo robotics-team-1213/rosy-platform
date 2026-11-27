@@ -13,7 +13,7 @@ from fleet.server.pipeline.bound_home_receipt import sync_home_receipts, verifie
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
-from fleet.pipeline.cell_motion import claim_refusal
+from fleet.pipeline.cell_motion import claim_refusal, release_verified
 from fleet.site_rules import SiteRules
 
 from fleet.server.pipeline_port_events import build_completion_events, flush_pending_port_events_async, strip_task_for_claim
@@ -442,12 +442,9 @@ def install_cameras_routes(app, ctx) -> None:
                         and stage_result.get("directive_id") == task_id
                         and stage_result.get("arm_id") == task.get("arm_id")
                         and stage_result.get("task_verified") is True
-                        and verification.get("verified") is True
-                        # D-1057 (user decision 2026-11-20): cell S has no side camera, so its top-camera zone check counts
-                        and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
-                                                          if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
+                        and release_verified(task, stage_result, cell_id)  # a push: measured displacement; else the zone verification (D-1057)
                         and stop_event.get("ok") is True and stop_event.get("folded") is True)
-            if cell_id == "cell_ab":
+            if cell_id == "cell_ab" and (task.get("motion") or {}).get("kind") != "push":
                 place = stage_result.get("place") or {}
                 z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
                 verified = verified and isinstance(place, dict) and cell_ab_completion_verified(task, place, z_gate, verification)

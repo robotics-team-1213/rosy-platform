@@ -25,6 +25,10 @@ def trip_wait_reason(view):
     if peer := detail.get("peer_wait"):
         before_send = peer.get("stage") == "pre_dispatch_peer_check" and peer.get("dispatch_attempted") is False
         return "peer_pre_dispatch" if before_send else "peer_clearance"
+    receipt = detail.get("wait_prefix") or {}
+    if detail.get("traffic_hold") and not (receipt.get("kind") == "hold_point"
+                                           and receipt.get("state") in ("dispatched", "waiting_stop_confirmation")):
+        return "traffic_hold"  # standing under a table cut, not driving to its hold point
     parking = detail.get("parking_handoff") or {}
     if parking.get("phase") in ("waiting_for_commission", "waiting_for_clearance"):
         return parking.get("reason") or parking["phase"]
@@ -59,6 +63,7 @@ def trip_execution(view, live=None, sample=None):
     peer = detail.get("peer_wait") or {}
     parking = detail.get("parking_handoff") or {}
     reason = trip_wait_reason(view)
+    waiting_on = peer.get("waiting_on") or (detail.get("traffic_hold") or {}).get("waiting_for") or ()
     motion, sampled_at, mono = _measured_motion(view["robot_id"], sample if view["state"] in OPEN else None)
     if view["state"] not in OPEN:
         phase, reason = "terminal", view.get("reason")
@@ -83,7 +88,7 @@ def trip_execution(view, live=None, sample=None):
         phase = "received"
     return {"phase": phase, "motion": motion, "sampled_at": sampled_at, "reason": reason,
             "command_robot_id": view["robot_id"],
-            "waiting_on": list(peer.get("waiting_on") or ()) if phase in ("paused", "pre_dispatch_wait", "goal_wait") else []}
+            "waiting_on": list(waiting_on) if phase in ("paused", "pre_dispatch_wait", "goal_wait") else []}
 
 
 class LiveTrip:

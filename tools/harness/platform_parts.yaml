@@ -1473,6 +1473,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_corridor_own.py
   - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_unwedge_rise.py
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
   - deploy/robot/omx/cell_fold_rehome.py
@@ -1545,6 +1546,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
   - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_push_measure.py
   - deploy/robot/omx/cell_pivot.py
   - deploy/robot/omx/cell_step.py
   - deploy/robot/omx/cell_z_shuttle.py
@@ -1559,6 +1561,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
   - deploy/robot/omx/cell_job_depart.py
+  - deploy/robot/omx/cell_job_cancel.py  # D-1081 cooperative stop marker route (no signal, no kill)
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_target_binding.py
