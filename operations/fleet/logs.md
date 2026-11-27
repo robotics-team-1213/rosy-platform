@@ -5770,3 +5770,35 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-27 · uncommitted · Hold point review fixes
+
+- 변경: 검토(PR #1140) 반영: 구간 끝 정지 발자국이 자르는 점에 닿으면 정지점으로, 취소한 주기에는 대체 경로 금지(정지 증거까지 fence), Nav2 목표 허용오차 0.03을 구역·횡단보도 검사에 포함하고 도착 때 발자국 재검사, 서 있는 기체 여유(keep-out+0.03)·주행 간격으로 물러섬, 급커브는 누적 방향 변화, 정지점 경로의 Nav2 FAILED·CANCELED는 대기 후 재시도
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Hold point review round 3
+
+- 변경: 검토 3차(PR #1140): 해제 안 된 정지점 receipt(fence 포함) 동안 도착 판정 금지, 정지점이 대체할 경로는 어떤 취소든 fence 후 그 주기 반환, 정지점 경로 재시도는 자율 기체의 FAILED만(외부 CANCELED는 종료), ARRIVED 후 위치 밖 확인 대기는 차단 기체가 있으면 stall 아님, 콘솔 신뢰·좌표계 시험은 경로에서 떨어진 기체와 통과 대조군
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Nav2 road trip table-cut hold point
+
+- 변경: 블록 표가 현재 구간에서 경로를 자르면 같은 구간의 가장 먼 안전 정지점까지 보내고 막은 기체를 이름으로 보이며 기다린다(통행권·점유 칸 앞 여유·구역 칸·횡단보도·급커브 물러섬, 덮임 상실 시 취소 후 재설정, 가드 값 불변)
+- 증거: 원격 pytest operations/fleet/test 9783 passed 0 new (D:/DevTemp/route-overlap-wait-1127/rt6)
+- gate 변화: 없음
+- 결정: D-1009 범위(표가 자른 경우만, 콘솔 wire 검사 유지)
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · Hold point review round 4
+
+- 변경: 검토 4차(PR #1140): 정지 fence가 걸려 있으면 앞서 resolved였어도 도착 판정 금지, fence는 resolved를 지워 정지 확인 뒤 실제 목적지 경로가 나가야 도착 인정
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
