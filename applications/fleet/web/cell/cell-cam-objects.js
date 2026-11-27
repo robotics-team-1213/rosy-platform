@@ -1,15 +1,6 @@
 // Clickable catalog-only detected object SVG overlay for OMX inspector and ARM-CELL stage.
-const SVG_NS = "http://www.w3.org/2000/svg";
+import { svgEl } from "/console/assets/cell-cam-roi.js";
 export const OBJECT_STALE_MS = 5000;
-
-function svgEl(tag, attrs = {}, text = null) {
-  const el = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v !== null && v !== undefined) el.setAttribute(k, String(v));
-  }
-  if (text !== null && text !== undefined) el.textContent = String(text);
-  return el;
-}
 
 export function cellIdForCamView(camView) {
   if (!camView) return null;
@@ -45,7 +36,7 @@ export function isObjectSnapshotFresh(snap, nowMs = Date.now()) {
   return true;
 }
 
-export function catalogMatchedObjects(snap) {
+function catalogMatchedObjects(snap) {
   const list = Array.isArray(snap?.objects) ? snap.objects : [];
   return list.filter((o) => o && typeof o.catalog_id === "string" && o.catalog_id.trim() && o.catalog_id.toLowerCase() !== "unmatched");
 }

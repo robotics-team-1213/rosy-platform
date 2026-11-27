@@ -3,12 +3,12 @@ import { setOffBy } from "/common/cause-line.js";
 import { node } from "/common/control-dom.js";
 import { isObjectSnapshotFresh, objectsForCamView } from "/console/assets/cell-cam-objects.js";
 
-export const DEST_OPTIONS_BY_CELL = {
+const DEST_OPTIONS_BY_CELL = {
   cell_s: [["belt", "벨트 (belt)"], ["belt-in", "벨트 공급 (belt-in)"]],
   cell_ab: [["stand", "반출대 (stand)"], ["belt", "벨트 (belt)"], ["pallet", "팔레트 (pallet)"]],
 };
 
-export function buildObjectStagingBar({
+function buildObjectStagingBar({
   cellId = "cell_ab", snap = null, objects = [], selectedObject = null, selectedDest = null,
   opReason = "", busy = false, statusText = "", nowMs = null,
   onSelectDest = () => {}, onClear = () => {}, onDispatch = () => {},
@@ -101,7 +101,7 @@ export function buildObjectStagingBar({
   return wrap;
 }
 
-export function buildTargetObjectTaskBody({ cellId, armId, snap, object, destSite, robotId = null }) {
+function buildTargetObjectTaskBody({ cellId, armId, snap, object, destSite, robotId = null }) {
   return {
     cell_id: cellId,
     arm_id: armId,
