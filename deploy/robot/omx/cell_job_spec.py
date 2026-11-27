@@ -118,7 +118,7 @@ JOBS = {
             "operator": _match(NAME),
             "proposer": _match(NAME),
             "reviewed_auto": _bool,
-            "verify_zones": _bool,
+            "verify_zones": _bool, "map_only": _bool,
             "object": _match(FILTER_OBJ),
             "colour": _match(FILTER_COL),
             "layers_below": _int_range(0, 5),
@@ -354,7 +354,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--remeasure-map", "remeasure"), ("--replace", "replace")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply"), ("--reassess", "reassess"), ("--remeasure-map", "remeasure"), ("--replace", "replace"), ("--map-only", "map_only")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
