@@ -1,34 +1,45 @@
-## D-1089 OMX 셀·Fleet·CORE 안전 가드와 복구 경로의 3단계 구조 통합 (공통 코어·기기별 프로필 분리)
+## D-1089 OMX 셀·Fleet·CORE 안전 가드와 복구 경로의 3단계 구조 통합 (공통 코어·기기별 프로필·3층 분리)
 
-**Status:** Proposed (2026-11-28, 사용자 요청 — 1~3단계 전체 구조 설계와 공통/기기별 경계 확정 후 단계별 PR 진행).
+**Status:** Accepted (2026-11-28, 사용자 승인 — 3층 분리·공통/기기별 경계·개발 단계 우회금지 `audit` 전환 확정; 단계별 PR로 구현, 실물 수용은 별도).
 
 ### Context
 
-`deploy/robot/omx/`와 주변 연동 계층을 `origin/main` 기준으로 실측한 결과, 장애·거절 반복의 주원인은 개별 버그보다 **공통 불변식과 기기별 차이가 한 평면 폴더와 얕은 파일 조각에 섞여 있는 구조**다.
+`deploy/robot/omx/`와 주변 연동 계층을 `origin/main` 기준으로 실측한 결과, 장애·거절 반복과 개발 병목의 주원인은 **물리 안전 커널, 공통 코어, 기기별 차이, 절차적 우회 금지(Anti-Bypass)가 한 평면 폴더와 얕은 파일 조각에 섞여 있는 구조**다.
 
 - **평면 파일 과밀과 400줄 수평 분할:** `deploy/robot/omx/` 단일 폴더에 `.py` 파일 473개(총 102,543줄)가 섞여 있으며, `tools/harness/rosy_harness.py`의 `< 400줄` 규칙에 걸려 118개 파일이 350줄 이상, 85개 파일이 380줄 이상이다. 기능·가드를 더할 때마다 얕은 수평 파일이 늘어나 최근 14일간 `cell_job_spec.py`(51회), `cell_calibrate.py`(50회), `cell_job_api.py`(35회), `cell_auto_pick.py`(33회), `cell_policy_drive.py`(30회)에 수정이 집중되었다.
 - **불변식 분산과 중복:** 접힘·홈 판정 상수와 함수가 7개 파일(`cell_job_peer_health.py`, `cell_auto_fold.py`, `cell_unwedge.py`, `chunk_runner_guards.py`, `omx_incident.py`, `cell_act_verdict.py`, `bench_record_auto_recover.py`)에 흩어져 35개 파일이 참조한다. `human_hold` 래치는 폐기 결정(D-1079) 뒤에도 50개 파일에 남았고, 토크/idle/baseline 판정은 73개 파일, 세션 잠금·리스는 34개 파일에 퍼져 있다. 복구·접기 흐름만 22개 파일(4,637줄)로 나뉘어 있다.
+- **절차적 우회 금지(Anti-Bypass) 과밀:** `platform_parts.yaml`의 `safety_review_paths` 160개 중 OMX 파일이 141개를 차지한다. OMX 내부에도 SHA/digest 봉인(159개 파일), 주체/토큰 분리(39개 파일), 복구 펜스·만료·일회 마커(15개 파일), 정책 사전 거절(22개 파일), 게이트 39개 파일 내 57종 거절 코드가 겹쳐 모델·설정·복구 수정마다 연쇄 거절이 발생한다. `tools/harness/`·착지 도구 78개(18,993줄)와 `test/architecture/` 32개(5,431줄)도 워크플로 마찰을 키운다.
 - **공통 로직과 기기·셀 차이의 혼재:** `arm_s`(2D USB 단독·고정 사이트)와 `arm_a`/`arm_b`(D435 깊이·양팔 공유·`arm_b` 손목 롤 예외), `Pinky Pro` 기체별 차이를 프로필/어댑터로 분리하지 않아 `d435_factory` 유무나 기기 ID 분기가 공통 복구·검증 코드 곳곳에 스며 있다. `probe_*`/`sim_*`(50개, 10,445줄)와 `bench_*`(19개)도 셀 런타임과 같은 폴더에 있다.
 - **계층 간 문자열 결합:** `contracts/foundation/core_common/protocol/arm_incident/arm_incidents.py`(414줄)는 러너 오류 문자열을 정규식으로 판별하고 `REMEASURE_HOME_TOL = 3.0`을 별도 선언한다. `operations/fleet/`의 49개 파일(14,663줄, `pipeline_recovery_policy.py` 598줄, `pipeline_recovery_tools.py` 487줄 등)은 5갈래 OMX 복구 진입점을 개별 조정한다. `middleware/robot_execution/local/`(13개, 1,996줄)은 로컬 정책 리스를 별도로 관리한다.
 
-### 목표 아키텍처
+### 목표 아키텍처 (3층 분리 + 공통/기기별 경계)
 
-공유 계약 계층이 상태·능력·사건 어휘를 단독 소유하고, 기기 무관 공통 코어가 선언형 기기 프로필과 어댑터 seam을 주입받아 실행하며, Fleet·CORE는 이 계약을 통해서만 연동한다.
+물리 안전 커널과 거버넌스(우회 금지)를 분리하고, 기기 무관 공통 코어가 선언형 기기 프로필과 어댑터 seam을 주입받아 실행하며, Fleet·CORE는 공유 계약을 통해서만 연동한다.
 
 ```mermaid
 flowchart LR
-    C["Shared Contracts (core_common: arm_state, cell_capabilities, arm_incident, cell_fleet_contract)"]
+    C["Shared Contracts (core_common: arm_state, cell_capabilities, arm_incident, governance, cell_fleet_contract)"]
     P["Per-Device Profile and Adapters (OmxDeviceProfile, PinkyProfile, CorridorChecker, SpaceArbitrator)"]
-    K["Device-Agnostic Core (2-Tier Admission, recover_arm, 30 Hz chunk_runner, record_session)"]
-    F["Fleet and CORE (operations/fleet dispatch, middleware/robot_execution/local lease, CORE cmd_vel)"]
+    K["Layer 2 Device-Agnostic Core (2-Tier Admission, recover_arm, policy runtime)"]
+    S["Layer 1 Physical Safety Kernel (guarded_native, chunk_runner guards, torque-cut/fold, board_map, space/lease - always enforce)"]
+    G["Layer 3 Governance (ROSY_GOVERNANCE_MODE: audit in dev, enforce in prod)"]
+    F["Fleet and CORE (operations/fleet, middleware/robot_execution/local, CORE cmd_vel)"]
 
     C --> K
-    P -->|"inject profile & seam adapters"| K
+    P -->|"inject profile & adapters"| K
+    K --> S
+    G -.->|"audit log / prod gate"| K
     C --> F
-    F <-->|"typed readiness, stop_code, handoff gate"| K
+    F <-->|"typed PoseClass, CellCapabilities, stop_code"| K
 ```
 
-위 구조에서 기기별 분기는 `Per-Device Profile and Adapters` 안에서 끝나므로, 새로운 기기나 카메라 구성을 추가해도 `Device-Agnostic Core`와 `Fleet and CORE` 제어 로직은 바뀌지 않는다.
+위 구조에서 물리 안전을 지키는 `Layer 1 Physical Safety Kernel`만 항상 차단하며, 개발 단계 우회 금지는 `Layer 3 Governance`에서 기본 `audit`(기록만)로 동작해 물리 안전을 잃지 않고 병목을 해소한다.
+
+### 3층 책임과 물리 안전 커널 (개발 병목 해소)
+
+1. **Layer 1 — 물리 안전 커널 (`safety_review_paths` 141개 → OMX 17개 + `arm_state.py`):** 실제로 팔 파손·충돌·인명 위험을 막는 5불변식만 버스·러너 경계에서 항상 강제한다. ① 뻗은 팔(`EXTENDED`) 토크 차단 금지, ② `hardware_error != 0`·과열(`>= 55 C`)·PWM/전류/속도 상한·30 Hz 추종오차/접촉 정지, ③ 타 팔 보드 시리얼 오구동 금지(`omx-arm-boards.json`), ④ `HOLDING_HIGH`, ⑤ 이웃 팔 `space.reserve`·AMR 베드 인터락(`AMR_IN_BED_ZONE`)·E-stop. 대상 OMX 17개 파일: `guarded_native.py`, `guarded_native_effort.py`, `guarded_native_probe.py`, `guarded_device.py`, `chunk_runner.py`, `chunk_runner_guards.py`, `chunk_runner_interrupt.py`, `record_session.py`, `record_session_baseline.py`, `commissioning_limits.py`, `commissioning_stop.py`, `cell_torque_off_folded.py`, `cell_safe_home.py`, `cell_auto_fold.py`, `cell_space.py`, `cell_arm_lease.py`, `cell_job_peer_health.py` + `core_common.protocol.arm_state`.
+2. **Layer 2 — 공통 코어 + 기기별 프로필/어댑터:** `arm_state`, `CellCapabilities`, 2층 Admission(`Tier B` 자동 선행 복구), `recover_arm`, 캘리브레이션, 정책 구동을 둔다.
+3. **Layer 3 — 거버넌스 / 우회 금지 (`ROSY_GOVERNANCE_MODE=audit|enforce`, 개발·랩 기본 `audit`):** ① SHA/해시 봉인(`operating_profile`, `library_sha256`, `reference_top_sha256`, `trusted_grasp` 5 mm/0 deg), ② 주체/토큰 4종 분리·`proposer != operator`, ③ 복구 펜스(`safety_fence`, `stop_generation`, `expires_at`, `O_EXCL` 1회 마커, `STOP_PROOF _MINTED`), ④ 정책 사전 거절(`StateGate`, `trained_grasp_mismatch`, `canonical_start`)을 개발 단계에서는 `audit` 기록만 남기고 Layer 1 물리 가드에 위임하며, 운영 배포 시에만 `enforce`로 전환한다. 개발 하네스(`safety_review_paths` 141→17개, 400줄 컷 경고 전환)도 이 원칙을 따른다.
 
 ### 공통 계층과 기기별 계층의 분리 기준
 
@@ -80,12 +91,12 @@ flowchart LR
 
 | 단계 | PR 분할 | 주요 변경과 경계 | 완료·검증·롤백 기준 |
 |---|---|---|---|
-| **Phase 1: 계약 단일화 및 기기 능력 분리** | `PR 1A` 팔 상태 계약<br>`PR 1B` 기기 프로필·`CellCapabilities`<br>`PR 1C` 구조화 `stop_code` | `1A`: `core_common.protocol.arm_state` 신설 + OMX 7곳 상수·함수 통합.<br>`1B`: `DeviceCapabilities`/`CellCapabilities` 도입, `arm_s`/`arm_a`/`arm_b` 하드코딩 분기를 프로필 필드로 이동, `/readiness` 노출.<br>`1C`: `chunk_runner`가 `stop_code` 동시 출력, `arm_incidents.py`는 `stop_code` 우선·문자열 정규식 폴백. | 기존 CLI/JSON 스키마 100% 하위 호환. `affected` + `core_common` 원격 pytest 0 new failure, `Safety-Review: AGREE`. 문제 시 PR 단위 즉시 revert 가능. |
-| **Phase 2: 2층 Admission & 단일 `recover_arm`** | `PR 2A` Tier A/B Admission 분리<br>`PR 2B` `recover_arm` 통합<br>`PR 2C` Fleet·워커 계약 전환 | `2A`: `cell_job_admission`에서 Tier B 상태(idle raised caps, `BODY_FOLDED` 잔류 토크, stale latch)를 거절 대신 자동 선행 복구.<br>`2B`: 5개 복구 진입점을 `recover_arm`으로 통합, 잔존 `human_hold` 대기 분기 정리.<br>`2C`: Fleet `pipeline_recovery_policy`·`cell_task_worker`가 구조화 `PoseClass`·`CellCapabilities`·`stop_code` 소비. | 기존 엔드포인트(`/jobs/safe_home`, `/jobs/recover_hold`, `/jobs/torque_off_folded`) 호환 래퍼 유지. 실물 셀 3대(`arm_s`, `arm_a`, `arm_b`) dry-run + `safe_home`/정책 실행 수용 확인. |
+| **Phase 1: 커널 축소·계약 단일화·능력 분리** | `PR 1` 커널 축소·`arm_state`·`CellCapabilities`·`governance`<br>`PR 1C` 구조화 `stop_code` | `1`: `platform_parts.yaml` `safety_review_paths`를 물리 안전 커널(OMX 17개 + `arm_state.py`)로 축소하고, `core_common.protocol.{arm_state,governance}` 신설, `cell_capabilities.py` 도입, OMX 7곳 상수 통합.<br>`1C`: `chunk_runner`가 `stop_code` 동시 출력, `arm_incidents.py`는 `stop_code` 우선·정규식 폴백. | 기존 CLI/JSON 스키마 100% 하위 호환. `affected` + `test_safety_separation.py` + `core_common` 원격 pytest 0 new failure, `Safety-Review: AGREE`. PR 단위 즉시 revert 가능. |
+| **Phase 2: 2층 Admission & 단일 `recover_arm` & `audit` 전환** | `PR 2A` Tier A/B Admission 분리<br>`PR 2B` `recover_arm` 통합<br>`PR 2C` Layer 3 `audit` 전환 및 Fleet 전환 | `2A`: `cell_job_admission`에서 Tier B 상태(idle raised caps, `BODY_FOLDED` 잔류 토크, stale latch) 자동 선행 복구.<br>`2B`: 5개 복구 진입점을 `recover_arm`으로 통합, 잔존 `human_hold` 대기 분기 정리.<br>`2C`: SHA/주체/펜스/사전 게이트에 `governance.py` 적용(개발 `audit`), Fleet·워커가 구조화 `PoseClass`·`CellCapabilities`·`stop_code` 소비. | 기존 엔드포인트(`/jobs/safe_home`, `/jobs/recover_hold`, `/jobs/torque_off_folded`) 호환 래퍼 유지. 실물 셀 3대(`arm_s`, `arm_a`, `arm_b`) dry-run + `safe_home`/정책 실행 수용 확인. |
 | **Phase 3: 폴더 구획·레거시 격리·하네스 정리** | `PR 3A` 하위 패키지 구획 및 `probe`/`bench` 격리<br>`PR 3B` 하네스 린트 및 `platform_parts.yaml` 정합 | `3A`: `deploy/robot/omx/`를 역할 패키지(`omx_state/`, `omx_recovery/`, `omx_jobs/`, `omx_policy/`, `omx_calibration/`, `devices/`, `bench/`, `probes/`)로 재배치하고 기존 스크립트 위치에 얇은 진입점 shim 유지.<br>`3B`: `rosy_harness.py` 크기 검사 및 `platform_parts.yaml` `safety_modules` 경로 일괄 갱신. | systemd 유닛·세션 래퍼·`cell_job_spec` 경로 동작 무변경 검증. `rosy_harness.py lint` 0 error 및 전체 OMX/Fleet `affected` 통과. |
 
-### Open (확정 필요 사항)
+### Open (후속 결정)
 
-1. **`tools/harness/rosy_harness.py` 400줄 규칙 전환 방식:** Phase 3에서 하위 패키지로 나눈 뒤에도 400줄 엄격 제한을 유지할지, 아니면 패키지 내 응집 모듈(예: 600줄 상한, 400줄 경고)로 완화할지 결정이 필요하다.
-2. **`bench_*` 19개 파일 배치:** `deploy/robot/omx/bench/` 하위 패키지로 남길지 `tools/` 아래 벤치 도구로 옮길지 결정이 필요하다.
-3. **착수 승인:** 이 ADR의 경계와 단계 계획이 확정되면 `Status`를 `Accepted`로 올리고 Phase 1A(`arm_state` 단일 진실 원천) PR부터 바로 착수할지 확인한다.
+1. **`tools/harness/rosy_harness.py` 400줄 규칙 전환 방식 (Phase 3):** 하위 패키지로 나눈 뒤에도 400줄 엄격 제한을 유지할지, 패키지 내 응집 모듈(예: 600줄 상한, 400줄 경고)로 완화할지 Phase 3 착수 시 확정한다.
+2. **`bench_*` 19개 파일 배치 (Phase 3):** `deploy/robot/omx/bench/` 하위 패키지로 남길지 `tools/` 아래 벤치 도구로 옮길지 Phase 3A에서 확정한다.
+3. **실물 수용:** Phase 1·2 코드·단위/회귀 시험 통과 뒤 제어 PC(`arm_s`, `arm_a`, `arm_b`) 실물 수용을 별도 확인한다.
