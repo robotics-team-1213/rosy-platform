@@ -69,6 +69,17 @@ def _refused(store, box, code):
     assert store.map_bindings.auto_notes["rosy_42"]["code"] == code
 
 
+def test_a_later_site_revision_in_the_same_frame_still_rebinds(tmp_path):
+    store, box = _rig(tmp_path, camera=(SPOT[0] + 0.01, SPOT[1]))
+    bound_version = store.active()[0]
+    site, _ = _world_261026_charge_graph()
+    draft = store.save_draft(site, expected_revision=None, principal_id="op")
+    store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+    assert store.active()[0] != bound_version  # the site map moved on, its frame did not
+    assert _go(box) is True
+    assert store.map_bindings.active("rosy_42")["approved_by"] == PRINCIPAL
+
+
 def test_a_redrawn_grid_with_eleven_cells_changed_is_rebound_with_the_old_transform(tmp_path):
     store, box = _rig(tmp_path, camera=(SPOT[0] + 0.01, SPOT[1]))  # rule05a -> rule06 changed 11 cells
     old = store.map_bindings.active("rosy_42")

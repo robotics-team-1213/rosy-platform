@@ -23,6 +23,7 @@ import time
 from typing import Awaitable, Callable, Mapping, Optional
 
 from fleet.localization.map_binding import BindingError, check_not_symmetric, grid_signature, same_raster
+from fleet.server.map_binding_store import _site_matches
 from fleet.server.transient_loc_hold import _standing
 
 PRINCIPAL = "fleet:auto-rebind"
@@ -95,8 +96,10 @@ class AutoRebind:
 
     async def _attempt(self, robot_id: str, state: Mapping, site: tuple[str, int], old: dict) -> dict:
         bindings = self._maps.map_bindings
-        if old["site_map_version"] != site[1]:
-            raise BindingError("SITE_REVISION_CHANGED", "the site map revision is not the one bound")
+        # The store's own rule: a later site revision with the same frame hash is still the bound site frame
+        # (2026-11-27 the site map went v395 -> v407 with the frame unchanged).
+        if not _site_matches(old, site, getattr(bindings, "_frame_for_version", None)):
+            raise BindingError("SITE_REVISION_CHANGED", "the active site map is not the frame that was bound")
         if state.get("mode") != "IDLE" or not _standing(state):
             raise BindingError("NOT_STANDING", "the robot must be IDLE and standing")
         if old["grid_sig"] is None:
