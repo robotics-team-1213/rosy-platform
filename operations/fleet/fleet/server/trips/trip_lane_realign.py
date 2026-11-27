@@ -24,8 +24,15 @@ import math
 from fleet.localization.lane_compliance import BODY_HALF_WIDTH_M, lane_offset
 
 GAP_MAX_M = 0.05            # robot SLAM pose vs ceiling-camera pose: farther apart is a location problem
-CAMERA_MAX_AGE_S = 0.5      # the camera anchor of the arbitrated pose must be this fresh to act
-CAMERA_SOURCES = ("sighting", "track")   # D-989: arbitrated_pose never carries an auto-locate anchor
+#: The camera anchor must be this fresh to act. On site the anchor is 0.4-0.6 s old (2026-11-27), so 0.5 s threw
+#: away every other tick and two consecutive ones almost never came. What the age costs is the odom carried since
+#: the anchor, so that is bounded too: at most CAMERA_BRIDGE_MAX_M of dead reckoning.
+CAMERA_MAX_AGE_S = 1.0
+CAMERA_BRIDGE_MAX_M = 0.15
+#: What set the pose's anchor (MapPose.anchor_source). While the robot moves the pose's own source reads "bridged"
+#: (the camera anchor carried on by odom), so the anchor is what says "the camera saw it" (2026-11-27 live run: every
+#: tick was camera_unavailable because the source was read instead). The anchor's age bounds the odom part.
+CAMERA_SOURCES = ("sighting", "track")
 NEAR_EDGE_M = 0.02
 PERSIST_TICKS = 2
 REALIGN_SLOW_MPS = 0.05
@@ -91,11 +98,13 @@ async def _observe(runner, live, index: int, pose, state, nav) -> bool:
         cam = None
     active = runner._store.active()
     if (cam is None or cam.state != "LOCALIZED" or cam.x is None or cam.y is None
-            or cam.source not in CAMERA_SOURCES or active is None or cam.map_id not in (None, active[1].map_id)):
-        return note("camera_unavailable", source=getattr(cam, "source", None))
+            or cam.anchor_source not in CAMERA_SOURCES or active is None
+            or cam.map_id not in (None, active[1].map_id)):
+        return note("camera_unavailable", source=getattr(cam, "source", None),
+                    anchor_source=getattr(cam, "anchor_source", None))
     age = cam.anchor_age_s
-    if age is None or not 0.0 <= age < CAMERA_MAX_AGE_S:
-        return note("camera_stale", camera_age_s=age)
+    if age is None or not 0.0 <= age < CAMERA_MAX_AGE_S or not 0.0 <= cam.dead_reckon_m <= CAMERA_BRIDGE_MAX_M:
+        return note("camera_stale", camera_age_s=age, bridged_m=cam.dead_reckon_m)
     if getattr(pose, "source", None) != "approved_slam":
         return note("location", "SLAM_POSE_UNBOUND", camera_age_s=round(age, 3))
     gap = math.hypot(pose.x - cam.x, pose.y - cam.y)
