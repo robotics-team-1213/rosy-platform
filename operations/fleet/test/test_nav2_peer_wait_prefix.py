@@ -148,12 +148,14 @@ def test_full_refusal_then_prefix_uses_both_normal_wire_gates(monkeypatch, chang
     runner._strict_named_stop = lambda *_: None
     runner.autonomous_robots = set()
     monkeypatch.setattr(nav2, "ready_free_goal", lambda *_: asyncio.sleep(0, result=True))
+    sampled_from = []  # the sampler gets the robot's site position (off-lane resend, 2026-11-27)
     monkeypatch.setattr(nav2, "sample_nav2_route", lambda graph, segs, index, s, end, **kw:
-                        [(live.progress(end, segs[end]["s_to"]), 0., 0., "stop")])
+                        sampled_from.append(kw["here"]) or [(live.progress(end, segs[end]["s_to"]), 0., 0., "stop")])
     if not ordinary:
         monkeypatch.setattr(nav2, "_convert_points", lambda runner, live, active, pts, pose, state: (pts, None))
     run(nav2.step_nav2_route(runner, live, 0, 0., pose))
     assert live.view["detail"]["peer_wait"]["waiting_on"] == ["p"] and actual == []
+    assert sampled_from and sampled_from[-1] == (pose.x, pose.y)
     if change in ("none", "peer_disappears"):
         from fleet.server.road_vision_demand import RoadVisionDemand
         rows = []

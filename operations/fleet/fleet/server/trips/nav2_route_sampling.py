@@ -111,7 +111,9 @@ def sample_nav2_route(
             ahead = (sx - here[0]) * math.cos(syaw) + (sy - here[1]) * math.sin(syaw)  # < 0: progress lags the robot
             lat = abs((sy - here[1]) * math.cos(syaw) - (sx - here[0]) * math.sin(syaw))
             if lat > NAV2_ROUTE_MIN_GAP_M:
-                reach = NAV2_RECENTRE_AHEAD_M if d < spacing else min(NAV2_RECENTRE_AHEAD_M + 2 * lat, NAV2_RECENTRE_MAX_M)
+                # judged from the lane itself: the even-spacing fallback has no curve step to tell it by
+                tight = abs(_wrap_angle(point_at_distance(min(spacing, total_m))[2] - syaw)) * NAV2_CURVE_RADIUS_M > spacing
+                reach = NAV2_RECENTRE_AHEAD_M if tight else min(NAV2_RECENTRE_AHEAD_M + 2 * lat, NAV2_RECENTRE_MAX_M)
                 d = max(d, reach - ahead)
         while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(out) < max_points - 1:
             px, py, pyaw = point_at_distance(d)
