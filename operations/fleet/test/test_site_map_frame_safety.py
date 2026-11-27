@@ -883,9 +883,20 @@ def test_transient_candidates_holds_bound_nav2_trip_until_recovery_or_timeout():
     _ticks(runner, ports, n=1)
     assert runner.view("p1")["detail"].get("localization_wait") is None
 
+    # 2026-11-27 rosy_45: the localization node restarted (UNKNOWN) and needed about 20 s to localize again
+    loc_state.update(state="UNKNOWN", reason=None)
+    for _ in range(40):
+        ports.now += 0.5
+        run(runner.tick())
+    assert runner.view("p1")["state"] == "running"
+    assert runner.view("p1")["detail"]["localization_wait"]["loc_state"] == "UNKNOWN"
+    loc_state.update(state="LOCALIZED", reason=None)
+    _ticks(runner, ports, n=1)
+    assert runner.view("p1")["detail"].get("localization_wait") is None
+
     # Sustained CANDIDATES past timeout cleanly stops with structured diagnostic detail
     loc_state.update(state="CANDIDATES", reason="fit_drop")
-    for _ in range(32):
+    for _ in range(100):
         ports.now += 0.5
         run(runner.tick())
         if runner.view("p1")["state"] not in ("started", "running"):
@@ -965,8 +976,8 @@ def test_opportunistic_binding_holds_transient_candidates_across_ticks_even_near
     assert later["detail"]["localization_wait"]["since"] == first_since
     assert live.progress_at == pytest.approx(ports.now)
 
-    # Sustained CANDIDATES past 15s cap cleanly stops even with opportunistic binding
-    for _ in range(32):
+    # Sustained CANDIDATES past the recovery wait cleanly stops even with opportunistic binding
+    for _ in range(100):
         ports.now += 0.5
         run(runner.tick())
         if runner.view("p1")["state"] not in ("started", "running"):

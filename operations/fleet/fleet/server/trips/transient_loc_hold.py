@@ -5,6 +5,10 @@ from __future__ import annotations
 from fleet.server.named_stop_map_pose import read_precision_pose_status
 from fleet.server.trip_ports import pose_diagnostics
 
+# The robot stands still (goal canceled) while it waits. One onboard recovery on rosy_45 took about
+# 20 s on 2026-11-27 (fit drop, node restart, 3 s search, initialpose, 3 s check); two fit in 45 s.
+LOC_RECOVERY_WAIT_S = 45.0
+
 
 def loc_diag_from_state(
     state: dict | None,
@@ -28,13 +32,13 @@ def loc_diag_from_state(
 
 
 async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -> bool:
-    """Hold a Nav2 trip bounded by stall_s/15s while onboard localization recovers from SUSPECT/CANDIDATES."""
+    """Hold a Nav2 trip up to LOC_RECOVERY_WAIT_S while onboard localization recovers (UNKNOWN: its node restarts)."""
     detail = live.view["detail"]
     recoverable = (
         live.nav2
         and live.open
         and diag.get("pose_reason") == "ROBOT_NOT_LOCALIZED"
-        and diag.get("loc_state") in ("SUSPECT", "CANDIDATES")
+        and diag.get("loc_state") in ("SUSPECT", "CANDIDATES", "UNKNOWN")
         and diag.get("robot_grid_id") is not None
         and diag.get("robot_grid_id") == diag.get("binding_grid_id")
         and not diag.get("estop")
@@ -55,7 +59,7 @@ async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -
         wait = {"since": now}
         detail["localization_wait"] = wait
     wait.update({"updated_at": now, "loc_state": diag.get("loc_state"), "loc_reason": diag.get("loc_reason")})
-    if now - wait["since"] >= min(float(runner.config.stall_s), 15.0):
+    if now - wait["since"] >= LOC_RECOVERY_WAIT_S:
         return False
     runner._save(live)
     return True
