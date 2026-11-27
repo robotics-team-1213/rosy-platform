@@ -20,3 +20,7 @@
 .cell-obj-staging { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-flat); margin-top: var(--space-2); }
 .cell-obj-staging-status { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
 .cell-obj-staging-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.assistant-obj-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.assistant-obj-chip { font-size: var(--text-micro); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--border-default); background: var(--surface-canvas); color: var(--text-primary); cursor: pointer; }
+.assistant-obj-chip[aria-pressed="true"] { border-color: var(--selection); outline: var(--focus-ring-width) solid var(--selection); background: var(--surface-raised); }
+.assistant-obj-chip:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }

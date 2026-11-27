@@ -65,7 +65,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
     "applications/fleet/web/console.js": 3,  # Channel, neutral ARM review, and assistant navigation share confirmedAction.
-    "applications/fleet/web/assistant/panel.js": 1,  # LLM CONTROL explicit navigation confirms through confirmedAction.
+    "applications/fleet/web/assistant/panel.js": 2,  # LLM CONTROL navigation & bound object pick-place confirm through confirmedAction.
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/manual-control.js": 2,  # fixed MANUAL transition and 10 cm relative step
     "applications/fleet/web/map/named-stop-actions.js": 2,  # named-stop custody release and precision correction clearance
@@ -73,6 +73,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/maintenance/host-services.js": 1,  # named operator host control, shared confirmation
     "applications/fleet/web/roster.js": 1,
     "applications/fleet/web/charge-bays-view.js": 4,  # cancel task, choice dispatch, quick dispatch, bound target-object pick-place
+    "applications/fleet/web/cell/arm-cell-controls.js": 3,  # ARM-CELL object stager, preset commands, and incident clear confirm through confirmedAction.
     "applications/fleet/web/trip-replan.js": 1,  # confirm resume or confirm-replan
     "applications/fleet/web/console-goal.js": 2,  # map goal and place-chip goal confirm the selected robot before dispatch
     "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)

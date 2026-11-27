@@ -85,6 +85,7 @@ if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 const cockpitHud = createCockpitHud({ el });
 const selection = createSelection(null);
+const objectHighlight = createSelection(null);
 let cellStage = null;
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
@@ -218,8 +219,10 @@ async function call(path, options = {}) {
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 const assistant = createAssistantPanel({
-  scope: pageScope, call, el, readSelection: () => view.focusRobot,
-  readRobots: () => view.robots, readPlaces: () => view.activeSiteMap?.map?.places || [],
+  scope: pageScope, call, el,
+  readSelection: () => { const id = selection.get() || view.focusRobot; return id && view.robots.some((r) => r.robot_id === id) ? id : null; },
+  readRobots: () => view.robots,
+  readPlaces: () => view.activeSiteMap?.map?.places || [], objectHighlight,
   onSelectRobot: (id) => selection.set(id || null, { source: "assistant" }),
   onOpenRobot: (id) => { if (id) rosterWorkspace.open(id); },
   confirm: (options) => confirmedAction.run(options), log,
@@ -398,7 +401,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason, openQueueRow: (key) => inbox.jumpToQueueRow(key) });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, objectHighlight, onCellChanged: () => cellStage?.refresh(), isOperator: () => hasOperatorRole(auth.role), namedReason, openQueueRow: (key) => inbox.jumpToQueueRow(key) });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
@@ -443,15 +446,17 @@ const namedStopActions = createNamedStopActions({ scope: pageScope, view, call, 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {
   const diag = (id, text) => patchText(el(id), text);
-  diag("diag-state", view.stateUnavailable ? "불가"
-    : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
-  diag("diag-scanner", deviceDirectory.scannerLost ? "끊김"
-    : "정상");
+  const armMode = !owns("drive") && owns("arms");
+  const arms = view.workcellObs?.arms || [];
+  const cams = view.workcellObs?.cameras || [];
+  diag("diag-state", armMode ? `팔 ${arms.filter((a) => a.fresh).length}/${arms.length} 실시간`
+    : view.stateUnavailable ? "불가" : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
+  diag("diag-scanner", deviceDirectory.scannerLost ? "끊김" : "정상");
   const robotErrors = view.robots
     .filter((r) => r.error)
     .map((r) => `${r.robot_id}: ${r.error.held ? "Fleet 보류" : r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
   diag("diag-robots", robotErrors.length ? robotErrors.join(" · ") : "오류 없음");
-  diag("diag-vision", el("vision-state")?.textContent ?? "—");
+  diag("diag-vision", armMode ? `${view.cellLiveCamCount ?? 0}/${cams.length} 실시간` : (el("vision-state")?.textContent ?? "—"));
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
@@ -470,13 +475,14 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, objectHighlight, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };
 let hadObsArms = false;
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
+  objectHighlight, confirmedAction, log,
   contextHost: el("cell-context-panel"),
   isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
   namedReason,
