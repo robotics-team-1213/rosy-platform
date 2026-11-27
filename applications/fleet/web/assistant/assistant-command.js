@@ -10,10 +10,10 @@ export const elOf = (tag, cls, text = "") => { const e = document.createElement(
 const num = (v) => (v === "" || v == null ? NaN : Number(v));
 
 export function controlRemainingS(row, nowSec = Date.now() / 1000) {
-  return !row || typeof row.completed_at !== "number" || !Number.isFinite(row.completed_at) ? null : Math.max(0, Math.ceil(CONTROL_WINDOW_S - (nowSec - row.completed_at)));
+  return !row || typeof row.completed_at !== "number" || !Number.isFinite(row.completed_at) ? null : Math.max(0, Math.ceil(CONTROL_WINDOW_S - Math.max(0, nowSec - row.completed_at)));
 }
 export function isControlExpired(row, nowSec = Date.now() / 1000) {
-  return !row || typeof row.completed_at !== "number" || !Number.isFinite(row.completed_at) ? false : nowSec - row.completed_at > CONTROL_WINDOW_S || nowSec < row.completed_at;
+  return !row || typeof row.completed_at !== "number" || !Number.isFinite(row.completed_at) ? false : nowSec - row.completed_at > CONTROL_WINDOW_S;
 }
 export function buildNavigationPayload(robotId, xRaw, yRaw, yawRaw = 0) {
   if (typeof robotId !== "string" || !robotId.trim()) return null;
@@ -96,7 +96,7 @@ export function renderCommandCard({
     const reason = !identity ? "기명 운영자로 로그인해 주세요." : !available ? "관제 AI 연결이 필요합니다." : submitting ? "이동 명령을 접수하는 중입니다."
       : isControlExpired(row) ? "30초 유효 시간이 지났습니다. 명령을 다시 요청해 주세요." : !payload ? "유효한 목표 X·Y 좌표를 입력하세요." : "";
     setOff(submitBtn, Boolean(reason), reason);
-    return payload;
+    return reason ? null : payload;
   };
   const emitDraft = () => onDraftChange?.({ placeId: placeSelect.value, x: fx.input.value, y: fy.input.value, yaw: fyaw.input.value });
   placeSelect.addEventListener("change", () => {

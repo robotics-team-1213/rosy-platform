@@ -76,6 +76,8 @@ test('command handoff validates coordinates, expiry, kind labels, and errors', (
   assert.equal(buildNavigationPayload('r1', '100001', '2', '0'), null);
   assert.equal(buildNavigationPayload('r1', '1', '2', '4'), null);
   assert.equal(controlRemainingS({ completed_at: 1000 }, 1012), 18);
+  assert.equal(controlRemainingS({ completed_at: 1010 }, 1000), 30);
+  assert.equal(isControlExpired({ completed_at: 1010 }, 1000), false);
   assert.equal(isControlExpired({ completed_at: 1000 }, 1030), false);
   assert.equal(isControlExpired({ completed_at: 1000 }, 1031), true);
   assert.match(formatNavigationError({ status: 409 }), /30초/);
