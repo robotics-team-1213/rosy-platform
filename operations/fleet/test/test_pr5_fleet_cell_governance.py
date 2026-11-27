@@ -74,6 +74,22 @@ def _build_env(tmp_path: Path, *, db_path: Path | str | None = None, amr_ok: boo
     return app, TestClient(app, raise_server_exceptions=False)
 
 
+def test_cell_readiness_reports_folded_only_from_a_recent_report(tmp_path):
+    app, client = _build_env(tmp_path)
+
+    def arm():
+        return client.get("/api/fleet/pipeline/cells/cell_s/readiness", headers=VIEW).json()["arms"]["arm_s"]
+
+    assert arm()["folded"] is None  # the boot default pose says folded; nobody observed it
+    assert arm()["state_unknown"] == {"reason": "never_observed", "last_observed_at": None}
+    live = app.state.arm_live_states["arm_s"]
+    live.update(folded=True, updated_at=time.time(), folded_updated_at=time.time(), source="live_stream")
+    assert arm()["folded"] is True and arm()["state_unknown"] is None
+    old = time.time() - 3600
+    live.update(folded_updated_at=old, updated_at=time.time())  # a later row without a fold report refreshes nothing
+    assert arm()["folded"] is None and arm()["state_unknown"] == {"reason": "stale", "last_observed_at": old}
+
+
 def test_propose_admit_cas_and_interlock_scope(tmp_path):
     app, client = _build_env(tmp_path)
     sha = "a" * 64

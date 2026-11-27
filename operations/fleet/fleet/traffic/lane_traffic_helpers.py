@@ -18,16 +18,22 @@ def units_under_pose(
     length: float,
     u_max: float,
     extra: float = 0.0,
+    side_m: Optional[float] = None,
 ) -> dict[str, bool]:
-    """``{unit: forward}`` a robot body at ``pose`` (± its length, u and ``extra`` along the lane) may touch."""
+    """``{unit: forward}`` a robot body at ``pose`` (± its length, u and ``extra`` along the lane) may touch.
+
+    ``side_m`` is how far beside a lane's edge the pose may be and still touch it (default ``u_max``, the worst
+    dead-reckoned error). A pose read this period is far better than that: with ``u_max`` a robot standing in one
+    charge bay pinned the bays 0.226 m to either side as well (2026-11-27 live run, three robots deadlocked)."""
     x, y, yaw = pose
+    side = u_max if side_m is None else side_m
     reach = length + u_max + extra
     units: dict[str, bool] = {}
     for arc in graph.arcs.values():
         if not arc.forward:
             continue
         dist, s, tangent = arc.project(x, y)
-        if dist > arc.width_m / 2 + u_max:
+        if dist > arc.width_m / 2 + side:
             continue
         forward = yaw is None or math.cos(yaw - tangent) >= 0.0
         for unit, s0, s1 in layout.edge_units[arc.edge_id]:
