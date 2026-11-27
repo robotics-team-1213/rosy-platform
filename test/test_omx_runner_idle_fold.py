@@ -137,3 +137,45 @@ def test_idle_park_still_fires_after_a_long_chunk_when_caller_goes_silent():
     assert park_done[0]["clock"] > long_done["clock"] + 5.0
     assert status[-1]["command"] == "stop" and "no command" in status[-1]["reason"]
     assert clock[0] >= long_done["clock"] + 10.0
+
+
+def _idle_open_run(holding: bool, robot=None):
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status, clock, grips = [], [0.0], []
+    r = m.Runner(robot or Robot(), lib, fps=30, status=lambda row: status.append(dict(row, clock=clock[0])),
+                 clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+                 params={"runner.idle_park_s": 5.0, "runner.idle_stop_s": 5.0, "runner.idle_open_grip": 56.0})
+    r.holding = holding
+    real = r.command
+
+    def spy(line):
+        if line.startswith("grip"):
+            grips.append((clock[0], line))
+        return real(line)
+
+    r.command = spy
+    r.run(lambda: [])
+    return status, grips
+
+
+def test_idle_open_grip_opens_the_empty_jaws_in_place_then_folds_home():
+    status, grips = _idle_open_run(holding=False)
+    parks = [s for s in status if s["command"] == "run park"]
+    assert grips and grips[0][1] == "grip 56.0" and grips[0][0] >= 5.0
+    assert len(parks) == 1 and parks[0]["ok"] is True and parks[0]["clock"] > grips[0][0] + 1.5
+    assert status[-1]["command"] == "stop" and "no command" in status[-1]["reason"]
+
+
+def test_idle_open_grip_never_opens_jaws_that_hold_a_box():
+    status, grips = _idle_open_run(holding=True)
+    assert not grips
+    assert [s for s in status if s["command"] == "run park"]
+
+
+def test_idle_open_grip_never_opens_jaws_measured_on_a_box_the_runner_did_not_flag():
+    box = Robot(object_at=52.0)
+    box.pos[5] = 52.0  # a box between the jaws from before this session: runner.holding is False
+    status, grips = _idle_open_run(holding=False, robot=box)
+    assert not grips
+    assert [s for s in status if s["command"] == "run park"]

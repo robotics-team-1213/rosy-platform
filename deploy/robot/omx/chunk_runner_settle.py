@@ -24,6 +24,7 @@ from chunk_runner_interrupt import folded, interrupt_step, interrupt_tick  # noq
 
 SETTLE_S = 3.0
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
+IDLE_OPEN_SETTLE_S = 1.5  # runner.idle_open_grip: time for the jaws to open in place before the idle fold rises
 
 
 def note_sent_grip(runner, sent) -> None:
@@ -269,6 +270,12 @@ def check_runner_idle(runner, cr_attr) -> bool:
         from chunk_runner_commands import _is_policy_lib
         if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library):
             return False
+        opened_at = getattr(runner, "_idle_open_at", None)
+        if opened_at is not None:  # jaws opened in place: rise and fold home along park_path once they have opened
+            if runner.clock() - opened_at >= IDLE_OPEN_SETTLE_S:
+                runner._idle_open_at, runner.last_input = None, runner.clock()
+                runner.command("park")
+            return False
         if runner.idle_parks >= 2:
             if runner.idle_parks == 2:
                 runner.idle_parks = 3
@@ -278,6 +285,17 @@ def check_runner_idle(runner, cr_attr) -> bool:
         wait = prm.get(runner.params, "runner.idle_retry_s", idle_retry_s) if runner.idle_parks else prm.get(runner.params, "runner.idle_park_s", idle_park_s)
         if quiet >= wait:
             runner.last_input, runner.idle_parks = runner.clock(), runner.idle_parks + 1
+            open_to = prm.get(runner.params, "runner.idle_open_grip")
+            # Open in place only on the first idle fold of a gripper measured shut on nothing: a held box would drop
+            # where it stands, and runner.holding is bookkeeping, so the live jaw must read closed (D-430 review 11-27).
+            closed, jaw = library_gripper_closed(runner.library), (getattr(runner, "last_present", None) or [None] * 6)[5]
+            if (open_to and runner.idle_parks == 1 and not runner.holding and not runner.fault
+                    and runner.target is not None and jaw is not None
+                    and max(jaw, runner.target[5]) <= closed + EMPTY_MARGIN and closed + EMPTY_MARGIN < open_to - 1.0):
+                runner.command(f"grip {open_to}")
+                if runner.target[5] >= open_to - 1.0:
+                    runner._idle_open_at = runner.clock()
+                    return False
             runner.command("park")
         return False
     pushed = (runner.fault or "").startswith("pushing at rest")
