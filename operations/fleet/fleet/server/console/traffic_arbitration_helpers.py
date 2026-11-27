@@ -232,7 +232,8 @@ def peer_proof(self, peers):
     return {"peer_evidence": {rid: sample for rid in peers if (sample := provider.evidence(rid))}}
 
 
-async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from, check_wait_prefix):
+async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, send, *, grid_from, check_wait_prefix,
+                            table_peers=None):
     from fleet.swarm.dispatch_guard import dispatch_guard
 
     await self._observe()
@@ -243,7 +244,7 @@ async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, s
 
     def check():
         self.goal_leases.check_stop(robot_id, stop)
-        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid)
+        wait = road_peer_wait(self, robot_id, points, goal, site_route_of, grid, table_peers)
         if wait is not None:
             raise PeerWait(wait)
         if not check_wait_prefix(self, robot_id, points, site_route_of):
@@ -258,7 +259,7 @@ async def guarded_road_send(self, robot_id, points, goal, stop, site_route_of, s
         return exc.args[0]
 
 
-def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
+def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid, table_peers=None):
 
     here = self._pose_of(robot_id)
     if here is None or self._verdict(robot_id) != "trusted":
@@ -277,7 +278,8 @@ def road_peer_wait(self, robot_id, route_points, goal, site_route_of, grid):
             peers = [blocker]
             reason = "ROUTE_CONFLICT" if conflict else "MAP_FRAME_MISMATCH"
         elif len(self._order) > 1:
-            peers = self._standing_in_the_way(robot_id, route, grid, goal, site_route=site_route)
+            peers = [rid for rid in self._standing_in_the_way(robot_id, route, grid, goal, site_route=site_route)
+                     if not self._table_governed(robot_id, rid, table_peers)]
             reason = "YIELDING"
     if peers:
         return {"accepted": False, "queued": False, "reason": reason, **peer_proof(self, peers),
