@@ -8,6 +8,7 @@ least one cell wide. The output is deterministic: the same faces always give the
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import math
 import struct
@@ -20,6 +21,10 @@ DEFAULT_RESOLUTION_M = 0.025
 OCCUPIED_THRESH = 0.65
 FREE_THRESH = 0.25
 MARGIN_M = 0.10  # unknown border around the walls, so the outside is never cut off
+OFF_LANE_COST = 60  # graded non-lethal (<= 98) preference cost outside mapped lanes
+SHOULDER_MAX_COST = 25
+CENTER_BAND_RATIO = 0.25
+PARKING_KINDS = frozenset({"charge", "park"})
 
 
 class WallGridError(ValueError):
@@ -99,3 +104,93 @@ def build(map_id: str, version: int, faces, resolution: float = DEFAULT_RESOLUTI
                      "origin": [grid["origin"][0], grid["origin"][1], 0.0], "negate": 0,
                      "occupied_thresh": OCCUPIED_THRESH, "free_thresh": FREE_THRESH},
             "width": grid["width"], "height": grid["height"]}
+
+
+def _get(obj, key: str, alt: str | None = None, default=None):
+    if isinstance(obj, dict):
+        return obj.get(key, default if alt is None else obj.get(alt, default))
+    val = getattr(obj, key, default)
+    return val if val is not None or alt is None else getattr(obj, alt, default)
+
+
+def _bay_place_ids(edges, places) -> set[str]:
+    kind_of = {_get(p, "id"): _get(p, "kind") for p in places}
+    bay_places: set[str] = set()
+    for edge in edges:
+        eid = _get(edge, "id", default="")
+        if isinstance(eid, str) and eid.startswith("bay_"):
+            for pid in (_get(edge, "from_", "from"), _get(edge, "to")):
+                if pid and kind_of.get(pid) != "stop":
+                    bay_places.add(pid)
+    return bay_places | {pid for pid, kind in kind_of.items() if kind in PARKING_KINDS}
+
+
+def build_lane_mask(map_id: str, version: int, walls, edges, places=(),
+                    resolution: float = DEFAULT_RESOLUTION_M) -> dict:
+    """Site-frame Nav2 KeepoutFilter scale mask matching ``wall_<map_id>_v<version>`` origin/size (non-lethal)."""
+    wall_faces = [(tuple(a), tuple(b)) for a, b in walls]
+    edge_list = list(edges)
+    if not wall_faces or resolution <= 0 or not all(math.isfinite(v) for f in wall_faces for p in f for v in p):
+        raise WallGridError("need at least one finite wall face and a positive resolution")
+    if not edge_list:
+        raise WallGridError("need at least one lane edge to build a lane mask")
+    xs = [p[0] for f in wall_faces for p in f]
+    ys = [p[1] for f in wall_faces for p in f]
+    ix0, iy0 = math.floor((min(xs) - MARGIN_M) / resolution), math.floor((min(ys) - MARGIN_M) / resolution)
+    width = math.ceil((max(xs) + MARGIN_M) / resolution) - ix0
+    height = math.ceil((max(ys) + MARGIN_M) / resolution) - iy0
+    ox, oy = round(ix0 * resolution, 6), round(iy0 * resolution, 6)
+    costs = [[OFF_LANE_COST] * width for _ in range(height)]
+    park_places = _bay_place_ids(edge_list, places)
+    for edge in edge_list:
+        poly = [tuple(p) for p in (_get(edge, "polyline") or ())]
+        width_m = float(_get(edge, "width_m", default=0.0))
+        if len(poly) < 2 or not math.isfinite(width_m) or width_m <= 0.0:
+            raise WallGridError("each lane edge needs a valid polyline and positive width_m")
+        half = width_m / 2.0
+        center = width_m * CENTER_BAND_RATIO
+        eid = _get(edge, "id", default="")
+        is_parking = (isinstance(eid, str) and eid.startswith("bay_")) or any(
+            pid in park_places for pid in (_get(edge, "from_", "from"), _get(edge, "to")) if pid)
+        for a, b in zip(poly, poly[1:]):
+            c_lo = max(0, int((min(a[0], b[0]) - half - ox) // resolution) - 1)
+            c_hi = min(width - 1, int((max(a[0], b[0]) + half - ox) // resolution) + 1)
+            r_lo = max(0, int((min(a[1], b[1]) - half - oy) // resolution) - 1)
+            r_hi = min(height - 1, int((max(a[1], b[1]) + half - oy) // resolution) + 1)
+            for r in range(r_lo, r_hi + 1):
+                for c in range(c_lo, c_hi + 1):
+                    d = _dist_to_segment(ox + (c + 0.5) * resolution, oy + (r + 0.5) * resolution, a, b)
+                    if d <= half:
+                        if is_parking or d <= center:
+                            cost = 0
+                        else:
+                            cost = int(round(SHOULDER_MAX_COST * (d - center) / max(1e-9, half - center)))
+                        if cost < costs[r][c]:
+                            costs[r][c] = cost
+    rows = [[max(1, min(255, round(255 * (1.0 - cost / 100.0)))) for cost in row] for row in costs]
+    stem = f"lane_mask_{map_id}_v{version}"
+    pgm = pgm_bytes({"width": width, "height": height, "rows": rows})
+    return {"map_id": map_id, "version": version, "resolution": resolution, "file_stem": stem,
+            "pgm": pgm, "sha256": hashlib.sha256(pgm).hexdigest(),
+            "yaml": {"image": f"{stem}.pgm", "mode": "scale", "resolution": resolution,
+                     "origin": [ox, oy, 0.0], "negate": 0, "occupied_thresh": 1.0, "free_thresh": 0.0},
+            "filter_info": {"type": 0, "filter_mask_topic": "/keepout_filter_mask", "base": 0.0, "multiplier": 1.0},
+            "width": width, "height": height}
+
+
+def grid_route_response(active, kind: str, error_fn) -> dict:
+    """Shared HTTP payload builder for /site-map/wall-grid and /site-map/lane-mask."""
+    if active is None:
+        raise error_fn(404, "SITE_MAP_NOT_ACTIVE", "activate a site map first")
+    version, site = active[:2]
+    if not site.walls:
+        raise error_fn(404, "SITE_MAP_NO_WALLS", "the active site map has no walls")
+    walls = [w.face for w in site.walls]
+    if kind == "wall":
+        built = build(site.map_id, version, walls)
+    else:
+        if not site.edges:
+            raise error_fn(404, "SITE_MAP_NO_EDGES", "the active site map has no lane edges")
+        built = build_lane_mask(site.map_id, version, walls, site.edges, site.places)
+    pgm = built.pop("pgm")
+    return {**built, "pgm_base64": base64.b64encode(pgm).decode("ascii")}

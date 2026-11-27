@@ -679,3 +679,32 @@ def test_start_after_tf_throttles_checks_across_fast_tf_wakeups_and_guards_conta
         check_interval_s=0.5,
     )
     assert rc == 0 and cli.service_is_ready.call_count <= 4  # throttled vs ~24 wakeups
+
+
+def test_keepout_mask_opt_in_targets_global_costmap_only_and_validates_mask_file(tmp_path):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    from navigation.site_map import resolve_keepout_mask
+
+    assert resolve_keepout_mask("") == ""
+    with pytest.raises(ValueError, match="keepout filter mask"):
+        resolve_keepout_mask(tmp_path / "missing.yaml")
+
+    (tmp_path / "mask.pgm").write_bytes(b"P5\n2 2\n255\n" + bytes([255, 255, 102, 102]))
+    mask_yaml = tmp_path / "mask.yaml"
+    mask_yaml.write_text("image: mask.pgm\nresolution: 0.025\norigin: [0.0, 0.0, 0.0]\nnegate: 0\n", encoding="utf-8")
+    assert resolve_keepout_mask(mask_yaml) == str(mask_yaml)
+
+    off = yaml.safe_load(Path(write_prefixed_nav2_params(NAV_PARAMS, "rosy_01", directory=tmp_path, keepout_mask=False)).read_text("utf-8"))
+    assert "filters" not in off["/rosy_01/global_costmap"]["global_costmap"]["ros__parameters"]
+    assert "filter_mask_server" not in off and "/rosy_01/filter_mask_server" not in off
+
+    on = yaml.safe_load(Path(write_prefixed_nav2_params(NAV_PARAMS, "rosy_01", directory=tmp_path, keepout_mask=True)).read_text("utf-8"))
+    gparams = on["/rosy_01/global_costmap"]["global_costmap"]["ros__parameters"]
+    lparams = on["/rosy_01/local_costmap"]["local_costmap"]["ros__parameters"]
+    assert gparams["filters"] == ["keepout_filter"]
+    assert gparams["keepout_filter"]["filter_info_topic"] == "/rosy_01/costmap_filter_info"
+    assert "filters" not in lparams and "keepout_filter" not in lparams
+    assert on["/rosy_01/filter_mask_server"]["ros__parameters"]["topic_name"] == "/rosy_01/keepout_filter_mask"
+    assert on["/rosy_01/filter_mask_server"]["ros__parameters"]["bond_heartbeat_period"] == 0.0
+    assert on["/rosy_01/costmap_filter_info_server"]["ros__parameters"]["mask_topic"] == "/rosy_01/keepout_filter_mask"
+    assert on["/rosy_01/costmap_filter_info_server"]["ros__parameters"]["bond_heartbeat_period"] == 0.0

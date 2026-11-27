@@ -31,7 +31,14 @@ from navigation.profile_limits import (
     validate_nav2_parameters,
     validate_requested_limits,
 )
-from navigation.site_map import resolve_occupancy_map
+from navigation.site_map import resolve_keepout_mask, resolve_occupancy_map
+
+
+def _opt_arg(context, name: str, default: str = "") -> str:
+    try:
+        return LaunchConfiguration(name).perform(context)
+    except KeyError:
+        return default
 
 
 def _include_nav2(context, *args, **kwargs):
@@ -80,6 +87,9 @@ def _include_nav2(context, *args, **kwargs):
         limits, max_linear_mps=requested_linear, max_angular_rps=requested_angular
     )
     validate_nav2_parameters(source, limits)
+    keepout_yaml = ""
+    if backend == "localization":
+        keepout_yaml = resolve_keepout_mask(_opt_arg(context, "keepout_mask"))
     # ROSY_MAX_LINEAR_MPS/ROSY_MAX_ANGULAR_RPS carry the approved speed; Nav2 plans inside it instead of CORE clipping afterwards.
     rewritten_nav = write_prefixed_nav2_params(
         source,
@@ -87,6 +97,7 @@ def _include_nav2(context, *args, **kwargs):
         footprint_points=footprint_points,
         speed=(float(requested_linear), float(requested_angular)),
         amcl_laser_model=amcl_laser_model,
+        keepout_mask=bool(keepout_yaml),
     )
     if backend == "localization":
         fallback_map = os.path.join(nav_share, "map", "my_map.yaml")
@@ -103,6 +114,7 @@ def _include_nav2(context, *args, **kwargs):
             "namespace": namespace,
             "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
             "map": map_yaml,
+            "keepout_mask": keepout_yaml,
             "params_file": rewritten_nav,
             "navigation_autostart": "False",
             # Standalone nodes are the device-verified path: on this Jazzy build
@@ -219,6 +231,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "map",
             default_value=os.environ.get("ROSY_MAP", "/var/lib/rosy/maps/site.yaml"),
+        ),
+        DeclareLaunchArgument(
+            "keepout_mask",
+            default_value=os.environ.get("ROSY_KEEPOUT_MASK", ""),
         ),
         DeclareLaunchArgument("params_file", default_value=default_params),
         DeclareLaunchArgument(
