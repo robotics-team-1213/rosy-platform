@@ -354,7 +354,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 else:
                     halted = await self.halts.halt_robot(
                         robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
-                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), **pause_proof_args(trip),
+                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), terminal=True,
+                        **pause_proof_args(trip),
                     )
                 detail.update(halted)
                 if halted.get("stop_sent") and "error" not in halted:
@@ -591,4 +592,4 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         return await self.halts.halt_robot(
             live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
             handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")),
-            **pause_proof_args(live.view))
+            terminal=not live.open, **pause_proof_args(live.view))

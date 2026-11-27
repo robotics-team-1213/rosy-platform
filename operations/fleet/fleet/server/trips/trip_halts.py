@@ -196,8 +196,12 @@ class TripHalts:
         return None
 
     async def halt_robot(self, robot_id: str, lane: bool, place: str | None, *, handoff_pending=False,
-                         pause_after=None, peer_idle=False) -> dict:
-        """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel."""
+                         pause_after=None, peer_idle=False, terminal=False) -> dict:
+        """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel.
+
+        ``terminal``: the trip is already closed. A cancel of an IDLE robot gets no ack even after an earlier leg
+        (a wait-place prefix) was sent, so a closed trip also accepts the measured idle standstill (same owner, same
+        wire, zero velocity after the cancel); without it that robot stayed refused (prior_stop_unconfirmed)."""
         errors = []
 
         async def attempt(call) -> bool:
@@ -215,7 +219,7 @@ class TripHalts:
         else:
             idle_proof = None
             try:
-                wire = self.idle_wire(robot_id) if peer_idle and not handoff_pending else None
+                wire = self.idle_wire(robot_id) if (peer_idle or terminal) and not handoff_pending else None
                 cancel_res = await self._call(self._cancel_goal(robot_id))
                 after_cancel = self._clock() if wire is not None else None
                 canceled = _cancel_ack(cancel_res)
@@ -292,7 +296,8 @@ class TripHalts:
             if self.dock_owned(trip):
                 result = await self.halt_dock(trip)
             else:
-                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip))
+                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, terminal=True,
+                                               **pause_proof_args(trip))
         except Exception:
             _LOG.exception("could not stop robot %s of a trip open before the restart", rid)
             return False
