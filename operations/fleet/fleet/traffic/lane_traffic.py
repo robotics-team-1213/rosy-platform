@@ -41,6 +41,7 @@ from fleet.traffic.lane_traffic_helpers import (
     _shift,
     build_traffic_view,
     occupied_ahead,
+    occupied_ahead_by,
     pinned_behind,
     resolve_handover,
     route_occupants,
@@ -320,7 +321,8 @@ class TrafficService(SignalService):
                             # D-1009 road route: who this answer counted and where its route meets them
                             "route_rev": live.route_rev,
                             "peers": route_occupants(robot, owners, seen, active[1].map_id),
-                            "occupied_ahead_m": None if occupied is None else occupied - live.segments[0]["s_from"]}
+                            "occupied_ahead_m": None if occupied is None else occupied - live.segments[0]["s_from"],
+                            "occupied_ahead_by": occupied_ahead_by(robot, state, owners)}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
         self._view["signals"] = self._signal_view(active[2])
         for row in self._view["robots"]:
