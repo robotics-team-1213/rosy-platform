@@ -19,6 +19,11 @@ STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM, STRAIN_NET_PWM = 2.2, 0.25, 6
 # never fires. Its travel lag saws up to ~1.6 going negative while it keeps moving (arm_b's "stalls" at -13 and 9.89,
 # 8 of 8, 2026-11-06), so a rising lag holds at ROLL_BLOCK_LAG only once ROLL_STILL_TICKS show it still, or at STRAIN_LAG.
 ROLL_BLOCK_LAG, ROLL_STILL, ROLL_STILL_TICKS, ROLL_BLOCK_PWM = 1.5, 0.3, 15, 0.20
+# Stall (2026-11-27 arm_a 15:13): shoulder_lift PWM -107 -> -600 while it moved 1 unit, then an overload latch on ID 12; the lag
+# never reached STRAIN_LAG. A load-bearing joint pushing at STALL_PWM of its cap with its lag rising STRAIN_RISE and under STALL_MOVE
+# of travel in STALL_TICKS (0.5 s at 30 Hz) holds at STALL_LAG, before the motor's own overload shutdown. STALL_PWM sits above the
+# 69 % of a normal lift out of the container reach (test_travel_lag_without_a_rising_push_is_not_strain).
+STALL_LAG, STALL_MOVE, STALL_TICKS, STALL_PWM = 1.0, 0.5, 15, 0.75
 SHED = ("shoulder_lift", "elbow_flex")
 
 
@@ -26,7 +31,7 @@ def strained(runner, sent, present):
     """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
     that stopped moving with its lag rising past ROLL_BLOCK_LAG (with at least ROLL_BLOCK_PWM effort, or past STRAIN_LAG); else None."""
     lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
-    runner.trend = (runner.trend + [[*lags, present[4]]])[-(ROLL_STILL_TICKS + 1):]
+    runner.trend = (runner.trend + [[*lags, present[4], *present[:4]]])[-(max(ROLL_STILL_TICKS, STALL_TICKS) + 1):]
     if len(runner.trend) <= STRAIN_TICKS:
         return None
     motion = getattr(runner.robot, "motion", None)  # the guard's own PWM sample: no extra bus read
@@ -41,6 +46,10 @@ def strained(runner, sent, present):
             and (motor not in grav
                  or min(abs(pwm[motor] - grav[motor]), abs(abs(pwm[motor]) - abs(grav[motor]))) >= STRAIN_NET_PWM * limits[motor])))
         if lags[i] >= STRAIN_LAG and rising and pushing:
+            return motor, lags[i], pwm.get(motor), limits.get(motor)
+        back = runner.trend[-STALL_TICKS - 1] if len(runner.trend) > STALL_TICKS else None
+        if (back is not None and len(back) > 6 + i and pushing and motor in pwm and motor in limits  # a measured push only
+                and abs(pwm[motor]) >= STALL_PWM * limits[motor] and lags[i] >= STALL_LAG and lags[i] - back[i] >= STRAIN_RISE and abs(present[i] - back[6 + i]) < STALL_MOVE):
             return motor, lags[i], pwm.get(motor), limits.get(motor)
     path = [row[5] for row in runner.trend]
     still = len(path) > ROLL_STILL_TICKS and max(path) - min(path) < ROLL_STILL

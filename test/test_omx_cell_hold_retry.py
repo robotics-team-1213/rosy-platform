@@ -78,46 +78,86 @@ def test_a_live_hold_is_retried_by_recover_hold_with_backoff_and_never_handed_to
     assert len(runner.started) == 12
 
 
-def test_overload_latch_of_1515_starts_no_motion(tmp_path):
-    runner, state = Runner(tmp_path), {}
+def test_overload_latch_of_1515_is_rebooted_then_the_fold_runs(tmp_path):
+    runner, state, folds, reboots = Runner(tmp_path), {}, [], []
     _dirs(tmp_path)
     _incident(tmp_path, OVERLOAD_1515)
-    rows = _tick(runner, state, 1000.0, HELD, tmp_path)
-    assert runner.started == [] and rows[0]["reason"] == "NO_FRESH_MOTOR_HEALTH"
-    _health(tmp_path, 2000.0, hw=32)
-    rows = _tick(runner, state, 2000.0, HELD, tmp_path)
-    assert runner.started == [] and rows[0]["reason"] == "HARDWARE_ERROR_LATCHED"
-    _health(tmp_path, 3000.0, temps=(50, 33, 32, 22, 22, 22))
-    rows = _tick(runner, state, 3000.0, HELD, tmp_path)
-    assert runner.started == [] and rows[0]["reason"] == "MOTORS_NOT_COOL"
-    _health(tmp_path, 4000.0)  # latch cleared (rebooted) and cool: one checked try
-    _tick(runner, state, 4000.0, HELD, tmp_path)
-    assert len(runner.started) == 1
+    held = {"arm_a": {"local_held": True}}
+
+    def reboot(arm, ids):
+        reboots.append(ids)
+        return {"rebooted": [int(i) for i in ids]} if len(reboots) == 2 else {"refused": "a follower motor has torque ON"}
+
+    inc, hd = _dirs(tmp_path)
+    tick = lambda now: hr.tick(runner, state, now, arms=("arm_a",), observe=lambda arm: {"session": False},  # noqa: E731
+                               incident_status=lambda arm: held["arm_a"], launch_fold=lambda arm: folds.append(arm) or {"started": True},
+                               incidents=inc, health_dir=hd, reboot=reboot)
+    _health(tmp_path, 1000.0, hw=32, status="ended", torque=False)
+    rows = tick(1000.0)
+    assert reboots == [["12"]] and folds == [] and rows[0]["reason"] == "HARDWARE_ERROR_LATCHED"
+    rows = tick(1000.0 + hr.COOLED_S)  # rebooted now, the old snapshot's hw error no longer stops it, and it has cooled
+    assert reboots == [["12"], ["12"]] and folds == ["arm_a"]
+    _incident(tmp_path, OVERLOAD_1515, "20261127T160000")  # the same ID latches again in a later incident: a new latch
+    rows = tick(1000.0 + hr.COOLED_S + hr.RETRY_S[-1])
+    assert reboots[-1] == ["12"] and len(reboots) == 3 and folds == ["arm_a"] and rows[0]["reason"] == "HARDWARE_ERROR_LATCHED"
 
 
-def test_pushing_then_following_error_of_1530_waits_for_a_pose_change_after_a_second_load_failure(tmp_path):
+def test_load_failures_of_1530_keep_trying_other_ways_once_cool(tmp_path):
     runner, state, folds = Runner(tmp_path), {}, []
     _dirs(tmp_path)
     _incident(tmp_path, PUSHING_1530, "20261127T153023")
     held = {"arm_a": {"local_held": True}}
+    _health(tmp_path, 1000.0, temps=(50, 33, 32, 22, 22, 22))
+    rows = _tick(runner, state, 1000.0, {}, tmp_path, held, folds)
+    assert folds == [] and rows[0]["reason"] == "MOTORS_NOT_COOL"  # the incident's own fault: cool down first
+    for k in range(6):  # every try after cooling; the fold itself picks the next candidate it learned
+        now = 2000.0 + k * hr.RETRY_S[-1]
+        marker = tmp_path / "inc" / f"auto-fold-inc{k}.json"
+        if k:
+            (tmp_path / "inc" / f"auto-fold-inc{k - 1}.result.json").write_text(json.dumps({"result": "held", "why": "pushing at rest"}))
+        _health(tmp_path, now)
+        _tick(runner, state, now, {}, tmp_path, held, folds)
+        marker.write_text(json.dumps({"incident_id": f"inc{k}", "arm": "arm_a", "stage": "full", "at": now}))
+    assert folds == ["arm_a"] * 6 and state["arm_a"]["load_fails"] >= 6
+    audit = [json.loads(line) for line in (runner.out / "audit.jsonl").read_text().splitlines()]
+    assert all("max_temp_c" in r for r in audit) and "moved_deg" in audit[-1]  # no progress shows at a glance
+
+
+def test_after_a_full_rotation_of_failures_it_slows_to_an_hour_and_keeps_trying(tmp_path):
+    runner, state = Runner(tmp_path), {}
+    _dirs(tmp_path)
+    state["arm_a"] = {"tries": 20, "next": 0.0, "load_fails": hr.ROTATION, "pending": None, "hold": "live_hold"}
     _health(tmp_path, 1000.0)
-    _tick(runner, state, 1000.0, {}, tmp_path, held, folds)
-    assert folds == ["arm_a"]  # the incident's own fault is load failure 1; cool and fault-free: one try
-    marker = tmp_path / "inc" / "auto-fold-inc1.json"
-    marker.write_text(json.dumps({"incident_id": "inc1", "arm": "arm_a", "stage": "full", "at": 1000.0}))
-    _health(tmp_path, 1030.0)
-    _tick(runner, state, 1061.0, {}, tmp_path, held, folds)
-    assert folds == ["arm_a"]  # its try still runs
-    (tmp_path / "inc" / "auto-fold-inc1.result.json").write_text(json.dumps({"result": "held", "why": "pushing at rest: PWM 200 -> 450"}))
-    _health(tmp_path, 1100.0)
-    rows = _tick(runner, state, 1100.0, {}, tmp_path, held, folds)
-    assert folds == ["arm_a"] and rows[0]["reason"] == "LOAD_FAILED_WAIT_POSE" and not marker.exists()
-    for k in range(5):  # keeps auditing, never moves, never latches a person
-        _health(tmp_path, 2000.0 + k * 600)
-        assert _tick(runner, state, 2000.0 + k * 600, {}, tmp_path, held, folds)[0]["reason"] == "LOAD_FAILED_WAIT_POSE"
-    _health(tmp_path, 9000.0, raw=2048 + 80)  # someone moved the arm: a fresh situation
-    _tick(runner, state, 9000.0, {}, tmp_path, held, folds)
-    assert folds == ["arm_a", "arm_a"]
+    rows = _tick(runner, state, 1000.0, HELD, tmp_path)
+    assert rows[0]["started"] and rows[0]["no_progress"] and state["arm_a"]["next"] == 1000.0 + hr.ROTATION_S
+
+
+def test_a_reboot_waits_for_the_pause_file_and_a_session_that_just_opened(tmp_path):
+    runner, state, reboots = Runner(tmp_path), {}, []
+    inc, hd = _dirs(tmp_path)
+    _incident(tmp_path, OVERLOAD_1515)
+    sessions = iter([{"session": False}, {"session": True}])
+    hr.tick(runner, state, 1000.0, arms=("arm_a",), observe=lambda arm: next(sessions), incident_status=lambda arm: {"local_held": True},
+            launch_fold=lambda arm: {"started": True}, incidents=inc, health_dir=hd, reboot=lambda arm, ids: reboots.append(ids) or {})
+    assert reboots == []  # a session opened between the look and the reboot
+    (runner.out / "hold-retry-off-arm_a").write_text("")
+    state.clear()
+    hr.tick(runner, state, 2000.0, arms=("arm_a",), observe=lambda arm: {"session": False}, incident_status=lambda arm: {"local_held": True},
+            launch_fold=lambda arm: {"started": True}, incidents=inc, health_dir=hd, reboot=lambda arm, ids: reboots.append(ids) or {})
+    assert reboots == []  # a person is working on the arm
+
+
+def test_an_automatic_fold_offers_a_forearm_in_way_out_and_a_latch_is_rebooted_unfolded():
+    import cell_recovery_plan as rp
+    import omx_incident
+
+    home, cur = [0.0, -62.0, 53.0, 51.0, 45.0, 49.0], [-20.0, 10.0, 7.0, 35.0, 29.0, 56.0]
+    names = [n for n, _, _ in rp.build_candidates(cur, home, 40.0, lambda s: [s, home], extended=True)]
+    assert names[1] == "elbow_in_then_park" and "elbow_in_then_park" in rp.extended_candidate_names()
+    f = {"latched": OVERLOAD_1515["latched"], "flagged": OVERLOAD_1515["flagged"], "folded": False, "safe_end": False,
+         "torque_after": {"12": 1}, "windup_hits": [], "stops": []}
+    assert omx_incident.decide(f)["actions"] == ["reboot_latched"]  # reboot_latched itself reads all torques 0 before it acts
+
 
 
 def test_an_ended_torque_off_session_counts_as_cooled_after_ten_minutes(tmp_path):
@@ -164,11 +204,11 @@ def test_a_short_unseen_gap_keeps_the_load_failure_count(tmp_path):
     runner, state, folds = Runner(tmp_path), {}, []
     _dirs(tmp_path)
     _incident(tmp_path, PUSHING_1530, "20261127T153023")
-    state["arm_a"] = {"tries": 2, "next": 0.0, "load_fails": 2, "pending": None, "stuck_pose": [180.0] * 5, "hold": "incident"}
+    state["arm_a"] = {"tries": 2, "next": 0.0, "load_fails": 2, "pending": None, "hold": "incident"}
     _tick(runner, state, 1000.0, {}, tmp_path, {}, folds)  # stale live.json / session end before the incident: unseen
-    _health(tmp_path, 1100.0)
+    _health(tmp_path, 1100.0, temps=(50, 33, 32, 22, 22, 22))
     rows = _tick(runner, state, 1100.0, {}, tmp_path, {"arm_a": {"local_held": True}}, folds)
-    assert folds == [] and rows[0]["reason"] == "LOAD_FAILED_WAIT_POSE"
+    assert folds == [] and rows[0]["reason"] == "MOTORS_NOT_COOL" and state["arm_a"]["load_fails"] == 2
     _tick(runner, state, 1200.0, {}, tmp_path, {}, folds)
     _tick(runner, state, 1200.0 + hr.CLEAR_GRACE_S, {}, tmp_path, {}, folds)
     assert state["arm_a"]["load_fails"] == 0  # gone for good: a later hold starts fresh

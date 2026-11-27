@@ -276,11 +276,14 @@ def test_the_local_clear_command_is_gone(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "x"])
 
-def test_an_arm_that_is_not_folded_is_never_rebooted(tmp_path, monkeypatch):
+def test_an_extended_arm_s_load_latch_is_rebooted_where_it_rests_and_stays_held(tmp_path, monkeypatch):
+    """D-1079 (was: never rebooted unfolded). reboot_latched reads all six torques 0 on the bus before it acts, so the arm already
+    rests where it is and the reboot changes nothing that holds it; the hold stays until the fold brings it home."""
     monkeypatch.chdir(tmp_path)
+    acted = []
     out = oi.handle(session(tmp_path, last=[0.8, -20.0, 10.0, 51.4, 45.0, 54.4]), "arm_b",
-                    act=lambda ids: pytest.fail("rebooted an extended arm"))
-    assert out["decision"]["hold"] and not out["decision"]["actions"] and "not folded" in out["decision"]["reason"]
+                    act=lambda ids: acted.append(ids) or {"rebooted": ids})
+    assert out["decision"]["hold"] and out["decision"]["actions"] == ["reboot_latched"] and acted and out["recovery"] == {"rebooted": acted[0]}
 
 
 def test_a_clean_session_is_no_incident_and_a_reopened_catch_is_a_note_without_hold(tmp_path, monkeypatch):

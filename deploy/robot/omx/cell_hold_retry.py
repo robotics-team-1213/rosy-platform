@@ -9,13 +9,14 @@ to start:
     is moved aside first (a try still running is waited for; a marker with no result after STALE_S is a dead try).
 Backoff per arm: RETRY_S in turn, then its last value for as long as the hold lasts; reset once the arm holds nothing.
 
-A try that loads a motor is not repeated blindly (OMX A/B review 2026-11-27: arm_a at 15:15 hit the lift PWM cap and latched an
-overload on ID 12, and at 15:30 a new session pushed at rest into a following error). After a load failure (overload, strain,
-pushing, stall, following error, hardware error; the incident's own fault counts) or with a latched hardware error, a motion try
-needs a fresh motor-health snapshot (or an ended, all torque-OFF session's, COOLED_S after it; an ended session still holding
-torque has none, so it waits) with no hardware error and every motor under COOL_C. After LOAD_FAILS_MAX load failures the
-arm is not moved again until its measured pose changes by POSE_MOVED_DEG; the loop keeps auditing that it waits (no motion, no
-person latch). Skipped as well: a pause file (cell-job-api/hold-retry-off or hold-retry-off-<arm>, a person working on the arm),
+The loop solves rather than waits (user 2026-11-27: "막는 코드가 아니라 푸는 코드"). Each try is a different way out: the fold
+learns every candidate's outcome (cell_choices) and tries the next one first, and the candidates include elbow_in_then_park,
+which folds the forearm in before the lift so shoulder_lift carries a shorter lever (arm_a 15:15 hit the lift PWM cap and latched
+an overload on ID 12; 15:30 pushed at rest into a following error). A load or supply latch is rebooted by omx_incident at the
+session end wherever the arm rests (all six torques read 0 first). What a try still waits for resolves itself: after a load
+failure (overload, strain, pushing, stall, following error, hardware error; the incident's own fault counts) the motors must be
+under COOL_C (a fresh snapshot, or an ended all torque-OFF session's COOLED_S after it), and an unrebooted latch waits for its
+reboot. Skipped as well: a pause file (cell-job-api/hold-retry-off or hold-retry-off-<arm>, a person working on the arm),
 a moving job on the arm or, for A/B, on the peer, and a home-recovery hold. Every try and every skip reason goes to
 cell-job-api/audit.jsonl.
 """
@@ -31,14 +32,14 @@ from cell_job_guards import ROLE_MACHINE, Principal, read_json_dict
 RETRY_S = (60.0, 120.0, 240.0, 480.0, 600.0)
 TICK_S = 15.0
 STALE_S = 3900.0  # longer than cell_auto_fold launch's own 3600 s bound
-COOL_C, LOAD_FAILS_MAX, POSE_MOVED_DEG, HEALTH_MAX_AGE_S = 45.0, 2, 5.0, 30.0
+COOL_C, HEALTH_MAX_AGE_S = 45.0, 30.0
+ROTATION, ROTATION_S = 12, 3600.0  # extended_candidate_names() once round: after that an hour between tries, still no person
 CLEAR_GRACE_S = 300.0  # a hold unseen this long is gone; a shorter gap (stale live.json, session end before the incident) keeps the counts
 COOLED_S = 600.0  # an ended session's last snapshot stands for a torque-OFF arm this long after it: cooled, pose unchanged
 PRINCIPAL = Principal(ROLE_MACHINE, "hold-retry")
 DEFAULTS_FILE = "recover-hold-defaults.json"  # cell_job_proof's {arm: {config, library, site, roi}}
 PEERS = {"arm_a": ("arm_b",), "arm_b": ("arm_a",)}
 LOAD_FAILURE = re.compile(r"overload|strain|push|stall|following error|hardware error|hw_error|PWM", re.I)
-TICK_DEG = 360.0 / 4096
 
 
 def needs(observation: dict, incident: dict) -> str | None:
@@ -85,12 +86,18 @@ def rotate_finished_folds(incidents: Path, arm: str, now: float) -> list[str]:
 
 
 def latest_incident_facts(incidents: Path, arm: str) -> dict:
+    """The arm's latest incident facts; "latched" is emptied once omx_incident's reboot of exactly those IDs succeeded."""
     folders = sorted(p for p in incidents.glob(f"*-{arm}") if p.is_dir())
-    return ((read_json_dict(folders[-1] / "incident.json") or {}).get("facts") or {}) if folders else {}
+    doc = (read_json_dict(folders[-1] / "incident.json") or {}) if folders else {}
+    facts = dict(doc.get("facts") or {}, incident=folders[-1].name if folders else None)
+    rebooted = {str(i) for i in ((doc.get("recovery") or {}).get("rebooted") or [])}
+    if facts.get("latched") and set(map(str, facts["latched"])) <= rebooted:
+        facts["latched"], facts["rebooted"] = {}, sorted(rebooted)
+    return facts
 
 
 def health(health_dir: Path, arm: str, now: float) -> dict | None:
-    """Motor-health snapshot {"cool", "hw_ok", "pose_deg"}: a fresh one, or an ended session's with every motor torque OFF
+    """Motor-health snapshot {"cool", "hw_ok"}: a fresh one, or an ended session's with every motor torque OFF
     since COOLED_S (cool by then); None otherwise."""
     doc = read_json_dict(health_dir / f"{arm}.json") or {}
     motors = doc.get("motors")
@@ -102,7 +109,10 @@ def health(health_dir: Path, arm: str, now: float) -> dict | None:
             return None
         return {"cool": cooled or all(float(m["temperature_c"]) < COOL_C for m in motors),
                 "hw_ok": all(m.get("hardware_error") == 0 and not m.get("fault") for m in motors),
-                "pose_deg": [float(m["present_raw"]) * TICK_DEG for m in motors[:5]]}
+                "hw_bad": sorted(str(m.get("id")) for m in motors if m.get("hardware_error") != 0 or m.get("fault")),
+                "max_temp_c": max(float(m["temperature_c"]) for m in motors),
+                "max_pwm_util": max(float(m.get("pwm_utilization") or 0.0) for m in motors),
+                "raw": [float(m["present_raw"]) for m in motors[:5]]}
     except (KeyError, TypeError, ValueError):
         return None
 
@@ -124,38 +134,33 @@ def _outcome(runner, st: dict, incidents: Path, arm: str, now: float) -> None:
 
 
 def gate(st: dict, facts: dict, snap: dict | None) -> str | None:
-    """Why a motion try must not start now, or None. A snapshot with a hardware error always stops it."""
-    if snap is not None and not snap["hw_ok"]:
-        return "HARDWARE_ERROR_LATCHED"
-    if st["load_fails"] >= LOAD_FAILS_MAX:
-        if snap is None or st.get("stuck_pose") is None:
-            return "LOAD_FAILED_WAIT_POSE"
-        if max(abs(a - b) for a, b in zip(snap["pose_deg"], st["stuck_pose"])) < POSE_MOVED_DEG:
-            return "LOAD_FAILED_WAIT_POSE"
-        st.update(load_fails=0, stuck_pose=None)  # moved since: a fresh situation
-    if st["load_fails"] or facts.get("latched"):
+    """What a motion try still waits for (it resolves itself: a reboot, cooling), or None."""
+    if facts.get("latched") or (snap is not None and set(snap["hw_bad"]) - set(facts.get("rebooted") or ())):
+        return "HARDWARE_ERROR_LATCHED"  # omx_incident reboots a load or supply latch at the session end
+    if st["load_fails"]:
         if snap is None:
             return "NO_FRESH_MOTOR_HEALTH"
-        if not snap["hw_ok"]:
-            return "HARDWARE_ERROR_LATCHED"
         if not snap["cool"]:
             return "MOTORS_NOT_COOL"
     return None
 
 
 def tick(runner, state: dict, now: float, *, arms, observe, incident_status, launch_fold, incidents: Path,
-         health_dir: Path) -> list[dict]:
+         health_dir: Path, reboot=None) -> list[dict]:
     rows = []
     for arm in arms:
-        st = state.setdefault(arm, {"tries": 0, "next": 0.0, "load_fails": 0, "pending": None, "stuck_pose": None, "hold": None})
+        st = state.setdefault(arm, {"tries": 0, "next": 0.0, "load_fails": 0, "pending": None, "hold": None})
         kind = needs(observe(arm), incident_status(arm))
         if kind is None:
             st.setdefault("unseen_since", now)
             if now - st["unseen_since"] >= CLEAR_GRACE_S:
-                state[arm] = {"tries": 0, "next": 0.0, "load_fails": 0, "pending": None, "stuck_pose": None, "hold": None}
+                state[arm] = {"tries": 0, "next": 0.0, "load_fails": 0, "pending": None, "hold": None}
             continue
         st.pop("unseen_since", None)
         facts = latest_incident_facts(incidents, arm)
+        done = st.get("rebooted") or {}  # {incident folder: ids}; a newer incident's latch is a new latch
+        if facts.get("latched") and set(map(str, facts["latched"])) <= set(done.get(facts.get("incident"), ())):
+            facts["latched"], facts["rebooted"] = {}, done[facts["incident"]]
         if st["hold"] is None:  # a new hold: the fault that made it counts as its first try
             st["hold"] = kind
             st["load_fails"] = int(any(LOAD_FAILURE.search(f"{(f or {}).get('fault') or ''} {(f or {}).get('error') or ''}") for f in facts.get("flagged") or []))
@@ -167,9 +172,19 @@ def tick(runner, state: dict, now: float, *, arms, observe, incident_status, lau
             outcomes = rotate_finished_folds(incidents, arm, now)
             st["load_fails"] += sum(bool(LOAD_FAILURE.search(o)) for o in outcomes)
         snap = health(health_dir, arm, now)
-        if st["load_fails"] >= LOAD_FAILS_MAX and st.get("stuck_pose") is None and snap is not None:
-            st["stuck_pose"] = snap["pose_deg"]
-        if (runner.out / "hold-retry-off").exists() or (runner.out / f"hold-retry-off-{arm}").exists():
+        row.update({k: snap[k] for k in ("max_temp_c", "max_pwm_util")} if snap else {})
+        if snap and st.get("raw"):  # what the last try changed: 0 over a run of tries is "no progress" at a glance
+            row["moved_deg"] = round(max(abs(a - b) for a, b in zip(snap["raw"], st["raw"])) * 360 / 4096, 1)
+        st["raw"] = snap["raw"] if snap else st.get("raw")
+        paused = (runner.out / "hold-retry-off").exists() or (runner.out / f"hold-retry-off-{arm}").exists()
+        if (not paused and kind == "incident" and facts.get("latched") and reboot is not None
+                and not observe(arm).get("session")):  # still no session on the bus right now: clear the latch here
+            row["reboot"] = res = reboot(arm, sorted(facts["latched"]))
+            if set(map(str, (res or {}).get("rebooted") or ())) >= set(map(str, facts["latched"])):
+                facts["rebooted"] = sorted(map(str, res["rebooted"]))
+                st["rebooted"] = {facts.get("incident"): facts["rebooted"]}
+                facts["latched"] = {}
+        if paused:
             row["reason"] = "PAUSED"
         elif (why := gate(st, facts, snap)) is not None:
             row["reason"] = why
@@ -189,11 +204,26 @@ def tick(runner, state: dict, now: float, *, arms, observe, incident_status, lau
             row.update(started=bool(res.get("started")), **({} if res.get("started") else {"reason": res.get("why")}))
         row["load_fails"] = st["load_fails"]
         st["tries"] += 1
-        st["next"] = now + RETRY_S[min(st["tries"], len(RETRY_S)) - 1]
+        st["next"] = now + (ROTATION_S if st["load_fails"] >= ROTATION else RETRY_S[min(st["tries"], len(RETRY_S)) - 1])
+        row["no_progress"] = st["load_fails"] >= ROTATION  # every candidate has failed once: slower, still trying
         with runner.lock, open(runner.out / "audit.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(row) + "\n")
         rows.append(row)
     return rows
+
+
+def reboot_latch(arm: str, ids: list) -> dict:
+    """omx_incident.reboot_latched on the arm's follower port (from its auto-fold config); it refuses unless all six read torque 0."""
+    import omx_incident
+    import omx_incident_auto
+
+    conf = (json.loads(omx_incident_auto._auto_fold_config().read_text(encoding="utf-8")) or {}).get(arm) or {}
+    cfg = read_json_dict(Path(conf.get("cwd", ".")).expanduser() / str(conf.get("config"))) or {}
+    rec = read_json_dict(Path(str(cfg.get("record_config_path") or "-")).expanduser()) or {}
+    port = cfg.get("port") or (cfg.get("follower") or {}).get("port") or rec.get("port") or (rec.get("robot") or {}).get("port")
+    if not port:
+        return {"refused": "no follower port in the arm's config"}
+    return omx_incident.reboot_latched(str(port))([int(i) for i in ids])
 
 
 def start(runner, **kwargs) -> None:
@@ -215,7 +245,7 @@ def run_forever(runner, *, live_max_age_s: float, session_held_fn, sleep=time.sl
         try:
             tick(runner, state, clock(), arms=omx_incident_auto.configured_fold_arms(), observe=observe,
                  incident_status=omx_incident.status, launch_fold=omx_incident_auto.launch_auto_fold,
-                 incidents=Path(omx_incident.INCIDENTS), health_dir=health_dir)
+                 incidents=Path(omx_incident.INCIDENTS), health_dir=health_dir, reboot=reboot_latch)
         except Exception as exc:  # noqa: BLE001  a bad pass must not end the loop; the holds stay, torque ON
             with runner.lock, open(runner.out / "audit.jsonl", "a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"event": "hold_retry", "error": f"{type(exc).__name__}: {str(exc)[:200]}", "time": clock()}) + "\n")
