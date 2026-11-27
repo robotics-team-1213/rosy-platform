@@ -464,3 +464,33 @@ def test_oversized_dry_run_stops_before_push_and_names_the_line_to_add(monkeypat
     with pytest.raises(SystemExit, match=r"(?s)--body.*Size-Exception: <reason>"):
         pr_land.main(["--dry-run"], repo=tmp_path)
     assert not any(cmd[:2] in (["git", "push"], ["gh", "pr"]) for cmd, _ in calls)
+
+
+def test_queue_merge_overlap_names_files_both_sides_changed(tmp_path):
+    """2026-11-27 #1123: the queue's merge commit showed a safety file main had also changed, with only the PR title as message."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@x", *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def commit(name, text):
+        (tmp_path / name).write_text(text, encoding="utf-8")
+        git("add", name)
+        git("commit", "-q", "-m", name + text)
+
+    git("init", "-q", "-b", "main")
+    commit("guard.py", "0")
+    git("switch", "-q", "-c", "topic")
+    commit("guard.py", "1")
+    commit("own.py", "1")
+    git("switch", "-q", "main")
+    commit("other.py", "2")
+    git("update-ref", "refs/remotes/origin/main", "main")
+    git("switch", "-q", "topic")
+    assert pr_land.queue_merge_overlap(tmp_path) == []
+    git("switch", "-q", "main")
+    commit("guard.py", "2")
+    git("update-ref", "refs/remotes/origin/main", "main")
+    git("switch", "-q", "topic")
+    assert pr_land.queue_merge_overlap(tmp_path) == ["guard.py"]
+    git("merge", "-q", "-X", "ours", "origin/main", "-m", "merge")
+    assert pr_land.queue_merge_overlap(tmp_path) == []  # merged: the queue's merge no longer shows the file

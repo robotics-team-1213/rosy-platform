@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
+- 2026-11-28 · uncommitted · Hold point review round 4
+- 2026-11-27 · uncommitted · Nav2 road trip table-cut hold point
+- 2026-11-27 · uncommitted · Hold point review round 3
+- 2026-11-27 · uncommitted · Hold point review fixes
 - 2026-11-27 · uncommitted · Fleet cell-task motion (free_pick) and D-1081
-- 2026-11-27 · uncommitted · D-1082 Nav2 도로 trip 정지 복구
-- 2026-11-27 · uncommitted · pr3-custody-correction-step-resume: Fleet R custody release, precision correction clearance, robot step nudge, and explicit trip resume controls
-- 2026-11-27 · uncommitted · pr2-faults-panel-and-command-parity
-- 2026-11-27 · uncommitted · pr0-confirm-idempotency-gates

@@ -26,6 +26,7 @@ from cell_job_guards import (  # noqa: E402
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
+import cell_job_cancel  # noqa: E402
 from cell_job_depart import depart_once, fill_depart_dest, with_depart  # noqa: E402
 from cell_job_proof import auto_recover_once, prove_job  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
@@ -111,6 +112,7 @@ class Runner:
         if run["moving"] and code == 0:
             self._state_gen.bump()
         run["audited"] = True
+        cell_job_cancel.clear(run)
 
     def _can_reuse_arm_session_locked(self, arm: str) -> bool:
         """True only when this runner owns the warm idle arm session and live state is clean and unheld."""
@@ -203,6 +205,9 @@ class Runner:
             if proof_err is not None: return proof_err
             log = self.out / f"{jid}.log"
             env = {**session_job_env(self._lease_owner, argv, name, arm, principal.role == ROLE_HUMAN, {**eff_params, "person_at_switch": proof is not None}), "ROSY_JOB_PRINCIPAL": f"{principal.role}:{principal.principal_id}"}
+            stop_file = cell_job_cancel.stop_file(self.out, jid, job, moving)
+            if stop_file:
+                env[cell_job_cancel.STOP_FILE_ENV] = str(stop_file)
             if "act_backend" in eff_params:
                 env["ROSY_ACT_BACKEND"] = str(eff_params["act_backend"])
             with open(log, "wb") as fh:
@@ -218,7 +223,7 @@ class Runner:
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
                 "proposer": eff_params.get("proposer"), "fleet_online": fleet_online, "stop_proof": proof, "person_at_switch_ignored": ignored,
-                "start": now, "expires_at": now + JOB_TTL_S, "depart": None, "depart_lock": threading.Lock(),
+                "stop_file": stop_file, "start": now, "expires_at": now + JOB_TTL_S, "depart": None, "depart_lock": threading.Lock(),
                 "omx_tools_tree": Path(argv[4]).name if len(argv) >= 5 and argv[2].startswith(S_DRY_RUN_ENV) else _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
@@ -335,6 +340,9 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
         def do_POST(self):
             if (principal := self._auth_principal()) is None:
                 return
+            if m := re.fullmatch(r"/jobs/([\w-]+)/cancel", self.path):
+                out = cell_job_cancel.cancel(runner, m.group(1), principal)
+                return self._send(out.pop("code"), out)
             m = re.fullmatch(r"/jobs/(\w+)", self.path)
             if not m:
                 return self._send(404, {"error": "not found"})
