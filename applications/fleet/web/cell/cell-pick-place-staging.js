@@ -8,7 +8,7 @@ export const DEST_OPTIONS_BY_CELL = {
   cell_ab: [["stand", "반출대 (stand)"], ["belt", "벨트 (belt)"], ["pallet", "팔레트 (pallet)"]],
 };
 
-export function buildObjectStagingBar({
+function buildObjectStagingBar({
   cellId = "cell_ab", snap = null, objects = [], selectedObject = null, selectedDest = null,
   opReason = "", busy = false, statusText = "", nowMs = null,
   onSelectDest = () => {}, onClear = () => {}, onDispatch = () => {},

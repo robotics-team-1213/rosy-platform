@@ -4738,6 +4738,40 @@
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-jobs/{mission_id}/resume"
         },
         {
+          "id": "GET:/api/fleet/pipeline/cell-objects",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cell-objects",
+          "implementation": "operations/fleet/fleet/server/pipeline/pipeline_cell_objects.py",
+          "handler": "list_cell_objects",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_objects.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cell-objects"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-objects",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-objects",
+          "implementation": "operations/fleet/fleet/server/pipeline/pipeline_cell_objects.py",
+          "handler": "ingest_cell_objects",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_cell_objects.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-objects"
+        },
+        {
           "id": "GET:/api/fleet/pipeline/cell-tasks",
           "method": "GET",
           "path": "/api/fleet/pipeline/cell-tasks",
@@ -5664,6 +5698,30 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim.js",
+          "expression": "/api/fleet/pipeline/cell-objects",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-objects"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/cell-objects",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-objects"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/pipeline/cell-objects",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-objects"
           ]
         },
         {
@@ -8657,7 +8715,8 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
-        "applications/fleet/web/assistant/panel.js"
+        "applications/fleet/web/assistant/panel.js",
+        "applications/fleet/web/cell/assistant-pick-place.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -8684,6 +8743,22 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/assistant/messages"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/assistant-pick-place.js",
+          "expression": "/api/fleet/pipeline/cell-objects",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-objects"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/assistant-pick-place.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
