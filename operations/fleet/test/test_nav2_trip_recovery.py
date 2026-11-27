@@ -1,4 +1,4 @@
-"""D-1082: a Nav2 road trip stopped for pose, stall or navigation recovers and resends; hazards still end it."""
+"""D-1082: a Nav2 road trip stopped for stall or navigation recovers and resends; hazards still end it."""
 import math
 
 import pytest
@@ -66,19 +66,6 @@ def test_nav2_failed_recovers_then_resends_the_lane_return_route_from_here():
     assert (first["x"], first["y"]) == pytest.approx(expected[0][:2], abs=1e-3)
 
 
-def test_a_degraded_pose_waits_for_localization_then_resends():
-    robot, clock, _store, graph, pose, canceled, runner, live = _trip()
-    good = pose["v"]
-    pose["v"] = _pose(good.x, good.y, good.yaw, "DEGRADED")
-    _tick(runner, clock, 6)
-    view = runner.view("p-rc")
-    assert view["state"] == "running" and view["detail"]["recovery"]["reason"] == "pose"
-    assert view["detail"]["recovery"]["attempt"] == 1 and canceled == ["rosy_42"] and len(robot.routes) == 1
-    pose["v"] = good
-    _tick(runner, clock, 2)
-    assert len(robot.routes) == 2 and runner.view("p-rc")["state"] == "running"
-
-
 @pytest.mark.parametrize("reason", rec.RECOVERABLE)
 def test_each_recoverable_reason_keeps_the_trip(reason):
     robot, clock, *_rest, canceled, runner, live = _trip()
@@ -142,7 +129,7 @@ def test_progress_after_a_resume_closes_the_episode():
     ("map_frame", {"binding": "MAP_FRAME_MISMATCH"}), ("map_frame", {"binding": "MAP_BINDING_REQUIRED"}),
     ("map_version", {}), ("ROAD_SPEED_OWNER_CHANGED", {}), ("ROAD_SPEED_OWNER_MISSING", {}), ("lane_arc", {}),
     ("WAIT_PREFIX_RESERVATION_LOST", {}), ("lease_lost", {}), ("junction", {}),
-    ("pose", {"off_lane_m": 0.2}), ("stall", {"link_wait": "timeout"}),
+    ("pose", {"off_lane_m": 0.2}), ("pose", {"pose_state": "DEGRADED"}), ("stall", {"link_wait": "timeout"}),
 ])
 def test_hazard_and_authority_stops_end_at_once(reason, detail):
     robot, clock, *_rest, runner, live = _trip()

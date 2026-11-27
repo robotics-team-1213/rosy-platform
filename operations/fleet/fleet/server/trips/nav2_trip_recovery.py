@@ -1,13 +1,14 @@
 """D-1082: a Nav2 road trip that stops for a non-hazard reason keeps running and resends from where it stands.
 
-The three reasons are ``pose`` (trip pose stale or not LOCALIZED, e.g. DEGRADED), ``stall`` (no progress) and
-``navigation`` (Nav2 FAILED, or a CANCELED Fleet did not ask for). Where ``TripRunner._stop`` would end the trip with
-one of them, ``recover_instead`` cancels the route (cancel -> ack, as ``_cancel_active_route``) and records
-``detail['recovery']``; ``resume_ready`` waits until the cause has cleared and then lets the existing
-``step_nav2_route`` resend from here (``sample_nav2_route(here=)``, the lane-return route). No new motion writer,
-no hold, no person. Everything else (E-stop, operator cancel or pause, off-lane backstop, frame or binding refusals,
-map change, unconfirmed stops, lease or road-speed ownership) never reaches here: a reason outside ``RECOVERABLE``
-or a detail that marks the off-lane backstop or a link loss ends the trip as before.
+The two reasons are ``stall`` (no progress) and ``navigation`` (Nav2 FAILED, or a CANCELED Fleet did not ask for).
+``pose`` is not one: its waits and their bounds belong to transient_loc_hold (#1107 45 s, #1135 120 s standing).
+Where ``TripRunner._stop`` would end the trip with one of them, ``recover_instead`` cancels the route (cancel -> ack,
+as ``_cancel_active_route``) and records ``detail['recovery']``; ``resume_ready`` waits until the robot is proven
+stopped and then lets the existing ``step_nav2_route`` resend from here (``sample_nav2_route(here=)``, the
+lane-return route). No new motion writer, no hold, no person. Everything else (E-stop, operator cancel or pause,
+off-lane backstop, frame or binding refusals, map change, unconfirmed stops, lease or road-speed ownership) never
+reaches here: a reason outside ``RECOVERABLE`` or a detail that marks the off-lane backstop or a link loss ends the
+trip as before.
 
 Order with the older paths: an autonomous robot's Nav2 FAILED stays with ``_handle_nav2_failure`` (it never calls
 ``_stop``); a route D-1080 replaced is ``superseded`` and never reads as aborted, so neither is handled twice.
@@ -20,7 +21,7 @@ from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_lane_realign import _excluded
 from fleet.server.trip_nav2_route import NAV2_TRANSIENT_RETRY_S
 
-RECOVERABLE = ("pose", "stall", "navigation")
+RECOVERABLE = ("stall", "navigation")
 MAX_ATTEMPTS = 3          # recoveries per episode; the next stop ends the trip with its own reason
 WINDOW_S = 300.0          # an episode ends this long after its first recovery
 WAIT_S = 45.0             # one wait for the cause to clear (as transient_loc_hold's LOC_RECOVERY_WAIT_S)
@@ -95,7 +96,7 @@ async def recover_instead(runner, live, reason: str, stop_detail: dict | None) -
     live.view["detail"]["recovery"] = {
         "state": "waiting", "label": "복구 중", "reason": reason, "attempt": attempt, "max_attempts": MAX_ATTEMPTS,
         "since": since, "entered_at": now, "checked_at": now,
-        "waiting_for": "localization" if reason == "pose" else "robot_stopped", "stop_detail": dict(stop_detail or {}),
+        "waiting_for": "robot_stopped", "stop_detail": dict(stop_detail or {}),
     }
     _LOG.warning("trip %s: %s stop recovered instead (attempt %d/%d)", live.view["trip_id"], reason, attempt, MAX_ATTEMPTS)
     runner._save(live)
@@ -124,9 +125,7 @@ async def resume_ready(runner, live, index: int, s: float) -> bool:
     live.progress_at = now
     rec["checked_at"] = now
     stopped = isinstance(state, dict) and state.get("navigation") not in _RUNNING and _fresh_stopped(state)
-    localized = isinstance(state, dict) and (state.get("localization") or {}).get("state") == "LOCALIZED"
-    if now - rec["entered_at"] < SETTLE_S or estop or not stopped or (rec["reason"] == "pose" and not localized):
-        rec["waiting_for"] = "localization" if rec["reason"] == "pose" and not localized else "robot_stopped"
+    if now - rec["entered_at"] < SETTLE_S or estop or not stopped:
         runner._save(live)
         return False
     rec.update(state="resumed", waiting_for=None, resumed_at=now, resumed_progress=live.progress(index, s))
