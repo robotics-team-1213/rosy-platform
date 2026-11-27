@@ -165,6 +165,9 @@ class NativeReleaseManager:
     def _systemctl_start_nav() -> None:
         # Stop rosy-io first so wheel_torque_off.py releases /dev/rosy-motor before navigation opens it.
         subprocess.run(["systemctl", "stop", "rosy-io.service"], check=False, timeout=30)
+        # The target start just launched io; stopping it mid-bringup can pass TimeoutStopSec and leave it
+        # 'failed', which the updater's health check reads as a new failure (679 on y8xs, 2026-11-27).
+        subprocess.run(["systemctl", "reset-failed", "rosy-io.service"], check=False, timeout=30)
         subprocess.run(
             ["systemctl", "start", "rosy-navigation.service"],
             check=True,

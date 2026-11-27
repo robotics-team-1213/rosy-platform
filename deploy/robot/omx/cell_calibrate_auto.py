@@ -263,6 +263,8 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
     import cell_cal_monitor
 
     p = config.get("params")
+    if str(site).startswith("free:"):  # an invented free-source name never gets a learned bias
+        return None
     if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
         return None
     seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]

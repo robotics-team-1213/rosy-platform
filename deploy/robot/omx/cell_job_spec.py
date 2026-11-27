@@ -15,7 +15,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     IMAGES_SPEC,
     MANIFEST_FILE,
     METRE,
-    NAME,
+    NAME, SOURCE, AT_PX,
     REPO_ID,
     SAFE_PATH,
     SHA256,
@@ -78,8 +78,8 @@ JOBS = {
         "script": "cell_auto_pick.py",
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}", "--dry-run"],
-        "params": {"config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
-        "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5), "neighbour_clear_mm": _num(10.0, 30.0)},
+        "params": {"config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(SOURCE), "dest": _match(NAME)},
+        "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5), "neighbour_clear_mm": _num(10.0, 30.0), "at_px": _match(AT_PX)},
     },
     "pivot_near": {
         "script": "cell_calibrate.py", "moving": True, "camera": True,
@@ -113,12 +113,12 @@ JOBS = {
         "moving": True,
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
-        "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
+        "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(SOURCE), "dest": _match(NAME)},
         "optional": {
             "operator": _match(NAME),
             "proposer": _match(NAME),
             "reviewed_auto": _bool,
-            "verify_zones": _bool, "map_only": _bool, "neighbour_clear_mm": _num(10.0, 30.0),
+            "verify_zones": _bool, "map_only": _bool, "neighbour_clear_mm": _num(10.0, 30.0), "at_px": _match(AT_PX),
             "object": _match(FILTER_OBJ),
             "colour": _match(FILTER_COL),
             "layers_below": _int_range(0, 5),
@@ -370,7 +370,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         "post_eval", "z_evidence", "tier_evidence", "obstacle_mm", "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
-        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts", "min_score", "neighbour_clear_mm", "half_mm", "half_width_mm",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts", "min_score", "neighbour_clear_mm", "half_mm", "half_width_mm", "at_px",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
