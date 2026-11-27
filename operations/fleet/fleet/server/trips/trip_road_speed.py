@@ -4,35 +4,28 @@ from __future__ import annotations
 from bisect import bisect_right
 import math
 
-from core_common.protocol.evidence import STALE_POSE_S
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_ports import TripError
 from fleet.speed_table import speed_table
-from rosy.world.state.projections.map_pose_samples import parse_utc
 
 GRANT_S = 1.5
 
 
 async def _goal_finished(runner, rid) -> bool:
-    """A lease 409 is a normal arrival only when CORE itself reports the goal done: ARRIVED, no goal,
-    no e-stop, zero fresh velocity. Anything else (failed, cancelled, replaced, unknown) stays a stop."""
+    """A lease 409 is a normal end only when CORE itself reports the goal done: ARRIVED (or FAILED, which the step
+    loop retries through _handle_nav2_failure), no goal, no e-stop. The step loop reads the same state next tick and
+    still demands fresh zero velocity before it reports arrival, so the lease race never needs that proof here.
+    Anything else (cancelled, replaced, still navigating, unknown) stays a stop."""
     if getattr(runner, "_robot_state", None) is None:
         return False
     try:
         state = await runner._call(runner._robot_state(rid))
     except Exception:
         return False
-    if not isinstance(state, dict) or state.get("navigation") != "ARRIVED" or state.get("goal") is not None:
-        return False
-    evidence = (state.get("evidence") or {}).get("velocity") or {}
-    stamp = parse_utc(evidence.get("sampled_at"))
-    vel = state.get("velocity") or {}
-    return (evidence.get("evidence") == "fresh" and stamp is not None and 0 <= runner._clock() - stamp < STALE_POSE_S
-            and (state.get("safety") or {}).get("estop") is False
-            and all(type(vel.get(a)) in (int, float) and math.isfinite(vel[a]) for a in ("linear", "angular"))
-            and abs(vel["linear"]) <= 0.01 and abs(vel["angular"]) <= 0.02)
+    return (isinstance(state, dict) and state.get("navigation") in ("ARRIVED", "FAILED") and state.get("goal") is None
+            and (state.get("safety") or {}).get("estop") is False)
 
 
 class RoadSpeed:
