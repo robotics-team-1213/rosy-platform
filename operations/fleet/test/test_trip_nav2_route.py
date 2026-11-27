@@ -900,3 +900,20 @@ def test_nav2_off_lane_margin_and_two_tick_persistence():
     assert sev["state"] == "stopped" and sev["reason"] == "pose" and "off_lane_m" in sev["detail"]
 
 
+
+
+
+def test_sample_nav2_route_ends_mid_edge_at_a_hold_point():
+    """A table-cut hold point ends the route at ``end_s``, never at the segment end (2026-11-27)."""
+    from fleet.routing.execute import arc_id
+
+    graph = SiteMapStore(clock=FakeClock())
+    graph.import_if_empty(_south_loop_map(), source="test")
+    graph = graph.active()[2]
+    seg = {"edge_id": "upper_west", "forward": True, "s_from": 0.0228, "s_to": graph.arcs["upper_west:fwd"].length_m}
+    arc = graph.arcs[arc_id(seg)]
+    pts = sample_nav2_route(graph, [seg], 0, 0.0228, 0, end_s=0.77)
+    assert pts[-1][3] == "stop" and math.dist(pts[-1][:2], arc.point_at(0.77)[:2]) < 1e-9
+    assert all(arc.project(x, y)[1] <= 0.77 + 1e-9 for x, y, _yaw, _kind in pts)
+    # Already at or past the hold point: the fallback stays at it, never the segment end.
+    assert sample_nav2_route(graph, [seg], 0, 0.8, 0, end_s=0.77) == [(*arc.point_at(0.77), "stop")]

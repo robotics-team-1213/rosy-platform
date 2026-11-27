@@ -121,6 +121,12 @@ def test_an_occupied_unit_in_the_first_segment_sends_nothing():
     runner, live = _live({"occupied_ahead_m": 0.3})
     assert nav2._traffic_end_index(runner, live, 0) is None
     assert nav2._held_at_m(live) == 0.3  # 2026-11-27 live run: refused_at_m is None here and float(None) ended the trip
+    # No room to advance: the occupied unit starts within the hold margin of the robot, so no hold point is sent.
+    from fleet.server.peer_wait_prefix import hold_point
+    from test_nav2_peer_wait_prefix import S_FROM, hold_snapshot
+    h = hold_snapshot()
+    h.table_row(occupied_ahead_m=0.3)
+    assert hold_point(h.runner, h.live, h.active, 0, S_FROM) == (None, "no_room_to_advance")
 
 
 @pytest.mark.parametrize("row, at", [({"refused_at_m": 0.2, "occupied_ahead_m": 0.3}, 0.2), ({}, 0.0), (None, 0.0)])

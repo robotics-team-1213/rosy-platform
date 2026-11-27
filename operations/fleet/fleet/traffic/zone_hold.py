@@ -32,3 +32,16 @@ def hold_back_m(traffic, segment: dict) -> Optional[float]:
         if not any(traffic._zones.keys() & traffic._under(layout, active[2], p).keys() for p in ((x, y, yaw), ahead)):
             return k * STEP_M
     return None
+
+
+def stop_touches_zone(traffic, arc, s: float) -> bool:
+    """A robot standing at arc metre ``s`` (and ``ZONE_STOP_CLEARANCE_M`` further on) may touch a zone unit of the
+    block table's layout, a direction-locked two-way lane included (not only the configured site zones)."""
+    active = traffic._store.active()
+    layout = traffic._layout_for(active)
+    if layout is None:
+        return False  # no table: no zone units (and no table answer to cut a hold point from)
+    x, y, yaw = arc.point_at(s)
+    ahead = (x + ZONE_STOP_CLEARANCE_M * math.cos(yaw), y + ZONE_STOP_CLEARANCE_M * math.sin(yaw), yaw)
+    return any(layout.units[unit].zone for pose in ((x, y, yaw), ahead)
+               for unit in traffic._under(layout, active[2], pose))

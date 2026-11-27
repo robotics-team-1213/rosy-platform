@@ -232,6 +232,7 @@ class TripSteps:
                     return
             live.view["detail"].pop("localization_wait", None)
             if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and not live.view["detail"].get("traffic_hold")  # held short of a table cut is no arrival
                     and off is None and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)

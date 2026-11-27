@@ -5,9 +5,10 @@ from contextvars import ContextVar
 
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import nominal_body_for
+from fleet.lane_progress import MIN_GAP_M
 from fleet.localization.trust import route_distance
 from fleet.site_map import _polyline_polygon_gap
-from fleet.traffic.zone_hold import hold_back_m
+from fleet.traffic.zone_hold import STEP_M, hold_back_m, stop_touches_zone
 
 
 # Internal to a single awaited route call. Console performs the same check again at the HTTP write.
@@ -76,13 +77,13 @@ def held_at_m(live) -> float:
     return float(at or 0.0)
 
 
-def road_centerline(live, pos, along, end):
+def road_centerline(live, pos, along, end, end_s=None):
     here = live.view["pose"]
     path = [(here["x"], here["y"])]
     for i in range(pos, end + 1):
         segment, arc = live.segments[i], live.arc(i)
         start = along if i == pos else segment["s_from"]
-        finish = segment["s_to"]
+        finish = segment["s_to"] if end_s is None or i != end else min(end_s, segment["s_to"])
         path.append(arc.point_at(start)[:2])
         path.extend(point for knot, point in zip(arc.knots, arc.polyline) if start < knot < finish)
         path.append(arc.point_at(finish)[:2])
@@ -149,6 +150,8 @@ def check_wait_prefix(console, robot_id, points, site_route_of):
     route = site_route_of([here, *((p["x"], p["y"]) for p in points)]) if here is not None else None
     mover, map_id, original_peers, reserved, expected, centerline = prefix
     peers = set(console._order) - {robot_id}
+    # A table cut can name pseudo nodes (a signal, a pose jump): they are no roster robot to wait on.
+    original_peers = {rid for rid in original_peers if not rid.startswith("signal:") and rid != "pose_jump"}
     now = time.time()
     if (robot_id != mover or not original_peers <= peers or not reserved() or not route
             or fresh_native_slam(console._seen.get(robot_id), now) is None or route[0] != map_id
@@ -170,3 +173,162 @@ def check_wait_prefix(console, robot_id, points, site_route_of):
                         or trust.blocks(corridor[1], pose[1:3], keep_out_m=clearance)):
                     return False
     return True
+
+
+# ---- table-cut hold point (2026-11-27: depart, stop short of the peer, wait, continue) -------------------
+
+def blockers(live) -> list[str]:
+    """Who the block table holds this trip for: its refusal's waiting robots, then the owners of the cut unit."""
+    row = live.traffic or {}
+    named = list(row.get("waiting_for") or [])
+    return named + [rid for rid in row.get("occupied_ahead_by") or () if rid not in named]
+
+
+def _hold_margin(runner, body) -> float:
+    """Base-centre metres a hold point keeps before the table's cut: the turn footprint and the road-speed gap."""
+    rules = runner._store.rules.active_rules()
+    gap = getattr(getattr(rules, "formation", None), "min_gap_m", None) or MIN_GAP_M
+    return max(body.rotation_clear_m(), gap)
+
+
+def hold_covered(runner, live, index, end_s) -> bool:
+    """A fresh table answer still covers a stop at arc metre ``end_s`` of segment ``index`` (route metres throughout):
+    its turn footprint inside the authority and the held span, and the margin before any refusal or occupied unit.
+    Unlike ``reservation_covers``, a refusal later on the same segment beyond the stop does not count against it."""
+    row = live.traffic or {}
+    end, front, stamp = (row.get(k) for k in ("authority_end_m", "front_d_m", "pose_stamp"))
+    body = nominal_body_for((live.view.get("caps") or {}).get("kind"))
+    if body is None or not all(type(v) in (int, float) and math.isfinite(v) for v in (end, front, stamp)):
+        return False
+    base = live.segments[0]["s_from"]  # plan metres + base = route metres (the table's own frame)
+    stop = base + live.progress(index, end_s)
+    cut = min((base + row[k] for k in ("refused_at_m", "occupied_ahead_m") if row.get(k) is not None), default=math.inf)
+    reach = stop + body.rotation_clear_m()
+    eps = 1e-9  # the stop was cut from these same bounds
+    return (0 <= runner._clock() - stamp < STALE_POSE_S and reach <= end + eps
+            and stop + _hold_margin(runner, body) <= cut + eps and runner.traffic.owns_span(live, front, reach - eps))
+
+
+def _tight_curve(arc, segment, s, reach) -> bool:
+    from fleet.server.nav2_route_sampling import NAV2_CURVE_RADIUS_M, _wrap_angle
+
+    lo, hi = max(segment["s_from"], s - reach), min(segment["s_to"], s + reach)
+    return hi > lo and abs(_wrap_angle(arc.point_at(hi)[2] - arc.point_at(lo)[2])) * NAV2_CURVE_RADIUS_M > hi - lo
+
+
+def hold_point(runner, live, active, index, s):
+    """``(end_s, why)``: the farthest stop (arc metres) on the current segment before a table cut, else ``(None, why)``.
+
+    The stop's turn footprint stays inside the table's authority, the held span and this segment (no junction pivot),
+    keeps ``_hold_margin`` before the cut, and steps back ``STEP_M`` while it touches a zone unit, a crosswalk or
+    a curve tighter than the sampler's curve radius. Peer clearance is the console's wire check (``check_wait_prefix``)."""
+    row = table_answer(runner, live)
+    body = nominal_body_for((live.view.get("caps") or {}).get("kind"))
+    if row is None or body is None or live.view.get("hold") is not None:
+        return None, "no_table_answer"
+    clear = body.rotation_clear_m()
+    segment, arc = live.segments[index], live.arc(index)
+    base = live.segments[0]["s_from"]
+    to_arc = base + live.progress(index, segment["s_from"]) - segment["s_from"]  # route metres -> arc metres
+    cut = min((base + row[k] for k in ("refused_at_m", "occupied_ahead_m") if row.get(k) is not None), default=math.inf)
+    end = row.get("authority_end_m")
+    if type(end) not in (int, float) or not math.isfinite(end):
+        return None, "authority_unknown"
+    stop = min(end - clear, cut - _hold_margin(runner, body), segment["s_to"] - clear + to_arc) - to_arc
+    crossings = [region for crossing in active[1].crosswalks for region in (crossing.polygon, *crossing.approach)]
+    while stop - s > runner.config.arrive_free_m:
+        x, y, _ = arc.point_at(stop)
+        if not (stop_touches_zone(runner.traffic, arc, stop) or _tight_curve(arc, segment, stop, clear)
+                or any(_polyline_polygon_gap([(x, y)] * 2, region) <= clear for region in crossings)):
+            return (stop, "hold_point") if hold_covered(runner, live, index, stop) else (None, "hold_outside_authority")
+        stop -= STEP_M
+    return None, "no_room_to_advance"
+
+
+def traffic_hold(live, names) -> None:
+    live.view["detail"]["traffic_hold"] = {"waiting_for": names, "refused_at_m": round(held_at_m(live), 3)}
+
+
+def held_receipt(index, reason, names) -> dict:
+    return {"kind": "hold_point", "segment": index, "state": "held", "reason": reason, "waiting_on": names}
+
+
+def hold_or_wait(runner, live, active, index, s, nav, state, names):
+    """Under a table cut on segment ``index``: the hold point to send now, else None (the trip waits, blocker named)."""
+    from fleet.server.handoff_traffic import _fresh_stopped
+
+    traffic_hold(live, names)
+    if live.view["hold"] is not None:
+        return None
+    detail = live.view["detail"]
+    receipt = detail.get("wait_prefix") or {}
+    stop, why = hold_point(runner, live, active, index, s)
+    if stop is None:
+        if receipt.get("kind") == "hold_point" and receipt.get("state") == "at_hold_point":
+            receipt["waiting_on"] = names
+        else:
+            detail["wait_prefix"] = held_receipt(index, why, names)
+        return None
+    if nav in ("NAVIGATING", "PLANNING") or (receipt.get("state") == "reservation_lost" and not _fresh_stopped(state or {})):
+        return None  # replace a route only after it stopped
+    return stop
+
+
+def hold_guard(runner, live, active, index, s, stop, site_pts, names):
+    """Set the console's wire veto for a hold-point send: clearance of the sent points and of the centreline to it."""
+    revision = live.route_rev
+
+    def reserved():
+        return (live.route_rev == revision and live.at is not None and live.at[0] == index
+                and hold_covered(runner, live, index, stop))
+    centerline = road_centerline(live, index, s, index, end_s=stop)
+    expected = [centerline[0], *(point[:2] for point in site_pts)]
+    return prefix_guard.set((live.view["robot_id"], active[1].map_id, set(names), reserved, expected, centerline))
+
+
+def hold_receipt(runner, live, index, stop, xy, names) -> None:
+    detail = live.view["detail"]
+    live.progress_at = runner._clock()
+    detail["wait_prefix"] = {"kind": "hold_point", "segment": index, "end_s": round(stop, 4),
+                             "target_xy": [round(v, 4) for v in xy], "route_rev": live.route_rev,
+                             "waiting_on": names, "state": "dispatched", "at": live.progress_at}
+    detail.pop("named_stop_dispatch", None)
+
+
+async def supervise_wait_prefix(runner, live, nav, state, pose, target_end, cancel) -> bool:
+    """A running wait-prefix route (a named wait place or a table-cut hold point); True: this step ends here."""
+    from fleet.server.handoff_traffic import _fresh_stopped
+
+    route = live.active_route
+    held = route.get("hold_point")
+    receipt = live.view["detail"]["wait_prefix"]
+    if nav in ("FAILED", "CANCELED"):
+        receipt["state"] = "aborted"
+        await runner._stop(live, "stopped", "navigation", {"navigation": nav})
+        return True
+    if held is not None and target_end is not None:  # the cut moved on or cleared: resend from here
+        receipt["state"] = "superseded"
+        live.active_route = {**route, "superseded": True}
+        return False
+    if held is not None and not hold_covered(runner, live, held["segment"], held["end_s"]):
+        # The table no longer covers the stop: cancel, then a new hold point once stopped (never a trip end).
+        receipt["state"] = "reservation_lost"
+        await cancel()
+        if live.open and live.active_route is not None:  # the cancel was not confirmed
+            await runner._stop(live, "stopped", "WAIT_PREFIX_RESERVATION_LOST", {"wait_prefix": receipt})
+        return True
+    if held is None and not reservation_covers(runner, live, route["end_index"]):
+        receipt["state"] = "reservation_lost"
+        await runner._stop(live, "stopped", "WAIT_PREFIX_RESERVATION_LOST", {"wait_prefix": receipt})
+        return True
+    if nav in ("IDLE", "ARRIVED"):
+        target = receipt.get("target_xy")
+        if target is None:
+            place = live.graph.places[receipt["place"]]
+            target = (place.x, place.y)
+        if not _fresh_stopped(state) or math.dist((pose.x, pose.y), target) > runner.config.arrive_free_m:
+            receipt["state"] = "waiting_stop_confirmation"
+            return True
+        receipt["state"] = "at_hold_point" if held is not None else "at_wait_place"
+        live.active_route = None
+    return False

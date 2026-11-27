@@ -404,7 +404,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                     row["outcome"] = {"robot_id": trip["robot_id"], "state": trip["state"],
                                       "reason": trip.get("reason"), "detail": {k: detail[k] for k in
                                       ("goal_reason", "goal_admission", "peer_wait", "last_peer_wait",
-                                       "wait_prefix", "last_peer_observation_retry", "held_lidar_observation",
+                                       "wait_prefix", "traffic_hold", "last_peer_observation_retry", "held_lidar_observation",
                                        "stop_sent") if k in detail}}
         return {"requests": rows}
 

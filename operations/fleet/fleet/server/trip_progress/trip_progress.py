@@ -160,7 +160,9 @@ class TripProgress:
         moved = progress >= live.best_progress + self.config.stall_m
         if moved and (live.view.get("wait") or {}).get("reason") not in (None, "link_wait"):
             live.view.pop("wait")  # D-763 8: only progress ends a regulation episode, not a reason change
-        if (live.progress_at is None or moved
+        # Standing with no route under a table cut that names its blocker (a hold point, 2026-11-27) is a wait.
+        held = live.active_route is None and ((live.view.get("detail") or {}).get("traffic_hold") or {}).get("waiting_for")
+        if (live.progress_at is None or moved or held
                 or live.view["hold"] is not None or (not (live.active_route or {}).get("wait_prefix")
                     and (live.junction.get("state") in MANOEUVRE or self._waiting(live, now)
                          or (live.traffic or {}).get("waiting_for")  # A downstream wait may coexist with a moving prefix.

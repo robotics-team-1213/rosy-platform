@@ -15,7 +15,9 @@ from fleet.server.held_lidar_observation import inspect_held_route
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
-from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reservation_covers, reserved_wait, road_centerline
+from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait, road_centerline
+from fleet.server.peer_wait_prefix import blockers as _blockers, held_receipt, hold_guard, hold_or_wait, hold_receipt
+from fleet.server.peer_wait_prefix import supervise_wait_prefix, traffic_hold
 from fleet.server.peer_wait_prefix import held_at_m as _held_at_m, table_answer as _table_answer, traffic_end_index as _traffic_end_index
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
 from fleet.server.trip_halts import _cancel_ack
@@ -337,26 +339,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     traffic_end = _traffic_end_index(runner, live, index)
     target_end = None if traffic_end is None else (min(index, traffic_end) if live.view["hold"] is not None else traffic_end)
     if live.active_route is not None:
-        if live.active_route.get("wait_prefix") and not live.active_route.get("superseded"):
-            from fleet.server.handoff_traffic import _fresh_stopped
-
-            end = live.active_route["end_index"]
-            prefix_receipt = live.view["detail"]["wait_prefix"]
-            if nav in _NAV_ABORTED:
-                prefix_receipt["state"] = "aborted"
-                await runner._stop(live, "stopped", "navigation", {"navigation": nav})
-                return
-            if not reservation_covers(runner, live, end):
-                prefix_receipt["state"] = "reservation_lost"
-                await runner._stop(live, "stopped", "WAIT_PREFIX_RESERVATION_LOST", {"wait_prefix": prefix_receipt})
-                return
-            if nav in ("IDLE", "ARRIVED"):
-                place = live.graph.places[prefix_receipt["place"]]
-                if (not _fresh_stopped(state) or math.dist((pose.x, pose.y), (place.x, place.y)) > runner.config.arrive_free_m):
-                    prefix_receipt["state"] = "waiting_stop_confirmation"
-                    return
-                prefix_receipt["state"] = "at_wait_place"
-                live.active_route = None
+        if (live.active_route.get("wait_prefix") and not live.active_route.get("superseded")
+                and await supervise_wait_prefix(runner, live, nav, state, pose, target_end,
+                                                lambda: _cancel_active_route(runner, live, robot_id, nav))):
+            return
         if (runner.config.map_binding_required or live.nav2_binding_scope is not None
                 or (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None):
             await recheck_binding(runner, live, active)
@@ -375,34 +361,37 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 return
             await runner._stop(live, "stopped", "navigation", {"navigation": nav})
             return
-        if live.active_route and (live.active_route.get("superseded") or target_end is None or live.active_route["end_index"] > target_end):
+        if live.active_route and (live.active_route.get("superseded") or (
+                not live.active_route.get("hold_point")  # a covered hold point runs on under the cut
+                and (target_end is None or live.active_route["end_index"] > target_end))):
             await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
+            if target_end is None:
+                traffic_hold(live, _blockers(live))
+                return  # a hold point goes out from the next read, after the cancel
         elif verdict == "busy":
             if live.active_route.get("road_speed_owner") and nav in _NAV_RUNNING:
                 await runner.road_speed.renew(runner, live, active, index, s, pose)
             return
+    hold_s = None
+    names = _blockers(live)
     if target_end is None:
-        live.view["detail"]["traffic_hold"] = {
-            "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
-            "refused_at_m": round(_held_at_m(live), 3),
-        }
-        return
-    live.view["detail"].pop("traffic_hold", None)
+        hold_s = None if live.active_route is not None else hold_or_wait(runner, live, active, index, s, nav, state, names)
+        if hold_s is None:
+            return
+    else:
+        live.view["detail"].pop("traffic_hold", None)
     now = runner._clock()
     if now < live.nav2_retry_at:
         demand = getattr(runner, "road_vision_demand", None)
         observed = demand.new_peer_observations(live, active[1].map_id, now) if demand and live.active_route is None else None
         if not observed:
             return
-        live.view["detail"]["peer_wait"]["observation_retry"] = observed
+        (live.view["detail"].get("peer_wait") or {})["observation_retry"] = observed  # a hold point retries without one
     if (target_end == index and target_end < len(live.segments) - 1
             and live.segments[index]["s_to"] - s <= runner.config.arrive_free_m and live.view["hold"] is None):
-        live.view["detail"]["traffic_hold"] = {
-            "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
-            "refused_at_m": round(_held_at_m(live), 3),
-        }
+        traffic_hold(live, names)
         return
     if not await ready_free_goal(runner, live) or not live.open:
         return
@@ -410,13 +399,16 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     detail = live.view["detail"]
     wait = detail.get("peer_wait") or {}
     prefix = None
-    if wait.pop("try_wait_place", False):
+    if hold_s is not None:
+        end_index = index
+    elif wait.pop("try_wait_place", False):
         prefix, why = reserved_wait(runner, live, active, index, s, target_end)
         if prefix is None:
             detail["wait_prefix"] = {"state": "held", "reason": why, "waiting_on": wait["waiting_on"]}
     if prefix is not None:
         end_index = prefix
-    site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()), here=(pose.x, pose.y))
+    site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()),
+                                 here=(pose.x, pose.y), end_s=hold_s)
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
         if (frame_err or {}).get("binding") == "ROBOT_NOT_LOCALIZED":
@@ -433,7 +425,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if (answer := _table_answer(runner, live)) is not None:
         options["table_peers"] = answer["peers"]
     controlled = getattr(runner, "road_speed", None) is not None and (
-        prefix is not None or live.nav2_binding_scope is not None or runner.config.map_binding_required
+        prefix is not None or hold_s is not None or live.nav2_binding_scope is not None or runner.config.map_binding_required
         or runner._store.rules.active_rules() is not None)
     if controlled:
         if runner._route is None:
@@ -445,7 +437,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         frame = live.view["detail"]["goal_frame"]
         options["route_binding"] = {"site_map_id": frame["map_id"], "site_map_version": frame["map_version"],
                                     "map_grid_id": frame["map_grid_id"], "binding_id": frame["binding_id"]}
-        if runner._strict_named_stop(live, end_index) is not None:
+        if hold_s is None and runner._strict_named_stop(live, end_index) is not None:  # a hold point is no named stop
             options["attempt_id"] = str(uuid4())
             record_stop_dispatch(runner, live, active, options["attempt_id"], site_pts[-1][:3], robot_pts[-1][:3])
     scope = None
@@ -457,6 +449,8 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         centerline = road_centerline(live, index, s, prefix)
         expected = [centerline[0], *(point[:2] for point in site_pts)]
         scope = prefix_guard.set((robot_id, active[1].map_id, set(wait["waiting_on"]), reserved, expected, centerline))
+    elif hold_s is not None:
+        scope = hold_guard(runner, live, active, index, s, hold_s, site_pts, names)
     try:
         if runner._route is not None:
             reply = await runner._call(runner._route(robot_id, payload, **options)) or {}
@@ -482,6 +476,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             detail["wait_prefix"] = {"place": live.place(prefix), "state": "held", "reason": reason}
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             return
+        if hold_s is not None and reason == "WAIT_PREFIX_UNVERIFIED":
+            detail["wait_prefix"] = held_receipt(index, reason, names)
+            live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
+            return
         peer_wait = (reply.get("blocked_by") not in (None, robot_id)
                        and reply.get("queued") is False
                        and (reply.get("dispatch_attempted") is False or reply.get("cancel_confirmed") is True)
@@ -495,10 +493,12 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                                        "checked_at": runner._clock(), "reason": reason}
                 if prior.get("observation_retry"):
                     detail["last_peer_observation_retry"] = prior["observation_retry"]
-                if prefix is None and downstream_refusal(reply, robot_id):
+                if prefix is None and hold_s is None and downstream_refusal(reply, robot_id):
                     detail["peer_wait"]["try_wait_place"] = True
                 elif prefix is not None:
                     detail["wait_prefix"] = {"place": live.place(prefix), "state": "held", "reason": reason}
+                elif hold_s is not None:
+                    detail["wait_prefix"] = held_receipt(index, reason, names)
             live.active_route = None
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
@@ -515,13 +515,17 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             detail.pop("named_stop_dispatch", None)
         else:
             detail["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
+    if hold_s is not None:  # the receipt of every accepted hold-point send
+        hold_receipt(runner, live, index, hold_s, site_pts[-1][:2], names)
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
     live.command_ack_mono = time.monotonic()
     live.active_route = {"end_index": end_index, "points": len(payload),
                          **({"nav_state": "NAVIGATING"} if state is not None else {})}
-    if prefix is not None:
+    if prefix is not None or hold_s is not None:
         live.active_route["wait_prefix"] = True
+        if hold_s is not None:
+            live.active_route["hold_point"] = {"segment": index, "end_s": hold_s}
     elif detail.get("wait_prefix"):
         detail["wait_prefix"]["state"] = "superseded"
     if "attempt_id" in options:
