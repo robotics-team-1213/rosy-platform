@@ -201,7 +201,7 @@ def detect_objects(
             raise ValueError(f"unknown site {site!r}")
         site_names = [site]
     else:
-        site_names = [s for s in sites_cfg if cell_pivot.map_record(calibration, s) is not None]
+        site_names = [s for s, sc in sites_cfg.items() if not sc.get("tier_of") and cell_pivot.map_record(calibration, s) is not None]
     entries = {e["id"]: e for e in catalog}
     raw_items: list[dict[str, Any]] = []
     cfg_mt, cat_mt = _mtime_ns(cfg_p), _mtime_ns(cat_p)

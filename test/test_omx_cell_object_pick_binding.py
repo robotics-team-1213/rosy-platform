@@ -54,7 +54,7 @@ def _scene_jpg(rects, colour=(60, 160, 60), surface=(200, 200, 200)) -> bytes:
 def _seed_cell_workdir(tmp_path: Path) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     cal_file = tmp_path / "cal.json"
-    cal_file.write_text(json.dumps({"schema": cal.SCHEMA, "sites": {"temp_plate_a~fine": RECORD}, "cameras": {"top": None}}), encoding="utf-8")
+    cal_file.write_text(json.dumps({"schema": cal.SCHEMA, "sites": {"temp_plate_a": RECORD}, "cameras": {"top": None}}), encoding="utf-8")
     cfg = {
         "arm_id": "arm_a",
         "calibration_path": str(cal_file),
@@ -107,6 +107,7 @@ def test_cell_object_view_filters_unmatched_splits_strip_corners_and_caches(tmp_
         assert res["schema"] == cov.SCHEMA and res["source_seq"] == 42 and res["cell_state_gen"] == 7
         ids = sorted(o["catalog_id"] for o in res["objects"])
         assert ids == ["container-1", "container-2", "container-3"]
+        assert all(o["site"] == "temp_plate_a" for o in res["objects"])
         c2 = next(o for o in res["objects"] if o["catalog_id"] == "container-2")
         c3 = next(o for o in res["objects"] if o["catalog_id"] == "container-3")
         assert c2["corners_px"] and c3["corners_px"] and c2["corners_px"] != c3["corners_px"]
@@ -345,7 +346,7 @@ def test_bench_record_http_objects_recording_and_strict_8781_proxy(tmp_path, mon
     monkeypatch.setattr(brh, "VIEWER", viewer.url)
     bench._config["job_api_url"] = f"http://127.0.0.1:{j_srv.server_port}"
     bench._config["job_api_token_file"] = str(tok_p)
-    srv = brh.make_server("127.0.0.1", 0, bench)
+    srv = brh.make_server(bench, 0, bind="127.0.0.1")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_port}/camera/top.jpg", timeout=5) as resp:
