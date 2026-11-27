@@ -117,15 +117,20 @@ async def resume_ready(runner, live, index: int, s: float) -> bool:
             detail["last_recovery"] = {**detail.pop("recovery"), "state": "recovered", "recovered_at": now}
         return True
     state = await _state(runner, live.view["robot_id"])
-    estop = not isinstance(state, dict) or (state.get("safety") or {}).get("estop") is not False
-    if now - rec["entered_at"] >= WAIT_S or now - rec["since"] >= WINDOW_S or (isinstance(state, dict) and estop):
+    readable = isinstance(state, dict)
+    end = ("wait_s" if now - rec["entered_at"] >= WAIT_S else "window" if now - rec["since"] >= WINDOW_S
+           else "estop" if readable and (state.get("safety") or {}).get("estop") is not False
+           else "out_of_scope" if readable and not _in_scope(runner, live, rec["reason"], rec["stop_detail"], state)
+           else None)   # MANUAL, DOCKING, a hold or a map change since entry: no resend
+    if end is not None:
         rec["state"] = "exhausted"
-        await runner._stop(live, "stopped", rec["reason"], rec["stop_detail"])
+        await runner._stop(live, "stopped", rec["reason"], {**rec["stop_detail"], "recovery_end": end})
         return False
     live.progress_at = now
     rec["checked_at"] = now
-    stopped = isinstance(state, dict) and state.get("navigation") not in _RUNNING and _fresh_stopped(state)
-    if now - rec["entered_at"] < SETTLE_S or estop or not stopped:
+    stopped = readable and state.get("navigation") not in _RUNNING and _fresh_stopped(state)
+    rec["stopped_samples"] = rec.get("stopped_samples", 0) + 1 if stopped else 0   # two reads on two ticks
+    if now - rec["entered_at"] < SETTLE_S or rec["stopped_samples"] < 2:
         runner._save(live)
         return False
     rec.update(state="resumed", waiting_for=None, resumed_at=now, resumed_progress=live.progress(index, s))

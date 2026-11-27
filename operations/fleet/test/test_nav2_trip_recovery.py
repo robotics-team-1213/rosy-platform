@@ -84,7 +84,39 @@ def test_a_robot_still_moving_is_not_resent_and_the_wait_ends_with_the_old_reaso
     _tick(runner, clock, 3)
     view = runner.view("p-rc")
     assert (view["state"], view["reason"]) == ("stopped", "stall") and view["detail"]["progress_m"] == 0.1
-    assert view["detail"]["recovery"]["state"] == "exhausted"
+    assert view["detail"]["recovery"]["state"] == "exhausted" and view["detail"]["recovery_end"] == "wait_s"
+
+
+@pytest.mark.parametrize("change", ["manual", "docking", "stale_velocity", "unread"])
+def test_a_wait_never_resends_without_fresh_proof_or_out_of_scope(change):
+    robot, clock, *_rest, runner, live = _trip()
+    run(runner._stop(live, "stopped", "stall", {}))
+    if change == "manual":
+        robot._state["mode"] = "MANUAL"
+    elif change == "docking":
+        robot._state["mode"] = "DOCKING"
+    elif change == "stale_velocity":
+        robot._state["evidence"] = {"pose": {"evidence": "fresh"}, "velocity": {"evidence": "stale"}}
+    else:
+        robot.state_error = OSError("no answer")
+    _tick(runner, clock, 6)
+    assert len(robot.routes) == 1
+    if change in ("manual", "docking"):
+        assert (live.view["state"], live.view["detail"]["recovery_end"]) == ("stopped", "out_of_scope")
+    else:
+        assert live.view["state"] in ("running", "link_wait") and live.view["detail"]["recovery"]["state"] == "waiting"
+
+
+def test_one_stationary_read_is_not_enough():
+    robot, clock, *_rest, runner, live = _trip()
+    run(runner._stop(live, "stopped", "stall", {}))
+    robot._state["velocity"] = {"linear": 0.05, "angular": 0.0}
+    _tick(runner, clock, 5)                                    # past SETTLE_S, still moving
+    robot._state["velocity"] = {"linear": 0.0, "angular": 0.0}
+    _tick(runner, clock)
+    assert len(robot.routes) == 1 and live.view["detail"]["recovery"]["stopped_samples"] == 1
+    _tick(runner, clock)
+    assert len(robot.routes) == 2
 
 
 def _recover_once(runner, clock, live, reason="navigation"):
@@ -183,7 +215,8 @@ def test_an_estop_while_waiting_ends_the_trip_with_the_old_reason():
     run(runner._stop(live, "stopped", "stall", {"stall_s": 20.0}))
     robot._state["safety"] = {"estop": True}
     _tick(runner, clock)
-    assert (live.view["state"], live.view["reason"]) == ("stopped", "stall")
+    assert (live.view["state"], live.view["reason"]) == ("stopped", "stall") and live.view["detail"]["recovery_end"] == "estop"
+    assert live.view["detail"].get("stop_sent") is not False
 
 
 def test_an_operator_cancel_while_recovering_is_final():
