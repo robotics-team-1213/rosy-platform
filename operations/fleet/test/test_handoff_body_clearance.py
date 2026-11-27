@@ -58,10 +58,16 @@ def test_peer_parked_two_bays_away_does_not_block():
     _run((-.42 + .452, .47))
 
 
+def test_peer_just_outside_the_turn_keep_out_does_not_block():
+    # 0.25 m from the staging turn: inside the old 0.288 (both trays), outside 0.23 (user decision 2026-11-27).
+    _run((-.42 + .25, .15), peer_shift=0.)
+
+
 @pytest.mark.parametrize("peer_xy, caps", [
     ((-.42 + .165, .47), PINKY_CAPS),            # off-centre towards the entry lane: bodies plus binding errors overlap
     ((-.42 + .20, .15), PINKY_CAPS),             # beside the staging turn
     ((-.42 + .26, .15 + .02), PINKY_CAPS),       # clear of the body circle but inside the tray's turn sweep
+    ((-.42 + .30, .15), PINKY_CAPS),             # 0.30 m: outside 0.23 alone, inside 0.23 plus both binding errors
     ((-.42 + .45, .47), None),                   # unknown kind keeps the general 0.7 m clearance
 ])
 def test_peer_too_close_or_of_unknown_geometry_blocks(peer_xy, caps):

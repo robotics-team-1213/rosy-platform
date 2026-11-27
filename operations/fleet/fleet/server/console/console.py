@@ -76,7 +76,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         fleet_name: str = "rosy-site",
         clearance_m: float = traffic.DEFAULT_CLEARANCE_M,
         yield_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
-        site_keep_out_m: float = 0.18,
+        site_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
         relay_factory=None,
         signal_console=None,
         event_store=None,
@@ -124,7 +124,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._yield_grace_ticks = 3
         #: 상대가 목표 자리를 깔고 앉았다고 보는 거리. 두 대의 실제 차체 반폭 합(약 0.12 m)에
         #: 최소 측위 여유만 더한 값 — 근접 정차를 허용하되 같은 목표 중복 진입은 막는다.
-        self._goal_blocked_m = 0.18
+        self._goal_blocked_m = self._site_keep_out_m   # the site's keep-out, also when its config sets another
         #: 비켜서 있는 로봇 → 어디로, 누구를 위해. 화면이 "왜 저리로 갔는지"를 말하려면
         #: 필요하고, 비켜서기가 끝났는지 판단하는 데도 쓴다.
         self._yielding: dict[str, dict] = {}

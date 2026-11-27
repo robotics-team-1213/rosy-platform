@@ -1554,6 +1554,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
+  - deploy/robot/omx/cell_target_binding.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
   - deploy/robot/omx/cell_area_job_spec.py
@@ -1575,6 +1576,8 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/pipeline/pipeline_cell_objects.py
+  - operations/fleet/fleet/server/pipeline/pipeline_target_object.py
   - operations/fleet/fleet/server/pipeline/pipeline_autonomous_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_home_recovery.py
