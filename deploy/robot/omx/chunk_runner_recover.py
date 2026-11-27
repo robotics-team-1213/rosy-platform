@@ -276,6 +276,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
 
     import cell_choices
     import cell_corridor
+    import cell_corridor_own
     import cell_params as prm
     import cell_pipeline as cp
     import cell_pivot
@@ -312,7 +313,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
         low = lambda s: crp.fk_z(s, tcp_x_m=tcp_x_m) < clear_z_m  # noqa: E731
         look = crp.build_multi_site_look(
             cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m,
-            allow_ascending_departure=True,
+            allow_ascending_departure=True, own_state=lambda: cell_corridor_own.measured_joints(cell),
         )
         load_check = crp.make_load_checker(config, library, params)
         advisor = None
