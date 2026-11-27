@@ -92,12 +92,13 @@ controller_server:
       max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
 
       # 경로 추종 (Lookahead, 시선 두기)
-      lookahead_dist: 0.12                   # [m] 기본 전방 주시 거리 (0-loop U-turn R=0.112 m 기준 단축)
+      # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 주시 0.12 로 10-12 cm 안쪽으로 질러 갔다. 패널 결정으로 주시를 0.07 로 줄인다.
+      lookahead_dist: 0.07                   # [m] 기본 전방 주시 거리 (U턴 호 R~0.135 m 보다 훨씬 짧게)
       use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
-      lookahead_time: 1.0                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
-      min_lookahead_dist: 0.10               # [m] 최소 주시 거리 (xy_goal_tolerance 0.08 < 0.10 < U-turn R 0.112)
-      max_lookahead_dist: 0.18               # [m] 최대 주시 거리
-      curvature_lookahead_dist: 0.12         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
+      lookahead_time: 0.6                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
+      min_lookahead_dist: 0.05               # [m] 최소 주시 거리
+      max_lookahead_dist: 0.10               # [m] 최대 주시 거리
+      curvature_lookahead_dist: 0.07         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
       use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
 
       # 제자리 회전 (고개 먼저 돌리기)
@@ -163,9 +164,9 @@ controller_server:
     general_goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
       stateful: true
-      # 차선 다음 점은 0.12 m, 최소 주시는 0.10 m 다. 당근이 이 공 안이면 RPP 는
+      # 차선 다음 점은 0.12 m 다. 당근이 이 공 안이면 RPP 는
       # 직진하지 않고 목표 각으로만 돈다. 그 회전에 옆 신호등과 벽이 정지로 읽힌다.
-      xy_goal_tolerance: 0.08                    # [m] 목표 지점 반경 0.08 m 안에 들어오면 도착 인정 (< RemovePassedGoals 0.09)
+      xy_goal_tolerance: 0.08                    # [m] 목표 지점 반경 0.08 m 안에 들어오면 도착 인정 (RemovePassedGoals 0.05 보다 큼: 마지막 목표만 이 공으로 도착 판정)
       yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
 
     # ==========================================================
