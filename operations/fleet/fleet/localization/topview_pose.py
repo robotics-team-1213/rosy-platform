@@ -1,8 +1,8 @@
-"""Where a Pinky stands at a cell stop, read from the arm cell's fixed top camera (2026-11-27).
+"""Where a robot stands at a cell stop, read from the arm cell's fixed top camera (2026-11-27).
 
-Model S was trained on top-camera frames with the Pinky parked at one spot. This module registers a live frame to a
+Model S was trained on top-camera frames with the robot parked at one spot. This module registers a live frame to a
 stored reference frame of the fixed arm plate (SIFT + similarity RANSAC, so a camera that has rotated since is
-absorbed), finds the Pinky's orange tray and returns its offset from the training target in the site frame, with an
+absorbed), finds the robot's orange tray and returns its offset from the training target in the site frame, with an
 uncertainty. The pixel to metre map lives in the data file ("px_to_site"), never in code; solve_px_to_site re-solves
 it from frames taken before and after a known small move. Pure: no network, no clock.
 """
@@ -87,7 +87,7 @@ def register(data: TopviewData, gray):
 
     def keypoints(img):
         mask = np.full(img.shape, 255, np.uint8)
-        mask[:, :data.mask_left_px] = 0  # the Pinky stands here; only the fixed arm plate may anchor the frame
+        mask[:, :data.mask_left_px] = 0  # the robot stands here; only the fixed arm plate may anchor the frame
         return cv2.SIFT_create(4000).detectAndCompute(img, mask)
 
     k1, d1 = keypoints(data.reference_gray)
@@ -139,7 +139,7 @@ def find_tray(data: TopviewData, bgr):
 
 
 def marker_check(data: TopviewData, gray, expected):
-    """Marker id seen on the Pinky, or None when the marker is not visible (S3 crops it at the frame's top edge).
+    """Marker id seen on the robot, or None when the marker is not visible (S3 crops it at the frame's top edge).
 
     A different robot's id is a refusal; an unseen marker is not (the tray is the measured evidence)."""
     import cv2
@@ -156,7 +156,7 @@ def marker_check(data: TopviewData, gray, expected):
 
 
 def observe(data: TopviewData, jpeg: bytes, robot_id=None) -> dict:
-    """Offset of the Pinky from the training target. dx/dy are site metres (robot minus target), dyaw the heading
+    """Offset of the robot from the training target. dx/dy are site metres (robot minus target), dyaw the heading
     error (rad); raises TopviewError."""
     import cv2
     import numpy as np

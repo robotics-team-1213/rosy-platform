@@ -1,6 +1,6 @@
 """Top-view evidence for a cell stop's precision verdict (2026-11-27, user: "dock to the model S top view").
 
-Where the robot's own map pose and the ceiling camera cannot say whether the Pinky stands where model S was trained,
+Where the robot's own map pose and the ceiling camera cannot say whether the robot stands where model S was trained,
 the arm cell's top camera can. CellTopview reads two fresh, agreeing frames of the cell job API and
 topview_decision classifies the offset exactly like named_stop_decision (same limits, same IN_TOLERANCE / HOLD /
 REPARK verdicts) with source "cell_topview"; unlike the straight-only SLAM verdict it also corrects sideways
