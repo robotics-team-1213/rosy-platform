@@ -5826,3 +5826,11 @@
 - gate 변화: 없음(밀기 완료 가드가 새로 생김, 다른 가드는 그대로)
 - 결정: D-1083
 - 교훈: 없음(셀 수용 전)
+
+## 2026-11-28 · uncommitted · D-1087 물러나서 다시 보기
+
+- 변경: trips/trip_back_off.py 추가, trip_reissue가 same_spot 종료를 후진 0.08 m(CORE nudge_backward, nudge_routes.request_step 재사용)→다시 보기(LOCALIZED·카메라·SLAM gap)→첫 1.0 m 저속·재중심 재발행으로 처리. 후진 최대 2회·0.16 m, 거절·중단·미확인이면 재발행 없음
+- 증거: test_trip_back_off.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1087
+- 교훈: 없음
