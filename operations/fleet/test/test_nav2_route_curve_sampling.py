@@ -84,8 +84,8 @@ def test_off_a_tight_curve_the_first_point_stays_the_base_distance_ahead():
     pts = sample_nav2_route(graph, segs, 1, s, 2, here=here)
     first = math.dist(pts[0][:2], (sx, sy))  # chord from the projection, along the arc about 0.10 m
     assert 0.09 < first <= NAV2_RECENTRE_AHEAD_M + 1e-6
-    few = sample_nav2_route(graph, segs, 1, s, 2, here=here, max_points=6)  # the even-spacing fallback
-    assert math.dist(few[0][:2], (sx, sy)) <= NAV2_RECENTRE_AHEAD_M + 1e-6
+    few = sample_nav2_route(graph, segs, 1, s, 2, here=here, max_points=10)  # the even-spacing fallback (0.12 m)
+    assert math.dist(few[0][:2], (sx, sy)) <= NAV2_ROUTE_STEP_M  # the road step, not the 0.20 m straight reach
 
 
 def test_progress_that_lags_the_robot_does_not_put_the_first_point_behind_it():
