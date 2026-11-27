@@ -1673,6 +1673,13 @@ task runs only while that user is logged on. Pause with
 `Unregister-ScheduledTask -TaskName RosySiteAutoSign -Confirm:$false`. On
 Linux run the same command from a systemd user timer or cron.
 
+**Green-main pointer for native updaters (D-805 7).** `green_main_pointer.py` runs on the same signing
+PC (its own task, every 5-10 min) with the authenticated `gh`. It signs `green-main.json` for the newest
+first-parent main commit whose newest GitHub Actions `ci-result` run succeeded, with a pointer key of its
+own (`rosy-green-main-v1`, never the site candidate key), and copies it with `--push user@host:dir`.
+`omx_autoupdate.py` with `"trust_source": "platform"` reads that file instead of the GitHub REST API
+(deploy/robot/omx/README.md "자동 업데이트").
+
 Optional `notify_hosts` (list of ssh targets) closes the latency gap after
 signing: a run that signed at least one release then runs, per host,
 `ssh -o BatchMode=yes <host> sudo -n systemctl start rosy-site-autoupdate.service`
