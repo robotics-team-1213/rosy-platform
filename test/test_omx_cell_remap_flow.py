@@ -233,3 +233,6 @@ def test_move_regions_carries_every_pixel_region_not_only_surface_and_auto_roi()
     assert near(out["markings_px"][0], [[300, 60], [430, 60], [430, 200], [300, 200]])
     assert near(config["scene_ignore_px"][0], [100, 100, 150, 200]) and near(config["calibrate"]["scene_ignore_px"][0], [200, 300, 260, 380])
     assert "detect_roi" not in config["sites"]["bare"]  # a site without the key gains none
+    gone = cc.move_regions({"sites": {"edge": {"auto_roi": [600, 440, 639, 479], "detect_roi": [630, 470, 639, 479]}}},
+                           ref, cv2.warpAffine(ref, np.float32([[1, 0, 30], [0, 1, 30]]), (640, 480)))["sites"]["edge"]
+    assert "detect_roi" not in gone and "auto_roi" in gone  # pushed out of the frame: dropped, not left as an empty box

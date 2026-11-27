@@ -209,6 +209,8 @@ def move_regions(config: dict, reference, current) -> dict:
         for key in RECT_REGIONS:
             if site.get(key):
                 site[key] = rect(site[key])
+                if key != "auto_roi" and (site[key][0] >= site[key][2] or site[key][1] >= site[key][3]):
+                    del site[key]  # moved out of the frame: readers fall back to auto_roi rather than an empty box
         if site.get("markings_px"):
             site["markings_px"] = [tp(p) for p in site["markings_px"]]
         if site.get("home_jaws_px"):
