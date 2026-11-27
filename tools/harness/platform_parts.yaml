@@ -1477,6 +1477,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_auto_fold_stages.py
   - deploy/robot/omx/cell_fold_rehome.py
   - deploy/robot/omx/cell_camera_telemetry_sync.py
+  - deploy/robot/omx/cell_objects_sync.py
   - deploy/robot/omx/cell_bound_home_request.py
   - deploy/robot/omx/cell_bound_home_placement.py
   - deploy/robot/omx/cell_recovery_cargo.py
@@ -1554,6 +1555,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_depart.py
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
+  - deploy/robot/omx/cell_target_binding.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
   - deploy/robot/omx/cell_area_job_spec.py

@@ -63,6 +63,15 @@ def _point(state):
 #: The nominal base's tray corner sweeps this radius in an in-place turn (docking model, panel B 2026-11-21); the body
 #: circle alone (0.0826) leaves the tray out. Fleet must not import the CORE docking model, so the value is kept here.
 TRAY_TURN_RADIUS_M = 0.144
+#: Keep-out around an in-place turning point: the mover's tray sweep (0.144) plus a standing peer's body circle
+#: (0.0826), rounded up. Both trays were counted before (0.288), more than the 0.226 m bay spacing; a standing
+#: peer does not sweep its tray (safety-distance panel and user decision 2026-11-27). Only for a peer whose state
+#: proves it stands; a peer known from a camera marker alone keeps both tray sweeps (its heading is not checked).
+TURN_KEEP_OUT_M = 0.23
+
+
+def _turn_keep_out(mover, peer):
+    return max(TURN_KEEP_OUT_M, max(mover.rotation_radius_m, TRAY_TURN_RADIUS_M) + peer.rotation_radius_m)
 
 
 def _body(console, robot):
@@ -138,7 +147,8 @@ def _check_terminal(maps, site, scope, path, fit_error, *, check_walls=False):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_PATH_CROSSWALK")
 
 
-def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None):
+def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None, held_by_fleet=frozenset()):
+    # held_by_fleet: peers Fleet itself holds (traffic_hold waiting_for the mover); it releases them only after the mover is done.
     clients, observed = peers
     marker_clearance = getattr(console, "_site_marker_clearance", None)
     current = {rid: client for rid, client in console.clients().items() if rid != mover}
@@ -191,7 +201,8 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
         line = state.get("line_follow") or {}
         if (robot in console.goal_leases.pending or robot in console._goal_busy
                 or state.get("navigation") not in ("IDLE", "ARRIVED", "CANCELED", "FAILED")
-                or state.get("mode") not in ("IDLE", "EMERGENCY") or line.get("mode") != "OFF"
+                or state.get("mode") not in (("IDLE", "EMERGENCY", "NAVIGATION") if robot in held_by_fleet else ("IDLE", "EMERGENCY"))
+                or line.get("mode") != "OFF"
                 or not _fresh_stopped(state)):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_MOTION_UNVERIFIED")
         peer_fit = fit_for(robot, state)
@@ -210,7 +221,7 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
             # along the path and its tray-inclusive turn radius at the turning points must clear it. Bays are
             # 0.226 m apart, so the lane term leaves ~1 cm: CORE keeps the body inside its lane and stops on LiDAR.
             lane = bodies[0].half_width_m + bodies[1].rotation_radius_m + error
-            turn = sum(max(body.rotation_radius_m, TRAY_TURN_RADIUS_M) for body in bodies) + error  # either tray may face the other
+            turn = _turn_keep_out(*bodies) + error  # the standing peer's tray does not sweep
         if (any(_point_segment(position, a, b) < lane for a, b in zip(path, path[1:]))
                 or any(math.dist(position, point) < turn for point in path[:-1])):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_ROUTE_OCCUPIED")

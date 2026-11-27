@@ -17,6 +17,14 @@ GRANT_S = 1.5
 TIGHT_CURVE_CAPS = (CurveCap(0.30, 0.08),)
 
 
+#: A lease 409 while the state read still shows the goal running: CORE has no active leased goal, so nothing drives
+#: under it (its speed authority closes with the run and expires within 1.5 s). At the end of a route run CORE
+#: finishes the run a moment before it reports ARRIVED, and Fleet's shared state read lags on top (2026-11-27
+#: 13:05Z: two trips failed in that window). The step loop reads the state every tick; only past this long is it
+#: a failure.
+LEASE_ENDED_GRACE_S = 2.0
+
+
 async def _goal_finished(runner, rid) -> bool:
     """A lease 409 is a normal end only when CORE itself reports the goal done: ARRIVED (or FAILED, which the step
     loop retries through _handle_nav2_failure), no goal, no e-stop. The step loop reads the same state next tick and
@@ -30,6 +38,16 @@ async def _goal_finished(runner, rid) -> bool:
     except Exception:
         return False
     return (isinstance(state, dict) and state.get("navigation") in ("ARRIVED", "FAILED") and state.get("goal") is None
+            and (state.get("safety") or {}).get("estop") is False)
+
+
+async def _goal_reads_running(runner, rid) -> bool:
+    """The state read still shows the goal under way (not cancelled, no e-stop): it may lag the lease's end."""
+    try:
+        state = await runner._call(runner._robot_state(rid))
+    except Exception:
+        return False
+    return (isinstance(state, dict) and state.get("navigation") in ("NAVIGATING", "PLANNING")
             and (state.get("safety") or {}).get("estop") is False)
 
 
@@ -132,6 +150,12 @@ class RoadSpeed:
                     and getattr(exc, "code", None) in ("GOAL_LEASE_NOT_ACTIVE", "ROAD_SPEED_OWNER_CHANGED")
                     and live.open and live.active_route is route and await _goal_finished(runner, rid)):
                 detail["state"] = "arrived"  # reached the target before the first renewal; the step loop sees ARRIVED
+                return
+            if (getattr(exc, "status", None) == 409 and getattr(exc, "code", None) == "GOAL_LEASE_NOT_ACTIVE"
+                    and live.open and live.active_route is route and getattr(runner, "_robot_state", None) is not None
+                    and (seen := runner._clock()) - route.setdefault("lease_ended_at", seen) < LEASE_ENDED_GRACE_S
+                    and await _goal_reads_running(runner, rid)):
+                detail.update(state="lease_ended", error="GOAL_LEASE_NOT_ACTIVE")  # the next tick's state read decides
                 return
             detail.update(state="unconfirmed", error=getattr(exc, "code", type(exc).__name__))
             if isinstance(exc, RoadSpeedRefused):

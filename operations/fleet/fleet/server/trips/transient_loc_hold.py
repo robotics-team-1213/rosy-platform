@@ -11,6 +11,9 @@ from fleet.server.trip_ports import pose_diagnostics
 # The robot stands still (goal canceled) while it waits. One onboard recovery on rosy_45 took about
 # 20 s on 2026-11-27 (fit drop, node restart, 3 s search, initialpose, 3 s check); two fit in 45 s.
 LOC_RECOVERY_WAIT_S = 45.0
+# A robot standing in a traffic hold can lose its camera sighting for minutes (13:05-13:13Z, rosy_46 behind
+# rosy_42: pose DEGRADED, trip stopped/pose). It cannot drift while standing, so wait for a re-sighting.
+POSE_WAIT_S = 120.0  # shortcut: fixed bound, not tied to the traffic hold (the hold is not re-read while pose-less)
 UNREACHABLE_GAP_S = 5.0  # failures further apart than this are separate outages
 
 
@@ -91,9 +94,54 @@ async def hold_unreachable_pre_dispatch(runner, live, exc) -> bool:
     return True
 
 
+def _standing(state) -> bool:
+    """Fresh zero velocity, no goal running, no estop: only then can an unusable pose not hide a moving robot."""
+    state = state if isinstance(state, dict) else {}
+    vel = state.get("velocity") or {}
+    fresh = ((state.get("evidence") or {}).get("velocity") or {}).get("evidence") == "fresh"
+    return (fresh and not (state.get("safety") or {}).get("estop")
+            and state.get("navigation") not in ("NAVIGATING", "PLANNING", None)
+            and state.get("mode") not in ("MANUAL", "ESTOP")
+            and all(type(vel.get(k)) in (int, float) for k in ("linear", "angular"))
+            and abs(vel["linear"]) < 0.01 and abs(vel["angular"]) <= 0.02)
+
+
+async def hold_unusable_pose(runner, live, robot_id: str, pose) -> bool:
+    """Keep a Nav2 trip up to POSE_WAIT_S while the map pose is DEGRADED/UNKNOWN (stale camera) and Fleet proves
+    the robot stands. Nothing new is sent while it waits; a moving robot is stopped as before."""
+    if not (live.nav2 and live.open and pose is not None and pose.state in ("DEGRADED", "UNKNOWN")
+            and runner._robot_state is not None):
+        return False
+    try:
+        state = await runner._call(runner._robot_state(robot_id))
+    except Exception:
+        return False
+    if not _standing(state):
+        return False
+    detail, now = live.view["detail"], runner._clock()
+    wait = detail.get("pose_wait")
+    if not isinstance(wait, dict) or now - wait["updated_at"] > UNREACHABLE_GAP_S:  # a flapping pose keeps one budget
+        wait = detail["pose_wait"] = {"since": now}
+        live.active_route = None  # whatever was sent is void: cancel it, the route goes out again after the wait
+        if runner._cancel_goal is not None:
+            try:
+                await runner._call(runner._cancel_goal(robot_id))
+            except Exception:
+                pass
+    wait.update(updated_at=now, pose_state=pose.state)
+    if now - wait["since"] >= POSE_WAIT_S:
+        return False
+    live.progress_at = now
+    runner._save(live)
+    return True
+
+
 async def handle_unlocalized_pose(runner, live, robot_id: str, pose) -> None:
     """Hold transient unlocalized Nav2 poses if recoverable, else stop with structured diagnostics."""
     detail = live.view["detail"]
+    if await hold_unusable_pose(runner, live, robot_id, pose):
+        return
+    detail.pop("pose_wait", None)
     binding_id = detail.get("precision_binding_id") or detail.get("nav2_binding_id")
     pose_diag: dict = {}
     if pose is None and binding_id is not None:

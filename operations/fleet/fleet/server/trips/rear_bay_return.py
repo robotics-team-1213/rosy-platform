@@ -137,7 +137,9 @@ class RearBayPort:
         goal = target["x"], target["y"]
         staging = goal[0] - offset * math.cos(target["yaw"]), goal[1] - offset * math.sin(target["yaw"])
         binding = {"site_map_id": site[0], "site_map_version": site[1]}
-        site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging])
+        held = frozenset(rid for rid, lv in getattr(runner, "_live", {}).items() if lv.open and robot in (
+            (lv.view["detail"].get("traffic_hold") or {}).get("waiting_for") or ()))
+        site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging], held_by_fleet=held)
         native = [(snapshot["pose"]["x"], snapshot["pose"]["y"]), staging, goal]
         route = (site[0], [fit.apply(point) for point in native])
         nearest = min((p for p in live.graph.places.values() if p.kind == "charge"),
@@ -162,7 +164,7 @@ class RearBayPort:
                 raise TripError(409, "CHARGE_BAY_PEER_CHANGED")
             if self.console._claim_blocker(robot, native, site_route=route)[0] is not None:
                 raise TripError(409, "CHARGE_BAY_ROUTE_OCCUPIED")
-            site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging])
+            site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging], held_by_fleet=held)
         clear_at_wire()
         return snapshot, route, clear_at_wire
 

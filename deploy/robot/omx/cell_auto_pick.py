@@ -39,6 +39,7 @@ from cell_pick_geom import across, box_centre, grasp_depth, grasp_yaw, jaw_open_
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot, cell_place_fit  # noqa: E402,E401
 from cell_return_held import _plan_return_held, run_return_held  # noqa: E402,F401
+import cell_target_binding  # noqa: E402
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
 import cell_zone_verification  # noqa: E402
@@ -94,6 +95,8 @@ def _run_auto_core(
     )
     episode, failed_yaws, gate, dest_view = None, [], None, None
     attempts = 1 if anchor else int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts  # the height was measured once: a retry is a new run
+    binding = config.get("_target_binding")
+    attempts = 1 if (binding or config.get("_one_shot")) else attempts
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
@@ -119,20 +122,16 @@ def _run_auto_core(
                 tried["fail"] = {"stage": "camera", "class": f"destination observation: {derr}"}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: destination observation: {derr}"}
-            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog,
-                                                image=source_image)
+            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog, image=source_image)
+            cand_objects, bind_refusal = cell_target_binding.prepare_candidates(objects, catalog, config, source_frame, error)
+            if bind_refusal:
+                tried["fail"] = {"stage": "bind", "class": bind_refusal["refusal_code"]}
+                if not dry_run: cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                return {**out, **bind_refusal}
             room_view = None if error else finger_room_view(img, config, source, roi, mask)
-            usable, refused = (
-                choose(
-                    cell, config, calibration, source, dest_site, place_xy, roi,
-                    objects, mask, catalog, bias_data, choices, work, failed_yaws, dest_view,
-                    room_view=room_view,
-                )
-                if not error
-                else ([], [])
-            )
-            cd.target(objects, usable, refused)
-            if usable and (config.get("debate_models") or config.get("decision_model")):
+            usable, refused = (choose(cell, config, calibration, source, dest_site, place_xy, roi, cand_objects, mask, catalog, bias_data, choices, work, failed_yaws, dest_view, room_view=room_view) if not error else ([], []))
+            cd.target(cand_objects, usable, refused)
+            if usable and not binding and (config.get("debate_models") or config.get("decision_model")):
                 import cell_pick_judge  # noqa: E401
 
                 judged = cell_pick_judge.ask(config.get("debate_models") or config["decision_model"], img, usable)
@@ -154,7 +153,7 @@ def _run_auto_core(
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
-                return {**out, "result": f"stopped: {row['error']}", **reach_fix_of(refused)}
+                return {**out, "result": f"stopped: {row['error']}", **({"refusal_code": "TARGET_NOT_PICKABLE"} if binding else {}), **reach_fix_of(refused)}
             target = usable[0]
             if anchor and (free_error := cell_free_source.chosen_error(config, source, target)):
                 return {**out, "result": free_error}
@@ -192,15 +191,12 @@ def _run_auto_core(
                 and cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"), blend=use_blend)
                 != target["bias_region"]
             ):
-                usable, refused = choose(
-                    cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
-                    bias_data, choices, work, failed_yaws, dest_view, room_view=room_view,
-                )
+                usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, cand_objects, mask, catalog, bias_data, choices, work, failed_yaws, dest_view, room_view=room_view)
                 if not usable:
                     row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))
-                    return {**out, "result": "stopped: " + row["error"]}
+                    return {**out, "result": "stopped: " + row["error"], **({"refusal_code": "TARGET_NOT_PICKABLE"} if binding else {})}
                 target = usable[0]
-                cd.target(objects, usable, refused)
+                cd.target(cand_objects, usable, refused)
             o = target["object"]
             tried["locate"] = {
                 "found": True,
@@ -234,7 +230,7 @@ def _run_auto_core(
                 tried["fail"] = {"stage": "camera" if "source" in evidence_error or "camera" in evidence_error
                                  else "verify", "class": evidence_error}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
-                return {**out, "result": f"held: {evidence_error}"}
+                return {**out, "result": f"held: {evidence_error}", **({"refusal_code": "TARGET_MOVED_BEFORE_GRASP"} if binding else {})}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
             sequence = FOLDED if folded else cp.SEQUENCE
             config = dict(config, _payload=cell_objects.payload(catalog, o["object"]))

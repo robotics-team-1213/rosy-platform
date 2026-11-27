@@ -48,10 +48,16 @@ def test_peer_parked_two_bays_away_does_not_block():
     _run((-.42 + .452, .47))
 
 
+def test_peer_just_outside_the_turn_keep_out_does_not_block():
+    # 0.25 m from the staging turn: inside the old 0.288 (both trays), outside 0.23 (user decision 2026-11-27).
+    _run((-.42 + .25, .15), peer_shift=0.)
+
+
 @pytest.mark.parametrize("peer_xy, caps", [
     ((-.42 + .165, .47), PINKY_CAPS),            # off-centre towards the entry lane: bodies plus binding errors overlap
     ((-.42 + .20, .15), PINKY_CAPS),             # beside the staging turn
     ((-.42 + .26, .15 + .02), PINKY_CAPS),       # clear of the body circle but inside the tray's turn sweep
+    ((-.42 + .30, .15), PINKY_CAPS),             # 0.30 m: outside 0.23 alone, inside 0.23 plus both binding errors
     ((-.42 + .45, .47), None),                   # unknown kind keeps the general 0.7 m clearance
 ])
 def test_peer_too_close_or_of_unknown_geometry_blocks(peer_xy, caps):
@@ -83,3 +89,28 @@ def test_stopped_deadband_and_offline_absent_peer_do_not_block():
     with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
         site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1},
                       None, (-.42, .47), peers, route=[(-.42, .15)])
+
+
+def _peer_run(peer_state, **kw):
+    fit = Fit(0., 0., 0., (.037,))
+    clients = {"mover": NS(), "peer": NS()}
+    console = NS(clients=lambda: clients, robot_ids=clients.keys(), _clearance_m=.7,
+                 goal_leases=NS(pending={}), _goal_busy=set(),
+                 _named_stop_site_maps=NS(map_bindings=NS(matching_fit=lambda *_a: (fit, None))),
+                 _capability_display=NS(_kept=lambda *_a: PINKY_CAPS))
+    site_corridor(console, "mover", _state(-.42, .04), {"site_map_id": "m", "site_map_version": 1}, None, (-.42, .47),
+                  ({"peer": clients["peer"]}, {"peer": peer_state}), route=[(-.42, .15)], **kw)
+
+
+def test_navigation_mode_peer_waits_unless_fleet_holds_it_for_the_mover():
+    sticky = _state(-.42 + .452, .47) | {"mode": "NAVIGATION", "navigation": "IDLE"}
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _peer_run(sticky)
+    _peer_run(sticky, held_by_fleet={"peer"})
+    # Still a fixed body: geometry applies, and a moving or goal-active held peer is not accepted.
+    with pytest.raises(HubError, match="LINE_HANDOFF_ROUTE_OCCUPIED"):
+        _peer_run(_state(-.42 + .10, .47) | {"mode": "NAVIGATION"}, held_by_fleet={"peer"})
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _peer_run(sticky | {"navigation": "NAVIGATING"}, held_by_fleet={"peer"})
+    with pytest.raises(HubError, match="LINE_HANDOFF_PEER_MOTION_UNVERIFIED"):
+        _peer_run(sticky | {"velocity": {"linear": .1, "angular": 0.}}, held_by_fleet={"peer"})

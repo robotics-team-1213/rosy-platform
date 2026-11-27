@@ -21,7 +21,8 @@ def test_lease_409_after_core_arrived_is_arrival_not_failure():
     async def update(rid, cid, grant):
         raise RobotApiError(rid, 409, "GOAL_LEASE_NOT_ACTIVE", "not active")
     rules = NS(formation=NS(min_gap_m=.4, max_speed_mps=.15))
-    runner = NS(_clock=lambda: 10., _roster=lambda: ["first"], _live={}, _call=lambda coro: coro,
+    clock = [10.]
+    runner = NS(_clock=lambda: clock[0], _roster=lambda: ["first"], _live={}, _call=lambda coro: coro,
                 _robot_state=lambda rid: asyncio.sleep(0, state),
                 _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: rules)))
     async def check():
@@ -34,7 +35,27 @@ def test_lease_409_after_core_arrived_is_arrival_not_failure():
             await road.renew(runner, live, (1, site), 0, .1, pose)
             assert live.view["detail"]["road_speed"]["state"] == "arrived"
             state.update(navigation="ARRIVED", velocity={"linear": 0.0, "angular": 0.0})
-        for bad in ({"navigation": "CANCELED"}, {"navigation": "NAVIGATING"}, {"goal": {"x": 1}}, {"safety": {"estop": True}}):
+        # 2026-11-27 13:05Z: the lease ended between route legs while the state read still showed the goal running.
+        state.update(navigation="NAVIGATING", goal={"x": 1})
+        await road.renew(runner, live, (1, site), 0, .1, pose)   # not a failure: the next tick's read decides
+        assert live.view["detail"]["road_speed"]["state"] == "lease_ended"
+        clock[0] += 1.9
+        pose.odom_stamp = clock[0] - .2
+        await road.renew(runner, live, (1, site), 0, .1, pose)
+        assert live.view["detail"]["road_speed"]["state"] == "lease_ended"
+        clock[0] += .2                                           # still "running" 2 s after the lease ended: a failure
+        pose.odom_stamp = clock[0] - .2
+        try:
+            await road.renew(runner, live, (1, site), 0, .1, pose)
+        except RobotApiError as exc:
+            assert exc.code == "GOAL_LEASE_NOT_ACTIVE"
+        else:
+            raise AssertionError("a goal that reads running 2 s after its lease ended must stop the trip")
+        state.update(navigation="ARRIVED", goal=None)
+        live.active_route = {"road_speed_owner": "run"}          # a new leg starts its own grace
+        for bad in ({"navigation": "CANCELED"}, {"goal": {"x": 1}}, {"safety": {"estop": True}},
+                    {"navigation": "NAVIGATING", "safety": {"estop": True}}):
+            live.active_route = {"road_speed_owner": "run"}
             state.update(bad)
             try:
                 await road.renew(runner, live, (1, site), 0, .1, pose)
