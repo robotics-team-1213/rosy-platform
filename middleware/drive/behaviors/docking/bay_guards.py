@@ -196,3 +196,38 @@ class BayGuardsMixin:
         self._guard_fail("contact", "contact off the line axis (lat %.0f mm, head %.0f deg)"
                          % (est[0] * 1000.0, math.degrees(est[1])), self._h._reseat)
         return True
+
+    def reset_undock(self) -> None:
+        self._bo_gap0 = None
+        self._in_row = False
+        self._reseat_active = False
+        self._facing_bay = False
+
+    def tick_undocking(self, now: float) -> bool:
+        """Charge-bay forward undock: verify fresh LiDAR front clearance and real body movement; fail-closed on block/slip."""
+        if not self.active():
+            return False
+        h = self._h
+        distance = h._type().undock_distance_m if h._dock else 0.35
+        travelled = abs(h.executor.travelled_m())
+        if travelled >= distance:
+            self._stop()
+            h._finish_undock()
+            return True
+        deadline = 2.0 * distance / h._cfg.undock_speed + h._cfg.undock_timeout_margin_s
+        if now - h._phase_since > deadline:
+            self._stop()
+            h._fail("undock timed out")
+            return True
+        block = self._forward_block(now, h._phase_since, step=distance, facing_ok=True)
+        if block == "wait":
+            self._stop()
+            return True
+        if block is not None:
+            self._stop()
+            h._fail("bay undock: " + block)
+            return True
+        if self._backoff_stuck(now, travelled):
+            return True
+        self._drive(h._cfg.undock_speed, 0.0)
+        return True

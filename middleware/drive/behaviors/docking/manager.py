@@ -348,6 +348,7 @@ class DockingManager(DockingPhasesMixin):
         # Leave by odometry: dock proximity makes front sensors unreliable.
         self._stop_detector()
         self._charging.reset()
+        self._bay_phases.reset_undock()
         self._state = DockState.UNDOCKING
         self._execution('activate')
         self._phase = None
