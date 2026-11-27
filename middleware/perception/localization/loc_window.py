@@ -127,3 +127,11 @@ def confirm_window_candidate(node, candidate, window, now, generation):
         return [], []
     candidate = PoseCandidate(candidate.x, candidate.y, candidate.yaw, min(candidate.scan_fit, fit), "window")
     return [candidate], localized_objects(node.field, sensor, ranges, angles, mount, node.p("robot_radius"))
+
+
+def log_by(logger, warn, message):
+    """rclpy fixes the severity at each logging call site, so warning and info each keep their own line."""
+    if warn:
+        logger.warning(message)
+    else:
+        logger.info(message)
