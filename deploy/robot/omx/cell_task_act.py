@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from cell_policy_timing import finite_stamp
-from cell_presence import presence_ok
+from cell_presence import autonomous_policy_enabled, effective_operator, presence_ok
 import cell_diagnose
 import cell_site_target
 from cell_policy_goals import GOALS, resolve_goal_site
@@ -142,7 +142,7 @@ def plan_act_policy_task(
     cell_ab = cell_id == "cell_ab" and arm_id in ("arm_a", "arm_b")
     if not cell_ab and (cell_id, arm_id) != ("cell_s", "arm_s"):
         return _fail(arm_id, "ACT_POLICY_UNSUPPORTED_ARM")
-    if not presence_ok(handoff):
+    if not (presence_ok(handoff) or autonomous_policy_enabled(handoff)):
         return _fail(arm_id, "PRESENCE_REQUIRED_FOR_ACT_POLICY")
     if not wrapper.is_file() or not cfg.is_file():
         return _fail(arm_id, "CELL_CONFIG_OR_WRAPPER_MISSING")
@@ -166,6 +166,9 @@ def plan_act_policy_task(
     obs_age = finite_stamp(max_obs_age_s)
     if obs_age is None or not 0 < obs_age <= 5.0:
         return _fail(arm_id, "ACT_POLICY_CONFIG_MISSING")
+    operator = effective_operator(handoff)
+    if not operator or operator.startswith("-"):
+        return _fail(arm_id, "ACT_POLICY_INVALID_ARGS", directive_id=task_id)
     if cell_ab:
         return _check_ab_policy(handoff, arm_id, prep_dir, cfg, cfg_data, policy_cfg)
     raw_lib = str(policy_cfg.get("library") or "chunks-arm-s-inplace-live.json").strip()
@@ -180,7 +183,6 @@ def plan_act_policy_task(
     raw_chunks = handoff.get("max_chunks", policy_cfg.get("max_chunks", 4))
     if type(raw_chunks) is not int or not 1 <= raw_chunks <= 6:
         return _fail(arm_id, "ACT_POLICY_INVALID_MAX_CHUNKS")
-    operator = str(handoff["presence"]["operator"]).strip()
     tid = str(task_id or "").strip()
     src_site = str(handoff.get("src_site") or "pinky").strip().rsplit("-l", 1)[0]
     dst = str(handoff.get("dst_site") or "belt").strip()

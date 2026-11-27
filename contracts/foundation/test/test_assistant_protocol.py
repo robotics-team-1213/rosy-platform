@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from core_common.protocol.assistant import AssistantMessage, AssistantNavigation, AssistantStatus
+from core_common.protocol.assistant import AssistantMessage, AssistantNavigation, AssistantResult, AssistantStatus
 
 
 def test_message_keeps_original_text_and_locale_without_accepting_identity():
@@ -28,3 +28,5 @@ def test_explicit_navigation_and_default_status_do_not_enable_execution():
     status = AssistantStatus(available=True)
     assert status.mode == 'READ_ONLY'
     assert status.execution_enabled is False
+    assert AssistantResult(request_id='r1', conversation_id='c1', text='안녕', state='PENDING', created_at=1.).kind is None
+    assert AssistantResult(request_id='r2', conversation_id='c1', text='보내줘', state='ANSWERED', kind='CONTROL', created_at=1., completed_at=2.).kind == 'CONTROL'

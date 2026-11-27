@@ -43,6 +43,14 @@ def fk_z(state: list, tcp_x_m: float | None = None) -> float:
     return kin.fk([norm_to_rad(v) for v in state[:5]]).z
 
 
+def _probe_contact(status: dict) -> bool:
+    """The descend probe's own contact hold: the runner reports it as a fault named after the chunk (hold_runner sets
+    fault=reason), so only that fault counts; any other fault or a latched human hold is not a surface."""
+    fault = status.get("fault")
+    return (bool(status.get("contact")) and not status.get("human_hold_latched")
+            and (not fault or str(fault).startswith("contact in descend_probe:")))
+
+
 def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repeat: int = 1) -> dict:
     """goto above, descend (repeated `repeat` times); a contact hold is the surface. Always ends folded home."""
     steps, touches, last_err = [], [], None
@@ -61,7 +69,7 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repea
     for idx in range(n_rep):
         status = cell.act("run descend_probe")
         steps.append({"command": "run descend_probe", **{k: status.get(k) for k in cp.STEP_KEYS}})
-        if status.get("contact") and not status.get("fault"):
+        if _probe_contact(status):
             z = fk(status["state"], tcp_x_m) if fk is fk_z else fk(status["state"])
             touches.append(z)
             last_err = status.get("error")

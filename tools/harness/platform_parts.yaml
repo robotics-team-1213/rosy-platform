@@ -1471,6 +1471,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_zones.py
   - deploy/robot/omx/cell_space.py
   - deploy/robot/omx/cell_corridor.py
+  - deploy/robot/omx/cell_corridor_own.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
@@ -1491,7 +1492,11 @@ safety_review_paths:
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
   - deploy/robot/omx/cell_task_act.py
+  - deploy/robot/omx/cell_task_act_run.py
   - deploy/robot/omx/cell_task_live_executor.py
+  - deploy/robot/omx/cell_presence.py
+  - deploy/robot/omx/cell_auto_setup.py
+  - deploy/robot/omx/cell_stop_proof.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py
   - deploy/robot/omx/cell_incident_release.py
@@ -1534,6 +1539,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_z_shuttle.py
   - deploy/robot/omx/cell_auto_carry.py
   - deploy/robot/omx/cell_auto_pick_plan.py
+  - deploy/robot/omx/cell_auto_reach.py
+  - deploy/robot/omx/cell_slot_prior.py
   - deploy/robot/omx/cell_executor.py
   - deploy/robot/omx/cell_job_api.py
   - deploy/robot/omx/cell_job_spec.py
@@ -1563,6 +1570,7 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/pipeline/pipeline_autonomous_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_home_recovery.py
   - operations/fleet/fleet/server/pipeline/bound_home_receipt.py

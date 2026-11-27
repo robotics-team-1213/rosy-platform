@@ -661,3 +661,101 @@ def test_measured_stop_accepts_core_snapshot_without_goal_key_and_recovers_prior
     clock.advance(3.0)
     run(runner.tick())
     assert live.view["detail"]["stop_sent"] is True
+
+
+@pytest.mark.parametrize("case", ["idle", "moving", "new_owner"])
+def test_cancel_after_a_sent_leg_accepts_measured_idle_standstill(case):
+    """11-27 rosy_45: a wait-place leg was sent (nav2_route), the trip then waited on a parked peer and was
+    cancelled; CORE answered IDLE without an ack and every later start was refused prior_stop_unconfirmed."""
+    robot = RouteFakeRobot("rosy_42")
+    clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _corridor_map())
+    clock.now = time.time()
+    rid, tid = "rosy_42", "peer-canceled"
+    pose["v"] = MapPose(.1, 0., 0., "LOCALIZED", "sighting", 0., .1, .1, "site-line")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=ver, start_pose=(.1, 0., 0.), goal="P3"), store.routing_config))
+    store.record_plan(plan_id=tid, robot_id=rid, principal_id="bob", map_version=ver,
+                      request={"to": "P3", "drive_mode": "nav2"}, result={"plan": plan})
+    async def refuse(_rid, _points):
+        return {"accepted": False, "queued": False, "reason": "YIELDING", "blocked_by": "peer",
+                "waiting_on": ["peer"], "dispatch_attempted": False, "stage": "pre_dispatch_peer_check",
+                "cancel_confirmed": False, "command_robot_id": rid}
+    runner._route = refuse
+    run(runner.start(tid, "bob"))
+    run(runner.tick())
+    live = runner._live[rid]
+    live.view["detail"]["nav2_route"] = {"points": 3, "end_index": 1, "lap": None}  # the earlier leg
+    leases = console.goal_leases
+    owner = {"owner_run_id": None, "boot_id": "a2154d53-b016-4f96-ada0-22b191c9fb13",
+             "owner_generation": 4, "transport_generation": 3, "mode_epoch": 1, "dock_owner_generation": 0}
+    async def cancel(_rid):
+        stamp = datetime.fromtimestamp(clock(), timezone.utc).isoformat()
+        return {"navigation": "IDLE", "operation": None, "idle_observed_at": stamp, "idle_owner": owner}
+    async def state(_rid):
+        clock.advance(.1)
+        stamp = datetime.fromtimestamp(clock.now - .02, timezone.utc).isoformat()
+        return {"robot_id": rid, "mode": "IDLE", "navigation": "IDLE", "line_follow": {"mode": "OFF"},
+                "velocity": {"linear": .1 if case == "moving" else 0., "angular": 0.},
+                "evidence": {"velocity": {"evidence": "fresh", "sampled_at": stamp}}}
+    async def navigation(_rid):
+        return {"navigation": "IDLE", "idle_owner": owner | ({"owner_generation": 5} if case == "new_owner" else {})}
+    runner._cancel_goal = runner.halts._cancel_goal = cancel
+    runner.halts.read_stop_state = state
+    runner.halts.read_navigation = navigation
+    runner.halts.wire_epoch = leases.idle_wire_epoch
+    canceled = run(runner.cancel(tid, "bob"))
+    from fleet.server.trip_halts import halt_unconfirmed
+    if case == "idle":
+        assert canceled["detail"]["stop_sent"] is True and "error" not in canceled["detail"]
+        assert canceled["detail"]["pause_proof"]["basis"] == "pre_dispatch_idle"
+        assert not halt_unconfirmed(canceled["detail"])
+    else:  # a moving robot or a changed owner is never taken as stopped
+        assert canceled["detail"]["stop_sent"] is False and halt_unconfirmed(canceled["detail"])
+
+
+@pytest.mark.parametrize("case", ["ARRIVED", "CANCELED", "FAILED", "moving", "wire_moved", "state_differs"])
+def test_cancel_of_a_closed_trip_accepts_measured_standstill_after_an_ended_goal(case):
+    """11-27 rosy_45: Nav2 ARRIVED just before the stop; the cancel receipt names ARRIVED (not IDLE), had no ack, and
+    every later start was refused prior_stop_unconfirmed. Same proof as IDLE: fresh zero velocity after the cancel."""
+    robot = RouteFakeRobot("rosy_42")
+    clock, console, store, graph, pose, _canceled, runner = _console_runner(robot, _corridor_map())
+    clock.now = time.time()
+    rid, tid = "rosy_42", "peer-canceled-ended"
+    pose["v"] = MapPose(.1, 0., 0., "LOCALIZED", "sighting", 0., .1, .1, "site-line")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=ver, start_pose=(.1, 0., 0.), goal="P3"), store.routing_config))
+    store.record_plan(plan_id=tid, robot_id=rid, principal_id="bob", map_version=ver,
+                      request={"to": "P3", "drive_mode": "nav2"}, result={"plan": plan})
+    async def refuse(_rid, _points):
+        return {"accepted": False, "queued": False, "reason": "YIELDING", "blocked_by": "peer",
+                "waiting_on": ["peer"], "dispatch_attempted": False, "stage": "pre_dispatch_peer_check",
+                "cancel_confirmed": False, "command_robot_id": rid}
+    runner._route = refuse
+    run(runner.start(tid, "bob"))
+    run(runner.tick())
+    live = runner._live[rid]
+    live.view["detail"]["nav2_route"] = {"points": 3, "end_index": 1, "lap": None}
+    ended = "ARRIVED" if case in ("moving", "wire_moved", "state_differs") else case
+    wire = [runner.halts.idle_wire(rid) or console.goal_leases.idle_wire_epoch(rid)]
+    async def cancel(_rid):
+        return {"navigation": ended, "operation": None}
+    async def state(_rid):
+        clock.advance(.1)
+        if case == "wire_moved":
+            wire[0] += 1
+        stamp = datetime.fromtimestamp(clock.now - .02, timezone.utc).isoformat()
+        return {"robot_id": rid, "mode": "NAVIGATION", "navigation": "IDLE" if case == "state_differs" else ended,
+                "line_follow": {"mode": "OFF"}, "velocity": {"linear": .1 if case == "moving" else 0., "angular": 0.},
+                "evidence": {"velocity": {"evidence": "fresh", "sampled_at": stamp}}}
+    runner._cancel_goal = runner.halts._cancel_goal = cancel
+    runner.halts.read_stop_state = state
+    runner.halts.wire_epoch = lambda _r: wire[0]
+    canceled = run(runner.cancel(tid, "bob"))
+    from fleet.server.trip_halts import halt_unconfirmed
+    if case in ("ARRIVED", "CANCELED", "FAILED"):
+        assert canceled["detail"]["stop_sent"] is True and "error" not in canceled["detail"]
+        if case != "CANCELED":  # CORE's own CANCELED receipt already counts as an ack
+            assert canceled["detail"]["pause_proof"]["basis"] == "ended_goal_standstill"
+        assert not halt_unconfirmed(canceled["detail"])
+    else:  # moving, a changed wire or a different navigation state is never taken as stopped
+        assert canceled["detail"]["stop_sent"] is False and halt_unconfirmed(canceled["detail"])

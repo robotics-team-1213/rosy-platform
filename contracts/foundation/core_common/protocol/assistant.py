@@ -39,6 +39,7 @@ class AssistantResult(AssistantStrict):
     facts: list[AssistantFact] = Field(default_factory=list, max_length=64)
     created_at: FiniteFloat
     completed_at: FiniteFloat | None = None
+    kind: Literal['CHAT', 'STATUS', 'CAUSE', 'CLARIFY', 'CONTROL', 'REFUSE'] | None = None
     action_admissible: Literal[False] = False
 
 

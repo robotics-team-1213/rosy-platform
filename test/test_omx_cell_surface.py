@@ -27,6 +27,18 @@ def test_contact_hold_is_the_surface_then_it_backs_out_and_folds():
     assert cell.sent[-2:] == ["retreat", "park"]
 
 
+def test_runner_shaped_contact_hold_with_its_fault_is_the_surface():
+    # the real runner reports a probe contact hold with fault set to the hold reason (2026-11-27 ship-h1r0 touch)
+    reason = "contact in descend_probe: a joint lagged the command by 1.6 units"
+    cell = Scripted({"run descend_probe": {"ok": False, "contact": True, "fault": reason, "error": reason, "state": [1, 2, 3, 4, 5, 46.6]}})
+    out = cs.touch(cell, Path("lib.json"), fk=lambda state: 0.0203)
+    assert out["result"] == "touched" and out["surface_z"] == 0.0203 and cell.sent[-2:] == ["retreat", "park"]
+    for other in ({"fault": "temperature 70 C on wrist_flex"}, {"fault": reason, "human_hold_latched": True}):
+        cell = Scripted({"run descend_probe": {"ok": False, "contact": True, "state": [1, 2, 3, 4, 5, 46.6], **other}})
+        out = cs.touch(cell, Path("lib.json"), fk=lambda state: 1 / 0)
+        assert out["result"] == "fault" and "surface_z" not in out and "retreat" not in cell.sent
+
+
 def test_no_contact_or_refusal_gives_no_height_and_parks():
     out = cs.touch(Scripted(), Path("lib.json"), fk=lambda s: 1 / 0)
     assert out["result"] == "no contact" and "surface_z" not in out

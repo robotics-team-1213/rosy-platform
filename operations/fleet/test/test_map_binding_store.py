@@ -118,3 +118,13 @@ def test_place_only_site_map_bump_keeps_binding_while_wall_change_invalidates_an
     v3 = store.activate(expected_revision=draft2["revision"], principal_id="op", route_active=False)["version"]
     assert store.map_bindings.matching_fit("rosy_42", state(), ("site-frame", v3)) == (None, "MAP_BINDING_SITE_CHANGED")
     assert store.map_bindings.binding_for_grid("rosy_42", GRID, ("site-frame", v3)) == (None, "MAP_BINDING_SITE_CHANGED")
+
+
+def test_a_grid_drawn_in_the_site_frame_binds_with_identical_robot_and_site_points(bindings):
+    """2026-11-27 rosy_45: a wall map built in site coordinates has robot == site; it was refused 'repeats a point'."""
+    same = [{"site": list(p), "robot": list(p)} for p in SITE]
+    row = bindings.approve("rosy_42", state(), ("world_261026", 7), same, [{"site": [0.32, -0.27], "robot": [0.33, -0.26]}], "op")
+    assert row["fit"]["yaw"] == pytest.approx(0.0, abs=1e-9) and row["fit"]["residual_max_m"] < 1e-9
+    with pytest.raises(BindingError) as err:  # a repeat inside one side is still refused
+        bindings.approve("rosy_42", state(), ("world_261026", 7), same + [same[0]], pairs([(0, 0)]), "op")
+    assert err.value.code == "BAD_POINTS"

@@ -22,7 +22,7 @@ from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
 )
-from cell_auto_setup import load_config, pick_main  # noqa: E402,F401
+from cell_auto_setup import load_config, pick_main, refresh_stop_proof  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
 import cell_calibration as cal  # noqa: E402
 import cell_carry_choices  # noqa: E402
@@ -66,6 +66,8 @@ def _run_auto_core(
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
+    if mismatch := cell_place_fit.tier_mismatch(config, source, catalog):  # dry run and real run, before any camera or arm step
+        return {**out, "result": f"stopped: {mismatch}"}
     if not dry_run and (refused := cell_site_target.unmeasured_refusal(config["sites"], source, dest)):  # before any camera or arm step
         return {**out, "result": "refused", "error": refused}
     map_error = cell_auto_evidence.map_pose_preflight(cell, config, calibration, calibration_path, work, dry_run, out)
@@ -169,7 +171,11 @@ def _run_auto_core(
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {bias_error}"}
             cd.bias(known, problem, target["object"]["raw_m"])
-            if problem and not dry_run:
+            if config.get("_neighbour_clear_mm") is not None:
+                tried["neighbour_clear_mm"] = config["_neighbour_clear_mm"]  # the operator's per-run margin (--neighbour-clear-mm)
+            if problem and config.get("_map_only"):
+                tried["map_only"] = problem  # operator chose the fresh measured map alone (--map-only); guards and Gate unchanged
+            elif problem and not dry_run:
                 tried["locate"] = {"found": True, "arm_m": target["object"]["raw_m"]}
                 tried["fail"] = {"stage": "calibrate", "class": problem}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -229,6 +235,8 @@ def _run_auto_core(
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
+            if config.get("_stop_proof_job_id"):
+                refresh_stop_proof(cell, config)
             gate = Gate(cell_route_depth.motion_cell(guarded, before_frame), config, calibration, sequence=sequence)
             gate.on_grasp = lambda status: cell_recovery_cargo.record_grasp(
                 config, catalog, target, source, dest_site, status, calibration=calibration, source_tier=source_tier)

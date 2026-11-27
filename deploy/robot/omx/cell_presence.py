@@ -7,6 +7,7 @@ as REVIEW_REQUIRED.
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -49,3 +50,22 @@ def zone_acceptance(zone: dict | None, handoff: dict[str, Any], dst: str) -> boo
     bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok and slot_match and site_id_ok and area_ok
     return bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound
                 and source_transition_matches(zone, handoff.get("src_site"), dst))
+
+
+def autonomous_policy_enabled(handoff: dict[str, Any] | None = None) -> bool:
+    """True when host opts into autonomous OMX policy execution or Fleet marked autonomous_policy (D-1078)."""
+    if isinstance(handoff, dict) and handoff.get("requires_presence_confirm"):
+        return False
+    if os.environ.get("ROSY_OMX_AUTONOMOUS_POLICY", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return isinstance(handoff, dict) and handoff.get("approval_mode") == "autonomous_policy"
+
+
+def effective_operator(handoff: dict[str, Any]) -> str:
+    """Resolve operator audit label from live presence, else autonomous policy approval."""
+    if presence_ok(handoff):
+        return str(handoff["presence"]["operator"]).strip()
+    if autonomous_policy_enabled(handoff):
+        op = str(handoff.get("approved_by") or "autonomous_policy").strip()
+        return op or "autonomous_policy"
+    return ""

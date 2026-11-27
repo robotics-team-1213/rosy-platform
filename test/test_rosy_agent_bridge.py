@@ -207,7 +207,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         assert replies[0]["result"]["protocolVersion"] == "2025-03-26"
         assert replies[1]["result"] == {}
-        assert len(replies[2]["result"]["tools"]) == 18
+        assert len(replies[2]["result"]["tools"]) == 21
         assert json.loads(replies[3]["result"]["content"][0]["text"])["data"]["cell_state_gen"] == 5
         frame_content = replies[4]["result"]["content"]
         assert len(frame_content) == 2 and frame_content[1]["type"] == "image" and frame_content[1]["mimeType"] == "image/jpeg"
@@ -262,6 +262,7 @@ def test_failure_bound_proposal_requires_the_diagnosed_arm(monkeypatch, arm_args
 
 def test_operations_mcp_scope_enforces_the_tool_list(monkeypatch, capsys):
     srv, url, calls = _serve_mock({
+        ("GET", "/api/fleet/pipeline/cell-sites"): (200, {"schema": "rosy.cell-site-map.v1", "count": 1, "zones": [{"id": "yard"}], "sites": [{"site_id": "yard-1", "sim_site": "yard:r1-s1-t1", "area": "yard"}]}, {}),
         ("POST", "/api/fleet/pipeline/cell-tasks"): (200, {"task": {"status": "PROPOSED"}}, {}),
     })
     requests = [
@@ -280,7 +281,8 @@ def test_operations_mcp_scope_enforces_the_tool_list(monkeypatch, capsys):
         listed, denied, proposed = map(json.loads, capsys.readouterr().out.splitlines())
         assert {tool["name"] for tool in listed["result"]["tools"]} == {
             "cell_readiness", "cell_failure_context", "cell_failure_asset", "cell_frame", "cell_queue",
-            "fleet_state", "fleet_cell_readiness", "fleet_cell_tasks", "fleet_propose_cell_task",
+            "fleet_state", "fleet_cell_readiness", "fleet_cell_sites", "fleet_cell_tasks",
+            "fleet_propose_cell_task", "fleet_dispatch_cell_task",
         }
         assert denied["error"]["code"] == -32602
         assert proposed["result"]["isError"] is False
@@ -342,6 +344,11 @@ def test_bridge_schemas_match_cell_job_specs():
     st_props = set(br.TOOL_MAP["learning_stage_bundle"]["inputSchema"]["properties"].keys())
     assert set(stage["params"]) <= st_props
 
+    push = cjs.JOBS["push_dry_run"]
+    push_schema = br.TOOL_MAP["cell_push_dry_run"]["inputSchema"]
+    assert set(push_schema["required"]) == set(push["params"])
+    assert set(push_schema["properties"]) == (set(push["params"]) | set(push["optional"])) - {"operator", "proposer"}
+
     area = cjs.AREA_JOBS["area_xyz_pick"]
     area_schema = br.TOOL_MAP["cell_area_dry_run"]["inputSchema"]
     assert set(area_schema["required"]) == set(area["params"].keys())
@@ -361,17 +368,81 @@ def test_bridge_help_runs_from_both_entrypoints(entrypoint):
 def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():
     bridge_path = ROOT / "tools/remote/rosy_agent_bridge.py"
     context_path = bridge_path.with_name("rosy_agent_proposal_context.py")
-    for path in (bridge_path, context_path):
+    tools_path = bridge_path.with_name("rosy_agent_tools.py")
+    for path in (bridge_path, context_path, tools_path):
         allowed = set(sys.stdlib_module_names) - {"subprocess"}
         if path == bridge_path:
-            allowed.add(context_path.stem)
+            allowed |= {context_path.stem, tools_path.stem}
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 assert {a.name.split(".")[0] for a in node.names} <= allowed
             elif isinstance(node, ast.ImportFrom):
                 if node.level:
-                    assert path == bridge_path and node.level == 1 and node.module == context_path.stem
+                    assert path == bridge_path and node.level == 1 and node.module in (context_path.stem, tools_path.stem)
                 else:
                     assert node.module and node.module.split(".")[0] in allowed
-    assert scan_files([bridge_path, context_path, Path(__file__)], root=ROOT) == []
+    assert scan_files([bridge_path, context_path, tools_path, Path(__file__)], root=ROOT) == []
+
+
+def test_fleet_dispatch_sites_args_file_and_cli_pick(tmp_path: Path, monkeypatch, capsys):
+    import rosy_cli  # noqa: E402
+
+    fleet_srv, fleet_url, fleet_log = _serve_mock({
+        ("GET", "/api/fleet/pipeline/cell-sites"): (200, {
+            "schema": "rosy.cell-site-map.v1", "count": 2, "zones": [{"id": "yard"}, {"id": "ship"}],
+            "sites": [
+                {"site_id": "yard-1", "sim_site": "yard:r1-s1-t1", "area": "yard", "col": 1, "row": 1, "tier": 1, "arms": ["arm_a"], "status": "verified"},
+                {"site_id": "ship-1", "sim_site": "ship-h1r0-l0", "area": "ship", "col": 1, "row": 1, "tier": 1, "arms": ["arm_a"], "status": "verified"},
+            ],
+        }, {}),
+        ("POST", "/api/fleet/pipeline/cell-tasks"): (200, {
+            "ok": True,
+            "task": {"task_id": "t-auto-1", "status": "QUEUED", "arm_id": "arm_a", "src_site": "belt", "dst_site": "yard:r1-s1-t1", "tier": 1, "approved_by": "autonomous_policy"},
+            "tasks": [{"task_id": "t-auto-1", "status": "QUEUED", "arm_id": "arm_a", "src_site": "belt", "dst_site": "yard:r1-s1-t1", "tier": 1, "approved_by": "autonomous_policy"}],
+        }, {}),
+        ("GET", "/api/fleet/pipeline/cell-tasks"): (200, {
+            "tasks": [{"task_id": "t-auto-1", "status": "COMPLETED", "arm_id": "arm_a", "src_site": "belt", "dst_site": "yard:r1-s1-t1", "tier": 1, "approved_by": "autonomous_policy"}],
+        }, {}),
+    })
+    try:
+        bridge = br.RosyAgentBridge(br.BridgeConfig(fleet_url=fleet_url))
+        sites_res = bridge.call_tool("fleet_cell_sites")
+        assert sites_res["ok"] and sites_res["data"]["count"] == 2
+        disp = bridge.call_tool("fleet_dispatch_cell_task", {
+            "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "yard:r1-s1-t1",
+            "tier": 1, "auto_admit": True, "request_key": "rk-auto-1",
+        })
+        assert disp["ok"] and disp["needs_approval"] is False
+        assert "propose" not in fleet_log[-1][3] and fleet_log[-1][2]["idempotency-key"] == "rk-auto-1"
+
+        args_file = tmp_path / "args.json"
+        args_file.write_text(json.dumps({"cell_id": "cell_ab", "dst_site": "yard:r1-s1-t1", "tier": 1}), encoding="utf-8")
+        assert rosy_cli.main(["--fleet-url", fleet_url, "call", "fleet_dispatch_cell_task", "--args-file", str(args_file)]) == 0
+        out_call = json.loads(capsys.readouterr().out)
+        assert out_call["ok"] and out_call["needs_approval"] is False
+
+        assert rosy_cli.main(["--fleet-url", fleet_url, "sites", "--area", "yard"]) == 0
+        out_sites = json.loads(capsys.readouterr().out)
+        assert out_sites["ok"] and out_sites["count"] == 1 and out_sites["sites"][0]["site_id"] == "yard-1"
+
+        assert rosy_cli.main([
+            "--fleet-url", fleet_url, "pick", "--preset", "s5_tier1_arm_a", "--tiers", "1,2", "--dry-run",
+        ]) == 0
+        out_dry = json.loads(capsys.readouterr().out)
+        assert out_dry["dry_run"] and out_dry["tool"] == "fleet_dispatch_cell_task" and out_dry["payload"]["cell_id"] == "cell_ab" and out_dry["payload"]["tiers"] == [1, 2]
+
+        assert rosy_cli.main([
+            "--fleet-url", fleet_url, "pick", "--arm", "arm_a", "--src", "belt", "--dst", "yard:r1-s1-t1", "--tier", "1", "--wait", "--wait-timeout-s", "2",
+        ]) == 0
+        out_wait = json.loads(capsys.readouterr().out)
+        assert out_wait["ok"] and out_wait["waited"] and out_wait["final_tasks"][0]["status"] == "COMPLETED"
+
+        assert rosy_cli.main([
+            "--fleet-url", fleet_url, "pick", "--cell", "cell_s", "--preset", "s3_shuttle", "--propose", "--dry-run",
+        ]) == 0
+        out_prop = json.loads(capsys.readouterr().out)
+        assert out_prop["tool"] == "fleet_propose_cell_task"
+    finally:
+        fleet_srv.shutdown()
+        fleet_srv.server_close()

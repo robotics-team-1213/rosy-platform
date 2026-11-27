@@ -28,8 +28,13 @@ def test_lease_409_after_core_arrived_is_arrival_not_failure():
         road = RoadSpeed(NS(arbitrated_pose=lambda rid: None), update)
         await road.renew(runner, live, (1, site), 0, .1, pose)
         assert live.view["detail"]["road_speed"]["state"] == "arrived"
-        for bad in ({"navigation": "FAILED"}, {"goal": {"x": 1}}, {"safety": {"estop": True}},
-                    {"velocity": {"linear": .1, "angular": 0.0}}):
+        for moving in ({"velocity": {"linear": .1, "angular": 0.0}}, {"navigation": "FAILED"}):
+            state.update(moving)  # still settling, or Nav2 failed: the step loop stops/retries it from its own state read
+            live.view["detail"].pop("road_speed", None)
+            await road.renew(runner, live, (1, site), 0, .1, pose)
+            assert live.view["detail"]["road_speed"]["state"] == "arrived"
+            state.update(navigation="ARRIVED", velocity={"linear": 0.0, "angular": 0.0})
+        for bad in ({"navigation": "CANCELED"}, {"navigation": "NAVIGATING"}, {"goal": {"x": 1}}, {"safety": {"estop": True}}):
             state.update(bad)
             try:
                 await road.renew(runner, live, (1, site), 0, .1, pose)

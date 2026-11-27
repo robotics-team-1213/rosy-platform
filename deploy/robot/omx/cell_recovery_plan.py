@@ -345,12 +345,14 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
 
 def build_multi_site_look(
     cell, config: dict, calibration: dict, primary_site: str, roi, params, to_px, tcp_x_m: float | None,
-    *, allow_ascending_departure: bool = False,
+    *, allow_ascending_departure: bool = False, own_state=None,
 ):
-    """Build a corridor look(frames) checker combining calibrated site surfaces for multi-site high transit."""
+    """Build a corridor look(frames) checker combining calibrated site surfaces for multi-site high transit.
+    `own_state` (the fold only): a call that returns the arm's measured joints, whose links are then no obstacle."""
     import numpy as np
 
     import cell_corridor
+    import cell_corridor_own
     import cell_objects
     import cell_pivot
 
@@ -379,21 +381,13 @@ def build_multi_site_look(
             seen_low = cell_corridor._fill_surfaces(low_mask.shape, roi, polys) > 0
             gap = (cell_corridor._fill_surfaces(low_mask.shape, roi, high_hull) > 0) & ~seen_low
             if gap.any():
-                x0, y0, x1, y1 = roi
-                gap_lab = config.get("transit_surface_lab")
-                if not gap_lab:
-                    gap_lab = np.median(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)[gap], axis=0).tolist()
-                first_lab = gap_lab[0] if isinstance(gap_lab[0], (list, tuple)) else gap_lab
-                patch = img[y0:y1, x0:x1].copy()
-                patch[~gap] = cv2.cvtColor(np.array([[first_lab]], np.uint8), cv2.COLOR_LAB2BGR)[0, 0]
-                gap_fg = cell_objects.foreground(patch, (0, 0, x1 - x0, y1 - y0), params=params, surface_lab=gap_lab)
-                gap_fg[~gap] = 0
-                if not config.get("transit_surface_lab") and int((gap_fg > 0).sum()) >= 0.20 * int(gap.sum()):
-                    gap_fg[gap] = 255
-                mask = low_mask | gap_fg
+                bound = calibration if own_state is not None else None  # other callers keep the colour rule
+                mask = low_mask | cell_corridor_own.gap_foreground(config, bound, img, roi, gap, params)
+        own = (cell_corridor_own.own_mask(config, primary_site, to_px, (own_state(),), low_mask.shape, roi, tcp_x_m)
+               if own_state is not None else None)
         return cell_corridor.check(
             pts, mask, roi, to_px, params=params, surface_px=polys,
-            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure,
+            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, own=own,
         )
 
     return look

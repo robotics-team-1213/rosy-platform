@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+MIN_SCORE = 99  # cell default (user 2026-11-27); the shared rule and Fleet keep their 95 floor
+
 
 def note_event(row: dict) -> None:
     """One line of what the cell did by itself (kind, arm, incident_id, result, why, candidate), kept in
@@ -26,7 +28,7 @@ def note_auto_clear(arm: str, verdict: dict) -> None:
     """The auto_clear verdict (auto_clear's return) as a Fleet-valid auto-events.jsonl row."""
     why = verdict.get("why")
     if "safety_score" in verdict:
-        why = f"score={verdict['safety_score']}/{verdict.get('threshold', 95)} ({verdict.get('decision', '?')}): {why or ''}"[:200]
+        why = f"score={verdict['safety_score']}/{verdict.get('threshold', MIN_SCORE)} ({verdict.get('decision', '?')}): {why or ''}"[:200]
     note_event({"kind": "auto_clear", "arm": arm, "incident_id": verdict.get("incident_id"),
                 "result": bool(verdict.get("cleared")), "why": why})
 
@@ -124,9 +126,9 @@ def _ensure_core_common() -> None:
 
 def auto_clear(arm: str, f: dict, link, clear_fn=None, *, remeasured=None, recovery=None, camera_check=None,
                motor_health=None, recent_clears_24h: int = 0, since=None, now=None, incident_id=None,
-               binding=None, min_score: int = 95, only=None) -> dict:
-    """D-1047 + 95+ risk pipeline: enforce Fleet's hard rules and deterministic safety_score >= 95 before calling the
-    AI assessor to clear. Refuses and escalates to a human when any hard veto hits or safety_score < 95."""
+               binding=None, min_score: int = MIN_SCORE, only=None) -> dict:
+    """D-1047 risk pipeline: enforce Fleet's hard rules and deterministic safety_score >= min_score (99) before calling
+    the AI assessor to clear. Refuses and escalates to a human when any hard veto hits or the score is below it."""
     try:
         _ensure_core_common()
         from core_common.protocol.arm_incident.arm_incidents import evaluate_clear_safety
@@ -139,7 +141,7 @@ def auto_clear(arm: str, f: dict, link, clear_fn=None, *, remeasured=None, recov
     except Exception as exc:  # invalid threshold or rule unavailable: fail closed, hold stays
         return {
             "cleared": False, "why": f"rule unavailable: {type(exc).__name__}: {str(exc)[:120]}",
-            "safety_score": 0, "risk_score": 100, "threshold": 95, "decision": "escalate_human",
+            "safety_score": 0, "risk_score": 100, "threshold": MIN_SCORE, "decision": "escalate_human",
             "hard_vetoes": [{"code": "RULE_UNAVAILABLE", "detail": str(exc)[:120]}], "deductions": [],
         }
 

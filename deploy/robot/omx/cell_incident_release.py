@@ -1,11 +1,13 @@
 """Auto-release of an arm incident hold without a person round trip (panel 2026-11-27 verdict C, D-1047).
 
-Two entry points, one judge. Both run omx_incident_pipeline.run_pipeline(apply=True): the 95 score, every hard veto and the
+Three entry points, one judge. All run omx_incident_pipeline.run_pipeline(apply=True): the 99 score, every hard veto and the
 24 h clear counter stay exactly as they are; a latch, a cable wind-up or a held object still goes to a person.
   after_torque_off(arm)   cell_torque_off_folded.py, once torque is OFF and caps are verified: a motionless folded
                           torque-0 re-read (ArmIncidentRemeasure) is the evidence (rule torque_off_folded_remeasure).
   before_refusal(arms..)  cell_job_api, just before it answers ARM_INCIDENT_HELD: one pipeline run per arm per
                           COOLDOWN_S (rule precheck_auto_clear).
+  watch()                 cell_task_worker, every WATCH_S with nobody calling: a held arm whose incidents, pose, torque or
+                          hardware error changed since its last run, stable over two ticks (rule open_incident_watch).
 Who released (the rule id) and the measured values go to the Fleet clear note, incidents/auto-release.jsonl and
 release.json beside the incident record. The 24 h counter still counts only the pipeline's own auto_clear row.
 """
@@ -21,7 +23,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 RULE_AFTER_TORQUE_OFF = "torque_off_folded_remeasure"
 RULE_BEFORE_REFUSAL = "precheck_auto_clear"
+RULE_WATCH = "open_incident_watch"
 COOLDOWN_S = 10.0
+WATCH_S = 30.0  # also the settle time: session-end release and cell_auto_fold take the arm first
+WATCH_ARMS = ("arm_a", "arm_b", "arm_s")
+SNAPSHOT_MAX_AGE_S = 15.0
+POSE_CHANGE_RAW = 20  # register ticks (about 1.8 deg); less is encoder jitter, not a new pose
+_ticked: dict[str, tuple] = {}
+_judged: dict[str, tuple] = {}
 _last: dict[str, float] = {}
 WAIT_S = 15.0  # a second request for an arm already being re-read waits this long for the first one's result
 _inflight: dict[str, threading.Event] = {}
@@ -186,6 +195,87 @@ def evaluate(arm: str, rule: str, *, pipeline=None, config="auto", clear_fn=None
     if result.get("status") != "no_open_incident":  # nothing was held: nothing to audit
         _record(arm, rule, result, measured, now)
     return {**result, "rule": rule, "measured": measured}
+
+
+def use_record_dir(workdir) -> None:
+    """A service whose cwd is not the recording directory (cell_task_worker, cell_job_api): sessions write incident.json
+    and the auto_clear rows the 24 h counter reads under <workdir>/incidents."""
+    import omx_incident_fleet
+
+    omx_incident_fleet.INCIDENTS = Path(workdir).expanduser() / "incidents"
+
+
+def arm_state(arm: str, now_fn=time.time) -> tuple | None:
+    """(torque, hardware error, raw pose) per motor from the observer's passive snapshot (no bus read), or None."""
+    try:
+        import omx_incident_pipeline
+
+        snap, _ = omx_incident_pipeline._read_motor_health(arm, None)
+        if now_fn() - float(snap["observed_at"]) > SNAPSHOT_MAX_AGE_S:
+            return None
+        motors = sorted(snap["motors"], key=lambda m: m["id"])
+        if len(motors) != 6:
+            return None
+        return (tuple(bool(m["torque_enabled"]) for m in motors), tuple(int(m["hardware_error"]) for m in motors),
+                tuple(float(m["present_raw"]) for m in motors))
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
+def arm_busy(arm: str) -> bool:
+    """True while a session or a live lease has the arm."""
+    try:
+        import cell_arm_lease
+        from joint_tune_lock import session_lock
+
+        lease = cell_arm_lease.status(arm).get(arm)
+        if lease and lease["live"]:
+            return True
+        session_lock(arm).close()
+        return False
+    except (SystemExit, Exception):
+        return True
+
+
+def _same(a: tuple | None, b: tuple) -> bool:
+    """Same incidents, torque and hardware error, and no joint moved by more than POSE_CHANGE_RAW."""
+    return (a is not None and a[0] == b[0] and a[1][:2] == b[1][:2]
+            and all(abs(x - y) <= POSE_CHANGE_RAW for x, y in zip(a[1][2], b[1][2])))
+
+
+def watch(arms=WATCH_ARMS, *, status_fn=None, state_fn=arm_state, busy_fn=arm_busy, evaluate_fn=None) -> None:
+    """One tick: judge each held arm once per state. A refused or failed run keeps the hold (audited by evaluate) and is
+    not repeated until the incidents, pose, torque or hardware error change. Never raises."""
+    for arm in arms:
+        try:
+            if status_fn is None:
+                import omx_incident
+
+                status_fn = omx_incident.status
+            st = status_fn(arm)
+            if st.get("fleet_held") is None:  # Fleet not reached: nothing can be cleared, judge when it answers
+                continue
+            if not (st.get("fleet_held") or st.get("local_held")):
+                _ticked.pop(arm, None)
+                _judged.pop(arm, None)
+                continue
+            state = state_fn(arm)
+            if state is None or any(state[0]):
+                _ticked.pop(arm, None)
+                if state is not None:  # torque ON: whatever follows is a new state
+                    _judged.pop(arm, None)
+                why = "torque ON" if state is not None else "no fresh passive motor-health snapshot"
+                _record(arm, RULE_WATCH, {"cleared": False, "why": why}, "not run", time.time())
+                continue
+            now_state = (tuple(sorted(st.get("incident_ids") or ())), state)
+            before, _ticked[arm] = _ticked.get(arm), now_state
+            if not _same(before, now_state) or _same(_judged.get(arm), now_state) or busy_fn(arm):
+                continue
+            _judged[arm] = now_state
+            (evaluate_fn or evaluate)(arm, RULE_WATCH)
+        except (SystemExit, Exception) as exc:  # fail closed: the hold stays
+            _record(arm, RULE_WATCH, {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:120]}"},
+                    "not run", time.time())
 
 
 def after_torque_off(arm: str, **kwargs) -> dict:

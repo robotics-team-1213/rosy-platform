@@ -25,7 +25,7 @@ class AssistantJournal:
         result = json.loads(row['result_json']) if row['result_json'] else {}
         return AssistantResult(request_id=row['request_id'], conversation_id=row['conversation_id'],
             text=message['text'], state=row['state'], created_at=row['created_at'],
-            completed_at=row['completed_at'], **result)
+            completed_at=row['completed_at'], kind=row['kind'], **result)
 
     def submit(self, principal, message, *, admitted):
         raw = json.dumps(message.model_dump(), sort_keys=True, ensure_ascii=False)

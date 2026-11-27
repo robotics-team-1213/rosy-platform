@@ -69,6 +69,7 @@ def test_site_fleet_passes_cell_pipeline_env_through():
     env = yaml.safe_load((ROOT/'deploy/site/compose.yaml').read_text())['services']['fleet']['environment']
     example = (ROOT/'deploy/site/.env.example').read_text()
     for key in ('ROSY_FLEET_CELL_OWNERS', 'ROSY_FLEET_CELL_AB_RELEASE_ENABLED',
+                'ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH',
                 'ROSY_INTAKE_RFID_WORKCELL', 'ROSY_INTAKE_RFID_READER_EPOCH',
                 'ROSY_PLACEMENT_CAMERA_SOURCE', 'ROSY_PLACEMENT_CALIBRATION_REVISION'):
         assert env[key] == '${%s:-}' % key

@@ -217,6 +217,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if (args.px is None or args.dir is None) == (args.at is None or args.along is None):
         raise SystemExit("give --px and --dir, or --at and --along")
+    if args.dir is not None and not any(float(v) for v in args.dir.split(",")):
+        raise SystemExit("--dir must not be zero")
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
     if not (args.dry_run or args.commissioning):

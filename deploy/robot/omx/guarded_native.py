@@ -50,7 +50,7 @@ from guarded_device import (  # noqa: E402,F401  (re-exported: existing importer
 )
 from guarded_native_cli import main, run_native  # noqa: E402,F401  (re-exported)
 from guarded_native_track import body_command  # noqa: E402
-from guarded_native_lag import LagModel, check_following, follows_far  # noqa: E402
+from guarded_native_lag import LagModel, check_following, follows_far, hold_after_following  # noqa: E402
 from teleop_speed import STAGES, valid as valid_stage  # noqa: E402
 from guarded_native_mount import GRIP_ENDS, check_floor, check_grip_map, check_mount, validate_targets  # noqa: E402,F401  (GRIP_ENDS, check_mount re-exported)
 from guarded_native_probe import is_recoverable_telemetry, probe_hardware_errors, probe_held_overload, safe_print  # noqa: E402
@@ -70,7 +70,7 @@ class GoalRejected(ValueError):
 
 
 class NativeJointMotion(PolicyWriterMixin):
-    stage = None
+    stage, hold_on_following = None, False  # set by chunk_runner.Guarded: a following error holds (guarded_native_lag)
 
     def __init__(self, follower, leader, *, clock=time.monotonic, body_only=False, label="follower", monitor=None,
                  offsets=None, teacher=False, shed_load=False, mount=None, grip_map=None, follower_floor=None, stage=None):
@@ -180,6 +180,7 @@ class NativeJointMotion(PolicyWriterMixin):
                     probe_held_overload(self)
                     self.stop_streaming()
                     raise GoalRejected(f"encoder read failed: {exc}", can_send_hold=False) from exc
+                if self.hold_on_following and hold_after_following(self, exc): raise GoalRejected(f"following-error hold: {exc}") from exc  # noqa: E701
                 raise
             if goal_check is not None and "command" in prepared:
                 goals = prepared["goals"] if "goals" in prepared else self._round_goals(prepared["command"])

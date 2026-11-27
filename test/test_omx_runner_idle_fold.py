@@ -179,3 +179,22 @@ def test_idle_open_grip_never_opens_jaws_measured_on_a_box_the_runner_did_not_fl
     status, grips = _idle_open_run(holding=False, robot=box)
     assert not grips
     assert [s for s in status if s["command"] == "run park"]
+
+
+def test_idle_open_grip_reads_the_session_env_within_range(monkeypatch):
+    import chunk_runner_idle_open as io
+    monkeypatch.delenv(io.ENV, raising=False)
+    assert io.open_grip({}) == 0.0
+    monkeypatch.setenv(io.ENV, "56.0")
+    assert io.open_grip({}) == 56.0
+    assert io.open_grip({"runner.idle_open_grip": 58.0}) == 58.0  # the params file wins
+    for bad in ("99", "nan", "x", "-1"):
+        monkeypatch.setenv(io.ENV, bad)
+        assert io.open_grip({}) == 0.0
+
+
+def test_every_arm_session_wrapper_turns_idle_open_on():
+    from pathlib import Path
+    wrappers = Path(__file__).resolve().parents[1] / "deploy/robot/omx/session-wrappers"
+    on = sorted(p.name for p in wrappers.glob("with-session-*.sh") if "ROSY_IDLE_OPEN_GRIP" in p.read_text(encoding="utf-8"))
+    assert on == ["with-session-arm-a-par.sh", "with-session-arm-b-par.sh", "with-session-arm-s-live.sh"]
