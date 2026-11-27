@@ -107,7 +107,7 @@ export function renderCommandCard({
     }
     emitDraft(); syncSubmitState();
   });
-  for (const field of (fx.input, fy.input, fyaw.input)) field.addEventListener("input", () => { emitDraft(); syncSubmitState(); });
+  for (const field of [fx.input, fy.input, fyaw.input]) field.addEventListener("input", () => { emitDraft(); syncSubmitState(); });
   submitBtn.addEventListener("click", () => { const payload = syncSubmitState(); if (payload && typeof onSubmit === "function") onSubmit(payload, submitBtn); });
   syncSubmitState();
   if (errorText) { const err = elOf("p", "hint assistant-nav-error", errorText); err.setAttribute("role", "alert"); card.append(err); }
