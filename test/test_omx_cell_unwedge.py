@@ -250,10 +250,10 @@ def test_a_drooping_lift_that_stalls_still_stops_below_the_guard():
 class Holding:
     """An arm stopped low on a box: the jaws stay at the box until their target passes it; the runner's target is the park's."""
 
-    def __init__(self, rise_lag=0.3, opens=True):
+    def __init__(self, rise_lag=0.3, opens=True, droop=0.0):
         self.state = [-35.0, 1.1, 16.1, 34.3, 11.6, 53.8]
-        self.target = [-35.0, 1.1, 16.1, 34.3, 11.6, 48.8]
-        self.rise_lag, self.opens, self.sent = rise_lag, opens, []
+        self.target = [-35.0, 1.1 - droop, 16.1, 34.3, 11.6, 48.8]
+        self.rise_lag, self.opens, self.droop, self.sent = rise_lag, opens, droop, []
 
     def act(self, command):
         self.sent.append(command)
@@ -263,7 +263,8 @@ class Holding:
             self.state[5] = max(self.state[5], self.target[5] - 0.5) if self.opens else self.state[5]
         elif words[0] == "jog":
             self.target[1] += float(words[2])
-            self.state[1] = self.target[1] + self.rise_lag
+            lag = self.rise_lag if float(words[2]) < 0 else self.droop
+            self.state[1] = self.target[1] + lag
         return {"ok": True, "state": list(self.state), "target": list(self.target)}
 
 
@@ -293,8 +294,21 @@ def test_jaws_that_do_not_open_never_rise():
 def test_a_blocked_rise_backs_off_and_stops_without_pulling():
     cell = Holding(rise_lag=2.0)
     out = u.release_and_rise(cell, sleep=lambda s: None)
-    assert out["result"] == "stuck" and cell.sent[-1] == "jog shoulder_lift.pos 0.5"
+    assert out["result"] == "stuck" and out["returned"] is True and cell.sent[-1] == "jog shoulder_lift.pos 1.0"
     assert not any("elbow" in c or c == "park" for c in cell.sent)
+
+
+def test_release_and_rise_is_droop_aware_and_returns_to_support_on_stall():
+    droop_ok = Holding(rise_lag=1.5, droop=1.5)
+    out_ok = u.release_and_rise(droop_ok, sleep=lambda _s: None)
+    assert out_ok["result"] == "risen"
+    lift_jogs = [c for c in droop_ok.sent if c.startswith("jog shoulder_lift.pos ")]
+    assert lift_jogs and all(c == f"jog shoulder_lift.pos -{u.SMALL_STEP}" for c in lift_jogs)
+
+    droop_stuck = Holding(rise_lag=2.04, droop=1.5)
+    out_stuck = u.release_and_rise(droop_stuck, sleep=lambda _s: None)
+    assert out_stuck["result"] == "stuck" and out_stuck["returned"] is True
+    assert droop_stuck.sent[-1] == f"jog shoulder_lift.pos {u.SMALL_STEP}"
 
 
 def test_the_rule_never_repeats_the_action_that_just_strained():
