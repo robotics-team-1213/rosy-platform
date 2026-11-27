@@ -61,7 +61,7 @@ def _seed_cell_workdir(tmp_path: Path) -> Path:
         "cameras": {"top": CAMERA},
         "plan": {"approach_m": 0.04, "limits": {"park_reach_m": 0.28}},
         "sites": {
-            "temp_plate_a": {"surface_z": 0.0, "detect_roi": list(ROI), "place": [0.1, 0.1], "yaw_deg": 0.0},
+            "temp_plate_a": {"z": 0.0, "surface_z": 0.0, "detect_roi": list(ROI), "place": [0.1, 0.1], "yaw_deg": 0.0},
         },
     }
     (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps(cfg), encoding="utf-8")
@@ -107,7 +107,7 @@ def test_cell_object_view_filters_unmatched_splits_strip_corners_and_caches(tmp_
         assert res["schema"] == cov.SCHEMA and res["source_seq"] == 42 and res["cell_state_gen"] == 7
         ids = sorted(o["catalog_id"] for o in res["objects"])
         assert ids == ["container-1", "container-2", "container-3"]
-        assert all(o["site"] == "temp_plate_a" for o in res["objects"])
+        assert all(o["site"] == "temp_plate_a" and o["pickable"] for o in res["objects"])
         c2 = next(o for o in res["objects"] if o["catalog_id"] == "container-2")
         c3 = next(o for o in res["objects"] if o["catalog_id"] == "container-3")
         assert c2["corners_px"] and c3["corners_px"] and c2["corners_px"] != c3["corners_px"]
@@ -288,8 +288,8 @@ def test_bench_record_http_objects_recording_and_strict_8781_proxy(tmp_path, mon
     from test_omx_bench_record import _setup
 
     bench, _, _, commands = _setup(tmp_path, monkeypatch)
-    wd = _seed_cell_workdir(tmp_path / "prep")
-    assert wd == bench.prep
+    wd = _seed_cell_workdir(cov._bench_workdir(bench))
+    assert wd == bench.prep / "work"
     tok_p = tmp_path / "job-api.token"
     tok_p.write_text("h" * 32, encoding="utf-8")
     tok_p.chmod(0o600)
