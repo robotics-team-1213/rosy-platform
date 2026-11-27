@@ -28,6 +28,11 @@ def test_trees_replan_fast_and_keep_closely_spaced_pass_points():
     assert _attr(THROUGH, "RateController", "hz") == ["2.0"] and _attr(TO_POSE, "RateController", "hz") == ["2.0"]
     assert _attr(THROUGH, "RemovePassedGoals", "radius") == ["0.05"]   # 11-27: 0.09 cut the R~0.135 m U-turn arc by 10-12 cm
     assert _attr(THROUGH, "ComputePathThroughPoses", "goals") == ["{goals}"]
+    # every BT tick, not under the 2 Hz RateController: 0.15 m/s moves 7.5 cm between 2 Hz looks and skips a 0.05 m ball
+    pipeline = next(n for n in _nodes(THROUGH) if n.tag == "PipelineSequence")
+    assert [c.tag for c in pipeline].index("RemovePassedGoals") < [c.tag for c in pipeline].index("RateController")
+    rate = next(n for n in _nodes(THROUGH) if n.tag == "RateController")
+    assert not [n for n in rate.iter() if n.tag == "RemovePassedGoals"]
     assert _attr(TO_POSE, "ComputePathToPose", "goal") == ["{goal}"]
 
 
