@@ -141,3 +141,13 @@ def test_idle_cancel_receipt_requires_stable_vacant_transport(navigation, race, 
         assert owner == result["idle_owner"] and owner["owner_run_id"] is None and owner["transport_generation"] == 2
     else:
         assert "idle_owner" not in result
+
+
+def test_plain_cancel_without_a_trip_lease_leaves_navigation_mode(navigation):
+    client, services, executor = navigation
+    goal(client, services, "attempt-1")
+    assert services.modes.mode.value == "NAVIGATION"
+    response = client.post("/api/v1/navigation/cancel", headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert services.modes.mode.value == "IDLE"
+    assert client.get("/api/v1/robot/state", headers=VIEWER).json()["mode"] == "IDLE"

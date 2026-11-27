@@ -147,7 +147,8 @@ def _check_terminal(maps, site, scope, path, fit_error, *, check_walls=False):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_PATH_CROSSWALK")
 
 
-def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None):
+def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers, *, route, correction_padding=None, held_by_fleet=frozenset()):
+    # held_by_fleet: peers Fleet itself holds (traffic_hold waiting_for the mover); it releases them only after the mover is done.
     clients, observed = peers
     marker_clearance = getattr(console, "_site_marker_clearance", None)
     current = {rid: client for rid, client in console.clients().items() if rid != mover}
@@ -200,7 +201,8 @@ def site_corridor(console, mover, mover_state, stop_binding, scope, goal, peers,
         line = state.get("line_follow") or {}
         if (robot in console.goal_leases.pending or robot in console._goal_busy
                 or state.get("navigation") not in ("IDLE", "ARRIVED", "CANCELED", "FAILED")
-                or state.get("mode") not in ("IDLE", "EMERGENCY") or line.get("mode") != "OFF"
+                or state.get("mode") not in (("IDLE", "EMERGENCY", "NAVIGATION") if robot in held_by_fleet else ("IDLE", "EMERGENCY"))
+                or line.get("mode") != "OFF"
                 or not _fresh_stopped(state)):
             raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_PEER_MOTION_UNVERIFIED")
         peer_fit = fit_for(robot, state)
