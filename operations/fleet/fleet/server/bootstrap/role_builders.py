@@ -347,6 +347,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.halts.read_navigation = lambda rid: console.clients()[rid]._get("/api/v1/navigation/state")
     trip_runner.halts.wire_epoch = console.goal_leases.idle_wire_epoch
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
+    try:  # 2026-11-27: cell top-view evidence for S3; a bad configuration runs the SLAM verdict unchanged
+        from fleet.server.named_stop_topview import CellTopview
+        trip_runner.cell_topview = CellTopview.from_env()
+    except Exception:  # noqa: BLE001 - optional evidence source, never a start-up failure
+        import logging
+        logging.getLogger("fleet.server.trip_runner").exception("cell top view disabled: configuration unusable")
 
     from fleet.server.handoff_recovery import stopped_handoff
 

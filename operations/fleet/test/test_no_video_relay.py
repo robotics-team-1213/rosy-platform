@@ -22,6 +22,8 @@ FORBIDDEN_IMPORTS = frozenset({"cv2", "sensor_msgs", "ffmpeg", "av", "picamera2"
 DRAWING_IMPORTS = {
     "fleet/server/sitemap/site_map_raster.py": {"PIL", "cv2"},
     "fleet/server/sitemap/site_map_extract.py": {"PIL", "cv2"},
+    # 2026-11-27: measures one cell stop from one frame (reads, never relays or stores); the verdict is JSON.
+    "fleet/localization/topview_pose.py": {"cv2"},
 }
 
 FORBIDDEN_ROUTE = re.compile(r"video|stream|camera|preview|proxy|relay|mjpeg|jpeg|image",
