@@ -273,7 +273,6 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
     import asyncio
     from uuid import uuid4
     from fleet.server.rear_bay_return import RearBayPort, rear_bay
-    from fleet.server.trip_ports import TripError
     from tools.sim.bay_departure_sim import build_world_261026_site_map
 
     _, graph, _ = build_world_261026_site_map()
@@ -347,6 +346,10 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
 
     class StepRig(TripSteps):
         rear_bay_port = port
+        config = SimpleNamespace(arrive_free_m=.15)
+
+        def _clock(self):
+            return clock[0]
 
         async def _call(self, coro):
             return await coro
