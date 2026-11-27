@@ -26,6 +26,38 @@ from guarded_device import BODY, TICKS_PER_DEGREE
 
 FOLLOW_DEG = 5.0  # |present - expected|
 FOLLOW_HARD_DEG = 15.0  # |present - last command|, whatever the model says
+FOLLOW_REHOLD_S = 0.5  # after a following-error hold, the coast while the servo brakes is frozen again, not cut
+
+
+
+class FollowingError(ValueError):
+    """The following-error stop, carrying the present ticks it was read at (the hold below freezes there)."""
+
+    def __init__(self, message: str, current: dict):
+        super().__init__(message)
+        self.current = dict(current)
+
+
+def hold_after_following(motion, exc) -> bool:
+    """A chunk-runner session's first following error: Goal_Position := present on every active joint (the servo stops pushing,
+    torque stays ON) and the command restarts there, so the runner's human hold keeps an extended arm up instead of this guard
+    cutting torque and dropping it (real5 arm_a 2026-11-27, against "never cut torque on an extended arm"). The 5 degree bound is
+    unchanged. Within FOLLOW_REHOLD_S of the first hold the arm may still coast past the freeze point, so it is frozen again
+    where it stands; after that a following error, a failed goal write or any other stop still cuts torque as before (the
+    2026-11-09 overload-hold rule: one hold, then torque off). Only the body is frozen: the jaws keep their goal, so a
+    squeezed box is not let go (check_following watches the body only in teacher mode)."""
+    held_at = getattr(motion, "follow_held_at", None)
+    if (not isinstance(exc, FollowingError) or motion.failed or motion.command is None
+            or (held_at is not None and not 0 <= motion.clock() - held_at <= FOLLOW_REHOLD_S)):
+        return False
+    motion.follow_held_at = motion.clock() if held_at is None else held_at
+    last = motion.sent if motion.sent is not None else motion.command
+    goals = {n: int(exc.current[n]) if n in BODY else int(last[n]) for n in motion.active}
+    motion.write_goal(goals)
+    motion.command, motion.sent = {n: float(v) for n, v in goals.items()}, goals
+    motion.stop_streaming()
+    print(f"{motion.label}: following-error hold ({exc}); goal set to present, torque ON", flush=True)
+    return True
 
 
 class LagModel:
@@ -74,18 +106,18 @@ def check_following(motion, current: dict, now: float) -> None:
         sent = motion.sent[name] if motion.sent is not None and name in motion.sent else int(motion.command[name])  # what was written
         if lag is None:
             if abs(current[name] - sent) > FOLLOW_DEG * TICKS_PER_DEGREE + 1e-9:
-                raise ValueError(f"{name}: following error >5 motor degrees; command={sent}, current={current[name]}")
+                raise FollowingError(f"{name}: following error >5 motor degrees; command={sent}, current={current[name]}", current)
         elif not _inside(current[name], expected[name], sent):
             since = lag.blocked_since.get(name)
             if lag.delta.get(name) == 0 and (since is None or now - since <= 2.0 * lag.tau_s + 1e-9):
                 if since is None:
                     lag.blocked_since[name] = now  # bounded window while rate-limited retraction pulls excess lead back to current + 3
             else:
-                raise ValueError(f"{name}: following error >5 motor degrees from the servo model; command={sent}, expected={expected[name]:.0f}, current={current[name]}")
+                raise FollowingError(f"{name}: following error >5 motor degrees from the servo model; command={sent}, expected={expected[name]:.0f}, current={current[name]}", current)
         else:
             lag.blocked_since.pop(name, None)
         if lag is not None and abs(current[name] - sent) > lag.hard_deg * TICKS_PER_DEGREE + 1e-9:
-            raise ValueError(f"{name}: following error >{lag.hard_deg:g} motor degrees; command={sent}, current={current[name]}")
+            raise FollowingError(f"{name}: following error >{lag.hard_deg:g} motor degrees; command={sent}, current={current[name]}", current)
 
 
 def _inside(present: float, expected: float, sent: float) -> bool:

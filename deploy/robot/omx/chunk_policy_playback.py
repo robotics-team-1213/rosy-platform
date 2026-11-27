@@ -303,16 +303,15 @@ def send_with_jaw_gate(runner, action: dict, gate, play, prev_target: list):
     from chunk_runner_settle import note_sent_grip
     protect = (gate is not None or runner.human_hold_latched or _is_holding(runner)
                or bool(getattr(runner, "_stop_after_park", None)) or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or getattr(runner, "_recovery_active", False))
-    if not protect or not callable(getattr(runner.robot, "send_action_checked", None)):
-        sent = runner.robot.send_action(action)
-        note_sent_grip(runner, sent)
-        return sent, True
     from guarded_native import GoalRejected
     from omx_adapter.chunk_library import NAMES
     try:
-        check = make_goal_check(gate) if gate is not None else None
-        stale = bool(runner.human_hold_latched and gate is None)
-        sent = runner.robot.send_action_checked(action, check, hold_on_read_error=True, allow_stale_hold=stale)
+        if not protect or not callable(getattr(runner.robot, "send_action_checked", None)):
+            sent = runner.robot.send_action(action)  # a guard following-error hold arrives here as GoalRejected too
+        else:
+            check = make_goal_check(gate) if gate is not None else None
+            stale = bool(runner.human_hold_latched and gate is None)
+            sent = runner.robot.send_action_checked(action, check, hold_on_read_error=True, allow_stale_hold=stale)
         note_sent_grip(runner, sent)
         return sent, True
     except GoalRejected as error:

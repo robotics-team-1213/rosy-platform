@@ -128,6 +128,7 @@ class Guarded:
 
     def __init__(self, robot, motion):
         self.robot, self.motion, self.bus = robot, motion, robot.bus
+        motion.hold_on_following = True  # a following error arrives as GoalRejected and send_with_jaw_gate holds, torque ON
 
     def send_action(self, action):
         return self.motion.send(action)
