@@ -96,6 +96,9 @@ def test_no_cargo_or_movable_support_cannot_be_selected():
     assert live._fixed_site("floor", "arm_s") and live._fixed_site("board", "arm_s")
     assert not live._fixed_site("pinky", "arm_s") and not live._fixed_site("belt", "arm_a")
     assert not live._fixed_site("temp_plate_b", "arm_a") and live._fixed_site("temp_plate_b", "arm_b")
+    # a designated slot is registered under its base name; site_surface must accept it for its own arms only
+    assert live._fixed_site("ship-h1r0", "arm_a") and live._fixed_site("ship-h1r0", "arm_b")
+    assert not live._fixed_site("ship-h1r0", "arm_s") and not live._fixed_site("ship-h9r9", "arm_a")
 
 
 def test_touchdown_at_nominal_height_can_still_be_in_air():

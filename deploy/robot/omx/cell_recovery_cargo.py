@@ -18,8 +18,10 @@ def fixed_site(name, arm):
     if arm not in ("arm_a", "arm_b"):
         return False
     try:
-        from cell_site_target import resolve_cell_ab_site
+        from cell_site_target import designated_slot_arms, resolve_cell_ab_site
         site = resolve_cell_ab_site(name, 1)
+        if site is None:  # a registered designated slot base name (ship-h1r0) is its tier-1 place
+            return arm in designated_slot_arms(name)
     except (ImportError, OSError, ValueError, KeyError, TypeError):
         return False
     return bool(site and site["area"] in ("stand", "yard", "temp_a", "temp_b", "temp_plate_a", "temp_plate_b")
