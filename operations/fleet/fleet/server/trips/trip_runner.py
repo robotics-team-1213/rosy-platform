@@ -96,7 +96,6 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self.confirm_named_precision = None
         self.check_named_correction = None
         self.auto_named_correction = None
-        self.cell_topview = None  # 2026-11-27: CellTopview for the cell stops it covers (S3), else the SLAM verdict
         #: D-550 10: renews the robot's leased trip goal each step (console.renew_goal_leases).
         self._renew_lease = renew_lease
         #: Edges an operator or the traffic layer closed; a remaining one means "replan" (D-489 9).
@@ -208,6 +207,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
             self._check_human_hold()
+            purpose = purpose or ("charge_return" if parking else None)  # rear charge-bay handoff: the way to a charger
             if purpose != "charge_return":  # D-1029: the way to a charger, like a charge_session job; CORE keeps 10 %/5 %
                 await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)

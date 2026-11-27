@@ -96,6 +96,38 @@ def scene(*boxes, size=(0.09, 0.03)):
     return img
 
 
+WIDE = {"dx_m": [-0.003, 0.032], "dy_m": [-0.027, 0.027], "yaw_rad": [-math.radians(16), math.radians(16)]}  # Panel N + margin
+
+
+def test_default_range_is_unchanged_without_a_declaration():
+    assert bp.RANGE == ((-0.002, 0.014), (-0.009, 0.009), (-math.radians(13), math.radians(13)))
+    assert bp._range(None) is bp.RANGE and "range" not in REFERENCE
+
+
+def test_declared_wider_range_accepts_what_the_default_refuses():
+    box = (0.020, -0.020, 14)  # past the default on all three axes, inside WIDE
+    assert bp.measure(scene(box), REFERENCE)["reason_code"] == bp.OUT_OF_RANGE
+    assert bp.measure(scene(box), {**REFERENCE, "range": WIDE})["ok"]
+    out = bp.measure(scene((0.036, 0, 0)), {**REFERENCE, "range": WIDE})  # still refused past the declared range, unclamped
+    assert out["reason_code"] == bp.OUT_OF_RANGE and "dx -3.0..32.0 mm" in out["reason"] and out["offset_mm"][0] > 30
+
+
+@pytest.mark.parametrize("declared", [
+    {**WIDE, "dx_m": [-0.003, 0.041]}, {**WIDE, "dx_m": [-0.011, 0.01]}, {**WIDE, "dy_m": [-0.036, 0.0]},
+    {**WIDE, "yaw_rad": [0, math.radians(21)]},                                       # past the ceiling
+    {**WIDE, "dx_m": [0.01, 0.0]}, {**WIDE, "dy_m": [0.0]}, {**WIDE, "yaw_rad": [0, float("nan")]},
+    {"dx_m": [0, 0.01], "dy_m": [-0.01, 0.01]}, {**WIDE, "extra": 1}, [0.01], {},     # malformed
+])
+def test_declared_range_past_the_ceiling_or_malformed_refuses_not_falls_back(declared):
+    out = bp.measure(scene((0.006, 0, 0)), {**REFERENCE, "range": declared})
+    assert not out["ok"] and out["reason_code"] == bp.UNKNOWN and "belt_reference.range" in out["reason"]
+
+
+def test_ceiling_edge_is_accepted():
+    edge = {"dx_m": [-0.01, 0.04], "dy_m": [-0.035, 0.035], "yaw_rad": [-math.radians(20), math.radians(20)]}
+    assert bp.measure(scene((0.006, 0, 0)), {**REFERENCE, "range": edge})["ok"]
+
+
 @pytest.mark.parametrize("yaw_deg", [10.0, 190.0, -170.0])  # one box, three spellings of its long axis: yaw folds to +10
 def test_known_offset_gives_the_trained_numbers(yaw_deg):
     out = bp.measure(scene((0.006, 0.004, yaw_deg)), REFERENCE)
@@ -154,6 +186,13 @@ def test_generator_fills_the_reference_from_the_sim_layout(tmp_path):
     argv = ["--info", str(tmp_path / "info.json"), "--top-camera", str(tmp_path / "top_refit.json"), "--preset", PRESET]
     assert omx_env_state.main([*argv, "--out", str(tmp_path / "ENV_STATE.json")]) == 0
     assert json.loads((tmp_path / "ENV_STATE.json").read_text()) == {"names": NAMES, "belt_reference": REFERENCE}
+    out = tmp_path / "wide.json"
+    assert omx_env_state.main([*argv, "--range=-0.003,0.032,0.027,16", "--out", str(out)]) == 0
+    assert json.loads(out.read_text())["belt_reference"] == {**REFERENCE, "range": {
+        "dx_m": [-0.003, 0.032], "dy_m": [-0.027, 0.027], "yaw_rad": [-math.radians(16), math.radians(16)]}}
+    for bad in ("-0.003,0.032,0.027", "a,b,c,d", "0,0.05,0.01,5", "0,0.01,0.01,25"):
+        with pytest.raises(ValueError):
+            omx_env_state.build(INFO, {"ok": True, "camera": TOP}, PRESET, bad)
     for info, top, why in ((INFO, {"ok": False, "camera": TOP}, "not ok"), (INFO, {"eye": [0, 0, 1]}, "needs"),
                            ({"features": {lrs.GOAL: {"shape": [10], "names": list(GOALS)}}}, TOP, "end with")):
         with pytest.raises(ValueError, match=why):
