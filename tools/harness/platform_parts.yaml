@@ -1541,7 +1541,6 @@ safety_review_paths:
   - deploy/robot/omx/cell_auto_pick_plan.py
   - deploy/robot/omx/cell_auto_reach.py
   - deploy/robot/omx/cell_slot_prior.py
-  - deploy/robot/omx/cell_free_source.py
   - deploy/robot/omx/cell_executor.py
   - deploy/robot/omx/cell_job_api.py
   - deploy/robot/omx/cell_job_spec.py
