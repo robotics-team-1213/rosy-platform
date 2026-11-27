@@ -44,7 +44,7 @@ from fleet.server.trip_runner_helpers import (  # noqa: F401
 from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
 from fleet.server.nav2_trip_recovery import recover_instead
-from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence
+from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence, traffic_watch_pose
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic.lane_traffic import TrafficService
@@ -522,7 +522,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                     live._halt_retry_at = self._clock() + 2.0
                     self._inflight[robot_id] = asyncio.ensure_future(self._retry_unconfirmed_halt(live))
         self.halts.watch_handoff_stops(self._inflight)
-        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)),
+        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(traffic_watch_pose(self, r)),
                            roster=self._roster() if self._roster is not None else ())
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:

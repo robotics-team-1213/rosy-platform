@@ -223,3 +223,12 @@ def test_guide_findings_follow_the_lane_watch():
     assert "WRONG_WAY" not in turned and "OFF_LANE" in turned      # the robot's own yaw goes the lane's way
     parked = _codes(_guide(cam(0.25, 0.964, math.radians(-14)), {**moving, "moving": False, "exempt": "parking"}))
     assert parked == {"PARKING": "info"}
+
+
+def test_parking_edge_covers_guide_bars_with_junction_bay_places():
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    _, world_graph, _ = build_world_261026_site_map()
+    for eid in ("bay_1", "bay_2", "bay_3", "bar_32", "bar_21", "park_in", "park_out"):
+        assert parking_edge(world_graph, eid), eid
+    for eid in ("upper_west", "loop_left", "lower_east", "loop_right"):
+        assert not parking_edge(world_graph, eid), eid

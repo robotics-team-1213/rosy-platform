@@ -91,3 +91,39 @@ def test_through_the_table_only_a_standing_robot_gets_the_body_reach():
                                     "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
         _ticks(runner, fleet, n=1)
         assert runner.traffic.pinned() == ["a"]
+
+
+def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
+    import asyncio
+    from datetime import datetime, timezone
+    from core_common.protocol.evidence import STALE_POSE_S
+    from fleet.localization.map_binding import Fit
+    from fleet.server.named_stop_map_pose import traffic_watch_pose
+
+    layout, graph = _bays(WIDTH_M)
+    pose = (BAY_GAP_M, 0.25, math.pi / 2)
+    east = _bay(BAY_GAP_M, WIDTH_M)
+    runner, _store, fleet, _ = _restarted(lambda _e: MapPose(*pose, "LOCALIZED", "sighting", 0.0, 0.1, 0.1))
+    runner.traffic._last_pose["a"] = pose
+    runner.traffic._state.pinned["a"] = {"lane:bay@0.226": True}
+    stale = MapPose(*pose, "LOCALIZED", "sighting", 0.0, STALE_POSE_S + 1.0, STALE_POSE_S + 1.0, "site")
+    runner.traffic.step([], poses={"a": stale})
+    assert len(runner.traffic._state.pinned["a"]) == 1  # stale update does not blow up pin to 0.285 m
+
+    fit = Fit(0.0, 0.25, 0.0, (0.001,))
+    now = 1_700_000_010.0
+    stamp = datetime.fromtimestamp(now - 0.1, timezone.utc).isoformat()
+    state = {"pose_frame": "map", "map_id": "m", "map_grid_id": "g", "localization": {"state": "LOCALIZED"},
+             "pose": {"x": 0.0, "y": 0.25, "yaw": math.pi / 2}, "odom_pose": {"x": 0.0, "y": 0.25, "yaw": 0.0, "stamp": now - 0.1},
+             "evidence": {"pose": {"evidence": "fresh", "received_at": stamp}}}
+    bindings = NS(matching_fit=lambda *_a: (fit, None))
+    fake_runner = NS(
+        _clock=lambda: now,
+        _store=NS(active=lambda: (1, NS(map_id="site")), map_bindings=bindings),
+        _poses=NS(cached_motion_sample=lambda _r: (state, now - 0.1, now)),
+        _driving_pose=lambda _r: MapPose(-9.0, -9.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site"),
+    )
+    watched = asyncio.run(traffic_watch_pose(fake_runner, "rosy_42"))
+    assert watched.source == "approved_slam" and watched.x == pytest.approx(0.25)
+    fake_runner._poses = NS()  # no cached sample -> fallback to driving pose
+    assert asyncio.run(traffic_watch_pose(fake_runner, "rosy_42")).x == -9.0

@@ -318,3 +318,17 @@ def test_without_a_bound_slam_pose_it_stays_a_location_record(monkeypatch, fit, 
     assert run(realign.observe(rig.runner, rig.live, 0, camera_trip_pose, LOCALIZED, "NAVIGATING")) is False
     record = rig.live.view["detail"]["lane_departure"]
     assert (record["kind"], record["reason"], record["slam_reason"]) == ("location", "SLAM_POSE_UNBOUND", why)
+
+
+def test_guide_bar_junction_exits_are_excluded_from_lane_realign():
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    _, world_graph, _ = build_world_261026_site_map()
+    clock = FakeClock()
+    arc = world_graph.arcs["park_out:fwd"]
+    cam = _camera(_at(arc, 0.1, 0.06))
+    runner = NS(_clock=clock, _store=NS(active=lambda: (1, NS(map_id="world_261026", walls=()))),
+                _poses=NS(arbitrated_pose=lambda _r: cam))
+    live = NS(view={"robot_id": "rosy_46", "detail": {}, "hold": None},
+              active_route={"end_index": 0}, graph=world_graph, arc=lambda _i: arc)
+    assert run(realign.observe(runner, live, 0, _slam(_at(arc, 0.1, 0.06)), LOCALIZED, "NAVIGATING")) is False
+    assert live.view["detail"]["lane_departure"]["kind"] == "excluded"
