@@ -102,10 +102,12 @@ def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
 
     runner, _store, fleet, east = _restarted(lambda east: _idle(east, 0.0))
     _ticks(runner, fleet, n=2)  # initializes traffic _version and settles _last_pose
-    runner.traffic._state.pinned["a"] = {"only_bay": True}
+    pinned_units = set(runner.traffic._state.pinned["a"])
+    other_unit = next(u for u in runner.traffic._layout.units if u not in pinned_units)
+    runner.traffic._state.pinned["a"] = {other_unit: True}
     stale = _idle(east, 0.0, age=STALE_POSE_S + 1.0)
     runner.traffic.step([], poses={"a": stale})
-    assert runner.traffic._state.pinned["a"] == {"only_bay": True}  # stale update does not blow up pin to 0.285 m
+    assert runner.traffic._state.pinned["a"] == {other_unit: True}  # stale update keeps existing pin instead of recomputing with u_max
 
     fit = Fit(0.0, 0.25, 0.0, (0.001,))
     now = 1_700_000_010.0
