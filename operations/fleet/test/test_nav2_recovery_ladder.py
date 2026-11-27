@@ -30,6 +30,23 @@ def test_the_second_resend_onward_runs_under_the_slow_cap(recovery, expected):
     assert _grant(_south_loop_map(), STRAIGHT, detail) == expected
 
 
+def test_the_recovery_cap_never_raises_a_lower_one():
+    tight = [dict(edge_id="loop_right", forward=True, s_from=0., s_to=.4)]   # the 0.08 curve cap, then 0.05
+    limit, _ = _grant(_south_loop_map(), tight, {"recovery": {"state": "resumed", "attempt": 2}})
+    assert limit == pytest.approx(realign.REALIGN_SLOW_MPS)
+    limit, reason = _grant(_south_loop_map(), STRAIGHT, {"recovery": {"state": "resumed", "attempt": 2},
+                                                         "lane_departure": {"slow": True}})
+    assert (limit, reason) == (realign.REALIGN_SLOW_MPS, "lane_realign")
+
+
+def test_a_refused_first_resend_still_recentres_the_next_try():
+    live = type("L", (), {})()
+    live.view = {"detail": {"recovery": {"state": "resumed", "attempt": 1, "resent_at": None}}}
+    assert ladder.recovery_resend(live) and ladder.recovery_resend(live)   # not consumed by sampling
+    live.view["detail"]["recovery"]["resent_at"] = 1.0
+    assert not ladder.recovery_resend(live)
+
+
 def test_the_slow_cap_ends_with_the_episode():
     robot, clock, _store, graph, pose, _c, runner, live = _trip()
     _recover_once(runner, clock, live)

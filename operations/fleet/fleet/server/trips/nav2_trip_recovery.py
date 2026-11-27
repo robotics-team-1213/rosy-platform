@@ -115,6 +115,8 @@ async def resume_ready(runner, live, index: int, s: float) -> bool:
         return True
     now = runner._clock()
     if rec["state"] == "resumed":
+        if live.active_route is not None and rec.get("resent_at") is None:
+            rec["resent_at"] = now   # the recentred resend went out: later sends are plain
         if live.progress(index, s) >= rec["resumed_progress"] + RESET_M:
             detail["last_recovery"] = {**detail.pop("recovery"), "state": "recovered", "recovered_at": now}
         return True

@@ -31,19 +31,18 @@ def recovery_slow(detail: dict) -> bool:
 
 
 def recovery_resend(live) -> bool:
-    """True for the first route sampled after a recovery resumed: it recentres with no threshold."""
+    """True until a route sent after a recovery resumed is acknowledged (``resent_at``, set by resume_ready): that
+    route recentres with no threshold, also when a first try is refused before it goes out."""
     rec = live.view["detail"].get("recovery") or {}
-    if rec.get("state") != "resumed" or rec.get("resent_at") is not None:
-        return False
-    rec["resent_at"] = rec.get("resumed_at")
-    return True
+    return rec.get("state") == "resumed" and rec.get("resent_at") is None
 
 
 def stop_point(live, reason: str, now: float) -> dict:
     """Where a stop happened: the trip pose and the last camera lane judgement (lat_m, wall clearance)."""
     pose = getattr(live, "road_pose", None)
     lane = live.view["detail"].get("lane_departure") or {}
-    xy = None if pose is None or pose.x is None else [round(pose.x, 4), round(pose.y, 4)]
+    xy = (None if pose is None or not all(isinstance(v, (int, float)) for v in (pose.x, pose.y))
+          else [round(pose.x, 4), round(pose.y, 4)])
     return {"reason": reason, "at": now, "xy": xy, "lat_m": lane.get("lat_m"),
             "wall_clear_m": lane.get("wall_clear_m"), "lane_kind": lane.get("kind")}
 
