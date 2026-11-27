@@ -56,13 +56,6 @@ def install_site_points_routes(app, *, site_maps, read_guard) -> None:
         web_common = _coerce_web_common(getattr(app.state, "web_common", None))
         cell_sites = list_canonical_sites(web_common, include_zone_layout=view == "full")
         legacy_aliases = _load_legacy_station_zones(web_common) if view == "full" else None
-        return build_site_points(
-            site_map_view=active_view,
-            site_map=site_map,
-            site_rules_view=rules_view,
-            site_rules=rules_obj,
-            cell_sites=cell_sites,
-            legacy_station_zones=legacy_aliases,
-            view=view,
-            include_junctions=include_junctions,
-        )
+        return build_site_points(site_map_view=active_view, site_map=site_map, site_rules_view=rules_view,
+                                 site_rules=rules_obj, cell_sites=cell_sites, legacy_station_zones=legacy_aliases,
+                                 view=view, include_junctions=include_junctions, web_common=web_common)

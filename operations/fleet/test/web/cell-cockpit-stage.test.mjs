@@ -10,6 +10,8 @@ const { canonicalArmId, normalizeWorkcellObservations, isArmAttentionOrLive } = 
 const { activeCellWorkRows } = await import(
   "/console/assets/cell-context-panel.js"
 );
+const { cameraRoiEntries } = await import("/console/assets/cell-cam-roi.js");
+const { renderOmxInspector } = await import("/console/assets/omx-inspector.js");
 
 test("canonicalArmId normalizes omx_ and _follower affixes", () => {
   assert.equal(canonicalArmId("omx_arm_a"), "arm_a");
@@ -134,4 +136,71 @@ test("cell-cockpit-stage keeps previously-live camera visible during disconnect 
   const src = readFileSync(new URL("../../../../applications/fleet/web/shared/cell-cockpit-stage.js", import.meta.url), "utf8");
   assert.match(src, /hasFrame/);
   assert.doesNotMatch(src, /onLoad=\$\(\(\) => \{ if \(standbyRef\.current\) standbyRef\.current\.hidden = true; \}\)/);
+});
+
+test("cameraRoiEntries and renderOmxInspector attach pixel ROI overlays only on top cameras and toggle cleanly", () => {
+  const cameraRois = {
+    schema: "rosy.cell-site-pixels.v1",
+    image_size_px: [640, 480],
+    arm_s_top: { amr_bed: { label: "S3 짐칸 ROI", top_roi_px: [10, 40, 260, 240] } },
+    arm_ab_top: { belt_pickup: { label: "벨트 픽업", top_px: [341, 112] }, outbound_stand: { label: "반출대", top_roi_px: [410, 30, 570, 125] } },
+  };
+  assert.equal(cameraRoiEntries({ id: "arm_s_top", label: "S3 상단" }, cameraRois).entries.length, 1);
+  assert.equal(cameraRoiEntries({ source_id: "omx_overhead", role: "overhead", label: "셀 상단" }, cameraRois).entries.length, 2);
+  assert.equal(cameraRoiEntries({ source_id: "omx_overhead", role: "overhead", stream: "depth", label: "상단" }, cameraRois).entries.length, 0);
+  assert.equal(cameraRoiEntries({ source_id: "omx_wrist_a", role: "wrist", label: "손목" }, cameraRois).entries.length, 0);
+
+  const prevDoc = globalThis.document;
+  const mkEl = (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      className: "",
+      textContent: "",
+      children: [],
+      attributes: {},
+      dataset: {},
+      listeners: {},
+      append(...nodes) { this.children.push(...nodes.filter((n) => n != null && typeof n === "object")); },
+      replaceChildren(...nodes) { this.children = nodes.filter((n) => n != null && typeof n === "object"); },
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      getAttribute(k) { return this.attributes[k] ?? null; },
+      hasAttribute(k) { return k in this.attributes; },
+      addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
+    };
+    return el;
+  };
+  const findAll = (root, pred, out = []) => {
+    if (!root || typeof root !== "object") return out;
+    if (pred(root)) out.push(root);
+    for (const c of root.children || []) findAll(c, pred, out);
+    return out;
+  };
+  globalThis.document = { createElement: mkEl, createElementNS: (_ns, tag) => mkEl(tag) };
+  try {
+    const container = mkEl("div");
+    let toggled = 0;
+    renderOmxInspector(container, {
+      targets: [{ id: "arm_s", shortTab: "arm_s", title: "arm_s", cameraViews: [{ id: "arm_s_top", label: "S3 상단", source: "arm_s_top" }] }],
+      activeId: "arm_s",
+      cameraRois,
+      showRoi: true,
+      onToggleRoi: () => { toggled += 1; },
+    });
+    const frames = findAll(container, (n) => n.attributes.class === "omx-inspector-cam-frame" || n.className === "omx-inspector-cam-frame");
+    const mainFrame = frames[0];
+    assert.equal(mainFrame.children[0].tagName, "IMG");
+    assert.equal(mainFrame.children[1].className, "omx-inspector-cam-standby");
+    assert.equal(mainFrame.children[2].attributes.class, "omx-cam-roi-overlay");
+    const svgs = findAll(container, (n) => n.tagName === "SVG" && n.attributes.class === "omx-cam-roi-overlay");
+    assert.equal(svgs.length, 1);
+    assert.equal(svgs[0].attributes.viewBox, "0 0 640 480");
+    const rects = findAll(svgs[0], (n) => n.tagName === "RECT" && n.attributes["data-roi-key"] === "amr_bed");
+    assert.equal(rects.length, 1);
+    const roiBtn = findAll(container, (n) => n.tagName === "UI-BUTTON" && n.dataset.roiToggle === "true")[0];
+    assert.ok(roiBtn);
+    roiBtn.listeners.click[0]();
+    assert.equal(toggled, 1);
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });

@@ -1,0 +1,17 @@
+{
+  "schema": "rosy.cell-site-pixels.v1",
+  "image_size_px": [640, 480],
+  "status": "cell_local_reference",
+  "cameras": {
+    "arm_s_top": {
+      "amr_bed": { "label": "S3 짐칸 ROI", "top_roi_px": [10, 40, 260, 240] },
+      "belt_center": { "label": "벨트 인입 중앙", "top_roi_px": [240, 90, 460, 270] },
+      "belt_far": { "label": "벨트 원거리 이탈", "top_roi_px": [320, 110, 620, 290] },
+      "floor_front": { "label": "전방 바닥 낙하", "top_roi_px": [60, 180, 280, 420] }
+    },
+    "arm_ab_top": {
+      "belt_pickup": { "label": "벨트 픽업", "top_px": [341, 112] },
+      "outbound_stand": { "label": "반출대 적재", "top_roi_px": [410, 30, 570, 125] }
+    }
+  }
+}

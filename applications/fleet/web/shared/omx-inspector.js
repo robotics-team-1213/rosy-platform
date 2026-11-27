@@ -1,16 +1,18 @@
 // Shared pure-DOM OMX right inspector used by both Console charge-bays and Cell real2sim.
 import { setOffBy } from "/common/cause-line.js";
 import { node, uiTag } from "/common/control-dom.js";
+import { buildCamRoiSvg } from "/console/assets/cell-cam-roi.js";
 
 const TIER_CHOICES = [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]];
 const DISP_CHOICES = [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]];
 
 /** Build a frame box with a permanent standby layer so paint() updates never re-create layout nodes. */
-export function buildInspectorCamFrame(img, standbyText = "영상 확인 중") {
+export function buildInspectorCamFrame(img, standbyText = "영상 확인 중", roiSvg = null) {
   const wrap = node("div", "", "omx-inspector-cam-frame");
   const standby = node("span", standbyText, "omx-inspector-cam-standby");
   standby.setAttribute("role", "status");
   wrap.append(img, standby);
+  if (roiSvg) wrap.append(roiSvg);
   return wrap;
 }
 
@@ -47,27 +49,11 @@ function buildTab(text, active, onClick) {
  * attached <img> elements never flash a detached standby state for 2 seconds.
  */
 export function renderOmxInspector(container, {
-  targets = [],
-  activeId = null,
-  dualCamMode = false,
-  selectedCamByTarget = {},
-  draftChoices = new Map(),
-  frames = null,
-  framesActive = true,
-  standbyText = "영상 확인 중",
-  tagText = null,
-  tagStatus = "neutral",
-  disclosure = null,
-  runButtonLabel = null,
-  quickDispatchReason = "",
-  actionChoices = null,
-  actionsClass = "omx-inspector-actions",
-  onSelectTarget = () => {},
-  onToggleDual = () => {},
-  onSelectCam = () => {},
-  onQuickDispatch = async () => {},
-  onRenderAction = null,
-  onDisclosureToggle = null,
+  targets = [], activeId = null, dualCamMode = false, selectedCamByTarget = {}, draftChoices = new Map(),
+  frames = null, framesActive = true, cameraRois = null, showRoi = true, standbyText = "영상 확인 중",
+  tagText = null, tagStatus = "neutral", disclosure = null, runButtonLabel = null, quickDispatchReason = "",
+  actionChoices = null, actionsClass = "omx-inspector-actions", onSelectTarget = () => {}, onToggleDual = () => {},
+  onToggleRoi = null, onSelectCam = () => {}, onQuickDispatch = async () => {}, onRenderAction = null, onDisclosureToggle = null,
 }) {
   if (!container || !targets.length) return;
   const active = targets.find((t) => t.id === activeId) || targets[0];
@@ -88,6 +74,11 @@ export function renderOmxInspector(container, {
   dualBtn.dataset.dualCamToggle = "true";
   dualBtn.title = "상단+손목 2채널 동시 보기";
   tabs.append(dualBtn);
+  if (onToggleRoi && cameraRois) {
+    const roiBtn = buildTab(showRoi ? "ROI 표시" : "ROI 숨김", showRoi, () => onToggleRoi());
+    roiBtn.dataset.roiToggle = "true";
+    tabs.append(roiBtn);
+  }
 
   const head = node("div", "", "omx-inspector-head");
   head.append(
@@ -109,7 +100,7 @@ export function renderOmxInspector(container, {
       dImg.loading = "lazy";
       const dCap = node("small", `[${dv.label}]`, "omx-inspector-cam-badge");
       cameraBindings.push([dImg, dv, dCap, `[${dv.label}]`]);
-      pane.append(buildInspectorCamFrame(dImg, standbyText), dCap);
+      pane.append(buildInspectorCamFrame(dImg, standbyText, showRoi ? buildCamRoiSvg(dv, cameraRois) : null), dCap);
       dualGrid.append(pane);
     }
     stage.append(dualGrid);
@@ -126,8 +117,10 @@ export function renderOmxInspector(container, {
     zoomBtn.setAttribute("data-work-read", "");
     zoomBtn.setAttribute("aria-expanded", "false");
     zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
+    const roiSvg = showRoi ? buildCamRoiSvg(activeCam, cameraRois) : null;
     const applyZoom = (zoomed) => {
       mainImg.classList.toggle("focused", zoomed);
+      roiSvg?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice");
       zoomBtn.setAttribute("aria-expanded", String(zoomed));
       zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
       zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
@@ -143,7 +136,7 @@ export function renderOmxInspector(container, {
     });
     stageBar.append(mainCap, zoomBtn);
     cameraBindings.push([mainImg, activeCam, mainCap, `[${activeCam.label}]`]);
-    wrap.append(buildInspectorCamFrame(mainImg, standbyText), stageBar);
+    wrap.append(buildInspectorCamFrame(mainImg, standbyText, roiSvg), stageBar);
     stage.append(wrap);
   }
 
