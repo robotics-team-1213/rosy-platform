@@ -210,7 +210,10 @@ local_costmap:
       # 줘도 REJECTED 로 끝나고 로봇은 한 발도 못 뗀다. 실제로 2x1 m 데모룸에서 그랬다.
       initial_transform_timeout: 30.0
       #robot_radius: 0.22
-      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+      # 11-27: 실제 몸체 0.113 m(반폭 0.0566) + 패딩 0.005. 0.12+기본 패딩 0.01(반폭 0.07)은 벽에서 7.5 cm 떨어져
+      # 있어도 inflation 칸을 몸체 안으로 읽어 RPP 가 "collision ahead"로 멈췄다(사용자 승인 완화).
+      footprint: '[[0.057, 0.057], [0.057, -0.057], [-0.057, -0.057], [-0.057, 0.057]]'
+      footprint_padding: 0.005
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -268,7 +271,7 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       #robot_radius: 0.22
-      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+      footprint: '[[0.057, 0.057], [0.057, -0.057], [-0.057, -0.057], [-0.057, 0.057]]'
       resolution: 0.025                     # 11-27: 0.05 격자 계획 경로에 5 cm 계단이 생겨 직선에서 조향을 흔들었다
       # 기동 경쟁 방어. nav2 는 활성화하며 map->base TF 를 기다리는데, 그 TF 는 AMCL 이
       # 첫 스캔을 처리한 뒤에야 나온다. 느린 기계(RTF 0.3)에서는 그것이 기본 대기시간을
