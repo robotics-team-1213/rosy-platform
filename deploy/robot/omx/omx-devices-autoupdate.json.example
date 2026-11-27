@@ -30,7 +30,7 @@
   "units": ["rosy-omx-camera@top.service", "rosy-omx-camera@front.service", "rosy-omx-camera@arm_a_wrist.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service",
             "rosy-omx-observer@arm_a.service", "rosy-omx-observer@arm_b.service",
-            "rosy-omx-observation-bridge.service", "rosy-omx-arm-status.service",
+            "rosy-omx-observation-bridge.service",
             "rosy-omx-cell-job-api.service"],
   "unit_files": ["deploy/robot/omx/rosy-omx-camera@.service", "deploy/robot/omx/rosy-omx-camera-view.service",
                  "deploy/robot/omx/rosy-omx-camera-readiness.service", "deploy/robot/omx/rosy-omx-observer@.service",

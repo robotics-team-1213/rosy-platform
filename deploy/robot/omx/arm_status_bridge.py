@@ -29,9 +29,12 @@ import math
 import os
 import signal
 import ssl
+import sys
 import threading
 import time
 from pathlib import Path
+
+EX_DUPLICATE_SENDER = 78
 
 JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"]
 MOTORS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
@@ -116,6 +119,45 @@ def _stat_sig(path: Path):
         return None
 
 
+def _bridge_env_refusal(env_path: Path, source_id: str) -> str | None:
+    """Fail closed when ``env_path`` exists and either names ``source_id`` in its manifest or cannot be verified."""
+    if not env_path.exists():
+        return None
+    manifest_raw = ""
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            if key.strip() == "ROSY_WORKCELL_OBSERVATIONS":
+                manifest_raw = val.strip().strip('"').strip("'")
+                break
+    except OSError as exc:
+        return f"cannot read {env_path} ({exc}); refusing duplicate sender verification fail-closed"
+    if not manifest_raw:
+        return f"ROSY_WORKCELL_OBSERVATIONS is unset in {env_path}; refusing duplicate sender fail-closed"
+    manifest_path = Path(manifest_raw)
+    try:
+        import yaml
+
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"cannot read workcell manifest {manifest_path} ({type(exc).__name__}); refusing duplicate sender fail-closed"
+    if not isinstance(data, dict):
+        return f"invalid workcell manifest {manifest_path}; refusing duplicate sender fail-closed"
+    for cell in data.get("workcells") or ():
+        if not isinstance(cell, dict):
+            continue
+        for arm in cell.get("arms") or ():
+            if isinstance(arm, dict) and arm.get("source_id") == source_id:
+                return (
+                    f"{source_id} is already registered in {manifest_path}; "
+                    "workcell_observation_bridge is the sole sender (two senders cause 409 epoch conflicts)"
+                )
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--live", type=Path, required=True)
@@ -130,7 +172,14 @@ def main(argv=None):
     parser.add_argument("--mirror-fleet", action="append", metavar="https://URL,/abs/ca.pem",
                         default=os.environ.get("ROSY_ARM_STATUS_MIRROR_FLEET", "").split(),
                         help="another Fleet (R) that also receives these observations")
+    parser.add_argument("--forbid-bridge-env", type=Path, default=None,
+                        help="refuse fail-closed (exit 78) if bridge env's manifest registers --source-id or cannot be verified")
     args = parser.parse_args(argv)
+    if args.forbid_bridge_env is not None:
+        refusal = _bridge_env_refusal(args.forbid_bridge_env, args.source_id)
+        if refusal is not None:
+            print(f"REFUSED: {refusal}", file=sys.stderr, flush=True)
+            raise SystemExit(EX_DUPLICATE_SENDER)
     if bool(args.arm_id) != bool(args.health_file):
         parser.error("--arm-id and --health-file go together")
     token = os.environ.get(args.token_env)
