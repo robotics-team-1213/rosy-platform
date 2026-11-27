@@ -236,7 +236,8 @@ def test_refusal_moves_nothing_and_never_starts_the_policy(tmp_path, monkeypatch
 
     cell = Cell(scene((0.006, 0.02, 0.0)))  # dy +20 mm: past +-9 mm
     monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: cell)
-    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: lrs.LeRobotShadow(*a, loader=lambda *_: None, **kw))
+    shadow = lrs.LeRobotShadow
+    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: shadow(*a, loader=lambda *_: None, **kw))
     monkeypatch.setattr(cell_stop_proof, "session_proof", lambda *a, **kw: {"ok": True, "code": "ok", "reason": ""})
     monkeypatch.setattr(cell_policy_handoff, "Authorization", lambda _cfg: None)
     monkeypatch.setattr(cell_policy_preflight, "preflight", lambda *a, **kw: pytest.fail("preflight after a refusal"))
@@ -257,7 +258,8 @@ def test_goal_names_must_be_the_cell_slots(tmp_path, monkeypatch, drive):
     import cell_pipeline
 
     monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: Cell(scene((0.006, 0, 0))))
-    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: lrs.LeRobotShadow(*a, loader=lambda *_: None, **kw))
+    shadow = lrs.LeRobotShadow
+    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: shadow(*a, loader=lambda *_: None, **kw))
     swapped = [GOALS[1], GOALS[0], *GOALS[2:], *bp.BELT_NAMES]
     with pytest.raises(SystemExit) as error:
         drive.main(drive_args(tmp_path, drive, {"names": swapped, "belt_reference": REFERENCE}))
