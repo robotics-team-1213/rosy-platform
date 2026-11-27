@@ -13,6 +13,8 @@ REAL = json.loads((Path(__file__).resolve().parents[1] / "contracts" / "foundati
                    / "arm_incidents_link" / "20261118T232302-arm_s.json").read_text(encoding="utf-8"))["facts"]
 HOME = [0.0, -58.0, 50.0, 50.0, -5.0, 48.8]
 LAST = [-0.02, -58.0, 55.9, 50.33, -4.91, 49.21]
+CLEAN = {**REAL, "folded": True, "flagged": [], "flagged_total": 0, "fault_records": [], "fault_records_total": 0,
+         "fault_record_kinds": []}  # folded, torque OFF, nothing flagged: 100, over the cell's 99
 
 
 def session(tmp_path, rows):
@@ -55,7 +57,7 @@ def test_auto_clear_clears_what_the_rule_allows_and_nothing_else(tmp_path, monke
     monkeypatch.setenv("ROSY_ARM_ASSESSOR_TOKEN_FILE", str(token))
     calls = []
     clear = lambda *a, **k: calls.append((a, k))  # noqa: E731
-    out = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear)
+    out = omx_incident.auto_clear("arm_s", CLEAN, link=object(), clear_fn=clear)
     assert out["cleared"] is True and calls[0][1] == {"cause": "software_or_config", "basis": "measured"}
     assert calls[0][0][2] == token
     calls.clear()
@@ -72,23 +74,26 @@ def test_a_refused_clear_keeps_the_hold(tmp_path, monkeypatch):
     def refused(*a, **k):
         raise SystemExit("arm_s held for a person: AI_CLEAR_REPEAT_LIMIT")
 
-    out = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=refused)
+    out = omx_incident.auto_clear("arm_s", CLEAN, link=object(), clear_fn=refused)
     assert out["cleared"] is False and "REPEAT_LIMIT" in out["why"]
 
 
-def test_auto_clear_enforces_95_score_floor_and_returns_risk_fields(tmp_path, monkeypatch):
+def test_auto_clear_defaults_to_99_keeps_the_95_floor_and_returns_risk_fields(tmp_path, monkeypatch):
     token = tmp_path / "cell-s-ai-assessor.token"
     token.write_text("t")
     monkeypatch.setenv("ROSY_ARM_ASSESSOR_TOKEN_FILE", str(token))
     calls = []
     clear = lambda *a, **k: calls.append((a, k))  # noqa: E731
 
-    ok = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear)
+    default = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear)
+    assert default["cleared"] is False and default["safety_score"] == 95 and default["threshold"] == 99 and calls == []
+
+    ok = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear, min_score=95)
     assert ok["cleared"] is True and ok["safety_score"] == 95 and ok["risk_score"] == 5 and ok["decision"] == "auto_clear"
 
     calls.clear()
     # Second clear of rested REAL arm within 24h scores 93 < 95 -> escalated, clear_fn not called
-    low = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear, recent_clears_24h=1)
+    low = omx_incident.auto_clear("arm_s", REAL, link=object(), clear_fn=clear, recent_clears_24h=1, min_score=95)
     assert low["cleared"] is False and low["safety_score"] == 93 and low["decision"] == "escalate_human"
     assert calls == []
 
@@ -137,7 +142,7 @@ def test_incident_risk_pipeline_applies_only_at_95_plus_and_logs_audit(tmp_path,
     }))
     cleared_calls = []
     res_ok, code_ok = pipe.run_pipeline(
-        "arm_s", apply=True, link=Link(held=True),
+        "arm_s", apply=True, link=Link(held=True), min_score=95,
         clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0,
     )
     assert code_ok == 0 and res_ok["decision"] == "auto_clear" and res_ok["safety_score"] == 95 and res_ok["cleared"] is True
@@ -151,7 +156,7 @@ def test_incident_risk_pipeline_applies_only_at_95_plus_and_logs_audit(tmp_path,
                     "torque_enabled": 0, "hardware_error": 0}],
     }))
     res_low, code_low = pipe.run_pipeline(
-        "arm_s", apply=True, link=Link(held=True),
+        "arm_s", apply=True, link=Link(held=True), min_score=95,
         clear_fn=lambda *a, **k: cleared_calls.append((a, k)), now_fn=lambda: t0 + 10.0,
     )
     assert code_low == 2 and res_low["decision"] == "escalate_human" and res_low["cleared"] is False
@@ -235,7 +240,7 @@ def test_omx_incident_pipeline_runs_cleanly_in_cold_subprocess(tmp_path):
         text=True,
         check=False,
     )
-    assert proc.returncode == 0, proc.stderr
+    assert proc.returncode == 2, proc.stderr  # 95 is under the CLI's default 99
     payload = json.loads(proc.stdout)
     assert payload["schema"] == "rosy.omx-incident-risk-pipeline.v1"
-    assert payload["safety_score"] == 95 and payload["decision"] == "auto_clear"
+    assert payload["safety_score"] == 95 and payload["threshold"] == 99 and payload["decision"] == "escalate_human"

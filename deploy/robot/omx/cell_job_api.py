@@ -387,6 +387,7 @@ def main():
     a = ap.parse_args()
     human_token = read_token(a.human_token_file or a.token_file)
     machine_token = read_token(a.machine_token_file) if a.machine_token_file else None
+    cell_incident_release.use_record_dir(a.workdir)
     runner = Runner(a.workdir.expanduser(), fleet_r_url=a.fleet_r_url, fleet_token_file=a.fleet_token_file, ca_file=a.ca_file)
     server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token)
     print(f"cell job API on {a.bind}:{a.port}", flush=True)

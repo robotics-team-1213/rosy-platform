@@ -135,6 +135,8 @@ def test_worker_main_seals_legacy_live_jog_by_default(tmp_path: Path, monkeypatc
     tok = tmp_path / "tok"
     tok.write_text("dummy-token", encoding="utf-8")
     calls: list[str] = []
+    import omx_incident_fleet
+    monkeypatch.setattr(omx_incident_fleet, "INCIDENTS", omx_incident_fleet.INCIDENTS)  # main() points it at --prep-dir
     monkeypatch.setattr(ctw, "make_default_request_fn", lambda *a, **k: (lambda m, p, b: calls.append(f"{m}:{p}") or {}))
     monkeypatch.setattr(ctw, "sync_cell_telemetry", lambda *a, **k: calls.append("sync") or {})
     monkeypatch.setattr(ctw, "execute_live_hardware_arm", lambda *a, **k: calls.append("live_jog") or {})
