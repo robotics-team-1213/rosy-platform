@@ -100,6 +100,12 @@ def test_extended_arm_is_refused_without_any_write():
     assert (err.code, err.exit_code) == ("NOT_FOLDED", job.REJECTED) and bus.writes == [] and Guard.closed
 
 
+def test_unfolded_arm_already_torque_off_gets_its_caps_restored_without_a_torque_write():
+    res, bus, calls, err = run(EXTENDED, torque=0, pwm=885)  # 2026-11-28 arm_b: torque OFF, raised caps, fold rule said no
+    assert err is None and calls == ["/dev/serial/by-id/x"] and res["baseline"] == {"restored": True}
+    assert res["already_torque_off"] is True and not [w for w in bus.writes if w[1] == "torque"]
+
+
 def test_missing_calibration_refuses():
     _, bus, _, err = run(cal=None)
     assert err.code == "CALIBRATION_MISSING" and bus.writes == []

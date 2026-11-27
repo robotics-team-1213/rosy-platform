@@ -57,7 +57,7 @@ def test_prestart_refusal_only_restores_observer_when_verified_idle(tmp_path, le
                              "touch", str(tmp_path / "moved")], env=env, capture_output=True, text=True, timeout=15)
     assert result.returncode == 2 and "session did not start" in result.stdout
     assert not (tmp_path / "moved").exists()
-    expected_config = "record-config.json" if letter == "a" and exit_code != 78 else f"record-config-arm-{letter}.json"
+    expected_config = f"record-config-arm-{letter}.json"  # the config each arm's operating profile pins
     assert (tmp_path / "selected-config").read_text().strip() == f"--config {expected_config}"
     handoff = tmp_path / "handoff"
     if exit_code == 78:
