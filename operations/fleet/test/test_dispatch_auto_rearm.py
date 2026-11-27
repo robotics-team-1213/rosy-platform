@@ -155,16 +155,16 @@ def test_stop_delivery_uncertainty_stays_closed(tmp_path, monkeypatch):
     assert store.dispatch_control()["dispatch_enabled"] is False
 
 
-def test_stop_between_check_and_rearm_blocks_rearm(tmp_path):
+def test_stop_between_check_and_rearm_blocks_rearm(tmp_path, monkeypatch):
     transport = _Transport()
     store, app = _omx(tmp_path / "f.sqlite3", transport, ArmIncidentStore())
-    real = store.auto_rearm_pending
+    real = dispatch_auto_rearm.auto_rearm_pending
 
-    def stop_after_check():
-        control = real()
-        store.trip_stop_latch(actor_id="estop-op", reason="SITE_STOP")
+    def stop_after_check(s):
+        control = real(s)
+        s.trip_stop_latch(actor_id="estop-op", reason="SITE_STOP")
         return control
-    store.auto_rearm_pending = stop_after_check
+    monkeypatch.setattr(dispatch_auto_rearm, "auto_rearm_pending", stop_after_check)
     assert _auto(app) is None and transport.rearms == 0
     control = store.dispatch_control()
     assert control["dispatch_enabled"] is False and control["reason"] == "SITE_STOP"
