@@ -42,6 +42,7 @@ SHARED = {
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
     "cell-obs-model.js",  # Pure workcell observation & camera normalization shared by Console and Cell.
     "arm-incident-clear.js",  # the one arm-incident and Fleet arm-hold clear step: Console drawer and Cell hold button
+    "cell-cam-roi.js",  # Shared top-camera pixel ROI SVG overlay helpers used by Console and Cell.
     "omx-inspector.js",  # Shared OMX right-inspector DOM builder used by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",

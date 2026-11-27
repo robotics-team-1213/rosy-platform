@@ -348,6 +348,14 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
         statusBody = null;
       }
       if (expectedGen !== generation) return;
+      if (!state.sitePointsCameras) {
+        try {
+          const sp = await request('/api/fleet/site-points?view=full');
+          if (expectedGen === generation && sp?.cameras) state.sitePointsCameras = sp.cameras;
+        } catch {
+          // Optional: /api/fleet/site-points may be absent before an active site map is published.
+        }
+      }
       lastStatusBody = statusBody;
       const ids = discoverPinkyIds(body, statusBody);
       if (!state.selectedRobotId || !ids.includes(state.selectedRobotId)) {

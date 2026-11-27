@@ -1,7 +1,20 @@
 """Static cell-coordinate catalog, 3-frame mapping, conveyor bridge, and 6-stage summary for site-points full view."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
+
+
+def _pixels_path(web_common: Path | None = None) -> Path:
+    if web_common is not None and (web_common / "cell-site-pixels.json").is_file():
+        return web_common / "cell-site-pixels.json"
+    return Path(__file__).resolve().parents[3] / "shared/web/cell-site-pixels.json"
+
+
+def load_cell_site_pixels(web_common: Path | None = None) -> dict[str, Any]:
+    """Load canonical camera pixel ROI definitions from shared/web/cell-site-pixels.json."""
+    return json.loads(_pixels_path(web_common).read_text(encoding="utf-8"))
 
 PLANNED_VEHICLE_STOPS: tuple[dict[str, str], ...] = (
     {
@@ -121,8 +134,13 @@ def build_coordinate_frames(
     site_map: Any,
     site_rules: Any,
     cell_sites: dict[str, Any],
+    *,
+    web_common: Path | None = None,
 ) -> dict[str, Any]:
     """Build 3 separate coordinate-frame views (vehicle_world m, cell_s mm, cell_ab mm) without conflating origins."""
+    pixels = load_cell_site_pixels(web_common)
+    cam_s = pixels["cameras"]["arm_s_top"]
+    cam_ab = pixels["cameras"]["arm_ab_top"]
     active_by_id = {p.id: p for p in site_map.places}
     exit_place = site_rules.return_.exit_place if site_rules is not None else None
     stop_rules = {s.place: s.role for s in site_rules.stops} if site_rules is not None else {}
@@ -201,7 +219,7 @@ def build_coordinate_frames(
         "vehicle_tray": {
             "xyz_mm": [53.5, 172.0, 20.0],
             "yaw_deg": -85.0,
-            "top_roi_px": [10, 40, 260, 240],
+            "top_roi_px": list(cam_s["amr_bed"]["top_roi_px"]),
             "bridge_vehicle_stop": "S3",
         },
         "belt_in": {
@@ -212,7 +230,7 @@ def build_coordinate_frames(
             "safe_x_min_mm": 134.0,
             "safe_z_min_mm": 55.0,
             "yaw_deg": -85.0,
-            "top_roi_px": [240, 90, 460, 270],
+            "top_roi_px": list(cam_s["belt_center"]["top_roi_px"]),
             "bridge_conveyor_end": "belt_in",
         },
     }
@@ -239,7 +257,7 @@ def build_coordinate_frames(
             "stop_x_mm": 158.0,
             "pickup_xyz_mm": [207.0, 7.0, 33.7],
             "v24_y_mm": -3.0,
-            "top_px": [341, 112],
+            "top_px": list(cam_ab["belt_pickup"]["top_px"]),
             "single_arm_area_xyz_mm": [15.0, 175.0],
             "arms": ["arm_a", "arm_b"],
             "bridge_conveyor_end": "belt_out",
@@ -258,7 +276,7 @@ def build_coordinate_frames(
             "v24_y_mm": -164.65,
             "rail_z_mm": 80.9,
             "yaw_deg": 90.0,
-            "top_roi_px": [410, 30, 570, 125],
+            "top_roi_px": list(cam_ab["outbound_stand"]["top_roi_px"]),
             "arms": ["arm_a"],
             "bridge_vehicle_stop": "S_OUT",
         },

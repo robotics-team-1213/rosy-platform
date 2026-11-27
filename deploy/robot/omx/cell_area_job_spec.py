@@ -24,8 +24,8 @@ PIXEL = _num(0, 1280)
 _PUSH = {  # cell_push.py: one closed-jaw push of a top box or a box on a flat surface, 5..20 mm for now
     "script": "cell_push.py",
     "camera": True,
-    "argv": ["--config", "{config}", "--site", "{site}", "--roi", "{roi}", "--px", "{px_x},{px_y}",
-             "--dir", "{dir_x},{dir_y}", "--mm", "{mm}"],  # no --arm: the config names the arm, as for auto_pick
+    "argv": ["--config", "{config}", "--site", "{site}", "--roi", "{roi}", "--px={px_x},{px_y}",
+             "--dir={dir_x},{dir_y}", "--mm", "{mm}"],  # one token each: argparse reads "--dir -1,0" as a flag; no --arm: the config names the arm
     "params": {
         "arm": _match(ARM),
         "config": _match(FILE),

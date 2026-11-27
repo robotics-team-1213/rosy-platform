@@ -1,0 +1,5 @@
+/* Styles for shared camera pixel ROI SVG overlays on OMX inspector and ARM-CELL stage. */
+.omx-cam-roi-overlay { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+.omx-cam-roi-rect { fill: var(--series-primary); fill-opacity: 0.14; stroke: var(--series-primary); stroke-width: 2; stroke-dasharray: 6 4; }
+.omx-cam-roi-point { fill: var(--series-goal); stroke: var(--surface-canvas); stroke-width: 2; }
+.omx-cam-roi-label { fill: var(--text-primary); font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); paint-order: stroke; stroke: var(--surface-canvas); stroke-width: 3; }

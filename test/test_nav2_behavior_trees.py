@@ -26,7 +26,7 @@ def _attr(path, tag, key):
 
 def test_trees_replan_fast_and_keep_closely_spaced_pass_points():
     assert _attr(THROUGH, "RateController", "hz") == ["2.0"] and _attr(TO_POSE, "RateController", "hz") == ["2.0"]
-    assert _attr(THROUGH, "RemovePassedGoals", "radius") == ["0.09"]   # keeps 0.12 m samples / U-turns intact
+    assert _attr(THROUGH, "RemovePassedGoals", "radius") == ["0.05"]   # 11-27: 0.09 cut the R~0.135 m U-turn arc by 10-12 cm
     assert _attr(THROUGH, "ComputePathThroughPoses", "goals") == ["{goals}"]
     assert _attr(TO_POSE, "ComputePathToPose", "goal") == ["{goal}"]
 

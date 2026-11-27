@@ -154,6 +154,14 @@
       "path": "cell/arm-incident-clear.js",
       "media_type": "application/javascript"
     },
+    "cell-cam-roi.js": {
+      "path": "cell/cell-cam-roi.js",
+      "media_type": "application/javascript"
+    },
+    "cell-cam-roi.css": {
+      "path": "cell/cell-cam-roi.css",
+      "media_type": "text/css"
+    },
     "cell-job-panel.js": {
       "path": "cell/cell-job-panel.js",
       "media_type": "application/javascript"

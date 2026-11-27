@@ -13,7 +13,10 @@ def _true(v):
 
 
 def check_site_files(job: dict, values: dict, workdir) -> None:
-    """Evidence files the job reads must be real files inside the workdir; symlinks are refused (resolve_under_workdir)."""
+    """Evidence files the job reads must be real files inside the workdir; symlinks are refused (resolve_under_workdir).
+    Also: a free source (free:<site>) has no layers_below (the planner would read it from a site that is not in the config)."""
+    if str(values.get("source", "")).startswith("free:") and values.get("layers_below") is not None:
+        raise ValueError("layers_below is not supported with a free source")
     for name in job.get("workdir_files", ()):
         if name in values and not resolve_under_workdir(workdir, values[name]).is_file():
             raise ValueError(f"{name}: no such file in the workdir")
