@@ -4,7 +4,7 @@ The 600-line limit (D-766) stopped long files and turned growth into more files:
 in the 30 days to 2026-11-28 (230 deleted). These caps hold each area's file count. Adding files past a
 cap means deleting or merging as many in the same area, or raising the cap in this file with a reason in
 the PR body (`Budget-Raise: <area> +N (why)`). docs/validation and docs/plans have no headroom: dated
-evidence goes to \$ROSY_SCRATCH and the PR body, and an existing record is updated instead (D-1090 2).
+evidence goes to $ROSY_SCRATCH and the PR body, and an existing record is updated instead (D-1090 2).
 """
 
 import re
