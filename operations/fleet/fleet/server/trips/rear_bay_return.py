@@ -215,22 +215,33 @@ class RearBayPort:
                 return
             sx, sy = live.graph.place_xy(info["staging_place_id"])
             velocity = snapshot.get("velocity") or {}
-            if pose is None or pose.state != "LOCALIZED" or math.dist((pose.x, pose.y), (sx, sy)) > runner.config.arrive_free_m:
+            if (pose is None or pose.state != "LOCALIZED"
+                    or not (math.isfinite(pose.x) and math.isfinite(pose.y))
+                    or math.dist((pose.x, pose.y), (sx, sy)) > runner.config.arrive_free_m):
+                info.pop("staging_wait_since", None)
+                if info["phase"] == "waiting_for_clearance":
+                    info["phase"] = "staging_confirmed"
                 raise TripError(409, "CHARGE_BAY_STAGING_STOP_UNVERIFIED")
             lin, ang = velocity.get("linear"), velocity.get("angular")
             still = (all(type(v) in (int, float) and math.isfinite(v) for v in (lin, ang))
                      and abs(lin) < 0.01 and abs(ang) <= 0.02)
             if (not still or snapshot.get("navigation") not in ("IDLE", "ARRIVED")
                     or (snapshot.get("line_follow") or {}).get("mode") != "OFF"):
+                if info.get("reason") != "CHARGE_BAY_STAGING_STOP_UNVERIFIED":
+                    info.pop("staging_wait_since", None)
                 since = info.setdefault("staging_wait_since", runner._clock())
                 if runner._clock() - since <= 10.0:
                     info.update(phase="waiting_for_clearance", reason="CHARGE_BAY_STAGING_STOP_UNVERIFIED",
                                 next_check_at=runner._clock() + 1)
                     return
+                info.pop("staging_wait_since", None)
+                info["phase"] = "staging_confirmed"
                 raise TripError(409, "CHARGE_BAY_STAGING_STOP_UNVERIFIED")
             info.pop("staging_wait_since", None)
             owner = view.get("owner") or {}
             if owner.get("owner_run_id", "unknown") is not None or type(owner.get("owner_generation")) is not int:
+                if info["phase"] == "waiting_for_clearance":
+                    info["phase"] = "staging_confirmed"
                 raise TripError(409, "CHARGE_BAY_DOCK_OWNER_BUSY")
             try:
                 evidence = site_pose_evidence(await runner.map_pose(robot), pose, state_map)

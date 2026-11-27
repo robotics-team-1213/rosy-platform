@@ -282,7 +282,7 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
     boot, run = str(uuid4()), str(uuid4())
     clock = [10.]
     nav_state = ["NAVIGATING"]
-    vel = [{"linear": 0.03, "angular": 0.0}]
+    vel = [{"linear": 0.004, "angular": 0.0}]
     calls = []
     owner = {"boot_id": boot, "owner_generation": 8, "owner_run_id": None}
     op = {"kind": "dock", "boot_id": boot, "run_id": run, "phase": "RUNNING", "correlation_id": "plan-id"}
@@ -307,7 +307,10 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
     async def pose(*args):
         return SimpleNamespace(x=sx, y=sy, state="LOCALIZED", map_id="site")
 
-    runner = SimpleNamespace(_progress_pose=pose, map_pose=lambda _: pose(),
+    async def no_cam(_):
+        return None
+
+    runner = SimpleNamespace(_progress_pose=pose, map_pose=no_cam,
                              config=SimpleNamespace(arrive_free_m=.15),
                              _check_human_hold=lambda: None, _graph_for=lambda _: graph, _save=lambda _: None,
                              _clock=lambda: clock[0], bay_cable_inhibited=lambda _: False)
@@ -335,14 +338,35 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
     asyncio.run(port.step(runner, live))
     assert park["phase"] == "docking" and len(calls) == 1
 
-    # Exceeding the 10 s settle wait still fails closed.
+    # Exceeding the 10 s settle wait stops the trip via TripSteps._step (not swallowed as waiting_for_clearance).
+    from fleet.server.trips.trip_steps import TripSteps
+
     park2 = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
+    stopped = []
+    saved = []
+
+    class StepRig(TripSteps):
+        rear_bay_port = port
+
+        async def _call(self, coro):
+            return await coro
+
+        def _save(self, lv):
+            saved.append(lv.view["detail"]["parking_handoff"]["phase"])
+
+        async def _stop(self, lv, state, reason, detail=None, *, halt_free=True):
+            lv.open = False
+            lv.view.update(state=state, reason=reason)
+            stopped.append((state, reason))
+
     live2 = SimpleNamespace(open=True, graph=graph, view={"robot_id": "rosy_42", "state": "running", "trip_id": "plan-id",
                                                           "map_version": 394, "detail": {"parking_handoff": park2}})
+    rig = StepRig()
     nav_state[0] = "NAVIGATING"
-    vel[0] = {"linear": 0.03, "angular": 0.0}
-    asyncio.run(port.step(runner, live2))
-    assert park2["phase"] == "waiting_for_clearance"
+    vel[0] = {"linear": 0.004, "angular": 0.0}
+    asyncio.run(rig._step(live2))
+    assert park2["phase"] == "waiting_for_clearance" and stopped == []
     clock[0] += 11.0
-    with pytest.raises(TripError, match="CHARGE_BAY_STAGING_STOP_UNVERIFIED"):
-        asyncio.run(port.step(runner, live2))
+    asyncio.run(rig._step(live2))
+    assert stopped == [("stopped", "CHARGE_BAY_STAGING_STOP_UNVERIFIED")]
+    assert not live2.open and park2["phase"] != "waiting_for_clearance"
