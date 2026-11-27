@@ -127,15 +127,26 @@ def sample_nav2_route(
                 tight = abs(_wrap_angle(point_at_distance(min(spacing, total_m))[2] - syaw)) * NAV2_CURVE_RADIUS_M > spacing
                 reach = NAV2_RECENTRE_AHEAD_M if tight else min(NAV2_RECENTRE_AHEAD_M + 2 * lat, NAV2_RECENTRE_MAX_M)
                 d = max(d, reach - ahead)
-        first_corner = next((c for c in corners if c > NAV2_ROUTE_MIN_GAP_M), None)
-        if first_corner is not None:
-            d = min(d, first_corner)
+                first_corner = next((c for c in corners if c > NAV2_ROUTE_MIN_GAP_M), None)
+                if first_corner is not None:
+                    d = min(d, first_corner)
+        prev_d = 0.0
         while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(out) < max_points - 1:
+            for c in corners:
+                if prev_d + 1e-6 < c < d and len(out) < max_points - 1:
+                    cx, cy, cyaw = point_at_distance(c)
+                    if not out or math.hypot(cx - out[-1][0], cy - out[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
+                        out.append((cx, cy, cyaw, "pass"))
             px, py, pyaw = point_at_distance(d)
             if not out or math.hypot(px - out[-1][0], py - out[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
                 out.append((px, py, pyaw, "pass"))
-            next_d = d + step_after(d, pyaw)
-            d = min((c for c in corners if d + 1e-6 < c < next_d), default=next_d)
+            prev_d = d
+            d += step_after(d, pyaw)
+        for c in corners:
+            if prev_d + 1e-6 < c < total_m - NAV2_ROUTE_MIN_GAP_M and len(out) < max_points - 1:
+                cx, cy, cyaw = point_at_distance(c)
+                if not out or math.hypot(cx - out[-1][0], cy - out[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
+                    out.append((cx, cy, cyaw, "pass"))
         return out, d < total_m - NAV2_ROUTE_MIN_GAP_M
 
     pts, cut = sampled(curve_step_m)

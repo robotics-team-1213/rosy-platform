@@ -100,15 +100,12 @@ def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
     from fleet.localization.map_binding import Fit
     from fleet.server.named_stop_map_pose import traffic_watch_pose
 
-    layout, graph = _bays(WIDTH_M)
-    pose = (BAY_GAP_M, 0.25, math.pi / 2)
-    east = _bay(BAY_GAP_M, WIDTH_M)
-    runner, _store, fleet, _ = _restarted(lambda _e: MapPose(*pose, "LOCALIZED", "sighting", 0.0, 0.1, 0.1))
-    runner.traffic._last_pose["a"] = pose
-    runner.traffic._state.pinned["a"] = {"lane:bay@0.226": True}
-    stale = MapPose(*pose, "LOCALIZED", "sighting", 0.0, STALE_POSE_S + 1.0, STALE_POSE_S + 1.0, "site")
+    runner, _store, fleet, east = _restarted(lambda east: _idle(east, 0.0))
+    _ticks(runner, fleet, n=2)  # initializes traffic _version and settles _last_pose
+    runner.traffic._state.pinned["a"] = {"only_bay": True}
+    stale = _idle(east, 0.0, age=STALE_POSE_S + 1.0)
     runner.traffic.step([], poses={"a": stale})
-    assert len(runner.traffic._state.pinned["a"]) == 1  # stale update does not blow up pin to 0.285 m
+    assert runner.traffic._state.pinned["a"] == {"only_bay": True}  # stale update does not blow up pin to 0.285 m
 
     fit = Fit(0.0, 0.25, 0.0, (0.001,))
     now = 1_700_000_010.0

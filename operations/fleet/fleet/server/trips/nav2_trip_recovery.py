@@ -34,11 +34,21 @@ _RUNNING = ("NAVIGATING", "PLANNING")
 _LOG = logging.getLogger("fleet.server.trip_runner")
 
 
+def _excluded(runner, live, index: int, state) -> bool:
+    if live.view["detail"].get("parking_handoff") is not None or state.get("mode") == "DOCKING":
+        return True
+    if not (0 <= index < len(live.segments)):
+        return False
+    arc = live.arc(index)
+    topview = getattr(runner, "cell_topview", None)
+    return (getattr(live.graph.places.get(arc.end_place), "kind", None) == "charge"
+            or (topview is not None and topview.covers(arc.end_place)))
+
+
 def _in_scope(runner, live, reason, stop_detail, state) -> bool:
     index = live.view["segment_index"]
     stop_detail = stop_detail or {}
     active = runner._store.active()
-    topview = getattr(runner, "cell_topview", None)
     return (live.open and live.nav2 and reason in RECOVERABLE
             and "off_lane_m" not in stop_detail and "link_wait" not in stop_detail   # off-lane backstop, no link
             and live.view["state"] != "link_wait" and live.view.get("hold") is None    # pause, replan, nav2_problem
@@ -46,9 +56,8 @@ def _in_scope(runner, live, reason, stop_detail, state) -> bool:
             and not live.view["detail"].get("camera_lane_fallback")
             and runner._strict_named_stop(live, index) is None
             and runner._cancel_goal is not None and isinstance(state, dict)
-            and (state.get("safety") or {}).get("estop") is False and state.get("mode") not in ("MANUAL", "ESTOP", "DOCKING")
-            and live.view["detail"].get("parking_handoff") is None
-            and not (topview is not None and topview.covers(live.arc(index).end_place))
+            and (state.get("safety") or {}).get("estop") is False and state.get("mode") not in ("MANUAL", "ESTOP")
+            and not _excluded(runner, live, index, state)
             and active is not None and active[0] == live.view["map_version"])
 
 
