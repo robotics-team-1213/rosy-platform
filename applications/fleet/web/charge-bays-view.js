@@ -23,7 +23,7 @@ function markNoRobot(button, choice, card) {
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, namedReason = () => "", readWorkcellObs = null, openArmIncident = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, objectHighlight = null, namedReason = () => "", readWorkcellObs = null, openArmIncident = null }) {
   const opReason = () => (auth.locked ? "세션 잠김" : namedReason());
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
@@ -46,9 +46,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   }, true);
   const selectedInspectorCam = {};
   let dualCamMode = false;
-  let showRoi = true;
-  let sitePointsCameras = null;
-  let lastRows = null;
+  let showRoi = true, sitePointsCameras = null, cellObjects = null, selectedObjectRef = null, selectedObjectDest = null, objectBusy = false, objectStatusText = "", lastRows = null;
   let lastInspectorSig = "";
   let lastListSig = "";
   let unconfirmedStopWarning = "";
@@ -70,6 +68,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     });
     scope.onDispose?.(offSelection);
   }
+  if (objectHighlight?.subscribe) scope.onDispose?.(objectHighlight.subscribe(() => { lastInspectorSig = ""; if (lastRows) renderInspector(lastRows); }));
 
   async function executeChoice(choice, card, button, confirmed = false) {
     if (auth.locked || button.hasAttribute("disabled")) return;
@@ -208,23 +207,19 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       active.dualPair || null,
       active.buttons || [],
       active.quickControls || [],
-      showRoi,
-      Boolean(sitePointsCameras),
-      opReason(),
+      showRoi, Boolean(sitePointsCameras), cellObjects?.observed_at ?? null,
+      Boolean(cellObjects?.fetchedAtMs && Date.now() - cellObjects.fetchedAtMs < 5000),
+      selectedObjectRef, selectedObjectDest, objectBusy, objectStatusText,
+      objectHighlight?.get?.() ?? null, opReason(),
     ]);
     if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
     lastInspectorSig = nextSig;
 
     const rendered = renderOmxInspector(inspector, {
-      targets,
-      activeId: active.id,
-      dualCamMode,
-      selectedCamByTarget: selectedInspectorCam,
-      draftChoices,
-      frames,
-      framesActive: framesOn && inspectorOpen,
-      cameraRois: sitePointsCameras,
-      showRoi,
+      targets, activeId: active.id, dualCamMode, selectedCamByTarget: selectedInspectorCam,
+      draftChoices, frames, framesActive: framesOn && inspectorOpen,
+      cameraRois: sitePointsCameras, showRoi, cellObjects, selectedObjectRef,
+      aiHighlightRef: objectHighlight?.get?.() ?? null, selectedObjectDest, objectBusy, objectStatusText,
       standbyText: "영상 대기 · 클릭하여 연결",
       tagText: active.text || "대기 중",
       tagStatus: active.status || "neutral",
@@ -296,11 +291,32 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         if (!button.hasAttribute("disabled") && needsConfirm(choice) && opReason()) setOffBy(button, opReason());
         button.addEventListener("click", () => executeChoice(choice, item, button));
       },
-      onDisclosureToggle: (open, bindCameras) => {
-        inspectorOpen = open;
-        if (open) framesOn = true;
-        frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
-        if (open && framesOn) bindCameras?.();
+      onDisclosureToggle: (open, bindCameras) => { inspectorOpen = open; if (open) framesOn = true; frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive")); if (open && framesOn) bindCameras?.(); },
+      onSelectObject: (obj) => { selectedObjectRef = obj.object_ref; objectStatusText = ""; objectHighlight?.set?.(obj.object_ref, { source: "camera" }); lastInspectorSig = ""; renderInspector(rows); },
+      onSelectObjectDest: (dst) => { selectedObjectDest = dst; },
+      onClearObject: () => { selectedObjectRef = null; objectStatusText = ""; lastInspectorSig = ""; renderInspector(rows); },
+      onDispatchTargetObject: async ({ object: obj, destSite, button, buildTaskBody }) => {
+        if (auth.locked || opReason() || !confirmedAction) return;
+        return confirmedAction.run({
+          message: `선택 객체(${obj.catalog_id})를 ${destSite}로 1회 집기·놓기 실행할까요?`,
+          opener: button,
+          eligible: () => !auth.locked && !opReason(),
+          request: async () => {
+            objectBusy = true; objectStatusText = "1회 집기·놓기 작업 등록 중…"; lastInspectorSig = ""; renderInspector(rows);
+            try {
+              const res = await call("/api/fleet/pipeline/cell-tasks", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+                body: JSON.stringify(buildTaskBody(active.robot_id)),
+              });
+              objectStatusText = `등록 완료: ${res.task?.task_id || "ok"} (${obj.catalog_id} → ${destSite})`; await refresh();
+            } catch (err) {
+              objectStatusText = `요청 거부: ${err.message}`;
+            } finally {
+              objectBusy = false; lastInspectorSig = ""; if (lastRows) renderInspector(lastRows);
+            }
+          },
+        });
       },
     });
     bindCurrentCameras = rendered?.bindCameras || null;
@@ -341,11 +357,13 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (inFlight || unavailable || auth.locked || document.hidden || !owns("drive")) return;
     inFlight = true;
     try {
-      const [planRes, spRes] = await Promise.allSettled([
+      const [planRes, spRes, objRes] = await Promise.allSettled([
         call("/api/fleet/charge-bays", { signals: [life.signal] }),
         sitePointsCameras ? Promise.resolve(null) : call("/api/fleet/site-points?view=full", { signals: [life.signal] }),
+        call("/api/fleet/pipeline/cell-objects", { signals: [life.signal] }),
       ]);
       if (spRes.status === "fulfilled" && spRes.value?.cameras) sitePointsCameras = spRes.value.cameras;
+      if (objRes.status === "fulfilled" && objRes.value) cellObjects = { ...objRes.value, fetchedAtMs: Date.now() };
       if (planRes.status === "rejected") throw planRes.reason;
       const plan = planRes.value;
       life.check();

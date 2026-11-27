@@ -11,6 +11,7 @@ import { armIncidentAlertRows, clearArmIncident, IncidentClearBody } from "/cons
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { syncCamRoiOverlay } from "/console/assets/cell-cam-roi.js";
+import { syncCamObjectsOverlay } from "/console/assets/cell-cam-objects.js";
 import {
   JOINT_SHORT,
   canonicalArmId,
@@ -24,12 +25,13 @@ import { owns } from "/console/assets/unit-scope.js";
 export { isArmAttentionOrLive, canonicalArmId, normalizeWorkcellObservations };
 
 /** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
-function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = true }) {
+function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = true, cellObjects = null }) {
   const imgRef = useRef(null), statusRef = useRef(null), standbyRef = useRef(null);
   useLayoutEffect(() => { frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label); }, [cam.source_id, cam.label, frames]);
   useLayoutEffect(() => { frames.repaint?.({ source: cam.source_id }); }, [liveOn, cam.source_id, frames]);
   useLayoutEffect(() => { syncCamRoiOverlay(imgRef.current?.parentElement, cam, cameraRois, showRoi, Boolean(imgRef.current?.classList.contains("focused"))); }, [cam.source_id, cam.role, cam.label, cameraRois, showRoi]);
-  const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); img.parentElement?.querySelector(".omx-cam-roi-overlay")?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
+  useLayoutEffect(() => { syncCamObjectsOverlay(imgRef.current?.parentElement, cam, cellObjects, { zoomed: Boolean(imgRef.current?.classList.contains("focused")) }); }, [cam.source_id, cam.role, cam.label, cellObjects]);
+  const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); for (const c of [".omx-cam-roi-overlay", ".omx-cam-objects-overlay"]) img.parentElement?.querySelector(c)?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
   const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); applyZoom(!img.classList.contains("focused")); };
   const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") applyZoom(false); };
   return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
@@ -245,7 +247,7 @@ export function createCellCockpitStage({
     const visibleArms = showAllArms ? arms : activeArms;
     const stageSig = JSON.stringify([
       unitId, parentText, revText, statText, liveStatus, liveText,
-      view.fleet?.name === "샘플 현장", liveOn, showRoi, Boolean(view.sitePointsCameras), selectedId, Boolean(auth.locked),
+      view.fleet?.name === "샘플 현장", liveOn, showRoi, Boolean(view.sitePointsCameras), view.cellObjects?.observed_at ?? null, selectedId, Boolean(auth.locked),
       showAllCams, showAllArms, activeCams.map((c) => c.source_id), camDiag, obsSignature(obs),
     ]);
     if (stageSig === lastStageSig) return;
@@ -290,7 +292,7 @@ export function createCellCockpitStage({
         <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
           ${cams.length
             ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn}
-                cameraRois=${view.sitePointsCameras || null} showRoi=${showRoi} hidden=${!showAllCams && !isCamActive(cam)} />`)
+                cameraRois=${view.sitePointsCameras || null} showRoi=${showRoi} cellObjects=${view.cellObjects || null} hidden=${!showAllCams && !isCamActive(cam)} />`)
             : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
         </div>
         ${arms.length && idleArmCount > 0
@@ -344,14 +346,16 @@ export function createCellCockpitStage({
     const life = scope.capture();
     inFlight = true;
     try {
-      const [payload] = await Promise.all([
+      const [payload, , , , , cellObjsRes] = await Promise.all([
         call("/api/fleet/workcell-observations", { signal: life.signal }),
         refreshControlUnit(life.signal),
         isStageActive() ? refreshSitePointCameras(life.signal) : Promise.resolve(),
         isStageActive() ? frames.checkSources(life.signal) : Promise.resolve(),
         isStageActive() && contextPanel ? contextPanel.refresh(life.signal) : Promise.resolve(),
+        isStageActive() ? call("/api/fleet/pipeline/cell-objects", { signal: life.signal }).catch(() => null) : Promise.resolve(null),
       ]);
       life.check();
+      if (cellObjsRes) view.cellObjects = { ...cellObjsRes, fetchedAtMs: Date.now() };
       gate.ok();
       const nextObs = normalizeWorkcellObservations(payload, Date.now());
       view.workcellObs = nextObs;

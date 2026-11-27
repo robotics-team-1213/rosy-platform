@@ -3,3 +3,20 @@
 .omx-cam-roi-rect { fill: var(--series-primary); fill-opacity: 0.14; stroke: var(--series-primary); stroke-width: 2; stroke-dasharray: 6 4; }
 .omx-cam-roi-point { fill: var(--series-goal); stroke: var(--surface-canvas); stroke-width: 2; }
 .omx-cam-roi-label { fill: var(--text-primary); font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); paint-order: stroke; stroke: var(--surface-canvas); stroke-width: 3; }
+
+/* Interactive catalog-only detected object overlay (PR B) & AI highlight ring (PR C). */
+.omx-cam-objects-overlay { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+.omx-cam-obj-node { pointer-events: all; cursor: pointer; outline: none; }
+.omx-cam-objects-overlay[data-stale="true"] .omx-cam-obj-node { pointer-events: none; cursor: not-allowed; opacity: var(--disabled-opacity); }
+.omx-cam-obj-hit { fill: transparent; stroke: none; }
+.omx-cam-obj-poly { fill: var(--series-primary); fill-opacity: 0.16; stroke: var(--series-primary); stroke-width: 2; }
+.omx-cam-obj-node[aria-pressed="true"] .omx-cam-obj-poly,
+.omx-cam-obj-node:hover .omx-cam-obj-poly { fill: var(--series-goal); fill-opacity: 0.24; stroke: var(--series-goal); stroke-width: 2.5; }
+.omx-cam-obj-node:focus-visible .omx-cam-obj-poly { stroke: var(--text-primary); stroke-width: 3; }
+.omx-cam-obj-ai-ring { fill: none; stroke: var(--series-goal); stroke-width: 2.5; stroke-dasharray: 5 3; }
+.omx-cam-obj-veto { pointer-events: none; opacity: var(--disabled-opacity); }
+.omx-cam-obj-poly-veto { fill: var(--status-warn); fill-opacity: 0.12; stroke: var(--status-warn); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.omx-cam-obj-label { fill: var(--text-primary); font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); paint-order: stroke; stroke: var(--surface-canvas); stroke-width: 3; }
+.cell-obj-staging { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-flat); margin-top: 8px; }
+.cell-obj-staging-status { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
+.cell-obj-staging-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

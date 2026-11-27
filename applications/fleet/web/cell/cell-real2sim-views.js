@@ -32,6 +32,11 @@ export function createCellViews(ctx) {
       framesActive: true,
       cameraRois: state.sitePointsCameras || null,
       showRoi: state.showRoi !== false,
+      cellObjects: state.cellObjects || null,
+      selectedObjectRef: state.selectedObjectRef || null,
+      selectedObjectDest: state.selectedObjectDest || null,
+      objectBusy: Boolean(state.objectBusy),
+      objectStatusText: state.objectStatusText || '',
       runButtonLabel: undefined,
       quickDispatchReason: typeof ctx.namedReason === 'function' ? ctx.namedReason() : '',
       actionsClass: 'omx-inspector-actions',
@@ -76,6 +81,40 @@ export function createCellViews(ctx) {
         }
       },
       onRenderAction: (btn, choice, active) => bindActionButton(btn, choice, active.robot_id || undefined),
+      onSelectObject: (obj) => {
+        state.selectedObjectRef = obj.object_ref;
+        state.objectStatusText = '';
+        renderRightInspector(body);
+      },
+      onSelectObjectDest: (dst) => { state.selectedObjectDest = dst; },
+      onClearObject: () => {
+        state.selectedObjectRef = null;
+        state.objectStatusText = '';
+        renderRightInspector(body);
+      },
+      onDispatchTargetObject: async ({ object: obj, destSite, button, buildTaskBody }) => {
+        const current = await ctx.confirmAndBump?.(`선택 객체(${obj.catalog_id})를 ${destSite}로 1회 집기·놓기 실행할까요?`, button);
+        if (!current) return;
+        state.objectBusy = true;
+        state.objectStatusText = '1회 집기·놓기 작업 등록 중입니다.';
+        renderRightInspector(body);
+        try {
+          const res = await request(CELL_TASKS_PATH, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+            body: JSON.stringify(buildTaskBody()),
+          });
+          if (current !== ctx.gen()) return;
+          state.objectStatusText = `등록 완료: ${res.task?.task_id || '—'} (${obj.catalog_id} → ${destSite})`;
+          await refreshCellTasks(current);
+        } catch (error) {
+          if (current !== ctx.gen()) return;
+          state.objectStatusText = `요청 거부: ${error.message}`;
+        } finally {
+          state.objectBusy = false;
+          renderRightInspector(body);
+        }
+      },
     });
   }
 
