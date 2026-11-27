@@ -32,7 +32,7 @@ from fleet.server.map_pose_service import MapPoseService, install_map_pin_route,
 from fleet.server.offline_marker import OfflineMarkerClearance
 from fleet.server.offline_pin import OfflinePinStore, mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
-from fleet.server.nudge_routes import install_nudge_step_route
+from fleet.server.nudge_routes import install_nudge_step_route, request_step
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore
@@ -421,6 +421,10 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event, cable_inhibited=cable_inhibited)
+    # D-1087: the reissue's back-off takes the console's own step (same checks) and reads CORE's mission state
+    trip_runner.robot_step = partial(request_step, console, trip_busy=trip_runner.robot_busy,
+                                     cable_inhibited=cable_inhibited)
+    trip_runner.robot_step_status = lambda robot: console.clients()[robot].localization_mission_status()
 
     trip_runner.bay_cable_inhibited = cable_inhibited
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)

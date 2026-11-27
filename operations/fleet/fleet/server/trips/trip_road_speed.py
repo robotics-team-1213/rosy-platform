@@ -90,7 +90,7 @@ class RoadSpeed:
         reason = "route_profile"
         if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
             cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: while a departure is fresh evidence
-        elif recovery_slow(live.view["detail"]) and cap > REALIGN_SLOW_MPS:
+        elif recovery_slow(live.view["detail"], progress) and cap > REALIGN_SLOW_MPS:
             cap, reason = REALIGN_SLOW_MPS, "recovery_slow"  # D-1082 ladder: attempt 2+ resends slow
         leader = None
         gap_m = None
