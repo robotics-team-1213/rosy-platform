@@ -385,11 +385,11 @@ def test_build_multi_site_look_deduplicates_tiers_and_avoids_gap_false_positives
 
 def test_ascending_departure_allows_vertical_lift_edge_and_under_jaw_blob_only():
     belt_site = [[280, 60], [375, 60], [375, 220], [280, 220]]
-    pallet_site = [[280, 230], [400, 230], [400, 380], [280, 380]]
+    pallet_site = [[280, 230], [450, 230], [450, 380], [280, 380]]
     hull = cc.transit_hull_polygon([belt_site, pallet_site], extra_pts=[_to_px((0.0, 0.0))])
     # Strictly ascending vertical departure near belt right edge (x=0.165, y=-0.060 -> px (365, 140), local (95, 90))
     dep_tcp = [(0.165 - 0.001 * i, -0.060 - 0.001 * i, -0.01 + 0.007 * i) for i in range(18)] + [
-        (0.14 - 0.005 * i, -0.06 + 0.02 * i, 0.13) for i in range(1, 10)
+        (0.148 - 0.004 * i, -0.077 - 0.001 * i, 0.13) for i in range(1, 10)
     ]
     roi = (270, 50, 410, 390)
     empty = np.zeros((roi[3] - roi[1], roi[2] - roi[0]), np.uint8)
@@ -398,7 +398,7 @@ def test_ascending_departure_allows_vertical_lift_edge_and_under_jaw_blob_only()
     assert not blocked["clear"] and blocked["off_surface"] > 0
     # 2) allow_ascending_departure=True clears edge fringe AND small under-jaw blob inside seen_low & r_px
     mask = empty.copy()
-    mask[94:102, 80:90] = 1  # 80 px, global x=350..360, y=144..152 inside belt_site, within r_px=30 of (95,90)
+    mask[106:114, 88:98] = 1  # 80 px, global x=358..368, y=156..164 inside belt_site, max_d=24.2<=r_px=30 from (95,90), >r_px from high[0]=(349,124)
     cleared = cc.check(
         dep_tcp, mask, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull,
         allow_ascending_departure=True,
@@ -407,7 +407,7 @@ def test_ascending_departure_allows_vertical_lift_edge_and_under_jaw_blob_only()
 
     # 3) Negative guards: high blob, large blob, border blob, off-seen_low blob, distant blob, non-ascending, and outside seen_low center
     high_obs = empty.copy()
-    hx, hy = _to_px((0.12, 0.04))
+    hx, hy = _to_px((0.125, -0.10))
     high_obs[int(hy) - roi[1] - 8:int(hy) - roi[1] + 8, int(hx) - roi[0] - 8:int(hx) - roi[0] + 8] = 1
     res_high = cc.check(dep_tcp, high_obs, roi, _to_px, surface_px=[belt_site, pallet_site], high_surface_px=hull, allow_ascending_departure=True)
     assert not res_high["clear"] and res_high["high"]
