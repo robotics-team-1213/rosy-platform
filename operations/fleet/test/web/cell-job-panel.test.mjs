@@ -42,6 +42,8 @@ test("recovery buttons follow readiness", () => {
   assert.deepEqual(armRecoveryActions({ incident_held: true, folded: true }), { recoverHold: false, safeHome: true });
   assert.deepEqual(armRecoveryActions({ folded: false, human_hold_latched: true, active_job_id: "j" }), { recoverHold: false, safeHome: false });
   assert.deepEqual(armRecoveryActions(undefined), { recoverHold: false, safeHome: false });
+  assert.deepEqual(armRecoveryActions({ folded: null, state_unknown: { reason: "stale" } }), { recoverHold: false, safeHome: true });
+  assert.deepEqual(armRecoveryActions({ folded: null, state_unknown: { reason: "board_missing" } }), { recoverHold: false, safeHome: false });
 });
 
 test("readiness and job lines are plain Korean", () => {
@@ -50,6 +52,13 @@ test("readiness and job lines are plain Korean", () => {
   assert.equal(text, "접힘 · 보류 없음 · 사건 보류: torque off · 세션 잠금 있음 · 관측 1.3초 전");
   assert.equal(jobStateText({ id: "j1", job: "safe_home", running: false, exit: 0 }), "safe_home 완료 (j1)");
   assert.equal(jobStateText({ id: "j1", job: "safe_home", running: false, exit: 2 }), "safe_home 실패: 종료 코드 2 (j1)");
+});
+
+test("an unknown arm state says why and when it was last seen, never folded", () => {
+  const text = armReadinessText({ folded: null, state_unknown: { reason: "board_missing", last_observed_at: Date.now() / 1000 - 7200 } })[0];
+  assert.match(text, /^알 수 없음 \(보드 없음 · 마지막 관측 2시간/);
+  assert.equal(armReadinessText({ folded: null, state_unknown: { reason: "never_observed", last_observed_at: null } })[0],
+    "알 수 없음 (관측 기록 없음)");
 });
 
 test("a refusal is shown as the cell said it", () => {

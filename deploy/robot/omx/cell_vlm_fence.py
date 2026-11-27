@@ -87,6 +87,8 @@ def verify_context_fence(
         reasons.append(f"{target_arm}:active_job_id={target_info.get('active_job_id')}")
     if isinstance(target_info.get("fleet_safety"), dict) and target_info["fleet_safety"].get("blocked") is True:
         reasons.append(f"{target_arm}:fleet_safety_blocked")
+    if target_info.get("state_unknown"):
+        reasons.append(f"{target_arm}:state_unknown")
     if target_info.get("session_lock_held") and target_info.get("folded") is not True:
         reasons.append(f"{target_arm}:session_lock_held while not folded")
     if target_arm in ("arm_a", "arm_b"):
@@ -97,6 +99,8 @@ def verify_context_fence(
                 reasons.append(f"peer {peer} busy/held/faulted")
             if isinstance(peer_info.get("fleet_safety"), dict) and peer_info["fleet_safety"].get("blocked") is True:
                 reasons.append(f"peer {peer}:fleet_safety_blocked")
+            if peer_info.get("state_unknown"):
+                reasons.append(f"peer {peer}:state_unknown")
             if peer_info.get("session_lock_held") and peer_info.get("folded") is not True:
                 reasons.append(f"peer {peer}:session_lock_held while not folded")
     if reasons:

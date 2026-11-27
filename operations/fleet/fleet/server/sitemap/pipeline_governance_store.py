@@ -164,10 +164,15 @@ def build_cell_readiness(
         held = bool(h.get("held"))
         if held:
             refusals.append(f"{aid}:incident_held")
+        stamp = st["folded_updated_at"] if "folded_updated_at" in st else st.get("updated_at")
+        current = bool(st.get("observed")) and stamp is not None and 0 <= time.time() - float(stamp) <= 15.0
         arms[aid] = {
             "held": held,
             "reason": h.get("reason"),
-            "folded": st.get("folded"),
+            "folded": st.get("folded") if current else None,
+            "state_unknown": None if current else {
+                "reason": "stale" if st.get("observed") else "never_observed",
+                "last_observed_at": stamp if st.get("observed") else None},
             "observed": bool(st.get("observed")),
             "fresh": bool(st.get("fresh")),
             "active_task_id": st.get("active_task_id"),
