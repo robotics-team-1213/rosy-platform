@@ -192,9 +192,13 @@ local_costmap:
       global_frame: odom
       robot_base_frame: base_footprint
       rolling_window: true
-      width: 3
-      height: 3
-      resolution: 0.05
+      # 2x2 m: RPP 앞보기(<= 0.18 m)와 발자국을 덮고, 0.025 m 에서 80x80 = 6,400 셀.
+      # 제어 루프가 이미 20 Hz 를 못 맞추는 Pi 에서 3x3 m(14,400 셀)는 4배 부담이다 (11-27).
+      width: 2
+      height: 2
+      # 0.025 m = 지도 해상도. 0.05 에서는 벽이 로봇 중심 0.09 m 부터 lethal 로 양자화되어
+      # 차선 중심이 벽에서 0.13 m 인 구간에서 RPP 가 "collision ahead" 로 멈췄다 (rosy_45, 11-27).
+      resolution: 0.025
       # 기동 경쟁 방어. nav2 는 활성화하며 map->base TF 를 기다리는데, 그 TF 는 AMCL 이
       # 첫 스캔을 처리한 뒤에야 나온다. 느린 기계(RTF 0.3)에서는 그것이 기본 대기시간을
       # 넘겨 global_costmap 이 활성화에 실패하고, planner_server 가 함께 죽는다 - 목표를
