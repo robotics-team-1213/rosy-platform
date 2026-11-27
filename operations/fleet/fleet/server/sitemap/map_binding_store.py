@@ -32,7 +32,7 @@ def _points(raw, field: str) -> list[tuple[tuple[float, float], tuple[float, flo
         if not all(math.isfinite(v) for p in pair for v in p):
             raise BindingError("BAD_POINTS", f"{field} values must be finite")
         out.append(pair)
-    if len({p for pair in out for p in pair}) < 2 * len(out):
+    if len({r for r, _ in out}) < len(out) or len({s for _, s in out}) < len(out):  # robot == site is a real pair
         raise BindingError("BAD_POINTS", f"{field} repeats a point")
     return out
 
@@ -81,7 +81,7 @@ class MapBindingStore:
                 principal_id: str) -> dict:
         robot_map_id, grid = _localized(state)
         pairs, holdout = _points(pairs, "pairs"), _points(holdout, "holdout")
-        if {p for pair in pairs for p in pair} & {p for pair in holdout for p in pair}:
+        if ({r for r, _ in pairs} & {r for r, _ in holdout}) or ({s for _, s in pairs} & {s for _, s in holdout}):
             raise BindingError("BAD_POINTS", "a holdout point repeats a fit point; measure it separately")
         fit, errors = judge([p[0] for p in pairs], [p[1] for p in pairs], holdout)
         body = {"yaw": fit.yaw, "tx": fit.tx, "ty": fit.ty, "residual_max_m": fit.max, "residual_rms_m": fit.rms,
