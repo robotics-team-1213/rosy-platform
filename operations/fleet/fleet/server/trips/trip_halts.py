@@ -66,6 +66,15 @@ def idle_cancel_owner(receipt, received_at):
     return None
 
 
+def ended_cancel_state(receipt):
+    """The navigation a cancel receipt reports when CORE had no goal left (ARRIVED, CANCELED, FAILED), else None."""
+    if (isinstance(receipt, dict) and receipt.get("navigation") in ("ARRIVED", "CANCELED", "FAILED")
+            and receipt.get("operation", False) is None and "error" not in receipt
+            and not any(receipt.get(k) is False for k in ("ok", "stop_sent", "cancel_confirmed"))):
+        return receipt["navigation"]
+    return None
+
+
 def pause_proof_args(trip: dict) -> dict:
     hold = trip.get("hold") or {}
     args = {}
@@ -195,6 +204,15 @@ class TripHalts:
             return {**proof, "basis": "pre_dispatch_idle", "idle_owner": owner}
         return None
 
+    async def measured_ended_stop(self, robot, after, navigation, wire):
+        """Closed trip, goal already over: measured standstill after the cancel, navigation unchanged, same wire."""
+        if wire is None or self.idle_wire(robot) != wire:
+            return None
+        proof = await self.measured_stop(robot, after)
+        if proof is None or proof["navigation"] != navigation or self.idle_wire(robot) != wire:
+            return None
+        return {**proof, "basis": "ended_goal_standstill"}
+
     async def halt_robot(self, robot_id: str, lane: bool, place: str | None, *, handoff_pending=False,
                          pause_after=None, peer_idle=False, terminal=False) -> dict:
         """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel.
@@ -223,12 +241,15 @@ class TripHalts:
                 cancel_res = await self._call(self._cancel_goal(robot_id))
                 after_cancel = self._clock() if wire is not None else None
                 canceled = _cancel_ack(cancel_res)
-                if not canceled and wire is not None and (observed := idle_cancel_owner(cancel_res, after_cancel)):
-                    owner, after_cancel = observed
+                ended = ended_cancel_state(cancel_res) if terminal else None  # peer_idle keeps the IDLE-only proof
+                if not canceled and wire is not None and ((observed := idle_cancel_owner(cancel_res, after_cancel)) or ended):
+                    if observed:
+                        owner, after_cancel = observed
                     for delay in (0., .15, .25):
                         if delay:
                             await asyncio.sleep(delay)
-                        idle_proof = await self.measured_idle_stop(robot_id, after_cancel, owner, wire)
+                        idle_proof = (await self.measured_idle_stop(robot_id, after_cancel, owner, wire) if observed
+                                      else await self.measured_ended_stop(robot_id, after_cancel, ended, wire))
                         if idle_proof:
                             canceled = True
                             break
