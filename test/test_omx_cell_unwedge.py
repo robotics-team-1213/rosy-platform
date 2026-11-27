@@ -293,7 +293,9 @@ def test_jaws_that_do_not_open_never_rise():
 def test_a_blocked_rise_backs_off_and_stops_without_pulling():
     cell = Holding(rise_lag=2.0)
     out = u.release_and_rise(cell, sleep=lambda s: None)
-    assert out["result"] == "stuck" and cell.sent[-1] == "jog shoulder_lift.pos 0.5"
+    rose = [c for c in cell.sent if c == f"jog shoulder_lift.pos {-u.STEP}"]
+    back = [c for c in cell.sent if c == f"jog shoulder_lift.pos {u.STEP}"]
+    assert out["result"] == "stuck" and out["returned"] and len(back) == len(rose)  # back down onto the support it rose from (2026-11-27)
     assert not any("elbow" in c or c == "park" for c in cell.sent)
 
 

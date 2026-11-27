@@ -205,7 +205,8 @@ def decide(f: dict) -> dict:
         return {"actions": [], "hold": False, "offered": [], "reason": "jaws caught and reopened by the runner"}
     rebootable = [m for m, l in f["latched"].items()
                   if isinstance(l.get("hw_error"), int) and l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
-    offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) and off and f["folded"] else []
+    # D-1079: a load or supply latch is rebooted wherever the arm rests; reboot_latched reads all six torques 0 on the bus first,
+    offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) else []  # so nothing that holds the arm changes
     why = []
     if f["latched"]:
         why.append("latched " + ", ".join(f"ID {m} {'/'.join(l['bits']) or l['hw_error']}" for m, l in f["latched"].items()))
@@ -214,8 +215,7 @@ def decide(f: dict) -> dict:
     if f["flagged"]:
         why.append(f"runner: {f['flagged'][-1].get('error') or f['flagged'][-1].get('fault')}")
     if not offered and f["latched"]:
-        why.append("no automatic reboot: " + ("torque not confirmed OFF" if not off else
-                                               "arm not folded at home" if not f["folded"] else "a latch that is not load or supply"))
+        why.append("no automatic reboot: a latch that is not load or supply")
     if not why and not f["safe_end"]:
         if not off:
             why.append("torque not confirmed OFF")

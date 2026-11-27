@@ -193,7 +193,7 @@ JOBS = {
         },
     },
     "recover_hold": {
-        "script": "cell_auto_fold.py", "moving": True, "camera": True, "attach_live_hold": True, "commissioning": False,
+        "script": "cell_auto_fold.py", "moving": True, "camera": True, "attach_live_hold": True, "commissioning": False, "machine_ids": ("hold-retry",),  # D-1079
         "argv": ["--supervised", "--unlatch-hold", "--arm", "{arm}", "--config", "{config}", "--library", "{library}",
                  "--site", "{site}", "--roi", "{roi}", "--out", "cell-job-api/recover-hold-{arm}.json"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "library": _match(FILE), "site": _match(NAME), "roi": _roi},
