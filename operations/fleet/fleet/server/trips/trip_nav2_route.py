@@ -372,8 +372,9 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
-            if was_hold or target_end is None:  # never a replacement in the cancel's own period
+            if was_hold or (target_end is None and nav not in ("ARRIVED", "IDLE")):  # no replacement this period
                 fence(live, index if cut_seg is None else cut_seg, names)
+            if was_hold or target_end is None:
                 if cut_seg is not None:
                     traffic_hold(live, names)
                 return

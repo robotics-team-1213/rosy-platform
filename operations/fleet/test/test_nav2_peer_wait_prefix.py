@@ -425,10 +425,11 @@ def test_hold_point_backs_off_two_way_zone_crosswalk_and_tight_curve(feature):
     stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
     x = stop  # the fake lane: x equals arc metres on segment 0
     assert why == "hold_point" and stop < free
+    tol = .03  # Nav2 may stop anywhere this close to the goal (NAV2_XY_GOAL_TOLERANCE_M)
     if feature == "two_way_zone":
-        assert edge - ZONE_STOP_CLEARANCE_M - .02 - 1e-9 <= x <= edge - ZONE_STOP_CLEARANCE_M + 1e-9
+        assert edge - ZONE_STOP_CLEARANCE_M - tol - .02 - 1e-9 <= x <= edge - ZONE_STOP_CLEARANCE_M - tol + 1e-9
     else:
-        assert edge - CLEAR - .02 - 1e-9 <= x < edge - CLEAR + 1e-9 if feature == "crosswalk" else x + CLEAR < edge
+        assert edge - CLEAR - tol - .02 - 1e-9 <= x < edge - CLEAR - tol if feature == "crosswalk" else x + CLEAR + tol < edge
 
 
 def test_final_segment_hold_point_is_not_arrival(monkeypatch):
