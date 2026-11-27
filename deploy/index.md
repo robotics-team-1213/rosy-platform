@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
-- 2026-11-27 · uncommitted · OMX 팔 사고 해제 자동 실행, 셀 기본 기준 99
 - 2026-11-26 · uncommitted · OMX 정책 실행 1회 제출 작업 cell_policy_run
 - 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 12px 미만 글자 전부 12px 이상
 - 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 결정 반영(녹화 중지 표기, 자동 복구 우선, 녹화 시작 중립, 공용 값 일치 시험, 좁은 폭 표시)
 - 2026-11-26 · uncommitted · Calibration 화면 신선도를 서버 예산으로, 옛 지도는 점선·흐림과 문구로
+- 2026-11-26 · uncommitted · OMX 작업대 녹화 화면 색·문구 정리
