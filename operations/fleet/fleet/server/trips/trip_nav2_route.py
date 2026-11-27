@@ -16,10 +16,11 @@ from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_op
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait, road_centerline
-from fleet.server.peer_wait_prefix import blockers as _blockers, held_receipt, hold_guard, hold_or_wait, hold_receipt
-from fleet.server.peer_wait_prefix import supervise_wait_prefix, traffic_hold
+from fleet.server.peer_wait_prefix import blockers as _blockers, fence, fenced, footprint_end, held_receipt, hold_guard
+from fleet.server.peer_wait_prefix import hold_or_wait, hold_receipt, supervise_wait_prefix, traffic_hold
 from fleet.server.peer_wait_prefix import held_at_m as _held_at_m, table_answer as _table_answer, traffic_end_index as _traffic_end_index
-from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal
+from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal  # noqa: F401
+from fleet.server.trip_geometry import convert_route_points as _convert_points
 from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_lane_realign import observe as observe_lane_departure
 from fleet.server.road_route_lease import RoadSpeedRefused
@@ -338,9 +339,12 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         return
     traffic_end = _traffic_end_index(runner, live, index)
     target_end = None if traffic_end is None else (min(index, traffic_end) if live.view["hold"] is not None else traffic_end)
+    # A segment end whose stop footprint reaches the cut is no whole-segment target: a hold point on it instead.
+    target_end, cut_seg = footprint_end(runner, live, index, target_end)
+    names = _blockers(live)
     if live.active_route is not None:
         if (live.active_route.get("wait_prefix") and not live.active_route.get("superseded")
-                and await supervise_wait_prefix(runner, live, nav, state, pose, target_end,
+                and await supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg,
                                                 lambda: _cancel_active_route(runner, live, robot_id, nav))):
             return
         if (runner.config.map_binding_required or live.nav2_binding_scope is not None
@@ -364,24 +368,30 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         if live.active_route and (live.active_route.get("superseded") or (
                 not live.active_route.get("hold_point")  # a covered hold point runs on under the cut
                 and (target_end is None or live.active_route["end_index"] > target_end))):
+            was_hold = bool(live.active_route.get("hold_point"))
             await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
-            if target_end is None:
-                traffic_hold(live, _blockers(live))
-                return  # a hold point goes out from the next read, after the cancel
+            if was_hold or target_end is None:  # never a replacement in the cancel's own period
+                fence(live, index if cut_seg is None else cut_seg, names)
+                if cut_seg is not None:
+                    traffic_hold(live, names)
+                return
         elif verdict == "busy":
             if live.active_route.get("road_speed_owner") and nav in _NAV_RUNNING:
                 await runner.road_speed.renew(runner, live, active, index, s, pose)
             return
     hold_s = None
-    names = _blockers(live)
-    if target_end is None:
-        hold_s = None if live.active_route is not None else hold_or_wait(runner, live, active, index, s, nav, state, names)
-        if hold_s is None:
+    if cut_seg is not None:
+        traffic_hold(live, names)
+        if live.view["hold"] is None:
+            hold_s = hold_or_wait(runner, live, active, index, s, cut_seg, names)
+        if hold_s is None and target_end is None:
             return
-    else:
+    if hold_s is None:
         live.view["detail"].pop("traffic_hold", None)
+    if fenced(live, state, nav):
+        return
     now = runner._clock()
     if now < live.nav2_retry_at:
         demand = getattr(runner, "road_vision_demand", None)
@@ -400,7 +410,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     wait = detail.get("peer_wait") or {}
     prefix = None
     if hold_s is not None:
-        end_index = index
+        end_index = cut_seg
     elif wait.pop("try_wait_place", False):
         prefix, why = reserved_wait(runner, live, active, index, s, target_end)
         if prefix is None:
@@ -450,7 +460,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         expected = [centerline[0], *(point[:2] for point in site_pts)]
         scope = prefix_guard.set((robot_id, active[1].map_id, set(wait["waiting_on"]), reserved, expected, centerline))
     elif hold_s is not None:
-        scope = hold_guard(runner, live, active, index, s, hold_s, site_pts, names)
+        scope = hold_guard(runner, live, active, index, s, cut_seg, hold_s, site_pts, names)
     try:
         if runner._route is not None:
             reply = await runner._call(runner._route(robot_id, payload, **options)) or {}
@@ -477,7 +487,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             return
         if hold_s is not None and reason == "WAIT_PREFIX_UNVERIFIED":
-            detail["wait_prefix"] = held_receipt(index, reason, names)
+            detail["wait_prefix"] = held_receipt(cut_seg, reason, names)
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             return
         peer_wait = (reply.get("blocked_by") not in (None, robot_id)
@@ -498,7 +508,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
                 elif prefix is not None:
                     detail["wait_prefix"] = {"place": live.place(prefix), "state": "held", "reason": reason}
                 elif hold_s is not None:
-                    detail["wait_prefix"] = held_receipt(index, reason, names)
+                    detail["wait_prefix"] = held_receipt(cut_seg, reason, names)
             live.active_route = None
             live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
             live.view["detail"]["goal_wait"] = reason
@@ -516,7 +526,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         else:
             detail["last_peer_wait"] = {**wait, "cleared_at": live.progress_at}
     if hold_s is not None:  # the receipt of every accepted hold-point send
-        hold_receipt(runner, live, index, hold_s, site_pts[-1][:2], names)
+        hold_receipt(runner, live, cut_seg, hold_s, site_pts[-1][:2], names)
     if "attempt_id" in options:
         record_stop_operation(live, options["attempt_id"], reply)
     live.command_ack_mono = time.monotonic()
@@ -525,7 +535,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if prefix is not None or hold_s is not None:
         live.active_route["wait_prefix"] = True
         if hold_s is not None:
-            live.active_route["hold_point"] = {"segment": index, "end_s": hold_s}
+            live.active_route["hold_point"] = {"segment": cut_seg, "end_s": hold_s}
     elif detail.get("wait_prefix"):
         detail["wait_prefix"]["state"] = "superseded"
     if "attempt_id" in options:
@@ -542,58 +552,3 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     live.view["detail"]["nav2_route"] = {"points": len(payload), "end_index": end_index, "lap": live.view.get("lap")}
     runner._fence(robot_id)  # Ensure the next tick reads post-dispatch robot state, never pre-POST ARRIVED.
 
-
-def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
-    robot_id = live.view["robot_id"]
-    binding_id = live.view["detail"].get("nav2_binding_id")
-    binding_required = binding_id is not None or runner.config.map_binding_required
-    if binding_id is not None and (
-        pose.source != "approved_slam" or pose.odom_stamp is None
-        or not 0 <= runner._clock() - pose.odom_stamp < STALE_POSE_S
-    ):
-        return None, {"map_id": active[1].map_id, "binding": "APPROVED_SLAM_POSE_REQUIRED"}
-    if runner._robot_state is None:
-        if binding_required:
-            return None, {"map_id": active[1].map_id, "robot_map_id": None, "binding": "MAP_BINDING_REQUIRED"}
-        if not runner._poses_in_robot_frame:
-            return None, {"map_id": active[1].map_id, "robot_map_id": None}
-        return site_pts, None
-    bindings = getattr(runner._store, "map_bindings", None)
-    fit, reason = bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0])) if bindings is not None else (None, "MAP_BINDING_REQUIRED" if binding_required else None)
-    if fit is not None:
-        binding = (fit, reason)
-    elif binding_required or reason == "MAP_BINDING_GRID_CHANGED" or (
-        reason == "ROBOT_NOT_LOCALIZED" and (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None
-    ):
-        binding = (None, reason)
-    else:
-        binding = None
-    current_binding_id = None
-    if binding is not None:
-        current_binding_id = ((bindings.active(robot_id) if bindings is not None else None) or {}).get("binding_id")
-        if binding_id is not None and current_binding_id != binding_id:
-            return None, {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"}
-    converted_pts = []
-    site_frame = True
-    for px, py, pyaw, kind in site_pts:
-        goal = (px, py, pyaw)
-        try:
-            converted = robot_frame_goal(goal, pose, state, active[1].map_id, binding)
-        except SiteFrameMismatch as error:
-            return None, {
-                "pose_map_id": error.pose_map_id, "map_id": error.map_id,
-                **({"binding": error.reason} if error.reason else {}),
-            }
-        if converted is None:
-            return None, {"map_id": active[1].map_id, "robot_map_id": None if state is None else state.get("map_id")}
-        site_frame = site_frame and (converted is goal)
-        converted_pts.append((converted[0], converted[1], converted[2], kind))
-    live.view["detail"]["goal_frame"] = {
-        "map_id": active[1].map_id, "map_version": active[0],
-        "robot_map_id": (state or {}).get("map_id"),
-        "goal_frame": "site" if site_frame else "robot",
-        **({"map_grid_id": (state or {}).get("map_grid_id"),
-            "binding_id": current_binding_id}
-           if binding is not None else {}),
-    }
-    return converted_pts, None

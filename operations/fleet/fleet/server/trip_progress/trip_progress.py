@@ -161,7 +161,11 @@ class TripProgress:
         if moved and (live.view.get("wait") or {}).get("reason") not in (None, "link_wait"):
             live.view.pop("wait")  # D-763 8: only progress ends a regulation episode, not a reason change
         # Standing with no route under a table cut that names its blocker (a hold point, 2026-11-27) is a wait.
-        held = live.active_route is None and ((live.view.get("detail") or {}).get("traffic_hold") or {}).get("waiting_for")
+        detail = live.view.get("detail") or {}
+        speed = detail.get("road_speed") or {}
+        held = ((live.active_route is None and (detail.get("traffic_hold") or {}).get("waiting_for"))
+                or ((live.active_route or {}).get("hold_point")  # road speed holds it behind a standing peer
+                    and speed.get("reason") == "leader_gap" and speed.get("limit_mps") == 0.0))
         if (live.progress_at is None or moved or held
                 or live.view["hold"] is not None or (not (live.active_route or {}).get("wait_prefix")
                     and (live.junction.get("state") in MANOEUVRE or self._waiting(live, now)

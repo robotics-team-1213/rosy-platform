@@ -260,3 +260,18 @@ def test_no_pin_from_an_off_lane_stale_or_unlocalized_idle_robot(pose):
     _ticks(runner, fleet, n=2)
     assert runner.traffic.pinned() == []
     assert "a" not in runner._live["b"].traffic["peers"]
+
+
+
+@pytest.mark.parametrize("peer_state", [{"localization": {"state": "UNKNOWN", "pose_frame": "odom"}}, {"map_id": "other"}])
+def test_a_hold_point_send_still_meets_the_real_console_trust_and_frame_gates(peer_state):
+    """A table-cut hold point goes out under the wait-prefix guard; an untrusted or other-frame peer still refuses it."""
+    from fleet.server.peer_wait_prefix import prefix_guard
+    console, mover = _console(peer_state)
+    line = [(0.0, 0.0), (0.4, 0.0), (0.8, 0.0)]
+    token = prefix_guard.set(("rosy_42", "site", {"rosy_45"}, lambda: True, line, line))
+    try:
+        reply = run(console.route("rosy_42", PTS, lease_source="trip", table_peers=COUNTED))
+    finally:
+        prefix_guard.reset(token)
+    assert reply["accepted"] is False and mover.routes == []

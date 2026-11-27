@@ -917,3 +917,34 @@ def test_sample_nav2_route_ends_mid_edge_at_a_hold_point():
     assert all(arc.project(x, y)[1] <= 0.77 + 1e-9 for x, y, _yaw, _kind in pts)
     # Already at or past the hold point: the fallback stays at it, never the segment end.
     assert sample_nav2_route(graph, [seg], 0, 0.8, 0, end_s=0.77) == [(*arc.point_at(0.77), "stop")]
+
+
+
+@pytest.mark.parametrize("held", [True, False])
+def test_held_short_of_a_table_cut_on_the_last_segment_is_no_arrival(monkeypatch, held):
+    """TripSteps reports arrival only without a table cut (``traffic_hold``); the control case arrives."""
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+    from fleet.server import trip_steps
+
+    robot = RouteFakeRobot("rosy_42")
+    _clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    arc = graph.arcs["loop_left:fwd"]
+    x, y, yaw = arc.point_at(arc.length_m - 0.3)
+    pose["v"] = MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    plan = plan_body(plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw), goal="S4",
+                                                  stop_offset=False), store.routing_config))
+    store.record_plan(plan_id="p-held", robot_id="rosy_42", principal_id="bob", map_version=plan["map_version"],
+                      request={"to": "S4", "drive_mode": "nav2"}, result={"plan": plan})
+    run(runner.start("p-held", "bob"))
+
+    async def step(_runner, live, _index, _s, _pose):  # the period's road step: standing, no route
+        live.active_route = None
+        if held:
+            live.view["detail"]["traffic_hold"] = {"waiting_for": ["rosy_46"], "refused_at_m": 0.3}
+
+    monkeypatch.setattr(trip_steps, "step_nav2_route", step)
+    ex, ey, eyaw = arc.point_at(arc.length_m - 0.02)
+    pose["v"] = MapPose(ex, ey, eyaw, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    assert runner.view("p-held")["state"] == ("running" if held else "arrived")

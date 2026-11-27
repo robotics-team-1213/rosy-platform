@@ -495,3 +495,128 @@ def test_check_wait_prefix_ignores_pseudo_waiting_ids(waiting, asked):
         assert bool(calls) is asked
     finally:
         prefix_guard.reset(token)
+
+
+
+# ---- review round (PR #1140): footprint at the cut, replacement fence, goal tolerance, peers, bends, Nav2 abort --------
+
+def test_segment_end_whose_footprint_reaches_the_cut_gets_a_hold_point(monkeypatch):
+    h = hold_snapshot()
+    h.table_row(occupied_ahead_m=S_TO - S_FROM + .06)  # a unit 6 cm past the segment end: PAST_PLACE_M admits the end
+    assert nav2._traffic_end_index(h.runner, h.live, 0) == 0  # unchanged for its other callers
+    _drive(monkeypatch, h, S_FROM)
+    end = h.sent[0][0][-1]
+    assert len(h.sent) == 1 and end["x"] + max(CLEAR, .2) <= S_TO + .06 + 1e-6 and end["x"] < S_TO - .1
+    assert h.live.active_route["hold_point"]["segment"] == 0
+
+
+def test_superseded_hold_route_is_replaced_only_after_standstill(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])  # the cut cleared mid-drive
+    _drive(monkeypatch, h, .4, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"] and len(h.sent) == 1  # no replacement in the cancel's own period
+    _drive(monkeypatch, h, .42, nav="CANCELED")  # no velocity evidence: no standstill
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .42, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2 and not h.live.active_route.get("hold_point")
+
+
+def test_replacement_fence_survives_a_period_without_room(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.owned["end"] = .45
+    h.table_row()
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"]
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # no room to advance this period
+    assert h.live.view["detail"]["wait_prefix"]["fence"] is True
+    h.owned["end"] = .867
+    h.table_row()
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # room again, still no standstill evidence
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .3, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2
+
+
+def test_nav2_goal_tolerance_is_the_device_value():
+    from pathlib import Path
+    import yaml
+    from fleet.server.peer_wait_prefix import NAV2_XY_GOAL_TOLERANCE_M
+    params = Path(__file__).resolve().parents[3] / "middleware/drive/planning/nav2/params/nav2_params.yaml"
+    data = yaml.safe_load(params.read_text(encoding="utf-8"))
+    checker = data["controller_server"]["ros__parameters"]["general_goal_checker"]
+    assert checker["xy_goal_tolerance"] == NAV2_XY_GOAL_TOLERANCE_M
+
+
+def test_crosswalk_back_off_includes_the_goal_tolerance():
+    h = hold_snapshot()
+    free, _ = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    edge = free + CLEAR + .02  # clear of the nominal footprint, not of a stop 3 cm long
+    h.active[1].crosswalks.append(NS(polygon=[(edge, -.1), (edge + .1, -.1), (edge + .1, .1), (edge, .1)], approach=()))
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    assert why == "hold_point" and edge - stop > CLEAR + .03
+
+
+def test_a_stop_inside_a_crosswalk_footprint_is_reported_not_held(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    edge = hold_s + CLEAR - .01  # the approach as the robot actually stopped (inside its tolerance)
+    h.active[1].crosswalks.append(NS(polygon=[(edge, -.1), (edge + .1, -.1), (edge + .1, .1), (edge, .1)], approach=()))
+    _drive(monkeypatch, h, hold_s, stopped=True)
+    receipt = h.live.view["detail"]["wait_prefix"]
+    assert receipt["state"] == "stopped_in_footprint" and h.live.active_route is None
+    for _ in range(3):  # it keeps waiting where it is: never sent backwards
+        h.clock.advance(.5)
+        h.table_row()
+        _drive(monkeypatch, h, hold_s, stopped=True)
+    assert len(h.sent) == 1 and receipt["state"] == "stopped_in_footprint" and h.stops == []
+
+
+@pytest.mark.parametrize("gap", [None, .35])
+def test_hold_point_backs_off_standing_peer_clearance_and_formation_gap(gap):
+    h = hold_snapshot(authority=.88)
+    if gap is not None:
+        h.runner._store.rules = NS(active_rules=lambda: NS(formation=NS(min_gap_m=gap)))
+    h.table_row(occupied_ahead_m=1.0 - S_FROM, peers={"rosy_46": ["site", .90, 0.]})
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    keep = .18 + .03  # the console's clearance: site keep-out + NAV2_ROUTE_MIN_GAP_M
+    assert why == "hold_point" and .90 - stop > max(keep, (gap or .2) + .03)
+    assert .90 - stop < max(keep, (gap or .2) + .03) + .02 + 1e-9  # the farthest such stop
+
+
+def test_road_speed_holding_a_hold_route_behind_a_peer_is_no_stall(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.live.view["detail"]["road_speed"] = {"reason": "leader_gap", "limit_mps": 0.0, "leader": "rosy_46"}
+    assert not _stalled(h, .4)
+    h.clock.advance(25.)
+    assert not _stalled(h, .4)
+
+
+def test_tight_curve_counts_opposite_bends():
+    h = hold_snapshot()
+    h.curve[.82] = 0.  # a right bend 8 cm after a left one: equal headings at the footprint's ends
+    h.curve[.74] = 1.57
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    assert why == "hold_point" and stop + CLEAR + .03 < .74
+
+
+def test_nav2_failure_on_a_hold_route_waits_and_retries(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav="FAILED")
+    receipt = h.live.view["detail"]["wait_prefix"]
+    assert h.stops == [] and h.live.active_route is None and receipt["state"] == "aborted" and receipt["fence"]
+    _drive(monkeypatch, h, .6, nav="FAILED")  # retry delay and no standstill evidence yet
+    assert len(h.sent) == 1
+    h.clock.advance(nav2.NAV2_TRANSIENT_RETRY_S)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav="FAILED", stopped=True)
+    assert len(h.sent) == 2 and h.live.active_route["hold_point"] and h.stops == []
