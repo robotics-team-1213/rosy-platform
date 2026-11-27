@@ -30,6 +30,7 @@ import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
 from cell_auto_reach import past_pan_limit, past_park_reach, reach_fix, reach_fix_of  # noqa: E402,F401
+import cell_slot_prior  # noqa: E402
 
 CLOSING = "gripper.closing_axis_offset_deg"
 
@@ -54,7 +55,8 @@ def _parent_attr(name: str, default):
     return default
 
 
-def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list, *, image=None):
+def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list, *, image=None, slot_tops_mm=None,
+            slot_side_mm=None):
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
@@ -76,11 +78,12 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         lab,
         obj.get("hsv"),
     )
+    objects = cell_slot_prior.on_site(cell, config, calibration, site, roi, catalog, img, record, objects, slot_tops_mm, slot_side_mm)
     for o in objects:
         o["raw_m"] = [
             c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))
         ]
-        o["layers_below"] = config["sites"][site].get("layers_below", 0)  # the site is a stack's top: cell_finger_room
+        o.setdefault("layers_below", config["sites"][site].get("layers_below", 0))  # the site is a stack's top: cell_finger_room
     mask = obstacle_mask(img, config, site, roi)
     return img, mask, objects, None
 
@@ -165,17 +168,18 @@ def choose(
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
     site_fp = {k: v for k, v in (config["sites"][site].get("finger_params") or {}).items() if k in prm.DEFAULTS}
-    fp = {**(p or {}), **site_fp} if site_fp else p
-    require_clearance = prm.get(fp, "auto.neighbour_clear_mm") > 0
-    plan_fn = _parent_attr("plan_pick", plan_pick)
     site_cfg = config["sites"][site]
+    plan_fn = _parent_attr("plan_pick", plan_pick)
     # a moving belt site has no fixed start/place: order by reach from the arm axis (IK origin) instead
     anchor = site_cfg.get("start") or site_cfg.get("place") or (0.0, 0.0)
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], anchor))):
         why = fix = None
+        # with slots, the site's finger_params reach only objects snapped into a slot (cell_slot_prior); the rest keep p
+        fp = {**(p or {}), **site_fp} if site_fp and ("slots" not in site_cfg or o.get("slot_params")) else p
+        require_clearance = prm.get(fp, "auto.neighbour_clear_mm") > 0
         px = pixel_fn(o["raw_m"])
-        if o.get("tangled"):
-            why = "tangled blob"
+        if o.get("refuse") or o.get("tangled"):
+            why = o.get("refuse") or "tangled blob"
         elif not o["matched"]:
             why = "no catalogue match"
         elif w := cell_objects.want_reason(config.get("want"), o):
@@ -220,6 +224,8 @@ def choose(
             choices.offer(CLOSING, prm.get(p, "auto.closing_alt_deg"), "alternative: closes along tool x")
         cell_jaw_axis.offer_measured(config, choices, CLOSING)
         offset, why = (None, None) if square else cell_jaw_axis.offset_for(config, entry, choices.best(CLOSING))
+        if not why and not square and o.get("slot") and not cell_slot_prior.across(o, grasp_yaw(config, site, o, entry, offset) + offset):
+            why = f"closing axis not across slot {o['slot']}"
         if why:
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": why})
             continue
@@ -230,6 +236,7 @@ def choose(
             fresh = [
                 y for y in (base_yaw, base_yaw + 90.0) if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)
             ] or [base_yaw, base_yaw + 90.0]
+            fresh = [o["slot_yaw_deg"] + 90.0 - closing] if o.get("slot") else fresh  # across the pocket, never along it
             rooms = [(y, finger_room(rmask, rroi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:

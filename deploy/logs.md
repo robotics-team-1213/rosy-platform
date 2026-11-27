@@ -5144,3 +5144,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음(hard veto, 점수 감점, 24 h 반복 한도 그대로)
 - 결정: 사용자 2026-11-27 완전 자동, 기준 99
 - 교훈: 없음(실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 임시판 칸 사전지식(cell_slot_prior)
+
+- 변경: 사이트 선택 키 `slots`·`slots_fit`을 읽어 칸 밖 덩어리 제외, 깊이 층수로 칸 안 재측정·칸 축 맞춤(8 mm/5°/가로 4 mm), 맞춰진 물체에만 사이트 finger_params 적용. 집게 닫기 칸 축 수직 ±3°, 이웃 높이 모르면 3단, SITE_NOT_MEASURED·깊이/측면 반 단 보류. `slots` 없으면 이전과 같음
+- 증거: 원격 pytest test_omx_temp_plate_prior.py(2026-11-27 상단 프레임 고정 입력 포함)와 관련 OMX 시험(로그는 PR 보고)
+- gate 변화: 없음(auto.neighbour_clear_mm·min_jaw_margin_mm·finger_mm 기본값, outside_blocks 그대로)
+- 결정: 2026-11-27 임시판 인식 패널 안전 조건
+- 교훈: 없음(셀 설정 값·판 기준점 측정·실물 수용 전)
