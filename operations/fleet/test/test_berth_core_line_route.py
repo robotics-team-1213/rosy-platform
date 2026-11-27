@@ -272,7 +272,6 @@ def test_rear_bay_clearance_accepts_corridor_staging_arrival_and_rejects_inverte
 def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch):
     import asyncio
     from uuid import uuid4
-    import pytest
     from fleet.server.rear_bay_return import RearBayPort, rear_bay
     from fleet.server.trip_ports import TripError
     from tools.sim.bay_departure_sim import build_world_261026_site_map
@@ -317,10 +316,11 @@ def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch)
     park = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
     live = SimpleNamespace(open=True, graph=graph, view={"robot_id": "rosy_42", "state": "running", "trip_id": "plan-id",
                                                          "map_version": 394, "detail": {"parking_handoff": park}})
-    port = RearBayPort(SimpleNamespace(clients=lambda: {"rosy_42": Core()}, goal_leases=SimpleNamespace(stop_token=lambda _: 1)))
+    core = Core()
+    port = RearBayPort(SimpleNamespace(clients=lambda: {"rosy_42": core}, goal_leases=SimpleNamespace(stop_token=lambda _: 1)))
 
     async def clear(*args):
-        return await Core().state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
+        return await core.state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
 
     async def approved(*args):
         return await pose(), "binding"
