@@ -113,6 +113,12 @@ class ArmIncidentStore:
         return ArmIncidentHold(held=True, incident_ids=[r[0] for r in rows[:64]],
                                reason=f"{len(rows)} open arm incident(s): {why}")
 
+    def any_hold(self) -> bool:
+        with self._lock:
+            sources = [r[0] for r in self._db.execute(
+                "SELECT DISTINCT source_id FROM arm_incidents WHERE cleared_at IS NULL").fetchall()]
+        return any(self.hold(source).held for source in sources)
+
     def accepted(self, source_id, incident_id) -> ArmIncidentAccepted:
         return ArmIncidentAccepted(incident_id=incident_id, hold=self.hold(source_id))
 
