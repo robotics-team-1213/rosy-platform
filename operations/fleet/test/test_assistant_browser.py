@@ -390,8 +390,10 @@ def test_arm_cell_live_stage_camera_objects_and_drawer_commands(site):
           'scope': {'role': 'cell', 'drive': False, 'arms': True, 'children': False, 'enrollment': False},
           'site': {'name': 'ARM-CELL'}}
     api = copy.deepcopy(API)
-    api['/api/fleet/state'] = {'fleet': {'name': 'ARM-CELL', 'online': 0, 'total': 0}, 'control_unit': cu, 'ts': 0.0, 'robots': []}
+    api['/api/fleet/state'] = {'fleet': {'name': 'ARM-CELL', 'online': 0, 'total': 0, 'scope': cu['scope']}, 'ts': 0.0, 'robots': []}
     api['/api/fleet/control-unit'] = cu
+    api['/api/fleet/vision/sources'] = {'sources': [{'source_id': 'arm_s_top', 'name': 'S3 상단', 'live': True, 'fresh': True}]}
+    api['/api/fleet/vision/lease'] = {'lease_id': 'test-lease', 'frames': []}
     api['/api/fleet/workcell-observations'] = {
         'schema_version': 'rosy.workcell-observations.v1',
         'workcells': [{'workcell_id': 'cell-s', 'arms': [
