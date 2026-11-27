@@ -317,10 +317,11 @@ class Host:
         if not isinstance(unit, str) or not unit or unit in self.cfg.get("always_restart", []):
             return False
         props = self._unit_props(unit, "ActiveState", "SubState")
-        if props.get("ActiveState") != "inactive" or props.get("SubState") != "dead":
-            return False
+        state = (props.get("ActiveState"), props.get("SubState"))
         absent = isinstance(dev, str) and bool(dev) and not os.path.lexists(dev) and not os.path.exists(dev)
-        return absent or self._snapshot_stale_torque_off(observer)
+        if state in (("activating", "auto-restart"), ("failed", "failed")):
+            return absent  # crash-looping on a missing board (11-27 arm_b, 3 h): no bus to drive, and restart() skips non-active units
+        return state == ("inactive", "dead") and (absent or self._snapshot_stale_torque_off(observer))
 
     def device_in_use(self) -> bool:
         sp = _sp()
