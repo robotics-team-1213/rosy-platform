@@ -43,13 +43,30 @@ def anchor_of(source):
     return source[len(PREFIX):] if isinstance(source, str) and source.startswith(PREFIX) else None
 
 
+def top_has_depth(config) -> bool:
+    import cell_cal_eval  # lazy: a heavy module, and only a free source needs the answer
+
+    return cell_cal_eval.top_has_depth(config)
+
+
+def _xy(text) -> bool:
+    try:
+        return len(str(text).split(",")) == 2 and all(math.isfinite(float(v)) for v in str(text).split(","))
+    except ValueError:
+        return False
+
+
 def source_error(config, source, dest):
     """Refusal text before any camera step, else None: the source must exist, a free source needs a destination site."""
     anchor = anchor_of(source)
     if (anchor or source) not in config["sites"]:
         return f"refused: source {source!r} is not a site in the config"
+    if anchor and not top_has_depth(config):
+        return "refused: no depth camera for this arm (a free source measures height with the D435 of cells A/B)"
     if anchor and dest not in config["sites"]:
         return f"refused: free source {source!r} needs a destination site (an x,y destination would place on the invented site)"
+    if dest not in config["sites"] and not _xy(dest):  # parse_dest: a site, or 'x,y' metres on the source surface
+        return f'refused: destination "{dest}" is not a site in the config'
     return None
 
 
@@ -70,6 +87,8 @@ def chosen_error(config, name, target):
 
 
 def _depth_frames(config: dict, n: int):
+    if not top_has_depth(config):  # never fall back to the A/B D435 for another arm's table
+        return None, "no depth camera for this arm"
     top = (config.get("cameras") or {}).get("top") or {}
     device = top.get("depth_device") or "/dev/v4l/by-id/rosy-realsense-d435-depth"
     try:

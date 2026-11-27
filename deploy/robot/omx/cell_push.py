@@ -32,9 +32,25 @@ import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_place_fit  # noqa: E402
+import cell_preflight  # noqa: E402
+from cell_job_validators import _is_amr_bed_site  # noqa: E402
 from cell_observe import KEEP, keep, predicted_pixel  # noqa: E402
 
 TANGENT_COS = 0.17  # --friction: the push within 10 deg of square to the reach, so the pan alone carries it
+
+
+def site_refusal(config: dict, name: str) -> str | None:
+    """Why a push is not planned on this site, before any camera step (config already has its tiers): an unknown site, a
+    vehicle or AMR bed (cell_align never pushes there), or a base site whose layers_below hint puts the stack top above it."""
+    site = (config.get("sites") or {}).get(name)
+    if site is None:
+        return f"refused: site {name!r} is not a site in the config"
+    if _is_amr_bed_site(name) or any(site.get(k) for k in ("on_vehicle", "moves", "moving_px")):
+        return f"refused: site {name!r} is a vehicle bed: a push moves a box there only through the AMR claim path"
+    if tier := cell_place_fit.tier_mismatch(config, name):
+        return f"refused: {tier}"
+    return None
 
 
 def geometry(centre_raw, direction, half_mm: float, push_mm: float, gap_mm: float):
@@ -224,10 +240,14 @@ def main(argv=None):
     if not (args.dry_run or args.commissioning):
         raise SystemExit("a push moves the arm outside the D-911 gate: --dry-run, or --commissioning --person-at-switch")
     config = json.loads(args.config.read_text(encoding="utf-8"))
+    calibration_path = Path(config["calibration_path"]).expanduser()
+    config, calibration = cell_place_fit.with_tiers(config, json.loads(calibration_path.read_text()))  # floor-l1: the tier's own top surface
+    if why := site_refusal(config, args.site):
+        print(json.dumps({"site": args.site, "result": why}))
+        return 1
     params = config["params"] = prm.load(config.get("params_path"))["values"]
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
-    calibration_path = Path(config["calibration_path"]).expanduser()
-    calibration = cell_pivot.with_site_maps(config, json.loads(calibration_path.read_text()))
+    calibration = cell_pivot.with_site_maps(config, calibration)
     record = cell_pivot.map_record(calibration, args.site)
     camera, site = config["cameras"]["top"], config["sites"][args.site]
     height = prm.get(params, "push.height_m")
@@ -236,6 +256,9 @@ def main(argv=None):
     work = Path(config["work_dir"]).expanduser() / "push"
     work.mkdir(parents=True, exist_ok=True)
     stamp, KEEP["dir"] = time.strftime("%Y%m%d-%H%M%S"), work
+    if dark := cell_preflight.ready(cell.frame, config):  # a dark frame shows an empty mask: "blocked: []" would mean clear
+        print(json.dumps({"site": args.site, "result": "refused: " + "; ".join(dark)}))
+        return 1
 
     img = cell.frame("top")
     keep("push-before", img)
@@ -252,7 +275,7 @@ def main(argv=None):
     gap = prm.get(params, "push.gap_mm") + back
     start, end, d = geometry(a, direction, args.half_mm, args.mm, gap)
     mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"), surface_lab=site.get("surface_lab"))
-    region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), params), args.site, a.tolist(),
+    region = cell_pivot.bias_at(cell_place_fit.with_tier_biases(config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), params)), args.site, a.tolist(),
                                 params=params)
     # jaw face + what the arm may still miss by: a pivot measured here leaves its circle's rms, else the map's worst
     # leave-one-out error (2026-11-01: 21.2 + 11.9 mm reached the next column of a packed row, 4 mm away)

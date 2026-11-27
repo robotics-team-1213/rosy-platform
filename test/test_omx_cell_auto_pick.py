@@ -1492,3 +1492,9 @@ def test_a_shifted_end_grasp_still_names_the_box_centre_for_scene_checks():
     for end in ends:
         assert geom.box_centre(end) == pytest.approx(o["raw_m"], abs=1e-9)
     assert geom.box_centre(o) == o["raw_m"]
+
+
+def test_a_destination_that_is_not_a_site_is_refused_before_anything_runs(tmp_path):
+    path, cell = biased_map(tmp_path), Cell([CONT2])  # 2026-11-27: dest ship-h1r1 was a ValueError in parse_dest
+    got = [auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "ship-h1r1", tmp_path, cell_choices.Choices(tmp_path / "c.json"), dry_run=d)["result"] for d in (True, False)]
+    assert got == 2 * ['refused: destination "ship-h1r1" is not a site in the config'] and cell.commands == []

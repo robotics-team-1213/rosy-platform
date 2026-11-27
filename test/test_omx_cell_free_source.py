@@ -295,3 +295,16 @@ def test_parallax_puts_a_low_box_at_its_true_xy(tmp_path, monkeypatch):
     assert result["result"] == "planned" and free["top_z_m"] == pytest.approx(0.050, abs=1e-3)
     assert free["centre_mm"] == pytest.approx([1000 * (CONT["x"] + tpa.BIAS[0]), 1000 * (CONT["y"] + tpa.BIAS[1])], abs=2.0)  # the map reads true + BIAS
     assert free["xy_from_height_error_mm"] > 0.3
+
+
+def test_free_source_needs_the_arms_own_depth_camera(tmp_path, monkeypatch):
+    """2026-11-27: arm_s (USB top camera, no depth) would have measured with the A/B D435 on the same host."""
+    cell = Cell([CONT])
+    seen, real = [], cfs._depth_frames
+    monkeypatch.setattr(cfs, "_depth_frames", lambda config, n: seen.append(1) or (None, "x"))
+    config = clipped_config(tmp_path)
+    config["cameras"]["top"]["url"] = "http://127.0.0.1:8767/frame/arm_s_top.jpg"
+    assert run(tmp_path, cell, config, "free:plate")["result"].startswith("refused: no depth camera for this arm") and not seen
+    assert real(config, 3) == (None, "no depth camera for this arm")
+    config["cameras"]["top"]["url"] = "http://127.0.0.1:8767/frame/top.jpg"  # arm_a / arm_b
+    assert cfs.top_has_depth(config)
