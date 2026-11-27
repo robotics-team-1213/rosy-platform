@@ -7,10 +7,14 @@ import math
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
+from fleet.server.trip_lane_realign import REALIGN_SLOW_MPS
 from fleet.server.trip_ports import TripError
-from fleet.speed_table import speed_table
+from fleet.speed_table import CurveCap, speed_table
 
 GRANT_S = 1.5
+#: D-1080 (user 2026-11-27): tighter than R 0.30 m the robot cannot keep the lane at 0.15 m/s within its turn rate
+#: (the R 0.135 m U-turn); it goes at most 0.08 m/s there, departed or not.
+TIGHT_CURVE_CAPS = (CurveCap(0.30, 0.08),)
 
 
 async def _goal_finished(runner, rid) -> bool:
@@ -45,7 +49,7 @@ class RoadSpeed:
         if getattr(live, "road_profile_key", None) != key:
             segs = [(row["edge_id"], row["forward"], row["s_from"], row["s_to"]) for row in live.segments]
             # Nav2 owns the acceleration from rest and the final pose controller.
-            table = speed_table(site, segs, start_mps=math.inf, stop_at_end=False)
+            table = speed_table(site, segs, curve_caps=TIGHT_CURVE_CAPS, start_mps=math.inf, stop_at_end=False)
             live.road_profile = table["rows"]
             live.road_profile_key = key
         rows = live.road_profile
@@ -65,6 +69,8 @@ class RoadSpeed:
             cap = min(cap, speed)
         stamp = pose.odom_stamp
         reason = "route_profile"
+        if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
+            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: until the camera sees it back on the lane
         leader = None
         gap_m = None
         geometry = await self.geometry.get(active)

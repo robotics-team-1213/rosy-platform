@@ -227,12 +227,17 @@ def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
             best = (arc, dist, s, tangent)
     if best is None:
         return LaneSample(state)
-    arc, dist, s, tangent = best
+    arc = best[0]
+    offset, margin, _ = lane_offset(arc, x, y, body_half_width_m)
+    return LaneSample(state, arc.edge_id, arc.id, offset, margin, arc.width_m)
+
+
+def lane_offset(arc, x: float, y: float, body_half_width_m: float = BODY_HALF_WIDTH_M) -> tuple[float, float, float]:
+    """(signed offset, left +; body margin to the lane edge; lane tangent) of the point against ``arc``."""
+    dist, s, tangent = arc.project(x, y)
     px, py, _ = arc.point_at(s)
     left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
-    offset = math.copysign(dist, left)
-    margin = arc.width_m / 2.0 - (dist + body_half_width_m)
-    return LaneSample(state, arc.edge_id, arc.id, offset, margin, arc.width_m)
+    return math.copysign(dist, left), arc.width_m / 2.0 - (dist + body_half_width_m), tangent
 
 
 class LaneComplianceTracker:
