@@ -1037,14 +1037,14 @@ def test_an_unplugged_arm_board_does_not_block_the_other_observers(tmp_path, mon
     "state,sub,rc,exc",
     [
         ("active", "running", 0, None),
-        ("activating", "auto-restart", 0, None),
         ("deactivating", "stop-sigterm", 0, None),
-        ("failed", "failed", 0, None),
+        ("activating", "start", 0, None),
         ("inactive", "dead", 1, None),
+        ("activating", "auto-restart", 1, None),
         ("", "", 0, OSError("no dbus")),
     ],
 )
-def test_absent_board_never_skips_unless_unit_is_cleanly_inactive_dead(tmp_path, monkeypatch, state, sub, rc, exc):
+def test_absent_board_never_skips_unless_unit_is_stopped_or_crash_looping(tmp_path, monkeypatch, state, sub, rc, exc):
     import json
     import subprocess
 
@@ -1061,6 +1061,24 @@ def test_absent_board_never_skips_unless_unit_is_cleanly_inactive_dead(tmp_path,
     stale_health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
     observers = [{"unit": "rosy-omx-observer@arm_s.service", "device": str(tmp_path / "absent_s"), "health": str(stale_health)}]
     assert m.Host({"devices": [], "observers": observers}).follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+
+@pytest.mark.parametrize("state,sub", [("activating", "auto-restart"), ("failed", "failed")])
+def test_a_crash_looping_observer_skips_only_while_its_board_is_absent(tmp_path, monkeypatch, state, sub):
+    """2026-11-27: arm_b's board fell off and its observer restarted for 3 h; the update waited on observer_stale."""
+    import json
+    import subprocess
+
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: subprocess.CompletedProcess(
+        args, 0, stdout=f"ActiveState={state}\nSubState={sub}\n", stderr=""))
+    health, dev = tmp_path / "arm_b.json", tmp_path / "follower_b"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 3000.0, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    host = m.Host({"devices": [], "observers": [{"unit": "rosy-omx-observer@arm_b.service", "device": str(dev), "health": str(health)}]})
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_device_missing"  # skipped: the only observer
+    dev.write_text("", encoding="utf-8")  # board back while the unit still restarts: wait for the observer
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
 
 
 def test_stopped_plugged_in_and_absent_edge_cases_fail_closed(tmp_path, monkeypatch):
