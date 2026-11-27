@@ -26,19 +26,23 @@ export function flattenCatalogObjects(cellObjects, nowMs = Date.now()) {
 
 export function createAssistantObjectsBridge({ scope, call, objectHighlight = null, getIdentity = () => null, onChange = () => {} }) {
   let cellObjects = null;
+  let panelOpen = false;
   if (objectHighlight?.subscribe) scope?.onDispose?.(objectHighlight.subscribe(() => onChange()));
+  async function refresh() {
+    const owner = getIdentity();
+    if (!owner) return;
+    try {
+      const data = await call("/api/fleet/pipeline/cell-objects");
+      if (getIdentity() !== owner) return;
+      cellObjects = { ...(data || {}), fetchedAtMs: Date.now() };
+      onChange();
+    } catch { /* Cell objects endpoint is optional when no cell vision is attached */ }
+  }
+  scope?.interval?.(() => { if (panelOpen && !document.hidden) void refresh(); }, 2500);
   return {
     get: () => cellObjects,
-    async refresh() {
-      const owner = getIdentity();
-      if (!owner) return;
-      try {
-        const data = await call("/api/fleet/pipeline/cell-objects");
-        if (getIdentity() !== owner) return;
-        cellObjects = { ...(data || {}), fetchedAtMs: Date.now() };
-        onChange();
-      } catch { /* Cell objects endpoint is optional when no cell vision is attached */ }
-    },
+    setOpen(open) { panelOpen = Boolean(open); if (panelOpen) void refresh(); },
+    refresh,
   };
 }
 
@@ -70,7 +74,7 @@ export function renderObjectPickPlaceCard({
   onHighlightObject = null, onDraftChange = null, onSubmit = null,
 } = {}) {
   const hasObjFacts = Boolean(row?.facts?.some((f) => String(f?.ref || "").startsWith("cell_objects:")));
-  if (!row || row.state !== "ANSWERED" || (!receipt && row.kind !== "CONTROL" && !hasObjFacts)) return null;
+  if (!row || row.state !== "ANSWERED" || (!receipt && row.kind !== "CONTROL" && row.kind !== "CLARIFY" && !hasObjFacts)) return null;
   const card = elOf("div", "assistant-command-card");
   if (receipt) {
     const box = elOf("div", "assistant-receipt"), link = elOf("a", "ui-action-link", "셀 작업 화면에서 확인");

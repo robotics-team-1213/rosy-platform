@@ -222,14 +222,14 @@ export function createAssistantPanel({
   const send = () => { if (available && identity && !dialogue.busy && input.value.trim()) post(dialogue.begin(input.value, activeRobotId(), el("assistant-locale").value)); };
   const setExpanded = (open) => { for (const btn of triggers) btn.setAttribute("aria-expanded", String(open)); };
   function close() {
-    voice.cancel(); listening = false; voiceState.textContent = ""; panel.hidden = true;
+    objBridge.setOpen(false); voice.cancel(); listening = false; voiceState.textContent = ""; panel.hidden = true;
     setExpanded(false); paintControls(); (lastOpener || triggers[0])?.focus();
   }
 
   for (const btn of triggers) {
     scope.listen(btn, "click", () => {
       if (panel.hidden) lastOpener = btn;
-      panel.hidden = !panel.hidden; setExpanded(!panel.hidden);
+      panel.hidden = !panel.hidden; setExpanded(!panel.hidden); objBridge.setOpen(!panel.hidden);
       if (!panel.hidden) { syncContext(); refreshStatus(); input.focus(); }
     });
   }

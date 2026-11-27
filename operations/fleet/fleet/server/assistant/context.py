@@ -53,9 +53,23 @@ async def build_context(app, principal, selected_robot_id, locale='ko-KR'):
             prop = sum(1 for t in tasks if t.get('cell_id') == cid and t.get('status') == 'PROPOSED')
             run = sum(1 for t in tasks if t.get('cell_id') == cid and t.get('status') == 'RUNNING')
             phase = code(cstate.get('phase'), locale)
-            text = (f'{safe_cid}: phase={phase}, held={len(held)}, proposed={prop}, running={run}'
-                    if locale == 'en-US' else f'{safe_cid}: 단계 {phase}, 보류 {len(held)}, 제안 {prop}, 실행 {run}')
-            facts.append(AssistantFact(ref=f'cell:{safe_cid}', observed_at=now_s, text=text))
+            held_txt = ','.join(code(a, locale) for a in held) if held else ('none' if locale == 'en-US' else '없음')
+            text = (f'{safe_cid}: phase={phase}, held={len(held)}({held_txt}), proposed={prop}, running={run}'
+                    if locale == 'en-US' else f'{safe_cid}: 단계 {phase}, 보류 {len(held)}({held_txt}), 제안 {prop}, 실행 {run}')
+            facts.append(AssistantFact(ref=f'cell:{safe_cid}', observed_at=now_s, text=text[:512]))
+            if len(facts) > 64:
+                raise ValueError('ASSISTANT_CONTEXT_LIMIT')
+    if isinstance(arm_holds, dict) and arm_holds:
+        now_s = time.time()
+        for aid in sorted(arm_holds):
+            hold = arm_holds.get(aid) or {}
+            if not isinstance(hold, dict) or not hold.get('held'):
+                continue
+            safe_arm = code(aid, locale)
+            why = code(hold.get('reason') or hold.get('code') or 'arm_hold', locale)
+            text = (f'{safe_arm}: arm hold active ({why}); inspect open incident and clear with confirmation.'
+                    if locale == 'en-US' else f'{safe_arm}: 팔 보류 활성 ({why}); 열린 사건을 확인하고 승인 후 해제할 수 있습니다.')
+            facts.append(AssistantFact(ref=f'incident:{safe_arm}', observed_at=now_s, text=text[:512]))
             if len(facts) > 64:
                 raise ValueError('ASSISTANT_CONTEXT_LIMIT')
     detected = getattr(app.state, 'cell_detected_objects', None)

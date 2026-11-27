@@ -377,3 +377,71 @@ def test_assistant_catalog_object_syncs_camera_highlight_and_confirms_one_shot_t
             assert not errors
         finally:
             browser.close()
+
+
+def test_arm_cell_live_stage_camera_objects_and_drawer_commands(site):
+    import copy
+    import json
+    import time
+    from playwright.sync_api import expect, sync_playwright
+
+    now_s = time.time()
+    cu = {'schema_version': 'rosy.control-unit.v1', 'unit_id': 'ARM-CELL',
+          'scope': {'role': 'cell', 'drive': False, 'arms': True, 'children': False, 'enrollment': False},
+          'site': {'name': 'ARM-CELL'}}
+    api = copy.deepcopy(API)
+    api['/api/fleet/state'] = {'fleet': {'name': 'ARM-CELL', 'online': 0, 'total': 0}, 'control_unit': cu, 'ts': 0.0, 'robots': []}
+    api['/api/fleet/control-unit'] = cu
+    api['/api/fleet/workcell-observations'] = {
+        'schema_version': 'rosy.workcell-observations.v1',
+        'workcells': [{'workcell_id': 'cell-s', 'arms': [
+            {'arm_id': 'arm_s', 'source_id': 'arm_s', 'label': 'Arm S', 'fresh': True, 'source_age_s': 0.2,
+             'positions': {'joint1': 0.1, 'joint2': -0.2, 'joint3': 0.3, 'joint4': 0.0, 'joint5': 0.1, 'gripper_joint_1': 0.0},
+             'motor_health': {'schema_version': 'rosy.motor-health.v1', 'status': 'ok', 'motors': []}, 'incidents': []},
+        ], 'cameras': [
+            {'source_id': 'arm_s_top', 'name': 'S3 상단', 'role': 'top', 'stream': 'color', 'arm_id': 'arm_s', 'fresh': False},
+        ]}],
+    }
+    api['/api/fleet/pipeline/cell-objects'] = {
+        'schema': 'rosy.cell-detected-objects.v1', 'observed_at': now_s,
+        'cells': {'cell_s': {'cell_id': 'cell_s', 'cell_state_gen': 5, 'arms': {'arm_s': {
+            'cell_id': 'cell_s', 'arm_id': 'arm_s', 'camera_role': 'arm_s_top', 'frame_wh': [640, 480], 'source_seq': 91,
+            'observed_at': now_s, 'ttl_s': 15.0, 'cell_state_gen': 5, 'stale': False,
+            'objects': [{'object_ref': 'det:91:0', 'catalog_id': 'container-1', 'site': 'pinky', 'centre_mm': [10.0, 20.0],
+                         'centre_px': [300.0, 220.0], 'corners_px': [[270, 190], [330, 190], [330, 250], [270, 250]],
+                         'pickable': True, 'bind_tol_mm': 13.5}],
+        }}}}, 'by_arm': {},
+    }
+    ans = {'/api/fleet/pipeline/cell-tasks': (200, {'task': {'task_id': 'ac-1', 'status': 'QUEUED'}})}
+    with sync_playwright() as pw:
+        posts = []
+        browser, page, errors = _open(pw, site, api, posts, answers=ans, size=(1440, 900))
+        try:
+            tile = page.locator('[data-camera-source="arm_s_top"]')
+            expect(tile).to_be_visible()
+            page.locator('#cell-cockpit-stage [data-cam-object="det:91:0"]').click()
+            staging = page.locator('#cell-cockpit-stage .cell-obj-staging')
+            expect(staging).to_be_visible()
+            staging.locator('[data-obj-dispatch="true"]').click()
+            dialog = page.locator('dialog.ui-confirm')
+            expect(dialog).to_be_visible()
+            dialog.locator('ui-button[kind="irreversible"]').click()
+            expect(staging).to_contain_text('ac-1')
+
+            page.locator('button[data-arm-id="arm_s"]').click()
+            expect(page.locator('#assistant-robot')).to_have_value('')
+            page.get_by_role('tab', name='명령').click()
+            shuttle = page.locator('[data-arm-preset="s3_shuttle"]')
+            expect(shuttle).to_be_visible()
+            shuttle.click()
+            expect(dialog).to_be_visible()
+            dialog.locator('ui-button[kind="irreversible"]').click()
+
+            task_posts = [json.loads(body) for path, body in posts if path == '/api/fleet/pipeline/cell-tasks']
+            assert len(task_posts) == 2
+            assert task_posts[0]['target_object']['catalog_id'] == 'container-1' and task_posts[0]['propose'] is False
+            assert task_posts[1]['preset'] == 's3_shuttle' and task_posts[1]['propose'] is False
+            assert '인증 대기' not in (page.locator('#diag-vision').text_content() or '')
+            assert not errors
+        finally:
+            browser.close()

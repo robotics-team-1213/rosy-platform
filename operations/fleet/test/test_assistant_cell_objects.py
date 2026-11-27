@@ -63,6 +63,7 @@ def test_build_context_includes_fresh_catalog_summary_and_filters_stale_or_unmat
         },
     }
     app = _fake_app(now_s, detected)
+    app.state.arm_holds = {"arm_a": {"held": True, "reason": "collision"}}
     facts = asyncio.run(ctx_mod.build_context(app, principal="alice", selected_robot_id=None, locale="ko-KR"))
     obj_facts = {f.ref: f for f in facts if f.ref.startswith("cell_objects:")}
     assert set(obj_facts) == {"cell_objects:cell_s"}
@@ -72,6 +73,8 @@ def test_build_context_includes_fresh_catalog_summary_and_filters_stale_or_unmat
     assert "container-2@belt(1개, 제한)" in fact.text
     assert "unmatched" not in fact.text
     assert "10.12" not in fact.text and "99.9" not in fact.text
+    hold_fact = next(f for f in facts if f.ref == "incident:arm_a")
+    assert "collision" in hold_fact.text
 
     facts_en = asyncio.run(ctx_mod.build_context(app, principal="alice", selected_robot_id=None, locale="en-US"))
     fact_en = next(f for f in facts_en if f.ref == "cell_objects:cell_s")
@@ -113,7 +116,7 @@ def test_assistant_service_tolerates_coordinate_and_seq_jitter_between_context_c
         snap["observed_at"] = time.time()
         snap["received_at"] = time.time()
         snap["objects"][0]["centre_mm"] = [10.45, 20.67]
-        return dict(kind="CONTROL", response="cell_s 카탈로그 객체를 확인했습니다.", evidence_refs=["cell_objects:cell_s"])
+        return dict(kind="STATUS", response="cell_s 카탈로그 객체를 확인했습니다.", evidence_refs=["cell_objects:cell_s"])
 
     service = AssistantService(
         journal,
@@ -127,5 +130,18 @@ def test_assistant_service_tolerates_coordinate_and_seq_jitter_between_context_c
     service.submit("alice", msg)
     asyncio.run(service.step("alice", "req-obj-1"))
     result = service.read("alice", "req-obj-1")
-    assert result.state == "ANSWERED" and result.kind == "CONTROL"
+    assert result.state == "ANSWERED" and result.kind == "STATUS"
     assert any(f.ref == "cell_objects:cell_s" for f in result.facts)
+
+    # Verify CONTROL stays D-810 compliant (answer returns clean without ASSISTANT_CONTEXT_CHANGED on jitter)
+    async def ctrl_provider(question, _remaining):
+        detected["cell_s"]["by_arm"]["arm_s"]["objects"][0]["centre_mm"] = [11.01, 19.88]
+        return dict(kind="CONTROL", response="실행을 준비합니다.", evidence_refs=[])
+
+    svc2 = AssistantService(
+        journal, context=context, provider=ctrl_provider, admitted=lambda: True, authorized=lambda p: p == "alice", clock=time.time,
+    )
+    svc2.submit("alice", AssistantMessage(request_id="req-obj-2", conversation_id="conv-1", text="container-1 옮겨줘"))
+    asyncio.run(svc2.step("alice", "req-obj-2"))
+    res2 = svc2.read("alice", "req-obj-2")
+    assert res2.state == "ANSWERED" and res2.kind == "CONTROL" and res2.facts == []

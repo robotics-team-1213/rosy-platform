@@ -4439,7 +4439,8 @@
         "applications/fleet/web/cell/cell.js",
         "applications/fleet/web/cell/cell-real2sim-specs.js",
         "applications/fleet/web/cell/cell-pipeline-panel.js",
-        "applications/fleet/web/map/zone-blueprint-inspector.js"
+        "applications/fleet/web/map/zone-blueprint-inspector.js",
+        "applications/fleet/web/cell/arm-cell-controls.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4661,6 +4662,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/pipeline/cell-tasks",
+            "POST:/api/fleet/pipeline/cell-tasks"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/arm-cell-controls.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
             "POST:/api/fleet/pipeline/cell-tasks"
           ]
         }

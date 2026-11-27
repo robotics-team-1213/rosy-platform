@@ -94,6 +94,7 @@ OWN = {
         "cockpit-hosts.js",
         "calm-power.js",
         "cell-cockpit-stage.js",
+        "arm-cell-controls.js",
         "cell-context-panel.js",
         "cell-job-panel.js",  # ARM-CELL run/recover of arms A/B through the Fleet cell job proxy
         "manual-control.js",
