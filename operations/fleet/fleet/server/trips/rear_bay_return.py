@@ -114,7 +114,7 @@ class RearBayPort:
         goal = target["x"], target["y"]
         staging = goal[0] - offset * math.cos(target["yaw"]), goal[1] - offset * math.sin(target["yaw"])
         binding = {"site_map_id": site[0], "site_map_version": site[1]}
-        held = frozenset(rid for rid, lv in runner._live.items() if lv.open and robot in (
+        held = frozenset(rid for rid, lv in getattr(runner, "_live", {}).items() if lv.open and robot in (
             (lv.view["detail"].get("traffic_hold") or {}).get("waiting_for") or ()))
         site_corridor(self.console, robot, snapshot, binding, None, goal, peers, route=[staging], held_by_fleet=held)
         native = [(snapshot["pose"]["x"], snapshot["pose"]["y"]), staging, goal]
