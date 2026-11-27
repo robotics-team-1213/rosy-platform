@@ -152,6 +152,8 @@ def bias_path(calibration_path) -> Path:
 
 
 def validate_bias(region: dict, params=None) -> None:
+    if str(region.get("site", "")).startswith("free:"):  # a free source is map-only (cell_free_source): no bias under its invented name
+        raise ValueError("bias refused: a free source has no bias region")
     for key in ("point_m", "bias_mm"):
         values = region.get(key)
         if (not isinstance(values, (list, tuple)) or len(values) != 2
