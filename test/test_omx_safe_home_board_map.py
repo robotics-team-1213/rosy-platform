@@ -133,3 +133,60 @@ def test_safe_home_unlinks_stale_out_sets_session_chunks_and_refuses_held_lease(
         csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
                           status_fn=lambda _a: (_ for _ in ()).throw(RuntimeError("boom")))
     assert released == ["arm_b"]
+
+
+def test_safe_home_auto_reboots_rebootable_latch_and_refuses_unsafe_hw_errors(cell, tmp_path):
+    _, ports = cell
+    args = args_for(tmp_path, ports["arm_a"])
+    args.arm = "arm_a"
+    cfg = json.loads(Path(args.config).read_text())
+    cfg["arm_id"] = "arm_a"
+    Path(args.config).write_text(json.dumps(cfg))
+    args.library.write_text("{}")
+
+    def six_rows(faults=None, torque_on=()):
+        faults = faults or {}
+        return [
+            {"id": i, "torque_enabled": 1 if i in torque_on else 0, "hardware_error": faults.get(i, 0)}
+            for i in range(11, 17)
+        ]
+
+    # 1. Rebootable ID 12 overload (32) with all 6 motors torque=0 auto-reboots and proceeds to fold
+    reboot_calls, fold_envs = [], []
+
+    def ok_reboot(ids):
+        reboot_calls.append(list(ids))
+        after = {i: {"torque": 0, "hw_error": 0} for i in range(11, 17)}
+        return {"rebooted": list(ids), "before": {}, "after": after}
+
+    def fake_fold(cmd, env=None, timeout=None):
+        fold_envs.append(env)
+        Path(args.out).write_text(json.dumps({"result": "folded", "candidate": "park", "home": [0] * 6, "state": [0] * 6}))
+        return SimpleNamespace(returncode=0)
+
+    rc_ok, res_ok = csh.run_safe_home(
+        args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+        read_fn=lambda _d: six_rows({12: 32}),
+        reboot_fn=ok_reboot,
+        status_fn=lambda _a: {"incident_ids": []},
+        run_fn=fake_fold,
+    )
+    assert rc_ok == 0 and reboot_calls == [[12]] and res_ok["rebooted_ids"] == [12] and len(fold_envs) == 1
+
+    # 2. Non-rebootable hw_error=8 (encoder) OR torque_enabled=1 refuses before calling reboot_fn
+    for bad_rows in (six_rows({12: 8}), six_rows({12: 32}, torque_on=(11,))):
+        calls = []
+        rc_bad, res_bad = csh.run_safe_home(
+            args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+            read_fn=lambda _d, r=bad_rows: r,
+            reboot_fn=lambda ids: calls.append(ids),
+        )
+        assert rc_bad == 2 and res_bad["result"] == "refused_hw_error" and calls == [] and "reboot_attempt" not in res_bad
+
+    # 3. Unclean post-reboot readback refuses and records reboot_attempt
+    rc_dirty, res_dirty = csh.run_safe_home(
+        args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
+        read_fn=lambda _d: six_rows({12: 32}),
+        reboot_fn=lambda ids: {"rebooted": list(ids), "after": {i: {"torque": 0, "hw_error": 32 if i == 12 else 0} for i in range(11, 17)}},
+    )
+    assert rc_dirty == 2 and res_dirty["result"] == "refused_hw_error" and res_dirty["reboot_attempt"]["rebooted"] == [12]

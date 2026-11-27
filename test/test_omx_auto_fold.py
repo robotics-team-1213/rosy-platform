@@ -563,3 +563,94 @@ def test_recover_treats_partial_target_closing_load_as_holding_high():
         low=lambda _s: False, allow_live_unlatch=True,
     )
     assert res["result"] == "held" and res["reason"] == "HOLDING_HIGH"
+
+
+def test_auto_fold_runtime_fallback_retries_distinct_family_and_fails_closed(tmp_path):
+    import cell_recovery_plan as crp
+    import chunk_runner_recover as crr
+
+    deep_pose = [-21.32, 15.02, 7.16, 45.1, 30.26, 57.0]
+    home_a = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
+
+    class _FallbackCell:
+        def __init__(self, *, fault_msg="pushing at rest: shoulder_lift wound up"):
+            self.s = list(deep_pose)
+            self.t = list(deep_pose)
+            self.latched = False
+            self.fault = None
+            self.fault_msg = fault_msg
+            self.cmds = []
+
+        def act(self, cmd):
+            self.cmds.append(cmd)
+            if cmd == "state":
+                return {
+                    "ok": True, "state": list(self.s), "target": list(self.t),
+                    "holding": False, "fault": self.fault, "human_hold_latched": self.latched,
+                }
+            if cmd == "human-hold":
+                self.latched = True
+                return {"ok": True, "human_hold_latched": True, "state": list(self.s), "target": list(self.t)}
+            if cmd == "recover-unlatch":
+                self.latched = False
+                self.fault = None
+                return {"ok": True, "human_hold_latched": False, "state": list(self.s), "target": list(self.t)}
+            if cmd == "grip 62.0":
+                self.s[5] = self.t[5] = 62.0
+                return {"ok": True, "state": list(self.s), "target": list(self.t)}
+            if cmd.startswith("jog shoulder_lift.pos") and self.s[5] < 60.0:
+                self.fault = self.fault_msg
+                return {"ok": False, "fault": self.fault_msg, "error": self.fault_msg, "state": list(self.s)}
+            if cmd.startswith("jog "):
+                _, j, d = cmd.split()
+                idx = crp.NAMES.index(j)
+                self.t[idx] += float(d)
+                self.s[idx] = self.t[idx]
+                return {"ok": True, "state": list(self.s), "target": list(self.t)}
+            if cmd in ("park", "park-slow"):
+                self.s = list(home_a)
+                self.t = list(home_a)
+                return {"ok": True, "settled": True, "state": list(home_a), "target": list(home_a)}
+            return {"ok": True, "state": list(self.s), "target": list(self.t)}
+
+    released = []
+    cell = _FallbackCell()
+    res = af.recover(
+        cell, home_a, 49.0, plan=lambda s: [s, home_a], held_plan=lambda s: [s, home_a],
+        look=lambda _f: {"clear": True, "low": [], "high": []},
+        reserve=lambda _f: {"ok": True}, release=lambda: released.append(1),
+        release_and_rise=lambda _c: {"result": "risen"}, low=lambda s: crp.fk_z(s, tcp_x_m=0.0740) < 0.10,
+        tcp_x_m=0.0740, clear_z_m=0.10, extended_detours=True, grip_open=62.0, sleep=lambda _s: None,
+    )
+    assert res["result"] == "folded" and res["candidate"].startswith("open_elbow_lift_")
+    assert "park-slow" in cell.cmds and "grip 62.0" in cell.cmds and len(released) == 2
+    assert any(s.get("step") == "strategy_fallback" and s.get("failed_family") == "shoulder_lift" and s.get("unlatched") for s in res["steps"])
+
+    # Non-recoverable fault (overload) stops fallback immediately in human-hold without releasing space
+    rel_ov, cell_ov = [], _FallbackCell(fault_msg="overload latch")
+    res_ov = af.recover(
+        cell_ov, home_a, 49.0, plan=lambda s: [s, home_a], held_plan=lambda s: [s, home_a],
+        look=lambda _f: {"clear": True, "low": [], "high": []},
+        reserve=lambda _f: {"ok": True}, release=lambda: rel_ov.append(1),
+        release_and_rise=lambda _c: {"result": "risen"}, low=lambda s: crp.fk_z(s, tcp_x_m=0.0740) < 0.10,
+        tcp_x_m=0.0740, clear_z_m=0.10, extended_detours=True, grip_open=62.0, sleep=lambda _s: None,
+    )
+    assert res_ov["result"] == "held" and rel_ov == [] and "recover-unlatch" not in cell_ov.cmds
+
+    # Exhausting max_runtime_tries keeps human-hold and space reservation
+    rel_ex, cell_ex = [], _FallbackCell()
+    res_ex = af.recover(
+        cell_ex, home_a, 49.0, plan=lambda s: [s, home_a], held_plan=lambda s: [s, home_a],
+        look=lambda _f: {"clear": True, "low": [], "high": []},
+        reserve=lambda _f: {"ok": True}, release=lambda: rel_ex.append(1),
+        release_and_rise=lambda _c: {"result": "risen"}, low=lambda s: crp.fk_z(s, tcp_x_m=0.0740) < 0.10,
+        tcp_x_m=0.0740, clear_z_m=0.10, extended_detours=True, grip_open=62.0, max_runtime_tries=1, sleep=lambda _s: None,
+    )
+    assert res_ex["result"] == "held" and rel_ex == [] and cell_ex.cmds[-1] == "human-hold"
+
+    # _resolve_grip_open validates from plan_path / coarse and rejects unsafe values
+    plan_p = tmp_path / "gp.json"
+    plan_p.write_text(json.dumps({"grip_open": 62.0}), encoding="utf-8")
+    assert crr._resolve_grip_open({"plan_path": str(plan_p)}, 49.0) == 62.0
+    assert crr._resolve_grip_open({"plan": {"grip_open": 75.0}}, 49.0) is None
+    assert crr._resolve_grip_open({"coarse": {"grip_open": 56.0}}, 49.0) == 56.0

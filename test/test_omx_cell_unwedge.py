@@ -384,3 +384,14 @@ def test_home_jogs_uses_checked_prefix_when_session_active():
     assert jogs and all(c.startswith("checked sid-42 deadbeef jog ") for c in jogs)
     assert grips and all(c.startswith("checked sid-42 deadbeef grip ") for c in grips)
 
+
+def test_unwedge_never_dips_elbow_when_shoulder_lift_blocked():
+    home_a = [0.8, -62.2, 53.1, 51.6, 45.2]
+    start_deep = [-20.6, 15.1, 7.1, 40.8, 29.9, 57.2]
+    cell = Cell(start_deep, stuck=("shoulder_lift", "elbow_flex"))
+    out = u.unwedge(cell, home_a, sleep=lambda _s: None, clear_z_m=0.10, tcp_x_m=0.0740)
+    assert out["result"] == "stuck"
+    elbow_jogs = [float(c.split()[-1]) for c in cell.sent if c.startswith("jog elbow_flex.pos ")]
+    assert elbow_jogs and elbow_jogs[0] < 0  # ascends instead of dipping +1.0 toward belt
+    assert not any(c.startswith("jog elbow_flex.pos ") and float(c.split()[-1]) > 0.6 for c in cell.sent)
+

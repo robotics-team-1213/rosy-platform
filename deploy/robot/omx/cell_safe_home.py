@@ -90,9 +90,40 @@ def _release_observer(arm: str) -> None:
         pass
 
 
-def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=None) -> tuple[bool, list[dict], str | None]:
+def _rebootable_ids(rows) -> list[int] | None:
+    """Return sorted faulted IDs only when all 6 motors 11..16 read torque 0 and only rebootable hw_error bits."""
+    import omx_incident
+
+    if not isinstance(rows, list) or len(rows) != 6 or {r.get("id") for r in rows} != set(range(11, 17)):
+        return None
+    for r in rows:
+        t = r.get("torque_enabled")
+        if isinstance(t, bool) or t != 0:
+            return None
+    bad = [r for r in rows if r.get("hardware_error")]
+    if not bad:
+        return None
+    if any(type(r.get("hardware_error")) is not int or (r["hardware_error"] & ~omx_incident.REBOOTABLE) != 0 for r in bad):
+        return None
+    return sorted(int(r["id"]) for r in bad)
+
+
+def _reboot_clean(after, ids: list[int]) -> bool:
+    if not isinstance(after, dict):
+        return False
+    for i in range(11, 17):
+        entry = after.get(i) if i in after else after.get(str(i))
+        if not isinstance(entry, dict) or entry.get("torque") != 0 or entry.get("hw_error") != 0:
+            return False
+    return True
+
+
+def _check_hw_clean(
+    arm: str, device: str | None, *, read_fn=None, stopped_out=None, reboot_fn=None,
+) -> tuple[bool, list[dict], str | None, dict | None]:
     if read_fn is None and (not device or not Path(device).exists()):
-        return False, [{"error": "follower device unresolved or missing"}], "refused_hw_probe_unavailable"
+        return False, [{"error": "follower device unresolved or missing"}], "refused_hw_probe_unavailable", None
+    import omx_incident
     import register_probe
 
     stopped_obs = False
@@ -115,15 +146,24 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=N
                 stopped_out.clear()
         msg = str(exc)
         reason = "refused_hw_error" if ("hardware alert" in msg or ("ping failed" in msg and ", 128)" in msg)) else "refused_hw_probe_unavailable"
-        return False, [{"error": f"{type(exc).__name__}: {msg}"[:200]}], reason
+        return False, [{"error": f"{type(exc).__name__}: {msg}"[:200]}], reason, None
     bad = [r for r in rows if r.get("hardware_error")]
     if bad:
+        ids = _rebootable_ids(rows)
+        reboot_receipt = None
+        if ids:
+            try:
+                reboot_receipt = (reboot_fn or omx_incident.reboot_latched(device))(ids)
+            except Exception as exc:  # noqa: BLE001
+                reboot_receipt = {"error": f"{type(exc).__name__}: {exc}"[:160]}
+            if isinstance(reboot_receipt, dict) and reboot_receipt.get("rebooted") == ids and _reboot_clean(reboot_receipt.get("after"), ids):
+                return True, [], None, reboot_receipt
         if stopped_obs:
             _release_observer(arm)
             if stopped_out is not None:
                 stopped_out.clear()
-        return False, bad, "refused_hw_error"
-    return True, [], None
+        return False, bad, "refused_hw_error", reboot_receipt
+    return True, [], None, None
 
 
 def _write_out(path: Path, payload: dict) -> None:
@@ -134,7 +174,8 @@ def _write_out(path: Path, payload: dict) -> None:
 
 
 def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=None, token_fn=None,
-                  live_fn=None, wait_sess_fn=None, lease_status_fn=None, now=time.time, sleep=time.sleep) -> tuple[int, dict]:
+                  live_fn=None, wait_sess_fn=None, lease_status_fn=None, reboot_fn=None,
+                  now=time.time, sleep=time.sleep) -> tuple[int, dict]:
     import cell_arm_lease
     import cell_auto_fold as af
     from cell_job_spec import SESSION
@@ -183,9 +224,12 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
             return 2, res
 
     stopped_obs: list[bool] = []
-    hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn, stopped_out=stopped_obs)
+    hw_ok, bad, refuse_reason, reboot_receipt = _check_hw_clean(
+        args.arm, device, read_fn=read_fn, stopped_out=stopped_obs, reboot_fn=reboot_fn,
+    )
     if not hw_ok:
-        res = {"result": refuse_reason or "refused_hw_error", "arm": args.arm, "device": device, "bad_motors": bad}
+        res = {"result": refuse_reason or "refused_hw_error", "arm": args.arm, "device": device, "bad_motors": bad,
+               **({"reboot_attempt": reboot_receipt} if reboot_receipt is not None else {})}
         _write_out(out_path, res)
         return 2, res
 
@@ -218,6 +262,9 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
         out = _read_out(proc, "session_start_failed")
         if proc.returncode != 0 or out.get("result") != "folded":
             _release_if_paused()
+            if reboot_receipt is not None:
+                out["rebooted_ids"] = reboot_receipt["rebooted"]
+                _write_out(out_path, out)
             return (proc.returncode or 3), out
     except BaseException:
         _release_if_paused()
@@ -245,6 +292,8 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
                 except (SystemExit, Exception) as exc:  # noqa: BLE001
                     clear_errors[inc_id] = f"{type(exc).__name__}: {str(exc)[:160]}"
             out.update(cleared_ids=cleared_ids, clear_errors=clear_errors)
+    if reboot_receipt is not None:
+        out["rebooted_ids"] = reboot_receipt["rebooted"]
     _write_out(Path(args.out), out)
     return 0, out
 
@@ -264,7 +313,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--proposer", default=None)
     args = ap.parse_args(argv)
     rc, out = run_safe_home(args)
-    print(json.dumps({"arm": args.arm, **{k: out.get(k) for k in ("result", "reason", "candidate", "cleared_ids", "clear_errors", "clear_skipped") if k in out}}, default=str))
+    summary_keys = ("result", "reason", "candidate", "rebooted_ids", "cleared_ids", "clear_errors", "clear_skipped")
+    print(json.dumps({"arm": args.arm, **{k: out.get(k) for k in summary_keys if k in out}}, default=str))
     return rc
 
 

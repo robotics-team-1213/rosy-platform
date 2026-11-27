@@ -78,14 +78,15 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
             held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
-            require_empty_gripper: bool = False) -> dict:
+            require_empty_gripper: bool = False, grip_open: float | None = None,
+            max_runtime_tries: int = 3) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
     if stage not in ("full", "release_and_lift", "park_only"):
         raise ValueError(f"unsupported stage: {stage}")
     from cell_pipeline_io import fold_from_hold, park_succeeded
-    from cell_recovery_plan import build_candidates, classify_situation, run_detour_jogs
-    from chunk_runner_recover import ensure_live_unlatch
+    from cell_recovery_plan import build_candidates, candidate_family, classify_situation, run_detour_jogs
+    from chunk_runner_recover import ensure_live_unlatch, is_recoverable_fault, request_live_unlatch
     steps, known, moved = [], {"state": None}, {"yes": False}  # known: last state seen; moved: any release/jog/park sent
     latched = {"started": False, "active": False}
 
@@ -181,27 +182,12 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             return {"schema": SCHEMA, "result": "risen_for_visual_verify", "candidate": "release_and_lift",
                     "state": state, "hold_ok": True, "steps": steps, "corridor": None}
 
-    park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
-    situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
-    tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
-                              clear_z_m=clear_z_m, situation=situation, extended=True)
-             if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
-    prefer_direct = bool(
-        latched["active"] and held_plan is not None and library_sha256
-        and status.get("library_sha256") == library_sha256
-        and status.get("torque_hold_commanded") is True and not status.get("holding")
-    )
-    rank = (
-        {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
-        if order is not None else {name: i for i, (name, _, _) in enumerate(tries)}
-    )
-    tries.sort(key=lambda c: (
-        0 if (prefer_direct and c[0] == "park") else (1 if situation == "low_open_jaws" and c[0].startswith("lift_") else 2),
-        rank.get(c[0], len(rank)),
-    ))
+    tried_families: set[str] = set()
+    runtime_tries = 0
+    advisor_tried = False
 
-    def _try_candidate(name, before, frames):
-        can_fold_direct = prefer_direct and not before
+    def _try_candidate(name, before, frames, *, allow_direct: bool, sit: str):
+        can_fold_direct = allow_direct and not before
         cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
         cand_name = "fold-from-hold" if can_fold_direct else name
         verdict = look(cand_frames)
@@ -229,18 +215,18 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                   "error": parked.get("error"), "contact": parked.get("contact")})
             if park_succeeded(parked) and at is not None and folded(at, home):
                 release()
-                return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps,
-                        "corridor": verdict, "unlatched_live_hold": True}
-            return hold("PARK_NOT_HOME", candidate=cand_name, error=parked.get("error"))
+                return "folded", {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at,
+                                  "steps": steps, "corridor": verdict, "unlatched_live_hold": True}
+            return "failed", "PARK_NOT_HOME", cand_name, parked.get("error")
         ok_u, err_u = ensure_live_unlatch(cell, latched, note)
         if not ok_u:
             release()
-            return hold("UNLATCH_REFUSED", candidate=name, error=err_u)
+            return "failed", "UNLATCH_REFUSED", name, err_u
         known["state"] = None  # from the first command the arm is no longer where it was read
         mark_moved()
         ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
         if not ok_jog:
-            return hold(err_reason or "DETOUR_REFUSED", candidate=name, error=(err_ack or {}).get("error"))
+            return "failed", (err_reason or "DETOUR_REFUSED"), name, (err_ack or {}).get("error")
         parked = cell.act("park-slow" if latched["started"] else "park")
         at = known["state"] = _ok_state(parked)
         note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
@@ -248,24 +234,97 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
         if ok_park and at is not None and folded(at, home):
             release()
-            return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
-                    "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
-        return hold("PARK_NOT_HOME", candidate=name, error=parked.get("error"))
+            return "folded", {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
+                              "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
+        return "failed", "PARK_NOT_HOME", name, parked.get("error")
 
-    for name, before, frames in tries:
-        if (outcome := _try_candidate(name, before, frames)) is not None:
-            return outcome
-    if advisor is not None:
-        try:
-            adv = advisor({"state": state, "target": list(target[:6]), "home": list(home), "closed": closed,
-                           "holding": False, "low": bool(is_low or low(list(target[:6]))),
-                           "situation": situation, "blocked": list(steps)})
-        except Exception as exc:
-            adv = {"audit": {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
-        note({"step": "advisor", **(adv.get("audit") or {})})
-        if (cand := adv.get("candidate") if isinstance(adv, dict) else None) is not None and (outcome := _try_candidate(*cand)) is not None:
-            return outcome
-    return hold("ALL_PATHS_BLOCKED")
+    while True:
+        park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
+        situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
+        raw_tries = (
+            build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
+                             clear_z_m=clear_z_m, situation=situation, extended=True, grip_open=grip_open)
+            if extended_detours else list(candidates(list(target[:6]), park_fn))
+        )  # the runner parks from its held target
+        tries = [c for c in raw_tries if candidate_family(c[0]) not in tried_families]
+        prefer_direct = bool(
+            latched["active"] and held_plan is not None and library_sha256
+            and status.get("library_sha256") == library_sha256
+            and status.get("torque_hold_commanded") is True and not status.get("holding")
+        )
+        rank = (
+            {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+            if (tries and order is not None) else {name: i for i, (name, _, _) in enumerate(tries)}
+        )
+
+        def _prio(name: str) -> int:
+            if prefer_direct and name == "park":
+                return 0
+            if situation == "low_open_jaws" and name.startswith("lift_"):
+                return 1
+            if situation == "low_open_jaws" and name.startswith(("open_elbow_lift_", "elbow_lift_")):
+                return 2
+            return 3
+
+        tries.sort(key=lambda c: (_prio(c[0]), rank.get(c[0], len(rank))))
+
+        fallback_ready = False
+        for name, before, frames in tries:
+            outcome = _try_candidate(name, before, frames, allow_direct=prefer_direct, sit=situation)
+            if outcome is None:
+                continue
+            if outcome[0] == "folded":
+                return outcome[1]
+            _, fail_reason, fail_cand, fail_err = outcome
+            if not (extended_detours and stage == "full"):
+                return hold(fail_reason, candidate=fail_cand, error=fail_err)
+            runtime_tries += 1
+            tried_families.add(candidate_family(fail_cand))
+            if runtime_tries >= max_runtime_tries or fail_reason == "UNLATCH_REFUSED":
+                return hold(fail_reason, candidate=fail_cand, error=fail_err)
+            cell.act("human-hold")
+            fresh = cell.act("state")
+            fresh_state = _ok_state(fresh)
+            recoverable = (
+                fresh_state is not None
+                and not fresh.get("holding")
+                and not (require_empty_gripper and fresh.get("holding") is not False)
+                and is_recoverable_fault(fresh.get("fault"))
+            )
+            if not recoverable:
+                return hold(fail_reason, candidate=fail_cand, error=fail_err)
+            ok_u, ack_u = request_live_unlatch(cell, fresh)
+            note({"step": "strategy_fallback", "failed_candidate": fail_cand, "failed_family": candidate_family(fail_cand),
+                  "reason": fail_reason, "unlatched": ok_u, "error": ack_u.get("error") if not ok_u else None})
+            if not ok_u:
+                return hold(fail_reason, candidate=fail_cand, error=ack_u.get("error") or fail_err)
+            release()
+            latched["started"], latched["active"] = True, False
+            state = known["state"] = _ok_state(ack_u) or fresh_state
+            raw_t = (ack_u if isinstance(ack_u, dict) else {}).get("target") or fresh.get("target")
+            target = list(raw_t[:6]) if isinstance(raw_t, list) and len(raw_t) >= 6 else list(state)
+            is_low = bool(low(state))
+            status = ack_u if isinstance(ack_u, dict) and ack_u.get("state") else fresh
+            fallback_ready = True
+            break
+        if fallback_ready:
+            continue
+        if advisor is not None and not advisor_tried:
+            advisor_tried = True
+            try:
+                adv = advisor({"state": state, "target": list(target[:6]), "home": list(home), "closed": closed,
+                               "holding": False, "low": bool(is_low or low(list(target[:6]))),
+                               "situation": situation, "blocked": list(steps)})
+            except Exception as exc:
+                adv = {"audit": {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
+            note({"step": "advisor", **(adv.get("audit") or {})})
+            if (cand := adv.get("candidate") if isinstance(adv, dict) else None) is not None:
+                outcome = _try_candidate(*cand, allow_direct=False, sit=situation)
+                if outcome is not None:
+                    if outcome[0] == "folded":
+                        return outcome[1]
+                    return hold(outcome[1], candidate=outcome[2], error=outcome[3])
+        return hold("ALL_PATHS_BLOCKED")
 
 
 def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None,

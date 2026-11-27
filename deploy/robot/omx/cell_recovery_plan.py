@@ -7,6 +7,10 @@ import time
 from pathlib import Path
 
 STEP_MAX = 5.0  # matches chunk_runner_guards.JOG_MAX (never emit a single jog > 5.0)
+SHOULDER_LIFT_STEP = 1.2  # avoids transient acceleration PWM spikes when lifting under gravity
+ELBOW_LIFT_STEP = 2.5
+ELBOW_FIRST_CAP = 15
+MAX_LIFT_BUDGET = 35
 MIN_SITE_AREA_PX = 2500.0  # anti-sliver threshold before expanding high-transit hull across sites/base
 NAMES = ("shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos")
 _FAULT_KEYS = ("fault", "contact", "hold", "human_hold_latched")
@@ -182,30 +186,61 @@ def wait_session_json(session: Path, arm: str, started: float, sleep) -> tuple[d
     return None, "the recovery session did not report its end (no fresh session.json)"
 
 
-def fk_lift_plan(start: list[float], *, lift_units: float = 20.0, clear_z_m: float = 0.10,
-                 bounds=None, tcp_x_m: float | None = None, home=None) -> tuple[list[str], list[list[float]], list[float]] | None:
+def fk_lift_plan(
+    start: list[float], *, lift_units: float = 30.0, clear_z_m: float = 0.10,
+    bounds=None, tcp_x_m: float | None = None, home=None,
+    axis_order=((1, "shoulder_lift.pos"), (2, "elbow_flex.pos")),
+    per_axis_cap: dict[int, int] | None = None, grip_open: float | None = None,
+) -> tuple[list[str], list[list[float]], list[float]] | None:
     """Build an open-jaw vertical FK-z lift sequence using strong joints before any horizontal turn."""
     cur = [float(v) for v in start[:6]]
     z0 = fk_z(cur, tcp_x_m=tcp_x_m)
     if z0 >= clear_z_m:
         return None
-    budget = min(20, max(1, int(round(lift_units))))
+    budget = min(MAX_LIFT_BUDGET, max(1, int(round(lift_units))))
     frames, cmds, used = [list(cur)], [], 0
-    for axis, name in ((1, "shoulder_lift.pos"), (2, "elbow_flex.pos")):
+    if (grip_open is not None and not isinstance(grip_open, bool)
+            and math.isfinite(float(grip_open)) and float(grip_open) > cur[5] + 1.0):
+        target_grip = round(float(grip_open), 2)
+        cmds.append(f"grip {target_grip}")
+        cur[5] = target_grip
+        frames.append(list(cur))
+    for axis, name in axis_order:
         if used >= budget or fk_z(cur, tcp_x_m=tcp_x_m) >= clear_z_m:
             break
+        cap_left = min(budget - used, int(per_axis_cap[axis])) if (per_axis_cap and axis in per_axis_cap) else (budget - used)
+        if cap_left <= 0:
+            continue
         pref = float(home[axis]) if home is not None else None
         sdir = _best_z_dir(cur, axis, fk_z(cur, tcp_x_m=tcp_x_m), bounds, tcp_x_m, prefer=pref)
         if sdir is None:
             continue
-        delta, seg, _ = _step_toward_z(cur, axis, sdir, clear_z_m, bounds, tcp_x_m, budget - used)
+        delta, seg, _ = _step_toward_z(cur, axis, sdir, clear_z_m, bounds, tcp_x_m, cap_left)
         if abs(delta) >= 1e-6:
-            cmds.extend(chunk_jog_commands(name, delta, step_max=2.0 if axis == 1 else STEP_MAX))
+            step_max = SHOULDER_LIFT_STEP if axis == 1 else (ELBOW_LIFT_STEP if axis == 2 else STEP_MAX)
+            cmds.extend(chunk_jog_commands(name, delta, step_max=step_max))
             frames.extend(seg)
             used += len(seg)
     if not cmds or fk_z(cur, tcp_x_m=tcp_x_m) < clear_z_m:
         return None
     return cmds, frames, cur
+
+
+def candidate_family(name: str) -> str:
+    """Group recovery candidates sharing one physical lift/release strategy for distinct runtime fallback."""
+    if name.startswith("open_elbow_lift_"):
+        return "open_elbow_lift"
+    if name.startswith("elbow_lift_"):
+        return "elbow_lift"
+    if name.startswith("lift_"):
+        return "shoulder_lift"
+    if name.startswith("elbow_clear_"):
+        return "elbow_clear"
+    if name.startswith("pan"):
+        return "pan"
+    if name in ("park", "fold-from-hold"):
+        return "park"
+    return name
 
 
 def classify_situation(state: list[float], target: list[float], home: list[float], closed: float, *,
@@ -224,7 +259,7 @@ def classify_situation(state: list[float], target: list[float], home: list[float
 
 def build_candidates(state: list[float], home: list[float], closed: float, plan, *, bounds=None,
                      tcp_x_m: float | None = None, clear_z_m: float = 0.10, situation: str = "extended",
-                     extended: bool = False) -> list[tuple[str, list[str], list[list[float]]]]:
+                     extended: bool = False, grip_open: float | None = None) -> list[tuple[str, list[str], list[list[float]]]]:
     """Generate guarded (name, jog_commands, swept_frames) candidates for tier-1 recovery."""
     cur = [float(v) for v in state[:6]]
     if not extended:
@@ -238,27 +273,39 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
         return out
 
     raw: list[tuple[str, list[str], list[list[float]]]] = []
-    lift = fk_lift_plan(cur, clear_z_m=clear_z_m + 0.015, bounds=bounds, tcp_x_m=tcp_x_m, home=home)
-    if lift is None:
-        lift = fk_lift_plan(cur, clear_z_m=clear_z_m, bounds=bounds, tcp_x_m=tcp_x_m, home=home)
 
-    def add_lift_variants():
-        if lift is None:
+    def _plan_lift(**extra):
+        return (fk_lift_plan(cur, clear_z_m=clear_z_m + 0.015, bounds=bounds, tcp_x_m=tcp_x_m, home=home, **extra)
+                or fk_lift_plan(cur, clear_z_m=clear_z_m, bounds=bounds, tcp_x_m=tcp_x_m, home=home, **extra))
+
+    lift = _plan_lift()
+    elbow_axis = ((2, "elbow_flex.pos"), (1, "shoulder_lift.pos"))
+    elbow_cap = {2: ELBOW_FIRST_CAP}
+    elbow_lift = _plan_lift(axis_order=elbow_axis, per_axis_cap=elbow_cap)
+    can_open_wider = (situation == "low_open_jaws" and grip_open is not None and not isinstance(grip_open, bool)
+                      and math.isfinite(float(grip_open)) and float(grip_open) > cur[5] + 1.0)
+    open_elbow = _plan_lift(axis_order=elbow_axis, per_axis_cap=elbow_cap, grip_open=float(grip_open)) if can_open_wider else None
+
+    def add_lift_group(prefix: str, lift_tuple) -> None:
+        if lift_tuple is None:
             return
-        l_cmds, l_frames, l_pose = lift
-        raw.append(("lift_then_park", list(l_cmds), [list(cur), *l_frames[1:], *plan(l_pose)]))
+        l_cmds, l_frames, l_pose = lift_tuple
+        raw.append((f"{prefix}_then_park", list(l_cmds), [list(cur), *l_frames[1:], *plan(l_pose)]))
         for d in (10.0, -10.0):
             p_pose = [l_pose[0] + d, *l_pose[1:]]
             cmds = [*l_cmds, *chunk_jog_commands("shoulder_pan.pos", d)]
             frames = [list(cur), *l_frames[1:], *interpolate_pose(l_pose, p_pose, max_step=STEP_MAX), *plan(p_pose)]
-            raw.append((f"lift_pan{d:+g}", cmds, frames))
+            raw.append((f"{prefix}_pan{d:+g}", cmds, frames))
 
     if situation == "low_open_jaws":
-        add_lift_variants()
+        add_lift_group("lift", lift)
+        add_lift_group("open_elbow_lift", open_elbow)
+        add_lift_group("elbow_lift", elbow_lift)
         raw.append(("park", [], list(plan(cur))))
     else:
         raw.append(("park", [], list(plan(cur))))
-        add_lift_variants()
+        add_lift_group("lift", lift)
+        add_lift_group("elbow_lift", elbow_lift)
 
     for d in (5.0, -5.0, 10.0, -10.0, 15.0, -15.0):
         moved = [cur[0] + d, *cur[1:]]
@@ -282,28 +329,38 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
 
 def extended_candidate_names() -> list[str]:
     """Return every tier-1 candidate name that `build_candidates(..., extended=True)` may produce."""
-    return ["park", "lift_then_park", "lift_pan+10", "lift_pan-10",
-            "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15", "elbow_clear_then_park"]
+    return [
+        "park",
+        "lift_then_park", "lift_pan+10", "lift_pan-10",
+        "open_elbow_lift_then_park", "open_elbow_lift_pan+10", "open_elbow_lift_pan-10",
+        "elbow_lift_then_park", "elbow_lift_pan+10", "elbow_lift_pan-10",
+        "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15",
+        "elbow_clear_then_park",
+    ]
 
 
-def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 15,
+def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 25,
                     sleep=time.sleep) -> tuple[bool, str | None, dict | None]:
-    """Execute chunked detour jogs sequentially, polling settle between multi-step commands."""
+    """Execute chunked detour jogs sequentially, polling settle after grip changes and between multi-step commands."""
     last_ack = None
     for idx, command in enumerate(commands):
         ack = cell.act(command)
         last_ack = ack if isinstance(ack, dict) else {"ok": False}
         if last_ack.get("ok") is not True or any(last_ack.get(k) for k in _FAULT_KEYS):
             return False, "DETOUR_REFUSED", last_ack
-        if len(commands) > 1 and idx + 1 < len(commands):
+        is_grip = command.startswith("grip ")
+        if is_grip or (len(commands) > 1 and idx + 1 < len(commands)):
+            need_len = 6 if is_grip else 5
+            axes = slice(5, 6) if is_grip else slice(0, 5)
             for _ in range(settle_polls):
                 st = cell.act("state")
                 last_ack = st if isinstance(st, dict) else {"ok": False}
                 if last_ack.get("ok") is not True or any(last_ack.get(k) for k in _FAULT_KEYS):
                     return False, "DETOUR_REFUSED", last_ack
                 s_vals, t_vals = last_ack.get("state"), last_ack.get("target")
-                if (isinstance(s_vals, list) and len(s_vals) >= 5 and isinstance(t_vals, list) and len(t_vals) >= 5
-                        and max(abs(float(t) - float(s)) for t, s in zip(t_vals[:5], s_vals[:5])) <= settle_tol):
+                if (isinstance(s_vals, list) and len(s_vals) >= need_len
+                        and isinstance(t_vals, list) and len(t_vals) >= need_len
+                        and max(abs(float(t) - float(s)) for t, s in zip(t_vals[axes], s_vals[axes])) <= settle_tol):
                     break
                 sleep(0.2)
             else:
