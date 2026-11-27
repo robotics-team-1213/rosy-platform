@@ -19,6 +19,7 @@
    - 각 후보를 움직이기 전에 확인한다. 프레임을 FK로 위 카메라 화면에 그려 `cell_corridor.check`(낮은 구간은 모든 덩어리, 높은 구간은 모르는 덩어리: 손·다른 팔)로 보고, 다른 팔 예약과 겹치지 않게 `cell_space`에 예약한다.
    - 막히지 않은 후보가 없거나 어떤 오류가 나면 `human-hold`로 그 자리에 둔다. 보류가 걸린 러너는 자기 유휴 park도 거부하고 토크를 유지한다(`chunk_runner_settle.check_runner_idle`).
 4. **성공 판정.** park가 settled이고 몸통 관절이 home에서 3단위 안이다. 그 뒤 `stop`으로 세션이 끝나면 `record_session`이 토크 0을 확인한다.
+   - **보완 (2026-11-27):** 이 변경부터 토크 꺼진 팔의 사건 열기 결정(`omx_incident.decide`)은 보정된 라이브러리 자세 기준의 쉬는 자세(몸 관절이 home에서 `REST_TOL` 8 안)를 "펴짐 아님"으로 읽어 guarded 접기 보류를 걸지 않는다. 단 통신 끊김 복구(`is_home_recovery`) 경우는 예전처럼 보류한다. `facts.folded`와 기계 해제(`machine_clearable`)는 3단위 그대로다.
 5. **해제.** 증거에는 사고 ID와 측정 시각이 들어간다. assessor 해제 본문에 `recovery`를 싣는다. 내용은 `kind: auto_fold`, `folded_state`, `home`, `torque_after`, `corridor_clear`다. Fleet은 `machine_clearable`이 거부한 사고를 `clearable_after_fold`로 다시 판정하고 증거를 사고 행에 남긴다.
    - **허용:** 접힘이 home 3단위 안이고, 사고가 보고한 home과 같으며, 모든 모터 토크 0이고, 길이 비어 있었고, 사실 목록이 완전하다.
    - **거부:** 래치, 감김, 통신 끊김이 아닌 모터 고장 기록, 사고에 home이 없음, 다른 사고의 증거, 사고보다 오래된 증거(시계 차이 120초 허용), 모터 6개 미만의 토크 확인. 장치가 남긴 원래 복구 기록은 덮어쓰지 않고 함께 남긴다.

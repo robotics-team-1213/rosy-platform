@@ -6,11 +6,12 @@ from pathlib import Path
 
 
 def library_of(session):
-    """The session's start library, or None when absent or unreadable (the home lookup and library pose are then skipped)."""
+    """The session's start library for rested_folded only, or None when absent, unreadable or not an object."""
     try:
-        return json.loads(Path(session["chunks"]["library"]).read_text())
+        library = json.loads(Path(session["chunks"]["library"]).read_text())
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    return library if isinstance(library, dict) else None
 
 
 def rests_folded(last, home, library) -> bool:

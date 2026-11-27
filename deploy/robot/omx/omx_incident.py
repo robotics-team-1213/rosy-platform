@@ -188,9 +188,10 @@ def decide(f: dict) -> dict:
         return {"actions": [], "hold": False, "offered": [], "reason": released}
     off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
                                           for v in f["torque_after"].values())
-    if off and not f["folded"] and not f.get("rested_folded") and f.get("home") and f.get("last_state") and not f["latched"]:
-        from core_common.protocol.arm_incident.home_recovery import guarded_home_decision
-        return guarded_home_decision(f)
+    if off and not f["folded"] and f.get("home") and f.get("last_state") and not f["latched"]:
+        from core_common.protocol.arm_incident.home_recovery import guarded_home_decision, is_home_recovery
+        if not f.get("rested_folded") or is_home_recovery(f):  # a rested pose skips the hold unless it is a link-loss recovery
+            return guarded_home_decision(f)
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],
@@ -231,8 +232,9 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     session = json.loads(Path(session_path).read_text())
     if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
         return {"incident": False}
-    library = library_of(session)
-    if home is None and library:
+    library = library_of(session)  # tolerant: only rested_folded reads this one (a bad library means "not rested")
+    if home is None and (session.get("chunks") or {}).get("library"):  # the home lookup reads the library loudly, as before
+        library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
     f = facts(session, home, arm, library)
     if (verify_caps and not f["safe_end"] and f["folded"] and not f["latched"]
