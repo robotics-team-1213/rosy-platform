@@ -310,7 +310,10 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
         choices.save()
         plan = lambda s: park_path(list(s), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))  # noqa: E731
         low = lambda s: crp.fk_z(s, tcp_x_m=tcp_x_m) < clear_z_m  # noqa: E731
-        look = crp.build_multi_site_look(cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m)
+        look = crp.build_multi_site_look(
+            cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m,
+            allow_ascending_departure=True,
+        )
         load_check = crp.make_load_checker(config, library, params)
         advisor = None
         if args.vlm_url or args.vlm_config:

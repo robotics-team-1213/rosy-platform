@@ -343,7 +343,10 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
     return check_frames
 
 
-def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: str, roi, params, to_px, tcp_x_m: float | None):
+def build_multi_site_look(
+    cell, config: dict, calibration: dict, primary_site: str, roi, params, to_px, tcp_x_m: float | None,
+    *, allow_ascending_departure: bool = False,
+):
     """Build a corridor look(frames) checker combining calibrated site surfaces for multi-site high transit."""
     import numpy as np
 
@@ -388,6 +391,9 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
                 if not config.get("transit_surface_lab") and int((gap_fg > 0).sum()) >= 0.20 * int(gap.sum()):
                     gap_fg[gap] = 255
                 mask = low_mask | gap_fg
-        return cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=polys, high_surface_px=high_hull)
+        return cell_corridor.check(
+            pts, mask, roi, to_px, params=params, surface_px=polys,
+            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure,
+        )
 
     return look
