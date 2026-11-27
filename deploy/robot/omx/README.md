@@ -1465,6 +1465,49 @@ arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너
 | 8 | `ship-h1r2-l2` |
 | 9 | `tray` |
 
+### 벨트 컨테이너 자세 입력 (Panel L, 2026-11-27)
+
+영상만 받는 A·B 정책은 벨트 컨테이너의 실제 위치를 따라가지 못하고 학습 데이터의 평균 위치를 집는다.
+Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. 앞 10칸은 위 표 순서의 목표 one-hot이다.
+뒤 3칸은 `belt_dx_cm`, `belt_dy_cm`, `belt_yaw_x5`다.
+
+- **선언:** 체크포인트 폴더의 `ENV_STATE.json`이 이름을 선언한다. `package_cell_bundle`은 이 파일을 그대로 복사한다.
+  파일이 없거나 `names`의 마지막 3개가 위 이름과 다르면 기존 동작(폭 전체를 one-hot 목표로 읽음)을 유지한다.
+  파일이 있는데 `names`가 없거나 길이가 폭과 다르면 체크포인트를 읽지 않는다.
+  선언이 있으면 앞 10개 이름이 위 표의 슬롯 이름과 같아야 한다. 다르면 시작하지 않는다.
+
+  ```json
+  {"names": ["ship-h1r0-l0", "...", "tray", "belt_dx_cm", "belt_dy_cm", "belt_yaw_x5"],
+   "belt_reference": {"preset": "v24-20261126-real-home",
+                      "top_camera": {"eye": [], "focus": [], "up": [], "f_px": 618.5, "width": 640, "height": 480},
+                      "belt_site": {"xy": [0.207, -0.003], "yaw": 0.0}}}
+  ```
+
+- **정의 (학습·시뮬 평가와 같음):** 시뮬 fixture 좌표에서 (컨테이너 중심 − 공칭 벨트 사이트) x, y [m] / 0.01과
+  (컨테이너 장축 yaw − 사이트 yaw, ±90°로 접음) [rad] / 0.2이다. 공칭 사이트는
+  `omx_two_arm_sites.Layout(preset).sites["belt"]`다. 11-14 top 사진의 벨트 끝·중심선(`BELT_PHOTO_1114`)과
+  fixture 집기 위치에서 정해진다. `belt_site`를 함께 적으면 이 checkout의 값과 0.5 mm·0.5° 안에서 같아야 한다.
+- **측정:** `cell_policy_drive.py`가 동작 전(팔 홈)에 top 프레임 한 장으로 한 번 잰다. 그 값을 에피소드 내내 고정한다.
+  프레임은 출처 시각이 있는 새 프레임(`frame_receipt`, 2초 이내)만 쓴다.
+  컨테이너는 `omx_real2sim`의 `blobs`·`lane_blobs`로 찾는다. 위치는 `top_camera`(학습 영상을 렌더한 시뮬 pinhole,
+  예: `top_refit.json`)로 벨트 위 컨테이너 윗면 높이에 역투영해 fixture 좌표로 바로 얻는다.
+  팔 좌표와 셀 보정 지도는 거치지 않는다. 시뮬 팔 받침 위치는 사진 추정값이고 arm_a에서 17 mm 차이가 확인되었다
+  (2026-11-17). 두 팔이 같은 top 카메라와 같은 벨트 사이트를 쓰므로 arm_a와 arm_b가 같은 값을 받는다.
+- **거절 (팔 무이동, 결과 `refused`, `reason_code`):**
+  - `BELT_POSE_UNKNOWN`: `belt_reference` 없음(`NOT_AVAILABLE`), 프레임 크기 불일치, 사이트 60 mm 안에 컨테이너 0개 또는
+    2개 이상, 학습 컨테이너 크기(90×30 mm)와 다른 컨테이너 색 덩어리.
+  - `BELT_POSE_OUT_OF_RANGE`: dx −2~+14 mm, dy ±9 mm, yaw ±13°를 벗어남(학습 범위 dx −1~+13 mm, dy ±8 mm, yaw ±12°에
+    1 mm·1° 여유). 값을 잘라서 넣지 않는다.
+- **기록:** `policy-drive.jsonl`의 `belt_pose` 행과 결과 JSON의 `belt_pose`에 세 숫자(`features`), fixture 중심(`centre_mm`),
+  오프셋(`offset_mm`), `yaw_deg`, 크기(`size_mm`), 크기 점수(`score`), 프레임 sha256을 남긴다. dry run도 같다.
+- **현재 실물 값 (2026-11-27 프레임, `top_refit.json` 기준):** 실물 1~5회차 컨테이너는 dy 약 −34 mm,
+  6회차는 dy −49 mm, yaw +6°에 있었다. 모두 `BELT_POSE_OUT_OF_RANGE`로 거절된다.
+  컨테이너를 벨트 중심(사이트 y)에 두거나 학습 범위를 넓혀야 한다.
+- 원격 정책(`--endpoint-url`)과 이를 쓰는 양팔 정책(`cell_two_arm_policy`)은 이 입력을 보내지 않는다. 서버가 이름 선언을
+  알리지 않으므로 13칸 체크포인트는 `--goal-site`·Job API에서 10칸 목표 검사로 거절되지만, CLI `--goal-slot`과 양팔
+  `--goal-a`·`--goal-b`는 기존처럼 13칸 one-hot을 보낸다. 이 체크포인트를 원격·양팔 경로에 쓰지 않는다.
+- 로컬 `cell_act_shadow` 섀도 기록은 이 입력을 보내지 않아 추론 입력 단계에서 거절된다. 팔은 움직이지 않는다.
+
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
 두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.
