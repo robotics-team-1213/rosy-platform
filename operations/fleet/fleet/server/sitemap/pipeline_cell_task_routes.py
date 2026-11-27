@@ -165,10 +165,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         web_common = getattr(app.state, "web_common", None)
         try:
             spec, motion = prepare_cell_motion(spec, cell_id=cell_id, web_common=web_common, legacy_sites=("belt", LEGACY_VEHICLE_SITE))
-            targets = resolve_cell_task_targets(
-                cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
-                legacy_sites=("belt", LEGACY_VEHICLE_SITE),
-            )
+            targets = resolve_cell_task_targets(cell_id, spec, web_common=web_common, default_cell_s_src=LEGACY_VEHICLE_SITE,
+                                                legacy_sites=("belt", LEGACY_VEHICLE_SITE))
             identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
@@ -216,10 +214,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             resolved_disp = raw_disp or None
         task = _enrich_task_health({
             "task_id": task_id,
-            "cell_id": cell_id,
-            "arm_id": arm_id,
-            "directive": directive,
-            **({"motion": motion} if motion else {}),
+            "cell_id": cell_id, "arm_id": arm_id,
+            "directive": directive, **({"motion": motion} if motion else {}),
             "robot_id": resolved_robot_id,
             "robot_kind": str(spec.get("robot_kind") or "pinky"),
             "src_site": targets["src_site"],
