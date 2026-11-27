@@ -41,7 +41,9 @@ def test_a_tight_curve_is_sampled_finely_and_a_straight_keeps_the_road_step():
     assert any(abs(gap - NAV2_ROUTE_STEP_M) < 1e-6 for gap, turn in gaps if not turn)
     # chord sagitta on the arc stays far inside the 0.043 m lane margin
     assert all(R - math.sqrt(R * R - (gap / 2) ** 2) < 0.003 for gap, turn in gaps if turn)
-    assert pts[-1][3] == "stop" and all(p[3] == "pass" for p in pts[:-1])
+    assert pts[-1][3] == "stop"
+    # start and end are 0.27 m apart, so one mid point is a stop (_split_closed_loop); it stays off the curve
+    assert [p[3] for p in pts[:-1]].count("stop") == 1 and not any(_on_turn(p) for p in pts[:-1] if p[3] == "stop")
 
 
 def test_a_resend_from_the_curve_keeps_its_first_kept_point_close():
