@@ -1505,6 +1505,10 @@ Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. �
     2개 이상, 학습 컨테이너 크기(90×30 mm)와 다른 컨테이너 색 덩어리.
   - `BELT_POSE_OUT_OF_RANGE`: dx −2~+14 mm, dy ±9 mm, yaw ±13°를 벗어남(학습 범위 dx −1~+13 mm, dy ±8 mm, yaw ±12°에
     1 mm·1° 여유). 값을 잘라서 넣지 않는다.
+    번들의 `ENV_STATE.json`이 `belt_reference.range` = `{"dx_m": [lo, hi], "dy_m": [lo, hi], "yaw_rad": [lo, hi]}`를 선언하면
+    (학습 범위+여유, 생성기 `--range "dx_lo,dx_hi,dy_abs,yaw_abs_deg"`, 예: Panel N `-0.003,0.032,0.027,16`) 그 범위를 쓴다.
+    없으면 위 기본값이다. 선언이 형식에 맞지 않거나 상한(dx −10~+40 mm, |dy| 35 mm, |yaw| 20°)을 넘으면 기본값으로 되돌리지 않고
+    `BELT_POSE_UNKNOWN`(`NOT_AVAILABLE`)으로 거절한다. 거절 문구에는 실제로 쓴 범위가 찍힌다.
 - **기록:** `policy-drive.jsonl`의 `belt_pose` 행과 결과 JSON의 `belt_pose`에 세 숫자(`features`), fixture 중심(`centre_mm`),
   오프셋(`offset_mm`), `yaw_deg`, 크기(`size_mm`), 크기 점수(`score`), 프레임 sha256을 남긴다. dry run도 같다.
 - **현재 실물 값 (2026-11-27 프레임, `top_refit.json` 기준):** 실물 1~5회차 컨테이너는 dy 약 −34 mm,
