@@ -729,17 +729,40 @@ def _torque_off_session(tmp_path, last, library):
     return s
 
 
-def test_a_rested_folded_arm_is_not_extended_when_the_fold_rule_agrees(tmp_path, monkeypatch):
+def test_a_rested_folded_arm_opens_no_extended_incident_and_folded_is_not_widened(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     s = _torque_off_session(tmp_path, REST, {"chunks": {"home": [S_HOME]}})
     assert oi.handle(s, "arm_s") == {"incident": False}
-    assert oi.facts(json.loads(s.read_text()), S_HOME, "arm_s")["folded"] is False  # no library: HOME_TOL alone, as before
+    f = oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", {"chunks": {"home": [S_HOME]}})
+    assert f["folded"] is False and f["rested_folded"] is True  # D-1047: only the HOME_TOL rule is "folded"
 
 
-def test_the_loose_fold_ranges_alone_do_not_fold_an_arm_far_from_its_home(tmp_path, monkeypatch):
+def test_a_latched_resting_arm_keeps_its_hold(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    s = _torque_off_session(tmp_path, [19.0] + REST[1:], {"chunks": {"home": [S_HOME]}})  # inside FOLD_TOL pan 20, outside REST_TOL
-    assert oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", {"chunks": {"home": [S_HOME]}})["folded"] is False
+    s = session(tmp_path, latched=True, windup=False, last=REST)
+    out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+    assert out["decision"]["hold"] and "arm extended" not in out["decision"]["reason"]
+
+
+def test_the_loose_fold_ranges_alone_do_not_rest_an_arm_far_from_its_home(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lib = {"chunks": {"home": [S_HOME]}}
+    far = [19.0] + REST[1:]  # inside FOLD_TOL pan 20, outside REST_TOL
+    s = _torque_off_session(tmp_path, far, lib)
+    f = oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", lib)
+    assert f["folded"] is False and f["rested_folded"] is False
+
+
+def test_nine_units_off_home_still_opens_the_extended_incident_and_seven_does_not(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lib = {"chunks": {"home": [S_HOME]}}
+    nine = list(S_HOME); nine[2] += 9.0
+    nine_dir = tmp_path / "nine"
+    nine_dir.mkdir()
+    out = oi.handle(_torque_off_session(nine_dir, nine, lib), "arm_s", link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+    seven = list(S_HOME); seven[2] += 7.0
+    assert oi.handle(_torque_off_session(tmp_path, seven, lib), "arm_s") == {"incident": False}
 
 
 def test_a_really_extended_arm_with_torque_off_still_opens_the_guarded_fold_incident(tmp_path, monkeypatch):
@@ -749,8 +772,21 @@ def test_a_really_extended_arm_with_torque_off_still_opens_the_guarded_fold_inci
     assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
 
 
-def test_without_a_library_pose_the_coarse_rule_never_folds_the_incident_fact(tmp_path, monkeypatch):
+def test_without_a_library_pose_the_coarse_rule_never_rests_the_incident_fact(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     s = _torque_off_session(tmp_path, REST, {"chunks": {}})
     out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
     assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def test_a_missing_or_malformed_library_is_tolerated_when_home_is_passed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {}})
+    rec = json.loads(s.read_text())
+    for body in (None, "{not json"):
+        lib = tmp_path / "lib.json"
+        lib.unlink(missing_ok=True)
+        if body:
+            lib.write_text(body)
+        out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+        assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]

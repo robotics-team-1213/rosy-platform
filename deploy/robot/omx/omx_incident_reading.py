@@ -5,6 +5,14 @@ import json
 from pathlib import Path
 
 
+def library_of(session):
+    """The session's start library, or None when absent or unreadable (the home lookup and library pose are then skipped)."""
+    try:
+        return json.loads(Path(session["chunks"]["library"]).read_text())
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def rests_folded(last, home, library) -> bool:
     """Torque OFF settles a folded arm a few units off its start home (arm_s elbow 50 -> 55): folded when the readiness
     rule (cell_job_peer_health, calibrated library basis only, never the coarse fallback) agrees AND every body joint is
