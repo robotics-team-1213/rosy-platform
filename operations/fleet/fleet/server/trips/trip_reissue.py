@@ -203,6 +203,11 @@ class TripReissue:
         bo.update(phase="backing", started_at=now, mission=answer.get("state"), traffic_held=answer.get("traffic_held"))
         item["reads"] = 0
         self._write(item["live"], item["record"])
+        event = getattr(self.runner._store, "record_event", None)   # beside the console's own "step" events
+        if event is not None:
+            event("trip_back_off", item["principal"], {"robot_id": robot_id, "trip_id": item["trip_id"],
+                                                        "distance_m": bo["distance_m"], "attempt": bo["attempt"],
+                                                        "before": bo["before"], "by": "auto_reissue"})
 
     async def _backing(self, item: dict, bo: dict, now: float) -> None:
         """Wait for CORE to end the step; an end Fleet cannot read before the step's own bound is no reissue."""

@@ -33,6 +33,8 @@
 | 다른 모든 기체가 0.5 m 밖 | 기다림(`peer_near`) |
 | 운영자 새 trip, 종료 뒤 E-stop·line-follow OFF 없음 | 버림(D-1086 `new_trip`, `stopped_since`) |
 
+   - **사람·물체는 Fleet이 판정하지 않는다.** 뒤에 선 사람·낮은 물체는 CORE의 뒤쪽 LiDAR 판정(D-424 뒤쪽 띠·멈춤 간격·무반사 빔 거절, 임무 중 `obstacle` 종료)에만 기댄다. LiDAR가 못 보는 낮은 물체·사각은 남는 위험이다(뒤쪽 초음파 없음).
+   - **후진이 시작된 뒤에는 Fleet 조건을 다시 보지 않는다.** 그 사이 뒤로 다가오는 기체는 `request_step`의 `hold_for_localization`(주변 Fleet 주행 기체 정지)과 CORE 센서가 막는다. E-stop은 CORE가 임무를 끝내고(`aborted`), Fleet은 `stopped_since`로 버린다.
 5. **통신 단절.** CORE 임무는 자기 거리(0.08 m)와 시간(거리/속도 + 5 s)에서 스스로 끝난다. Fleet이 `done`을 거리/속도 + 10 s 안에 읽지 못하면 `back_off_unconfirmed`로 버리고 다시 내지 않는다. `aborted`(장애물·E-stop 등)도 다시 내지 않는다.
 6. **한도.** 한 사슬에 후진 최대 2회, 합계 0.16 m 이하(stuck lane_lost 후진 상한 0.20 m보다 작다). 물러난 뒤 재발행한 trip이 다시 같은 지점에서 실패하면 0.08 m 더 물러난다. 그 뒤에는 그만두고 `reissue.state: gave_up`, `gave_up: "한쪽 치우침 복구 실패: lat …, 벽 여유 …, 시도한 조건 […]"`을 남긴다. 재발행 3회 안에서 센다.
 7. **기록.** 끝난 trip `detail.reissue.back_off = {phase, attempt, distance_m, total_m, before, after, lat_m, started_at, ended_at, result(done | aborted:<이유> | unconfirmed | <거절 코드>)}`, 새 trip `detail.reissued_from.back_offs·back_off_m`, `detail.first_leg`.
@@ -48,4 +50,4 @@
 - 뒤쪽 기체 판정은 블록 표(held·pinned·last_occupied, route_occupants)가 아니라 "모든 기체 자리 확인 + 0.5 m 밖"이다. 더 보수적이지만, 자리를 모르는 기체가 하나라도 있으면 물러나지 않는다. 블록 표 판정이 필요하면 교통 쪽과 정한다.
 - 다른 기체가 trip 중이면 `request_step`이 거절하므로, 여러 대가 동시에 달리는 시간에는 물러나기가 거의 일어나지 않는다.
 - 재발행 직후 trip 루프가 `first_leg` 기록 전에 첫 경로를 보낼 수 있다. 그 경우 첫 송신은 평범한 재중심이고, 저속 상한은 그 뒤 갱신부터 걸린다.
-- 실물 수용: rosy_45 lower_east 벽 쪽 치우침 재현에서 후진 0.08 m(`done`) → 다시 보기 → 저속 재발행 → 통과, 그리고 뒤에 기체를 둔 상태에서 `peer_near` 거절을 확인한다.
+- 실물 수용: rosy_45 lower_east 벽 쪽 치우침 재현에서 후진 0.08 m(`done`) → 다시 보기 → 저속 재발행 → 통과. 뒤에 기체를 둔 상태의 `peer_near` 거절, 뒤에 사람 발·낮은 상자를 둔 상태에서 CORE 거절(`back_off_refused`) 또는 `aborted:obstacle`을 확인한다.
