@@ -214,8 +214,22 @@ def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_tra
     heights[290:302, 310:322] = 120.0  # a hand over part of the outline
     assert not cargo().any()
     heights[:] = 0.0
-    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high: no bare surface to measure from
+    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high
     assert not cargo().any()
+    heights[250:350, 210:390] = 30.0  # covered one tier high (the real deck on 2026-11-25): the other surfaces vouch
+    assert cargo().any()
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (heights, [[1, 0, 0], [0, 1, 0]], [], 620.0))
+    assert not cargo().any()  # no surface where the calibration puts it: the depth is not trusted
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (heights, [[1, 0, 0], [0, 1, 0]], [], 600.0))
+    heights[280:321, 300:325] = np.nan  # more than half the outline without a depth return
+    assert not cargo().any()
+    heights[:] = 0.0
+    heights[280:321, 300:341] = 64.0
+    seen = iter(range(3))
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (
+        (None, None, ["missing_depth"], None) if next(seen) == 1 else (heights, [[1, 0, 0], [0, 1, 0]], [], 600.0)))
+    assert cargo() is None  # one bad frame of three
+    monkeypatch.setattr(fs, "_frame_heights", lambda _frame, _img, _cam: (heights, [[1, 0, 0], [0, 1, 0]], [], 600.0))
     heights[:] = 0.0
     heights[280:321, 300:341] = 64.0
     assert cargo().any()
