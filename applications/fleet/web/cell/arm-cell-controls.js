@@ -102,11 +102,18 @@ export function createArmCommandSection({
     if (sig === lastSig && box.childElementCount) return box;
     lastSig = sig;
     statusEl.textContent = lastStatus;
+    statusEl.className = "hint arm-cmd-status";
     const nodes = [];
 
     if (inc) {
       const plan = armIncidentClearPlan(inc);
-      const wrap = node("div", "", "cell-context-clear");
+      const wrap = node("div", "", "cell-context-clear arm-cmd-incident");
+      const incHead = node("div", "", "arm-cmd-head");
+      const incTag = node("ui-tag", "보류·사건");
+      incTag.setAttribute("variant", "inline");
+      incTag.setAttribute("status", "warn");
+      incHead.append(node("strong", "열린 사건 · 보류 해제"), incTag);
+      wrap.append(incHead);
       if (plan.mode === "next_step") {
         wrap.append(node("p", `다음 단계 · ${plan.step}`, "hint"));
       } else {
@@ -149,10 +156,13 @@ export function createArmCommandSection({
       nodes.push(wrap);
     }
 
-    const row = node("div", "", "cell-obj-staging-controls");
-    for (const [preset, label] of ARM_PRESETS[armId] || ARM_PRESETS.arm_a) {
+    const row = node("div", "", "arm-cmd-presets");
+    const presets = ARM_PRESETS[armId] || ARM_PRESETS.arm_a;
+    for (const [idx, [preset, label]] of presets.entries()) {
       const btn = node("ui-button", label);
-      btn.setAttribute("kind", "primary"); btn.setAttribute("type", "button");
+      btn.setAttribute("kind", "quiet");
+      if (idx === 0) btn.setAttribute("kind", "primary");
+      btn.setAttribute("type", "button");
       btn.setAttribute("data-work-read", ""); btn.setAttribute("data-arm-preset", preset);
       if (lock) setOffBy(btn, lock);
       btn.addEventListener("click", () => {
@@ -182,12 +192,14 @@ export function createArmCommandSection({
     }
     nodes.push(row);
     if (lastStatus) nodes.push(statusEl);
+    const links = node("div", "", "arm-cmd-links");
     const obsLink = node("a", "팔 관측·사건 보기", "ui-action-link");
     obsLink.dataset.kind = "quiet";
     obsLink.href = obsArm?.sourceId ? `/console/cell?focus=arm:${encodeURIComponent(obsArm.sourceId)}#observation-heading` : "/console/cell#observation-heading";
     const workLink = node("a", "팔레트 적재 화면 열기", "ui-action-link");
     workLink.dataset.kind = "quiet"; workLink.href = "/console/cell";
-    nodes.push(obsLink, workLink);
+    links.append(obsLink, workLink);
+    nodes.push(links);
     box.replaceChildren(...nodes);
     return box;
   }

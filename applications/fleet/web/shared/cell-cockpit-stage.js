@@ -11,7 +11,7 @@ import { armIncidentAlertRows, clearArmIncident, IncidentClearBody } from "/cons
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { syncCamRoiOverlay } from "/console/assets/cell-cam-roi.js";
-import { syncCamObjectsOverlay } from "/console/assets/cell-cam-objects.js";
+import { objectsForCamView, syncCamObjectsOverlay } from "/console/assets/cell-cam-objects.js";
 import { createCellObjectStager } from "/console/assets/arm-cell-controls.js";
 import { JOINT_SHORT, canonicalArmId, isArmAttentionOrLive, normalizeWorkcellObservations, obsSignature } from "/console/assets/cell-obs-model.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
@@ -32,8 +32,9 @@ function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = 
   const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); for (const c of [".omx-cam-roi-overlay", ".omx-cam-objects-overlay"]) img.parentElement?.querySelector(c)?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
   const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); applyZoom(!img.classList.contains("focused")); };
   const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") applyZoom(false); };
+  const objCount = objectsForCamView(cam, cellObjects).objects.length;
   return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
-    <div class="cell-stage-cam-head"><strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong><small ref=${statusRef} class="omx-inspector-cam-badge" /></div>
+    <div class="cell-stage-cam-head"><strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>${objCount ? html`<ui-tag variant="inline" status="active" class="cell-stage-obj-count">객체 ${objCount}</ui-tag>` : null}<small ref=${statusRef} class="omx-inspector-cam-badge" /></div>
     <div class="omx-inspector-cam-frame"><img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} onClick=${toggleZoom} /><span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" /></div>
   </article>`;
 }
@@ -50,7 +51,10 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
     : arm.homeRecoveries?.length ? { status: "warn", text: "홈 복구 대기" }
     : arm.fresh ? { status: "active", text: "실시간" }
     : { status: "warn", text: "대기 · 만료" };
-  return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id}
+  const severity = arm.heldIncidents.length ? "crit"
+    : (arm.openIncidents.length || arm.homeRecoveries?.length) ? "warn"
+    : arm.fresh ? "live" : "idle";
+  return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id} data-arm-severity=${severity}
     onClick=${() => selection?.set?.(arm.id, { source: "roster" })}>
     <div class="cell-stage-arm-head">
       <strong>${arm.label}</strong>
