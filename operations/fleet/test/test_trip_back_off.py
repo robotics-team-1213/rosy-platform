@@ -51,7 +51,7 @@ class Rig:
         run(self.reissue.tick())
         live.view["detail"]["recovery"] = dict(SAME_SPOT)
         if chain is not None:
-            live.view["detail"]["reissued_from"] = chain
+            live.view["detail"]["reissued_from"] = {**chain, "first_end_at": clock()}
         run(runner._stop(live, "stopped", "stall", {}))
         assert live.view["state"] == "stopped"
         run(self.reissue.tick())
@@ -61,15 +61,16 @@ class Rig:
         return self.live.view["detail"]["reissue"]
 
     def poll(self, seconds):
-        self.pose["v"] = _cam(self.pose["v"].x, self.pose["v"].y, self.pose["v"].yaw, odom_stamp=self.clock())
-        _poll(self.reissue, self.clock, seconds)
+        for _ in range(int(seconds)):   # poses stay fresh as a live robot's do
+            self.pose["v"] = _cam(self.pose["v"].x, self.pose["v"].y, self.pose["v"].yaw, odom_stamp=self.clock())
+            _poll(self.reissue, self.clock, 1)
 
 
 def test_backs_off_once_looks_again_then_reissues_slow_and_recentred(monkeypatch):
     rig = Rig(monkeypatch)
     assert rig.record["kind"] == "same_spot" and rig.record["back_off"]["phase"] == "pending"
     rig.poll(ri.REISSUE_DELAYS_S[0] + 2)
-    assert rig.steps == [("rosy_42", "backward", back.BACK_OFF_M)] and rig.calls == []
+    assert rig.steps == [("rosy_42", "backward", back.BACK_OFF_M)] and rig.calls == [], rig.record
     assert rig.record["back_off"]["phase"] == "backing" and rig.record["back_off"]["before"] is not None
     rig.status = {"kind": "nudge_backward", "state": "done", "reason": "done"}
     rig.poll(3)
@@ -91,9 +92,13 @@ def test_no_back_off_when_a_condition_fails(monkeypatch, setup, why):
     me = rig.pose["v"]
     if setup in ("peer_unknown", "peer_near"):
         rig.runner._roster = lambda: ["rosy_42", "rosy_43"]
-        peer = None if setup == "peer_unknown" else _cam(me.x - 0.2, me.y, me.yaw, odom_stamp=rig.clock())
         own = rig.runner._poses.arbitrated_pose
-        rig.runner._poses.arbitrated_pose = lambda r: peer if r == "rosy_43" else own(r)
+
+        def poses(r):
+            if r != "rosy_43":
+                return own(r)
+            return None if setup == "peer_unknown" else _cam(me.x - 0.2, me.y, me.yaw, odom_stamp=rig.clock())
+        rig.runner._poses.arbitrated_pose = poses
     elif setup == "excluded":
         monkeypatch.setattr(back, "_excluded", lambda *_a: True)
     elif setup == "crosswalk":
@@ -136,10 +141,10 @@ def test_a_step_that_did_not_finish_or_could_not_be_read_is_no_reissue(monkeypat
 
 
 def test_a_second_same_spot_failure_backs_off_again_then_gives_up(monkeypatch):
-    rig = Rig(monkeypatch, chain={"trip_id": "t0", "root": "t0", "attempt": 1, "first_end_at": 0.0,
+    rig = Rig(monkeypatch, chain={"trip_id": "t0", "root": "t0", "attempt": 1,
                                   "back_offs": 1, "back_off_m": back.BACK_OFF_M})
     assert rig.record["back_off"]["attempt"] == 2
-    rig2 = Rig(monkeypatch, chain={"trip_id": "t0", "root": "t0", "attempt": 2, "first_end_at": 0.0,
+    rig2 = Rig(monkeypatch, chain={"trip_id": "t0", "root": "t0", "attempt": 2,
                                    "back_offs": back.MAX_BACK_OFFS, "back_off_m": back.MAX_TOTAL_M})
     assert rig2.record["state"] == "gave_up" and rig2.record["gave_up"].startswith("한쪽 치우침 복구 실패")
     assert "lat -0.03" in rig2.record["gave_up"] and "벽 여유 0.1" in rig2.record["gave_up"]
