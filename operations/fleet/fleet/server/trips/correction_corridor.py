@@ -6,20 +6,23 @@ import math
 import httpx
 
 from core_common.protocol.evidence import STALE_POSE_S
-from core_common.stop_pose import REPARK_MAX_FORWARD_M
+from core_common.stop_pose import repark_within_limits
 from fleet.hub.hub import HubError
 from fleet.server.handoff_traffic import read_peers, site_corridor
 from fleet.server.named_stop_decision import named_stop_decision
+from fleet.server.named_stop_topview import KEY as TOPVIEW_KEY, current_verdict
 from fleet.site_map import SitePlace
 
 
-def correction_endpoint(state, forward):
+def correction_endpoint(state, forward, left=0.0):
     pose = state.get("pose") or {}
-    if (type(forward) not in (int, float) or not 0.005 <= abs(forward) <= REPARK_MAX_FORWARD_M
+    if (type(forward) not in (int, float) or type(left) not in (int, float) or not repark_within_limits(forward, left)
+            or not 0.005 <= max(abs(forward), abs(left))
             or any(type(pose.get(axis)) not in (int, float) or not math.isfinite(pose[axis])
                    for axis in ("x", "y", "yaw"))):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_CORRECTION_POSE_UNVERIFIED")
-    return (pose["x"] + forward * math.cos(pose["yaw"]), pose["y"] + forward * math.sin(pose["yaw"]))
+    return (pose["x"] + forward * math.cos(pose["yaw"]) - left * math.sin(pose["yaw"]),
+            pose["y"] + forward * math.sin(pose["yaw"]) + left * math.cos(pose["yaw"]))
 
 
 async def check_correction_path(console, live, evidence, place_data, *, cable_inhibited):
@@ -53,12 +56,16 @@ async def check_correction_path(console, live, evidence, place_data, *, cable_in
             or binding.get("binding_id") != evidence["binding_id"] or state.get("map_grid_id") != evidence["map_grid_id"]):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_DISPATCH_FRAME_CHANGED")
     place = SitePlace.model_validate(place_data)
-    decision = named_stop_decision(place, fit, state)
-    if decision["decision"] != "REPARK":
+    record = live.view["detail"].get(TOPVIEW_KEY)  # a top-view stop is corrected from its own verdict only
+    decision = (current_verdict(record, state, console._clock(), place.id)
+                if record is not None and record.get("place") == place.id else named_stop_decision(place, fit, state))
+    if decision is None or decision["decision"] != "REPARK":
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_CORRECTION_POSE_CHANGED")
-    goal = correction_endpoint(state, decision["forward_m"])
+    left = decision.get("left_m", 0.0)
+    goal = correction_endpoint(state, decision["forward_m"], left)
     limits = place.precision_stop
-    padding = limits.position_uncertainty_m + 2 * abs(decision["forward_m"]) * math.sin(limits.heading_uncertainty_rad / 2)
+    padding = (limits.position_uncertainty_m + abs(left)
+               + 2 * abs(decision["forward_m"]) * math.sin(limits.heading_uncertainty_rad / 2))
     site_corridor(console, robot, state, {"site_map_id": site[0], "site_map_version": site[1]},
                   scope, goal, peers, route=(), correction_padding=padding)
     return {**decision, "site_end": list(fit.apply(goal)), "terminal_arc": scope["terminal"]["arc_id"]}

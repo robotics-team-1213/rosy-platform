@@ -4,6 +4,7 @@ import math
 
 from core_common.stop_pose import stop_error
 from fleet.localization.map_binding import bound_pose
+from fleet.server.named_stop_topview import KEY as TOPVIEW_KEY, current_verdict
 
 
 def named_stop_decision(place, fit, state):
@@ -39,9 +40,7 @@ def named_stop_decision(place, fit, state):
     return {**result, "decision": "REPARK", "forward_m": forward}
 
 
-def still_aligned(store, live, evidence, place, snapshot):
-    from fleet.site_map import SitePlace
-
+def still_aligned(store, live, evidence, place, snapshot, clock=None):
     current = store.active_view()
     robot = live.view["robot_id"]
     bindings = store.map_bindings
@@ -50,7 +49,17 @@ def still_aligned(store, live, evidence, place, snapshot):
     return (live.open and current is not None and current["sha256"] == evidence["map_sha256"]
             and binding.get("binding_id") == evidence["binding_id"] and fit is not None
             and snapshot.get("mode") in ("NAVIGATION", "IDLE")
-            and named_stop_decision(SitePlace.model_validate(place), fit, snapshot)["decision"] == "IN_TOLERANCE")
+            and _aligned(live, place, fit, snapshot, clock))
+
+
+def _aligned(live, place, fit, snapshot, clock):
+    from fleet.site_map import SitePlace
+
+    record = live.view["detail"].get(TOPVIEW_KEY)  # a cell top-view verdict replaces the SLAM one for its stop
+    if record is not None and record.get("place") == place["id"]:
+        verdict = current_verdict(record, snapshot, clock() if clock else None, place["id"])
+        return verdict is not None and verdict["decision"] == "IN_TOLERANCE"
+    return named_stop_decision(SitePlace.model_validate(place), fit, snapshot)["decision"] == "IN_TOLERANCE"
 
 
 async def check_repark_decision(runner, live, evidence, place, decision):
@@ -68,7 +77,7 @@ async def check_repark_decision(runner, live, evidence, place, decision):
 async def confirm_precision_arrival(runner, live, operation, evidence, place):
     if runner.confirm_named_precision is None:
         return True
-    ready = lambda snapshot: still_aligned(runner._store, live, evidence, place, snapshot)
+    ready = lambda snapshot: still_aligned(runner._store, live, evidence, place, snapshot, runner._clock)
     result = await runner.confirm_named_precision(live.view["robot_id"], operation, ready=ready)
     if isinstance(result, dict):
         live.view["detail"]["named_stop_repark_completion"] = result
