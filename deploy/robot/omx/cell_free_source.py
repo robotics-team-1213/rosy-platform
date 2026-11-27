@@ -280,6 +280,10 @@ def prepare(cell, config, calibration, anchor, roi, catalog, out):
         return config, calibration, roi, (f"refused: free source: the blob matches {len(cands)} catalogue candidates at heights {heights} mm "
                                      f"({[c[2]['object'] for c in cands]}): the height of what is picked is not unique")
     h0, base, o = cands[0]
+    rival = cell_objects.match(o, [e for e in catalog if e["top_height_mm"] != h0], colour=o.get("colour"))
+    if rival:  # the same footprint also fits an entry of another height: the footprint does not say how tall it is
+        return config, calibration, roi, (f"refused: free source: the blob matches {o['object']} ({h0} mm) and also {rival['id']} "
+                                     f"({rival['top_height_mm']} mm): the height of what is picked is not unique")
     if not inside(o, poly):
         return config, calibration, roi, "refused: free source: the one catalogue object found is not the measured blob"
     err_mm = max(Z_ERR_MM, m["frame_spread_mm"])

@@ -141,6 +141,7 @@ def refusal(tmp_path, cell, config=None, **kw):
 def test_free_source_refuses_when_another_catalogue_object_stands_in_the_tight_roi(tmp_path, monkeypatch):  # H1
     cell = Cell([CONT, NEIGHBOUR])
     depth(monkeypatch, cell)
+    monkeypatch.setattr(cfs, "_tight_roi", lambda roi, mask, margin, shape: list(roi))  # a neighbour wholly inside the tight roi
     assert "not unique" in refusal(tmp_path, cell, at_px=AT_BOX)
 
 
@@ -199,10 +200,10 @@ def test_nearest_site_must_agree_with_the_depth_too(tmp_path, monkeypatch):  # M
     cell = Cell([CONT])
     depth(monkeypatch, cell)
     config = clipped_config(tmp_path)
-    config["sites"]["shelf"] = dict(copy.deepcopy(config["sites"]["pinky"]), surface_px=[[60, 272], [158, 272], [158, 330], [60, 330]], surface_z=0.060)
+    config["sites"]["shelf"] = dict(copy.deepcopy(config["sites"]["pinky"]), surface_px=[[60, 272], [158, 272], [158, 330], [60, 330]], surface_z=0.060, z=0.080)
     result = run(tmp_path, cell, config, "free:plate")
     assert "shelf, nearest the object, disagrees" in result["result"] and result["free_source"]["nearest_ref_diff_mm"] == pytest.approx(15.0, abs=0.5)
-    config["sites"]["shelf"]["surface_z"] = 0.045  # a configured value that agrees: the pick goes on
+    config["sites"]["shelf"].update(surface_z=0.045, z=0.060)  # a configured value that agrees: the pick goes on
     assert run(tmp_path, cell, config, "free:plate")["result"] == "planned"
 
 
@@ -271,7 +272,7 @@ def test_grasp_depth_of_the_anchor_is_kept(tmp_path, monkeypatch):  # L9
     cell = Cell([CONT])
     depth(monkeypatch, cell)
     config = clipped_config(tmp_path)
-    config["sites"]["plate"]["grasp_depth_m"] = 0.020
+    config["sites"]["plate"].update(grasp_depth_m=0.020, z=0.070)
     result = run(tmp_path, cell, config, "free:plate")
     assert result["result"] == "planned" and result["free_source"]["grasp_z_m"] == pytest.approx(0.055, abs=1e-3)
     assert result["attempts"][0]["plan"]["pick"]["z"] == pytest.approx(0.055, abs=1.5e-3)  # the planner reads it from the free site
@@ -280,8 +281,14 @@ def test_grasp_depth_of_the_anchor_is_kept(tmp_path, monkeypatch):  # L9
 def test_parallax_puts_a_low_box_at_its_true_xy(tmp_path, monkeypatch):
     """The map is fitted at z_view 0.075; a box whose top is 25 mm lower shows displaced by the parallax and must still read at its true place."""
     shown = lambda x, y: tuple(cal.parallax(tray_pixel(x, y), 0.075, 0.050, CAMERA))  # noqa: E731
-    monkeypatch.setattr(tpa, "tray_pixel", shown)
-    cell = Cell([CONT])
+
+    class LowCell(Cell):  # only the picture shows the displaced top, the map was fitted undisplaced
+        def frame(self, camera):
+            with monkeypatch.context() as m:
+                m.setattr(tpa, "tray_pixel", shown)
+                return super().frame(camera)
+
+    cell = LowCell([CONT])
     depth(monkeypatch, cell, top_mm=5.0)
     result = run(tmp_path, cell, clipped_config(tmp_path), "free:plate", z_view=0.075)
     free = result["free_source"]
