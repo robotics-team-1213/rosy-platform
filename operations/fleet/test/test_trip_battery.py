@@ -120,8 +120,10 @@ def test_a_charge_bay_parking_trip_starts_at_critical_battery_as_charge_return_b
         return reading(level="critical", percent=9.0)
     runner._battery = critical
     assert _refused(runner).detail == {"reason": "level_critical"}      # a plain place keeps the gate
-    row = store.plan("p1")
+    row = store.plan("p1")  # the store hands out a copy: write the handoff back as the route does
     row["result"]["plan"]["parking_handoff"] = {"bay_id": "C2", "staging_place_id": "NW", "dock_id": "bay_c2",
                                                 "owner": "core_docking", "terminal_motion": "rear_dock"}
-    view = run(runner.start("p1", "bob"))
+    store.record_plan(plan_id="p2", robot_id=row["robot_id"], principal_id="bob", map_version=row["map_version"],
+                      request=row["request"], result=row["result"])
+    view = run(runner.start("p2", "bob"))
     assert view["purpose"] == "charge_return"
