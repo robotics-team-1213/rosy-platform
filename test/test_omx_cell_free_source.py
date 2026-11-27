@@ -66,7 +66,7 @@ def test_free_source_refuses_without_depth_and_never_guesses_z(tmp_path, monkeyp
     cell = Cell([CONT])
     monkeypatch.setattr(cfs, "_depth_frames", lambda config, n: (None, "depth device missing"))
     result = run(tmp_path, cell, clipped_config(tmp_path), "free:plate")
-    assert result["result"].startswith("refused: free source needs depth") and "attempts" not in result
+    assert result["result"].startswith("refused: free source needs depth") and not result["attempts"]
     monkeypatch.setattr(cfs, "_depth_frames", lambda config, n: (np.zeros((3, 480, 640), np.uint16), {}))
     monkeypatch.setattr(cfs, "_frame_heights", lambda *a: (None, None, ["missing_depth"], None))
     assert "depth unavailable" in run(tmp_path, cell, clipped_config(tmp_path), "free:plate")["result"]
