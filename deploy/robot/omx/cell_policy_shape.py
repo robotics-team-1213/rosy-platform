@@ -114,7 +114,7 @@ def finite_float(raw) -> float | None:
 
 
 from cell_policy_entry import trained_grasp_mismatch, wrist_roll_warning  # noqa: E402,F401
-from cell_policy_pre_home import ease_start, refuse_outside, trim_backtrack_prefix  # noqa: E402,F401
+from cell_policy_pre_home import EASE_MIN_ROWS, ease_start, refuse_outside, trim_backtrack_prefix  # noqa: E402,F401
 
 
 def _params_rim_z(params) -> float | None:

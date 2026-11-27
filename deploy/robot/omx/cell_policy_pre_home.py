@@ -83,20 +83,33 @@ def trim_backtrack_prefix(chunk, start, *, tol: float = 3.0, joints: int = 6):
     return arr
 
 
-def ease_start(chunk, start, *, joints: int = 5):
+EASE_MIN_ROWS = 8  # a shorter chunk is resampled first, so even one row after a trim is eased in, not one full-speed segment
+
+
+def ease_start(chunk, start, *, joints: int = 5, jaw_tol: float = 3.0):
     """Fade the body offset between `start` and the chunk's first action out over the chunk (smoothstep), last row kept.
 
     Sim-trained ACT actions lead the sim state (the sim arm lags its command), so on the real arm, which tracks closely,
     each chunk's first action sits ~15 units ahead of the measured pose (real5 2026-11-27): shaped as is, the chunk opens
-    with a full-speed sprint from rest and shoulder_lift trips the following-error fault. The jaw column is untouched."""
+    with a full-speed sprint from rest and shoulder_lift trips the following-error fault. While the eased body is still
+    more than `jaw_tol` off the policy's own rows the jaw may not close past min(measured, first action): the body
+    arrives later than the policy timed it, and a close would land short of the grasp pose. Opening is never delayed."""
     import numpy as np
 
     arr = np.array(chunk, dtype=float)
-    if len(arr) < 2:
+    if not len(arr):
         return arr
+    if len(arr) < EASE_MIN_ROWS:
+        t = np.linspace(0.0, len(arr) - 1.0, EASE_MIN_ROWS)
+        arr = np.column_stack([np.interp(t, np.arange(len(arr)), arr[:, j]) for j in range(arr.shape[1])])
+    start = np.asarray(start, dtype=float)
     s = np.linspace(0.0, 1.0, len(arr))
     weight = 1.0 - s * s * (3.0 - 2.0 * s)
-    arr[:, :joints] += weight[:, None] * (np.asarray(start, dtype=float)[:joints] - arr[0, :joints])
+    offset = start[:joints] - arr[0, :joints]
+    arr[:, :joints] += weight[:, None] * offset
+    if arr.shape[1] > joints and len(start) > joints:
+        far = weight * np.abs(offset).max() > jaw_tol
+        arr[far, joints] = np.maximum(arr[far, joints], min(start[joints], arr[0, joints]))
     return arr[1:]  # row 0 is now `start` itself
 
 
