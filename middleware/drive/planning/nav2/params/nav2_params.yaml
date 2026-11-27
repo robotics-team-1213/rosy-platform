@@ -92,13 +92,14 @@ controller_server:
       max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
 
       # 경로 추종 (Lookahead, 시선 두기)
-      # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 주시 0.12 로 10-12 cm 안쪽으로 질러 갔다. 패널 결정으로 주시를 0.07 로 줄인다.
-      lookahead_dist: 0.07                   # [m] 기본 전방 주시 거리 (U턴 호 R~0.135 m 보다 훨씬 짧게)
+      # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 주시 0.12~0.18 로 10-12 cm 안쪽으로 질러 갔다.
+      # 호를 자르는 양은 L^2/(8R): 0.09 m 면 0.8 cm. 최소 주시는 목표 공 0.08 보다 커야 RPP 가 제자리 회전만 하지 않는다.
+      lookahead_dist: 0.09                   # [m] 기본 전방 주시 거리
       use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
       lookahead_time: 0.6                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
-      min_lookahead_dist: 0.05               # [m] 최소 주시 거리
+      min_lookahead_dist: 0.09               # [m] 최소 주시 거리 (xy_goal_tolerance 0.08 < 0.09)
       max_lookahead_dist: 0.10               # [m] 최대 주시 거리
-      curvature_lookahead_dist: 0.07         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
+      curvature_lookahead_dist: 0.09         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
       use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
 
       # 제자리 회전 (고개 먼저 돌리기)
