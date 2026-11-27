@@ -1589,14 +1589,8 @@ ROS setup은 필요하지 않다. 해당 Python의 격리 환경에서 OpenCV와
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
-**Arm S live-file 관측.** ROS가 없는 Arm S는 live/calibration/guard-health 파일을 가진 호스트에서
-`rosy-omx-arm-status.service`를 쓴다. `arm-status.env.example`을
-`~/.config/rosy/omx-arm-status.env`에 mode 0600으로 복사하고, Fleet manifest의
-`source_id`·`arm_id`, 실제 live·calibration·canonical health 경로, HTTPS origin·CA와
-해당 팔 전용 토큰을 설정한다. 빈 토큰은 시작을 거부한다. guard의
-`ROSY_OMX_MONITOR_OWNER`는 같은 arm_id여야 한다. 유닛을 user systemd 경로에 복사하고
-`daemon-reload` 뒤 `enable --now rosy-omx-arm-status.service`로 활성화한다.
-같은 source에 기존 ROS observation bridge를 동시에 연결하지 않는다.
+**Arm S 관측과 `rosy-omx-arm-status.service` 은퇴.** `observations.yaml`에 `omx_arm_s`가 등록된 셀에서는 `rosy-omx-observer@arm_s.service` + 세션 래퍼의 `ROSY_CHUNK_JOINT_TOPIC` → `workcell_observation_bridge.py` 단일 송신 경로를 사용한다(`rosy-omx-arm-status.service`는 은퇴·`disabled`/`inactive` 유지). `rosy-omx-arm-status.service`는 브리지 환경이 없는 단독(legacy/standalone) live-file 호스트 전용이며, `--forbid-bridge-env` 가드로 브리지 매니페스트와 같은 `source_id`를 탐지하면 exit 78(`RestartPreventExitStatus=78`)로 즉시 거부해 409 epoch 충돌을 막는다.
+같은 source에 기존 observation bridge와 `arm_status_bridge`를 동시에 연결하지 않는다.
 
 이 producer는 파일만 읽고 `ArmSender`로 보낸다. 보정 범위로 변환한 신선한 관절 위치와
 정본 `rosy.motor-health.v1`만 사용하며, 누락된 PWM·온도·목표를 만들지 않는다.
@@ -1633,6 +1627,7 @@ export PYTHONPATH="$release/middleware/devices/omx/adapter:$release/contracts/fo
   3. SHA가 이름에 박힌 drop-in(`95-motor-health-*.conf`)을 지운다. health 파일은 이제 템플릿과 `ROSY_OBSERVATION_ARM_HEALTH`가 정한다.
   4. 첫 실행은 저장소 사본으로 `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/omx-devices-autoupdate.json run`.
   5. 그 뒤 업데이터 유닛 두 개와 카메라 바인드 유닛 두 개(`rosy-omx-cameras-bind.service`·`.timer`)를 복사하고 `systemctl --user enable --now rosy-omx-devices-autoupdate.timer rosy-omx-cameras-bind.timer`. 바인드 타이머가 없으면 옮겨 꽂은 카메라 추적과 Fleet 설치 화면의 승인 적용(D-963)이 일어나지 않는다. 업데이터는 `unit_files`의 파일을 복사만 하고 타이머를 켜지 않는다.
+- 신뢰 출처(`trust_source`, D-805 7): `platform`이면 GitHub REST API를 부르지 않는다. 서명 PC가 서명한 green-main 포인터(`platform_url`, `.sig`, `platform_public_key`, `platform_key_id`)에서 머리 커밋과 `ci-result` 통과를 읽고, 조상 확인은 `root/history.git`(커밋만 받은 git 미러, 약 11 MB)에서 한다. 포인터를 못 읽거나 서명이 틀리면 `transient`로 남기고 아무것도 바꾸지 않는다. `platform_url`이 있으면 기본값이 `platform`이고, 없으면 `github`(예전 경로)다. 소스 바이트는 지금처럼 `repo_url`에서 git으로 받는다. 생산자는 `deploy/site/green_main_pointer.py`다(deploy/site/README.md).
 - 관측기 health 스냅샷 이상 또는 토크 ON이면 상태에 따라 `observer_missing`·`observer_stale`·`observer_invalid`·`follower_hardware_error`·`follower_torque_not_off`로 보류된다.
 
 실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고

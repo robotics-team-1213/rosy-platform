@@ -5,6 +5,8 @@ After=network-online.target rosy-omx-observation-bridge.service
 [Service]
 Type=simple
 EnvironmentFile=-%h/.config/rosy/omx-observation-bridge.env
+Environment=ROSY_CELL_JOB_WORKER_TOKEN_FILE=%h/.config/rosy/cell-job-worker.token
+# ROSY_CELL_JOB_WORKER_URL (the cell API tailnet address, port 8781) comes from the EnvironmentFile above; default is loopback.
 Environment=TOOLS_ROOT=%h/.local/share/rosy/omx-devices/current
 Environment=PYTHONPATH=%h/.local/share/rosy/omx-devices/current:%h/.local/share/rosy/omx-devices/current/deploy/robot/omx:%h/.local/share/rosy/omx-devices/current/middleware/devices/omx/adapter:%h/.local/share/rosy/omx-devices/current/operations/overhead:%h/.local/share/rosy/omx-devices/current/contracts/foundation
 ExecStart=%h/rosy-omx/current-env/bin/python %h/.local/share/rosy/omx-devices/current/deploy/robot/omx/cell_task_worker.py --fleet-r-url https://rosy-fleet-r.local:8443 --token-file %h/.config/rosy-fleet-r-token --ca-file %h/.config/rosy/r-site-ca.pem --execute-mode guarded-pick --interval-s 1.5

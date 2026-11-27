@@ -48,6 +48,16 @@ def test_nav2_default_inflation_is_the_hardware_value():
     assert data["global_costmap"]["global_costmap"]["ros__parameters"]["footprint_padding"] == 0.005
 
 
+def test_footprint_is_the_true_body_plus_small_padding():
+    """11-27 field: the 0.12 m square + 0.01 padding read inflation cells 7.5 cm from a wall as a collision."""
+    data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
+    for costmap in ("local_costmap", "global_costmap"):
+        params = data[costmap][costmap]["ros__parameters"]
+        half = max(abs(v) for point in yaml.safe_load(params["footprint"]) for v in point)
+        assert 0.0566 <= half <= 0.06, f"{costmap} footprint half-width {half}"
+        assert params.get("footprint_padding") == 0.005, f"{costmap} footprint_padding"
+
+
 def test_factory_sim_inflation_is_wider_than_hardware_default():
     catalog = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "worlds.yaml"
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]
@@ -65,8 +75,9 @@ def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
     assert tolerance == 0.03  # 11-27 field: 0.08 stopped ~7 cm short of the stop line
     assert tolerance < lookahead  # a carrot inside the goal ball makes RPP rotate without driving
     # 11-27 tight U-turn (R~0.135 m): lookahead 0.09 cuts the arc by L^2/(8R) ~ 0.8 cm.
-    assert (rpp["lookahead_dist"], lookahead, rpp["max_lookahead_dist"]) == (0.09, 0.09, 0.10)
-    assert (rpp["curvature_lookahead_dist"], rpp["lookahead_time"]) == (0.09, 0.6)
+    # 11-27: speed-scaled lookahead, 0.09 on slowed U-turn arcs, up to 0.16 on straights (wall zigzag fix).
+    assert (rpp["lookahead_dist"], lookahead, rpp["max_lookahead_dist"]) == (0.12, 0.09, 0.16)
+    assert (rpp["curvature_lookahead_dist"], rpp["lookahead_time"]) == (0.09, 2.0)
     assert rpp["use_regulated_linear_velocity_scaling"] is True
 
 

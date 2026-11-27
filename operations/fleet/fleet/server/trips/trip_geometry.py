@@ -10,6 +10,7 @@ import math
 from dataclasses import fields
 from typing import Optional
 
+from core_common.protocol.evidence import STALE_POSE_S
 from rosy.world.state.projections.map_pose import MapPose
 from fleet.localization import trust
 from fleet.routing.cost import LEFT, RIGHT, STRAIGHT, wrap
@@ -386,3 +387,60 @@ def _wall_clearance(x: float, y: float, walls) -> float:
             t = 0.0 if l2 == 0.0 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
             best = min(best, math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy)))
     return best
+
+
+def convert_route_points(runner, live, active, site_pts, pose, state):
+    """Site route points in the robot frame for a D-1009 road route (moved from ``trip_nav2_route``, D-766)."""
+    robot_id = live.view["robot_id"]
+    binding_id = live.view["detail"].get("nav2_binding_id")
+    binding_required = binding_id is not None or runner.config.map_binding_required
+    if binding_id is not None and (
+        pose.source != "approved_slam" or pose.odom_stamp is None
+        or not 0 <= runner._clock() - pose.odom_stamp < STALE_POSE_S
+    ):
+        return None, {"map_id": active[1].map_id, "binding": "APPROVED_SLAM_POSE_REQUIRED"}
+    if runner._robot_state is None:
+        if binding_required:
+            return None, {"map_id": active[1].map_id, "robot_map_id": None, "binding": "MAP_BINDING_REQUIRED"}
+        if not runner._poses_in_robot_frame:
+            return None, {"map_id": active[1].map_id, "robot_map_id": None}
+        return site_pts, None
+    bindings = getattr(runner._store, "map_bindings", None)
+    fit, reason = bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0])) if bindings is not None else (None, "MAP_BINDING_REQUIRED" if binding_required else None)
+    if fit is not None:
+        binding = (fit, reason)
+    elif binding_required or reason == "MAP_BINDING_GRID_CHANGED" or (
+        reason == "ROBOT_NOT_LOCALIZED" and (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None
+    ):
+        binding = (None, reason)
+    else:
+        binding = None
+    current_binding_id = None
+    if binding is not None:
+        current_binding_id = ((bindings.active(robot_id) if bindings is not None else None) or {}).get("binding_id")
+        if binding_id is not None and current_binding_id != binding_id:
+            return None, {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"}
+    converted_pts = []
+    site_frame = True
+    for px, py, pyaw, kind in site_pts:
+        goal = (px, py, pyaw)
+        try:
+            converted = robot_frame_goal(goal, pose, state, active[1].map_id, binding)
+        except SiteFrameMismatch as error:
+            return None, {
+                "pose_map_id": error.pose_map_id, "map_id": error.map_id,
+                **({"binding": error.reason} if error.reason else {}),
+            }
+        if converted is None:
+            return None, {"map_id": active[1].map_id, "robot_map_id": None if state is None else state.get("map_id")}
+        site_frame = site_frame and (converted is goal)
+        converted_pts.append((converted[0], converted[1], converted[2], kind))
+    live.view["detail"]["goal_frame"] = {
+        "map_id": active[1].map_id, "map_version": active[0],
+        "robot_map_id": (state or {}).get("map_id"),
+        "goal_frame": "site" if site_frame else "robot",
+        **({"map_grid_id": (state or {}).get("map_grid_id"),
+            "binding_id": current_binding_id}
+           if binding is not None else {}),
+    }
+    return converted_pts, None

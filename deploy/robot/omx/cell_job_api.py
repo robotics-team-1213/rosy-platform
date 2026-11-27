@@ -22,7 +22,7 @@ from cell_depth_lock import is_depth_lock_held  # noqa: E402
 from cell_failure_context import default_bundle_root  # noqa: E402
 from cell_job_guards import (  # noqa: E402
     IDEMPOTENCY_KEY_RE, ROLE_HUMAN, ROLE_MACHINE, IdempotencyStore, Principal,
-    authenticate_bearer, authorize_principal, check_arm_incident_hold, check_fleet_safety_online,
+    authenticate_bearer, authenticate_worker, authorize_principal, read_worker_token, check_arm_incident_hold, check_fleet_safety_online,
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
@@ -278,7 +278,7 @@ class Runner:
 
 def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = "http://127.0.0.1:8767",
                 *, machine_token: str | None = None, human_principal_id: str = ROLE_HUMAN,
-                machine_principal_id: str = ROLE_MACHINE):
+                machine_principal_id: str = ROLE_MACHINE, worker_token: str | None = None):
     if machine_token is not None and hmac.compare_digest(token.encode("utf-8"), machine_token.encode("utf-8")):
         raise ValueError("human and machine tokens must differ")
 
@@ -305,7 +305,7 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
                 machine_token=machine_token,
                 human_id=human_principal_id,
                 machine_id=machine_principal_id,
-            )
+            ) or authenticate_worker(self.headers.get("Authorization", ""), worker_token)
             if principal is None:
                 self._send(401, {"error": "unauthorized"})
             return principal
@@ -366,7 +366,7 @@ def main():
     machine_token = read_token(a.machine_token_file) if a.machine_token_file else None
     cell_incident_release.use_record_dir(a.workdir)
     runner = Runner(a.workdir.expanduser(), fleet_r_url=a.fleet_r_url, fleet_token_file=a.fleet_token_file, ca_file=a.ca_file)
-    server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token)
+    server = make_server(a.bind, a.port, human_token, runner, machine_token=machine_token, worker_token=read_worker_token(human_token, machine_token))
     cell_hold_retry.start(runner, live_max_age_s=LIVE_MAX_AGE_S, session_held_fn=_session_lock_held)  # D-1079: no hold waits for a person
     print(f"cell job API on {a.bind}:{a.port}", flush=True)
     server.serve_forever()

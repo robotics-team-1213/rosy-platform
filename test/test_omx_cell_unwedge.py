@@ -386,3 +386,44 @@ def test_home_jogs_uses_checked_prefix_when_session_active():
     assert jogs and all(c.startswith("checked sid-42 deadbeef jog ") for c in jogs)
     assert grips and all(c.startswith("checked sid-42 deadbeef grip ") for c in grips)
 
+
+class SlowJaw(HomeCell):
+    """The jaws travel `rate` units per state poll toward the grip target, stopping at `stop` when set."""
+    def __init__(self, measured, rate, stop=None):
+        super().__init__(measured)
+        self.rate, self.stop, self.goal = rate, stop, None
+
+    def act(self, command):
+        if command == "state" and self.goal is not None:
+            step = max(-self.rate, min(self.rate, self.goal - self.measured[5]))
+            if self.stop is not None:
+                step = min(step, max(0.0, self.stop - self.measured[5]))
+            self.measured[5] += step
+        out = super().act(command)
+        if command.startswith("grip "):
+            self.goal = float(command.split()[1])
+            self.measured[5] = self.target[5] = 40.0
+            out["state"] = list(self.measured)
+        return out
+
+
+@pytest.mark.parametrize(("rate", "stop", "result"), [(2.8, None, "home"), (60.0, None, "home"), (2.8, 44.0, "stopped")])
+def test_home_waits_for_a_slow_gripper_but_a_jaw_stuck_short_still_stops(rate, stop, result):
+    cell = SlowJaw([0.8, -62.2, 53.1, 51.6, 45.2, 40.0], rate, stop)
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None, log=None)
+    assert out["result"] == result
+
+
+def test_home_grip_wait_stops_when_the_live_state_is_refused():
+    class FaultAfterGrip(SlowJaw):
+        def act(self, command):
+            out = super().act(command)
+            if command == "state" and self.goal is not None:
+                out["fault"] = "overload"
+            return out
+
+    cell = FaultAfterGrip([0.8, -62.2, 53.1, 51.6, 45.2, 40.0], 2.8)
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None, log=None)
+    assert out["result"] == "stopped" and out["error"] == "live state refused while the grip settled"
+    last_grip = max(i for i, c in enumerate(cell.commands) if c.startswith("grip "))
+    assert not [c for c in cell.commands[last_grip + 1:] if c.startswith(("grip ", "jog "))]

@@ -182,10 +182,90 @@ def test_managed_arm_s_service_has_private_explicit_bindings_and_release_ownersh
     assert "current-env/bin/python" in env and "current/deploy/robot/omx/arm_status_bridge.py" in env
     assert "current/contracts/foundation" in env and "current/operations/overhead" in env
     entry = yaml.safe_load((ROOT / "deploy/hosts/services.yaml").read_text())["roles"]["omx"][unit]
-    assert entry["channel"] == "autoupdate" and entry["template"] == f"deploy/robot/omx/{unit}"
+    assert entry["run"] == "off" and entry["channel"] == "retired" and entry["template"] == f"deploy/robot/omx/{unit}"
+    assert '--forbid-bridge-env "%h/.config/rosy/omx-observation-bridge.env"' in text
+    assert "RestartPreventExitStatus=78" in text
     cfg = json.loads((OMX / "omx-devices-autoupdate.json.example").read_text())
-    assert unit in cfg["units"] and f"deploy/robot/omx/{unit}" in cfg["unit_files"]
+    assert unit not in cfg["units"] and f"deploy/robot/omx/{unit}" in cfg["unit_files"]
     assert "arm_status_bridge" in cfg["smoke"]
+
+
+def test_forbid_bridge_env_refuses_duplicate_or_unreadable_manifest_and_allows_unclaimed_or_standalone(
+        tmp_path, monkeypatch, capsys):
+    import types
+
+    manifest = tmp_path / "observations.yaml"
+    manifest.write_text(
+        "schema: rosy.workcell-observations/1\n"
+        "workcells:\n"
+        "- workcell_id: omx_dual_observation\n"
+        "  arms:\n"
+        "  - source_id: omx_arm_s\n"
+        "    arm_id: arm_s\n",
+        encoding="utf-8",
+    )
+    bridge_env = tmp_path / "omx-observation-bridge.env"
+    bridge_env.write_text(f"ROSY_WORKCELL_OBSERVATIONS={manifest}\n", encoding="utf-8")
+    monkeypatch.setenv("EXAMPLE_TOKEN", "example-token")
+
+    # 1. Duplicate source registered in manifest -> exit 78
+    with pytest.raises(SystemExit) as exc:
+        m.main(["--live", str(tmp_path / "live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN",
+                "--forbid-bridge-env", str(bridge_env)])
+    assert exc.value.code == 78
+    assert "409 epoch conflicts" in capsys.readouterr().err
+
+    # 2. Missing manifest referenced by bridge env -> fail-closed exit 78
+    bad_env = tmp_path / "bad-bridge.env"
+    bad_env.write_text(f"ROSY_WORKCELL_OBSERVATIONS={tmp_path / 'missing.yaml'}\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        m.main(["--live", str(tmp_path / "live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN",
+                "--forbid-bridge-env", str(bad_env)])
+    assert exc.value.code == 78
+
+    # 3. Malformed YAML manifest -> fail-closed exit 78
+    malformed = tmp_path / "malformed.yaml"
+    malformed.write_text("workcells: [\n  - invalid: :\n", encoding="utf-8")
+    malformed_env = tmp_path / "malformed-bridge.env"
+    malformed_env.write_text(f"ROSY_WORKCELL_OBSERVATIONS={malformed}\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        m.main(["--live", str(tmp_path / "live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN",
+                "--forbid-bridge-env", str(malformed_env)])
+    assert exc.value.code == 78
+
+    class Sender:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def send(self, sample):
+            pass
+
+    monkeypatch.setitem(sys.modules, "workcell_observation_bridge", types.SimpleNamespace(ArmSender=Sender))
+    monkeypatch.setattr(m.time, "sleep", lambda _: (_ for _ in ()).throw(InterruptedError()))
+
+    # 4. Unclaimed source_id in valid manifest -> allowed
+    with pytest.raises(InterruptedError):
+        m.main(["--live", str(tmp_path / "live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_other", "--token-env", "EXAMPLE_TOKEN",
+                "--forbid-bridge-env", str(bridge_env)])
+
+    # 5. Missing bridge env (standalone host) -> allowed
+    with pytest.raises(InterruptedError):
+        m.main(["--live", str(tmp_path / "live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN",
+                "--forbid-bridge-env", str(tmp_path / "nonexistent.env")])
+
+
+def test_arm_s_wrapper_scopes_handoff_joint_topic_to_session_subshell():
+    txt = (OMX / "session-wrappers/with-session-arm-s-live.sh").read_text(encoding="utf-8")
+    subshell = txt.split("(\n", 1)[1].split("\n    ) >", 1)[0]
+    assert "rosy-omx-observation-bridge.service" in subshell
+    assert "ROSY_OBSERVATION_DIR=" in subshell
+    assert "export ROSY_CHUNK_JOINT_TOPIC=/omx_commissioning/arm_s/joint_states" in subshell
+    assert "export ROSY_CHUNK_JOINT_TOPIC" not in txt.split("\n    ) >", 1)[1]
 
 
 def test_missing_producer_credential_refuses_startup(monkeypatch):

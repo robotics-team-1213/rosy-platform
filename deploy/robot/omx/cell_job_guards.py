@@ -28,6 +28,7 @@ from cell_job_peer_health import (  # noqa: F401
     stale_latch_superseded as _stale_latch_superseded,
 )
 
+from cell_job_worker import authenticate_worker, read_worker_token, worker_scope_error  # noqa: E402,F401  (api imports the two from here)
 ROLE_HUMAN = "cell-job-human"
 ROLE_MACHINE = "cell-job-machine"
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -70,6 +71,7 @@ def authorize_principal(
         return eff, None
     if principal.role != ROLE_MACHINE:
         return eff, {"code": 403, "error_code": "FORBIDDEN_ROLE", "error": f"unsupported principal role {principal.role}"}
+    if err := worker_scope_error(job_name, eff, principal): return eff, err  # noqa: E701
     opt = job.get("optional") or ()
     if moves_arm_fn(job, eff) and not (bool(job.get("reviewed_only")) or ("reviewed_auto" in opt and eff.get("reviewed_auto") is True)
                                        or principal.principal_id in job.get("machine_ids", ())):  # D-1079: recover_hold by hold-retry
