@@ -44,6 +44,16 @@ def _excluded(live, index: int, state) -> bool:
 
 async def observe(runner, live, index: int, pose, state, nav) -> bool:
     """Record ``detail['lane_departure']``; True when the current route is to be replaced by a recentring one."""
+    try:
+        return await _observe(runner, live, index, pose, state, nav)
+    except Exception as exc:  # noqa: BLE001 - a fault in this watch never fails the trip it watches
+        _LOG.exception("lane departure %s: not judged", live.view.get("robot_id"))
+        live.view["detail"]["lane_departure"] = {**(live.view["detail"].get("lane_departure") or {}),
+                                                 "kind": "error", "reason": type(exc).__name__, "ticks": 0}
+        return False
+
+
+async def _observe(runner, live, index: int, pose, state, nav) -> bool:
     detail = live.view["detail"]
     last = detail.get("lane_departure") or {}
     now = runner._clock()

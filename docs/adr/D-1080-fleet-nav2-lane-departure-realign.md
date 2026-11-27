@@ -34,6 +34,9 @@
 
 - 코드: `operations/fleet/fleet/server/trips/trip_lane_realign.py`(분류·조치), `trip_nav2_route.py`(호출 한 줄), `trip_road_speed.py`(감속·곡선 상한), `localization/lane_compliance.py`(`lane_offset` 공용 계산).
 - 시험: `operations/fleet/test/test_trip_lane_realign.py`.
+- 기체 AMCL이 카메라와 5 cm 넘게 틀리면(11-27 robot-45의 12 cm) 이 변경은 조치하지 않고 `location`(`SLAM_CAMERA_GAP`)으로 기록만 한다. 그 경우의 대기·재위치는 transient_loc_hold가 맡는다.
+- 교체한 경로의 취소 확인이 늦거나 사라져 다음 tick에 기체가 CANCELED를 보고하면, `superseded` 경로는 중단이 아니라 재전송 대상이다(`_route_finished`). 같은 일이 replan 교체에도 적용된다.
+- 이 감시에서 예외가 나면 `kind: error`로 기록하고 조치하지 않는다. trip은 계속된다.
 - 승인 SLAM 바인딩이 없는 Nav2 trip은 차이를 잴 수 없어 `location`(`SLAM_POSE_UNBOUND`)으로 기록만 한다.
 - 위치 문제가 감속 중에 생기면 감속은 남는다(보수적). 칸 구간에 들어가면 풀린다.
 

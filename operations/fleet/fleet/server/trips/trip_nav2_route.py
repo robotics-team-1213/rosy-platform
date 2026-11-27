@@ -286,6 +286,8 @@ async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, po
 def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | None,
                     target_end: int | None = None, pose=None) -> str:
     """Return ``'busy'``, ``'aborted'``, or ``'ready'`` for sending the next route."""
+    if nav == "CANCELED" and (live.active_route or {}).get("superseded"):
+        return "ready"  # our own cancel of a replaced route (its ack lost): resend, never an abort
     if nav in _NAV_ABORTED:
         return "aborted"
     if nav in _NAV_RUNNING:
