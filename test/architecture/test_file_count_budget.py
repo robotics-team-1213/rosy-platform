@@ -7,12 +7,15 @@ the PR body (`Budget-Raise: <area> +N (why)`). docs/validation and docs/plans ha
 evidence goes to \$ROSY_SCRATCH and the PR body, and an existing record is updated instead (D-1090 2).
 """
 
+import re
 import subprocess
 import warnings
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+#: Record fragments (D-1052) the records bot consolidates; transient, so not counted.
+FRAGMENT = re.compile(r"(^|/)logs/\d{4}/|^docs/reference/api-changes/")
 
 #: Measured on cd65c8970b (2026-11-28) plus headroom: 20 for code areas (splits), 10 for
 #: docs/adr and docs/solutions (PRs in flight), 0 for docs/validation and docs/plans.
@@ -46,7 +49,7 @@ def _area(path: str) -> str:
 def _counts() -> Counter:
     # Fails, never skips, without git: an unreadable tree is not an empty one.
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True).stdout
-    return Counter(_area(line) for line in out.splitlines() if line)
+    return Counter(_area(line) for line in out.splitlines() if line and not FRAGMENT.search(line))
 
 
 def test_no_area_exceeds_its_file_count_cap():
