@@ -361,6 +361,19 @@ def test_neutral_surface_foreground_fallback_finds_yellow_box_even_with_orange_h
     assert int((m > 0).sum()) >= co.MIN_PX
 
 
+def test_fragment_below_footprint_share_is_not_a_catalogue_match():
+    """2026-11-27 arm_b plate_b: yellow workbench seen through the base plate (21.6 x 22 mm, 53 % of a container-1
+    footprint) matched container-1 inside the 9 mm tolerance; the arm ran the whole pick twice and came up empty."""
+    import numpy as np
+    import cell_objects as O
 
+    cat = [{"id": "container-1", "length_mm": 30, "width_mm": 30, "top_height_mm": 30, "tolerance_mm": 9,
+            "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}}]
 
+    def sq(w, length):
+        return np.mgrid[0:int(w) + 1, 0:int(length) + 1].reshape(2, -1).T.astype(float)
 
+    frag = O.classify(sq(22, 22), cat)
+    assert not frag[0]["matched"]  # stays in the list as an unmatched blob: still an obstacle, never a target
+    assert O.classify(sq(30, 30), cat)[0]["matched"]
+    assert O.classify(sq(27, 33), cat)[0]["matched"]

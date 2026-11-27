@@ -26,6 +26,7 @@ import cell_params as prm  # noqa: E402
 
 SCHEMA = "rosy.omx-object-catalog.v1"
 SPLIT_FILL, SPLIT_AXIS_DEG = prm.default("objects.split_fill"), prm.default("objects.split_axis_deg")  # a split piece must fill its rectangle and lie parallel to the others
+FOOTPRINT_MIN = 0.6  # a match covers this share of the catalogue footprint. shortcut: constant; a cell param once a site needs less
 CHROMA, LIGHT, MIN_PX = (prm.default(f"objects.{k}") for k in ("chroma", "light", "min_px"))  # Lab (OpenCV 0-255) chroma and lightness steps; smallest blob in pixels
 _CATALOG_CACHE: dict[tuple[str, int, int], list] = {}
 
@@ -157,7 +158,7 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None, px=Non
     ignore_col = bool(params.get("objects.ignore_colour")) if isinstance(params, dict) else False
     m = {**measure(mm), **tag, **struct}
     o = match(m, catalog, colour=tag.get("colour"), ignore_colour=ignore_col)
-    if o:
+    if o and m["length_mm"] * m["width_mm"] >= FOOTPRINT_MIN * o["length_mm"] * o["width_mm"]:  # 2026-11-27 arm_b: a 21.6x22 workbench patch read as container-1 (30x30, tol 9) and was picked twice, empty
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
     # a row put back by hand: one box 15 mm along from the others made the row's blob 16 mm longer than a box
     # (2026-11-03); the row's own length allows that, each strip is still held to the box length
