@@ -514,12 +514,12 @@
           <summary class="ui-disclosure-row">진단</summary>
           <dl class="diag-readout">
             <dt>상태 갱신</dt><dd id="diag-state">—</dd>
-            <dt>발견 검색기</dt><dd id="diag-scanner">—</dd>
-            <dt>로봇 오류</dt><dd id="diag-robots">—</dd>
+            <dt data-unit-scope="drive">발견 검색기</dt><dd id="diag-scanner" data-unit-scope="drive">—</dd>
+            <dt data-unit-scope="drive">로봇 오류</dt><dd id="diag-robots" data-unit-scope="drive">—</dd>
             <dt>카메라</dt><dd id="diag-vision">—</dd>
           </dl>
         </details>
-        <details id="chain-status" class="console-diagnostics">
+        <details id="chain-status" class="console-diagnostics" data-unit-scope="drive">
           <summary class="ui-disclosure-row">연동 상태</summary>
           <dl id="chain-readout" class="diag-readout"><dt>연동</dt><dd>—</dd></dl>
         </details>
@@ -527,7 +527,7 @@
       </section>
         </div>
         <div class="context-panel" id="context-evidence" role="tabpanel" tabindex="0" aria-labelledby="context-evidence-tab" hidden>
-          <details class="panel" id="trip-receipt-history">
+          <details class="panel" id="trip-receipt-history" data-unit-scope="drive">
             <summary>운행 요청 기록</summary>
             <ui-button kind="quiet" id="trip-receipt-refresh" type="button">새로고침</ui-button>
             <ol id="trip-receipt-rows" aria-live="polite"></ol>
@@ -607,17 +607,19 @@
     </div>
     <div class="assistant-prompts" role="group" aria-label="빠른 질문">
       <ui-button kind="quiet" type="button" data-work-read="" data-assistant-prompt="status" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">상태 요약</ui-button>
+      <ui-button kind="quiet" type="button" data-work-read="" data-assistant-prompt="cell" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">셀 객체</ui-button>
       <ui-button kind="quiet" type="button" data-work-read="" data-assistant-prompt="cause" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">오류 원인</ui-button>
       <ui-button kind="quiet" type="button" data-work-read="" data-assistant-prompt="move" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">이동 요청</ui-button>
     </div>
     <p id="assistant-state" class="hint" role="status">기명 운영자로 로그인해 주세요.</p>
     <ol id="assistant-messages" class="assistant-messages" aria-label="관제 AI 대화" aria-live="polite"></ol>
-    <label for="assistant-input">관제 AI에게 물어보기</label>
-    <textarea id="assistant-input" class="ui-field" rows="3" maxlength="2000" placeholder="예: r1 현재 상태 알려줘 / r1을 도크로 보내줘" disabled></textarea>
-    <div class="map-head"><ui-button id="assistant-send" data-work-read="" kind="quiet" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
-    <div class="map-head"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button></div>
-    <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
-    <div class="map-head"><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
+    <div class="assistant-compose">
+      <label for="assistant-input">관제 AI에게 물어보기</label>
+      <textarea id="assistant-input" class="ui-field" rows="3" maxlength="2000" placeholder="예: r1 현재 상태 알려줘 / 셀 객체 확인" disabled></textarea>
+      <div class="map-head assistant-compose-actions"><ui-button id="assistant-send" data-work-read="" kind="primary" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
+      <div class="map-head assistant-voice-bar"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
+      <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
+    </div>
   </aside>
   </div>
 

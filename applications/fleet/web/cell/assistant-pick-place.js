@@ -75,7 +75,7 @@ export function renderObjectPickPlaceCard({
 } = {}) {
   const hasObjFacts = Boolean(row?.facts?.some((f) => String(f?.ref || "").startsWith("cell_objects:")));
   if (!row || row.state !== "ANSWERED" || (!receipt && row.kind !== "CONTROL" && row.kind !== "CLARIFY" && !hasObjFacts)) return null;
-  const card = elOf("div", "assistant-command-card");
+  const card = elOf("div", "assistant-command-card assistant-obj-card");
   if (receipt) {
     const box = elOf("div", "assistant-receipt"), link = elOf("a", "ui-action-link", "셀 작업 화면에서 확인");
     box.setAttribute("role", "status");
@@ -99,8 +99,12 @@ export function renderObjectPickPlaceCard({
     || entries.find((e) => e.object.pickable) || entries[0];
 
   const head = elOf("div", "assistant-command-head");
-  head.append(elOf("strong", "", `셀 카탈로그 객체 (${active.cellId} · ${active.armId})`),
-    elOf("small", "", active.object.pickable ? "카메라와 선택 연동됨" : "선택 불가"));
+  const tag = elOf("ui-tag", active.object.pickable ? "선택 가능" : "선택 제한");
+  tag.setAttribute("variant", "inline");
+  tag.setAttribute("status", active.object.pickable && isObjectSnapshotFresh(active.snap, clickNow()) ? "active" : "warn");
+  head.append(elOf("strong", "", `셀 카탈로그 객체 (${active.cellId} · ${active.armId})`), tag);
+  const meta = elOf("p", "assistant-obj-meta",
+    `${active.object.catalog_id} · ${active.object.site} · [${active.object.centre_mm?.join(", ")}] mm · tol ${active.object.bind_tol_mm ?? 13.5} mm`);
 
   const chips = elOf("div", "assistant-obj-chips");
   for (const entry of entries) {
@@ -157,7 +161,7 @@ export function renderObjectPickPlaceCard({
     }, submitBtn);
   });
   actions.append(submitBtn);
-  card.append(head, chips, destField, actions);
+  card.append(head, meta, chips, destField, actions);
   if (errorText) {
     const err = elOf("p", "hint assistant-nav-error", errorText);
     err.setAttribute("role", "alert");

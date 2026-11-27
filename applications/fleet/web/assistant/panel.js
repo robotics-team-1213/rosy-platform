@@ -9,6 +9,7 @@ import { createAssistantObjectsBridge, dispatchAssistantPickPlace, renderObjectP
 
 const PROMPT_TEMPLATES = {
   status: (r) => r ? `${r} 현재 상태 알려줘` : "현재 전체 로봇 상태 알려줘",
+  cell: (r) => r ? `${r} 셀의 감지된 카탈로그 객체와 팔 상태를 알려줘` : "현재 셀에 감지된 카탈로그 객체와 팔 상태를 알려줘",
   cause: (r) => r ? `${r} 왜 멈췄는지 원인 근거 알려줘` : "최근 정지·오류 사건 원인 알려줘",
   move: (r) => r ? `${r}을 지정한 좌표로 이동해줘` : "로봇 이동 명령을 준비해줘",
 };
