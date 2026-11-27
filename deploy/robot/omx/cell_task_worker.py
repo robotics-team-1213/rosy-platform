@@ -314,7 +314,7 @@ def main(argv: list[str] | None = None) -> None:
     cell_incident_release.use_record_dir(prep_dir)
     watch_pool = ThreadPoolExecutor(max_workers=1)  # its own thread: a ~6 s re-read must not delay the safety fence
     watch_fut: Future | None = None
-    last_watch = 0.0
+    last_watch = time.monotonic()  # the first tick one period after start
 
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
