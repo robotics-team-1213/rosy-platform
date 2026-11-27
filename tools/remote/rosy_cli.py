@@ -16,6 +16,7 @@ if _DIR not in sys.path:
     sys.path.insert(0, _DIR)
 
 import rosy_agent_bridge as br  # noqa: E402
+from rosy_cli_motion import add_pick_args, add_push_parser, cmd_push, free_pick_motion  # noqa: E402
 
 _CAS_KEYS = (
     "fallback_from_task_id",
@@ -315,31 +316,13 @@ def _poll_pick_tasks(bridge: br.RosyAgentBridge, task_ids: list[str], timeout_s:
         time.sleep(1.5)
 
 
-def _pair(text: str | None, *, sep=int) -> list | None:
-    try:
-        pair = [sep(x) for x in str(text).split(",")]
-    except ValueError:
-        pair = []
-    return pair if len(pair) == 2 else None
-
-
-def _motion_frame(args: argparse.Namespace) -> dict[str, Any]:
-    return {"frame_seq": args.frame_seq, "frame_sha256": args.frame_sha256}
-
-
-def _motion_error(detail: str) -> dict[str, Any]:
-    return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": detail}
-
-
 def cmd_pick(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
     cell_id = "cell_ab" if args.free_anchor and not args.cell else _infer_pick_cell(args)
     payload: dict[str, Any] = {"cell_id": cell_id}
     if args.free_anchor:  # free-position pick: pixels from a frame, never metres; the server derives the sites
-        at_px = _pair(args.at_px)
-        if at_px is None or not args.dst or args.frame_seq is None or not args.frame_sha256 or args.src or args.preset or args.tiers:
-            return _motion_error("--free-anchor needs --at-px U,V --dst SITE --frame-seq N --frame-sha256 SHA from 'rosy frame', and no --src/--preset/--tiers")
-        payload["motion"] = {"kind": "free_pick", "anchor_site": args.free_anchor, "at_px": at_px, "dst_site": args.dst,
-                             **_motion_frame(args), **{k: v for k, v in (("object", args.object), ("colour", args.colour)) if v}}
+        payload["motion"], err = free_pick_motion(args)
+        if err:
+            return err
         args.dst = None
     for cli_k, pay_k in (
         ("arm", "arm_id"), ("src", "src_site"), ("dst", "dst_site"), ("tier", "tier"),
@@ -381,25 +364,6 @@ def cmd_pick(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, 
             for t in final_tasks
         ],
     }
-
-
-def cmd_push(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
-    """A push is always a proposal: a named human approves it in the Fleet console."""
-    px, direction = _pair(args.px), _pair(args.dir, sep=float)
-    if px is None or direction is None or args.frame_seq is None or not args.frame_sha256:
-        return _motion_error("--site, --px U,V, --dir DX,DY, --mm, --frame-seq and --frame-sha256 are required")
-    payload: dict[str, Any] = {"cell_id": args.cell, "motion": {"kind": "push", "site": args.site, "px": px, "dir": direction,
-                                                              "mm": args.mm, **_motion_frame(args)}}
-    if args.arm:
-        payload["arm_id"] = args.arm
-    if args.request_key:
-        payload["request_key"] = args.request_key
-    if args.dry_run:
-        if err := br._validate_args(br.TOOL_MAP["fleet_propose_cell_task"], payload):
-            return _motion_error(err)
-        return {"ok": True, "dry_run": True, "tool": "fleet_propose_cell_task", "payload": payload}
-    res = bridge.call_tool("fleet_propose_cell_task", payload)
-    return {**res, "needs_approval": True} if res.get("ok") else res
 
 
 def cmd_schema(args: argparse.Namespace) -> tuple[Any, int]:
@@ -476,29 +440,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_pick.add_argument("--robot-id", default=None)
     p_pick.add_argument("--zone-id", default=None)
     p_pick.add_argument("--request-key", default=None)
-    p_pick.add_argument("--free-anchor", default=None, help="pick at a pixel on this site (free position), not at a fixed slot")
-    p_pick.add_argument("--at-px", default=None)
-    p_pick.add_argument("--frame-seq", type=int, default=None)
-    p_pick.add_argument("--frame-sha256", default=None, help="audit record of the chosen frame only; the cell re-measures at run time")
-    p_pick.add_argument("--object", default=None)
-    p_pick.add_argument("--colour", default=None)
+    add_pick_args(p_pick)
     p_pick.add_argument("--propose", action="store_true")
     p_pick.add_argument("--auto-admit", action="store_true")
     p_pick.add_argument("--dry-run", action="store_true")
     p_pick.add_argument("--wait", action="store_true")
     p_pick.add_argument("--wait-timeout-s", type=float, default=120.0)
 
-    p_push = sub.add_parser("push")
-    p_push.add_argument("--cell", choices=["cell_s", "cell_ab"], default="cell_ab")
-    p_push.add_argument("--arm", default=None)
-    p_push.add_argument("--site", required=True)
-    p_push.add_argument("--px", required=True)
-    p_push.add_argument("--dir", required=True, help="DX,DY; write a leading minus as --dir=-1,0")
-    p_push.add_argument("--mm", type=float, required=True)
-    p_push.add_argument("--frame-seq", type=int, default=None)
-    p_push.add_argument("--frame-sha256", default=None, help="audit record of the chosen frame only; the cell re-measures at run time")
-    p_push.add_argument("--request-key", default=None)
-    p_push.add_argument("--dry-run", action="store_true")
+    add_push_parser(sub)
 
     p_schema = sub.add_parser("schema")
     p_schema.add_argument("tool", nargs="?", default=None)
