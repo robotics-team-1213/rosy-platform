@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import httpx
+
 from fleet.server.named_stop_map_pose import read_precision_pose_status
+from fleet.server.trip_halts import error_code, pre_dispatch_wait
 from fleet.server.trip_ports import pose_diagnostics
+
+# The robot stands still (goal canceled) while it waits. One onboard recovery on rosy_45 took about
+# 20 s on 2026-11-27 (fit drop, node restart, 3 s search, initialpose, 3 s check); two fit in 45 s.
+LOC_RECOVERY_WAIT_S = 45.0
+UNREACHABLE_GAP_S = 5.0  # failures further apart than this are separate outages
 
 
 def loc_diag_from_state(
@@ -28,13 +36,13 @@ def loc_diag_from_state(
 
 
 async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -> bool:
-    """Hold a Nav2 trip bounded by stall_s/15s while onboard localization recovers from SUSPECT/CANDIDATES."""
+    """Hold a Nav2 trip up to LOC_RECOVERY_WAIT_S while onboard localization recovers (UNKNOWN: its node restarts)."""
     detail = live.view["detail"]
     recoverable = (
         live.nav2
         and live.open
         and diag.get("pose_reason") == "ROBOT_NOT_LOCALIZED"
-        and diag.get("loc_state") in ("SUSPECT", "CANDIDATES")
+        and diag.get("loc_state") in ("SUSPECT", "CANDIDATES", "UNKNOWN")
         and diag.get("robot_grid_id") is not None
         and diag.get("robot_grid_id") == diag.get("binding_grid_id")
         and not diag.get("estop")
@@ -55,8 +63,30 @@ async def hold_transient_localization(runner, live, robot_id: str, diag: dict) -
         wait = {"since": now}
         detail["localization_wait"] = wait
     wait.update({"updated_at": now, "loc_state": diag.get("loc_state"), "loc_reason": diag.get("loc_reason")})
-    if now - wait["since"] >= min(float(runner.config.stall_s), 15.0):
+    if now - wait["since"] >= LOC_RECOVERY_WAIT_S:
         return False
+    runner._save(live)
+    return True
+
+
+async def hold_unreachable_pre_dispatch(runner, live, exc) -> bool:
+    """A robot that gave no answer (CORE restart, ~16 s on 2026-11-27) while the trip waits before any goal went
+    out has no motion of ours to lose: keep the trip up to LOC_RECOVERY_WAIT_S. A moving robot never gets this."""
+    # Only a connection that never opened proves nothing of ours reached the robot; a timeout may follow a
+    # delivered request (D-760 4 HIGH-1), and a stale peer_wait must not vouch for a goal sent since.
+    never_connected = (isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, OSError))
+                       and not isinstance(exc, TimeoutError))
+    if not (live.open and never_connected and live.active_route is None and live.last_goal is None
+            and pre_dispatch_wait(live.view)):
+        return False
+    now = runner._clock()
+    wait = live.view["detail"].get("unreachable_wait")
+    if not isinstance(wait, dict) or now - wait["updated_at"] > UNREACHABLE_GAP_S:
+        wait = live.view["detail"]["unreachable_wait"] = {"since": now}  # an earlier outage that ended
+    wait.update(updated_at=now, kind=error_code(exc))
+    if now - wait["since"] >= LOC_RECOVERY_WAIT_S:
+        return False
+    live.at, live.at_stamp, live.progress_at = None, None, now
     runner._save(live)
     return True
 

@@ -1,0 +1,107 @@
+{
+ "id": "tier_hint_base_site",
+ "evidence": "deploy/robot/omx/cell_place_fit.py tier_mismatch (sentence from code; no recorded run)",
+ "note": "A layers_below hint on the base site: the cell teaches the tier site. Correct step: pick from the -l1 site.",
+ "raw": {
+  "arm": "arm_a",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_a_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "temp_plate_a",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "temp_plate_a",
+       "to": "pallet",
+       "result": "refused",
+       "error": "tier mismatch: layers_below=1 on base site temp_plate_a plans at plate height; use source temp_plate_a-l1"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "act",
+  "allowed": [
+   {
+    "verb": "pick",
+    "target": "temp_plate_a-l1",
+    "dest": "pallet"
+   }
+  ]
+ }
+}
