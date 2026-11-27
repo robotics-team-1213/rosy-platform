@@ -69,9 +69,19 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     const button = wire(document.createElement("ui-button"), label, `${label}. 누르는 동안만 저속으로 움직입니다.`);
     button.setAttribute("kind", "toggle"); button.setAttribute("aria-pressed", "false"); button.dataset.manualDirection = direction; return {button, linear, angular};
   });
+  const stepButtons = [
+    ["forward", "전진 10cm…", "앞으로 10 cm 미세 이동"],
+    ["backward", "후진 10cm…", "뒤로 10 cm 미세 이동"],
+  ].map(([direction, label, aria]) => {
+    const button = document.createElement("ui-button");
+    button.setAttribute("kind", "quiet");
+    button.dataset.manualStep = direction;
+    wire(button, label, aria);
+    return {direction, label, button};
+  });
   root.append(heading, pose, reason, actions);
   let active = null, pending = null, stopping = null, cancelTimeout = null;
-  let failure = "", notice = "", modePending = false, speedPending = false;
+  let failure = "", notice = "", modePending = false, speedPending = false, stepPending = false;
 
   function blocked(requireManual = true) {
     const robot = view.robots.find(row => row.robot_id === view.focusRobot);
@@ -101,6 +111,51 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (requireManual && robot.state?.mode !== "MANUAL") return "수동 모드로 전환한 뒤 조종하세요.";
     if (requireManual) { const s = manualSpeeds(robot.state); if (!(s.linear > 0 && s.angular > 0)) return "수동 속도 한도가 0입니다. 속도를 올리세요."; }
     return "";
+  }
+
+  // Relative 10 cm nudge (`POST /api/fleet/robots/{robot_id}/step`) runs in robot frame without MANUAL/LOCALIZED.
+  function stepBlocked() {
+    const robot = view.robots.find(row => row.robot_id === view.focusRobot);
+    if (namedReason()) return namedReason();
+    if (!scope.capture().current() || document.hidden) return "화면을 다시 열고 상태를 확인하세요.";
+    if (view.stateUnavailable) return "관제 상태를 확인할 수 없습니다.";
+    if (!robot?.online) return "로봇 연결을 확인하세요.";
+    if (robot.state?.safety?.estop === true) return "비상정지 상태를 확인하고 해제하세요.";
+    if (robot.state?.safety?.estop !== false) return "정지 상태를 확인할 수 없습니다. 연결을 확인하세요.";
+    if (view.dispatchControl?.dispatch_enabled !== true || !Number.isSafeInteger(view.dispatchControl.generation))
+      return "관제 발행 상태를 확인하고 정지 래치를 해제하세요.";
+    if (robot.held || robot.calibration) return "로봇의 작업·점검 상태를 확인하세요.";
+    if (robot.goal || robot.queued || (view.trafficTrips || []).some(row => row.robot_id === robot.robot_id)
+        || robot.state?.swarm?.active) return "진행 중인 운행을 먼저 취소하세요.";
+    if (view.formation?.active) return "활성 대형·대열을 먼저 멈추세요.";
+    if (active || stopping || stepPending) return stepPending ? "단계 이동을 요청하는 중입니다." : "정지 명령을 전달하는 중입니다.";
+    return "";
+  }
+
+  async function runStep(direction, label, opener) {
+    const robotId = view.focusRobot, generation = view.dispatchControl?.generation;
+    await confirmedAction.run({
+      message: `${robotId}을 ${direction === "forward" ? "앞으로" : "뒤로"} 10 cm 단계 이동할까요?`,
+      opener,
+      eligible: () => view.focusRobot === robotId && generation === view.dispatchControl?.generation && !stepBlocked(),
+      request: async owner => {
+        stepPending = true; failure = ""; notice = ""; update();
+        try {
+          const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/step`, {
+            method: "POST", signals: [owner.signal],
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({direction, distance_m: 0.1}),
+          });
+          owner.check();
+          notice = `${robotId} ${label} 완료 (${result?.state || "요청됨"})`;
+          await refreshState();
+        } finally { stepPending = false; update(); }
+      },
+      onError: error => { failure = `${label} 거절: ${error.code ? `${error.code} · ` : ""}${error.message}`; update(); },
+    });
+  }
+  for (const {direction, label, button} of stepButtons) {
+    scope.listen(button, "click", () => { void runStep(direction, label, button); });
   }
 
   // The operator raises or lowers the robot's manual speed here; CORE refuses anything above the signed ceiling.
@@ -226,12 +281,16 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     for (const {button} of buttons) {
       setOffBy(button, why ? "위 사유" : "");
     }
+    const stepWhy = stepBlocked();
+    for (const {button} of stepButtons) {
+      setOffBy(button, stepWhy ? "위 사유" : "");
+    }
     const robot = view.robots.find(row => row.robot_id === view.focusRobot);
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === view.focusRobot);
     const age = robot && Number.isFinite(robot.state_age_s)
       ? `상태 ${evidenceAgeText(Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)).slice(3)}` : "상태 시각 없음";
     pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
-    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
+    if (!active && !stopping) reason.textContent = [failure, why || stepWhy].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
   }
   scope.interval(update, 100);
   return {root, update, stop};
