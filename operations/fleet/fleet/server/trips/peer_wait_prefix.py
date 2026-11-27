@@ -7,6 +7,7 @@ from core_common.protocol.evidence import STALE_POSE_S
 from core_common.robot_body import nominal_body_for
 from fleet.localization.trust import route_distance
 from fleet.site_map import _polyline_polygon_gap
+from fleet.traffic.config import DEFAULT_SITE_KEEP_OUT_M
 from fleet.traffic.zone_hold import hold_back_m
 
 
@@ -155,7 +156,7 @@ def check_wait_prefix(console, robot_id, points, site_route_of):
             or len(route[1]) != len(expected)
             or any(math.dist(pt, xy) > NAV2_ROUTE_MIN_GAP_M for pt, xy in zip(route[1], expected))):
         return False
-    clearance = getattr(console, "_site_keep_out_m", 0.18) + NAV2_ROUTE_MIN_GAP_M
+    clearance = getattr(console, "_site_keep_out_m", DEFAULT_SITE_KEEP_OUT_M)  # the one keep-out, no extra 0.03
     markers = getattr(console, "_site_marker_clearance", None)
     for rid in peers:
         for corridor in (route, (map_id, centerline)):

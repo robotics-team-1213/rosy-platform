@@ -16,6 +16,7 @@ if _DIR not in sys.path:
     sys.path.insert(0, _DIR)
 
 import rosy_agent_bridge as br  # noqa: E402
+import rosy_plan as plan_mod  # noqa: E402
 
 _CAS_KEYS = (
     "fallback_from_task_id",
@@ -221,6 +222,38 @@ def cmd_frame(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str,
     return {**res, "view": args.view, "out": str(out_path)}
 
 
+def cmd_observe(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    """One read-only observation pack for an arm; with --out-dir also pack.json and annotated_top.jpg."""
+    args_ = {"arm": args.arm, "repeat": args.repeat, **({"layers_below": args.layers_below} if args.layers_below else {})}
+    res = bridge.call_tool("cell_observe", args_)
+    if not res.get("ok"):
+        return res
+    pack, img = res["data"], res.pop("image_b64", None)
+    if args.out_dir:
+        out = Path(args.out_dir).expanduser()
+        pack_path = _write_json(out / "pack.json", pack)
+        if img:
+            (out / "annotated_top.jpg").write_bytes(base64.b64decode(img))
+        return {"ok": True, "observable": pack["observable"], "observation_id": pack["observation_id"], "pack_path": pack_path,
+                "annotated_top": str(out / "annotated_top.jpg") if img else None, "reason": pack.get("reason")}
+    return {"ok": True, "pack": pack, "annotated_top_b64_omitted": bool(img)}
+
+
+def cmd_plan_check(args: argparse.Namespace) -> dict[str, Any]:
+    """Offline: check one plan file against a saved pack (pack.json from observe). Exit 0 only when valid."""
+    load = lambda p: json.loads(Path(p).expanduser().read_text(encoding="utf-8-sig"))  # noqa: E731
+    history = load(args.history) if args.history else ([] if args.first_step else None)  # None: motion is refused, a failure could be hidden
+    res = plan_mod.validate_plan(load(args.plan), load(args.pack), now=time.time(), history=history)
+    return {**res, "ok": res["ok"]}
+
+
+def cmd_verify(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    """Camera verdict for a step against the saved before pack; the after pack is observed by the bridge. Only VERIFIED exits 0."""
+    load = lambda p: json.loads(Path(p).expanduser().read_text(encoding="utf-8-sig"))  # noqa: E731
+    res = bridge.call_tool("cell_verify_after", {"before": load(args.before), "step": load(args.step), **({"job_exit": args.job_exit} if args.job_exit is not None else {})})
+    return res["data"] if res.get("ok") else res
+
+
 def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
     cas_path = Path(args.from_dir).expanduser() / "cas_context.json"
     if not cas_path.is_file():
@@ -397,6 +430,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_diag.add_argument("--max-frames", type=int, default=4)
     p_diag.add_argument("--out-dir", default=None)
 
+    p_obs = sub.add_parser("observe")
+    p_obs.add_argument("--arm", choices=["arm_a", "arm_b", "arm_s"], required=True)
+    p_obs.add_argument("--repeat", type=int, default=1, help="dry runs per site; blobs that differ between runs become ask_human only")
+    p_obs.add_argument("--layers-below", type=int, default=None)
+    p_obs.add_argument("--out-dir", default=None)
+
+    p_chk = sub.add_parser("plan-check")
+    p_chk.add_argument("--pack", required=True)
+    p_chk.add_argument("--plan", required=True)
+    p_chk.add_argument("--history", default=None)
+    p_chk.add_argument("--first-step", action="store_true", help="no earlier step in this episode (history is [])")
+
+    p_ver = sub.add_parser("verify")
+    p_ver.add_argument("--before", required=True)
+    p_ver.add_argument("--step", required=True)
+    p_ver.add_argument("--job-exit", type=int, default=None)
+
     p_frame = sub.add_parser("frame")
     p_frame.add_argument("view")
     p_frame.add_argument("--out", required=True)
@@ -457,8 +507,16 @@ def main(argv: list[str] | None = None) -> int:
         out, rc = cmd_schema(args)
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return rc
+    if args.cmd == "plan-check":  # offline: no bridge, no cell
+        res = cmd_plan_check(args)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res.get("ok") else 1
     bridge = br.RosyAgentBridge(br.build_config(args))
-    if args.cmd == "snapshot":
+    if args.cmd == "observe":
+        res = cmd_observe(bridge, args)
+    elif args.cmd == "verify":
+        res = cmd_verify(bridge, args)
+    elif args.cmd == "snapshot":
         res = cmd_snapshot(bridge, args)
     elif args.cmd == "diagnose":
         res = cmd_diagnose(bridge, args)

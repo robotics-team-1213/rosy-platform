@@ -507,6 +507,7 @@ def install_pipeline_routes(
     from fleet.server.sitemap.pipeline_cell_plan_routes import install_cell_plan_routes
     from fleet.server.sitemap.pipeline_gate_routes import install_gates_routes
     from fleet.server.sitemap.pipeline_camera_routes import install_cameras_routes
+    from fleet.server.pipeline.pipeline_cell_objects import install_cell_objects_routes
     from fleet.server.sitemap.pipeline_evidence import install_evidence_routes
     from fleet.server.pipeline_recovery_tools import install_recovery_tool_routes
 
@@ -523,6 +524,7 @@ def install_pipeline_routes(
     install_cell_plan_routes(app, ctx)
     install_gates_routes(app, ctx)
     install_cameras_routes(app, ctx)
+    install_cell_objects_routes(app, ctx)
     install_evidence_routes(app, ctx)
     install_recovery_tool_routes(app, ctx)
 

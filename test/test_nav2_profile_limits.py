@@ -62,7 +62,7 @@ def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
     tolerance = controller["general_goal_checker"]["xy_goal_tolerance"]
     rpp = controller["FollowPath"]
     lookahead = rpp["min_lookahead_dist"]
-    assert tolerance == 0.08
+    assert tolerance == 0.03  # 11-27 field: 0.08 stopped ~7 cm short of the stop line
     assert tolerance < lookahead  # a carrot inside the goal ball makes RPP rotate without driving
     # 11-27 tight U-turn (R~0.135 m): lookahead 0.09 cuts the arc by L^2/(8R) ~ 0.8 cm.
     assert (rpp["lookahead_dist"], lookahead, rpp["max_lookahead_dist"]) == (0.09, 0.09, 0.10)

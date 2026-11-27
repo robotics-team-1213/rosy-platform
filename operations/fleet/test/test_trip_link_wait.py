@@ -7,6 +7,7 @@ import dataclasses
 import math
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from fleet.routing.execute import plan_body
@@ -195,6 +196,54 @@ def test_a_trip_without_a_lease_ends_on_the_first_failure_as_before():
     runner, store, fleet = _running(*_setup({"a": AUTH}, lease=False))
     fleet.down.add("a")
     _ticks(runner, fleet)
+    view = runner.view("a")
+    assert (view["state"], view["reason"]) == ("failed", "TRIP_ROBOT_UNREACHABLE")
+
+
+def _pre_dispatch(runner):
+    runner._live["a"].view["detail"].update(drive_mode="nav2", peer_wait={
+        "stage": "pre_dispatch_peer_check", "command_robot_id": "a", "dispatch_attempted": False,
+        "waiting_on": ["b"], "blocked_by": "b"})
+
+
+def test_a_no_lease_trip_before_any_goal_waits_on_no_answer_for_a_bounded_time():
+    """A robot CORE restart (~16 s) must not end a trip that has sent nothing; the bound ends it as before."""
+    runner, store, fleet = _running(*_setup({"a": AUTH}, lease=False))
+    _pre_dispatch(runner)
+    fleet.down.add("a")
+    _ticks(runner, fleet, 32)  # 16 s
+    view = runner.view("a")
+    assert view["state"] == "running" and view["detail"]["unreachable_wait"]["kind"]
+    first = view["detail"]["unreachable_wait"]["since"]
+    fleet.down.discard("a")
+    _ticks(runner, fleet, 12)  # 6 s of answers: the next outage is a new one
+    _pre_dispatch(runner)
+    fleet.down.add("a")
+    _ticks(runner, fleet, 2)
+    view = runner.view("a")
+    assert view["state"] == "running" and view["detail"]["unreachable_wait"]["since"] > first
+    _ticks(runner, fleet, 100)  # past LOC_RECOVERY_WAIT_S
+    view = runner.view("a")
+    assert (view["state"], view["reason"]) == ("failed", "TRIP_ROBOT_UNREACHABLE")
+
+
+@pytest.mark.parametrize("error", [TimeoutError("no reply"), httpx.ReadTimeout("no reply")])
+def test_an_error_that_may_follow_a_delivered_request_still_ends_the_trip(error):
+    """Only a connection that never opened is waited on (D-760 4 HIGH-1): a timeout may hide a delivered goal."""
+    runner, store, fleet = _running(*_setup({"a": AUTH}, lease=False))
+    _pre_dispatch(runner)
+    fleet.fail["state"] = error
+    _ticks(runner, fleet, 2)
+    view = runner.view("a")
+    assert (view["state"], view["reason"]) == ("failed", "TRIP_ROBOT_UNREACHABLE")
+
+
+def test_a_trip_that_holds_a_goal_is_not_waited_on_even_with_a_stale_peer_wait():
+    runner, store, fleet = _running(*_setup({"a": AUTH}, lease=False))
+    _pre_dispatch(runner)
+    runner._live["a"].last_goal = (0.0, 0.0)
+    fleet.down.add("a")
+    _ticks(runner, fleet, 2)
     view = runner.view("a")
     assert (view["state"], view["reason"]) == ("failed", "TRIP_ROBOT_UNREACHABLE")
 

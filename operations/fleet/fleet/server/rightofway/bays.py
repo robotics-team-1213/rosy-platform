@@ -33,6 +33,8 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Optional, Sequence
 
+from fleet.traffic.config import DEFAULT_SITE_KEEP_OUT_M
+
 Point = tuple[float, float]
 Cell = tuple[int, int]
 
@@ -40,14 +42,14 @@ Cell = tuple[int, int]
 #: 같은 자리를 노린다 - 계획기가 벽으로 보는 칸을 여기서 빈 칸으로 보면 안 된다.
 OCCUPIED_COST = 65
 
-#: pinky 의 외접 반지름. 풋프린트 반폭 0.06 에 바퀴와 범퍼 여유를 더해 잡는다. 이보다
-#: 좁은 칸은 "설 수 있는 자리"가 아니다.
-ROBOT_RADIUS_M = 0.12
+#: pinky 의 외접 반지름(0.12 m 정사각 + 패딩 0.01 의 대각 0.092). 이보다 좁은 칸은 "설 수 있는 자리"가
+#: 아니다. 0.12 는 칸 간격 0.226 m 에서 이웃 칸을 못 쓰게 했다(2026-11-27 안전거리 판정·사용자 결정).
+ROBOT_RADIUS_M = 0.093
 
 
 #: 비켜선 로봇이 상대 경로에서 떨어져 있어야 하는 거리. 지나가는 쪽 반폭에
 #: 비켜선 쪽 차체와 최소 여유를 더한 값이다.
-YIELD_KEEP_OUT_M = 0.20
+YIELD_KEEP_OUT_M = DEFAULT_SITE_KEEP_OUT_M
 
 #: 비켜서느라 이보다 멀리 가야 한다면 그것은 양보가 아니라 또 하나의 미션이다.
 MAX_DETOUR_M = 3.0
@@ -293,6 +295,8 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
     queue: list[tuple[float, int, int]] = [(0.0, start[0], start[1])]
     budget = max_detour_m
     #: (경로에서 떨어진 거리, 비용, 자리). 비용은 같은 거리일 때 가까운 쪽을 고르는 데 쓴다.
+    # clearance() is cell centre to cell centre: the wall cell's near edge is half a cell closer than that.
+    need_clear = robot_radius_m + res / 2
     best: Optional[tuple[float, float, Point]] = None
     while queue:
         cost, cx, cy = heapq.heappop(queue)
@@ -302,7 +306,7 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
         if cost > budget:
             break
         point = grid.point_of((cx, cy))
-        if cost > 0.0 and clearance(cx, cy) >= robot_radius_m:
+        if cost > 0.0 and clearance(cx, cy) >= need_clear:
             nearest = nearest_on_route(route, point)
             off_route = math.inf if nearest is None else math.dist(nearest, point)
             if off_route >= needed:
@@ -320,7 +324,7 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
                     continue
                 # 지나가는 칸에도 같은 여유를 건다 - 로봇이 통과할 수 없는 틈으로
                 # 이어진 자리는 갈 수 없는 자리다.
-                if clearance(nx, ny) < robot_radius_m:
+                if clearance(nx, ny) < need_clear:
                     continue
                 step = res * (_SQRT2 if dx and dy else 1.0)
                 heapq.heappush(queue, (cost + step, nx, ny))

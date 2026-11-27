@@ -1,7 +1,7 @@
 // Shared top-camera pixel ROI SVG overlay helpers for OMX inspector and ARM-CELL stage.
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-function svgEl(tag, attrs = {}, text = null) {
+export function svgEl(tag, attrs = {}, text = null) {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v !== null && v !== undefined) el.setAttribute(k, String(v));

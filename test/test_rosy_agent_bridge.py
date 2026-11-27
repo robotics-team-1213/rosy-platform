@@ -207,7 +207,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         assert replies[0]["result"]["protocolVersion"] == "2025-03-26"
         assert replies[1]["result"] == {}
-        assert len(replies[2]["result"]["tools"]) == 21
+        assert len(replies[2]["result"]["tools"]) == 23
         assert json.loads(replies[3]["result"]["content"][0]["text"])["data"]["cell_state_gen"] == 5
         frame_content = replies[4]["result"]["content"]
         assert len(frame_content) == 2 and frame_content[1]["type"] == "image" and frame_content[1]["mimeType"] == "image/jpeg"
@@ -372,14 +372,14 @@ def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():
     for path in (bridge_path, context_path, tools_path):
         allowed = set(sys.stdlib_module_names) - {"subprocess"}
         if path == bridge_path:
-            allowed |= {context_path.stem, tools_path.stem}
+            allowed |= {context_path.stem, tools_path.stem, "rosy_observe", "rosy_verify"}  # stdlib-only siblings of the LLM loop (test_rosy_observe checks them)
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 assert {a.name.split(".")[0] for a in node.names} <= allowed
             elif isinstance(node, ast.ImportFrom):
                 if node.level:
-                    assert path == bridge_path and node.level == 1 and node.module in (context_path.stem, tools_path.stem)
+                    assert path == bridge_path and node.level == 1 and node.module in (context_path.stem, tools_path.stem, "rosy_observe", "rosy_verify")
                 else:
                     assert node.module and node.module.split(".")[0] in allowed
     assert scan_files([bridge_path, context_path, tools_path, Path(__file__)], root=ROOT) == []

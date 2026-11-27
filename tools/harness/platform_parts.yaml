@@ -1475,6 +1475,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
+  - deploy/robot/omx/cell_fold_rehome.py
   - deploy/robot/omx/cell_camera_telemetry_sync.py
   - deploy/robot/omx/cell_objects_sync.py
   - deploy/robot/omx/cell_bound_home_request.py
@@ -1576,6 +1577,8 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/pipeline/pipeline_cell_objects.py
+  - operations/fleet/fleet/server/pipeline/pipeline_target_object.py
   - operations/fleet/fleet/server/pipeline/pipeline_autonomous_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_home_recovery.py
