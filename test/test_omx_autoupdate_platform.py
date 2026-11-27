@@ -84,6 +84,7 @@ def test_a_transient_source_changes_nothing_and_exits_zero(tmp_path, capsys):
     for where in ("remote_head", "checks", "descends"):
         host = FakeHost()
         u = updater(tmp_path / where, host)
+        (tmp_path / where).mkdir()
         u.save({"current": "old", "previous": None, "history": [], "current_sha": "c" * 40})
         before = (tmp_path / where / "state.json").read_text()
         setattr(host, where, lambda *a: (_ for _ in ()).throw(m.SourceUnavailable("unreachable")))
