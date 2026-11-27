@@ -237,7 +237,7 @@ def test_the_slow_cap_is_lifted_when_no_fresh_departure_has_been_seen_for_a_whil
         return rig.tick(0.03, yaw_off=math.radians(20))   # inside the lane, not aligned yet
 
     slow = [tick()[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
-    assert slow[0] is True and slow[-1] is False
+    assert all(slow[:int(realign.SLOW_EVIDENCE_S / 0.5) - 1]) and slow[-1] is False   # kept until 9.5 s, lifted at 10 s
     assert rig.tick(0.06)[1]["slow"] is False and rig.tick(0.06)[1]["slow"] is True   # a new departure slows again
 
 
@@ -245,3 +245,9 @@ def test_a_departure_that_lasts_keeps_the_slow_cap():
     rig = Rig()
     slow = [rig.tick(0.06)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 6)]
     assert slow[0] is False and all(slow[1:])
+
+
+def test_a_record_from_before_the_expiry_field_does_not_keep_the_cap():
+    rig = Rig()
+    rig.live.view["detail"]["lane_departure"] = {"kind": "departed", "slow": True, "ticks": 2}   # no departed_at
+    assert rig.tick(0.06, age=2.0)[1]["slow"] is False

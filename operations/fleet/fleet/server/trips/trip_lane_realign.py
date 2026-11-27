@@ -11,6 +11,9 @@ not LOCALIZED, no approved-SLAM trip pose, or SLAM-vs-camera gap > ``GAP_MAX_M``
 the answer; nothing here acts) · ``camera_unavailable`` / ``camera_stale`` (recorded and warned only) ·
 ``on_lane`` / ``near_edge`` (margin < ``NEAR_EDGE_M``, recorded) / ``departed`` (margin < 0). The margin is
 D-511's body margin (``lane_offset``) of the ceiling-camera pose, never the robot's AMCL pose.
+
+The slow cap ends when the camera sees the robot back (``REALIGNED_*``), on an excluded leg, or ``SLOW_EVIDENCE_S``
+after the last fresh ``departed`` judgement.
 """
 from __future__ import annotations
 
