@@ -1,4 +1,4 @@
-"""D-1086 draft: a Nav2 road trip that ended for a non-hazard reason is planned and started again with its request.
+"""D-1086: a Nav2 road trip that ended for a non-hazard reason is planned and started again with its request.
 
 User 2026-11-28: a robot that stops is tried again on the same way at least three times. D-1082 resends inside one
 trip; this is the step after it, once the trip has closed. No new motion writer: the reissue is the ordinary plan path
