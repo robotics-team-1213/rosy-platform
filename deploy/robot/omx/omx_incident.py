@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_decisions  # noqa: E402
 import omx_incident_reassess  # noqa: E402
+from cell_job_peer_health import fold_basis, live_folded  # noqa: E402
 import push_replay  # noqa: E402
 from omx_incident_fleet import (  # noqa: E402
     INCIDENTS,
@@ -54,7 +55,6 @@ from omx_incident_fleet import (  # noqa: E402
     send,
     upload_evidence,
 )
-
 from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
 from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold, note_auto_clear  # noqa: E402
 
@@ -138,7 +138,7 @@ def stills_of(arm: str | None, since: float) -> list:
     return [str(p) for p in sorted(kept, key=lambda p: (p.stem.rsplit("-", 1)[-1] not in ("top", "side"), p.name))][:2]
 
 
-def facts(session: dict, home=None, arm: str | None = None) -> dict:
+def facts(session: dict, home=None, arm: str | None = None, library=None) -> dict:
     """Measured facts of one ended session (session.json as record_session writes it)."""
     chunks = session.get("chunks") or {}
     status = rows(Path(chunks["io"]) / "chunk-status.jsonl", session.get("started", 0)) if chunks.get("io") else []
@@ -155,12 +155,12 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
     n_arm = min(len(last) - 1, len(home) - 1) if (last and home and len(last) >= 6 and len(home) >= 6) else 5
     last_row = next((r for r in reversed(status) if r.get("state")), {})
     return {"safe_end": bool(session.get("safe_end")), "latched": latched,
-            # D-1047: what core_common recomputes "rested" from (never a boolean of ours): the runner's last target and
-            # command beside its last state, home, and how many rows the short lists below were cut from
+            # D-1047: what core_common recomputes "rested" from (never a boolean of ours): last target/command, last state, home, list totals
             "home": list(home) if home else None, "last_target": last_row.get("target"),
             "last_command": last_row.get("command"), "flagged_total": len(flagged), "fault_records_total": len(kept),
             "torque_after": session.get("torque_after") or {}, "caps_restored": session.get("caps_restored"),
-            "folded": bool(home and last and all(abs(a - b) <= HOME_TOL for a, b in zip(last[:n_arm], home[:n_arm]))),
+            "folded": bool(home and last and all(abs(a - b) <= HOME_TOL for a, b in zip(last[:n_arm], home[:n_arm])))
+            or bool(last and fold_basis(library) == "calibrated" and live_folded({"state": last}, library) is True),  # rested: arm_s elbow 50 -> 55 torque OFF
             "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "person_needed", "t")}
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
@@ -233,10 +233,10 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     session = json.loads(Path(session_path).read_text())
     if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
         return {"incident": False}
-    if home is None and (session.get("chunks") or {}).get("library"):
-        library = json.loads(Path(session["chunks"]["library"]).read_text())
+    library = json.loads(Path(session["chunks"]["library"]).read_text()) if (session.get("chunks") or {}).get("library") else None
+    if home is None and library:
         home = (library.get("chunks", {}).get("home") or [None])[0]
-    f = facts(session, home, arm)
+    f = facts(session, home, arm, library)
     if (verify_caps and not f["safe_end"] and f["folded"] and not f["latched"]
             and not f["windup_hits"] and not f["flagged"] and f.get("caps_restored") is not True):
         if verify_caps():

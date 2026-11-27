@@ -719,4 +719,32 @@ def test_rows_reads_tail_chunks_backward_stopping_before_since(tmp_path, monkeyp
     assert reading.rows(tmp_path / "missing.jsonl", since=10.0) == []
 
 
+REST = [0.22, -58.53, 54.68, 49.84, -4.66, 53.6]  # 2026-11-27 arm_s: torque OFF relaxed the elbow from 50.4 to 54.7 on its rest pose
+S_HOME = [0.22, -58.9, 50.4, 49.8, -4.7, 53.6]
 
+
+def _torque_off_session(tmp_path, last, library):
+    s = session(tmp_path, latched=False, windup=False, last=last)
+    (tmp_path / "lib.json").write_text(json.dumps(library))
+    return s
+
+
+def test_a_rested_folded_arm_is_not_extended_when_the_fold_rule_agrees(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {"home": [S_HOME]}})
+    assert oi.handle(s, "arm_s") == {"incident": False}
+    assert oi.facts(json.loads(s.read_text()), S_HOME, "arm_s")["folded"] is False  # no library: HOME_TOL alone, as before
+
+
+def test_a_really_extended_arm_with_torque_off_still_opens_the_guarded_fold_incident(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, [0.22, -20.0, 20.0, 49.8, -4.7, 53.6], {"chunks": {"home": [S_HOME]}})
+    out = oi.handle(s, "arm_s", link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def test_without_a_library_pose_the_coarse_rule_never_folds_the_incident_fact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {}})
+    out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
