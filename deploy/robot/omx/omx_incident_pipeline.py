@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structured cell-side incident risk evaluation and guarded auto-clear pipeline (safety_score >= 95)."""
+"""Structured cell-side incident risk evaluation and guarded auto-clear pipeline (safety_score >= 99)."""
 from __future__ import annotations
 
 import argparse
@@ -138,14 +138,14 @@ def run_pipeline(
     apply: bool = False,
     reassess: bool = False,
     camera_check: bool = False,
-    min_score: int = 95,
+    min_score: int = omx_incident_auto.MIN_SCORE,
     link=None,
     clear_fn=None,
     reassess_fn=None,
     camera_check_fn=None,
     now_fn=time.time,
 ) -> tuple[dict, int]:
-    """Run the 5-stage deterministic safety evaluation and only apply AI assessor clear when score >= 95."""
+    """Run the 5-stage deterministic safety evaluation and only apply AI assessor clear when score >= min_score."""
     _ensure_core_common()
     from core_common.protocol.arm_incident.arm_incidents import AUTO_CLEAR_MIN_SCORE, evaluate_clear_safety
 
@@ -323,7 +323,8 @@ def main(argv=None) -> int:
     ap.add_argument("--apply", action="store_true", help="only clear via AI assessor when safety_score >= min_score")
     ap.add_argument("--reassess", action="store_true", help="run motionless register remeasure (requires --config)")
     ap.add_argument("--camera-check", action="store_true", help="run camera obstruction check before clearing")
-    ap.add_argument("--min-score", type=int, default=95, help="minimum safety score [95..100] required to auto-clear")
+    ap.add_argument("--min-score", type=int, default=omx_incident_auto.MIN_SCORE,
+                    help="minimum safety score [95..100] required to auto-clear")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     result, code = run_pipeline(

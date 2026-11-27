@@ -28,6 +28,7 @@ from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
+import cell_incident_release
 import cell_site_target
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
@@ -310,6 +311,10 @@ def main(argv: list[str] | None = None) -> None:
     prep_dir = Path(args.prep_dir)
     bg_cam_pool = ThreadPoolExecutor(max_workers=1)
     bg_cam_fut: Future | None = None
+    cell_incident_release.use_record_dir(prep_dir)
+    watch_pool = ThreadPoolExecutor(max_workers=1)  # its own thread: a ~6 s re-read must not delay the safety fence
+    watch_fut: Future | None = None
+    last_watch = 0.0
 
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
@@ -346,6 +351,9 @@ def main(argv: list[str] | None = None) -> None:
             if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
                 _trigger_bg_cam_upload()
                 last_cam_push = now_m
+            if not args.dry_run_hw and (now_m - last_watch) >= cell_incident_release.WATCH_S:
+                if watch_fut is None or watch_fut.done():
+                    watch_fut, last_watch = watch_pool.submit(cell_incident_release.watch), now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
                 runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir,
