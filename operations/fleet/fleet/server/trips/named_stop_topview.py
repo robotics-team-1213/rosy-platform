@@ -4,7 +4,8 @@ Where the robot's own map pose and the ceiling camera cannot say whether the rob
 the arm cell's top camera can. CellTopview reads two fresh, agreeing frames of the cell job API and
 topview_decision classifies the offset exactly like named_stop_decision (same limits, same IN_TOLERANCE / HOLD /
 REPARK verdicts) with source "cell_topview"; unlike the straight-only SLAM verdict it also corrects sideways
-(CORE re-park turns, drives and restores heading, left_m at most REPARK_MAX_LEFT_M). A camera that is not
+(CORE re-park turns, drives and restores heading, left_m at most REPARK_MAX_LEFT_M) and a heading error above 3 degrees
+(CORE re-park ends with an in-place turn of turn_deg; the next read re-measures it). A camera that is not
 reachable, stale, unregistered or not agreeing is no evidence: the caller keeps the unchanged SLAM verdict."""
 
 import asyncio
@@ -17,7 +18,7 @@ import urllib.request
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-from core_common.stop_pose import repark_within_limits, stop_error
+from core_common.stop_pose import REPARK_MAX_TURN_DEG, repark_within_limits, stop_error
 from fleet.localization.topview_pose import TopviewError, load_data, observe
 
 CONFIG_ENV = "ROSY_FLEET_CELL_TOPVIEW"
@@ -28,6 +29,8 @@ RECORD_MAX_AGE_S = 10.0  # a verdict older than this is read again, never acted 
 STILL_M, STILL_RAD = 0.01, 0.03  # the robot's own pose may move this much between the camera read and the action
 AGREE_M, AGREE_RAD = 0.01, 0.05  # two frames of a parked robot agree this well, else it was moving
 MIN_MOVE_M = 0.005
+TRIM_MIN_RAD = math.radians(3.0)  # a heading error above this is turned out in place (user 2026-11-27), never accepted
+TRIM_MAX_RAD = math.radians(REPARK_MAX_TURN_DEG)  # beyond this the camera or the robot is wrong: HOLD, no turn
 HEADING_SANITY_RAD = 0.5  # camera heading vs the robot's own heading; the SLAM yaw here is a few degrees off
 
 
@@ -112,18 +115,22 @@ def topview_decision(place, obs) -> dict:
     margin = max(limits.position_uncertainty_m, obs["sigma_m"])
     result = {"source": SOURCE, "error": error, "evidence_ref": limits.evidence_ref,
               "observation": {key: obs[key] for key in ("dx", "dy", "dyaw", "sigma_m", "inliers", "rms_px", "marker_id")}}
-    if abs(heading) + max(limits.heading_uncertainty_rad, obs["sigma_rad"]) > limits.heading_rad:
-        return {**result, "decision": "HOLD", "reason": "heading_outside_limits"}  # a re-park cannot turn the robot
+    turning = abs(heading) > TRIM_MIN_RAD
+    if turning and abs(heading) > TRIM_MAX_RAD or (
+            not turning and abs(heading) + max(limits.heading_uncertainty_rad, obs["sigma_rad"]) > limits.heading_rad):
+        return {**result, "decision": "HOLD", "reason": "heading_outside_limits"}
+    turn = {"turn_deg": round(-math.degrees(heading), 2)} if turning else {}  # CORE trims in place, then the next read checks
     if abs(longitudinal) + margin <= limits.longitudinal_m and abs(lateral) + margin <= limits.lateral_m:
-        return {**result, "decision": "IN_TOLERANCE"}
+        return {**result, "decision": "REPARK", "forward_m": 0.0, "left_m": 0.0, **turn} if turning else {
+            **result, "decision": "IN_TOLERANCE"}
     c, s = math.cos(heading), math.sin(heading)  # the target offset in the robot's own forward / left axes
     forward, left = longitudinal * c + lateral * s, -longitudinal * s + lateral * c
     move = max(abs(forward), abs(left))
     if move > limits.max_correction_m or not repark_within_limits(forward, left):
         return {**result, "decision": "HOLD", "reason": "outside_repark_limits"}
-    if move < MIN_MOVE_M:
+    if move < MIN_MOVE_M and not turning:
         return {**result, "decision": "HOLD", "reason": "correction_below_resolution"}
-    return {**result, "decision": "REPARK", "forward_m": round(forward, 4), "left_m": round(left, 4)}
+    return {**result, "decision": "REPARK", "forward_m": round(forward, 4), "left_m": round(left, 4), **turn}
 
 
 def _still(pose, was) -> bool:

@@ -6,7 +6,7 @@ import math
 import httpx
 
 from core_common.protocol.evidence import STALE_POSE_S
-from core_common.stop_pose import repark_within_limits
+from core_common.stop_pose import REPARK_MIN_TURN_DEG, repark_within_limits
 from fleet.hub.hub import HubError
 from fleet.server.handoff_traffic import read_peers, site_corridor
 from fleet.server.named_stop_decision import named_stop_decision
@@ -14,10 +14,12 @@ from fleet.server.named_stop_topview import KEY as TOPVIEW_KEY, current_verdict
 from fleet.site_map import SitePlace
 
 
-def correction_endpoint(state, forward, left=0.0):
+def correction_endpoint(state, forward, left=0.0, turn_deg=0.0):
     pose = state.get("pose") or {}
-    if (type(forward) not in (int, float) or type(left) not in (int, float) or not repark_within_limits(forward, left)
-            or not 0.005 <= max(abs(forward), abs(left))
+    if (type(forward) not in (int, float) or type(left) not in (int, float) or type(turn_deg) not in (int, float)
+            or not repark_within_limits(forward, left, turn_deg)
+            or (turn_deg and not REPARK_MIN_TURN_DEG <= abs(turn_deg))
+            or not (0.005 <= max(abs(forward), abs(left)) or turn_deg)
             or any(type(pose.get(axis)) not in (int, float) or not math.isfinite(pose[axis])
                    for axis in ("x", "y", "yaw"))):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_CORRECTION_POSE_UNVERIFIED")
@@ -62,7 +64,7 @@ async def check_correction_path(console, live, evidence, place_data, *, cable_in
     if decision is None or decision["decision"] != "REPARK":
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_CORRECTION_POSE_CHANGED")
     left = decision.get("left_m", 0.0)
-    goal = correction_endpoint(state, decision["forward_m"], left)
+    goal = correction_endpoint(state, decision["forward_m"], left, decision.get("turn_deg", 0.0))
     limits = place.precision_stop
     padding = (limits.position_uncertainty_m + abs(left)
                + 2 * abs(decision["forward_m"]) * math.sin(limits.heading_uncertainty_rad / 2))
