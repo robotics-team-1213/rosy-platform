@@ -40,3 +40,5 @@ middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/flee
 middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|verify  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
 middleware/perception/sensors/sensing/odometry_fit.py tools/device_test/tether.py tools/sim/gazebo/driver.py|wrap  ④ 각도 wrap 관습, test_angle_wrap_conventions.py가 경계 거동 고정
 integrations/simulation/gazebo/scripts/map_v2_runner.py middleware/drive/behaviors/docking/parking.py operations/fleet/fleet/localization/cues.py tools/sim/d395_truth.py|wrap  ④ 각도 wrap 관습, test_angle_wrap_conventions.py가 경계 거동 고정
+deploy/robot/omx/cell_belt_vision.py tools/sim/omx_real2sim_helpers.py|fold  ③ 셀 릴리스에 tools/sim 없음(벨트 자세 검출 사본), test_omx_policy_belt_pose.py가 원본과 결과 동치 고정
+deploy/robot/omx/cell_belt_vision.py tools/sim/omx_real2sim_helpers.py|rect  ③ 셀 릴리스에 tools/sim 없음(벨트 자세 검출 사본), test_omx_policy_belt_pose.py가 원본과 결과 동치 고정
