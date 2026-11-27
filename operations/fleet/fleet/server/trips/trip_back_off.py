@@ -92,7 +92,10 @@ async def refusal(runner, live, robot_id: str, state: dict) -> str | None:
     if not _room(live, index, me.x, me.y, me.yaw):
         return "no_room"
     now = runner._clock()
-    for other in runner._roster():
+    roster = getattr(runner, "_roster", None)
+    if not callable(roster):
+        return "peer_unknown"   # no roster: nobody can say who else is on the floor
+    for other in roster():
         if other == robot_id:
             continue
         peer = await _pose(runner, other)

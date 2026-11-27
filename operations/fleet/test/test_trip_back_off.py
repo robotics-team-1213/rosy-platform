@@ -45,6 +45,7 @@ class Rig:
             return (self.pose["v"], "b1")
         runner.robot_step, runner.robot_step_status = step, status
         runner.bay_cable_inhibited = lambda _r: False
+        runner._roster = lambda: ["rosy_42"]
         monkeypatch.setattr(named_stop_map_pose, "read_precision_pose", slam)
         plan, self.calls = _planner(store, graph, pose)
         self.reissue = ri.TripReissue(runner, plan)
