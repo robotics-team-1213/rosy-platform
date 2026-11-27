@@ -169,9 +169,16 @@ def test_assistant_control_handoff_picks_place_confirms_and_submits_navigation(s
         '/api/fleet/assistant/status': {
             'available': True, 'mode': 'READ_ONLY', 'reason': None, 'execution_enabled': True,
         },
-        '/api/fleet/site-map': {'corners': [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]},
+        '/api/fleet/site-map': {
+            'maps': [{
+                'map_id': 'site-main',
+                'polygon_m': [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+                'bounds_m': {'min_x': 0.0, 'min_y': 0.0, 'max_x': 2.0, 'max_y': 2.0},
+            }],
+        },
         '/api/fleet/site-map/active': {
             'version': 1,
+            'activated_by': 'bob',
             'map': {
                 'map_id': 'site-main',
                 'places': [{'id': 'dock_a', 'name': '도크 A', 'kind': 'dock', 'x': 1.25, 'y': -0.5, 'yaw': 0.5}],
