@@ -5,7 +5,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from core_common.robot_body import MARGIN_M, PINKY_PRO
+from core_common.robot_body import PINKY_PRO
+from fleet.traffic.lane_traffic import STANDING_SIDE_M as MARGIN_M
 from fleet.traffic.lane_traffic_helpers import units_under_pose
 from rosy.world.state.projections.map_pose import MapPose
 from test_lane_traffic import _ticks, _trip

@@ -29,7 +29,7 @@ import time
 from typing import Iterable, Mapping, Optional
 
 from core_common.protocol.evidence import STALE_POSE_S
-from core_common.robot_body import MARGIN_M, PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
+from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from rosy.world.state.projections.map_pose import MapPoseConfig
 from fleet.traffic import blocks, handover, signal_phase
 from fleet.traffic.lane_traffic_helpers import (
@@ -60,6 +60,9 @@ PAST_PLACE_M = 0.05
 #: A robot counts as standing when two poses a period apart are this close: only then is its pin's side reach the
 #: body's own (a tripless robot may still be moved by a jog, a dock or a recovery; that keeps u).
 STANDING_M = 0.01
+#: Past the radius a standing body sweeps: the body margin (URDF and calibration error, floor slip), the same
+#: 0.02 m as core_common.robot_body.MARGIN_M, which is not part of the safety public API.
+STANDING_SIDE_M = 0.02
 #: D-517 9 M3 (Safety-Review): the most a convoy member may reverse below the farthest point it reached,
 #: added to the follower's moving-block gap. D-407 stuck back-off: one ``recovery_back_m`` (default 0.08,
 #: config cap 0.20; a next attempt needs that much forward travel first); then a D-468 retrace: ≤ 0.15 m
@@ -153,7 +156,7 @@ class TrafficService(SignalService):
         ``fresh``: a LOCALIZED pose read this period of a standing robot: beside a lane it counts by the radius
         its body sweeps at any heading plus the body margin (0.0826 + 0.02), never more than u. With u a robot in one
         charge bay pinned the bays 0.226 m to either side too. Along the lane the reach is the same."""
-        side = min(self._u_max, self._body.rotation_radius_m + MARGIN_M) if fresh else None
+        side = min(self._u_max, self._body.rotation_radius_m + STANDING_SIDE_M) if fresh else None
         return units_under_pose(layout, graph, pose, self._length, self._u_max, extra, side)
 
     def _pin(self, robot_id: str) -> None:
