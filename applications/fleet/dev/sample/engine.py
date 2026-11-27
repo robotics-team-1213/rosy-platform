@@ -104,6 +104,8 @@ class SampleEngine:
             return reply({'tasks': [], 'summary': {'total': 0, 'queued': 0, 'running': 0, 'completed': 0}})
         if (method, path) == ('GET', '/pipeline/cell-plans'):
             return reply({'ok': True, 'schema': 'rosy.fleet-cell-plan.v1', 'plans': []})
+        if (method, path) == ('GET', '/pipeline/cell-objects'):
+            return reply({'schema': 'rosy.cell-detected-objects.v1', 'observed_at': 0.0, 'cells': {}, 'by_arm': {}})
         if (method, path) == ('GET', '/pipeline/status'):
             return reply({'cell_states': {}, 'arm_holds': {}, 'arm_live_states': {}, 'pinky_tasks': [],
                           'repark_requests': {}, 'auto_events': []})
@@ -159,6 +161,8 @@ class SampleEngine:
             return reply({'tasks': []})
         if (method, path) == ('GET', '/pipeline/cell-plans'):
             return reply({'ok': True, 'schema': 'rosy.fleet-cell-plan.v1', 'plans': []})
+        if (method, path) == ('GET', '/pipeline/cell-objects'):
+            return reply({'schema': 'rosy.cell-detected-objects.v1', 'observed_at': 0.0, 'cells': {}, 'by_arm': {}})
         if (method, path) == ('GET', '/workcell-observations/usb-devices'):
             # No hardware is connected to the sample provider.
             return reply({'workcells': []})
