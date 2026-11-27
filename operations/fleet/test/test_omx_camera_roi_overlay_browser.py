@@ -59,10 +59,20 @@ def test_omx_inspector_renders_pixel_roi_svg_and_toggles_visibility(site):
         expect(roi_toggle).to_have_attribute("aria-pressed", "true")
 
         svg = inspector.locator(".omx-inspector-single-wrap svg.omx-cam-roi-overlay")
+        expect(svg).to_have_count(0)
+
+        inspector.get_by_role("button", name="S3 상단 카메라 선택").click()
         expect(svg).to_be_visible()
         expect(svg).to_have_attribute("viewBox", "0 0 640 480")
+        expect(svg).to_have_attribute("preserveAspectRatio", "xMidYMid slice")
         expect(svg.locator('rect[data-roi-key="pinky_tray"]')).to_have_count(1)
         expect(svg.locator('rect[data-roi-key="belt_center"]')).to_have_count(1)
+
+        zoom_btn = inspector.locator(".omx-inspector-zoom")
+        zoom_btn.click()
+        expect(svg).to_have_attribute("preserveAspectRatio", "xMidYMid meet")
+        zoom_btn.click()
+        expect(svg).to_have_attribute("preserveAspectRatio", "xMidYMid slice")
 
         roi_toggle.click()
         expect(roi_toggle).to_have_attribute("aria-pressed", "false")
