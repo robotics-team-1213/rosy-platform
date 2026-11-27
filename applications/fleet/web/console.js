@@ -217,7 +217,15 @@ async function call(path, options = {}) {
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
-const zoneBlueprint = createZoneBlueprintInspector({ scope: pageScope, call, el, log });
+const zoneBlueprint = createZoneBlueprintInspector({
+  scope: pageScope,
+  call,
+  el,
+  log,
+  confirmedAction,
+  isOperator: () => hasOperatorRole(auth.role),
+  namedReason: () => namedOperatorReason(auth),
+});
 if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
