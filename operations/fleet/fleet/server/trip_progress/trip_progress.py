@@ -165,7 +165,10 @@ class TripProgress:
         speed = detail.get("road_speed") or {}
         held = ((live.active_route is None and (detail.get("traffic_hold") or {}).get("waiting_for"))
                 or ((live.active_route or {}).get("hold_point")  # road speed holds it behind a standing peer
-                    and speed.get("reason") == "leader_gap" and speed.get("limit_mps") == 0.0))
+                    and (speed.get("reason") == "leader_gap" and speed.get("limit_mps") == 0.0
+                         # Nav2 ARRIVED off the stop: it waits there while the cut still names its blocker
+                         or ((detail.get("wait_prefix") or {}).get("state") == "waiting_stop_confirmation"
+                             and (detail.get("traffic_hold") or {}).get("waiting_for")))))
         if (live.progress_at is None or moved or held
                 or live.view["hold"] is not None or (not (live.active_route or {}).get("wait_prefix")
                     and (live.junction.get("state") in MANOEUVRE or self._waiting(live, now)

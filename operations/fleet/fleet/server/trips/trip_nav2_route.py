@@ -18,6 +18,7 @@ from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angl
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait, road_centerline
 from fleet.server.peer_wait_prefix import blockers as _blockers, fence, fenced, footprint_end, held_receipt, hold_guard
 from fleet.server.peer_wait_prefix import hold_or_wait, hold_receipt, supervise_wait_prefix, traffic_hold
+from fleet.server.peer_wait_prefix import hold_pending  # noqa: F401 (trip_steps arrival guard)
 from fleet.server.peer_wait_prefix import held_at_m as _held_at_m, table_answer as _table_answer, traffic_end_index as _traffic_end_index
 from fleet.server.trip_geometry import SiteFrameMismatch, _wall_clearance, robot_frame_goal  # noqa: F401
 from fleet.server.trip_geometry import convert_route_points as _convert_points
@@ -345,6 +346,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if live.active_route is not None:
         if (live.active_route.get("wait_prefix") and not live.active_route.get("superseded")
                 and await supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg,
+                                                robot_id in runner.autonomous_robots,
                                                 lambda: _cancel_active_route(runner, live, robot_id, nav))):
             return
         if (runner.config.map_binding_required or live.nav2_binding_scope is not None
@@ -372,9 +374,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
-            if was_hold or (target_end is None and nav not in ("ARRIVED", "IDLE")):  # no replacement this period
+            # A hold point would replace it: fence any real cancel, never a replacement in this period.
+            if was_hold or (cut_seg is not None and nav not in ("ARRIVED", "IDLE")):
                 fence(live, index if cut_seg is None else cut_seg, names)
-            if was_hold or target_end is None:
+            if was_hold or cut_seg is not None:
                 if cut_seg is not None:
                     traffic_hold(live, names)
                 return
@@ -538,7 +541,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         if hold_s is not None:
             live.active_route["hold_point"] = {"segment": cut_seg, "end_s": hold_s}
     elif detail.get("wait_prefix"):
-        detail["wait_prefix"]["state"] = "superseded"
+        detail["wait_prefix"].update(state="superseded", resolved=True)  # the real route went out
     if "attempt_id" in options:
         live.active_route["attempt_id"] = options["attempt_id"]
     if controlled:

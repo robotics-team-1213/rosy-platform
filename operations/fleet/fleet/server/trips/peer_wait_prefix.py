@@ -330,7 +330,8 @@ def hold_or_wait(runner, live, active, index, s, seg, names):
         if receipt.get("kind") == "hold_point" and receipt.get("state") in _STAYING:
             receipt["waiting_on"] = names
         else:  # a pending replacement fence survives a period without room
-            detail["wait_prefix"] = {**held_receipt(seg, why, names), **({"fence": True} if receipt.get("fence") else {})}
+            fenced_now = {"fence": True} if receipt.get("fence") else {}
+            detail["wait_prefix"] = {**held_receipt(seg, why, names), **fenced_now}
     return stop
 
 
@@ -371,7 +372,13 @@ def hold_receipt(runner, live, seg, stop, xy, names) -> None:
     detail.pop("named_stop_dispatch", None)
 
 
-async def supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg, cancel) -> bool:
+def hold_pending(detail) -> bool:
+    """A table cut stands, or a hold-point receipt is not yet resolved by the real route: never an arrival."""
+    receipt = detail.get("wait_prefix") or {}
+    return bool(detail.get("traffic_hold") or (receipt.get("kind") == "hold_point" and not receipt.get("resolved")))
+
+
+async def supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg, autonomous, cancel) -> bool:
     """A running wait-prefix route (a named wait place or a table-cut hold point); True: this step ends here."""
     from fleet.server.handoff_traffic import _fresh_stopped
     from fleet.server.trip_nav2_route import NAV2_TRANSIENT_RETRY_S
@@ -379,8 +386,9 @@ async def supervise_wait_prefix(runner, live, active, nav, state, pose, cut_seg,
     route = live.active_route
     held = route.get("hold_point")
     receipt = live.view["detail"]["wait_prefix"]
-    if nav in ("FAILED", "CANCELED") and held is not None:
-        # Nav2 gave up near a standing peer: wait and send a new hold point once stopped, never a trip end.
+    if nav == "FAILED" and held is not None and autonomous:
+        # Nav2 gave up near a standing peer: wait and send a new hold point once stopped (CANCELED from outside
+        # Fleet and a supervised robot's FAILED end the trip as on any route).
         receipt.update(state="aborted", navigation=nav, fence=True)
         live.active_route = None
         live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S

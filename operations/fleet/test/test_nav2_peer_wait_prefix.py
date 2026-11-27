@@ -609,6 +609,7 @@ def test_tight_curve_counts_opposite_bends():
 
 def test_nav2_failure_on_a_hold_route_waits_and_retries(monkeypatch):
     h = hold_snapshot()
+    h.runner.autonomous_robots = {"rosy_45"}  # as the ordinary route: only an autonomous robot retries FAILED
     _drive(monkeypatch, h, S_FROM)
     h.clock.advance(1.)
     h.table_row()
@@ -621,3 +622,45 @@ def test_nav2_failure_on_a_hold_route_waits_and_retries(monkeypatch):
     h.table_row()
     _drive(monkeypatch, h, .6, nav="FAILED", stopped=True)
     assert len(h.sent) == 2 and h.live.active_route["hold_point"] and h.stops == []
+
+
+
+# ---- review round 3 (PR #1140) ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("nav, autonomous", [("CANCELED", True), ("FAILED", False)])
+def test_external_cancel_or_supervised_failure_on_a_hold_route_ends_the_trip(monkeypatch, nav, autonomous):
+    h = hold_snapshot()
+    h.runner.autonomous_robots = {"rosy_45"} if autonomous else set()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav=nav)
+    assert h.stops == ["navigation"] and len(h.sent) == 1
+
+
+def test_cancel_of_an_ordinary_route_shortened_by_the_footprint_cut_fences_the_hold_point(monkeypatch):
+    h = hold_snapshot()
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, S_FROM)  # an ordinary route over both segments
+    assert len(h.sent) == 1 and h.live.active_route["end_index"] == 1 and not h.live.active_route.get("hold_point")
+    h.clock.advance(1.)
+    h.table_row(occupied_ahead_m=h.live.progress(1, .5) + .06)  # the cut moves to 6 cm past segment 2's end
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"] and len(h.sent) == 1  # cancelled, no replacement in the same period
+    assert h.live.view["detail"]["wait_prefix"]["fence"] is True
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # no velocity evidence: no standstill
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .3, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2 and h.live.active_route["hold_point"]["segment"] == 1
+
+
+def test_arrived_off_the_hold_point_keeps_waiting_under_the_cut(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    _drive(monkeypatch, h, hold_s - .3, nav="ARRIVED", stopped=True)  # Nav2 says ARRIVED 0.3 m short
+    assert h.live.view["detail"]["wait_prefix"]["state"] == "waiting_stop_confirmation"
+    assert not _stalled(h, hold_s - .3)
+    h.clock.advance(25.)
+    assert not _stalled(h, hold_s - .3) and h.live.view["detail"]["traffic_hold"]["waiting_for"] == ["rosy_46"]

@@ -263,15 +263,33 @@ def test_no_pin_from_an_off_lane_stale_or_unlocalized_idle_robot(pose):
 
 
 
-@pytest.mark.parametrize("peer_state", [{"localization": {"state": "UNKNOWN", "pose_frame": "odom"}}, {"map_id": "other"}])
-def test_a_hold_point_send_still_meets_the_real_console_trust_and_frame_gates(peer_state):
-    """A table-cut hold point goes out under the wait-prefix guard; an untrusted or other-frame peer still refuses it."""
+@pytest.mark.parametrize("peer", ["trusted", "untrusted", "other_map"])
+def test_a_hold_point_send_still_meets_the_real_console_trust_and_frame_gates(peer):
+    """A table-cut hold point goes out under the wait-prefix guard. The peer stands 0.8 m off the guarded path, so
+    clearance never refuses it: a trusted same-map peer lets the send through, an untrusted or other-map one does not."""
+    from datetime import datetime, timezone
     from fleet.server.peer_wait_prefix import prefix_guard
-    console, mover = _console(peer_state)
+    console, mover = _console()
+    now = datetime.now(timezone.utc)
+
+    def native(x, y):
+        return {"pose": {"x": x, "y": y, "yaw": 0.0}, "pose_frame": "map", "map_id": "native-map",
+                "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+                "odom_pose": {"x": x, "y": y, "yaw": 0.0, "stamp": now.timestamp()},
+                "evidence": {"pose": {"evidence": "fresh", "received_at": now.isoformat()}}}
+    mover._state.update(native(0.0, 0.0))
+    peer_robot = console._clients["rosy_45"]
+    peer_robot._state.update(native(0.4, 0.8))
+    if peer == "untrusted":
+        peer_robot._state.update(pose_frame="odom", localization={"state": "UNKNOWN", "pose_frame": "odom"})
+    console.site["rosy_45"] = ("other" if peer == "other_map" else "site", 0.4, 0.8, 0.0)
     line = [(0.0, 0.0), (0.4, 0.0), (0.8, 0.0)]
-    token = prefix_guard.set(("rosy_42", "site", {"rosy_45"}, lambda: True, line, line))
+    token = prefix_guard.set(("rosy_42", "site", set(), lambda: True, line, line))
     try:
-        reply = run(console.route("rosy_42", PTS, lease_source="trip", table_peers=COUNTED))
+        reply = run(console.route("rosy_42", PTS, lease_source="trip", table_peers={"rosy_45": ["site", 0.4, 0.8]}))
     finally:
         prefix_guard.reset(token)
-    assert reply["accepted"] is False and mover.routes == []
+    if peer == "trusted":
+        assert reply.get("accepted") is True and len(mover.routes) == 1, reply
+    else:
+        assert reply["accepted"] is False and mover.routes == []
