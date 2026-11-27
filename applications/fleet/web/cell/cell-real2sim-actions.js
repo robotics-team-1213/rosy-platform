@@ -1,6 +1,7 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
 import {confirmIrreversible} from '/common/ui.js';
+import {randomUUID} from '/console/assets/uuid.js';
 import {OBS_BASE, normalizeWorkcellObservations} from '/console/assets/cell-obs-model.js';
 import {armIncidentClearPlan, armIncidentRowFor, cellArms, clearPipelineArmHold} from './arm-incident-clear.js';
 import {
@@ -42,11 +43,25 @@ export function createCellActions(ctx) {
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
   const activeRobotId = explicit => explicit || ctx.state?.selectedRobotId || 'rosy_46';
 
+  async function confirmAndBump(message, opener = null, action = '작업 등록') {
+    const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
+    if (reason) {
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = reason;
+      return null;
+    }
+    const before = ctx.gen();
+    const ask = ctx.confirm || confirmIrreversible;
+    if (!await ask({message, action, opener}) || before !== ctx.gen()) return null;
+    return ctx.bump();
+  }
+
   function bindActionButton(btn, b, fallbackRobotId = 'rosy_46') {
     const targetRobotId = b.robot_id || fallbackRobotId;
+    const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
     if (b.decisionSubject) {
+      setOffBy(btn, reason);
       btn.dataset.decisionSubject = b.decisionSubject;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runDecisionGate(b.decisionSubject); });
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runDecisionGate(b.decisionSubject, btn); });
     } else if (b.visionCheckCell) {
       btn.dataset.visionCheckCell = b.visionCheckCell;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runVisionAutoCheck(b.visionCheckCell); });
@@ -60,25 +75,27 @@ export function createCellActions(ctx) {
       btn.dataset.humanSafetyCell = b.humanSafetyCell;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, targetRobotId); });
     } else if (b.zoneId) {
-      btn.dataset.zoneId = b.zoneId;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runStationZoneDispatch(b.zoneId, targetRobotId); });
-    } else if (b.preset) {
-      btn.dataset.cellQuickPreset = b.preset;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset, b.robot_id); });
-    } else if (b.pinkyAction) {
-      setOffBy(btn, ctx.namedReason());
-      btn.dataset.pinkyQuickAction = b.pinkyAction;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
-    } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
-      const reason = ctx.namedReason();  // D-1057: the server refuses a shared or development identity too
       setOffBy(btn, reason);
+      btn.dataset.zoneId = b.zoneId;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runStationZoneDispatch(b.zoneId, targetRobotId, btn); });
+    } else if (b.preset) {
+      setOffBy(btn, reason);
+      btn.dataset.cellQuickPreset = b.preset;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset, b.robot_id, btn); });
+    } else if (b.pinkyAction) {
+      setOffBy(btn, reason);
+      btn.dataset.pinkyQuickAction = b.pinkyAction;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction, btn); });
+    } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
+      setOffBy(btn, reason);  // D-1057: the server refuses a shared or development identity too
       const [kind, taskId] = b.bedConfirmTaskId ? ['bed', b.bedConfirmTaskId] : ['presence', b.presenceConfirmTaskId];
       btn.dataset[`${kind}ConfirmTaskId`] = taskId;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void confirmOperator(kind, taskId, targetRobotId); });
     } else if (b.cancelTaskId) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.cancelTaskId, 'cancel'); });
     } else if (b.retryTaskId) {
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.retryTaskId, 'retry'); });
+      setOffBy(btn, reason);
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.retryTaskId, 'retry', btn); });
     }
   }
 
@@ -113,8 +130,9 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runStationZoneDispatch(zoneId, robotId) {
-    const current = ctx.bump();
+  async function runStationZoneDispatch(zoneId, robotId, opener = null) {
+    const current = await confirmAndBump(`YAML 구역(${zoneId} · ${robotId || activeRobotId()}) 이동·반출 태스크를 등록할까요?`, opener);
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 이동/반출 태스크를 즉시 실행하는 중입니다.`;
     try {
       const res = await request(STATION_ZONES_DISPATCH_PATH, {
@@ -207,7 +225,7 @@ export function createCellActions(ctx) {
         return;
       }
       const {checks, note} = armIncidentClearPlan(null);
-      if (!await confirmIrreversible({message: `열린 팔 사건 없이 팔 보류만 남았습니다(${cellOrArmId}). 현장에서 ${checks.join(', ')}을 확인했나요?`,
+      if (!await confirmIrreversible({message: `"${cellOrArmId}"에는 열린 팔 사건 없이 팔 보류만 남았습니다. 현장에서 ${checks.join(', ')}을 확인했고 이 보류를 해제할까요?`,
         action: '확인했습니다 · 해제', opener})) return;
       const results = [];
       for (const arm of cellArms(cellOrArmId)) results.push([arm, await clearPipelineArmHold(request, arm, {note})]);
@@ -255,8 +273,9 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runDecisionGate(subjectId) {
-    const current = ctx.bump();
+  async function runDecisionGate(subjectId, opener = null) {
+    const current = await confirmAndBump(`Decision Gate(${subjectId}) 자동 실행을 요청할까요?`, opener, '자동 실행');
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `Decision Gate(${subjectId}) 상황을 판단하고 자동 실행하는 중입니다.`;
     try {
       const res = await request(DECISION_GATE_PATH, {
@@ -309,8 +328,11 @@ export function createCellActions(ctx) {
   const confirmBed = (taskId, robotId) => confirmOperator('bed', taskId, robotId);
   const confirmPresence = (taskId, robotId) => confirmOperator('presence', taskId, robotId);
 
-  async function cancelOrRetryTask(taskId, op) {
-    const current = ctx.bump();
+  async function cancelOrRetryTask(taskId, op, opener = null) {
+    const current = op === 'retry'
+      ? await confirmAndBump(`태스크(${taskId})를 다시 실행 큐에 등록할까요?`, opener, '재실행')
+      : ctx.bump();
+    if (!current) return;
     const verb = op === 'cancel' ? '취소' : '재실행';
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `태스크(${taskId}) ${verb} 요청 중입니다.`;
     try {
@@ -384,14 +406,16 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runQuickPreset(preset, robotId = null) {
-    const current = ctx.bump();
+  async function runQuickPreset(preset, robotId = null, opener = null) {
+    const rid = activeRobotId(robotId);
+    const current = await confirmAndBump(`프리셋 작업(${preset} · ${rid})을 큐에 등록할까요?`, opener);
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 원클릭 프리셋(${preset})을 실행하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset, robot_id: activeRobotId(robotId)}),
+        headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
+        body: JSON.stringify({preset, robot_id: rid, propose: false}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -405,13 +429,14 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runPinkyQuickAction(robotId, action) {
-    const current = ctx.bump();
+  async function runPinkyQuickAction(robotId, action, opener = null) {
+    const current = await confirmAndBump(`핑키(${robotId}) 작업(${action})을 배차 큐에 등록할까요?`, opener);
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키(${robotId}) 작업(${action})을 실행하는 중입니다.`;
     try {
       const res = await request(PINKY_TASKS_PATH, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
         body: JSON.stringify({robot_id: robotId, action}),
       });
       if (current !== ctx.gen()) return;
@@ -426,15 +451,16 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runPresetTask() {
-    const current = ctx.bump();
+  async function runPresetTask(opener = $('cell-task-preset-run')) {
     const preset = $('cell-task-preset')?.value || 's3_shuttle';
+    const current = await confirmAndBump(`프리셋(${preset}) 태스크를 큐에 등록할까요?`, opener);
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `프리셋(${preset}) 태스크를 할당하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset, robot_id: activeRobotId()}),
+        headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
+        body: JSON.stringify({preset, robot_id: activeRobotId(), propose: false}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -448,19 +474,20 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function createCustomTask() {
-    const current = ctx.bump();
+  async function createCustomTask(opener = $('cell-task-create')) {
     const cellId = $('cell-task-cell')?.value || 'cell_s';
     const armId = $('cell-task-arm')?.value || (cellId === 'cell_s' ? 'arm_s' : 'arm_a');
     const tier = Number($('cell-task-tier')?.value || 1);
     const displacedTo = $('cell-task-displaced')?.value || null;
     const dstSite = $('cell-task-dst')?.value || undefined;  // empty: the server's cell and tier default
+    const current = await confirmAndBump(`맞춤 태스크(${cellId}/${armId} · ${tier}층)를 큐에 등록할까요?`, opener);
+    if (!current) return;
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `맞춤 태스크(${cellId}/${armId})를 큐에 등록하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, arm_id: armId, robot_id: activeRobotId(), tier, displaced_to: displacedTo, dst_site: dstSite}),
+        headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
+        body: JSON.stringify({cell_id: cellId, arm_id: armId, robot_id: activeRobotId(), tier, displaced_to: displacedTo, dst_site: dstSite, propose: false}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -519,5 +546,5 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, admitCellPlan, cancelCellPlan, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  return {confirmAndBump, bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, admitCellPlan, cancelCellPlan, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }

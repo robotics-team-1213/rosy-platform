@@ -50,7 +50,7 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float, st
         else runner.target[5]
     )
     runner.target = list(present[:5]) + [grip_target]
-    runner.fault, runner.holding = reason, bool(runner.holding and present[5] > runner.target[5] + empty_margin)
+    runner.fault, runner.holding = reason, bool(runner.holding and present[5] > runner.target[5] + min(empty_margin, 0.8))
     runner.chunk, runner.played, runner.jog_path = None, [], []
     runner.pace_floor, runner.paced, runner.pace_last, runner.trend = 0.0, 0, None, []
     # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record

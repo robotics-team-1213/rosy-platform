@@ -1,0 +1,239 @@
+{
+ "schema": "rosy.omx-cell-snapshot.v1",
+ "frame": "fixture-20261103",
+ "preset": null,
+ "gap_rows": [],
+ "taken_at": "2026-11-14T19:15:10+00:00",
+ "frames": {
+  "top": "sha256:4a29c5930070d031375ac226bcab50da6d2ede30d83d31105f29227eaa3d8a60",
+  "side": "sha256:e311af49dea269913a0112b47dea101a15186ad684fac08d7b9a04b8f2e83d4f",
+  "arm_a_wrist": "sha256:329d25682ac1e7bc9bcd6dbc5a274406d3e537f7e9eba41fee32f861f240661c",
+  "arm_b_wrist": "sha256:7af07677716cb1f8329e3ccd47652d0368ff1992a58fad67b60a9410c359b325"
+ },
+ "camera": {
+  "top": {
+   "eye": [
+    -0.056,
+    0.075,
+    0.6429
+   ],
+   "focus": [
+    0.0437,
+    0.0687,
+    0.1762
+   ],
+   "up": [
+    0.9735,
+    0.0674,
+    0.2185
+   ],
+   "f_px": 615.0,
+   "width": 640,
+   "height": 480
+  }
+ },
+ "camera_reference_top": "sha256:4a29c5930070d031375ac226bcab50da6d2ede30d83d31105f29227eaa3d8a60",
+ "camera_reference_lanes": {
+  "tmp-a-1": [
+   -0.0888,
+   -0.184,
+   0.36302848441482055
+  ],
+  "tmp-a-2": [
+   -0.1012,
+   -0.1279,
+   0.06981317007977318
+  ],
+  "tmp-a-3": [
+   -0.0968,
+   -0.0706,
+   -0.22165681500327983
+  ],
+  "tmp-b-1": [
+   -0.1081,
+   0.1382,
+   0.3612831551628262
+  ],
+  "tmp-b-2": [
+   -0.1204,
+   0.1944,
+   0.06981317007977318
+  ],
+  "tmp-b-3": [
+   -0.116,
+   0.2516,
+   -0.22165681500327983
+  ]
+ },
+ "camera_motion": {
+  "checked": false,
+  "reason": "no previous snapshot"
+ },
+ "camera_fit": null,
+ "items": {
+  "temp_plates": {
+   "plates": {
+    "a": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0888,
+       -0.184
+      ],
+      "yaw_deg": 20.8,
+      "source": "pad",
+      "residual_mm": 1.5
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.1012,
+       -0.1279
+      ],
+      "yaw_deg": 4.0,
+      "source": "pad",
+      "residual_mm": 1.2
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0968,
+       -0.0706
+      ],
+      "yaw_deg": -12.7,
+      "source": "container",
+      "residual_mm": 2.6
+     }
+    ],
+    "b": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.1081,
+       0.1382
+      ],
+      "yaw_deg": 20.7,
+      "source": "container",
+      "residual_mm": 1.7
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.1204,
+       0.1944
+      ],
+      "yaw_deg": 4.0,
+      "source": "pad",
+      "residual_mm": 0.2
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.116,
+       0.2516
+      ],
+      "yaw_deg": -12.7,
+      "source": "pad",
+      "residual_mm": 1.9
+     }
+    ]
+   },
+   "seen": {
+    "a": 3,
+    "b": 3
+   },
+   "fan_axis": {
+    "a": [
+     0.096,
+     -0.114
+    ],
+    "b": [
+     0.0768,
+     0.2081
+    ]
+   },
+   "errors": {},
+   "shape": {
+    "step_deg": 16.71,
+    "radius_m": 0.1977,
+    "from": "plate a, two clean pads"
+   },
+   "camera_check": {
+    "pads": 4,
+    "worst_mm": [
+     2.2,
+     2.6
+    ]
+   }
+  },
+  "ship": {
+   "stern_x_m": 0.149,
+   "centre_y_m": 0.042,
+   "yaw_deg": 0.46,
+   "iou": 0.799,
+   "model": "r08"
+  },
+  "belt": {
+   "end_x_m": 0.1841,
+   "centre_y_m": 0.0591,
+   "width_m": 0.0818
+  },
+  "arm_bases": {
+   "fk": {
+    "arm_a": {
+     "xy": [
+      0.091,
+      -0.1682
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.091,
+      0.1682
+     ],
+     "yaw_deg": -90.0
+    }
+   },
+   "plate_centre": {
+    "arm_a": {
+     "xy": [
+      0.091,
+      -0.16825
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.091,
+      0.16825
+     ],
+     "yaw_deg": -90.0
+    }
+   }
+  },
+  "ship_fixation": {
+   "berth_kit": "v24-docks",
+   "temp_bridge": "v7",
+   "spacer_dy_nominal_mm": 32.0,
+   "spacer_dx_mm": 0.0,
+   "stern_hook_mm": 0.0,
+   "arm_a_gap_dy_mm": 74.0,
+   "arm_b_gap_dy_mm": -10.0,
+   "nearest_spacer_step_mm": {
+    "arm_a": 32.0,
+    "arm_b": 32.0
+   },
+   "hull_yaw_deg": 0.46,
+   "within_v16_yaw_budget": true,
+   "stopper_flat_x_m": 0.1565,
+   "stopper_tip_x_m": 0.1655,
+   "belt_to_stopper_flat_mm": 27.6,
+   "repeatability_rss_mm": 0.22,
+   "nominal_spacer_dy_mm": 32.0,
+   "stopper_drop_mm": 20.0,
+   "measured_stern_x_m": 0.149,
+   "measured_centre_y_m": 0.042
+  }
+ }
+}

@@ -60,7 +60,7 @@ def test_fleet_goal_passes_with_two_stationary_markers_after_the_last_good_robot
 @pytest.mark.parametrize("problem", ["single", "stale", "future", "new_map", "revision", "roster",
                                      "near", "aged_near", "moved", "out_of_bounds", "conflict", "claim", "pin", "no_route"])
 def test_fleet_holds_on_unproven_or_intersecting_peer_geometry(rig, problem):
-    y = .15 if problem == "near" else .25 if problem == "aged_near" else 3.0 if problem == "out_of_bounds" else .9
+    y = -.05 if problem == "near" else .05 if problem == "aged_near" else 3.0 if problem == "out_of_bounds" else .9
     if problem != "single":
         rig.see(y=y if problem != "moved" else -.2, age=.35, seq=1)
     rig.see(y=y, age=.2 if problem == "aged_near" else .05)
@@ -110,7 +110,7 @@ def test_parked_disconnected_peer_is_a_static_obstacle_after_the_hold(rig):
     _hold_still(rig, .3, 2.5, .2)
     assert "queued" not in run(rig.console.goal("rosy_01", 2, 0))
     obs = rig.clear.evidence(RID)["observations"][0]
-    assert obs["uncertainty_m"] == pytest.approx(.05) and obs["still_s"] >= 2.0
+    assert obs["uncertainty_m"] == pytest.approx(.02) and obs["still_s"] >= 2.0
 
 
 def test_parked_peer_stays_usable_past_the_moving_frame_age_limit(rig):
@@ -134,27 +134,27 @@ def test_young_peer_marker_older_than_the_frame_age_limit_is_unavailable(rig):
 
 @pytest.mark.parametrize("problem", ["young", "moved", "gap", "new_map", "processor"])
 def test_disconnected_peer_keeps_the_speed_allowance_until_it_has_stayed_still(rig, problem):
-    # Same spot as the parked case (0.44 m from route): parked (0.37 m) clears, young (0.46 m) blocks.
+    # Same spot (0.28 m from route at y=-0.2): parked (0.22 m) clears, young (0.34 m) blocks.
     if problem in ("gap", "new_map", "processor"):
-        _hold_still(rig, .24, 2.5, .05)
+        _hold_still(rig, .08, 2.5, .05)
         rig.now[0] += .5
         if problem == "gap":
-            rig.now[0] += .3          # .85 s since the last sighting: the run restarts
+            rig.now[0] += 1.0         # > STATIC_MAX_GAP_S (1.2 s) since the last sighting: the run restarts
         elif problem == "new_map":
             rig.version[0] += 1
-            rig.see(y=.24, age=.4, seq=20)
+            rig.see(y=.08, age=.4, seq=20)
         else:
             rig.clear.still[(RID, "north")]["basis"] = ("other",)
-        rig.see(y=.24, age=.2, seq=21)
+        rig.see(y=.08, age=.2, seq=21)
     elif problem == "moved":
-        _hold_still(rig, .24, 2.5, .05)
+        _hold_still(rig, .08, 2.5, .05)
         rig.now[0] += .5
-        rig.see(y=.27, age=.05, seq=20)
+        rig.see(y=.11, age=.05, seq=20)
         rig.now[0] += .3
-        rig.see(y=.27, age=.2, seq=21)
+        rig.see(y=.11, age=.2, seq=21)
     else:
-        rig.see(y=.24, age=.35, seq=1)
-        rig.see(y=.24, age=.2, seq=2)
+        rig.see(y=.08, age=.35, seq=1)
+        rig.see(y=.08, age=.2, seq=2)
     result = run(rig.console.goal("rosy_01", 2, 0))
     assert result["queued"] is True and result["blocked_by"] == RID
 
@@ -207,3 +207,14 @@ def test_missing_offline_peer_still_blocks_without_proof_it_left(rig, problem):
         _see_other(rig, seq, "north")
     result = run(rig.console.goal("rosy_01", 2, 0))
     assert result["queued"] is True and result["blocked_by"] == RID
+
+
+def test_parked_marker_vs_pin_tolerates_marker_parallax_without_false_conflict(rig):
+    _hold_still(rig, .3, 2.5, .2)
+    rig.console._site_obstacle_pose = lambda _rid: (MAP, 0.0, 0.325, 0.0)  # 2.5 cm parallax vs parked marker
+    assert "queued" not in run(rig.console.goal("rosy_01", 2, 0))
+    assert rig.clear.evidence(RID)["reason"] == "peer_clear"
+
+    rig.console._site_obstacle_pose = lambda _rid: (MAP, 0.0, 0.45, 0.0)   # 15 cm mismatch still conflicts
+    held = run(rig.console.goal("rosy_01", 2, 0))
+    assert held["queued"] is True and rig.clear.evidence(RID)["reason"] == "peer_pose_conflict"

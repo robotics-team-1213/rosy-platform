@@ -210,22 +210,69 @@ def move_regions(config: dict, reference, current) -> dict:
     return config
 
 
-def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, config: dict, image) -> None:
-    """Publish a remap and its actual JPEG bytes so an interrupted pair always fails the reader binding."""
+MAP_GEOMETRY = ("auto_roi", "surface_px", "map_from")
+
+
+def geometry_sha(config: dict) -> str:
+    """The site geometry a bound map was measured with (cell_auto_evidence.bound_map_error checks the same digest)."""
+    return cell_attempts.digest({name: {key: site.get(key) for key in MAP_GEOMETRY}
+                                 for name, site in config["sites"].items() if not site.get("tier_of")})
+
+
+def sync_siblings(config_path, config: dict, cal_path, old_sha) -> dict:
+    """After a remap rebinds the shared map to this config's moved geometry, give the same geometry to every other config of
+    the arm that reads the same calibration file (stack and policy profiles) and still matched the replaced binding. A sibling
+    that had drifted from that binding is left as it is (its runs stay held on the binding check) and named in "held"."""
+    import cell_config_io
+
+    me, cal = Path(config_path).resolve(), Path(cal_path).expanduser().resolve()
+    out: dict = {"synced": [], "held": []}
+    for path in sorted(me.parent.glob("cell-arm-*.json")):
+        try:
+            sib = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if path.resolve() == me or not isinstance(sib, dict) or not isinstance(sib.get("calibration_path"), str) \
+                or Path(sib["calibration_path"]).expanduser().resolve() != cal:
+            continue
+        with cell_config_io.locked(path):
+            raw = path.resolve().read_bytes()
+            sib = json.loads(raw.decode("utf-8"))
+            if not old_sha or set(sib.get("sites") or {}) != set(config["sites"]) or geometry_sha(sib) != old_sha:
+                out["held"].append(path.name)
+                continue
+            for name, site in config["sites"].items():
+                for key in MAP_GEOMETRY:
+                    if key in site:
+                        sib["sites"][name][key] = site[key]
+                    else:
+                        sib["sites"][name].pop(key, None)
+            cell_config_io.atomic_write(path, cell_config_io.dump(sib, 1), cell_config_io.sha256_bytes(raw))
+        out["synced"].append(path.name)
+    return out
+
+
+def save_bound_map_reference(cal_path: Path, ref_path: Path, calibration: dict, config: dict, image, raw: bytes | None = None) -> None:
+    """Publish a remap and its actual JPEG bytes so an interrupted pair always fails the reader binding.
+
+    raw: the bound JPEG bytes to keep as they are (no re-encode) when only the binding changes."""
     import cv2
+    import cell_map_followers
 
     ref_path.parent.mkdir(parents=True, exist_ok=True)
     ref_tmp = ref_path.with_name(ref_path.stem + ".pending" + ref_path.suffix)
-    if not cv2.imwrite(str(ref_tmp), image):
+    if raw is not None:
+        ref_tmp.write_bytes(raw)
+    elif not cv2.imwrite(str(ref_tmp), image):
         raise OSError("map reference JPEG write failed")
     raw = ref_tmp.read_bytes()
     if not raw:
         raise OSError("map reference JPEG is empty")
     calibration["reference_top_sha256"] = hashlib.sha256(raw).hexdigest()
     calibration["reference_map_sha"] = cell_attempts.digest(calibration["sites"])
-    calibration["reference_geometry_sha"] = cell_attempts.digest({
-        name: {key: site.get(key) for key in ("auto_roi", "surface_px", "map_from")}
-        for name, site in config["sites"].items() if not site.get("tier_of")})
+    calibration["reference_geometry_sha"] = geometry_sha(config)
+    calibration["reference_geometry_sites"] = cell_map_followers.site_digests(
+        cell_map_followers.site_geometry(config), calibration["reference_geometry_sha"])
     import cell_cal_history
 
     cell_cal_history.keep([cal_path, ref_path, Path(cal_path).with_suffix(".bias.json")], "map")

@@ -17,6 +17,7 @@ def test_calibration_screen_sources_select_frame_header_and_job_browser_tests():
         "test/test_calibration_header_browser.py",
         "test/test_calibration_job_controls_browser.py",
         "test/test_calibration_flow_browser.py",
+        "test/test_calibration_camera_align_browser.py",
     }
     for path in ("applications/calibration/web/styles.css", "applications/calibration/calibration_web.py"):
         assert set(browser_scope.targets([path])) == expected

@@ -208,8 +208,7 @@ def main(argv=None) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not isinstance(config.get("io"), str) or not config["io"]:
         parser.error("config.io must be a non-empty path")
-    if not config.get("work_dir"):
-        config["work_dir"] = str(args.config.parent)
+    config["work_dir"] = config.get("work_dir") or str(args.config.parent)
     cfg_kind = (config.get("episodes") or {}).get("source_kind")
     if args.source_kind or cfg_kind:
         import cell_collect_plan
@@ -282,7 +281,7 @@ def main(argv=None) -> int:
              "endpoint_url": _safe_log_url(args.endpoint_url), "max_chunks": args.max_chunks, "n_action": args.n_action,
              "max_obs_age_s": args.max_obs_age_s, "goal_slot": goal_slot, "goal_site": args.goal_site,
              "goal_destination": destination, "goal_site_slot": mapped_slot,
-             "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None})
+             "units_sha256": getattr(shadow, "files", {}).get(lrs.UNITS) if shadow else None, "library": args.library.name, "policy_root": Path(args.policy_root).name if args.policy_root else None})
         from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
         import cell_params as prm, cell_stop_proof as stop_proof
         authorize = handoff = rim_z_m = None
@@ -290,11 +289,11 @@ def main(argv=None) -> int:
             config["params"] = prm.load(config.get("params_path"))["values"]
             config.pop("_commissioning", None)
             if not args.dry_run:
-                proof = stop_proof.session_proof(cell, run_id, args.arm_id or str(config.get("arm_id") or "arm"))
+                proof = stop_proof.session_proof(cell, run_id, arm_id := args.arm_id or str(config.get("arm_id") or "arm"))
                 log({"stop_proof": proof})
                 if not proof["ok"]: raise SystemExit(f"no stop-capability proof ({proof['code']}): {proof['reason']}")
                 config["_commissioning"] = {"stop_proof": proof}
-                authorize = Authorization(config)
+                if (authorize := Authorization(config)) is not None: authorize.bind_proof(cell, run_id, arm_id, log)
             library = json.loads(args.library.read_text(encoding="utf-8"))
             source = args.site or "belt"
             rim_z_m = source_rim_z(config, source, library)

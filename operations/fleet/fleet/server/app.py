@@ -438,6 +438,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         simulation_pose=simulation_pose, tracking=tracking, require_operator=require_operator,
         require_named_operator=require_named_operator, read_guard=read_guard)
     trip_runner.road_vision_demand = road_vision_demand
+    if road_vision_demand is not None:
+        road_vision_demand.localization = localization_service
 
     install_mission_and_channel_surfaces(
         app, policy_admission_core=policy_admission_core, mission_service=mission_service,

@@ -167,3 +167,43 @@ def test_guide_route_is_read_only_and_needs_a_viewer(tmp_path):
     for row in body["robots"]:
         assert {"robot_id", "online", "body_radius_m", "pose", "lane", "findings", "worst"} <= set(row)
     assert client.post("/api/fleet/guide", headers=VIEWER).status_code == 405
+
+
+def test_offline_robot_uses_fresh_sighting_fallback_without_becoming_online():
+    from types import SimpleNamespace
+
+    class _Sightings:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def snapshot(self):
+            return {"sightings": self._rows}
+
+    sightings = _Sightings([
+        {"robot_id": "rosy_42", "x": -0.246, "y": 0.498, "yaw": -1.584, "map_id": "site", "stale": False, "age_ms": 420},
+        {"robot_id": "rosy_46", "x": -0.002, "y": 0.505, "yaw": -1.561, "map_id": "site", "stale": True, "age_ms": 9500},
+        {"robot_id": "rosy_48", "x": 0.25, "y": 0.505, "yaw": -1.561, "map_id": "site", "stale": True, "age_ms": 650000},
+        {"robot_id": "rosy_47", "x": 0.1, "y": 0.2, "yaw": 0.0, "map_id": "other_map", "stale": False, "age_ms": 200},
+        {"robot_id": "rosy_45", "x": 0.5, "y": 0.5, "yaw": 0.0, "map_id": "site", "stale": False, "age_ms": 200},
+    ])
+    still = {"velocity": {"linear": 0.0, "angular": 0.0}}
+    site_maps = SimpleNamespace(active=lambda: (3, SimpleNamespace(map_id="site"), GRAPH))
+    service = GuideService(
+        gather=_Gather([
+            {"robot_id": "rosy_42", "online": False, "state": None},
+            {"robot_id": "rosy_46", "online": False, "state": None},
+            {"robot_id": "rosy_48", "online": False, "state": None},
+            {"robot_id": "rosy_47", "online": False, "state": None},
+            {"robot_id": "rosy_45", "online": True, "state": still},
+        ]),
+        poses=_Poses({rid: _pose(None, None, None, "UNKNOWN") for rid in ("rosy_42", "rosy_46", "rosy_48", "rosy_47", "rosy_45")}),
+        site_maps=site_maps, tracking=None, sightings=sightings)
+    rows = {r["robot_id"]: r for r in asyncio.run(service.view())["robots"]}
+    assert rows["rosy_42"]["online"] is False and rows["rosy_42"]["findings"] == []
+    assert rows["rosy_42"]["pose"]["state"] == "DEGRADED"
+    assert rows["rosy_42"]["pose"]["source"] == "sighting"
+    assert rows["rosy_42"]["pose"]["x"] == -0.246 and rows["rosy_42"]["pose"]["y"] == 0.498
+    assert rows["rosy_46"]["pose"]["state"] == "DEGRADED" and rows["rosy_46"]["pose"]["source"] == "sighting"
+    assert rows["rosy_48"]["pose"] is None
+    assert rows["rosy_47"]["pose"] is None
+    assert rows["rosy_45"]["pose"] is None  # online robot never bypasses MapPose via offline sighting fallback

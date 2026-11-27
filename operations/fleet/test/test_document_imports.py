@@ -107,6 +107,7 @@ OWN = {
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "decision-slot.js",  # shared calm decision-slot builder & filler
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
+        "named-stop-actions.js",  # named-stop custody release and precision correction clearance rows
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
@@ -116,6 +117,7 @@ OWN = {
         "camera-backdrop.js",
         "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "map-hover-card.js",
+        "stop-zone-overlay.js",
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",
@@ -134,6 +136,7 @@ OWN = {
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",
         "zone-blueprint-model.js",
+        "zone-blueprint-staging.js",
         "zone-blueprint-geometry.js",
         "zone-blueprint-2d.js",
         "zone-blueprint-3d.js",

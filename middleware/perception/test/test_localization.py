@@ -273,3 +273,26 @@ class LocalizationTests(unittest.TestCase):
         b_oob = m_open.explain((1.0, 1.0, 0.0), oob, angles)
         self.assertEqual(b_oob.miss_wall_pierced, 0)
         self.assertEqual(b_oob.miss_unknown, len(angles))
+
+    def test_2cm_localized_pierce_relaxation_applies_only_when_localized(self):
+        grid = np.zeros((250, 250), dtype=np.int8)
+        grid[25:225, 25] = grid[25:225, 224] = grid[25, 25:225] = grid[224, 25:225] = 100
+        m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
+        truth = (1.5, 1.5, 0.0)
+        angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)
+        wall_ranges = np.array([
+            min(d for d in (
+                (224 * .02 - truth[0]) / math.cos(a) if math.cos(a) > 1e-6 else None,
+                (25 * .02 - truth[0]) / math.cos(a) if math.cos(a) < -1e-6 else None,
+                (224 * .02 - truth[1]) / math.sin(a) if math.sin(a) > 1e-6 else None,
+                (25 * .02 - truth[1]) / math.sin(a) if math.sin(a) < -1e-6 else None,
+            ) if d is not None) + .01
+            for a in angles
+        ], dtype=float)
+        pierced = wall_ranges.copy()
+        pierced[:10] = 4.2  # 5.6% in 1 sector: rejected unlocalized, tolerated when already localized
+        self.assertEqual(m.explain(truth, pierced, angles).rejected_reason, "wall-piercing")
+        self.assertEqual(m.robust_score(truth, pierced, angles), 0.0)
+        loc_b = m.explain(truth, pierced, angles, localized=True)
+        self.assertIsNone(loc_b.rejected_reason)
+        self.assertGreaterEqual(loc_b.robust_score, 0.85)

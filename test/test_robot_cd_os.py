@@ -282,6 +282,12 @@ def test_os_auto_rollout_uses_7200s_timeout_fleet_canary_and_open_release(tmp_pa
     archive = tmp_path / "os-2026.11.23-001/unsigned.zip"
     archive.parent.mkdir(parents=True)
     archive.write_bytes(b"zipbytes01")
+    monkeypatch.setenv("ROSY_OS_TOOLS_CACHE", str(tmp_path / "os-tools"))
+    monkeypatch.setattr(prep_mod, "MIN_FREE_BYTES", 1 << 62)
+    with pytest.raises(OSError, match="GiB free"):
+        mod.advance(c, SHA, "success")
+    assert "os_attempt" not in c.state and not (archive.parent / "attempt-1").exists() and not prep_calls
+    monkeypatch.setattr(prep_mod, "MIN_FREE_BYTES", 0)
     assert mod.advance(c, SHA, "success") == "os_prepared"
     assert prep_calls[-1]["canary"] == ["rosy-pinky-b8xy", "rosy-pinky-y8xs"]
     assert prep_calls[-1]["stage_timeout"] == 7200

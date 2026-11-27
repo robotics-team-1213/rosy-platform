@@ -421,3 +421,33 @@ def test_cell_calibration_view_bundle_flags_over_limit_bias_and_ssrf_urls(tmp_pa
     grid_js = (Path(web.__file__).resolve().parent / "web" / "grid.js").read_text(encoding="utf-8")
     assert "cross_verify?.lateral_xy?.sites" in grid_js and "centre_sigma_mm" in grid_js
     assert cell_calibration_view.is_allowed_frame_url("http://169.254.169.254/latest") is False
+
+
+def test_camera_align_lists_references_compares_the_live_frame_and_refuses_unlisted_files(store, tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from test_omx_cell_camera_align import jpg, scene
+
+    reg = _write_test_profile(tmp_path, "http://127.0.0.1:1/unused.jpg")
+    ref, live = tmp_path / "arm_test" / "ref.jpg", tmp_path / "live.jpg"
+    ref.write_bytes(jpg(scene()))
+    live.write_bytes(jpg(cv2.warpAffine(scene(), np.float32([[1, 0, 25], [0, 1, 0]]), (640, 480), borderValue=(90, 90, 90))))
+    items = json.loads(reg.read_text(encoding="utf-8"))
+    items[0]["live_top_path"] = str(live)
+    reg.write_text(json.dumps(items), encoding="utf-8")
+    server = web.make_server(store, 0, None, profiles_path=reg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    base = web.PROFILES_API + "/arm_a/align"
+    try:
+        status, body = call(url, base)
+        assert status == 200 and [r["id"] for r in json.loads(body)["references"]] == ["current"]
+        status, body = call(url, base + "?ref=current")
+        report = json.loads(body)
+        assert status == 200 and report["ok"] and not report["aligned"] and report["shift_px"][0] > 20 and report["live_image"]
+        assert call(url, base + "/reference?ref=current") == (200, ref.read_bytes())
+        for bad in ("../config.json", "%2Fetc%2Fpasswd", "nope"):
+            assert call(url, base + "?ref=" + bad)[0] == 404
+    finally:
+        server.shutdown()
+        server.server_close()

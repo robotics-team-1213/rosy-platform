@@ -85,7 +85,7 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     assert follow["max_lookahead_dist"] == pytest.approx(.30)
     assert follow["use_regulated_linear_velocity_scaling"] is True
     assert follow["use_cost_regulated_linear_velocity_scaling"] is True
-    assert follow["cost_scaling_dist"] == pytest.approx(.12)
+    assert follow["cost_scaling_dist"] == pytest.approx(.08)
     assert controller["progress_checker"]["required_movement_radius"] == pytest.approx(.05)
     # D-395 R4: RPP rotates to the goal heading with linear 0 whenever the carrot is
     # nearer than xy_goal_tolerance. The carrot sits about one lookahead ahead, so a
@@ -98,7 +98,7 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     # SmacPlanner2D is orientationless.  Give both costmaps the padded
     # circumscribed radius so a square robot cannot enter a corner that only
     # fits at yaw=0 and then become "start occupied" while turning.
-    padded_radius = (2 * .06 ** 2) ** .5 + .015
+    padded_radius = (2 * .06 ** 2) ** .5 + .005
     global_params = params["global_costmap"]["global_costmap"]["ros__parameters"]
     assert "footprint" not in global_params
     assert global_params["robot_radius"] == pytest.approx(padded_radius)
@@ -109,7 +109,7 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     assert local_params["footprint"] == '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
     assert "robot_radius" not in local_params
     for costmap_params in (global_params, local_params):
-        assert costmap_params["inflation_layer"]["inflation_radius"] == pytest.approx(.12)
+        assert costmap_params["inflation_layer"]["inflation_radius"] == pytest.approx(.08)
 
 
 def test_robots_manifest_lists_every_core_with_the_dev_operator_token():

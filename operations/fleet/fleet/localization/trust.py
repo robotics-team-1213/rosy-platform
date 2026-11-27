@@ -23,7 +23,7 @@ TRUSTED = "trusted"
 UNTRUSTED = "untrusted"
 
 #: Contract §3: an untrusted robot keeps this clear around its last trusted pose.
-UNTRUSTED_KEEP_OUT_M = 0.45
+UNTRUSTED_KEEP_OUT_M = 0.20
 
 #: Missing localization expires the last trusted position after a CORE restart.
 LAPSED_GRACE_S = 30.0

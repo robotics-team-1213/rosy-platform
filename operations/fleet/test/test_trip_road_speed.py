@@ -114,3 +114,26 @@ def test_road_speed_owner_changed_after_arrived_is_rescued():
         await road.renew(runner, live, (1, site), 0, .1, pose)
         assert live.view["detail"]["road_speed"]["state"] == "arrived"
     asyncio.run(check())
+
+
+def test_trailing_peer_stale_odom_stamp_does_not_shrink_leader_grant():
+    site = SiteMap.model_validate({
+        "schema": "rosy.site_map/1", "map_id": "road",
+        "places": [dict(id=n, name=n, x=x, y=y) for n, x, y in [("A", 0, 0), ("B", 2, 0), ("C", 2, 2), ("D", 0, 2)]],
+        "edges": [{"id": a + b, "from": a, "to": b, "polyline": [p, q], "direction": "one_way",
+                   "width_m": .1, "speed_cap_mps": .15}
+                  for a, b, p, q in [("A", "B", [0, 0], [2, 0]), ("B", "C", [2, 0], [2, 2]),
+                                     ("C", "D", [2, 2], [0, 2]), ("D", "A", [0, 2], [0, 0])]]})
+    pose = NS(x=1.5, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.8)
+    trailing_peer = NS(x=0.2, y=0., map_id="road", state="LOCALIZED", odom_stamp=9.0)  # gap ahead around loop is 6.7 m
+    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": {}},
+              route_rev=0, trim_m=0., segments=[dict(edge_id="AB", forward=True, s_from=0., s_to=2.)],
+              progress=lambda idx, s: s)
+    grants = []
+    async def update(_rid, cid, grant):
+        grants.append(grant)
+        return {"renewed": True, "correlation_id": cid}
+    runner = NS(_clock=lambda: 10., _roster=lambda: ["first", "second"], _live={"second": NS(open=True)},
+                _call=lambda coro: coro, _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: None)))
+    asyncio.run(RoadSpeed(NS(arbitrated_pose=lambda _rid: trailing_peer), update).renew(runner, live, (1, site), 0, 1.5, pose))
+    assert grants[-1]["limit_mps"] == .15 and grants[-1]["expires_at"] == 11.3

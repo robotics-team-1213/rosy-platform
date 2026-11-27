@@ -48,7 +48,23 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
     bay_plan = app.state.charge_bays = ChargeBays(
         thresholds=lambda: thresholds_of(getattr(app.state, "site_maps", None)))
 
-    def bay_view(row: dict, on_trip: set) -> RobotView:
+    def _fresh_sightings(active_map_id: Optional[str]) -> dict[str, tuple[float, float]]:
+        sightings = getattr(app.state, "sightings", None)
+        if sightings is None or active_map_id is None:
+            return {}
+        found: dict[str, tuple[float, float]] = {}
+        for srow in sightings.snapshot().get("sightings") or ():
+            rid = srow.get("robot_id")
+            if (not rid or rid in found or srow.get("stale") is True
+                    or srow.get("calibration_source") != "approved_record"
+                    or srow.get("map_id") != active_map_id):
+                continue
+            sx, sy = srow.get("x"), srow.get("y")
+            if isinstance(sx, (int, float)) and isinstance(sy, (int, float)) and math.isfinite(sx) and math.isfinite(sy):
+                found[rid] = (float(sx), float(sy))
+        return found
+
+    def bay_view(row: dict, on_trip: set, sighted: dict[str, tuple[float, float]]) -> RobotView:
         battery = (row.get("power_health") or {}).get("battery") or {}
         fresh = battery.get("evidence") == "fresh"
         pose = map_pose.arbitrated_pose(row["robot_id"]) if map_pose is not None else None
@@ -57,7 +73,8 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                          battery.get("filtered_voltage") if fresh else None,
                          (pose.x, pose.y) if localized else None,
                          row["robot_id"] in on_trip,
-                         getattr(pose, "yaw", None) if localized else None)
+                         getattr(pose, "yaw", None) if localized else None,
+                         None if localized else sighted.get(row["robot_id"]))
 
     async def bay_inputs():
         maps = getattr(app.state, "site_maps", None)
@@ -66,7 +83,8 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
             return None, [], []
         runner = getattr(app.state, "trip_runner", None)
         on_trip = {trip["robot_id"] for trip in runner.open_trips()} if runner is not None else set()
-        robots = [bay_view(row, on_trip) for row in (await gathered())["robots"]]
+        sighted = _fresh_sightings(active[1].map_id if active[1] is not None else None)
+        robots = [bay_view(row, on_trip, sighted) for row in (await gathered())["robots"]]
         return active, robots, bays_from_map(active[1])
     app.state.bay_inputs = bay_inputs
     app.state.bay_inputs = bay_inputs

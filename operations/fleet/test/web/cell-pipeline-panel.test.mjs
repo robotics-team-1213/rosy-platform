@@ -258,6 +258,27 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
     assert.equal(invCalls[0].expected_context_sha256, "a".repeat(64));
     assert.equal(invCalls[1].tool_name, "record_visual_checkpoint");
     assert.deepEqual(invCalls[1].arguments.cameras_checked, {arm_s_top: 12, arm_s_wrist: 9});
+
+    // Unnamed/locked operators get step2 and step3 recovery preset buttons disabled with namedReason.
+    const gatedPanel = createPipelinePanel({
+      $: id => byId[id] || null,
+      state,
+      namedReason: () => "이름 있는 운영자 로그인이 필요합니다",
+      runPinkyQuickAction: () => {},
+      runQuickPreset: () => {},
+    });
+    gatedPanel.render({ pinky_tasks: [], tasks: [] }, { robot_layer: { robots: [{ robot_id: "rosy_77" }] } }, {});
+    const collect = (n, out = []) => {
+      if (n?.tagName === "UI-BUTTON") out.push(n);
+      for (const ch of n?.children || []) if (ch && typeof ch === "object") collect(ch, out);
+      return out;
+    };
+    const allGated = collect(panelEl);
+    for (const label of ["S3 하역 셔틀", "S5 1층 적재", "Belt-Far 복구", "Floor-Front 복구"]) {
+      const b = allGated.find(btn => btn.textContent === label);
+      assert.equal(b.disabled, true, label);
+      assert.equal(b.getAttribute("reason"), "이름 있는 운영자 로그인이 필요합니다", label);
+    }
   } finally {
     globalThis.document = prevDoc;
   }

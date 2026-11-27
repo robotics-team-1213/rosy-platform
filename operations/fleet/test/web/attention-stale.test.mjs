@@ -200,3 +200,11 @@ test("B-1: attentionKey is blind to age ticks and flips when the folded cause se
   robot.state.docking = { state: "DOCK_FAILED" };  // a new cause joins the fold
   assert.notEqual(queues.attentionKey(robot), key);
 });
+
+test("T-D: admin-held E-stop has crit severity while auto-released E-stop stays warn", () => {
+  view.receivedAtMs = Date.now() - 500;
+  const adminEstop = full({ line_stuck: null, robot_id: "r_admin", state: { safety: { estop: true } } });
+  const autoEstop = full({ line_stuck: null, robot_id: "r_auto", state: { safety: { estop: true, releases_when_charged: true } } });
+  assert.equal(attentionItems(adminEstop)[0].severity, "crit");
+  assert.equal(attentionItems(autoEstop)[0].severity, "warn");
+});

@@ -43,7 +43,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
       view.trackingDrift = effectiveDriftVerdict(calibrationDriftVerdict(driftHistory), body.sources);
       view.calibrationHealth = calibrationHealthNotice(body.sources);
     }
-    patchHidden(legend, !(next.robots.length || next.unknown.length));
+    patchHidden(legend, (view.layers?.tracking === false) || !(next.robots.length || next.unknown.length));
     if (positions && positionBody) {
       if (body?.sources?.length || next.robots.length || next.unknown.length) coordinatePanel = true;
       const rows = positionRows(next);

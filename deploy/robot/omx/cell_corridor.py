@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -27,6 +28,9 @@ HALF_WIDTH_MM = 30.0  # gripper half width (jaws open ~50 mm) plus a margin
 CLEAR_Z_M = 0.10  # above this the TCP passes over the container (30 mm) and the two-layer stack (65 mm)
 BASE_M = 0.10  # the folded arm itself shows within this radius of its base
 MIN_PX = 40  # smaller blobs are noise or a shadow edge
+MAX_DEPARTURE_BLOB_PX = 1800  # small under-jaw container corner during initial vertical lift; larger blobs block
+MAX_DEPARTURE_XY_M = 0.06  # departure lift must stay predominantly vertical within 60 mm XY
+MIN_DEPARTURE_DZ_M = 0.02  # must gain at least 20 mm before clearing clear_z
 
 
 def runs(tcp, clear_z: float = CLEAR_Z_M, base_m: float = BASE_M) -> tuple[list, list]:
@@ -184,26 +188,100 @@ def site_foreground_mask(img, sites: dict | None, roi, params) -> tuple[np.ndarr
     return mask, valid_sites
 
 
+def _is_ascending_departure(tcp, low, clear_z: float, base_m: float) -> bool:
+    """True only when `low` is a single strictly-ascending vertical departure prefix starting outside `base_m`."""
+    if len(low) != 1 or len(low[0]) < 2 or len(tcp) <= len(low[0]):
+        return False
+    k = len(low[0])
+    if tcp[0][2] >= clear_z or (tcp[0][0] ** 2 + tcp[0][1] ** 2) < base_m * base_m:
+        return False
+    if any(tuple(tcp[i][:2]) != tuple(low[0][i]) for i in range(k)):
+        return False
+    if tcp[k][2] < clear_z or (tcp[k][2] - tcp[0][2]) < MIN_DEPARTURE_DZ_M:
+        return False
+    for i in range(1, k + 1):
+        dxy = math.hypot(tcp[i][0] - tcp[i - 1][0], tcp[i][1] - tcp[i - 1][1])
+        dz = tcp[i][2] - tcp[i - 1][2]
+        if dz < -1e-4 or (dxy > 1e-3 and dz <= 0.5 * dxy):
+            return False
+    return all(math.hypot(tcp[i][0] - tcp[0][0], tcp[i][1] - tcp[0][1]) <= MAX_DEPARTURE_XY_M for i in range(1, k + 1))
+
+
+def _px_radius(pt_xy, to_px, half_mm: float) -> float | None:
+    """Pixel radius matching `corridor()`'s 10 mm scale probe at `pt_xy`."""
+    a = to_px(pt_xy)
+    if a is None:
+        return None
+    b = next((p for dx, dy in ((0.01, 0.0), (-0.01, 0.0), (0.0, 0.01), (0.0, -0.01))
+              if (p := to_px((pt_xy[0] + dx, pt_xy[1] + dy))) is not None), None)
+    if b is None:
+        return None
+    return half_mm * math.hypot(b[0] - a[0], b[1] - a[1]) / 10.0
+
+
+def _filter_departure_low_mask(mask: np.ndarray, seen_low: np.ndarray, roi, start_px, r_px: float) -> np.ndarray:
+    """Exclude only small, interior, calibrated-surface blobs right under the resting jaw during initial vertical lift."""
+    import cv2
+
+    h, w = mask.shape[:2]
+    n, labels, stats, centres = cv2.connectedComponentsWithStats((mask > 0).astype(np.uint8))
+    out = mask.copy()
+    sx, sy = float(start_px[0]) - roi[0], float(start_px[1]) - roi[1]
+    for comp in range(1, n):
+        area = int(stats[comp, cv2.CC_STAT_AREA])
+        cx0, cy0 = int(stats[comp, cv2.CC_STAT_LEFT]), int(stats[comp, cv2.CC_STAT_TOP])
+        cw, ch = int(stats[comp, cv2.CC_STAT_WIDTH]), int(stats[comp, cv2.CC_STAT_HEIGHT])
+        if area > MAX_DEPARTURE_BLOB_PX or cx0 <= 0 or cy0 <= 0 or cx0 + cw >= w or cy0 + ch >= h:
+            continue
+        comp_mask = labels == comp
+        if (comp_mask & (seen_low == 0)).any():
+            continue
+        if math.hypot(float(centres[comp][0]) - sx, float(centres[comp][1]) - sy) > r_px:
+            continue
+        ys, xs = np.where(comp_mask)
+        if float(np.hypot(xs - sx, ys - sy).max()) > r_px:
+            continue
+        out[comp_mask] = 0
+    return out
+
+
 def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None,
-          surface_px=None, high_surface_px=None) -> dict:
+          surface_px=None, high_surface_px=None, allow_ascending_departure: bool = False) -> dict:
     """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.
     `known`: 0/1 mask of catalogue objects, which may pass under high travel. `surface_px`: the polygon(s) the mask
     covers; corridor pixels beyond it are unseen, not clear (2026-11-01). Optional `high_surface_px` expands only
     the above-clear_z transit surface check (e.g. convex hull across calibrated multi-arm sites)."""
     get = lambda k, d: prm.get(params, k, d)  # noqa: E731
-    low, high = runs(tcp, get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M))
+    clear_z, base_m = get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M)
+    low, high = runs(tcp, clear_z, base_m)
     off_map = sum(to_px(p) is None for run in low + high for p in run)
     work = [px for p in (pick_xy, stack_xy) if p is not None and (px := to_px(p)) is not None]
     mask = without_blobs(mask, roi, work) > 0
     half, min_px = get("corridor.half_width_mm", HALF_WIDTH_MM), get("corridor.min_px", MIN_PX)
     unknown = mask & ~(known > 0) if known is not None else mask
     lanes = [corridor(path, to_px, mask.shape, roi, half) > 0 for path in (low, high)]
-    off_surface = 0
+    off_surface, low_mask, ascending_dep = 0, mask, False
     if surface_px:
         seen_low = _fill_surfaces(mask.shape, roi, surface_px)
         seen_high = _fill_surfaces(mask.shape, roi, high_surface_px) if high_surface_px else seen_low
-        off_surface = int((lanes[0] & (seen_low == 0)).sum()) + int((lanes[1] & (seen_high == 0)).sum())
-    found_low, found_high = hits(mask & lanes[0], roi, min_px), hits(unknown & lanes[1], roi, min_px)
+        if (allow_ascending_departure and high_surface_px and off_map == 0
+                and _is_ascending_departure(tcp, low, clear_z, base_m)):
+            h, w = mask.shape[:2]
+            centers = [to_px(p) for p in low[0]]
+            all_in_low = all(
+                px is not None
+                and 0 <= (row := int(round(px[1])) - roi[1]) < h
+                and 0 <= (col := int(round(px[0])) - roi[0]) < w
+                and seen_low[row, col] > 0
+                for px in centers
+            )
+            if all_in_low and (r_px := _px_radius(low[0][0], to_px, half)) is not None:
+                ascending_dep = True
+                off_surface = int((lanes[0] & (seen_high == 0)).sum()) + int((lanes[1] & (seen_high == 0)).sum())
+                low_mask = _filter_departure_low_mask(mask, seen_low, roi, centers[0], r_px)
+        if not ascending_dep:
+            off_surface = int((lanes[0] & (seen_low == 0)).sum()) + int((lanes[1] & (seen_high == 0)).sum())
+    found_low, found_high = hits(low_mask & lanes[0], roi, min_px), hits(unknown & lanes[1], roi, min_px)
     return {"clear": not (found_low or found_high or off_map or off_surface), "low": found_low, "high": found_high,
             "off_map": off_map, "off_surface": off_surface}
 

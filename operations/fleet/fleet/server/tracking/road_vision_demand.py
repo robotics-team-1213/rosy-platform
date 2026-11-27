@@ -25,8 +25,9 @@ def _waiting_peers(live, map_id):
 
 
 class RoadVisionDemand:
-    def __init__(self, reader, sightings, *, clock=time.monotonic):
+    def __init__(self, reader, sightings, *, clock=time.monotonic, localization=None):
         self.reader, self.sightings, self.clock = reader, sightings, clock
+        self.localization = localization
         self._next = {}
         self._tasks = {}
         self._failed = set()
@@ -55,16 +56,23 @@ class RoadVisionDemand:
     def period(self, runner):
         robots = {robot for robot, live in runner._live.items() if live.open and
                   (live.nav2 or live.segment_is_lane(live.view["segment_index"]))}
+        tiebreak_robots = (
+            set(getattr(self.localization, "_fallback", ()))
+            if self.localization is not None else set()
+        )
         wanted = set()
-        active = runner._store.active() if robots else None
+        active = runner._store.active() if (robots or tiebreak_robots) else None
         if active is not None:
             eligible = [src for src in self.sightings.sources if src.map_id == active[1].map_id]
             latest = None
             movers = {rid for rid in robots if runner._live[rid].view["map_version"] == active[0]}
-            peers = {peer for rid in movers for peer in _waiting_peers(runner._live[rid], active[1].map_id)}
+            peers = (
+                {peer for rid in movers for peer in _waiting_peers(runner._live[rid], active[1].map_id)}
+                | tiebreak_robots
+            )
             for robot in (*sorted(movers), *sorted(peers - movers)):
                 choices = {src.source_id for src in eligible if robot in src.robot_ids
-                           and (robot in movers or robot in dict(src.robot_markers))}
+                           and (robot in movers or robot in tiebreak_robots or robot in dict(src.robot_markers))}
                 if robot not in movers and choices & wanted:
                     continue
                 if len(choices) == 1:

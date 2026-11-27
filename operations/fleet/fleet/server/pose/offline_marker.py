@@ -12,12 +12,12 @@ from fleet.localization.relative_search_prior import MAX_FRAME_AGE_S, pose3
 
 # D-587 bounds sticker location, height/parallax and the calibrated floor fit at this site.
 MARKER_ERROR_M = 0.10
-STATIC_MARKER_ERROR_M = 0.05
+STATIC_MARKER_ERROR_M = 0.02
 MAX_OFFLINE_PEER_SPEED_MPS = 0.20
 #: A disconnected peer whose marker stayed within STILL_PATH_M this long is a parked obstacle,
 #: seen at least STATIC_MIN_FRAMES times with no gap above STATIC_MAX_GAP_S.
 STATIC_HOLD_S = 2.0
-STATIC_MAX_GAP_S = 0.6
+STATIC_MAX_GAP_S = 1.2
 STATIC_MIN_FRAMES = 5
 #: A disconnected peer unseen this long by every covering camera that still reports other markers is off the track.
 ABSENT_S = 5.0
@@ -182,7 +182,11 @@ class OfflineMarkerClearance:
         facts = {"map_id": site_route[0], "map_version": active[0], "min_route_distance_m": min(
             obs["route_distance_m"] for obs in obstacles), "observations": obstacles}
         for index, (point, margin, _) in enumerate(samples):
-            if any(math.dist(point, other) > margin + error for other, error, _ in samples[:index]):
+            p_tol = max(margin, MARKER_ERROR_M) if margin > 0 else 0.0
+            if any(
+                math.dist(point, other) > p_tol + (max(error, MARKER_ERROR_M) if error > 0 else 0.0)
+                for other, error, _ in samples[:index]
+            ):
                 return self._decision(rid, "peer_pose_conflict", False, **facts)
         if any(obs["route_distance_m"] <= obs["keep_out_m"] for obs in obstacles):
             return self._decision(rid, "keep_out_intersection", False, **facts)

@@ -17,6 +17,7 @@ import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
+import { createNamedStopActions } from "/console/assets/named-stop-actions.js";
 import { createStationRecovery } from "./station-recovery.js";
 import { createPersonRequests } from "./person-request.js";
 import { createSignals } from "./signals.js";
@@ -217,7 +218,15 @@ async function call(path, options = {}) {
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
-const zoneBlueprint = createZoneBlueprintInspector({ scope: pageScope, call, el, log });
+const zoneBlueprint = createZoneBlueprintInspector({
+  scope: pageScope,
+  call,
+  el,
+  log,
+  confirmedAction,
+  isOperator: () => hasOperatorRole(auth.role),
+  namedReason,
+});
 if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
@@ -308,6 +317,7 @@ function render() {
   lineStuck.render();
   deviceWatch.render();
   tripReplan.render();
+  namedStopActions.render();
   stationRecovery.render();
   personRequests.render();
   cellStage?.renderAlertSlots();
@@ -381,7 +391,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason, openQueueRow: (key) => inbox.jumpToQueueRow(key) });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
@@ -418,8 +428,10 @@ const stationRecovery = createStationRecovery({ scope: pageScope, view, call, lo
 const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => hasOperatorRole(auth.role), namedReason,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
   openCard: (robotId) => { rosterWorkspace.open(robotId); } });
+const namedStopActions = createNamedStopActions({ scope: pageScope, view, call, log,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {
@@ -451,7 +463,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };

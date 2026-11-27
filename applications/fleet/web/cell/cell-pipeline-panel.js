@@ -83,7 +83,7 @@ export function createPipelinePanel(ctx) {
     if (disabledReason) setOffBy(btn, disabledReason);
     btn.addEventListener('click', ev => {
       ev.stopPropagation();
-      onClick();
+      onClick(btn);
     });
     return btn;
   }
@@ -149,19 +149,19 @@ export function createPipelinePanel(ctx) {
       ['S5 도킹', 'dock_s5', 'quiet'],
       ['충전소 C1', 'charge_c1', 'quiet'],
       ['출구 S1 이동', 'depart_s1', 'quiet'],
-    ].map(([lbl, act, kind]) => makeBtn(lbl, kind, opReason, () => void runPinkyQuickAction(activeRobot, act))));
+    ].map(([lbl, act, kind]) => makeBtn(lbl, kind, opReason, (btn) => void runPinkyQuickAction(activeRobot, act, btn))));
 
     const step2 = makeStepCard('2단계 · 상차·하역', [
       ['S3 하역 셔틀', 's3_shuttle', 'primary'],
       ['S5 1층 적재', 's5_tier1_arm_a', 'quiet'],
       ['S5 2층 적재', 's5_tier2_arm_b', 'quiet'],
       ['S3→S5 연속', 'full_s3_to_s5_pipeline', 'quiet'],
-    ].map(([lbl, preset, kind]) => makeBtn(lbl, kind, '', () => void runQuickPreset(preset, activeRobot))));
+    ].map(([lbl, preset, kind]) => makeBtn(lbl, kind, opReason, (btn) => void runQuickPreset(preset, activeRobot, btn))));
 
     const openReparks = Object.values(tasksBody?.repark_requests || {}).filter(r => r && r.state === 'REQUESTED');
     const step3Nodes = [
-      makeBtn('Belt-Far 복구', 'quiet', '', () => void runQuickPreset('s3_recover_belt_far', activeRobot)),
-      makeBtn('Floor-Front 복구', 'quiet', '', () => void runQuickPreset('s3_recover_floor_front', activeRobot)),
+      makeBtn('Belt-Far 복구', 'quiet', opReason, (btn) => void runQuickPreset('s3_recover_belt_far', activeRobot, btn)),
+      makeBtn('Floor-Front 복구', 'quiet', opReason, (btn) => void runQuickPreset('s3_recover_floor_front', activeRobot, btn)),
     ];
     for (const req of openReparks) {
       const box = document.createElement('div');
@@ -253,7 +253,7 @@ export function createPipelinePanel(ctx) {
     const departReason = opReason || (rel.ready ? '' : (Array.isArray(rel.reasons) && rel.reasons.length ? `출발 불가: ${rel.reasons.join(', ')}` : 'S3 하역 완료 확인 대기'));
     const step4 = makeStepCard('4단계 · S3 출발 판정', [
       relMeta,
-      makeBtn('S3 출발 (depart_s3)', 'primary', departReason, () => void runPinkyQuickAction(activeRobot, 'depart_s3')),
+      makeBtn('S3 출발 (depart_s3)', 'primary', departReason, (btn) => void runPinkyQuickAction(activeRobot, 'depart_s3', btn)),
     ]);
 
     const steps = document.createElement('div');

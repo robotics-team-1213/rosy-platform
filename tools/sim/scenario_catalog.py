@@ -19,13 +19,17 @@ ROOT = Path(__file__).resolve().parents[2]
 TEACHER = "tools/sim/omx_two_arm_teacher.py"
 SOURCE = "Confluence 164138 v17 (2026-11-14 백업)"
 NOTE = "팀 검토 전 초안 (Confluence 164138 v17)"
+# the cell the MuJoCo runs model: without these the teacher uses assumed defaults (stack 0/9 on 2026-11-27).
+# 20261110-1231 passes every row; 20261115-0415 still needs a real arm-base measurement (plate fan vs belt disagree).
+SNAP = ["--choice", "cell_snapshot=deploy/robot/omx/sim/cell_snapshots/20261110-1231.json", "--choice", "temp_lanes=snapshot",
+        "--choice", "ship_pose=snapshot", "--choice", "belt_pose=snapshot"]
 
 SCENARIOS: list[dict] = [
     {
         "id": "AT-01",
         "title": "입고·적층 1순환",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "stack", "--video"],
+        "sim": [TEACHER, "run", "stack", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["stack-*-seed0.json", "stack.mp4"],
         "dry_run": ["cell_dry_run", "cell_area_dry_run"],
@@ -36,7 +40,7 @@ SCENARIOS: list[dict] = [
         "id": "AT-02",
         "title": "매몰 화물 회수(재취급)",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "rehandle", "--video"],
+        "sim": [TEACHER, "run", "rehandle", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["rehandle-*-seed0.json", "rehandle.mp4"],
         "dry_run": ["cell_dry_run", "cell_area_dry_run"],
@@ -58,7 +62,7 @@ SCENARIOS: list[dict] = [
         "id": "AT-04",
         "title": "동시 작업·충돌",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "plan", "--plan", "FILE", "--concurrent", "--video"],
+        "sim": [TEACHER, "run", "plan", "--plan", "FILE", "--concurrent", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["plan-*.json", "plan.mp4"],
         "dry_run": [],
@@ -70,7 +74,7 @@ SCENARIOS: list[dict] = [
         "title": "중단·실패 복구",
         "source": SOURCE,
         "sim": [TEACHER, "run", "plan", "--plan", "FILE", "--concurrent",
-                "--belt-unknown", "0.3", "--seed", "3", "--video"],
+                "--belt-unknown", "0.3", "--seed", "3", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["plan-*-seed3.json", "plan.mp4"],
         "dry_run": ["cell_failure_context"],
@@ -82,7 +86,7 @@ SCENARIOS: list[dict] = [
         "title": "한 팔 vs 두 팔 비교",
         "source": SOURCE,
         "sim": ["tools/sim/omx_two_arm_plan.py", "compare", "--scenario", "all",
-                "--replay-dir", "DIR", "--out", "FILE"],
+                "--replay-dir", "DIR", "--out", "FILE", *SNAP],
         "sim_host": "ai",
         "evidence": ["compare.json"],
         "dry_run": [],
@@ -93,7 +97,7 @@ SCENARIOS: list[dict] = [
         "id": "AT-07",
         "title": "반복 운용",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "stack", "--seed", "N"],
+        "sim": [TEACHER, "run", "stack", "--seed", "N", *SNAP],
         "sim_host": "ai",
         "evidence": ["stack-*-seed[1-5].json"],
         "dry_run": [],
@@ -104,7 +108,7 @@ SCENARIOS: list[dict] = [
         "id": "X-SLOT",
         "title": "Harbor JSON·말 지정 칸 이송 (D-1076)",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "outbound-stand", "--video"],
+        "sim": [TEACHER, "run", "outbound-stand", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["outbound-stand-*-seed0.json", "outbound-stand.mp4"],
         "dry_run": ["cell_area_dry_run"],
@@ -115,7 +119,7 @@ SCENARIOS: list[dict] = [
         "id": "X-3TIER",
         "title": "3단 적층",
         "source": SOURCE,
-        "sim": [TEACHER, "run", "stack-t3", "--video"],
+        "sim": [TEACHER, "run", "stack-t3", "--video", *SNAP],
         "sim_host": "ai",
         "evidence": ["stack-t3-*-seed0.json", "stack-t3.mp4"],
         "dry_run": [],
@@ -188,6 +192,8 @@ def check() -> list[str]:
         if s["sim"] and s["sim"][0] == TEACHER and (len(s["sim"]) < 3 or s["sim"][2] not in tasks):
             errors.append(f"{where}: teacher task {s['sim'][2] if len(s['sim']) > 2 else ''!r}"
                           f"가 omx_two_arm_teacher.py choices에 없음")
+        if s["sim_host"] == "ai" and not all(c in s["sim"] for c in SNAP):
+            errors.append(f"{where}: MuJoCo 명령에 셀 스냅샷 선택지(SNAP)가 없음")
         unknown = sorted(set(s["dry_run"]) - tools)
         if unknown:
             errors.append(f"{where}: dry_run 도구 {unknown}가 rosy_agent_bridge.py TOOL_SPECS에 없음")
