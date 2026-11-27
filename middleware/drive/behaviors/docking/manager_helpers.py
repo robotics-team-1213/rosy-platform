@@ -247,6 +247,8 @@ class DockingPhasesMixin:
         if self._phase is DockPhase.TURNING:
             self._parking_phases.tick_turning(now)
             return
+        if self._bay_phases.tick_undocking(now):
+            return
         distance = self._type().undock_distance_m if self._dock else 0.35
         travelled = abs(self.executor.travelled_m())
         deadline = (
