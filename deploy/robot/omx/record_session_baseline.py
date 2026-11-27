@@ -17,6 +17,10 @@ def session_job_env(lease_owner, argv, job, arm, human, params):
     """Select the release wrapper and its bound recovery scope after job admission."""
     env = {**os.environ, "ROSY_ARM_LEASE_OWNER": lease_owner}
     env.pop("ROSY_BASELINE_RECOVERY_ARM", None)
+    env.pop("ROSY_SESSION_CHUNKS_STRICT", None)
+    if job in ("cell_policy_drive", "cell_policy_run") and arm == "arm_s" and params.get("library"):
+        # shortcut: arm_s only; the A/B wrappers honour it too, extend once their policy libraries are checked for it
+        env.update(ROSY_SESSION_CHUNKS=str(params["library"]), ROSY_SESSION_CHUNKS_STRICT="1")
     if job != "remap" or arm not in ("arm_a", "arm_b") or not human or params.get("person_at_switch") is not True:
         return env
     tools_dir = Path(__file__).resolve().parent

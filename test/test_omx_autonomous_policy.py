@@ -62,9 +62,11 @@ def test_act_policy_allows_autonomous_mode_without_person_at_switch(tmp_path: Pa
     assert "plan" in planned
 
     seen_cmd: list[str] = []
+    seen_env: dict = {}
 
-    def fake_run(cmd, **_kw):
+    def fake_run(cmd, **kw):
         seen_cmd.extend(cmd)
+        seen_env.update(kw.get("env") or {})
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"result": "released", "parked": True, "took_one": True}), stderr="")
 
     monkeypatch.setattr(ctar, "act_verdict", lambda *a, **k: {
@@ -82,6 +84,9 @@ def test_act_policy_allows_autonomous_mode_without_person_at_switch(tmp_path: Pa
     )
     assert out["stage_result"]["task_verified"] is True
     assert "--policy-lease" in seen_cmd and "--person-at-switch" not in seen_cmd
+    # the arm_s session must start on the policy library, else its trusted grasp refuses the jaw_gate
+    assert seen_env["ROSY_SESSION_CHUNKS"] == seen_cmd[seen_cmd.index("--library") + 1]
+    assert seen_env["ROSY_SESSION_CHUNKS_STRICT"] == "1"
     idx = seen_cmd.index("--operator")
     assert seen_cmd[idx + 1] == "autonomous_policy"
 

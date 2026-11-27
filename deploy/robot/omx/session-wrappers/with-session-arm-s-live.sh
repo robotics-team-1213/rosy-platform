@@ -14,7 +14,7 @@ if ! { [ -p chunk-io-s/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
     if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
     n0=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
     (
-      ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-s-live.json --caps caps-arm-s-nowindup.json --arm arm_s --chunks chunks-arm-s-inplace-live.json --io chunk-io-s --params cell-params-floor-1028.json --operating-profile arm-s-robot-profile-live.json </dev/null
+      ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-s-live.json --caps caps-arm-s-nowindup.json --arm arm_s --chunks "${ROSY_SESSION_CHUNKS:-chunks-arm-s-inplace-live.json}" --io chunk-io-s --params cell-params-floor-1028.json --operating-profile arm-s-robot-profile-live.json </dev/null
       rc=$?
       if [ "$rc" -eq 0 ] && flock -n ~/rosy-omx/session-arm_s.lock true; then
         ~/rosy-omx/current-env/bin/python "$OMX/observer_handoff.py" release arm_s
@@ -30,6 +30,13 @@ if ! { [ -p chunk-io-s/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
     sleep 2
   done
   tail -n +$((n0+1)) chunk-io-s/chunk-status.jsonl 2>/dev/null | grep -q '"command": "start", "ok": true' || { echo "REFUSED: the arm session did not start"; exit 2; }
+elif [ "${ROSY_SESSION_CHUNKS_STRICT:-}" = 1 ]; then
+  # policy jobs only (folds and recovery reuse any session): the runner trusts its start library's grasp_pick,
+  # so a policy job on another library would be refused later as a jaw_gate conflict
+  running=$(pgrep -af '[r]ecord_session.py .*--io chunk-io-s' | sed -n 's/.* --chunks \([^ ]*\) .*/\1/p' | head -n 1)
+  if [ -z "$running" ] || [ "$(realpath -m "$running")" != "$(realpath -m "${ROSY_SESSION_CHUNKS:-chunks-arm-s-inplace-live.json}")" ]; then
+    echo "REFUSED: the running arm_s session started with ${running:-an unknown library}, this job needs ${ROSY_SESSION_CHUNKS:-chunks-arm-s-inplace-live.json}; wait for the idle fold to end the session, then retry"; exit 2
+  fi
 fi
 echo "session up"
 exec "$@"
