@@ -17,6 +17,7 @@ import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
+import { createNamedStopActions } from "/console/assets/named-stop-actions.js";
 import { createStationRecovery } from "./station-recovery.js";
 import { createPersonRequests } from "./person-request.js";
 import { createSignals } from "./signals.js";
@@ -308,6 +309,7 @@ function render() {
   lineStuck.render();
   deviceWatch.render();
   tripReplan.render();
+  namedStopActions.render();
   stationRecovery.render();
   personRequests.render();
   cellStage?.renderAlertSlots();
@@ -420,6 +422,8 @@ const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
   openCard: (robotId) => { rosterWorkspace.open(robotId); } });
+const namedStopActions = createNamedStopActions({ scope: pageScope, view, call, log,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {

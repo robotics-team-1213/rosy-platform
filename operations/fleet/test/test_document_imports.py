@@ -107,6 +107,7 @@ OWN = {
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "decision-slot.js",  # shared calm decision-slot builder & filler
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
+        "named-stop-actions.js",  # named-stop custody release and precision correction clearance rows
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",

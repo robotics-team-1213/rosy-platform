@@ -825,6 +825,10 @@
     "zone-blueprint.css": {
       "path": "map/zone-blueprint.css",
       "media_type": "text/css"
+    },
+    "named-stop-actions.js": {
+      "path": "map/named-stop-actions.js",
+      "media_type": "application/javascript"
     }
   }
 }
