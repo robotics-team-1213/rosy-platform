@@ -8,7 +8,7 @@ from tempfile import mkdtemp
 import time
 
 import commissioning_limits as limits
-from cell_job_peer_health import FOLLOWER_JOINTS, calibrated_positions_folded
+from cell_job_peer_health import FOLLOWER_JOINTS
 from observer_handoff_io import unit_env
 from register_probe import open_readonly_port, read_motors
 
@@ -32,7 +32,7 @@ class BaselineMismatch(SystemExit):
 
 
 class FoldUnconfirmed(ValueError):
-    """Registers were idle, but did not confirm the bound arm's folded pose."""
+    """Registers were idle, but did not match the bound arm's calibrated identity (IDs, drive modes, offsets)."""
 
 
 def check_session_idle(session, recovery_arm, robot, record):
@@ -94,12 +94,13 @@ def restore(arm, robot):
     def guarded_read(port):
         rows = read_motors(port)
         limits.validate_motors(rows)
-        if not calibrated_positions_folded([r["position_raw"] for r in rows], cal) or any(
+        # no fold rule: torque is OFF (validate_motors) and a cap write never moves the arm (2026-11-28 user)
+        if any(
             type(cal[name].get("id")) is not int or row["id"] != cal[name]["id"]
             or row["drive_mode"] != cal[name]["drive_mode"] or row["homing_offset_raw"] != cal[name]["homing_offset"]
             for name, row in zip(FOLLOWER_JOINTS, rows)
         ):
-            raise FoldUnconfirmed("baseline restore requires a calibrated folded pose with matching hardware offsets")
+            raise FoldUnconfirmed("baseline restore requires hardware IDs and offsets matching the arm calibration")
         return rows
 
     with open_readonly_port(device) as port:
