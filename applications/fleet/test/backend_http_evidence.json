@@ -1720,6 +1720,14 @@
       ],
       "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
     },
+    "POST:/api/fleet/assistant/messages/{request_id}/navigation": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_assistant_navigation_routes.py",
+        "test_explicit_http_handoff_is_opt_in_idempotent_and_owned"
+      ],
+      "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
+    },
     "POST:/api/fleet/site-map/drawings": {
       "status": 200,
       "test": [
