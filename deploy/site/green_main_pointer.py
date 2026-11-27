@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes  # noqa: E402
@@ -95,7 +96,7 @@ def main(argv=None) -> int:
     if pointer is None:
         print(json.dumps({"step": "no_green_commit", "depth": a.depth}), flush=True)
         return 3
-    data = encode(pointer)
+    data = encode({**pointer, "generated_at": int(time.time())})  # the cell refuses a pointer older than platform_max_age_s
     if a.dry_run:
         sys.stdout.write(data.decode("ascii"))
         return 0

@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 
 from omx_autoupdate_host import Host, SourceUnavailable, _sp
@@ -46,8 +47,11 @@ def parse_pointer(raw: bytes, cfg: dict) -> dict:
             or p.get("branch") != cfg["branch"] or not isinstance(p.get("source_commit"), str)
             or not SHA.fullmatch(p["source_commit"]) or type(p.get("commit_verified")) is not bool
             or not isinstance(p.get("required_checks"), list)
-            or not all(isinstance(c, str) for c in p["required_checks"])):
+            or not all(isinstance(c, str) for c in p["required_checks"]) or type(p.get("generated_at")) is not int):
         raise SourceUnavailable("malformed")
+    age = time.time() - p["generated_at"]  # a replayed old pointer (or a dead signer) must not hold the cell on an old head
+    if not -300 <= age <= float(cfg.get("platform_max_age_s", 3600)):
+        raise SourceUnavailable("stale")
     return p
 
 

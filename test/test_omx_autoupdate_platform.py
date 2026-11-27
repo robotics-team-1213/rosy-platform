@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -38,7 +39,7 @@ def keys(tmp_path_factory):
 
 def publish(tmp_path, keys, sign_with=None, **fields):
     pointer = {"schema": "rosy-green-main/1", "repository": "o/r", "branch": "main", "source_commit": SHA,
-               "required_checks": ["ci-result"], "commit_verified": False, **fields}
+               "required_checks": ["ci-result"], "commit_verified": False, "generated_at": int(time.time()), **fields}
     data = (json.dumps(pointer, sort_keys=True) + "\n").encode()
     priv, pub = sign_with or keys
     (tmp_path / "green-main.json").write_bytes(data)
@@ -61,10 +62,12 @@ def test_a_signed_pointer_gives_head_checks_and_verification_without_github(tmp_
 @pytest.mark.parametrize("change, reason", [
     ("forged", "bad_signature"), ("unsigned", "unreachable"), ("absent", "unreachable"),
     ("repository", "malformed"), ("branch", "malformed"), ("schema", "malformed"), ("short_sha", "malformed"),
+    ("old", "stale"), ("future", "stale"), ("no_time", "malformed"),
 ])
 def test_an_unreadable_or_untrusted_pointer_is_transient(tmp_path, keys, change, reason, tmp_path_factory):
     fields = {"repository": {"repository": "x/y"}, "branch": {"branch": "dev"}, "schema": {"schema": "rosy-green-main/0"},
-              "short_sha": {"source_commit": "abc"}}.get(change, {})
+              "short_sha": {"source_commit": "abc"}, "old": {"generated_at": int(time.time()) - 3700},
+              "future": {"generated_at": int(time.time()) + 600}, "no_time": {"generated_at": "now"}}.get(change, {})
     other = None
     if change == "forged":
         d = tmp_path_factory.mktemp("other")

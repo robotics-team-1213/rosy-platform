@@ -60,16 +60,18 @@ def test_the_written_pointer_verifies_on_the_cell(tmp_path, monkeypatch):
     subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(priv)], check=True)
     subprocess.run(["openssl", "pkey", "-in", str(priv), "-pubout", "-out", str(pub)], check=True)
     monkeypatch.setattr(g, "gh_json", lambda gh, path: fetcher(MAIN, {"m3": [run("ci-result")]})(path))
+    monkeypatch.setattr(g.time, "time", lambda: 1795790000.5)
     out = tmp_path / "out"
     assert g.main(["--repo", "o/r", "--key-id", "rosy-green-main-v1", "--private-key", str(priv),
                    "--public-key", str(pub), "--out-dir", str(out)]) == 0
     data, sig = (out / "green-main.json").read_bytes(), (out / "green-main.json.sig").read_bytes()
     assert json.loads(data)["source_commit"] == "m3" and json.loads(data)["schema"] == "rosy-green-main/1"
+    assert json.loads(data)["generated_at"] == 1795790000  # the cell's freshness bound reads it
     from candidate_signing import verify_manifest_signature
     verify_manifest_signature(data, sig, trusted_key_id="rosy-green-main-v1", public_key=pub)
     assert g.main(["--repo", "o/r", "--key-id", "rosy-green-main-v1", "--private-key", str(priv),
                    "--public-key", str(pub), "--out-dir", str(out)]) == 0
-    assert (out / "green-main.json").read_bytes() == data  # an unchanged main rewrites the same bytes
+    assert (out / "green-main.json").read_bytes() == data  # an unchanged main in the same second rewrites the same bytes
 
 
 def test_no_green_commit_and_gh_failure_exit_without_writing(tmp_path, monkeypatch):

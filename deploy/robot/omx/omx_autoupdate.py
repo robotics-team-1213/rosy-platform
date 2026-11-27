@@ -385,8 +385,8 @@ def main(argv=None):
     Path(cfg["root"]).mkdir(parents=True, exist_ok=True)
     with (Path(cfg["root"]) / UPDATE_LOCK).open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        # platform: the signed green-main pointer, imported only here (a release listing single files may lack it)
-        host = Host(cfg) if cfg["trust_source"] == "github" else __import__("omx_autoupdate_platform").PlatformHost(cfg)
+        platform = cfg["trust_source"] == "platform" and (Path(__file__).resolve().parents[2] / "site/candidate_signing.py").is_file()  # an older updater's release lacks the verifier: github this once
+        host = __import__("omx_autoupdate_platform").PlatformHost(cfg) if platform else Host(cfg)
         updater = Updater(cfg, host)
         if args.command == "status":
             print(json.dumps(updater.state(), indent=2))
