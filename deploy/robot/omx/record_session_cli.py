@@ -305,7 +305,8 @@ def main(argv=None, *, _globals: dict | None = None):
         recovery = os.environ.get("ROSY_RECOVERY_INCIDENT")
         omx_incident.refuse_if_held(args.arm, **({"allow_incident": recovery} if recovery else {}))
         resting.check_pending(args.arm)
-        if (args.arm in ("arm_a", "arm_b") and os.environ.get("ROSY_BASELINE_RECOVERY_ARM") == args.arm
+        # 2026-11-28 user: caps left raised on an idle (torque OFF, no error) follower are restored, not refused, for every A/B session
+        if (args.arm in ("arm_a", "arm_b")
                 and args.chunks and args.operating_profile and not recovery and config["robot"]["type"] == "omx_follower"):
             session.baseline_recovery_arm = args.arm
         record = session.execute(
