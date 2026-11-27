@@ -5,6 +5,12 @@ from fleet.routing.execute import arc_id
 from fleet.server.trip_geometry import _wall_clearance
 
 NAV2_ROUTE_STEP_M = 0.12
+#: A curve tighter than this radius is sampled every NAV2_CURVE_STEP_M: on the 0.135 m U-turn a 0.12 m chord
+#: cuts 14 mm inside the lane centre, a 0.05 m chord 2 mm (2026-11-27 live run, rosy_45 on loop_right). After a
+#: resend the first leg is the chord to the first point Nav2 keeps (RemovePassedGoals 0.09 m): 0.09-0.21 m with
+#: the road step, 0.09-0.14 m with this one.
+NAV2_CURVE_RADIUS_M = 0.30
+NAV2_CURVE_STEP_M = 0.05
 NAV2_ROUTE_MAX_POINTS = 64
 NAV2_ROUTE_MIN_GAP_M = 0.03
 NAV2_CLOSED_LOOP_SPLIT_M = 0.60
@@ -57,6 +63,7 @@ def sample_nav2_route(
     step_m: float = NAV2_ROUTE_STEP_M,
     max_points: int = NAV2_ROUTE_MAX_POINTS,
     walls=(),
+    curve_step_m: float = NAV2_CURVE_STEP_M,
 ) -> list[tuple[float, float, float, str]]:
     """Sample road-centerline ``pass`` points ending with one ``stop`` point along ``segments[index..end_index]``."""
     spans = []
@@ -84,13 +91,23 @@ def sample_nav2_route(
         arc, _s0, s1 = spans[-1]
         return arc.point_at(s1)
 
-    pts: list[tuple[float, float, float, str]] = []
-    d = spacing
-    while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(pts) < max_points - 1:
-        px, py, pyaw = point_at_distance(d)
-        if not pts or math.hypot(px - pts[-1][0], py - pts[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
-            pts.append((px, py, pyaw, "pass"))
-        d += spacing
+    def sampled(curve: float) -> tuple[list, bool]:
+        def step_after(d: float, yaw: float) -> float:
+            ahead = point_at_distance(min(d + spacing, total_m))[2]
+            return min(curve, spacing) if abs(_wrap_angle(ahead - yaw)) * NAV2_CURVE_RADIUS_M > spacing else spacing
+
+        out: list[tuple[float, float, float, str]] = []
+        d = step_after(0.0, point_at_distance(0.0)[2])
+        while d < total_m - NAV2_ROUTE_MIN_GAP_M and len(out) < max_points - 1:
+            px, py, pyaw = point_at_distance(d)
+            if not out or math.hypot(px - out[-1][0], py - out[-1][1]) >= NAV2_ROUTE_MIN_GAP_M:
+                out.append((px, py, pyaw, "pass"))
+            d += step_after(d, pyaw)
+        return out, d < total_m - NAV2_ROUTE_MIN_GAP_M
+
+    pts, cut = sampled(curve_step_m)
+    if cut:  # shortcut: one even spacing when dense curves do not fit max_points; split the route to go finer
+        pts, _ = sampled(spacing)
     fx, fy, fyaw = spans[-1][0].point_at(spans[-1][2])
     while pts and math.hypot(fx - pts[-1][0], fy - pts[-1][1]) < NAV2_ROUTE_MIN_GAP_M:
         pts.pop()
