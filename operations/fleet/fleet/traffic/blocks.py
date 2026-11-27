@@ -65,7 +65,8 @@ def _occupied(robot: Robot) -> set[int]:
 
 
 def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float, *,
-         merge_max_wait_s: float = MERGE_MAX_WAIT_S, green: Mapping[str, Collection[str]] = {}) -> TickResult:
+         merge_max_wait_s: float = MERGE_MAX_WAIT_S, green: Mapping[str, Collection[str]] = {},
+         behind: Mapping[str, Collection[str]] = {}) -> TickResult:
     """One Fleet tick: occupancy, release, grants in fair order, authority ends.
 
     1. A robot's grants and last padded body keep blocking others whether or not it is in
@@ -78,6 +79,9 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
        zone, wait start, id. Grants are contiguous from the front; only grants extend a
        robot's own authority, padding only blocks others.
     4. D-525: a span of a zone in ``green`` whose entry arc is not listed is refused in 2 and 3.
+    5. ``behind``: ``{robot: pinned robots whose whole pin lies behind its rear}`` (the caller measured it on
+       this robot's route). Those pins do not refuse the unit under its front in 2; it drives away from them.
+       They keep blocking every other unit and every other robot.
     """
     for robot in robots:
         if state.route.get(robot.id, robot.route_id) != robot.route_id:
@@ -185,8 +189,11 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             continue
         i = bisect.bisect_right(robot.spans, robot.d, key=_D1)
         front = i if i < len(robot.spans) and robot.spans[i].d0 <= robot.d < robot.spans[i].d1 else None
+        passed = set(behind.get(robot.id, ())) & set(state.pinned)
+        by = present if front is None or not passed else {
+            **present, robot.spans[front].unit: present.get(robot.spans[front].unit, set()) - passed}
         ok, _others, via = (False, (), None) if front is None or front in state.held[robot.id] \
-            else free_for(robot, robot.spans[front], present)
+            else free_for(robot, robot.spans[front], by)
         if ok:
             grant(robot, front, via)
             present.setdefault(robot.spans[front].unit, set()).add(robot.id)
