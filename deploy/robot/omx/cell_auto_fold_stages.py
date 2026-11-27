@@ -16,6 +16,12 @@ from typing import Any, Callable
 
 SCHEMA = "rosy.omx-auto-fold.v1"
 CHOICE = "auto_fold.candidate"  # cell_choices name the candidates compete under
+LIFT_FAR = 50.0  # shoulder_lift units past home: the forearm lever that latched shoulder_lift on 2026-11-27
+
+
+def fold_context(state, home, is_low: bool) -> str:
+    """The coarse situation (4 buckets) whose own record orders the candidates: resting low or not, lift near or far."""
+    return f"{'low' if is_low else 'high'}/{'far' if abs(float(state[1]) - float(home[1])) > LIFT_FAR else 'near'}"
 
 
 def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float, *,
@@ -44,7 +50,11 @@ def _learn(result: dict, ok: bool) -> None:
         from cell_choices import Choices
 
         choices = Choices(Path(path))
-        choices.outcome(CHOICE, name, ok, note=str(result.get("reason") or result.get("result")))
+        note = str(result.get("reason") or result.get("result"))
+        choices.outcome(CHOICE, name, ok, note=note)
+        if result.get("context"):  # the same try under its situation too (ranked_in_context)
+            choices.offer(f"{CHOICE}@{result['context']}", name, "D-1048")
+            choices.outcome(f"{CHOICE}@{result['context']}", name, ok, note=note)
         choices.save()
     except (SystemExit, Exception):  # a lost learning row never changes the outcome
         pass

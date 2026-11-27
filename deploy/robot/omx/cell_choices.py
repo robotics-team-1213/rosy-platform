@@ -150,6 +150,14 @@ class Choices:
             return -(c["ok"] + 1) / (c["tries"] + 2)
         return sorted(values, key=record)
 
+    def ranked_in_context(self, name: str, values: list, context: str | None, min_tries: int = 3) -> list:
+        """ranked() by the record kept under `name@context` once that context has min_tries tries, else by the global
+        record; equal contextual records keep the global order."""
+        order = self.ranked(name, values)
+        if context is None or sum(c["tries"] for c in self.data["values"].get(f"{name}@{context}", [])) < min_tries:
+            return order
+        return self.ranked(f"{name}@{context}", order)
+
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")

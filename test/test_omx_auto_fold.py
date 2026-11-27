@@ -113,7 +113,7 @@ def test_a_stalled_park_gives_no_state_to_trust_so_it_holds_with_torque():
 def test_order_changes_only_the_order_of_the_same_candidates():
     names = []
 
-    def order(offered):
+    def order(offered, context):
         names.append(list(offered))
         return ["pan-5", *[n for n in offered if n != "pan-5"]]
 
