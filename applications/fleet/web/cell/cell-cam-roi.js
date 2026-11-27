@@ -14,7 +14,7 @@ function svgEl(tag, attrs = {}, text = null) {
 export function cameraRoiEntries(camView, cameraRois) {
   const cams = cameraRois?.arm_s_top || cameraRois?.arm_ab_top ? cameraRois : cameraRois?.cameras;
   if (!cams || !camView) return { size: [640, 480], entries: [] };
-  const text = [camView.id, camView.source, camView.source_id, camView.role, camView.label]
+  const text = [camView.id, camView.source, camView.source_id, camView.role, camView.stream, camView.label]
     .filter(Boolean).join(" ").toLowerCase();
   if (text.includes("wrist") || text.includes("side") || text.includes("depth") || text.includes("front")) {
     return { size: [640, 480], entries: [] };
@@ -41,13 +41,13 @@ export function cameraRoiEntries(camView, cameraRois) {
   return { size, entries };
 }
 
-export function buildCamRoiSvg(camView, cameraRois) {
+export function buildCamRoiSvg(camView, cameraRois, zoomed = false) {
   const { size, entries } = cameraRoiEntries(camView, cameraRois);
   if (!entries.length) return null;
   const svg = svgEl("svg", {
     class: "omx-cam-roi-overlay",
     viewBox: `0 0 ${size[0]} ${size[1]}`,
-    preserveAspectRatio: "xMidYMid slice",
+    preserveAspectRatio: zoomed ? "xMidYMid meet" : "xMidYMid slice",
     "aria-hidden": "true",
   });
   for (const entry of entries) {
@@ -67,10 +67,10 @@ export function buildCamRoiSvg(camView, cameraRois) {
   return svg;
 }
 
-export function syncCamRoiOverlay(frameEl, camView, cameraRois, showRoi = true) {
+export function syncCamRoiOverlay(frameEl, camView, cameraRois, showRoi = true, zoomed = false) {
   if (!frameEl) return;
   frameEl.querySelector(".omx-cam-roi-overlay")?.remove();
   if (!showRoi || !cameraRois) return;
-  const svg = buildCamRoiSvg(camView, cameraRois);
+  const svg = buildCamRoiSvg(camView, cameraRois, zoomed);
   if (svg) frameEl.append(svg);
 }

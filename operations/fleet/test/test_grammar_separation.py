@@ -42,7 +42,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # C23/C24 shared robot dock and panel sheet.
         # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
-                       "/console/assets/roster.css", "/console/assets/omx-inspector.css",
+                       "/console/assets/roster.css", "/console/assets/omx-inspector.css", "/console/assets/cell-cam-roi.css",
                        "/common/component-controls.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",

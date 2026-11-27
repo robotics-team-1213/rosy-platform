@@ -28,9 +28,10 @@ function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = 
   const imgRef = useRef(null), statusRef = useRef(null), standbyRef = useRef(null);
   useLayoutEffect(() => { frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label); }, [cam.source_id, cam.label, frames]);
   useLayoutEffect(() => { frames.repaint?.({ source: cam.source_id }); }, [liveOn, cam.source_id, frames]);
-  useLayoutEffect(() => { syncCamRoiOverlay(imgRef.current?.parentElement, cam, cameraRois, showRoi); }, [cam.source_id, cam.role, cam.label, cameraRois, showRoi]);
-  const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); img.classList.toggle("focused"); };
-  const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") imgRef.current?.classList.remove("focused"); };
+  useLayoutEffect(() => { syncCamRoiOverlay(imgRef.current?.parentElement, cam, cameraRois, showRoi, Boolean(imgRef.current?.classList.contains("focused"))); }, [cam.source_id, cam.role, cam.label, cameraRois, showRoi]);
+  const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); img.parentElement?.querySelector(".omx-cam-roi-overlay")?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
+  const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); applyZoom(!img.classList.contains("focused")); };
+  const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") applyZoom(false); };
   return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
     <div class="cell-stage-cam-head"><strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong><small ref=${statusRef} class="omx-inspector-cam-badge" /></div>
     <div class="omx-inspector-cam-frame"><img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} onClick=${toggleZoom} /><span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" /></div>

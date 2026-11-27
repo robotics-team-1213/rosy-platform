@@ -147,6 +147,7 @@ test("cameraRoiEntries and renderOmxInspector attach pixel ROI overlays only on 
   };
   assert.equal(cameraRoiEntries({ id: "arm_s_top", label: "S3 상단" }, cameraRois).entries.length, 1);
   assert.equal(cameraRoiEntries({ source_id: "omx_overhead", role: "overhead", label: "셀 상단" }, cameraRois).entries.length, 2);
+  assert.equal(cameraRoiEntries({ source_id: "omx_overhead", role: "overhead", stream: "depth", label: "상단" }, cameraRois).entries.length, 0);
   assert.equal(cameraRoiEntries({ source_id: "omx_wrist_a", role: "wrist", label: "손목" }, cameraRois).entries.length, 0);
 
   const prevDoc = globalThis.document;
