@@ -217,7 +217,7 @@ def measure_temp_plates(frame, layout, prev=None):
             lanes.append(dict(lane=k, xy=[round(v, 4) for v in xy], yaw_deg=round(math.degrees(fold(yaw)), 1),
                               source=(b["kind"] + (" (partial)" if b["partial"] else "")) if b else "plate-fit",
                               residual_mm=round(math.dist(xy, b["xy"]) * 1000, 1) if b else None))
-        plates[t] = dict(lanes=lanes, seen=len(seen))
+        plates[t] = dict(lanes=lanes, seen=len(seen), axis=[round(v, 4) for v in place(((shape["radius_m"], 0.), 0.), pose)[0]])  # the fan centre: its arm axis
         sizes += [b["size"] for b in seen.values() if b["kind"] == "pad" and not b["partial"]]
     scale = None
     if sizes:
@@ -280,19 +280,22 @@ def measure_ship(frame, layout):
     _, deck_mm = hull_outline()
     ship_z = layout.table_z + deck_mm / 1000
     ys, xs = np.nonzero(blue)
-    if len(xs) >= 5000:
-        pts = cam.to_plane(np.stack([xs, ys], 1), ship_z)
-        keep = (pts[:, 0] > -.17) & (pts[:, 0] < .20) & (np.abs(pts[:, 1]) < .085)
-        if int(keep.sum()) >= 5000:
-            blue_ship = np.zeros_like(blue)
-            blue_ship[ys[keep], xs[keep]] = 255
-            blue_ship = cv2.morphologyEx(blue_ship, cv2.MORPH_OPEN, _KERNEL_3X3)
-            chull = cv2.convexHull(np.column_stack(np.nonzero(blue_ship))[:, ::-1].astype(np.int32))
-            blob = cv2.fillConvexPoly(np.zeros_like(blue), chull, 1)
-        else:
-            blob = None
-    else:
-        blob = None
+    pts = cam.to_plane(np.stack([xs, ys], 1), ship_z) if len(xs) >= 5000 else None
+
+    def blob_around(y0):  # the hull blue within a beam window about y0: the plates' blue beside the hull stays out
+        if pts is None:
+            return None
+        keep = (pts[:, 0] > -.17) & (pts[:, 0] < .20) & (np.abs(pts[:, 1] - y0) < .085)
+        if int(keep.sum()) < 5000:
+            return None
+        blue_ship = np.zeros_like(blue)
+        blue_ship[ys[keep], xs[keep]] = 255
+        blue_ship = cv2.morphologyEx(blue_ship, cv2.MORPH_OPEN, _KERNEL_3X3)
+        chull = cv2.convexHull(np.column_stack(np.nonzero(blue_ship))[:, ::-1].astype(np.int32))
+        return cv2.fillConvexPoly(np.zeros_like(blue), chull, 1)
+
+    x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
+    blob = blob_around(y0)
     if blob is None:
         m = cv2.morphologyEx(blue | orange, cv2.MORPH_CLOSE, _KERNEL_9X9)
         n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
@@ -301,35 +304,44 @@ def measure_ship(frame, layout):
         blob = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
         blob = cv2.drawContours(np.zeros_like(blob), cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0], -1, 1, -1)
 
-    blob_u8 = (blob != 0).astype(np.uint8)
-    blob_area = int(cv2.countNonZero(blob_u8))
-    hull_buf = np.empty_like(blob_u8)
-    and_buf = np.empty_like(blob_u8)
-    iou_cache: dict[tuple[float, float, float], float] = {}
+    def fit(blob, x0, y0):
+        blob_u8 = (blob != 0).astype(np.uint8)
+        blob_area = int(cv2.countNonZero(blob_u8))
+        hull_buf = np.empty_like(blob_u8)
+        and_buf = np.empty_like(blob_u8)
+        iou_cache: dict[tuple[float, float, float], float] = {}
 
-    def iou(pose):
-        key = (round(pose[0], 6), round(pose[1], 6), round(pose[2], 6))
-        if key in iou_cache:
+        def iou(pose):
+            key = (round(pose[0], 6), round(pose[1], 6), round(pose[2], 6))
+            if key in iou_cache:
+                return iou_cache[key]
+            hull_buf.fill(0)
+            cv2.fillPoly(hull_buf, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
+            cv2.bitwise_and(hull_buf, blob_u8, dst=and_buf)
+            inter = int(cv2.countNonZero(and_buf))
+            union = int(cv2.countNonZero(hull_buf)) + blob_area - inter
+            iou_cache[key] = inter / max(union, 1)
             return iou_cache[key]
-        hull_buf.fill(0)
-        cv2.fillPoly(hull_buf, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
-        cv2.bitwise_and(hull_buf, blob_u8, dst=and_buf)
-        inter = int(cv2.countNonZero(and_buf))
-        union = int(cv2.countNonZero(hull_buf)) + blob_area - inter
-        iou_cache[key] = inter / max(union, 1)
-        return iou_cache[key]
 
-    x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
-    best = max(((x, y, 0.) for x in np.arange(x0 - .06, x0 + .06, .004) for y in np.arange(y0 - .05, y0 + .05, .004)), key=iou)
-    for step in (.002, .001, .0005):
-        while True:
-            near = max(((best[0] + a * step, best[1] + b * step, best[2] + c * step * 2) for a in (-1, 0, 1) for b in (-1, 0, 1)
-                        for c in (-1, 0, 1)), key=iou)
-            if iou(near) <= iou(best):
-                break
-            best = near
+        best = max(((x, y, 0.) for x in np.arange(x0 - .06, x0 + .06, .004) for y in np.arange(y0 - .05, y0 + .05, .004)), key=iou)
+        for step in (.002, .001, .0005):
+            while True:
+                near = max(((best[0] + a * step, best[1] + b * step, best[2] + c * step * 2) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                            for c in (-1, 0, 1)), key=iou)
+                if iou(near) <= iou(best):
+                    break
+                best = near
+        return best, float(iou(best))
+
+    best, score = fit(blob, x0, y0)
+    for _ in range(3):  # a hull far from the layout's y was cut by the first window: crop again about where it was found
+        again = blob_around(best[1]) if abs(best[1] - y0) > .002 else None
+        if again is None:
+            break
+        y0 = best[1]
+        best, score = fit(again, best[0], y0)
     return dict(stern_x_m=round(float(best[0]), 4), centre_y_m=round(float(best[1]), 4), yaw_deg=round(math.degrees(best[2]), 2),
-                iou=round(float(iou(best)), 3), model="r08")
+                iou=round(score, 3), model="r08")
 
 
 def measure_belt(frame, layout):
