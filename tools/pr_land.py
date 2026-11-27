@@ -355,10 +355,15 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     safety = safety_lines(cwd, base)
     if safety:
         print(f"[pr-land] safety-tagged branch: {len(safety)} Safety-Review line(s) go into the PR body")
-        if both := queue_merge_overlap(cwd):
-            raise SystemExit("[pr-land] main and this safety-tagged branch both changed: " + ", ".join(both[:5])
+        _run(["git", "fetch", "--quiet", "origin", "main"], cwd, check=False)  # a stale origin/main hides an overlap
+        import safety_review  # lazy: needs yaml
+        import yaml
+
+        manifest = yaml.safe_load((cwd / safety_review.MANIFEST).read_text(encoding="utf-8")) or {}
+        if both := [p for p in queue_merge_overlap(cwd) if safety_review._is_safety_in(p, manifest)]:
+            raise SystemExit("[pr-land] main and this branch both changed safety-tagged: " + ", ".join(both[:5])
                              + "\n[pr-land] the queue's merge commit would show them without a Safety-Review line (its message is the PR title);"
-                             " run 'git merge origin/main' with the Safety-Review line in the merge message, then submit again")
+                             " run 'git merge origin/main', put the Safety-Review line in that merge commit's message, then submit again")
     preflight(cwd, base, build_body(args.body, args.self_review, safety))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
