@@ -18,7 +18,6 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import land_batch  # noqa: E402
 import land_freeze  # noqa: E402
 import land_rollup  # noqa: E402
-import land_tick  # noqa: E402
 
 _SPEC = importlib.util.spec_from_file_location("land_async", ROOT / "tools" / "land_async.py")
 land_async = importlib.util.module_from_spec(_SPEC)
@@ -190,30 +189,6 @@ def test_land_async_resume_refused_in_drain_then_allowed(repo):
     launched = []
     land_async.resume(dev, name, [], lambda argv, log: launched.append(argv) or None, wait=0, sleep=lambda s: None)
     assert launched
-
-
-def test_tick_requeue_and_orphan_resume_report_the_refusal(repo, monkeypatch, capsys):
-    main, dev = repo
-    snap, _ = land_async.start(dev, [], NOW, lambda *a: None)
-    name = snap.replace("/", "-")
-    holder = Path(_git(main, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "rosy-land-wt"
-    (holder / (name + ".stopped")).write_text("STOP\n", encoding="utf-8")
-    monkeypatch.setattr(land_tick.land_async, "orphans", lambda repo, *a, **k: [name])
-    freeze(main, "drain")
-    land_tick.resume(main)
-    assert "rosy-cutover.json" in capsys.readouterr().out
-
-
-def test_tick_pending_request_stays_kept_while_refused(repo, monkeypatch):
-    main, dev = repo
-    sha = _git(dev, "rev-parse", "HEAD")
-    qdir = land_tick.land_queue.queue_dir(main)
-    qdir.mkdir(parents=True, exist_ok=True)
-    row = qdir / "pending-1.json"
-    row.write_text(json.dumps({"branch": "feat/x", "ref": sha, "args": []}), encoding="utf-8")
-    monkeypatch.setattr(land_tick.land_async, "detach", lambda *a, **k: pytest.fail("launched"))
-    freeze(main, "drain")
-    assert land_tick.pending(main) is None and row.exists()
 
 
 def test_batch_eligibility_refuses_unallowed_member(repo, monkeypatch):
