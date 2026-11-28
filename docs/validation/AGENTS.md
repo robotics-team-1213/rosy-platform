@@ -27,10 +27,10 @@ Current entries by theme (dated folders carry no AGENTS.md of their own):
 | Theme | Entries |
 |-------|---------|
 | Core and ROS simulation | `ros-sim-core-2026-09-21`, `-2026-09-22`, `-2026-09-22b`; `core-sigterm-2026-09-22`; `core-shutdown-2026-09-23` |
-| Pinky device and image | `pinky-vendor-boot-2026-09-24`, `pinky-image-sd-2026-09-27`, `pinky-native-commissioning-2026-09-27`, `pinky-camera-capture-2026-09-26`, `pinky-pro-evaluation-2026-09-24.md`, `d310-*-2026-09-27.md` (artifact comparisons), `real-drive-2026-09-30` |
-| Gazebo, maps, lanes | `pinky-integrated-gazebo-2026-09-22`, `map-v2-fleet-*`, `map-260905-update-v2-*`, `scene-context-*`, `semantic-road-*`, `line-follow-modes-2026-09-21`, `lane-junction-spike`, `follow-preview-gazebo-2026-10-02.md`, `camera-ground-homography-review-2026-09-20.md`, `control-*-ros-sim-2026-09-30` |
+| Pinky device and image | `pinky-vendor-boot-2026-09-24`, `pinky-native-commissioning-2026-09-27`, `pinky-camera-capture-2026-09-26`, `pinky-pro-evaluation-2026-09-24.md`, `d310-*-2026-09-27.md` (artifact comparisons), `real-drive-2026-09-30` |
+| Gazebo, maps, lanes | `map-v2-fleet-*`, `map-260905-update-v2-*`, `scene-context-*`, `semantic-road-*`, `lane-junction-spike`, `follow-preview-gazebo-2026-10-02.md`, `control-*-ros-sim-2026-09-30` |
 | Perception and model tooling | `perception-real-video`, `model-tool-artifact-2026-10-01`, `model-tool-ros-sim-2026-10-01` |
-| Fleet and site | `fleet-*-2026-09-29`, `site-fleet-local-smoke-2026-09-26`, `2026-09-26-site-*.md`, `web-surface-role-boundaries-2026-09-26` |
+| Fleet and site | `fleet-*-2026-09-29`, `2026-09-26-site-*.md`, `web-surface-role-boundaries-2026-09-26` |
 | UI/UX surfaces | `uiux-surfaces-2026-09-21` through `-2026-09-29`, `d280-product-design-baseline-2026-09-26` |
 | OMX and platform | `omx-two-instance-ros-sim-2026-09-26`, `omx-demonstration-lerobot-2026-10-01`, `er2-omx-action-baseline-2026-09-29`, `pilot-omx-gazebo-2026-10-01`, `2026-09-27-platform-*.md` |
 
