@@ -46,6 +46,11 @@ from test_site_autoupdate import (  # noqa: F401 - host is a pytest fixture
     ('/api/fleet/dispatch-control', {'queued_tasks': 1, 'unresolved_actions': 0}),
     ('/api/fleet/dispatch-control', {'queued_tasks': 0, 'unresolved_actions': 1}),
     ('/api/fleet/formation', {'active': True, 'state': 'RUNNING'}),
+    ('/api/fleet/pipeline/cell-plans', {'plans': [{'plan_id': 'p1', 'status': 'RUNNING'}]}),
+    ('/api/fleet/pipeline/cell-plans', {'plans': [{'plan_id': 'p1', 'status': 'QUEUED'}]}),
+    ('/api/fleet/pipeline/cell-plans', {'plans': [{'plan_id': 'p1', 'status': 'PAUSED_HUMAN'}]}),
+    ('/api/fleet/pipeline/cell-plans', {'plans': 'bad'}),
+    ('/api/fleet/pipeline/cell-plans', upd.Transient('no plans route')),
     ('/api/fleet/state', 'malformed'),
     ('/api/fleet/trips', upd.Transient('fleet down')),
 ], ids=lambda v: str(v)[:36])
@@ -203,3 +208,22 @@ def test_site_check_idle_allows_retained_terminal_goal_and_dock_failed(host, mon
     monkeypatch.setattr(upd, 'Http', lambda: http)
     assert upd.main(['check-idle']) == upd.EXIT_OK
     assert json.loads(capsys.readouterr().out) == {'idle': True, 'reasons': []}
+
+
+def test_cell_plan_idle_reasons_block_admitted_and_fresh_proposals_only():
+    from deploy.site.site_update_runtime import _cell_plan_busy_reasons
+    now = 10_000.0
+    plans = {'plans': [
+        {'plan_id': 'fresh', 'status': 'PROPOSED', 'created_at': now - 60},
+        {'plan_id': 'stale', 'status': 'PROPOSED', 'created_at': now - 31 * 60},
+        {'plan_id': 'run', 'status': 'PARTIALLY_ADMITTED', 'created_at': 1.0},
+        {'plan_id': 'gone', 'status': 'CANCELLED', 'created_at': now},
+        {'plan_id': 'done', 'status': 'COMPLETED', 'created_at': now},
+        {'plan_id': 'bad', 'status': 'ABORTED'},
+    ]}
+    assert _cell_plan_busy_reasons(plans, now) == [
+        'fresh: cell plan awaiting review', 'run: cell plan PARTIALLY_ADMITTED']
+    for bad in ({}, {'plans': [None]}, {'plans': [{'status': 'PROPOSED', 'created_at': 'x'}]},
+                {'plans': [{'status': 'PROPOSED', 'created_at': True}]}):
+        with pytest.raises(ValueError):
+            _cell_plan_busy_reasons(bad, now)
