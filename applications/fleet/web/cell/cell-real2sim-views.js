@@ -5,6 +5,23 @@ import { buildCameraZoomHeading } from "./cell-camera-zoom.js";
 import { buildInspectorCamFrame, renderOmxInspector } from "/console/assets/omx-inspector.js";
 import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } from "./cell-real2sim-specs.js";
 
+// Card buttons in operator order: the current task first, the stop/hold controls last and set apart.
+const ACTION_GROUPS = [['task', '현재 작업'], ['run', '작업 실행'], ['recover', '복구'], ['move', '이동·반출'], ['safety', '안전·홀드']];
+
+export function actionGroup(b) {
+  if (b.bedConfirmTaskId || b.presenceConfirmTaskId || b.cancelTaskId || b.retryTaskId) return 'task';
+  if (b.humanSafetyCell || b.visionCheckCell || b.clearArmHold) return 'safety';
+  if (String(b.preset || '').includes('recover')) return 'recover';
+  if (b.zoneId || b.pinkyAction || b.cableGuardToggle) return 'move';
+  return 'run';
+}
+
+function phaseTagStatus(card) {
+  if (/HOLD|ESTOP|STOP/.test(card.phase)) return 'crit';
+  if (card.amr_motion_inhibited) return 'warn';
+  return ['IDLE', 'READY'].includes(card.phase) ? 'neutral' : 'active';
+}
+
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
   const matrixBtns = [];
@@ -196,17 +213,22 @@ export function createCellViews(ctx) {
       head.className = 'cell-visual-head';
       const title = document.createElement('strong');
       title.textContent = card.title;
-      const badge = document.createElement('span');
-      badge.className = 'cell-visual-badge';
+      const badge = document.createElement('ui-tag');
+      badge.setAttribute('status', phaseTagStatus(card));
       badge.textContent = `${card.phase} · AMR 잠금 ${card.amr_motion_inhibited ? 'ON' : 'OFF'}`;
       head.append(title, badge);
 
-      const meta = document.createElement('p');
-      meta.className = 'cell-visual-meta';
-      meta.textContent = `${card.last_task} | ${card.folded_state}`;
+      const meta = document.createElement('dl');
+      meta.className = 'cell-visual-facts';
+      for (const [term, value] of [['최근 작업', card.last_task], ['팔 상태', card.folded_state]]) {
+        if (!value) continue;
+        const dt = document.createElement('dt'); dt.textContent = term;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        meta.append(dt, dd);
+      }
 
-      const actions = document.createElement('div');
-      actions.className = 'cell-visual-actions';
+      const nav = document.createElement('div');
+      nav.className = 'cell-visual-actions';
       const inspectTargets = card.id === 'cell_s'
         ? [['arm_s', 'arm_s 상세']]
         : card.id === 'cell_ab'
@@ -223,22 +245,39 @@ export function createCellViews(ctx) {
           ev.stopPropagation();
           selectInspectorTarget(tId);
         });
-        actions.append(iBtn);
+        nav.append(iBtn);
         if (body.calibration_origin && ['arm_s', 'arm_a', 'arm_b'].includes(tId)) {
           const link = document.createElement('a');
+          link.className = 'ui-action-link';
+          link.dataset.kind = 'quiet';
           link.href = `${body.calibration_origin}/?arm=${tId}`;
           link.textContent = `${tId} 보정`;
           link.addEventListener('click', event => event.stopPropagation());
-          actions.append(link);
+          nav.append(link);
         }
       }
+      const groups = ACTION_GROUPS.map(([id, label]) => {
+        const group = document.createElement('section');
+        group.className = 'cell-visual-group';
+        group.dataset.group = id;
+        group.setAttribute('aria-label', label);
+        const heading = document.createElement('span');
+        heading.className = 'cell-visual-group-label';
+        heading.textContent = label;
+        const row = document.createElement('div');
+        row.className = 'cell-visual-actions';
+        group.append(heading, row);
+        return {id, group, row, used: false};
+      });
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
         btn.setAttribute('kind', 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
         bindActionButton(btn, b, card.robot_id || undefined);
-        actions.append(btn);
+        const target = groups.find(g => g.id === actionGroup(b));
+        target.row.append(btn);
+        target.used = true;
       }
 
       article.append(buildInspectorCamFrame(thumb), camSwitcher, head);
@@ -258,7 +297,7 @@ export function createCellViews(ctx) {
           article.append(refusal);
         }
       }
-      article.append(meta, actions);
+      article.append(meta, nav, ...groups.filter(g => g.used).map(g => g.group));
       return article;
     }));
     for (const args of pendingBinds) frames()?.bind(...args);
