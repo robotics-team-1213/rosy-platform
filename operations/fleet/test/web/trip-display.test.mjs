@@ -68,3 +68,25 @@ test('a peer-held parking trip also shows the time-scoped independent dock diagn
       reasons: ['CHARGE_BAY_TARGET_NOT_TAUGHT', 'CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED']}}}};
   assert.match(tripWaitText(trip), /통행 대기.*명령 대상 rosy_42.*rosy_45.*계획 시 C1.*도킹 위치 미등록.*작업별 정지 미지원/);
 });
+
+test('peer_wait reason, wait_prefix, nav2_problem, and approved_slam source render clearly', () => {
+  const yieldingTrip = {state: 'running', robot_id: 'rosy_45', detail: {
+    peer_wait: {stage: 'pre_dispatch_peer_check', dispatch_attempted: false, reason: 'YIELDING', waiting_on: ['rosy_46']},
+    wait_prefix: {place: 'S2', state: 'at_wait_place'}}};
+  const waitText = tripWaitText(yieldingTrip);
+  assert.match(waitText, /경로 앞 정차 기체 대기/);
+  assert.match(waitText, /S2 대기 지점 정차 중/);
+
+  const retryTrip = {state: 'running', robot_id: 'rosy_45', detail: {
+    nav2_problem: {state: 'retry_wait', attempt: 1, max_retries: 2}}};
+  assert.match(tripWaitText(retryTrip), /Nav2 경로 재시도 대기 \(1\/2\)/);
+
+  const heldTrip = {state: 'running', robot_id: 'rosy_45',
+    hold: {reason: 'nav2_problem', code: 'NAV2_FAILED'},
+    pose: {state: 'LOCALIZED', source: 'approved_slam'},
+    detail: {nav2_problem: {state: 'held', code: 'NAV2_FAILED'}}};
+  const statusText = tripStatusText(heldTrip);
+  assert.match(statusText, /Nav2 주행 문제 정지.*NAV2_FAILED/);
+  assert.match(statusText, /위치 확정 · SLAM/);
+  assert.doesNotMatch(statusText, /바뀐 경로 확인 대기/);
+});

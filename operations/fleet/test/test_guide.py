@@ -207,3 +207,49 @@ def test_offline_robot_uses_fresh_sighting_fallback_without_becoming_online():
     assert rows["rosy_48"]["pose"] is None
     assert rows["rosy_47"]["pose"] is None
     assert rows["rosy_45"]["pose"] is None  # online robot never bypasses MapPose via offline sighting fallback
+
+
+def test_guide_service_prefers_approved_slam_over_camera_sighting_and_falls_back(tmp_path):
+    from datetime import datetime, timezone
+    from fleet.localization.map_binding import Fit
+    from fleet.server.site_map_store import SiteMapStore
+
+    store = SiteMapStore(tmp_path / "maps.sqlite3")
+    version = store.import_if_empty(_demo_map(), source="test")
+    site = (store.active()[1].map_id, version)
+    fit = Fit(yaw=0.2, tx=0.3, ty=-0.2, residuals=(0.0,))
+    pairs = [{"site": list(p), "robot": list(fit.inverse(p))} for p in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]]
+    holdout = [{"site": [0.5, 0.5], "robot": list(fit.inverse((0.5, 0.5)))}]
+    now_wall = 1_700_000_100.0
+    slam_x, slam_y, slam_yaw = _on("east:fwd", 1.2)
+    rx, ry = fit.inverse((slam_x, slam_y))
+    ryaw = slam_yaw - fit.yaw
+    fresh_state = {
+        "map_id": "native", "map_grid_id": "occupancy:abc", "pose_frame": "map",
+        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+        "pose": {"x": rx, "y": ry, "yaw": ryaw},
+        "odom_pose": {"x": rx, "y": ry, "yaw": ryaw, "stamp": now_wall - 0.1},
+        "velocity": {"linear": 0.0, "angular": 0.0},
+        "evidence": {"pose": {"evidence": "fresh",
+                              "received_at": datetime.fromtimestamp(now_wall - 0.1, timezone.utc).isoformat()}},
+    }
+    store.map_bindings.approve("rosy_26", fresh_state, site, pairs, holdout, "bob")
+    cam_x, cam_y, cam_yaw = _on("east:fwd", 0.5)
+    service = GuideService(
+        gather=_Gather([{"robot_id": "rosy_26", "online": True, "state": fresh_state}]),
+        poses=_Poses({"rosy_26": _pose(cam_x, cam_y, cam_yaw)}),
+        site_maps=store, wall=lambda: now_wall,
+    )
+    row = asyncio.run(service.view())["robots"][0]
+    assert row["pose"]["source"] == "approved_slam"
+    assert math.isclose(row["pose"]["x"], slam_x, abs_tol=1e-3)
+    # Stale or unbound falls back to camera sighting
+    stale_state = {**fresh_state, "evidence": {"pose": {"evidence": "delayed", "received_at": datetime.fromtimestamp(now_wall - 20.0, timezone.utc).isoformat()}}}
+    service_stale = GuideService(
+        gather=_Gather([{"robot_id": "rosy_26", "online": True, "state": stale_state}]),
+        poses=_Poses({"rosy_26": _pose(cam_x, cam_y, cam_yaw)}),
+        site_maps=store, wall=lambda: now_wall,
+    )
+    row_stale = asyncio.run(service_stale.view())["robots"][0]
+    assert row_stale["pose"]["source"] == "sighting"
+    assert math.isclose(row_stale["pose"]["x"], cam_x, abs_tol=1e-3)

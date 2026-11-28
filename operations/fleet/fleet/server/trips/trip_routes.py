@@ -205,6 +205,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         binding_id = None
         bound_nav2 = nav2 and isinstance(body.to, str) and (body.approved_slam_required
                                                             or runner.config.map_binding_required)
+        caps = None
         if precision is not None or bound_nav2:
             bound = await read_precision_pose(runner, robot_id, active[0])
             if bound is None:
@@ -213,11 +214,17 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
             map_pose, binding_id = bound
         else:
-            try:
-                map_pose = await runner.map_pose(robot_id)
-            except (HubError, RobotApiError, OSError) as exc:
-                record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
-                raise http_error(exc) from exc
+            bound = await read_precision_pose(runner, robot_id, active[0]) if nav2 else None
+            if bound is not None:
+                caps = await caps_for(robot_id)
+            if bound is not None and caps is not None and caps.bound_route:
+                map_pose, binding_id = bound
+            else:
+                try:
+                    map_pose = await runner.map_pose(robot_id)
+                except (HubError, RobotApiError, OSError) as exc:
+                    record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
+                    raise http_error(exc) from exc
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
@@ -248,7 +255,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
-        caps = await caps_for(robot_id)
+        if caps is None:
+            caps = await caps_for(robot_id)
         if bound_nav2 and (caps is None or not caps.bound_route):
             detail = {"reason": "NAV2_BOUND_ROUTE_UNSUPPORTED"}
             record({"error": "NAV2_BOUND_ROUTE_UNSUPPORTED", "detail": detail})
@@ -291,7 +299,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             plan_data["staging_distance_m"] = round(staging_distance, 4)
             if staging_distance <= runner.config.arrive_free_m:
                 parking["plan_prerequisites"] = await runner.rear_bay_port.prerequisites(robot_id, parking)
-        if bound_nav2:
+        if bound_nav2 or (nav2 and binding_id is not None):
             plan_data["nav2_binding_id"] = binding_id
         elif binding_id is not None:
             if not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):

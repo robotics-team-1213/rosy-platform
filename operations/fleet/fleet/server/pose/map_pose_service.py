@@ -75,6 +75,7 @@ class MapPoseService:
         self._site_bays = site_bays
         self._robot_idle: dict[str, bool] = {}
         self._dock_anchors: dict[str, tuple[str, tuple[float, float, float], Optional[int], float]] = {}
+        self._latest_states: dict[str, dict] = {}
         self._update_listeners: list = []
 
     def add_update_listener(self, listener: Callable[[Optional[str]], None]) -> None:
@@ -125,6 +126,8 @@ class MapPoseService:
         self._offline_pins.prune(roster)
         for gone in set(self._trackers) - roster:     # a robot that left starts over if it returns
             del self._trackers[gone]
+        for gone in set(self._latest_states) - roster:
+            del self._latest_states[gone]
         for key in [key for key in self._kept if key[0] not in roster]:   # and its kept reads
             del self._kept[key]
         if robot_id not in roster:
@@ -210,6 +213,7 @@ class MapPoseService:
         if not isinstance(state, Mapping):
             return
         if state:
+            self._latest_states[robot_id] = dict(state)
             self._offline_pins.clear(robot_id)
             mode, nav = state.get("mode"), state.get("navigation")
             idle = mode in (None, "IDLE") and nav in (None, "IDLE", "ARRIVED", "CANCELED", "FAILED")
@@ -422,6 +426,10 @@ class MapPoseService:
         return self._offline_pins.pin(
             robot_id, pose, knows=self.knows(robot_id),
             active_map_id=self.active_map_id(), robot_online=robot_online or has_odom)
+
+    def latest_state(self, robot_id: str) -> Optional[Mapping]:
+        """Most recent raw CORE state snapshot observed for `robot_id`, if any."""
+        return self._latest_states.get(robot_id)
 
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor

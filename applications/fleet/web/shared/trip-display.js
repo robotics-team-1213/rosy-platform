@@ -187,8 +187,8 @@ export function tripStatusText(trip, map) {
   const parts = [tripExecutionText(trip) || wait || TRIP_STATE_LABEL[trip.state] || trip.state, trip.robot_id];
   if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
-  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
-  if (trip.hold && trip.hold.reason !== 'fleet_hold') parts.push('바뀐 경로 확인 대기');
+  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source === 'approved_slam' ? 'SLAM' : trip.pose.source}`);
+  if (trip.hold && !['fleet_hold', 'nav2_problem'].includes(trip.hold.reason)) parts.push('바뀐 경로 확인 대기');
   if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
     const {from, to} = trip.stop_moved;
     parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);
