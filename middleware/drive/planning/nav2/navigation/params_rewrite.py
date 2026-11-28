@@ -21,6 +21,7 @@ def write_prefixed_nav2_params(
     footprint_points: Sequence[Sequence[float]] | None = None,
     speed: tuple[float, float] | None = None,
     amcl_laser_model: str = "configured",
+    keepout_mask: bool = False,
 ) -> str:
     params = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
     if amcl_laser_model not in {"configured", "beam"}:
@@ -52,6 +53,35 @@ def write_prefixed_nav2_params(
             for key in path:
                 target = target[key]
             target["footprint"] = footprint
+    if keepout_mask:
+        gmap = params.get("global_costmap", {}).get("global_costmap", {}).get("ros__parameters")
+        if isinstance(gmap, dict):
+            filters = list(gmap.get("filters") or [])
+            if "keepout_filter" not in filters:
+                filters.append("keepout_filter")
+            gmap["filters"] = filters
+            gmap["keepout_filter"] = {
+                "plugin": "nav2_costmap_2d::KeepoutFilter",
+                "enabled": True,
+                "filter_info_topic": "/costmap_filter_info",
+            }
+        params["filter_mask_server"] = {
+            "ros__parameters": {
+                "bond_heartbeat_period": 0.0,
+                "frame_id": "map",
+                "topic_name": "/keepout_filter_mask",
+            }
+        }
+        params["costmap_filter_info_server"] = {
+            "ros__parameters": {
+                "bond_heartbeat_period": 0.0,
+                "type": 0,
+                "filter_info_topic": "/costmap_filter_info",
+                "mask_topic": "/keepout_filter_mask",
+                "base": 0.0,
+                "multiplier": 1.0,
+            }
+        }
     # D-4: standalone nodes match params-file sections by fully qualified name, so a
     # bare `slam_toolbox:` section never reaches `/rosy_42/slam_toolbox` and the node
     # silently runs on defaults (2026-11-04 geg6 probe verified FQN sections apply).

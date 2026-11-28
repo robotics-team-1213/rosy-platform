@@ -29,6 +29,17 @@ def resolve_occupancy_map(
     return str(fallback_path)
 
 
+def resolve_keepout_mask(path: str | Path) -> str:
+    """Return a loadable keepout filter mask YAML path, or '' when disabled."""
+    raw = str(path).strip()
+    if not raw:
+        return ""
+    mask_path = Path(raw)
+    if not _is_loadable(mask_path):
+        raise ValueError(f"keepout filter mask is missing or unloadable: {mask_path}")
+    return str(mask_path)
+
+
 def _is_loadable(yaml_path: Path) -> bool:
     if not yaml_path.is_file():
         return False

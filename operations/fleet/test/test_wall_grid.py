@@ -125,3 +125,27 @@ def test_the_route_refuses_a_map_without_walls(tmp_path):
     client, _ = _client(tmp_path, SiteMap.model_validate({**body, "walls": []}))
     res = client.get("/api/fleet/site-map/wall-grid", headers=OP)
     assert res.status_code == 404 and res.json()["detail"]["code"] == "SITE_MAP_NO_WALLS"
+
+
+def test_lane_mask_is_graded_non_lethal_and_aligned_with_wall_grid(tmp_path):
+    site = SiteMap.model_validate(json.loads(V5.read_text(encoding="utf-8")))
+    wall_built = wall_grid.build("map_v2_fleet", 5, [w.face for w in site.walls])
+    mask_built = wall_grid.build_lane_mask("map_v2_fleet", 5, [w.face for w in site.walls], site.edges, site.places)
+    assert (mask_built["width"], mask_built["height"]) == (wall_built["width"], wall_built["height"])
+    assert mask_built["yaml"]["origin"] == wall_built["yaml"]["origin"]
+    assert mask_built["yaml"]["mode"] == "scale" and mask_built["file_stem"] == "lane_mask_map_v2_fleet_v5"
+    body = mask_built["pgm"][mask_built["pgm"].index(b"255\n") + 4:]
+    assert min(body) > 0 and max(body) == 255  # strictly non-lethal everywhere; lane centerlines are cost 0 (255)
+    off_pixel = max(1, min(255, round(255 * (1.0 - wall_grid.OFF_LANE_COST / 100.0))))
+    assert off_pixel in body
+
+    client, _ = _client(tmp_path, site)
+    res = client.get("/api/fleet/site-map/lane-mask", headers=OP)
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["sha256"] == sha256(base64.b64decode(payload["pgm_base64"])).hexdigest()
+    assert client.get("/api/fleet/site-map/lane-mask").status_code in (401, 403)
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    client_no_map, _ = _client(empty_dir, None)
+    assert client_no_map.get("/api/fleet/site-map/lane-mask", headers=OP).status_code == 404
