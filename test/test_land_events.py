@@ -10,7 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import land_events  # noqa: E402
-import land_stats  # noqa: E402
 
 
 def test_events_append_one_line_each_and_a_torn_line_is_skipped(tmp_path, monkeypatch):
@@ -52,56 +51,6 @@ def test_queue_and_landed_carry_the_branch_apps(tmp_path, monkeypatch):
     assert [r.get("apps") for r in rows] == [["core", "site-fleet"], None, ["core", "site-fleet"]]
 
 
-def test_daily_numbers_from_waits_turns_and_verdicts():
-    t = 1_792_900_000.0
-    rows = [{"t": t, "event": "turn", "pid": 1, "waited_s": 600},
-            {"t": t + 300, "event": "tests", "pid": 1, "verdict": "pass"},
-            {"t": t + 300, "event": "tests", "pid": 1, "verdict": "new"},
-            {"t": t + 360, "event": "stop", "pid": 1},
-            {"t": t + 400, "event": "turn", "pid": 2, "waited_s": 1800},
-            {"t": t + 700, "event": "tests", "pid": 2, "verdict": "flaky"},
-            {"t": t + 760, "event": "landed", "pid": 2},
-            {"t": t + 800, "event": "prep_wait", "pid": 3, "seconds": 120},
-            {"t": t + 900, "event": "prep_wait", "pid": 3, "seconds": 300},
-            {"t": t + 1000, "event": "prepared", "pid": 3, "seconds": 1500}]
-    (day,) = land_stats.daily(rows).values()
-    assert (day["landed"], day["stopped"], day["invocations"]) == (1, 1, 3)
-    assert day["wait_p90_min"] == 30 and day["turn_p50_min"] in (6, 6.0)
-    assert day["new_share"] == round(1 / 3, 3) and day["flaky_share"] == round(1 / 3, 3)
-    assert day["prepare_p50_min"] == 25, "prepare time is apart from the queue wait"
-    assert day["prep_wait_p90"] == 5
-    assert json.dumps(land_stats.daily(rows))  # --json prints it
-
-
-def test_confirmed_failures_split_into_shared_host_and_branch_causes():
-    """D-889 addendum 3: the new-failure share (p) caps batching; shared and host causes are tooling's to fix."""
-    t = 1_792_900_000.0
-    fail = lambda dt, branch, host, *ids, confirmed=True: {  # noqa: E731
-        "t": t + dt, "event": "failure", "branch": branch, "host": host, "failed": list(ids), "confirmed": confirmed}
-    rows = [fail(0, "a", "ai", "test/x.py::t"), fail(600, "b", "rosy", "test/x.py::t"),  # two branches: shared
-            fail(0, "c", "robttt", "test/y.py::t"), fail(900, "c", "robttt", "test/y.py::t"),  # one host: host
-            fail(0, "d", "ai", "test/z.py::t"),  # one branch once: branch
-            fail(0, "e", "ai", "test/w.py::t", confirmed=False),  # load-flaky: not counted
-            fail(land_stats.WINDOW + 1, "f", "rosy", "test/z.py::t")]  # same id, far apart, other host: branch
-    (day,) = land_stats.daily(rows).values()
-    assert (day["failed_shared"], day["failed_host"], day["failed_branch"]) == (2, 2, 2)
-
-
-def test_ids_that_stopped_several_branches_list_their_flaky_candidates_and_quarantine():
-    """The same id stopping branch after branch is a decision nobody took; landing snapshots count once per branch."""
-    fail = lambda t, branch, host, *ids: {  # noqa: E731
-        "t": t, "event": "failure", "branch": branch, "host": host, "failed": list(ids), "confirmed": True}
-    rows = [fail(1, "land/fix/a-20261029143227", "ai", "test/x.py::t", "test/q.py::t"),
-            fail(2, "fix/a", "ai", "test/x.py::t"),  # the same branch landed directly: still one branch
-            fail(3, "land/feat/b-20261029150000-batch220728-k2", "rosy", "test/x.py::t", "test/q.py::t"),
-            fail(4, "feat/c", "ai", "test/x.py::t"),
-            fail(5, "feat/c", "ai", "test/once.py::t")]
-    candidates = "test/x.py::t  # LOAD-FLAKY 1\ntest/x.py::t  # LOAD-FLAKY 2\n"
-    top = land_stats.repeat(rows, candidates, "test/q.py::t  # reviewed\n")
-    assert [(s["id"], s["branches"], s["flaky_candidates"], s["quarantined"], s["hosts"]) for s in top] == [
-        ("test/x.py::t", 3, 2, False, ["ai", "rosy"]), ("test/q.py::t", 2, 0, True, ["ai", "rosy"])]
-
-
 def test_a_judged_failure_leaves_its_ids_and_host_user_never_the_address(tmp_path, monkeypatch):
     import land_checks
     sys.path.insert(0, str(ROOT / "tools" / "remote"))
@@ -121,16 +70,3 @@ def test_a_judged_failure_leaves_its_ids_and_host_user_never_the_address(tmp_pat
     assert emitted[1][1]["host"] is None and emitted[1][1]["confirmed"] is False
 
 
-def test_each_invocation_carries_its_queue_wait_and_run_time(tmp_path):
-    """2026-10-31: every tests event carried the round's elapsed seconds, so where 20 min went was a guess."""
-    sys.path.insert(0, str(ROOT / "tools" / "remote"))
-    import land_checks
-    log = tmp_path / "run-1-1.txt"
-    log.write_text("1 passed\n[remote-pytest] timing host=ai start=1000 wait_s=30 run_s=50\n", encoding="utf-8")
-    assert land_checks.timing(log, 940.4) == {"host": "ai", "queued_s": 60, "wait_s": 30, "run_s": 50}
-    assert land_checks.timing(tmp_path / "none.txt", 0) == {} and land_checks.timing(tmp_path, 0) == {}
-    t = 1_792_900_000.0
-    rows = [{"t": t, "event": "tests", "pid": 1, "verdict": "pass", "queued_s": q, "wait_s": w, "run_s": r}
-            for q, w, r in ((10, 0, 20), (300, 120, 40), (60, 0, 30))] + [{"t": t, "event": "tests", "verdict": "pass"}]
-    (day,) = land_stats.daily(rows).values()
-    assert (day["queued_s_p50"], day["wait_s_p90"], day["run_s_p50"]) == (60, 120, 30)

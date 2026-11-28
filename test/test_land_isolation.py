@@ -22,7 +22,6 @@ sys.path.insert(0, str(ROOT / "tools"))
 import land_guards  # noqa: E402
 import land_isolation  # noqa: E402
 from known_failures import NO_ROS_LAUNCH_PLUGINS
-from test_land import GREEN, _runner, commit, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 PAIR = {
     "helpers/hidden_mod.py": "VALUE = 1\n",
@@ -367,29 +366,6 @@ def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, m
     assert land_isolation.stale(pair, {**rec, "main": git(pair, "rev-parse", "HEAD")}) == []  # main did not move
 
 
-def test_turn_stale_reruns_ride_the_turns_round_its_cap_and_overtime_path(repos, monkeypatch):
-    """The stale reruns join land.py's turn invocations, so TURN_CAP_S cancels them as Overtime and
-    land_prepare.again tests them outside the lock, as for the delta selection."""
-    import land
-
-    main, wt = repos
-    commit(wt, {"pkg/a.py": "x = 2\n", land_isolation.GATE: ""}, "branch")
-    monkeypatch.setattr(land_isolation, "last", lambda wt_, branch: {"main": "0" * 40, "alone": ["pkg/test/test_a.py"]})
-    stale = iter([["pkg/test/test_a.py"]])
-    monkeypatch.setattr(land_isolation, "stale", lambda wt_, rec: next(stale, []))
-    monkeypatch.setattr(land_isolation, "alone_files", lambda wt_, sel: ([], set()))
-    monkeypatch.setattr(land_isolation, "gate", lambda wt_, sel: [])
-    monkeypatch.setattr(land, "TURN_CAP_S", -1)
-    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
-    real, calls, again = _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}), [], []
-    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append([list(i) for i in inv]) or real(inv, *a, **k))
-    real_again = land.land_prepare.again
-    monkeypatch.setattr(land.land_prepare, "again", lambda *a: again.append(a[-2]) or real_again(*a))
-    assert land.main(["--tests", "auto"]) == 0
-    assert calls[0][0][0] == "pkg/test" and calls[0][1:] == [["pkg/test/test_a.py"]], "in the turn's own round"
-    assert again and ["pkg/test/test_a.py"] in again[0], "past the cap it went outside the lock"
-
-
 def test_alone_files_put_safety_references_first_with_no_count_cap(monkeypatch, tmp_path):
     (tmp_path / "tools").mkdir()
     (tmp_path / land_isolation.GATE).write_text("", encoding="utf-8")
@@ -477,36 +453,6 @@ def test_close_needs_a_reason_and_records_who_and_when(prepared, monkeypatch, ca
     assert (rec["kind"], rec["reason"], rec["by"], rec["alone"]) == ("done", "nightly not built yet",
                                                                   "closer@example.invalid", ["m/test/test_b.py"])
     assert rec["at"] and rec["t"]
-
-
-@pytest.mark.parametrize("mode", ["auto", "full"])
-@pytest.mark.parametrize("fresh", [False, True])
-def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepared, monkeypatch, tmp_path, mode, fresh):
-    import land_cache
-    pair, logdir, args = prepared
-    args.tests = mode
-    git(pair, "config", "user.name", "t")
-    git(pair, "config", "user.email", "t@t")
-    monkeypatch.setattr(land_isolation, "_cache_entries", land_cache.entries)
-    candidate = git(pair, "rev-parse", "HEAD")
-    commit(pair, {"current.py": "VALUE = 1\n"}, "different current candidate")
-    old = tmp_path / "historical-complete.txt"
-    old.write_text("[isolation] complete: 2\n", encoding="utf-8")
-    land_cache.record(pair, candidate, git(pair, "rev-parse", candidate + "^{tree}"), "old-env",
-                      land_isolation.job(FILES)[0], old)
-    assert any(entry["log"] == str(old) for entry in land_isolation._cache_entries(pair))
-    calls = []
-    report = "[isolation] complete: 2\n" if fresh else "1 passed\n"
-    run = fake_round({"gpre": {"run-gpre-1.txt": report}, "gprer": {"run-gprer-1.txt": report}}, calls)
-    if mode == "full" and not fresh:
-        with pytest.raises(RuntimeError, match=r"without its \[isolation\] report"):
-            land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
-        assert [name for name, _ in calls] == ["gpre", "gprer"]
-        assert land_isolation.rows(pair)[-1]["error"] == "no [isolation] report twice"
-    else:
-        land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
-        assert [name for name, _ in calls] == ["gpre"]
-        assert land_isolation.rows(pair)[-1]["incomplete"] == []
 
 
 def test_a_quarantined_timing_flake_is_not_an_isolation_failure():

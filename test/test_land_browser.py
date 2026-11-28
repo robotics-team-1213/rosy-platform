@@ -12,7 +12,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import land  # noqa: E402
 import land_browser  # noqa: E402
 import browser_scope  # noqa: E402  (test/, on sys.path through land's remote_pytest)
 from known_failures import RERUN_MARKER  # noqa: E402
@@ -23,19 +22,6 @@ EVERY = browser_scope.targets(["test/browser_harness.py"])  # maps to browser_sc
 
 def files(invocations):
     return [w for inv in invocations for w in inv if w not in ENV]
-
-
-def test_every_browser_file_runs_once_in_chunks_that_do_not_move_between_runs():
-    assert len(EVERY) > 50  # the real tree, not an empty selection
-    tier = [inv for group in land.pack(ROOT, EVERY) for inv in land_browser.chunks(ROOT, group)]
-    assert sorted(files(tier)) == sorted(EVERY)  # the union is the file set: nothing lost, nothing repeated
-    assert len(files(tier)) == len(set(files(tier)))  # disjoint
-    assert all(inv[0] == land_browser.BROWSER_ENV and inv[-1] not in ENV for inv in tier)  # opted in, never empty
-    shuffled = random.Random(7).sample(EVERY, len(EVERY))
-    for group in land.pack(ROOT, EVERY):  # land_cache keys are the argv: the same tree gives the same chunks
-        again = [p for p in shuffled if p in group]
-        assert land_browser.chunks(ROOT, again) == land_browser.chunks(ROOT, group)
-        assert len(land_browser.chunks(ROOT, group)) <= land_browser.CHUNKS + 1
 
 
 def test_alone_files_share_one_chunk_marked_to_run_without_lanes(tmp_path):

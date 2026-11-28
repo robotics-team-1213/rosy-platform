@@ -17,7 +17,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import land  # noqa: E402
 import worktrees  # noqa: E402
 
 HOUR = 3600
@@ -625,54 +624,6 @@ def test_lint_note_is_silent_in_ci_and_without_worktrees_and_never_raises(main, 
 
 
 # --- tools/land.py hook ------------------------------------------------------------
-
-@pytest.fixture
-def landing(main, tmp_path, monkeypatch):
-    done = add(main, "done", commit=True, merge=True)
-    topic = add(main, "topic", commit=True)
-    monkeypatch.chdir(topic)
-    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
-    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
-    monkeypatch.setattr(land.remote_pytest, "run", lambda invocations, logs, *a, **kw: [])  # --tests none
-    clock = types.SimpleNamespace(time=lambda: LATER, strftime=time.strftime, localtime=time.localtime)
-    monkeypatch.setattr(worktrees, "time", clock)
-    return done, topic
-
-
-def test_land_reports_finished_worktrees_and_removes_nothing(main, landing, capsys):
-    done, topic = landing
-    assert land.main(["--tests", "none"]) == 0
-    assert done.is_dir() and topic.is_dir()
-    assert git(main, "rev-parse", "main") == git(topic, "rev-parse", "HEAD")
-    out = capsys.readouterr().out
-    assert f"1 finished worktree(s) can be removed: {worktrees.SWEEP}" in out
-    assert "this worktree is now removable" in out and "&&" not in out  # PowerShell 5.1 has no &&
-    assert f"\n  {worktrees.SWEEP}" in out and "git worktree remove" not in out  # one command, not two
-
-
-def test_land_prune_sweeps_finished_worktrees_but_not_the_one_landing(main, landing):
-    done, topic = landing
-    assert land.main(["--tests", "none", "--prune"]) == 0
-    assert not done.exists() and topic.is_dir()
-
-
-def test_land_no_prune_and_dry_run_say_nothing_about_worktrees(main, landing, capsys):
-    done, _ = landing
-    assert land.main(["--dry-run"]) == 0
-    assert land.main(["--tests", "none", "--no-prune"]) == 0
-    assert done.is_dir() and "can be removed" not in capsys.readouterr().out
-
-
-def test_land_continues_when_the_prune_fails(main, landing, monkeypatch, capsys):
-    done, topic = landing
-
-    def broken(*args, **kwargs):
-        raise OSError("disk went away")
-
-    monkeypatch.setattr(worktrees, "sweep", broken)
-    assert land.main(["--tests", "none"]) == 0
-    assert "worktree prune failed" in capsys.readouterr().out
-    assert done.is_dir() and git(main, "rev-parse", "main") == git(topic, "rev-parse", "HEAD")
 
 
 # --- zero-wait landed cleanup and non-worktree entries under .worktrees/ -------------
@@ -1302,3 +1253,12 @@ def test_prune_remote_archives_and_deletes_only_stale_own_unopened_branches(main
     assert {"refs/heads/feat/stale-moved", "refs/heads/feat/stale-open-pr", "refs/heads/feat/recent-own",
             "refs/heads/release/keep", "refs/heads/build/keep", "refs/heads/feat/stale-teammate",
             "refs/heads/feat/stale-mixed"} <= remote_heads
+
+
+def test_admission_lock_refuses_a_second_creation_and_frees_itself(tmp_path):
+    lock = tmp_path / "a.lock"
+    with worktrees._exclusive(lock, "worktree creation"):
+        with pytest.raises(RuntimeError, match="another worktree creation is running"):
+            with worktrees._exclusive(lock, "worktree creation"):
+                pass
+    assert not lock.exists()

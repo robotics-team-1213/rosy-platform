@@ -11,7 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from harness import affected_exclusive as exclusive  # noqa: E402
-from test_land import cached, commit, land, repos  # noqa: E402 (existing fake landing boundary)
 
 CLEAN = '[g1-timing-gate] expected=2 collected=2 passed=2 skipped=0 clean=1\n2 passed in 0.01s\n'
 
@@ -81,63 +80,6 @@ def test_gate_observes_whole_collection_and_real_results(tmp_path, body, args, a
     assert (exclusive.evidence(log, result.returncode) is None) == good
 
 
-@pytest.mark.parametrize('text,code', [('', 0), ('2 passed in 0.01s\n', 0), (CLEAN + CLEAN, 0),
-    (CLEAN.replace('skipped=0', 'skipped=1'), 0), (CLEAN.replace('collected=2', 'collected=1'), 0),
-    (CLEAN.replace('2 passed in', '1 failed, 1 passed in'), 1), (CLEAN, 1)])
-def test_nonclean_dedicated_job_is_not_retried_or_cached(cached, monkeypatch, text, code):
-    wt, run, _ = cached
-    commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing fixture')
-    calls = []
-
-    def remote(invocations, logs, *args, on_done=None, **kwargs):
-        calls.append(invocations)
-        for inv, log in zip(invocations, logs):
-            log.parent.mkdir(parents=True, exist_ok=True)
-            log.write_text(text, encoding='utf-8')
-            if on_done:
-                on_done(inv, log)
-        return [code] * len(invocations)
-
-    monkeypatch.setattr(land.remote_pytest, 'run', remote)
-    with pytest.raises(land.Stop):
-        run([exclusive.DEDICATED])
-    assert calls == [[exclusive.DEDICATED]]
-    assert land.land_cache.entries(wt) == []
-
-
-@pytest.mark.parametrize('seed_previous_pass', [False, True])
-def test_success_requires_fresh_execution_and_preserves_publication_mapping(
-        cached, monkeypatch, tmp_path, seed_previous_pass):
-    wt, run, _ = cached
-    commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing fixture')
-    if seed_previous_pass:
-        log = tmp_path / 'previous.txt'
-        log.write_text(CLEAN, encoding='utf-8')
-        head = land.out(wt, 'rev-parse', 'HEAD')
-        land.land_cache.record(wt, head, land.out(wt, 'rev-parse', 'HEAD^{tree}'),
-                               'env1', exclusive.DEDICATED, log)
-    before = list(land.land_cache.entries(wt))
-    calls = []
-
-    def remote(invocations, logs, *args, on_done=None, **kwargs):
-        calls.append(invocations)
-        for inv, log in zip(invocations, logs):
-            log.parent.mkdir(parents=True, exist_ok=True)
-            log.write_text(CLEAN, encoding='utf-8')
-            if on_done:
-                on_done(inv, log)
-        return [0] * len(invocations)
-
-    monkeypatch.setattr(land.remote_pytest, 'run', remote)
-    run([exclusive.DEDICATED])
-    assert calls == [[exclusive.DEDICATED]]
-    rows = land.land_cache.entries(wt)
-    assert len(rows) == len(before) + 1
-    assert rows[-1]['argv'] == exclusive.DEDICATED
-    import hashlib
-    assert rows[-1]['log_sha256'] == hashlib.sha256(Path(rows[-1]['log']).read_bytes()).hexdigest()
-
-
 def test_ci_extracts_exclusive_environment_before_passing_pytest_arguments():
     args, environment = exclusive.split_environment(exclusive.DEDICATED)
     assert environment == {'ROSY_JOB_ALONE': '1'} and args[0] == exclusive.TARGET
@@ -169,22 +111,3 @@ def test_affected_runner_exports_job_words_instead_of_using_them_as_paths(monkey
     assert kwargs['env']['ROSY_JOB_ALONE'] == '1'
 
 
-def test_remote_exclusive_failure_cannot_turn_green_through_quarantine(tmp_path, monkeypatch):
-    remote = land.remote_pytest
-    monkeypatch.setattr(remote, 'ship', lambda *a, **k: None)
-    monkeypatch.setattr(remote, 'deps', lambda *a: ('d' * 16, []))
-    monkeypatch.setattr(remote, 'remote', lambda *a, **k: subprocess.CompletedProcess([], 0, b'', b''))
-    node = exclusive.TARGET + '::test_fixture'
-    monkeypatch.setattr(remote, 'quarantine', lambda *a: {node: 'synthetic quarantine'})
-    calls = []
-
-    def job(host, name, key, log, job_args, inv, *args):
-        calls.append(inv)
-        log.write_text('FAILED ' + node + ' - fixture miss\n', encoding='utf-8')
-        return 1
-
-    monkeypatch.setattr(remote.remote_job, 'run', job)
-    assert remote.run_on('fixture-host', [exclusive.DEDICATED], [tmp_path / 'remote.txt'],
-                         'ab' * 20, tmp_path, None) == [1]
-    assert len(calls) == 1 and calls[0][:len(exclusive.DEDICATED)] == exclusive.DEDICATED
-    assert '-n' not in calls[0]

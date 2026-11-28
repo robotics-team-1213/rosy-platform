@@ -22,10 +22,10 @@ The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so e
 - pre-push picks the first of `python3`/`python` that imports `yaml`. Pytest runs `test_harness_contracts.py`, `architecture/test_module_structure.py`, `test_io_image_closure.py`, `test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` (list in the file).
 - Both pytest steps run through `tools/remote/remote_pytest.py` on the pushed commit (first local sha on stdin, else HEAD): model, AI or site PC by headroom (D-568), this machine only when none answers. Lint, generated-records check and Safety-Review stay local.
 - The D-436 affected tier uses `rosy_harness.py affected --json` against the `origin/main` merge base. `--skip` drops the fast suites (`FAST_SUITES`). A FULL escalation still runs only guards plus mapped suites; the full suite runs on GitHub runners.
-- `reference-transaction` refuses any move of local `refs/heads/main` unless `ROSY_MAIN_WRITER` is set (only `tools/land.py`'s fast-forward) or the new tip is `origin/main` (D-868 sync). Reason: 25 hand commits on main stopped every landing for a day (2026-11-13).
+- `reference-transaction` refuses any move of local `refs/heads/main` unless `ROSY_MAIN_WRITER` is set (incident use only; `land.py` is retired) or the new tip is `origin/main` (D-868 sync). Reason: 25 hand commits on main stopped every landing for a day (2026-11-13).
 - Keep it fast. A new check belongs here only if it is cheap and has already failed CI; everything else stays in CI.
 - Never bypass the hook with `--no-verify`; fix the failure.
-- The `Safety-Review:` step (D-430 §5) runs `tools/harness/safety_review.py origin/main <pushed sha>` and refuses the push on a missing trailer: the same rule and range CI's `scope` job checks after a push to `main` (D-762 stage 0). `tools/land.py` refuses the landing earlier on the same rule.
+- The `Safety-Review:` step (D-430 §5) runs `tools/harness/safety_review.py origin/main <pushed sha>` and refuses the push on a missing trailer: the same rule and range CI's `scope` job checks after a push to `main` (D-762 stage 0). `tools/pr_land.py` refuses the submission earlier on the same rule.
 
 ### Testing Requirements
 

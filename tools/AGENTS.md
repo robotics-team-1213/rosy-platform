@@ -24,15 +24,13 @@ Commands a developer runs from the workspace; not installed on the robot, not a 
 
 - Placement: a script serving one module that imports no other package lives in that module's `tools/`. One that composes several packages lives in a root group here; inside a package it adds an undeclared cross-package import.
 - Robot install and image build stay in `deploy/`. Session files go under `data/teleop`, `data/drive` (untracked), never here.
-- `land.py`: no host means no landing (D-584); it never pushes. Before the turn it checks Safety-Review (D-430 §5) and size; a FULL selection lands only with 0 NEW failures. `--no-queue` is for incidents only.
-- `land.py` and pre-push refuse a commit lacking a Safety-Review trailer on a safety path (D-430); `publish_main.py` re-checks Safety-Review on its range.
-- Never add a `test/known_failures.txt` id to hide your own failure; `land.py` stops when an id it adds passes (`--must-fail`).
-- `land_isolation.py`: an alone-run test of a safety-tagged source that was not reached stops the landing; `tools/doctor.py` FAILs on open isolation records past a night. Close one only by running its files.
+- `pr_land.py` and pre-push refuse a commit lacking a Safety-Review trailer on a safety path (D-430); `publish_main.py` re-checks Safety-Review on its range.
+- `land_isolation.py`: an alone-run test of a safety-tagged source that was not reached stops the landing. Close an open record only by running its files.
 - `land_isolation` and `rosy-land-events.jsonl` have no backup: a known single point of loss.
 - `land_logs.py`: a `logs.md` conflict where a side edited, dropped or reordered a base entry needs a human.
 - `publish_main.py` (D-868): dry run unless `--apply`. It never syncs, forces, closes or reopens. A secret-scan hit exits 9 (commit, path, rule, never the value). Needs a green FULL land record for the SHA and a Safety-Review check of its range.
 - `publish_main.py --merge-when-green` merges only when mergeable and `ci-result` is green.
-- `worktrees.py` (D-761/D-1070): cap 14 + main (D-886); `prune --apply` archives unlanded idle branches to `refs/archive/`, never deletes teammate branches. `land_gc.py` is dry run unless `--apply`.
+- `worktrees.py` (D-761/D-1070): cap 14 + main (D-886); `prune --apply` archives unlanded idle branches to `refs/archive/`, never deletes teammate branches.
 - `release/publish_payload_release.py` (D-412): a canary timeout before start exits 4 and changes nothing (D-985); `--withdraw --reason` retracts.
 - `ssh/rosy_ssh_*.py` (D-418): tokens and login codes are never printed; the share zip never holds the passphrase.
 - Shell scripts compute the repo root from their own path; no machine-specific absolute paths. `graphify_pipeline.py`: [analysis artifact locations](../docs/reference/analysis-artifact-locations.md); never recreate `graphify-out` beside source.
@@ -41,7 +39,7 @@ Commands a developer runs from the workspace; not installed on the robot, not a 
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/tools-check" -- test/architecture/test_folder_layout.py test/test_run_data.py test/test_land.py -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/tools-check" -- test/architecture/test_folder_layout.py test/test_run_data.py test/test_pr_land.py -q
 ```
 
 JPEG relay source belongs to `integrations/simulation/gazebo/scripts/sim_jpeg_relay.py`; review smoke to `learning/curation/perception/tools/review_app_smoke.py`.

@@ -129,94 +129,10 @@ def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_e
         "feat/full"], "done preparing, the FULL lander is first again"
 
 
-def test_at_most_max_preparing_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
-    import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING)]
-    mine = queue.take(tmp_path, "feat/mine")
-    later = queue.take(tmp_path, "feat/later")
-    naps = []
-
-    def nap(s):
-        naps.append(s)
-        assert json.loads(mine.read_text())["status"] == "pending"
-        assert [r["branch"] for r in queue.blockers(tmp_path, later)] == [], "pending blocks no one"
-        busy.pop().unlink()  # one preparing lander finishes
-
-    land_prepare.slot(tmp_path, mine, sleep=nap)
-    assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"
-
-
-def test_an_urgent_ticket_prepares_without_waiting_behind_older_pending_ones(tmp_path):
-    import land_prepare
-    for n in range(land_prepare.MAX_PREPARING + 2):
-        queue.take(tmp_path, f"feat/older{n}", status="pending")
-    mine = queue.take(tmp_path, "feat/urgent", status="pending", urgent="the user's words")
-    land_prepare.slot(tmp_path, mine, sleep=lambda s: pytest.fail("urgent waited behind pending reservations"))
-    assert json.loads(mine.read_text())["status"] == "preparing"
-
-
-def test_a_full_pretest_waiting_its_turn_holds_no_preparation_slot(tmp_path):
-    import land_prepare
-    running = [queue.take(tmp_path, f"feat/full{n}", status="preparing") for n in range(land_prepare.MAX_FULL)]
-    for ticket in running:
-        queue.set_status(ticket, "preparing", tier="full")
-    waiters = [queue.take(tmp_path, f"feat/wait{n}", status="preparing")
-               for n in range(land_prepare.MAX_PREPARING - land_prepare.MAX_FULL)]
-    first = waiters[0]
-
-    def nap(_):
-        assert json.loads(first.read_text())["full_wait"] is True
-        for other in waiters[1:]:
-            queue.set_status(other, "preparing", tier="full", full_wait=True)
-        small = queue.take(tmp_path, "feat/small")
-        land_prepare.slot(tmp_path, small, sleep=lambda s: pytest.fail("a waiting FULL pretest held the slot"))
-        assert json.loads(small.read_text())["status"] == "preparing"
-        small.unlink()
-        for ticket in running:
-            ticket.unlink()
-
-    land_prepare.full_slot(tmp_path, first, sleep=nap)
-    assert json.loads(first.read_text())["full_wait"] is False
-
-
 def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     queue.take(tmp_path, "feat/full", status="preparing")
     mine = queue.take(tmp_path, "feat/mine")
     assert "feat/full (preparing," in queue.describe(queue.ahead(tmp_path, mine))
-
-
-def test_preparation_slot_reserves_capacity_for_older_pending_ticket(tmp_path):
-    import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING - 1)]
-    older = queue.take(tmp_path, "feat/older", status="pending")
-    mine = queue.take(tmp_path, "feat/mine", status="pending")
-    naps = []
-
-    def nap(seconds):
-        naps.append(seconds)
-        assert json.loads(mine.read_text())["status"] == "pending"
-        if len(naps) == 1:
-            queue.set_status(older, "preparing")
-        else:
-            busy.pop().unlink()
-
-    land_prepare.slot(tmp_path, mine, sleep=nap)
-    assert len(naps) == 2
-    assert json.loads(mine.read_text())["status"] == "preparing"
-
-
-@pytest.mark.parametrize("status,later", [("pending", True), ("waiting", False), ("turn", False)])
-def test_preparation_slot_ignores_non_preparing_tickets_without_prior_claim(tmp_path, status, later):
-    import land_prepare
-    for n in range(2):
-        queue.take(tmp_path, f"feat/p{n}", status="preparing")
-    if not later:
-        queue.take(tmp_path, "feat/peer", status=status)
-    mine = queue.take(tmp_path, "feat/mine", status="pending")
-    if later:
-        queue.take(tmp_path, "feat/peer", status=status)
-    land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a preparation slot is available"))
-    assert json.loads(mine.read_text())["status"] == "preparing"
 
 
 def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit(tmp_path):
@@ -228,19 +144,6 @@ def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_li
         queue.wait(tmp_path, mine, timeout=0, sleep=lambda s: None,
                    check=lambda: calls.append(1) or ("main abc conflicts with this branch" if len(calls) > 2 else None))
     assert len(calls) == 3, "no time limit: it waited until the check spoke"
-
-
-def test_an_older_pending_ticket_a_batch_carries_reserves_no_preparation_slot(tmp_path):
-    """A carried member never prepares on its own (land_batch), so it must not hold back younger tickets."""
-    import land_prepare
-    for n in range(2):
-        queue.take(tmp_path, f"feat/p{n}", status="preparing")
-    queue.take(tmp_path, "feat/carried", status="pending")
-    leader = queue.take(tmp_path, "feat/leader", status="waiting")
-    queue.set_status(leader, "waiting", batch=["feat/carried"])
-    mine = queue.take(tmp_path, "feat/mine", status="pending")
-    land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a carried ticket kept the slot"))
-    assert json.loads(mine.read_text())["status"] == "preparing"
 
 
 def test_a_ticket_tested_on_the_current_main_passes_an_earlier_stale_waiting_one(tmp_path, monkeypatch):
@@ -482,16 +385,6 @@ def test_a_head_tested_over_an_older_main_is_refreshed_outside_the_turn(tmp_path
     assert queue.wait(tmp_path, mine, 0, tested="m2", sleep=lambda s: None) is None and seen == [], "fresh: turn at once"
     monkeypatch.setattr(queue, "REFRESH", refresh(None))  # a refresh that cannot catch up: two tries, then the turn
     assert queue.wait(tmp_path, mine, 0, tested="m1", sleep=lambda s: None) is None and len(seen) == queue.REFRESHES == 2
-
-
-def test_speculation_runs_only_when_asked(monkeypatch):
-    import land_prepare
-    hook = land_prepare.train(types.SimpleNamespace(), Path("."), "feat/x", types.SimpleNamespace(tests="auto"), "py", Path("."), Path("."))
-    monkeypatch.delenv(land_prepare.SPECULATE_ENV, raising=False)
-    hook({"branch": "feat/peer"})  # returns before touching land: nothing starts
-    monkeypatch.setenv(land_prepare.SPECULATE_ENV, "1")
-    with pytest.raises(AttributeError):
-        hook({"branch": "feat/peer"})  # asked: it goes on to land.land_full
 
 
 def test_nt_lock_waits_past_the_msvcrt_ten_second_give_up(monkeypatch):

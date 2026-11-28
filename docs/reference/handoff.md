@@ -67,7 +67,7 @@
 
 ## 7. 새 컴퓨터·새 사람 체크리스트
 
-- [ ] Python 3.12 + `pyyaml` (하네스·훅·`land.py`가 모두 Python이다. 없으면 push가 막힌다)
+- [ ] Python 3.12 + `pyyaml` (하네스·훅·`pr_land.py`가 모두 Python이다. 없으면 push가 막힌다)
 - [ ] `gh` 로그인(조직 `robotics-team-1213`), git 2.48 이상
 - [ ] `git config user.name` / `user.email`이 내 GitHub 계정
 - [ ] `bash tools/hooks/install.sh`로 pre-push 훅

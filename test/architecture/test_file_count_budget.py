@@ -34,8 +34,8 @@ CAPS = {
     "middleware": 2250,
     "operations": 2103,
     "shared": 162,
-    "test": 1464,
-    "tools": 601,
+    "test": 1445,
+    "tools": 587,
 }
 #: Cap minus count above this warns: lower the cap to keep the ratchet tight.
 SLACK_WARN = 40

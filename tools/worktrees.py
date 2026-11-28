@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import os
 import re
 import subprocess
@@ -13,7 +14,6 @@ import time
 from pathlib import Path
 
 import worktree_rules as rules
-from land_async import Busy, locked
 
 CAP = 14  # everything under .worktrees/, orphan directories included; with main, the 15-slot budget (D-886)
 IDLE_HOURS = 72.0
@@ -25,6 +25,21 @@ SNAPSHOT = ("needs snapshot", "landed-dirty")  # verdicts only --snapshot takes,
 SWEEP = "python tools/worktrees.py prune --apply"
 HINT = (f"see `python tools/worktrees.py status`; `{SWEEP}` removes only clean idle ones, whoever made them"
         " (an unmerged branch stays: `adopt` re-attaches it); `--snapshot` is for a person or the dispatcher, not for every session")
+
+
+@contextlib.contextmanager
+def _exclusive(lock: Path, what: str):
+    """Two runs must not interleave; a lock a dead run left is taken over after STALE_LOCK."""
+    if time.time() - (_mtime(lock) or time.time()) > STALE_LOCK:
+        lock.unlink(missing_ok=True)
+    try:
+        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        raise RuntimeError(f"another {what} is running ({lock}; taken over after 30 min)") from None
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 def git(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -302,15 +317,8 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
     here = _here(cwd)
     me = _identity(root)
     lock = (root / _must(git(root, "rev-parse", "--git-common-dir"), "git rev-parse")) / "worktrees-prune.lock"
-    if apply:  # two applying runs must not interleave
-        if time.time() - (_mtime(lock) or time.time()) > STALE_LOCK:
-            lock.unlink(missing_ok=True)
-        try:
-            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-        except FileExistsError:
-            raise RuntimeError(f"another prune is running ({lock}; taken over after 30 min)") from None
     done, failed = 0, set()
-    try:
+    with _exclusive(lock, "prune") if apply else contextlib.nullcontext():
         ordered = sorted(rows, key=lambda r: r["name"])
         if ordered:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ordered))) as pool:
@@ -339,9 +347,6 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
                 failed.add(row["branch"])  # its "branch kept" holds for this run
         git(root, "worktree", "prune", *([] if apply else ["--dry-run"]))
         rules.sweep_branches(root, now, apply, say, quiet, keep=failed)
-    finally:
-        if apply:
-            lock.unlink(missing_ok=True)
     if done or not quiet:
         say(f"[worktrees] {'removed' if apply else 'would remove'} {done} of {len(rows)} under {root / '.worktrees'}")
     return done
@@ -467,11 +472,8 @@ def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], pr
         except (RuntimeError, OSError) as exc:
             print(f"[worktrees] warning: prune failed, continuing: {exc}", file=sys.stderr)
     common = root / _must(git(root, "rev-parse", "--git-common-dir"), "git rev-parse")
-    try:
-        with locked(common / "worktrees-admission.lock"):
-            return _admit(cwd, root, name, branch, target, reason, now, owner)
-    except Busy:
-        raise RuntimeError("another worktree creation is running; retry after it finishes") from None
+    with _exclusive(common / "worktrees-admission.lock", "worktree creation"):
+        return _admit(cwd, root, name, branch, target, reason, now, owner)
 
 
 def _admit(cwd: Path, root: Path, name: str, branch: str, target: list[str], reason: str | None,

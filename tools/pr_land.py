@@ -149,7 +149,7 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
     """Enforce D-868 publishOnly separation and return base ref for PR diff checks."""
     if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and not activated(cwd):
         raise SystemExit(
-            "[pr-land] rosy.publishOnly=true clone follows D-868: use land_async.py -> publish_main.py --via-ci "
+            "[pr-land] rosy.publishOnly=true clone follows D-868: use publish_main.py --via-ci "
             "(D-1055 not Accepted and rosy.prLandActivated unset; activation needs human approval)"
         )
     origin_main = _run(["git", "rev-parse", "--verify", "-q", "origin/main"], cwd, check=False)

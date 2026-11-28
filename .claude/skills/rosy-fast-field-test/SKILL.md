@@ -124,11 +124,8 @@ the exact root shell line is in `rosy-release-push` Pitfalls). The first paint p
 
 Start it while the loop runs, once the user says land and push:
 
-1. Land: `python tools/land.py --tests auto` from the worktree (`rosy-land-on-main`).
-2. Push. Before pushing, `git rev-list --count origin/main..main`. The pre-push affected tier
-   is measured from `git merge-base <pushed> origin/main`; 97 commits ahead on 2026-10-10 made
-   it huge and met two unrelated guard failures. Push each landing the user approved right away
-   so this count stays small.
+1. Submit: `python tools/pr_land.py --evidence` from the worktree (`rosy-land-on-main`); it pushes the topic PR and the Merge Queue merges it (D-1055).
+2. Wait for the merge to reach origin/main before step 3.
 3. Build, sign and ship: `rosy-release-push` (D-553 `robot_cd.py` starts the unsigned ARM64
    build beside CI when main moves on origin). Builds 069-071 took 4m19s-6m36s, then
    download, sign, push and restart per robot.
@@ -142,7 +139,7 @@ Start it while the loop runs, once the user says land and push:
 - pytest, browser tests or Gazebo on the laptop (D-584). Use `tools/remote/remote_pytest.py`
   (`--pick sim` for Gazebo). No reachable test host means "not checked", not a pass.
 - An overlay key the installed release does not know: the whole overlay is skipped.
-- Skipping a gate (`tools/land.py --tests none`, `git push --no-verify`) without the user's
+- Skipping a gate (`git push --no-verify`) without the user's
   explicit words. When they say it, report what was skipped.
 - Adding someone else's failure to `test/known_failures.txt`; find the introducing commit
   (`prepush-gate-red-from-other-sessions-unpushed-commits-2026-10-10.md`).

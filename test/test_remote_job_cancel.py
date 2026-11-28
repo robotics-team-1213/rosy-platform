@@ -15,9 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
-import land  # noqa: E402
 import remote_job as rj  # noqa: E402
-from test_land import repos  # noqa: E402,F401  (land.py's fixture repos)
 
 
 class Host:
@@ -103,27 +101,6 @@ def test_lease_fresh_job_lives_stale_job_gets_term_finished_job_is_skipped(tmp_p
     assert _lease(tmp_path, 1201) == ("1", "kill -TERM -- -4242")
     assert _lease(tmp_path, 1201, pgid="3496") == ("1", "kill -TERM 4242"), "a group it does not lead (tailscaled's)"
     assert _lease(tmp_path, 5000, rc=True) == ("1", ""), "a finished job (.rc) is never signalled"
-
-
-def test_guard_failure_cancels_the_pre_run_and_its_stop_is_the_verdict(repos, monkeypatch):
-    _, wt = repos
-
-    def guards(*a, **k):
-        raise land.Stop("NEW failure in test/architecture")
-
-    def pre(*a, **k):  # a pre run that only ends when its jobs are cancelled
-        end = time.monotonic() + 10
-        while not rj._CANCEL.is_set() and time.monotonic() < end:
-            time.sleep(0.01)
-        raise land.Overtime("cancelled")
-
-    monkeypatch.setattr(land.land_guards, "first", guards)
-    monkeypatch.setattr(land, "run_tests", pre)
-    monkeypatch.setattr(land.land_full, "save", lambda *a, **k: pytest.fail("recorded a cancelled pretest"))
-    with pytest.raises(land.Stop, match="test/architecture") as raised:
-        land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable,
-                                  None, None, [["pkg/test"]], "FULL tier (test)")
-    assert not isinstance(raised.value, land.Overtime) and not rj._CANCEL.is_set()
 
 
 def test_run_uses_adaptive_poll_intervals_within_poll_s(tmp_path, monkeypatch):

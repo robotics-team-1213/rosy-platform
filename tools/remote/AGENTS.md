@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Run pytest for one committed sha (D-584) on the model, AI or site PC with headroom (D-568), not the laptop; `--pick sim` names a Gazebo host. `remote_sim.py` (D-571) runs headless Gazebo benches. `tools/hooks/pre-push` and `tools/land.py` call it.
+Run pytest for one committed sha (D-584) on the model, AI or site PC with headroom (D-568), not the laptop; `--pick sim` names a Gazebo host. `remote_sim.py` (D-571) runs headless Gazebo benches. `tools/hooks/pre-push` and `tools/pr_evidence.py` call it.
 
 ## For AI Agents
 
@@ -21,7 +21,7 @@ Run pytest for one committed sha (D-584) on the model, AI or site PC with headro
 - Not in the default venv: Chromium (browser jobs install it; browser tests never run on the laptop, D-584), Pinky raw tools, CPU torch, ROS. Ask for `--test-tools pinky-raw` explicitly.
 - xdist (D-799): suites in `serial_suites.txt` stay serial; remove a line only after a serial vs `-n` run on a test host gave the same failures.
 - Flaky rerun (D-762): only failures listed in `test/flaky_quarantine.txt` rerun once; unlisted failures are never rerun, a lost rerun stays red.
-- Lost contact exits 255 and leaves the job, lock and run directory on the host (no kill); a job gone without an exit code is 254. `land.py` stops on anything but 0/1.
+- Lost contact exits 255 and leaves the job, lock and run directory on the host (no kill); a job gone without an exit code is 254. `pr_land.py`/`pr_evidence.py` stop on anything but 0/1.
 - `prepare_test_workspace.py LABEL --owner OWNER --reason REASON [--sha REV]` makes disposable lab workspaces; the host storage timer deletes them (48 h empty, 72 h with a sha). Copy results out first.
 - `omx_hotfix.py` deploys files to the site PC only and never starts an arm session. `deploy` refuses unless the tested log names the sha and its last pytest summary has no failure. The host comes from `--host` or `OMX_HOTFIX_HOST` only (D-226).
 - `update_ops.py` (D-957) only starts the existing updater or sets holds; every surface's gates (idle, battery, signature, freeze) keep authority. Robot holds are `0<h<=168` hours; `forget-failed` is site-only.

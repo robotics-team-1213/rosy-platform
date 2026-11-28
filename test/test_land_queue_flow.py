@@ -14,8 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import land_merge  # noqa: E402
-import land_precheck  # noqa: E402
-import land_stats  # noqa: E402
 
 HEAD = b"# Ref\n\n**Version:** v1.%d\n\n"
 OLD = b"### v1.10 old\n\n- old fact\n\n## 1. Rules\n\nbody\n"
@@ -51,14 +49,6 @@ def test_api_conflicts_a_person_must_decide_stay_manual(ours, theirs):
     assert land_merge.api_version(ref(10), ours, theirs) is None
 
 
-def test_mixed_branches_split_gate_and_safety_from_product_paths_with_docs_and_tests_neutral():
-    paths = ["tools/land_async.py", "tools/remote/remote_pytest.py", "operations/fleet/x.py", "docs/logs.md",
-             "test/test_land.py", "operations/fleet/test/test_x.py", "AGENTS.md", "middleware/core/safe.py"]
-    held, product = land_precheck.mixed(paths, lambda p: p == "middleware/core/safe.py")
-    assert held == ["tools/land_async.py", "tools/remote/remote_pytest.py", "middleware/core/safe.py"]
-    assert product == ["operations/fleet/x.py"]
-
-
 def fake_land(paths):
     class Stop(Exception):
         pass
@@ -70,49 +60,3 @@ def fake_land(paths):
         git=lambda *a, **k: SimpleNamespace(returncode=0, stdout=""))  # no grep hit: no CRLF added
 
 
-def test_precheck_refuses_a_mixed_branch_unless_the_users_words_are_given(tmp_path):
-    calls, land = fake_land(["tools/land.py", "operations/fleet/x.py"])
-    with pytest.raises(land.Stop, match="--mixed"):
-        land_precheck.precheck(land, tmp_path, "python")
-    assert calls == []  # before any other gate
-    land_precheck.precheck(land, tmp_path, "python", "user: one change, 2026-11-09")
-    assert calls == ["safety", "size", "secret"]
-    calls, land = fake_land(["tools/land.py", "docs/adr/D-889.md", "test/test_land.py"])
-    land_precheck.precheck(land, tmp_path, "python")
-    assert calls == ["safety", "size", "secret"]
-
-
-def test_land_async_hands_the_mixed_words_to_the_precheck(monkeypatch, tmp_path):
-    import land_async
-    seen = []
-    monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
-    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
-    assert land_async.main(["--tests", "auto", "--mixed", "user said so"]) == 1
-    assert seen[0][-3:] == ["--precheck", "--mixed", "user said so"]
-
-
-def test_the_unattended_rollup_takes_affected_tier_members_only(monkeypatch):
-    import land_rollup
-    monkeypatch.setattr(land_rollup, "tier", lambda repo, branch: {"a": "affected", "f": "full"}.get(branch))
-    assert [land_rollup.affected(None, b) for b in ("a", "f", "safety")] == ["affected", None, None]
-
-
-def test_land_stats_shows_the_stage_times_and_how_far_behind_main_a_change_was_queued():
-    t = 1_762_650_000.0
-    rows = [{"t": t, "event": "async", "behind": 7}, {"t": t + 1, "event": "async", "behind": 1},
-            {"t": t + 2, "event": "prepared", "tier": "affected", "seconds": 600},
-            {"t": t + 3, "event": "prepared", "tier": "full", "seconds": 3600},
-            {"t": t + 4, "event": "merged", "round": 1, "seconds": 30, "resolved": []}]
-    (day,) = land_stats.daily(rows).values()
-    assert (day["pretest_p50"], day["full_p50"], day["merge_p50"]) == (10, 60, .5)
-    assert (day["behind_p50"], day["behind_p90"]) == (1, 7)
-    assert json.dumps(day)
-
-
-def test_land_async_also_takes_the_mixed_words_in_equals_form(monkeypatch):
-    import land_async
-    seen = []
-    monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
-    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
-    assert land_async.main(["--mixed=user said so", "--tests", "auto"]) == 1
-    assert seen[0][-2:] == ["--precheck", "--mixed=user said so"]
