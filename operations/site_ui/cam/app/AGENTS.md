@@ -1,21 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # app
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, OkHttp). It captures ceiling-camera JPEG frames and pushes them to the site-PC Rosy Vision receiver over `rosy-overhead/1`. Fleet never sees frames, only derived poses from Vision (D-257, D-261). Gradle wrapper, settings and version catalog live one level up in `operations/site_ui/cam/`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `build.gradle.kts` | `applicationId` `io.github.livsbittt.rosy.cam`, minSdk 26, compile/target 35, JVM 17, Compose + `buildConfig`. Tests get shared-vector paths as JVM properties `rosy.{overhead,discovery,failure,sitelink,pairing}.vectors` |
-| `src/main/AndroidManifest.xml` | Activity, foreground stream service, `rosyov://` pairing link |
 
 ## Subdirectories
 

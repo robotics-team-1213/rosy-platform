@@ -1,7 +1,6 @@
 # robots
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -37,5 +36,3 @@ See `omx/AGENTS.md`. CI installs this wheel next to the manipulation Skill wheel
 ### External
 
 None beyond the child's declared wheels.
-
-## Manual Notes

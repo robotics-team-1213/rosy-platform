@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # hooks
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-08
 
 ## Purpose
 
@@ -15,9 +12,7 @@ The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so e
 | File | Description |
 |------|-------------|
 | `pre-push` | Bash hook, the D-346 fast gate: harness `lint`, generated-records check, fast pytest suites, D-436 affected tier. Details in the rules below |
-| `reference-transaction` | Guards local `refs/heads/main` (see rules). Test `test/test_main_writer_hook.py` |
 | `commit-msg` | Refuses a commit whose staged files are safety-tagged when the message has no `Safety-Review:` line (`safety_review.py --commit-msg`); applies to every linked worktree; a worktree whose `safety_review.py` lacks `--commit-msg` (based before #1019) gets a warning and passes, fix `git merge origin/main`. Test `test/test_safety_review.py` |
-| `install.sh` | Copies `pre-push`, `reference-transaction` and `commit-msg` to `.git/hooks/` and marks them executable. Uninstall with `rm .git/hooks/<name>` |
 
 ## For AI Agents
 
@@ -51,5 +46,3 @@ python -m pytest test/test_pre_push_hook.py -q
 ### External
 
 - bash, git, Python with PyYAML and pytest
-
-<!-- MANUAL: -->

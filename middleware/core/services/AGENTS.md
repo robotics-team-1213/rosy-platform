@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_features
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,12 +13,6 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: `core_common` |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `test/` | `test_docking.py` (DNC-001~003), `test_swarm.py` (SWM follow) |
-| `core_features/<feature>/` | One requirement family per subpackage; split rules in `docs/plans/2026-09-06-module-split-criteria.md` |
 | `core_features/maps.py` | Map read path (not SLAM) |
 | `drive/behaviors/docking` | D-766 size unit: docking phases, relative observations, seating and charging evidence; installed once as `core_features.docking` |
 
@@ -50,8 +41,6 @@ python -m pytest middleware/core/services/test -q
 ### Internal
 
 `core_common`
-
-<!-- MANUAL: -->
 
 ## Current source names (D-749)
 

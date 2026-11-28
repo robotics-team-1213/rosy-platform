@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # waypoints
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 WPT-001–005 local JSON store (D-9). CRUD, unique names, reserved `__home__`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `manager.py` | `Waypoint`, `WaypointManager`, `WaypointError`, `HOME_NAME` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -45,5 +31,3 @@ pydantic `Waypoint` with x/y/yaw/`map_id`.
 ### External
 
 - pydantic
-
-<!-- MANUAL: -->

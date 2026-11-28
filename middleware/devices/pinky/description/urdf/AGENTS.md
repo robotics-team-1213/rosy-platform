@@ -1,22 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # urdf
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 xacro models for real robot and Gazebo.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `robot.urdf.xacro` | Primary robot model |
-| `rosy.urdf.xacro` | ROSY-named wrapper |
-| `rosy_gz.urdf.xacro` | Gazebo plugins/topics variant |
 
 ## Subdirectories
 
@@ -48,5 +37,3 @@ xacro includes; mesh paths `package://description/meshes/...`.
 ### External
 
 - xacro
-
-<!-- MANUAL: -->

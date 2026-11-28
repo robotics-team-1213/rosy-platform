@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
 
 # observer
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -12,14 +9,6 @@ Host-side read-only observation service. Camera frames in, lamp-state readings o
 **No command path exists** — the service exposes `GET /observed` (+ `/healthz`) only,
 so it cannot become a control surface. Design:
 `docs/plans/2026-09-22-signal-observer-vision-design.md`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `observer.py` | HSV 분할 분류기(`classify_frame`), 설정 로더, FastAPI 표면(`GET /observed`·`/preview.jpeg`), cv2 프레임 소스, 프레임 동결(`freeze_after_s` → `frozen`/`age_s` 강등) |
-| `config.example.json` | 카메라 인덱스·ROI·문턱·debounce·동결 예산 예시 (좌표는 설치 후 캘리브레이션) |
-| `test/` | 합성 프레임 시험 32건 — 분류·설정 검증·명령 경로 부재·동결 강등·preview 자체 캡처 |
 
 ## Subdirectories
 
@@ -61,5 +50,3 @@ OpenCV(opencv-python) 필요 — Windows 호스트에서 통과를 확인했다(
 
 - opencv-python (cv2), numpy, fastapi, uvicorn
 - Raspberry Pi 배치: picamera2 (선택 소스 — Pi 전용, 없으면 명확히 거절)
-
-<!-- MANUAL: -->

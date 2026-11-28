@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # image
 
@@ -28,5 +27,3 @@ python3 -m pytest test/test_ubuntu_native_runtime_contract.py test/test_image_pi
 ```
 
 Also `test_native_release_activation.py`, `test_first_boot_provisioning.py`.
-
-<!-- MANUAL: -->

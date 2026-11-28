@@ -1,28 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # system
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Common power/battery composition, host and ROS-graph observability, and the unprivileged Host Agent client. Never invent telemetry when the agent or `/proc` is missing. D-628 keeps power policy outside Drive; algorithms remain in `core_features.power`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `power.py` | Existing power/battery config and construction; legacy parser/sentinel exports stay in `core.services` |
-| `runtime.py` | `HostRuntimeProbe` — CPU, mem, disk, temp, hostname from `host_root` |
-| `ros_graph.py` | Bounded node/topic/edge snapshot; `ROS_DOMAIN_ID` 0–101 |
-| `host_agent_client.py` | Unix-socket client; codes `HOST_AGENT_UNAVAILABLE` / `HOST_AGENT_TIMEOUT` / `HOST_AGENT_UNREADABLE_RESPONSE` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -52,5 +35,3 @@ Read-only filesystem views; JSON request lines to Host Agent.
 ### External
 
 - POSIX sockets (client no-ops if missing)
-
-<!-- MANUAL: -->

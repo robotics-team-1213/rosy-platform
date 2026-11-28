@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # shell
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,7 +12,6 @@ Shell of the role surfaces (D-204). It fetches the panel manifest, assembles pan
 | File | Description |
 |------|-------------|
 | `shell.js` | Entry: reads `body[data-surface]`, loads the manifest, refreshes every 5 s, renders the SAFE_STOP/e-stop notice, redirects to dashboard login when unauthenticated |
-| `mount.js` | `mountPanels(root, panels, contextFor, actionGroups)`: mounts each panel into its slot, groups `act` panels by `action_group` as tabs, isolates failures per panel |
 | `store.js` | `createStore(api)`: the only panel window to server state; `scope()` gives per-panel `poll` and is closed on unmount |
 | `shell.css` | Layout only (grid, slots, top bar); tokens only |
 
@@ -48,5 +44,3 @@ Timers and late responses are cut by closing the store scope, never by flags in 
 ### External
 
 None (browser APIs only).
-
-<!-- MANUAL: -->

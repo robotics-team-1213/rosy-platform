@@ -1,9 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
 
 # games
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stays in CORE.
 
@@ -14,10 +12,6 @@ Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stay
 | File | Description |
 |------|-------------|
 | `package.xml` | ament_python. No ROS exec_depend |
-| `setup.py` / `setup.cfg` | Package install |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 

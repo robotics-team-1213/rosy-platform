@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # line_follow
 
@@ -34,5 +33,3 @@ All mixins share the manager lock and generation; none has its own lock, thread,
 ### Testing Requirements
 
 `test_line_*`, `test_lane_*` and `test_crosswalk_gate*` under `middleware/core/gateway/test` and `middleware/core/services/test` (`rg -l line_follow` there).
-
-<!-- MANUAL: -->

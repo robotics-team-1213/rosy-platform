@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # core_common
 
@@ -33,5 +32,3 @@ python -m pytest contracts/foundation/test -q
 ```
 
 `test/architecture/test_module_structure.py` enforces the structure rules.
-
-<!-- MANUAL: -->

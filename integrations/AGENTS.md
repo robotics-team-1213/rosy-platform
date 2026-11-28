@@ -1,7 +1,6 @@
 # integrations
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -38,5 +37,3 @@ Wheels carry `COLCON_IGNORE`. ROS packages keep `package.xml` beside their own `
 ### External
 
 - Gazebo / ros_gz only inside `simulation/gazebo/`.
-
-## Manual Notes

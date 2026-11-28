@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
 
 # emotion (Python package)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,15 +13,7 @@ Installed to `share/emotion/emotion`; runtime lookup is
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
-| `emotion_server.py` | LCD service and display/info node (`emotion_server=emotion.emotion_server:main`) |
 | `rosy_lcd.py` | Hardware LCD helper (SPI, RPi.GPIO — device only) |
-| `info_screen.py` | PIL renderer for `display/info` JSON (320×240, ROS-free) |
-| `*.gif` | hello, basic, angry, bored, fun, happy, interest, sad, doze, scan, lost, worry, lowbat, cheer, thinking, searching (`character.NAMES`) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -58,5 +47,3 @@ GIF play on a thread so the service callback does not block forever.
 ### External
 
 - PIL (renderer), rclpy (node only), hardware LCD via `rosy_lcd.py`
-
-<!-- MANUAL: -->

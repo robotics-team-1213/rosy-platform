@@ -1,23 +1,10 @@
 # omx
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
 Wheel with the OMX LeRobot `rosy_omx` Robot, the CORE arm client and the preflight entry point. It imports no middleware. The `pallet.transfer` Skill binding and the mixed-planner IK reach live in the OMX cell owner `rosy_agent` (`middleware/devices/omx/agent`).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | What this wheel holds and where the Skill binding moved |
-| `pyproject.toml` | Integration wheel metadata |
-| `COLCON_IGNORE` | Keeps colcon from building this folder |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 

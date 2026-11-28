@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # launch
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Upload URDF to robot_state_publisher and optional RViz view.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `upload_robot.launch.py` | xacro + RSP with namespace/frame_prefix |
-| `view_robot.launch.py` | Same plus RViz |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -44,5 +30,3 @@ Python launch; xacro substitutions.
 ### External
 
 - xacro, robot_state_publisher, rviz2
-
-<!-- MANUAL: -->

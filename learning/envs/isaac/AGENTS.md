@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-30 | Updated: 2026-09-30 -->
 
 # isaac_sim
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,28 +11,15 @@ Isaac Sim assets and Python probes (D-322). Not a buildable package — marker o
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_python marker; `exec_depend` on `description` (URDF reference) |
 | `progress.md` | Gate snapshot (overwrite; state of record) |
 | `logs.md` | Append-only journal |
 | `index.md` | Generated (do not edit) |
-| `prepare_urdf.py` | Adapts the description URDF for Isaac |
-| `prepare_omx_urdf.py` | OMX-F/OMX-L URDF preparation for the official importer |
-| `graph_contract.py` | Isaac-side action graph contract |
 | `run_rosy.py` | URDFImporter → USD + ROS 2 OmniGraph runner (single robot) |
 | `model_checks.py` | Asset hash and URDF mesh/joint preflight; `run_rosy.py` refuses to start without it |
-| `import_omx.py` | OMX URDF → USD import and articulation check |
 | `run_omx_backend.py` | D-877 OMX backend on the shared sim layer: `/clock`, `/sim/joint_states`, `/sim/joint_commands`, top/front cameras (`tools/sim/run_omx_backend_conformance.sh isaac`) |
 | `arm_s_cell_fixture.py` | Arm S cell scene (tray, belt, Pinky frame, box square to the jaws), the nominal/overhang/wrong-yaw scenarios and the judgement from measured samples only; Isaac-free |
-| `arm_s_cell_task.py` | Isaac script: replays `deploy/robot/omx/isaac_cell_frames.py` frames against that scene, samples box, finger contact and joint lag, writes `rosy.arm-s-cell-report/1` |
-| `run_catalog.py` `arm-s-cell-case` | A real-cell case (`arm_s_cell_fixture.check_case`: box on the tray, place point, jaw turn, expected outcome) as a run beside the seed; an optional `aim` aims the pick off the box (tolerance sweep) |
-| `arm_s_cell_report.py` | Verifies an arm S cell report (schema, frames hash, SDK version) for the run worker |
 | `palletizing_gripper.py` · `finger_pads.py` · `pad_sweep.py` | Opt-in palletizing jaw v2.1 (`gripper='palletizing-v2.1'` in a fixture case): pad box, pad gap and finger angles read from the vendored mesh, the finger collider for both jaws, and the pad sweep below the TCP. Default stays the stock OMX-F jaw |
 | `assets/` | `open_manipulator_description` and `omx_f_palletizing_description` (vendored reference; the latter holds only the new jaw meshes and URDF) |
-| `test/` | Host pytest: `test_graph_contract.py`, `test_model_checks.py`, `test_prepare_urdf.py` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -66,5 +50,3 @@ URDF reference: `package://description/…` for robot mesh; `package://open_mani
 ### External
 
 - Isaac Sim (not ROS)
-
-<!-- MANUAL: -->

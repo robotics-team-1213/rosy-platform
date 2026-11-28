@@ -1,5 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-03 | Updated: 2026-11-26 -->
 
 # omx curation
 
@@ -26,5 +24,3 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 ```bash
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/omx-curation" -- learning/curation/omx/test/ -q -p no:cacheprovider
 ```
-
-<!-- MANUAL: -->

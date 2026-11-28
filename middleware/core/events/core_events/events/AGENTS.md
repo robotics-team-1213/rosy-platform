@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # events
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,13 +11,7 @@ EVT-001–005 in-process bus (D-8): monotonic seq, ring buffer, subscriber broad
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
-| `bus.py` | `EventBus` |
 | `audit.py` | `FileAuditLog` JSONL under the data dir (LOG-001, 30-day retention). Append-only writes; reads filter in memory and never rewrite; the write path prunes at most hourly outside the lock; `health()` reports write/prune failures |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -42,9 +33,3 @@ None.
 ### Internal
 
 - `protocol.schemas.EventMessage`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

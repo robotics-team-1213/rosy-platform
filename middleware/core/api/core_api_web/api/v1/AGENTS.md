@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
 
 # v1
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,26 +11,12 @@ REST routers under `/api/v1/*` (API Ref §5). One module per domain; `routes.py`
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
 | `routes.py` | Aggregator: re-exports every router for `app.py`. No endpoints live here |
 | `common.py` | `viewer`/`operator`/`admin` role deps and `enter_navigation_mode` (D-2) |
-| `system.py` | IDN-003 identity, CAP-001 capabilities, SEC-101 tokens, host runtime |
-| `robot.py` | State/pose/battery/velocity, sensors, PWR-001 power modes |
-| `control.py` | `POST /mode`, `POST /teleop` |
 | `safety.py` | SAF-001 stop/release, SAF-004 limits, SAF-005 battery policy |
-| `navigation.py` | NAV-001~004/006 goals, NAV-005 SLAM session, `/localization/initialpose` |
-| `map.py` | MAP-003 occupancy and costmap snapshots (`svc.maps`) |
 | `motion.py` | D-603 `POST/GET/DELETE /motion/rotate_to`: bounded in-place turn (lease owner or named operator) |
-| `waypoints.py` | WPT-002 waypoint CRUD (`svc.waypoints`) |
-| `docking.py` | DNC-003/005 dock registry, teach, dock/undock |
 | `swarm.py` | SWM-002 follow/cancel/state. 501 when the capability does not declare `swarm.follow` |
-| `observability.py` | EVT-003 events, LOG-001 audit, DIAG-001 diagnostics, OBS-101 `/metrics` |
-| `host.py` | Host Agent relay: network, release, commissioning |
 | `trip_lease.py` | D-541 Fleet trip lease open/renew, release, takeover (fence lives in `common.require_calibration_owner`) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -71,5 +54,3 @@ None.
 ### External
 
 - FastAPI, pydantic
-
-<!-- MANUAL: -->

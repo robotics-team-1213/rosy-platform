@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # bringup
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Physical robot bringup: Dynamixel differential drive, odometry/TF, optional LiDAR and battery publisher, and a driver-side cmd_vel deadman independent of `core` (D-22).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | ament_python; exec depends include sllidar_ros2, robot_state_publisher |
-| `setup.py` / `setup.cfg` | Package install |
-| `config/pinky_pro_adapter.yaml` | ROS parameter source for the Pinky Pro board adapter |
-| `bringup/pinky_pro_adapter.py` | ROS-free validation boundary before Dynamixel I/O |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -70,5 +55,3 @@ Motor start verification (2026-10-10, fix/rosy-io-restart-after-activation; no A
 ### External
 
 - dynamixel_sdk, sllidar_ros2, tf_transformations, rclpy
-
-<!-- MANUAL: -->

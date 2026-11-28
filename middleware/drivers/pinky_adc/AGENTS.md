@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # sensor_adc
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,11 +11,7 @@ C++ I2C ADC node (`sensor_adc`). Channels 0–2 IR, 3 ultrasonic, 4 battery. Pub
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_cmake; rclcpp, sensor_msgs, realtime_tools |
 | `CMakeLists.txt` | Builds `src/main_node.cpp` **only on aarch64** (wiringPi); x86 logs skip |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -52,5 +45,3 @@ ament_lint. Hardware-in-the-loop on Pi; power policy tests are in `core`.
 ### External
 
 - rclcpp, wiringPiI2C, realtime_tools
-
-<!-- MANUAL: -->

@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,10 +13,6 @@ ROS-free policy/contract tests plus opt-in ROS message/action integration tests.
 |------|-------------|
 | `test_omx_profile.py` | Disabled profile is valid but not capable; enabled profile emits joint-state broadcaster + JointTrajectoryController names |
 | `test_omx_command_owner.py` | ROS-free single-writer, identity, freshness, bounds, timeout/HOLD, and explicit recovery policy |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -48,5 +41,3 @@ python3 -m pytest middleware/devices/omx/adapter/test/ -v
 ### External
 
 - pytest
-
-<!-- MANUAL: -->

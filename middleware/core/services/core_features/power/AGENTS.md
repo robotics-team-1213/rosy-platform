@@ -1,28 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # power
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 PWR-001–004 duty cycling and SAF-005 battery integrity. Policy only: no GPIO, no halt, no cmd_vel. STANDBY is the deepest sleep (D-25); OS halt is D-27 via sentinel.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `manager.py` | `PowerManager`, `PowerConfig`, `PresenceConfig`, `LidarPolicy`; wake reasons |
-| `presence.py` | `PresenceConfig`, `PresenceDetector` (PWR-002): consecutive valid near samples plus `min_presence_s`; re-exported by `manager.py` |
-| `devices.py` | Per-device power policy: `DeviceLevel`, `DevicePolicy`, `DevicePolicyConfig` (bench switch), `DevicePowerPort`, `parse_device_policy` |
-| `battery.py` | `BatteryCurve`, `BatteryMonitor`, hysteresis, LED intent, shutdown sentinel |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -54,9 +37,3 @@ Injected clock; enter/exit sample counters; hysteresis percent.
 
 - `protocol.schemas` PowerMode / BatteryLevel
 - Wired in `services.py` from `rosy_default.yaml`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

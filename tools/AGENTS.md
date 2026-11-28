@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # tools
 
@@ -44,8 +43,5 @@ Commands a developer runs from the workspace; not installed on the robot, not a 
 ```bash
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/tools-check" -- test/architecture/test_folder_layout.py test/test_run_data.py test/test_land.py -q
 ```
-
-
-<!-- MANUAL: -->
 
 JPEG relay source belongs to `integrations/simulation/gazebo/scripts/sim_jpeg_relay.py`; review smoke to `learning/curation/perception/tools/review_app_smoke.py`.

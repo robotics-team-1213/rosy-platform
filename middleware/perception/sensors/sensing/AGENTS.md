@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-24 -->
 
 # sensing/ (raw data → robot-frame geometry)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera and lane evidence is `perception/`, not this package root. This package does not import `perception` and does not publish `cmd_vel`.
@@ -14,11 +11,8 @@ Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera 
 |------|-------------|
 | `lidar.py` | C1 scan geometry, the one shared heading: `NOSE_YAW = π` (D-397), sector ranges at 10th percentile (`scan_pctl`), frontier/straight-route finders feeding `/safety/frontier_*`, `/safety/route_*`. See rules for `robot_yaw()`/`wrap_pi()` and `is_robot_scan()` |
 | `range_tilt.py` | `parse_us_range` (US Range → metres, None for no-echo/blind zone) and `roll_pitch` (quaternion → tilt). The safety adapters (bumper, hazard) and calibration both use these one copies |
-| `filt.py` | Median + 1st-order low-pass filters for jumpy sensors |
-| `body.py` | Robot circumradius from URDF (calib param wins if sane); `ignore_m` drops chassis hits; `turn_clear_m` for spin clearance |
 | `perception/` | Camera and lane evidence. Import `control.sensing.perception`, not this package root. See `perception/AGENTS.md` |
 | `dock_tag.py` | ArUco dock tag → relative pose; optional `CameraMount` gives base_link pose and tag yaw. Picks the ArUco API by `hasattr` (OpenCV 4.6 on the device, 4.7+ on hosts). Not perception |
-| `dock_observer.py` | One camera frame → one `dock/observation` wire payload |
 | `loc_candidates.py` | D-395 pose hypotheses: `global_candidates` (every distinct pose, mirror included), `slot_candidates` (reference square axis and axis+180), `merge`; base/sensor transforms through `Mount` |
 | `loc_objects.py` | D-395 `unmapped_objects`: unexplained lidar returns as base_link objects (other robots); clusters wrap across the scan seam |
 | `loc_verify.py` | D-395 `InjectionCheck`: 0.5 s settle + 3 s of fit ≥ 0.85; cannot reject a mirror on a symmetric map |
@@ -46,5 +40,3 @@ Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera 
 
 ### External
 - `math`, `numpy` only.
-
-<!-- MANUAL: -->

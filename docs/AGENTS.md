@@ -1,10 +1,6 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-10-12 -->
-
 # docs
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-12
 
 ## Purpose
 
@@ -17,7 +13,7 @@ Content lives in the subdirectories below; at this root only the harness records
 | File | Description |
 |------|-------------|
 | `progress.md` | Governance gate snapshot (ADR log, harness). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
+| `logs.md` | Work journal merged by the records bot (D-1052, D-1061). Do not edit; add a fragment with `python tools/new_record.py log <module> "<summary>" --change ... --evidence ...` |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
@@ -69,9 +65,3 @@ python3 tools/harness/rosy_harness.py lint
 
 - Implementation: `middleware/core/gateway`, `middleware/devices/pinky/bringup`, `deploy/`
 - Traceability matrix in Implementation Plan §11
-
-### External
-
-None.
-
-<!-- MANUAL: -->

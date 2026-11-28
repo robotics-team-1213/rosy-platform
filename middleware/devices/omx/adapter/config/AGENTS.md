@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # config
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,10 +12,6 @@ Device manifest for the OMX adapter. The disabled arm profile lives in `middlewa
 | File | Description |
 |------|-------------|
 | `adapter.manifest.yaml` | Device id `rosy.device.omx`, type manipulator, disabled |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -41,9 +34,3 @@ Top-level `omx:` map consumed by `OmxAdapterProfile.from_mapping`.
 ### Internal
 
 - `../omx_adapter/profile.py`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

@@ -1,27 +1,13 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_events
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 In-process EventBus and file audit log (D-8).
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | Declared deps: `core_common` |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `test/` | `test_audit.py`: LOG-001 restart survival, retention, pruning, health |
-| `core_events/events/` | EventBus + audit writer |
 
 ## Subdirectories
 
@@ -48,5 +34,3 @@ python -m pytest middleware/core/events/test -q
 ### Internal
 
 `core_common`
-
-<!-- MANUAL: -->

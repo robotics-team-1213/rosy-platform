@@ -1,23 +1,10 @@
 # policy
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
 D-449 offline policy ledger. SQLite `BEGIN IMMEDIATE`, `FULL` synchronous, file snapshots, and a canonical event hash chain. `register` re-checks policy, normalization, and eval bytes and copies them in. The same revision registered again does not grow history. A damaged file, stage, or history is rejected on the next read.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | CLI, assess-act, and HMAC promotion rules |
-| `registry.py` | Ledger CLI: register, assess-act, show, history |
-| `dataset_store.py` | Register a curated dataset directory |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -46,5 +33,3 @@ Snapshot-then-commit. A failure before commit leaves an orphan snapshot that can
 ### External
 
 - SQLite in the Python standard library.
-
-## Manual Notes

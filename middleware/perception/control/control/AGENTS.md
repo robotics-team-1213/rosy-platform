@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # control.control (import and installation compatibility)
 
@@ -21,5 +20,3 @@ This directory holds `__init__.py` and this guide. The initializer preserves the
 
 ### Testing Requirements
 - Run `middleware/perception/test/` through the committed-HEAD remote pytest runner (D-584). Source holder, installed identity, sdist/wheel and map-byte checks are in `middleware/perception/test/test_responsibility_layout.py`.
-
-<!-- MANUAL: -->

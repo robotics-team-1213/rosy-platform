@@ -1,7 +1,6 @@
 # middleware
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-11
 
 ## Purpose
 
@@ -48,5 +47,3 @@ ament Python uses `setup.py` and `package.xml`. Wheels use `pyproject.toml` and 
 ### External
 
 - ROS 2 Jazzy for the ament packages. Wheels stay ROS-free unless their own file says otherwise.
-
-## Manual Notes

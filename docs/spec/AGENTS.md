@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # spec
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,11 +12,6 @@ Approved software requirements. CORE is the robot/edge obligation; FLEET is the 
 | File | Description |
 |------|-------------|
 | `ROSY CORE SRS.md` | ROSY-CORE-SRS-001 — robot middleware, local-first, API-only external interface, AT |
-| `ROSY FLEET SRS.md` | ROSY-FLEET-SRS-001 — multi-robot fleet server (Linux/Docker) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -43,9 +35,3 @@ Both docs inherited PKY-* IDs and were renamed ROSY (D-15/D-16).
 
 - `docs/reference/ROSY API & Protocol Reference.md` for the shared contract
 - `middleware/core/gateway` implements CORE SRS
-
-### External
-
-None.
-
-<!-- MANUAL: -->

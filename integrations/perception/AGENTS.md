@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-11-03 | Updated: 2026-11-03 -->
 
 # perception_runtime (integrations/perception)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-11-03
 
 ## Purpose
 
@@ -16,9 +13,6 @@ ROS-free lane perception and learned-model runtime shared by the robot and the l
 |------|-------------|
 | `package.xml` / `setup.py` | ament_python library package `perception_runtime` (no nodes, no entry points) |
 | `perception_runtime/recording.py` | D-356 recording session format, quota and topic names (was `control.recording`) |
-| `perception_runtime/keep_odom_veto.py` | Odometry veto for keep mode (was `control.keep_odom_veto`) |
-| `perception_runtime/perception/` | Rule-based lane evidence: camera ground plane, lane fit, bird's-eye view, keeper, road state (was `control.sensing.perception.*`) |
-| `perception_runtime/perception/learned/` | Model manifest, signature, pre/post-processing and ONNX/NCNN runners (was `control.sensing.perception.learned.*`) |
 | `progress.md` / `logs.md` / `index.md` | Harness records (D-61); `index.md` is generated |
 
 ## Subdirectories

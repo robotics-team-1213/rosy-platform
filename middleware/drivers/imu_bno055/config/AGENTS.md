@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # config
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Explicit opt-in YAML for the optional BNO055 node. The default Rosy OS compose path does not load this file.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `bno055.yaml` | Driver parameters; `reset_on_start: false` unless a commissioning record requires a sensor reset |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -40,9 +27,3 @@ Launch arguments override YAML. Reset is the dangerous knob.
 ### Internal
 
 - `../launch/bno055.launch.py`, `../src/main_node.cpp`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

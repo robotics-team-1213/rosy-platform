@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # bridge
 
@@ -33,5 +32,3 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke and the SaveMap guard cover it; check the latest run (`gh run list`). A local `main` ahead of `origin/main` has no CI evidence.
 
 Exception: `test/test_bridge_timers.py` stubs `rclpy` in `sys.modules` and asserts only what the bridge registers (structural). Add no semantic tests there and do not move the stub into `conftest.py`: a stub asserts stub semantics, so its blast radius stays one file. Extract decisions into ROS-free siblings with duck-typed `SimpleNamespace` tests instead.
-
-<!-- MANUAL: -->

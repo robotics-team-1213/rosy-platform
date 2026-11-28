@@ -1,7 +1,6 @@
 # execution
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,8 +10,6 @@ Wheel `rosy-execution` 0.1.1. ROS-free PlanBundle and existing authority project
 
 | File | Description |
 |------|-------------|
-| `pyproject.toml` | Wheel name and existing skill/foundation contract pins |
-| `src/` | `rosy.execution.api` and `rosy.execution.site` |
 | `src/rosy/execution/site/goal_evidence.py` | D-657 pure bounded goal predicate/evidence types and verification; producer authentication and post-action admission remain Fleet-owned |
 | `src/rosy/execution/site/workflow.py` | D-657 pure full progress projection, timestamp/freshness and Mission-to-step helpers; wire schemas load only when project_progress is called; never writes a transition, claim, fence or device command |
 | `COLCON_IGNORE` | Not a colcon package |
@@ -47,5 +44,3 @@ Two namespace packages in one wheel: `api` and `site`.
 ### External
 
 - Python >= 3.12.
-
-## Manual Notes

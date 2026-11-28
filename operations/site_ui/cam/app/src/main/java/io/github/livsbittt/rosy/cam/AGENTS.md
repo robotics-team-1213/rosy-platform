@@ -1,20 +1,11 @@
-<!-- Parent: ../../../../../../../../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # cam (Kotlin package `io.github.livsbittt.rosy.cam`)
 
 **Parent context:** `../../../../../../../../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 All Rosy Cam app code: capture, encode, and push latest-only JPEG frames to the site Vision receiver, plus pairing, settings and the Compose UI. The app knows only the site link; it never talks to Fleet or to a robot.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `MainActivity.kt` | Compose host; routes between pairing, settings and stream screens |
 
 ## Subdirectories
 

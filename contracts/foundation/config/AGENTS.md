@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # config
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,10 +13,6 @@ Default robot config. Installed to `share/core_common/config`. Local override is
 |------|-------------|
 | `rosy_default.yaml` | CFG-001 defaults: robot id, `robot.model` (D-196), API port 8080, `auth.tokens: []` and `auth.pairing` lifetimes (D-193), safety/battery curve, power, navigation and the opt-in readiness gate |
 | `rosy_dev_auth.yaml` | Shared dev tokens (`rosy-dev-admin`/`operator`/`viewer`). Merged by `load_config` only with `ROSY_DEV_AUTH=1` and never in device mode (D-193 7) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -48,5 +41,3 @@ Deep-merge; missing keys keep dataclass defaults. Runtime settings (SAF-004 limi
 ### External
 
 - PyYAML
-
-<!-- MANUAL: -->

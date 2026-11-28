@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-06 -->
 
 # planning/ (map → goals)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 Occupancy-grid planning: map check → point to go, best route, coverage. Pure logic (no ROS) shared by `goal_node` and the offline sim `tools/explore_sim.py`. GoalBrain is the explore→coverage FSM.
@@ -14,9 +11,6 @@ Occupancy-grid planning: map check → point to go, best route, coverage. Pure l
 |------|-----|
 | `gridmap.py` | `OccupancyMap` — OccupancyGrid-shaped grid (−1 unknown / 0..64 free / ≥65 occ), world↔grid transforms, flood fill, inflate (OCC-only, never unknown), ASCII render |
 | `astar.py` | `best_route(map, start, goal, clear_m)` — 8-connected A*, no corner cutting, unknown blocks, returns world points + length |
-| `frontier.py` | `frontier_points(map)`, `pick_goal(map)` — free cells touching unknown, clusters, snaps centroid to free, biggest first |
-| `zigzag.py` | `ZigzagPlanner` — boustrophedon coverage lanes along the longer axis; covered cells excluded before lane build so replanning advances |
-| `goals.py` | `GoalBrain` — explore (frontier goal) → coverage (zigzag waypoints) FSM; map+pose in, point-to-go + route out |
 
 ## For AI Agents
 
@@ -41,5 +35,3 @@ Occupancy-grid planning: map check → point to go, best route, coverage. Pure l
 
 ### External
 - `collections.deque`, `heapq`, `math` only.
-
-<!-- MANUAL: -->

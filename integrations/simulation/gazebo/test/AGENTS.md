@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,10 +12,6 @@ Launch-file contracts for `gz_multi.launch.py` when `core:=true`: per-robot iden
 | File | Description |
 |------|-------------|
 | `test_gz_multi_core.py` | Imports launch by path; asserts `rosy_02` / port / `api_host == 127.0.0.1`; robots manifest lists every core with the dev operator token |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -48,5 +41,3 @@ Requires `launch` / `launch_ros` (skipped otherwise).
 ### External
 
 - pytest, ROS 2 `launch` / `launch_ros` (optional on Windows)
-
-<!-- MANUAL: -->

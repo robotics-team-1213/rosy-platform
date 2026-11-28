@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # drivers
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,7 +11,6 @@ Device-kind drivers for Pilot (D-323 T5, D-296). A driver owns the endpoints and
 
 | File | Description |
 |------|-------------|
-| `registry.js` | `registerDriver`/`driverFor`/`registeredKinds`; a duplicate kind with a different driver throws, the same driver is idempotent |
 | `pinky_core.js` | Pinky CORE driver (`KIND = "pinky_core"`): `assessGate` turns whoami plus capabilities into raw reason codes (`role:`, `teleop_withheld`, `drive_disabled`), plus path actions for mode and safety stop |
 | `omx_sim.js` | SIM-only OMX arm transport (`omx_sim`) over `/api/v1/sim/omx`: `discover`, `request`; never uses Pinky teleop, CORE tokens, or `/ws/state` |
 
@@ -48,5 +44,3 @@ Plain object exports with a `kind` string; pure decision functions kept apart fr
 ### External
 
 None (browser `fetch` only).
-
-<!-- MANUAL: -->

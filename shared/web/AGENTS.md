@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # web_common
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,16 +13,10 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: none |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `test/` | Token, palette, headless, and shared-control contract tests |
 | `tokens.css` | Colour and type scale — the only palette and size source |
-| `components.css` | Shared text, head, grid, button, field, form, readout, readback, status, tag, chip, triage, evidence |
 | `ui.js` | Custom elements for those controls; no build step |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
-| `CMakeLists.txt` | Installs the shared files to share |
 
 ## For AI Agents
 
@@ -52,5 +43,3 @@ python -m pytest shared/web/test -q
 ### Internal
 
 none
-
-<!-- MANUAL: -->

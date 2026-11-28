@@ -1,10 +1,7 @@
-<!-- Parent: ../../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
 
 # perception
 
 **Parent context:** `../../AGENTS.md`
-**Updated:** 2026-10-11
 
 ## Purpose
 
@@ -16,9 +13,6 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 
 | File | Description |
 |------|-------------|
-| `camera.py` | Floor, void, and obstacle classification |
-| `road.py` | Road observation |
-| `scene_context.py` | Closed scene profiles |
 | `paint_hypothesis.py` | D-395 `paint_score`: how well a pose hypothesis explains the camera's paint points (same distance score as `paint_localizer`); `camera_paint_points`: base_link paint points from one frame (keep mode front end: `floor_white_mask` on the `BirdsEye` grid) |
 | `reference_square.py` | D-395 reference square (red ring, blue core): `SquareObservation(bearing_rad, range_m, confidence)` contract, `SquareDetector` protocol, `HsvSquareDetector` rule backend |
 
@@ -48,9 +42,3 @@ D-584: use `tools/remote/remote_pytest.py` to run committed HEAD on a remote tes
 ### Internal
 
 Sibling modules in this folder only.
-
-### External
-
-None.
-
-<!-- MANUAL: -->

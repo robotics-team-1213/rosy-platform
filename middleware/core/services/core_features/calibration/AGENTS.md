@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-01 | Updated: 2026-10-01 -->
 
 # calibration
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,12 +11,7 @@ D-321 addendum: the attended calibration session lease. One session per robot, r
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Re-exports `CalibrationSessionManager`, `CalibrationSessionError` |
 | `session.py` | Lease lifecycle (start/heartbeat/end/expiry), `activity()` for the snapshot, `blocking(token_id)` for the API fence, `calibration.session_*` events |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 

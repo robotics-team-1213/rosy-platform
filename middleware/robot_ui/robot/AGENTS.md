@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # dashboard
 
@@ -28,8 +27,6 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 ### Testing Requirements
 
 `middleware/robot_ui/robot/test`, `middleware/core/gateway/test/test_dashboard.py`, `test_host_cards.py`; browser: `test/test_dashboard_browser.py`.
-
-<!-- MANUAL: -->
 
 ### UI 역할과 공용 부품
 

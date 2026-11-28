@@ -1,7 +1,6 @@
 # simulation
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -37,5 +36,3 @@ ament packages keep their own `AGENTS.md` one level down.
 ### External
 
 - Gazebo (ros_gz) on a Linux host. Not a Windows host dependency.
-
-## Manual Notes

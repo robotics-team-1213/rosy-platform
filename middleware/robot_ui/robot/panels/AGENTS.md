@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # panels
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,10 +12,6 @@ Panel modules for the role surfaces (D-204): `console` (operate), `setup` (prepa
 | File | Description |
 |------|-------------|
 | `surface-panels.css` | Shared panel layout for all surfaces; tokens only, no raw colors |
-| `console/` | `overview`, `map`, `mode`, `teleop`, `docking`, `line-follow`, `camera` (viewer-level operate surface; act panels carry an `action_group`) |
-| `setup/` | `waypoints`, `localization`, `docking`, `dock-admin`, `traffic-policy`, `pose-evidence` (operator role; `pose-evidence` exports `poseUnavailableReason`) |
-| `host/` | `hardware`, `system`, `operations` (+ `hardware.css`); `system.js` exports `runtimeGap` |
-| `system/` | `diagnostics`, `display`, `events` (+ `events.css`), `security` |
 
 ## For AI Agents
 
@@ -48,5 +41,3 @@ Vanilla ES modules, no bundler. Panels import from `/assets/*` (client, vision, 
 ### External
 
 None (browser APIs only).
-
-<!-- MANUAL: -->

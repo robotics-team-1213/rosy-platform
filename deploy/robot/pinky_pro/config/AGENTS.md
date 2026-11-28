@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
 
 # config
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,16 +13,10 @@ Pinky Pro board overlays mounted into `rosy-core`. `ROSY_RUNTIME_MODE` selects `
 |------|-------------|
 | `profile.core.yaml` / `capabilities.core.yaml` | Dashboard only: no teleop, no lidar |
 | `profile.motor.yaml` / `capabilities.motor.yaml` | Dynamixel teleop, encoder only |
-| `profile.hardware.yaml` / `capabilities.hardware.yaml` | Motor + RPLidar + localized Nav2 goal/return-home; slam false |
 | `capabilities.hardware-mapping.yaml` | Hardware SLAM overlay selected only by `ROSY_NAVIGATION_BACKEND=slam`; slam true, navigation false |
-| `motion_profiles.yaml` | Measured base/arm/payload states; defaults to unmeasured `unknown` |
 | `board.yaml` | Modes, aliases (`pi5-lite` → `hardware`), `slices` (`required: [core]`; available motor/io/nav/vision/omx/ai), and `presets` (`core` / `motor` / `hardware`) |
 | `resolve-mode.sh` | Maps aliases and `--slices` sets onto catalog modes; overlay YAML exists only for catalog modes |
 | `rosy.pi5.example.yaml` | Example `ROSY_CONFIG` for the device; hardware readiness gate is required |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -50,9 +41,3 @@ YAML only; no code.
 
 - `contracts/foundation/config/rosy_default.yaml` structure
 - `deploy/robot/pinky_pro/compose.yaml` volume mounts
-
-### External
-
-None.
-
-<!-- MANUAL: -->

@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # .github
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,7 +13,6 @@ GitHub Actions for colcon build, lint, pytest, and `core` boot smoke on ROS 2 Ja
 |------|-------------|
 | `CONTRIBUTING.md` | Contributor summary; points at `docs/reference/team-guide.md` (kept here because the repo root allows only listed files) |
 | `pull_request_template.md` | PR checklist: branch type, contract read, known_failures, no secrets, Safety-Review, ADR |
-| `CODEOWNERS` | Review owners per root `capability:` in `tools/harness/platform_parts.yaml`; `test/architecture/test_capability_owners.py` keeps them in step |
 
 ## Subdirectories
 
@@ -48,5 +44,3 @@ Comments in `ci.yml` document why extra steps exist (root `test/` used to be ski
 ### External
 
 - GitHub Actions, `ros:jazzy-ros-base` container
-
-<!-- MANUAL: -->

@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # diagnostics
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 DIAG-001/002 + OBS-101 health rollup. Providers return `HealthState`; collector takes the worst.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `collector.py` | `DiagnosticsCollector`, CPU/mem/disk providers, `topic_freshness_provider`, `worst()` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -42,9 +28,3 @@ Covered indirectly by host runtime / graph tests; add unit tests here if you cha
 
 - `protocol.schemas.HealthState`
 - Instantiated from `ros_bridge.py`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

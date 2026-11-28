@@ -1,9 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
 
 # android
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-31
 
 ## Purpose
 

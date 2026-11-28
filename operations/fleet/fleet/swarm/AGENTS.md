@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # swarm
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-26
 
 ## Purpose
 
@@ -14,16 +11,11 @@ Robot endpoints, HTTP/WS transport, byte-for-byte pose relay, pure arming plans,
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
 | `robots.py` | `RobotEndpoint`; `load_robots()` / `write_robots()` for `robots.yaml` (per-robot token, D-30) |
 | `api/types.py`, `api/ports.py` | Canonical declarations and Protocols only; existing public modules reexport the same objects (D-875) |
 | `transport.py` | `HttpRobotClient` and the `RobotClient` reexport — the only module that calls the robot contract |
 | `relay.py` | Leader pose socket 1 → follower reference sockets N; stopped stream is 0 Hz, not last-frame repeat |
-| `arming.py` | `FormationSpec` + pure pre-check/assignment; finished before the relay is touched |
-| `session.py` | `FormationSession` Decision construction facade; injects the existing planner and default assigner factory |
 | `session_lifecycle.py` | Safety lifecycle: arm → relay → watch → HOLD/ABORT, reform/resume and stop cleanup |
-| `session_arming.py` | Member preflight and all-or-nothing arming on session-owned state |
-| `session_state.py` | Reexports SessionState and HoldPolicy from api/types.py; session.py retains existing exports |
 
 ## Subdirectories
 
@@ -57,5 +49,3 @@ Use the repository's [remote test procedure](../../../../docs/reference/develope
 ### External
 
 - httpx, websockets (transport only)
-
-<!-- MANUAL: -->

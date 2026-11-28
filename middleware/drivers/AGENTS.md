@@ -1,7 +1,6 @@
 # drivers
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -41,5 +40,3 @@ ament_cmake or ament_python as the package already uses. Node names stay in the 
 ### External
 
 - I2C, ws2811, and the Pinky ADC path named in each package.
-
-## Manual Notes

@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-10-03 -->
 
 # site_devices
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,5 +13,3 @@
 |-----------|---------|
 | `dock/` | ROSY-DOCK-001 충전 도크 (see `dock/AGENTS.md`) |
 | `signal/` | ROSY-SIGNAL-001 신호 제어 (see `signal/AGENTS.md`). 관측기는 `../vision/signal_observer` |
-
-<!-- MANUAL: -->

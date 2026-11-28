@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # workflows
 
@@ -29,6 +28,3 @@ CI job definitions. `ci.yml` is the test pipeline (D-436 `scope` + parallel `tes
 ### Testing Requirements
 
 Edit `ci.yml` only with a matching local command. Do not drop the root `test/` step.
-
-
-

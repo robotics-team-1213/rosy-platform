@@ -1,7 +1,6 @@
 # omx
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -39,5 +38,3 @@ OMX on the robot: the ROS adapter, the profile, and the ROS-free agent compositi
 ### External
 
 - Declared in `agent/pyproject.toml` and the adapter `package.xml`.
-
-## Manual Notes
