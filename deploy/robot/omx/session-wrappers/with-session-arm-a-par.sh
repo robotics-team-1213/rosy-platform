@@ -16,15 +16,15 @@ if ! { [ -p chunk-io-a/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   for _ in $(seq 1 25); do systemctl --user is-active --quiet rosy-omx-observer@arm_a.service || break; sleep 0.2; done
   sleep 0.2
   flock -n ~/rosy-omx/session-arm_a.lock true || { refuse lock_held "REFUSED: the arm session lock is held"; exit 2; }
+  export ROSY_IDLE_OPEN_GRIP=${ROSY_IDLE_OPEN_GRIP:-56.0}  # idle fold opens empty jaws in place, then folds home (2026-11-27 user, chunk_runner_idle_open)
   export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_a-$(date +%Y%m%d-%H%M%S).jsonl  # jitter_replay.py reads it (2026-11-04)
   STATUS=chunk-io-a/chunk-status.jsonl
   if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
   n0=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
   slog=session-arm_a-$(date +%H%M%S).log
   (
-    config=record-config.json
-    if [ "${ROSY_BASELINE_RECOVERY_ARM:-}" = arm_a ]; then config=record-config-arm-a.json; fi
-    ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config "$config" --caps caps-arm-a-wrist400-20261109.json --arm arm_a --chunks "${ROSY_SESSION_CHUNKS:-chunks-topdown-guard-arma-closed49-20261103.json}" --io chunk-io-a --params cell-params-floor-1028.json --operating-profile arm-a-robot-profile.json </dev/null
+    # record-config-arm-a.json is the config arm-a-robot-profile.json pins (side+wrist, arm_a_leader); the old record-config.json failed the profile check (2026-11-28)
+    ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-a.json --caps caps-arm-a-wrist400-20261109.json --arm arm_a --chunks "${ROSY_SESSION_CHUNKS:-chunks-topdown-guard-arma-closed49-20261103.json}" --io chunk-io-a --params cell-params-floor-1028.json --operating-profile arm-a-robot-profile.json </dev/null
     rc=$?
     # record_session exits 78 only after proving a pre-start refusal left the arm idle.
     if { [ "$rc" -eq 0 ] || [ "$rc" -eq 78 ]; } && flock -n ~/rosy-omx/session-arm_a.lock true; then

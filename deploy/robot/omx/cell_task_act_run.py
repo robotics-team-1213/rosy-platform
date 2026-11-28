@@ -16,6 +16,7 @@ from typing import Any
 
 from cell_policy_lease import UNACKED
 from cell_act_verdict import act_verdict
+from cell_presence import effective_operator, presence_ok
 from cell_task_act import _fail
 import cell_diagnose
 
@@ -39,7 +40,7 @@ def execute_act_policy_task(
         "--cell-calibration", str(Path(policy_cfg["cell_calibration"].strip()).expanduser()),
         "--model-calibration", str(Path(policy_cfg["model_calibration"].strip()).expanduser()),
         "--max-chunks", str(plan["max_chunks"]), "--max-obs-age-s", str(policy_cfg.get("max_obs_age_s", 2.0)),
-        "--operator", str(handoff["presence"]["operator"]).strip(), "--person-at-switch",
+        "--operator", effective_operator(handoff), *(["--person-at-switch"] if presence_ok(handoff) else []),
         "--paced-chunks", "--policy-lease",
         *(["--goal-site", plan["goal_site"]] if plan.get("goal_site") else []),
         "--catalog", str(cat_path), "--roi", *(str(int(v)) for v in roi),
@@ -47,7 +48,8 @@ def execute_act_policy_task(
     ]
     try:
         proc = run_fn(cmd, capture_output=True, text=True, timeout=300,
-                      env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner})
+                      env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner,
+                           **({"ROSY_SESSION_CHUNKS": str(plan["library"]), "ROSY_SESSION_CHUNKS_STRICT": "1"} if arm_id == "arm_s" else {})})
     except timeout_exc:  # the drive is gone, so are its renewals: the runner's own watchdog holds within the ttl
         return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop={"lease_watchdog": True})
     parsed = last_json_fn(proc.stdout)

@@ -10,53 +10,32 @@ import { createCellContextPanel } from "/console/assets/cell-context-panel.js";
 import { armIncidentAlertRows, clearArmIncident, IncidentClearBody } from "/console/assets/arm-incident-clear.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
-import {
-  JOINT_SHORT,
-  canonicalArmId,
-  isArmAttentionOrLive,
-  normalizeWorkcellObservations,
-  obsSignature,
-} from "/console/assets/cell-obs-model.js";
+import { syncCamRoiOverlay } from "/console/assets/cell-cam-roi.js";
+import { objectsForCamView, syncCamObjectsOverlay } from "/console/assets/cell-cam-objects.js";
+import { createCellObjectStager } from "/console/assets/arm-cell-controls.js";
+import { JOINT_SHORT, canonicalArmId, isArmAttentionOrLive, normalizeWorkcellObservations, obsSignature } from "/console/assets/cell-obs-model.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
 
 export { isArmAttentionOrLive, canonicalArmId, normalizeWorkcellObservations };
 
 /** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
-function CameraTile({ cam, frames, liveOn, hidden }) {
-  const imgRef = useRef(null);
-  const statusRef = useRef(null);
-  const standbyRef = useRef(null);
+function CameraTile({ cam, frames, liveOn, hidden, cameraRois = null, showRoi = true, cellObjects = null, stager = null }) {
+  const imgRef = useRef(null), statusRef = useRef(null), standbyRef = useRef(null);
+  useLayoutEffect(() => { frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label); }, [cam.source_id, cam.label, frames]);
+  useLayoutEffect(() => { frames.repaint?.({ source: cam.source_id }); }, [liveOn, cam.source_id, frames]);
+  useLayoutEffect(() => { syncCamRoiOverlay(imgRef.current?.parentElement, cam, cameraRois, showRoi, Boolean(imgRef.current?.classList.contains("focused"))); }, [cam.source_id, cam.role, cam.label, cameraRois, showRoi]);
   useLayoutEffect(() => {
-    frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label);
-  }, [cam.source_id, cam.label, frames]);
-  useLayoutEffect(() => {
-    frames.repaint?.({ source: cam.source_id });
-  }, [liveOn, cam.source_id, frames]);
-  const toggleZoom = (ev) => {
-    const img = imgRef.current;
-    if (!img?.getAttribute("src")) return;
-    ev.stopPropagation();
-    img.classList.toggle("focused");
-  };
-  const onKeyDown = (ev) => {
-    if (ev.key === "Enter" || ev.key === " ") {
-      ev.preventDefault();
-      toggleZoom(ev);
-    } else if (ev.key === "Escape") {
-      imgRef.current?.classList.remove("focused");
-    }
-  };
+    const zoomed = Boolean(imgRef.current?.classList.contains("focused"));
+    syncCamObjectsOverlay(imgRef.current?.parentElement, cam, cellObjects, stager ? stager.overlayOpts(cam, zoomed) : { zoomed });
+  }, [cam.source_id, cam.role, cam.label, cellObjects, stager?.sig(cellObjects)]);
+  const applyZoom = (zoomed) => { const img = imgRef.current; if (!img) return; img.classList.toggle("focused", zoomed); for (const c of [".omx-cam-roi-overlay", ".omx-cam-objects-overlay"]) img.parentElement?.querySelector(c)?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice"); };
+  const toggleZoom = (ev) => { const img = imgRef.current; if (!img?.getAttribute("src")) return; ev.stopPropagation(); applyZoom(!img.classList.contains("focused")); };
+  const onKeyDown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleZoom(ev); } else if (ev.key === "Escape") applyZoom(false); };
+  const objCount = objectsForCamView(cam, cellObjects).objects.length;
   return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
-    <div class="cell-stage-cam-head">
-      <strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>
-      <small ref=${statusRef} class="omx-inspector-cam-badge" />
-    </div>
-    <div class="omx-inspector-cam-frame">
-      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`}
-        onClick=${toggleZoom} />
-      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" />
-    </div>
+    <div class="cell-stage-cam-head"><strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>${objCount ? html`<ui-tag variant="inline" status="active" class="cell-stage-obj-count">객체 ${objCount}</ui-tag>` : null}<small ref=${statusRef} class="omx-inspector-cam-badge" /></div>
+    <div class="omx-inspector-cam-frame"><img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} onClick=${toggleZoom} /><span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" /></div>
   </article>`;
 }
 
@@ -72,7 +51,10 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
     : arm.homeRecoveries?.length ? { status: "warn", text: "홈 복구 대기" }
     : arm.fresh ? { status: "active", text: "실시간" }
     : { status: "warn", text: "대기 · 만료" };
-  return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id}
+  const severity = arm.heldIncidents.length ? "crit"
+    : (arm.openIncidents.length || arm.homeRecoveries?.length) ? "warn"
+    : arm.fresh ? "live" : "idle";
+  return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id} data-arm-severity=${severity}
     onClick=${() => selection?.set?.(arm.id, { source: "roster" })}>
     <div class="cell-stage-arm-head">
       <strong>${arm.label}</strong>
@@ -91,22 +73,14 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
 }
 
 export function createCellCockpitStage({
-  scope,
-  call,
-  view,
-  auth,
-  selection,
-  contextHost = null,
-  isOperator = () => false,
-  namedReason = () => "",
-  onChanged,
-  onVisionSample,
-  onOpenBlueprint = null,
+  scope, call, view, auth, selection, contextHost = null, objectHighlight = null, confirmedAction = null, log = null,
+  isOperator = () => false, namedReason = () => "", onChanged, onVisionSample, onOpenBlueprint = null,
 }) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
   const camStates = new Map();
   let renderingStage = false;
   let notifyQueued = false;
+  const stager = createCellObjectStager({ scope, call, auth, objectHighlight, confirmedAction, isOperator, namedReason, log, onChange: () => { lastStageSig = ""; render(); }, onDispatched: () => { gate.reset(); void refresh(); } });
   const frames = createCellFrameFeed({
     call,
     scope,
@@ -164,9 +138,11 @@ export function createCellCockpitStage({
   let areaHidden = false;
   let inFlight = false;
   let liveOn = true;
+  let showRoi = true;
   let showAllCams = false;
   let showAllArms = false;
   let controlUnitFetched = false;
+  let sitePointsFetched = false;
   let lastStageSig = "";
   let lastObsSig = "";
   let notifiedOnce = false;
@@ -265,7 +241,7 @@ export function createCellCockpitStage({
     const visibleArms = showAllArms ? arms : activeArms;
     const stageSig = JSON.stringify([
       unitId, parentText, revText, statText, liveStatus, liveText,
-      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked),
+      view.fleet?.name === "샘플 현장", liveOn, showRoi, Boolean(view.sitePointsCameras), stager.sig(view.cellObjects), selectedId, Boolean(auth.locked),
       showAllCams, showAllArms, activeCams.map((c) => c.source_id), camDiag, obsSignature(obs),
     ]);
     if (stageSig === lastStageSig) return;
@@ -283,6 +259,8 @@ export function createCellCockpitStage({
             <ui-tag status=${liveStatus}>${liveText}</ui-tag>
             <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
             >${liveOn ? "영상 일시정지" : "영상 다시 보기"}</${UiButton}>
+            ${view.sitePointsCameras ? html`<${UiButton} kind="segment" type="button" data-work-read="" data-roi-toggle="true" aria-pressed=${showRoi ? "true" : "false"} onClick=${() => { showRoi = !showRoi; render(); }}
+            >${showRoi ? "ROI 표시" : "ROI 숨김"}</${UiButton}>` : null}
             ${onOpenBlueprint ? html`<${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => onOpenBlueprint("yard")}>구역 도면</${UiButton}>` : null}
             <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
           </div>
@@ -307,9 +285,11 @@ export function createCellCockpitStage({
           : null}
         <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
           ${cams.length
-            ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} hidden=${!showAllCams && !isCamActive(cam)} />`)
+            ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn}
+                cameraRois=${view.sitePointsCameras || null} showRoi=${showRoi} cellObjects=${view.cellObjects || null} stager=${stager} hidden=${!showAllCams && activeCams.length > 0 && !isCamActive(cam)} />`)
             : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
         </div>
+        <div class="cell-stage-obj-host" />
         ${arms.length && idleArmCount > 0
           ? html`<div class="cell-stage-standby">
               <p class="hint">
@@ -330,6 +310,7 @@ export function createCellCockpitStage({
             : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
         </div>
       `, section);
+      stager.renderStagingBar(section.querySelector(".cell-stage-obj-host"), cams, view.cellObjects);
     } finally {
       renderingStage = false;
     }
@@ -345,23 +326,37 @@ export function createCellCockpitStage({
     }
   }
 
+  async function refreshSitePointCameras(signal) {
+    if (sitePointsFetched || view.sitePointsCameras) return;
+    sitePointsFetched = true;
+    try {
+      const sp = await call("/api/fleet/site-points?view=full", { signal });
+      if (sp?.cameras) view.sitePointsCameras = sp.cameras;
+    } catch {
+      sitePointsFetched = false;
+    }
+  }
+
   async function refresh() {
     if (auth.locked || inFlight || !gate.due() || !owns("arms")) return;
     const life = scope.capture();
     inFlight = true;
     try {
-      const [payload] = await Promise.all([
+      const [payload, , , , , cellObjsRes] = await Promise.all([
         call("/api/fleet/workcell-observations", { signal: life.signal }),
         refreshControlUnit(life.signal),
+        isStageActive() ? refreshSitePointCameras(life.signal) : Promise.resolve(),
         isStageActive() ? frames.checkSources(life.signal) : Promise.resolve(),
         isStageActive() && contextPanel ? contextPanel.refresh(life.signal) : Promise.resolve(),
+        isStageActive() ? call("/api/fleet/pipeline/cell-objects", { signal: life.signal }).catch(() => null) : Promise.resolve(null),
       ]);
       life.check();
+      if (cellObjsRes) view.cellObjects = { ...cellObjsRes, fetchedAtMs: Date.now() };
       gate.ok();
       const nextObs = normalizeWorkcellObservations(payload, Date.now());
       view.workcellObs = nextObs;
       for (const arm of nextObs.arms) mhStateFor(arm.id).accept(arm.motorHealth, { receivedAtMs: nextObs.receivedAtMs });
-      const nextSig = obsSignature(nextObs);
+      const nextSig = `${obsSignature(nextObs)}|${JSON.stringify(stager.sig(view.cellObjects))}`;
       if (!notifiedOnce || nextSig !== lastObsSig) {
         lastObsSig = nextSig;
         notifiedOnce = true;

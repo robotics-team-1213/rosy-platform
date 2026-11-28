@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
+
+globalThis.crypto ??= webcrypto;
 
 import {
   REAL2SIM_PATH,
@@ -370,14 +373,18 @@ test("inspector mounts before frame bind, preserves matrix and draft choices, an
     const getEl = id => (els[id] ??= Object.assign(mkNode('DIV'), { rootConnected: true }));
     const boundStates = [];
     const requests = [];
+    let confirmAllow = false;
+    const confirmCalls = [];
     const pipeline = createReal2SimPipeline({
       request: async (path, opts) => {
-        requests.push({path, body: opts?.body ? JSON.parse(opts.body) : null});
+        requests.push({path, headers: opts?.headers || {}, body: opts?.body ? JSON.parse(opts.body) : null});
         if (opts?.method === 'POST') return {task: {task_id: 't-new'}};
         return {tasks: [], cameras: [], summary: {}};
       },
       $: getEl,
       isOperator: () => true,
+      namedReason: () => '',
+      confirm: async (opts) => { confirmCalls.push(opts); return confirmAllow; },
       cellFrames: {
         bind(img) { boundStates.push(img.isConnected); },
         setPaused() {},
@@ -394,9 +401,15 @@ test("inspector mounts before frame bind, preserves matrix and draft choices, an
     tierSelect.value = '3';
     tierSelect.listeners.change[0]();
     await dispatchBtn.listeners.click[0]();
+    assert.equal(confirmCalls.length, 1);
+    assert.equal(requests.some(r => r.path === CELL_TASKS_PATH && r.body), false, 'canceled confirm never posts');
+    confirmAllow = true;
+    await dispatchBtn.listeners.click[0]();
     assert.equal(els['cell-camera-matrix'].children[0], firstChild);
     const post = requests.find(r => r.path === CELL_TASKS_PATH && r.body);
     assert.equal(post.body.tier, 3);
+    assert.equal(post.body.propose, false);
+    assert.ok(post.headers['Idempotency-Key']);
     assert.equal('robot_id' in post.body, false);
     assert.equal(els['omx-right-inspector'].children[4].children[0].children[1].children.find(o => o.value === '3').selected, true);
   } finally {
@@ -554,5 +567,65 @@ test("unconfirmed stop warning stays visible across 3s polling and overlapping a
   } finally {
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
+  }
+});
+
+test("camera matrix and preset/create task buttons sync namedReason locks across sign-in and clear", async () => {
+  const mkNode = (tag = 'DIV') => {
+    const el = {
+      tagName: String(tag).toUpperCase(), dataset: {}, style: {}, attributes: {}, listeners: {}, children: [],
+      hidden: false, value: '', textContent: '', className: '', open: false, selected: false,
+      get firstElementChild() { return el.children[0] || null; },
+      get childElementCount() { return el.children.length; },
+      classList: {add() {}, remove() {}, toggle() {}, contains: () => false},
+      append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.parentNode = el; el.children.push(n); } },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      addEventListener(type, cb) { (el.listeners[type] ??= []).push(cb); },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] ?? null; },
+      hasAttribute(k) { return k in el.attributes; },
+      removeAttribute(k) { delete el.attributes[k]; },
+      querySelector: () => null, querySelectorAll: () => [],
+    };
+    return el;
+  };
+  const prevDoc = globalThis.document;
+  globalThis.document = {createElement: mkNode, querySelectorAll: () => []};
+  try {
+    const els = {};
+    const getEl = id => (els[id] ??= mkNode('DIV'));
+    let reason = '이름 있는 운영자 로그인이 필요합니다';
+    const pipeline = createReal2SimPipeline({
+      request: async () => ({tasks: [], cameras: [], summary: {}}),
+      $: getEl,
+      isOperator: () => true,
+      namedReason: () => reason,
+    });
+    const collectUiButtons = (node, out = []) => {
+      if (node.tagName === 'UI-BUTTON') out.push(node);
+      for (const c of node.children || []) collectUiButtons(c, out);
+      return out;
+    };
+    pipeline.syncPermissions();
+    assert.equal(els['cell-camera-matrix'].childElementCount, 0);
+    await pipeline.refreshCellTasks();
+    const matrixBtns = collectUiButtons(els['cell-camera-matrix']).filter(b => !b.hasAttribute('aria-pressed'));
+    assert.ok(matrixBtns.length >= 6);
+    assert.ok(matrixBtns.every(b => b.disabled && b.getAttribute('reason') === reason));
+    assert.equal(els['cell-task-preset-run'].getAttribute('reason'), reason);
+    assert.equal(els['cell-task-create'].getAttribute('reason'), reason);
+
+    reason = '';
+    pipeline.syncPermissions();
+    assert.ok(matrixBtns.every(b => !b.disabled && !b.hasAttribute('reason')));
+    assert.equal(Boolean(els['cell-task-preset-run'].disabled), false);
+    assert.equal(Boolean(els['cell-task-create'].disabled), false);
+
+    reason = '이름 있는 운영자 로그인이 필요합니다';
+    pipeline.clear();
+    assert.ok(matrixBtns.every(b => b.disabled && b.getAttribute('reason') === reason));
+    assert.equal(els['cell-task-preset-run'].getAttribute('reason'), reason);
+  } finally {
+    globalThis.document = prevDoc;
   }
 });

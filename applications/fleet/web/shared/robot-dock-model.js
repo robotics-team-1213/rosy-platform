@@ -24,9 +24,9 @@ function shortId(id, kind) {
   const raw = String(id ?? "");
   if (kind === "mobile") return raw.match(/(\d+)$/)?.[1] || raw;
   if (kind === "arm") {
-    const idx = raw.lastIndexOf("_");
-    const seg = idx >= 0 ? raw.slice(idx + 1) : "";
-    return seg ? seg.toUpperCase() : raw;
+    const clean = raw.replace(/_follower$/i, "").replace(/_+$/g, "");
+    const idx = clean.lastIndexOf("_");
+    return idx >= 0 ? clean.slice(idx + 1).toUpperCase() : raw;
   }
   return raw;
 }
@@ -42,10 +42,12 @@ function marksOf(profile) {
     });
   }
   if (profile.alarm) {
+    const count = Number(profile.alarm.count);
     marks.push({
       kind: "alarm",
       state: profile.alarm.tag || profile.alarm.level || "unknown",
       text: profile.alarm.text || EVIDENCE_LABEL.unavailable,
+      ...(Number.isFinite(count) && count > 1 ? { count } : {}),
     });
   }
   return marks;

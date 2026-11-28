@@ -50,6 +50,7 @@ from fleet.localization.lane_compliance_helpers import (
     crosswalk_ahead,
     evaluate_bay_dock,
     map_bounds,
+    parking_edge,
 )
 
 OK, WARN, ACT, UNKNOWN = "OK", "WARN", "ACT", "UNKNOWN"
@@ -227,12 +228,17 @@ def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
             best = (arc, dist, s, tangent)
     if best is None:
         return LaneSample(state)
-    arc, dist, s, tangent = best
+    arc = best[0]
+    offset, margin, _ = lane_offset(arc, x, y, body_half_width_m)
+    return LaneSample(state, arc.edge_id, arc.id, offset, margin, arc.width_m)
+
+
+def lane_offset(arc, x: float, y: float, body_half_width_m: float = BODY_HALF_WIDTH_M) -> tuple[float, float, float]:
+    """(signed offset, left +; body margin to the lane edge; lane tangent) of the point against ``arc``."""
+    dist, s, tangent = arc.project(x, y)
     px, py, _ = arc.point_at(s)
     left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
-    offset = math.copysign(dist, left)
-    margin = arc.width_m / 2.0 - (dist + body_half_width_m)
-    return LaneSample(state, arc.edge_id, arc.id, offset, margin, arc.width_m)
+    return math.copysign(dist, left), arc.width_m / 2.0 - (dist + body_half_width_m), tangent
 
 
 class LaneComplianceTracker:
@@ -256,6 +262,11 @@ class LaneComplianceTracker:
         return LaneCompliance(level, lane.pose_state, lane.edge_id, lane.arc_id, lane.offset_m,
                               lane.margin_m, lane.width_m, self.body_half_width_m, self._warn, self._act)
 
+    def hold(self, lane: LaneSample) -> LaneCompliance:
+        """D-1084: a still or parking robot is not judged: OK (UNKNOWN without a lane), counts neither grow nor reset."""
+        return LaneCompliance(UNKNOWN if lane.margin_m is None else OK, lane.pose_state, lane.edge_id, lane.arc_id, lane.offset_m, lane.margin_m,
+                              lane.width_m, self.body_half_width_m, self._warn, self._act)
+
     def judge(self, pose, graph) -> LaneCompliance:
         return self.update(sample(pose, graph, self.body_half_width_m, self.config))
 
@@ -264,6 +275,9 @@ class LaneComplianceTracker:
 #: Where the body is against the map. ``UNSEEN`` is "no judgement yet" and is never sent.
 ON_LANE, ON_LINE, OFF_LANE, OFF_MAP, WRONG_WAY, UNSEEN = (
     "ON_LANE", "ON_LINE", "OFF_LANE", "OFF_MAP", "WRONG_WAY", "UNSEEN")
+#: D-1084 report-only states (never sent to CORE): on a parking or bay edge, docking or in a parking
+#: handoff; the camera and the bound SLAM pose disagree on whether the body left the lane.
+PARKING, POSE_MISMATCH = "PARKING", "POSE_MISMATCH"
 
 
 def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], graph, crosswalks=(),

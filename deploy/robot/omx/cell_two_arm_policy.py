@@ -119,7 +119,7 @@ def _shape_candidate(
     model_closed = cell_policy_shape.converted_closed(closed, dict(sim_rule)) if (sim_units and sim_rule is not None) else closed
     actions = raw_actions if holding else cell_policy_shape.open_before_close(raw_actions, float(high[5]), model_closed)
     candidate = cell_policy_shape.resample_chunk(actions, list(start_state), fps) if sim_units else actions
-    shaped = cell_policy_shape.shape_chunk(candidate, list(start_state), low, high, fastest)
+    shaped = cell_policy_shape.shape_chunk(candidate, list(start_state), low, high, fastest, ease=True)
     return [[float(x) for x in row] for row in shaped], fastest
 
 

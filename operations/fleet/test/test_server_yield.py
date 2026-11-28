@@ -354,11 +354,11 @@ def test_without_a_map_nobody_is_moved_aside_merely_for_being_near_the_route():
 
 @pytest.mark.parametrize("has_grid", [True, False])
 @pytest.mark.parametrize("neighbor, route, goal, expected", [
-    ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), []),
-    ((0.0, 0.22), [(0.0, 0.0), (0.0, 0.1), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
+    ((0.0, 0.18), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), []),
+    ((0.0, 0.16), [(0.0, 0.0), (0.0, 0.1), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
     ((0.0, 0.14), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
-    ((0.0, 0.22), [(0.0, 0.0), (0.35, 0.0)], (0.35, 0.0), ["rosy_02"]),
-    ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.4, 0.22), ["rosy_02"]),
+    ((0.0, 0.17), [(0.0, 0.0), (0.05, 0.0)], (0.05, 0.0), ["rosy_02"]),
+    ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.15, 0.22), ["rosy_02"]),
 ], ids=["parallel-exit", "approach", "too-close-at-start", "near-end", "blocked-commanded-goal"])
 def test_parallel_bay_departure_standing_blockers(has_grid, neighbor, route, goal, expected):
     from fleet.server.bays import Grid
@@ -485,13 +485,14 @@ def _row(snapshot, robot_id):
     return [r for r in snapshot["robots"] if r["robot_id"] == robot_id][0]
 
 
-def test_rear_bay_claim_blocks_adjacent_turn_and_crossing_and_clears_far_bay():
+def test_rear_bay_claim_blocks_overlapping_and_crossing_and_clears_adjacent_and_far_bay():
     from fleet.server.traffic_arbitration_helpers import road_peer_wait
 
     console = _console(SimRobot("rosy_45", (0.446, 0.0), None))
     console.rear_bay_claims = {"rosy_46": ("world_261026", [(0.0, 0.0), (0.0, 0.47)])}
-    assert console._claim_blocker("rosy_45", [(0.222, 0.0)], site_route=("world_261026", [(0.222, 0.0), (0.222, 0.47)])) == ("rosy_46", True)
+    assert console._claim_blocker("rosy_45", [(0.15, 0.0)], site_route=("world_261026", [(0.15, 0.0), (0.15, 0.47)])) == ("rosy_46", True)
     assert console._claim_blocker("rosy_45", [(-0.4, 0.235)], site_route=("world_261026", [(-0.4, 0.235), (0.4, 0.235)])) == ("rosy_46", True)
+    assert console._claim_blocker("rosy_45", [(0.222, 0.0)], site_route=("world_261026", [(0.222, 0.0), (0.222, 0.47)])) == (None, False)
     assert console._claim_blocker("rosy_45", [(0.446, 0.0)], site_route=("world_261026", [(0.446, 0.0), (0.446, 0.47)])) == (None, False)
     assert console._claim_blocker("rosy_45", [(-0.5, -0.31)], site_route=("world_261026", [(-0.5, -0.31), (0.5, -0.31)])) == (None, False)
     wait = road_peer_wait(console, "rosy_45", [{"x": 0.446, "y": 0.47}], (0.446, 0.47), lambda _r: None, None)

@@ -20,7 +20,8 @@ BLOCK = {"torque_after": {"11": 0, "12": 0}, "hardware_error": {"11": 0, "12": 0
 @pytest.fixture(autouse=True)
 def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(omx_incident_fleet, "incidents_dir", lambda: tmp_path / "incidents")
-    rel._last.clear()
+    for memory in (rel._last, rel._ticked, rel._judged, rel._last_refusal):
+        memory.clear()
 
 
 def fake_pipeline(allowed=True, status="evaluated", incident=None):
@@ -196,3 +197,84 @@ def test_api_does_not_reread_for_a_request_refused_for_another_reason(tmp_path, 
     runner.runs["x"] = {"moving": True, "proc": Mock(poll=Mock(return_value=None)), "arms": ["arm_a"], "arm": "arm_a", "job": "j"}
     assert "already runs" in runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})["error"]
     assert seen == []
+
+
+HELD = {"fleet_held": True, "local_held": True, "incident_ids": ["d" * 32]}
+OFF = ((False,) * 6, (0,) * 6, (2048.0,) * 6)
+LINK = json.loads((Path(__file__).resolve().parents[1] / "contracts/foundation/test/fixtures/arm_incidents_link"
+                   / "20261118T232302-arm_s.json").read_text(encoding="utf-8"))["facts"]
+CLEAN = {**LINK, "folded": True, "flagged": [], "flagged_total": 0, "fault_records": [], "fault_records_total": 0,
+         "fault_record_kinds": []}  # folded, torque OFF, no hardware error, nothing flagged: 100
+
+
+@pytest.mark.parametrize("facts,score,cleared", [
+    (CLEAN, 100, True),
+    ({**LINK, "folded": True}, 98, False),  # a bus link end: 2 points off, under the cell's 99
+    ({**CLEAN, "stops": [{"command": "run park", "error": "contact in descend", "t": 1.0}]}, 0, False),  # D-1039
+])
+def test_watch_releases_only_at_99_and_a_hard_veto_keeps_the_hold(tmp_path, monkeypatch, facts, score, cleared):
+    import omx_incident_pipeline
+
+    monkeypatch.setattr(omx_incident_fleet, "INCIDENTS", omx_incident_fleet.INCIDENTS)  # restored after the test
+    monkeypatch.setattr(omx_incident_fleet, "held", lambda arm: "held")
+    monkeypatch.setattr(rel, "fleet_hold_reason", lambda arm: None)
+    monkeypatch.setenv("ROSY_OMX_MOTOR_HEALTH_DIR", str(tmp_path / "mh"))
+    token = tmp_path / "t.token"
+    token.write_text("t")
+    monkeypatch.setenv("ROSY_ARM_ASSESSOR_TOKEN_FILE", str(token))
+    answer = type("Hold", (), {"held": True, "incident_ids": ["d" * 32], "reason": "hold"})()
+    monkeypatch.setattr(omx_incident_fleet, "link_for", lambda arm: type("Link", (), {"hold": lambda self: answer})())
+    rel.use_record_dir(tmp_path / "prep")  # the record is found where the sessions write it, whatever the cwd is
+    record = tmp_path / "prep" / "incidents" / "20261127T010000-arm_s" / "incident.json"
+    record.parent.mkdir(parents=True)
+    record.write_text(json.dumps({"arm": "arm_s", "facts": facts}))
+    asked, results = [], []
+
+    def run(arm, rule):
+        results.append(rel.evaluate(arm, rule, config=None, clear_fn=lambda *a, **k: asked.append(a)))
+
+    for _ in range(4):
+        rel.watch(["arm_s"], status_fn=lambda a: HELD, state_fn=lambda a: OFF, busy_fn=lambda a: False, evaluate_fn=run)
+    assert len(results) == 1 and results[0]["safety_score"] == score and results[0]["threshold"] == 99
+    assert results[0]["cleared"] is cleared and len(asked) == int(cleared)
+
+
+def test_watch_judges_again_only_when_the_state_changes():
+    ran, now = [], {"status": HELD, "state": OFF, "busy": False}
+
+    def tick(n=3):
+        for _ in range(n):
+            rel.watch(["arm_s"], status_fn=lambda a: now["status"], state_fn=lambda a: now["state"],
+                      busy_fn=lambda a: now["busy"], evaluate_fn=lambda a, r: ran.append(r))
+        return len(ran)
+
+    assert tick(1) == 0  # not yet stable over two ticks
+    assert tick() == 1 and ran == ["open_incident_watch"]
+    now["state"] = (OFF[0], OFF[1], (2060.0,) * 6)  # jitter
+    assert tick() == 1
+    now["state"] = (OFF[0], OFF[1], (2100.0,) * 6)  # moved
+    assert tick() == 2
+    now["state"] = (OFF[0], (32, 0, 0, 0, 0, 0), now["state"][2])  # hardware error
+    assert tick() == 3
+    now["state"] = ((True,) * 6, OFF[1], OFF[2])  # torque ON: not judged
+    assert tick() == 3
+    now["state"], now["busy"] = OFF, True  # a session has the arm: wait
+    assert tick() == 3
+    now["busy"] = False
+    assert tick() == 4
+    now["state"] = None  # no evidence: hold stays, and the same state afterwards is not judged again
+    assert tick() == 4
+    now["state"] = OFF
+    assert tick() == 4
+    now["status"] = {**HELD, "fleet_held": None}  # Fleet unreachable
+    assert tick() == 4
+    now["status"] = {**HELD, "incident_ids": ["e" * 32]}  # a new incident
+    assert tick() == 5
+
+
+def test_arm_state_reads_the_passive_snapshot_and_rejects_a_stale_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_MOTOR_HEALTH_DIR", str(tmp_path))
+    motors = [{"id": i, "torque_enabled": False, "hardware_error": 0, "present_raw": 2000.0 + i} for i in range(11, 17)]
+    (tmp_path / "arm_s.json").write_text(json.dumps({"observed_at": 100.0, "motors": motors}))
+    assert rel.arm_state("arm_s", now_fn=lambda: 101.0)[2][0] == 2011.0
+    assert rel.arm_state("arm_s", now_fn=lambda: 200.0) is None and rel.arm_state("arm_a") is None

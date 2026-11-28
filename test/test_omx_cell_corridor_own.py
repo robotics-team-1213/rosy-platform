@@ -1,0 +1,307 @@
+"""The fold corridor's own-arm mask and reference-frame gap (cell_corridor_own), from arm_a's stop on 2026-11-27:
+extended over the belt's edge, torque OFF, every fold candidate ALL_PATHS_BLOCKED."""
+from __future__ import annotations
+
+import hashlib
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+for _p in (ROOT / "deploy" / "robot" / "omx", ROOT / "middleware" / "devices" / "omx" / "adapter"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+import cell_corridor as cc  # noqa: E402
+import cell_corridor_own as own  # noqa: E402
+import cell_pivot  # noqa: E402
+import cell_place_fit  # noqa: E402
+import cell_recovery_plan as crp  # noqa: E402
+
+ROI = (0, 0, 400, 400)
+SHAPE = (400, 400)
+START = [-20.59, 15.07, 7.11, 40.76, 29.91, 57.19]  # arm_a's measured joints at the stop
+HOME = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
+LIFT = [START[0], START[1] - 40.0, *START[2:]]  # straight up past clear_z before the fold, as park_path does
+TCP_X = 0.074
+BELT = [[255, 40], [335, 40], [335, 150], [255, 150]]  # the TCP (325, 96) rests 10 px inside its right edge
+PALLET = [[210, 250], [390, 250], [390, 350], [210, 350]]
+FAR = [[40, 150], [120, 150], [120, 250], [40, 250]]
+SHIP = [[360, 30], [395, 30], [395, 80], [360, 80]]
+
+
+def _to_px(p):  # 1 px per mm, the arm's base at pixel (200, 200)
+    return (200.0 + p[0] * 1000.0, 200.0 + p[1] * 1000.0)
+
+
+class _Cell:
+    def __init__(self, img):
+        self.img = img
+
+    def frame(self, _camera):
+        return self.img
+
+
+def _config(reference: Path | None) -> dict:
+    site = lambda poly: {"z": 0.0, "surface_z": 0.0, "surface_px": poly, "surface_lab": [240, 128, 128]}  # noqa: E731
+    config = {"sites": {"belt": site(BELT), "pallet": site(PALLET), "far": site(FAR), "ship": site(SHIP)},
+              "cameras": {"top": {"height_m": 0.6, "center_px": [300, 370]}}}
+    if reference is not None:
+        config["preflight"] = {"reference_top": str(reference)}
+    return cell_place_fit.with_tiers(config)[0]
+
+
+def _furniture() -> np.ndarray:
+    """White mats on a dark base plate beside a bright table: the gap has no single colour."""
+    img = np.full((400, 400, 3), 50, np.uint8)
+    img[:, 150:260] = 200
+    for poly in (BELT, PALLET, FAR, SHIP):
+        cv2.fillPoly(img, [np.asarray(poly, np.int32)], (240, 240, 240))
+    return img
+
+
+def _look(img, reference: Path | None, state=START, bound: str | None = None, roi=ROI):
+    """The fold's look: the reference bound by its sha256 (or `bound`), the arm's links from `state` (None: not asked)."""
+    calibration = {}
+    if reference is not None:
+        calibration["reference_top_sha256"] = bound or hashlib.sha256(reference.read_bytes()).hexdigest()
+    return crp.build_multi_site_look(_Cell(img), _config(reference), calibration, "belt", roi, None, _to_px, TCP_X,
+                                     allow_ascending_departure=True,
+                                     own_state=None if state is None else (lambda: state))
+
+
+def _arm(pose) -> np.ndarray:
+    return own.own_mask(_config(None), "belt", _to_px, [pose], SHAPE, ROI, TCP_X, half_mm=25.0) > 0
+
+
+def test_check_own_links_are_neither_obstacle_nor_unseen():
+    site = [[240, 60], [360, 60], [360, 340], [240, 340]]
+    tcp = [(0.12, y, 0.14) for y in np.linspace(-0.10, 0.10, 20)]  # a high lane along pixel x = 320
+    mask = np.zeros(SHAPE, np.uint8)
+    mask[180:220, 310:330] = 1
+    assert cc.check(tcp, mask, ROI, _to_px, surface_px=site)["high"]
+    links = np.zeros(SHAPE, np.uint8)
+    links[170:230, 300:340] = 1
+    assert cc.check(tcp, mask, ROI, _to_px, surface_px=site, own=links)["clear"]
+    mask[120:140, 310:330] = 1  # a blob beside the links still blocks
+    assert cc.check(tcp, mask, ROI, _to_px, surface_px=site, own=links)["high"]
+    narrow = [[310, 60], [330, 60], [330, 340], [310, 340]]
+    empty = np.zeros(SHAPE, np.uint8)
+    assert cc.check(tcp, empty, ROI, _to_px, surface_px=narrow, own=links)["off_surface"] > 0  # unseen beside the links
+    assert cc.check(tcp, empty, ROI, _to_px, surface_px=narrow, own=np.ones(SHAPE, np.uint8))["clear"]
+
+
+def test_own_mask_is_empty_without_a_site_height_or_a_top_camera():
+    config = _config(None)
+    assert own.own_mask(config, "belt", _to_px, [START], SHAPE, ROI, TCP_X).any()
+    assert not own.own_mask({**config, "cameras": {}}, "belt", _to_px, [START], SHAPE, ROI, TCP_X).any()
+    assert not own.own_mask(config, "nowhere", _to_px, [START], SHAPE, ROI, TCP_X).any()
+    assert not own.own_mask(config, "belt", lambda _p: None, [START], SHAPE, ROI, TCP_X).any()
+
+
+def test_measured_joints_come_only_from_an_ok_state():
+    class _Runner:
+        def __init__(self, status):
+            self.status = status
+
+        def act(self, _command):
+            return self.status
+
+    assert own.measured_joints(_Runner({"ok": True, "state": START})) == START
+    assert own.measured_joints(_Runner({"ok": False, "state": START})) is None
+    assert own.measured_joints(_Runner({"ok": True, "state": [0.0, float("nan"), 0.0, 0.0, 0.0, 0.0]})) is None
+    assert own.measured_joints(_Runner(None)) is None
+
+
+def test_fold_from_the_belt_edge_clears_against_the_reference_and_still_sees_an_object(tmp_path):
+    config = _config(None)
+    frames = [START, *crp.interpolate_pose(START, LIFT, max_step=2.0), *crp.interpolate_pose(LIFT, HOME, max_step=2.0)]
+    reference = tmp_path / "reference-top.png"
+    folded = _furniture()
+    folded[_arm(HOME)] = 20  # the reference shows the arm folded at home
+    cv2.imwrite(str(reference), folded)
+    img = _furniture()
+    img[_arm(START)] = 20  # now it lies extended over the belt's edge
+
+    # the colour rule alone: the furniture makes the whole gap an object, as on the real cell
+    old = _look(img, None)(frames)
+    assert not old["clear"] and (old["low"] or old["high"])
+    # against the bound reference only the arm changed, and the arm is its own
+    assert _look(img, reference)(frames)["clear"] is True
+    # a caller that does not ask (the placement check) still meets the arm as an obstacle, and keeps the colour rule
+    # for the gap even where nothing differs from the reference
+    assert not _look(img, reference, state=None)(frames)["clear"]
+    cv2.imwrite(str(tmp_path / "same.png"), _furniture())
+    across = crp.interpolate_pose(LIFT, HOME, max_step=2.0)  # high over the gap only
+    assert not _look(_furniture(), tmp_path / "same.png", state=None)(across)["clear"]
+    assert _look(_furniture(), tmp_path / "same.png")(across)["clear"] is True
+    # the links are excused where they are measured, not where the path says they start
+    elsewhere = [START[0] + 60.0, *START[1:]]
+    assert not _look(img, reference, state=elsewhere)(frames)["clear"]
+    # a reference the calibration is not bound to, or of another size, is no reference
+    assert not _look(img, reference, bound="0" * 64)(frames)["clear"]
+    small = tmp_path / "small.png"
+    cv2.imwrite(str(small), _furniture()[:200])
+    assert not _look(img, small)(frames)["clear"]
+
+    # an object in the lane, beside the arm, still refuses the fold: darker, and of the table's own brightness
+    low, high = cc.runs([cell_pivot.joints_tcp(f, tcp_x_m=TCP_X)[:3] for f in frames])
+    lane = cc.corridor(low + high, _to_px, SHAPE, ROI) > 0
+    links = own.own_mask(config, "belt", _to_px, (START, HOME), SHAPE, ROI, TCP_X) > 0
+    polys = cc.calibrated_surface_polygons(config, "belt")
+    hull = cc.transit_hull_polygon(polys, extra_pts=[_to_px((0.0, 0.0))])
+    gap = (cc._fill_surfaces(SHAPE, ROI, hull) > 0) & ~(cc._fill_surfaces(SHAPE, ROI, polys) > 0)
+    depth = cv2.distanceTransform((lane & ~links & gap).astype(np.uint8), cv2.DIST_L2, 3)
+    row, col = np.unravel_index(int(depth.argmax()), depth.shape)
+    assert depth[row, col] >= 7, "the fixture needs lane pixels beside the arm"
+    for colour in ((125, 125, 125), tuple(int(v) + d for v, d in zip(img[row, col], (70, 0, -70)))):
+        seen_img = img.copy()
+        seen_img[row - 6:row + 7, col - 6:col + 7] = np.clip(colour, 0, 255)
+        seen = _look(seen_img, reference)(frames)
+        assert not seen["clear"] and (seen["low"] or seen["high"]), colour
+
+
+def test_fold_lane_outside_the_roi_is_unseen_not_clear(tmp_path):
+    """2026-11-27 16:51: a belt-sized ROI let arm_a's real fold pass with 95 % of its lane never looked at."""
+    frames = [START, *crp.interpolate_pose(START, LIFT, max_step=2.0), *crp.interpolate_pose(LIFT, HOME, max_step=2.0)]
+    reference = tmp_path / "reference-top.png"
+    cv2.imwrite(str(reference), _furniture())
+    img = _furniture()
+    img[_arm(START)] = 20
+    assert _look(img, reference)(frames)["clear"] is True
+    belt_only = (BELT[0][0], BELT[0][1], BELT[2][0], BELT[2][1])
+    narrow = _look(img, reference, roi=belt_only)(frames)
+    assert not narrow["clear"] and narrow["off_surface"] > 0
+    assert own.with_outside({"clear": True, "off_surface": 0}, [(0.1, 0.0, 0.2)], _to_px, SHAPE, ROI)["clear"] is True
+    assert own.with_outside({"clear": True, "off_surface": 0}, [(0.3, 0.0, 0.2)], _to_px, SHAPE, ROI)["off_surface"] > 0
+    # one measured surface only (the look's fallback) is held to the same rule
+    one = {**_config(None), "sites": {"belt": _config(None)["sites"]["belt"]}}
+    fallback = crp.build_multi_site_look(_Cell(img), one, {}, "belt", belt_only, None, _to_px, TCP_X, own_state=lambda: START)
+    assert fallback(frames)["off_surface"] > 0
+
+
+def test_low_cargo_is_a_catalogue_object_the_depth_camera_measures_under_the_travel_floor(monkeypatch, tmp_path):
+    """2026-11-27 runs 7-9: cargo on the ship lies under every fold path, and a two-tier stack matched the catalogue as
+    one container, so the match alone cannot tell how tall it stands."""
+    import cell_depth_pose
+    import cell_free_source as fs
+    import cell_objects
+
+    img = _furniture()
+    hull = [[300, 280], [340, 280], [340, 320], [300, 320]]  # on the pallet
+    found = [{"matched": True, "hull_px": hull}]
+    heights = np.zeros(SHAPE, np.float32)
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (np.zeros((n, 1)), {}))
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
+    monkeypatch.setattr(fs, "_load", lambda _path: {})
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(cell_pivot, "map_record", lambda _calibration, _name: {})
+    monkeypatch.setattr(cell_objects, "detect", lambda _i, _r, _m, _c, _k, _z, _p, poly, _lab: found if poly == PALLET else [])
+    config = {**_config(None), "catalog_path": str(tmp_path / "catalog.json")}
+    config["cameras"] = {"top": {**config["cameras"]["top"], "d435_factory": str(tmp_path / "factory.json")}}
+
+    def cargo(cfg=config):
+        return own.low_cargo(cfg, {}, img, ROI, SHAPE)
+
+    heights[280:321, 300:341] = 64.0  # two tiers: under the floor (100 mm) by more than the margin
+    assert cargo()[300, 320] == 1 and 0 < cargo().sum() < 2500
+    heights[280:321, 300:341] = 99.0  # three tiers
+    assert not cargo().any()
+    heights[280:321, 300:341] = 64.0
+    found[0]["matched"] = False
+    assert not cargo().any()
+    found[0]["matched"] = True
+    assert cargo(_config(None)) is None  # no catalogue named: the fold excuses no object
+    heights[290:302, 310:322] = 120.0  # a hand over part of the outline
+    assert not cargo().any()
+    heights[:] = 0.0
+    heights[250:350, 210:390] = 99.0  # the deck covered three tiers high
+    assert not cargo().any()
+    heights[250:350, 210:390] = 30.0  # covered one tier high (the real deck on 2026-11-25): the other surfaces vouch
+    assert cargo().any()
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 620.0}))
+    assert not cargo().any()  # no surface where the calibration puts it: the depth is not trusted
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
+    heights[280:321, 300:325] = np.nan  # 0.4 of the outline has a depth return, as the factory projection gives
+    assert cargo().any()
+    heights[280:321, 300:333] = np.nan  # more than three quarters of the outline without a depth return
+    assert not cargo().any()
+    assert own.low_cargo(config, {}, np.zeros((480, 640, 3), np.uint8), ROI, SHAPE) is None  # not the colour grid
+    heights[:] = 0.0
+    heights[280:321, 300:341] = 64.0
+    seen = iter(range(3))
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (
+        heights, {"ok": next(seen) != 1, "height_mm": 600.0}))
+    assert cargo() is None  # one bad frame of three
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, _factory, **_k: (heights, {"ok": True, "height_mm": 600.0}))
+    heights[:] = 0.0
+    heights[280:321, 300:341] = 64.0
+    assert cargo().any()
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: (_ for _ in ()).throw(OSError("no catalogue")))
+    assert cargo() is None
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(fs, "_load", lambda _path: None)  # no readable factory record: no edge-aligned fallback
+    assert cargo() is None
+    flat = {"stream.depth": {"fx": 1.0}, "stream.color": {"fx": 2.0}}  # the cell's record, keys as pyrealsense2 dumped them
+    monkeypatch.setattr(fs, "_load", lambda _path: flat)
+    monkeypatch.setattr(cell_depth_pose, "height_map_in_colour", lambda _frame, factory, **_k: (
+        heights, {"ok": factory["stream"] == {"depth": {"fx": 1.0}, "color": {"fx": 2.0}}, "height_mm": 600.0}))
+    assert cargo().any()
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (None, "depth-d435.lock busy"))
+    assert cargo() is None
+
+    # the fold's look lets what low_cargo names pass under high travel, and nothing else
+    reference = tmp_path / "reference-top.png"
+    cv2.imwrite(str(reference), _furniture())
+    across = crp.interpolate_pose(LIFT, HOME, max_step=2.0)
+    low, high = cc.runs([cell_pivot.joints_tcp(f, tcp_x_m=TCP_X)[:3] for f in across])
+    lane = cc.corridor(high, _to_px, SHAPE, ROI) > 0
+    links = own.own_mask(_config(None), "belt", _to_px, (START,), SHAPE, ROI, TCP_X) > 0
+    depth = cv2.distanceTransform((lane & ~links).astype(np.uint8), cv2.DIST_L2, 3)
+    row, col = np.unravel_index(int(depth.argmax()), depth.shape)
+    assert not low and depth[row, col] >= 7, "the fixture needs a high lane beside the arm"
+    img[row - 6:row + 7, col - 6:col + 7] = (125, 125, 125)
+    monkeypatch.setattr(own, "low_cargo", lambda *_a, **_k: None)
+    assert _look(img, reference)(across)["high"]
+    monkeypatch.setattr(own, "low_cargo", lambda *_a, **_k: np.ones(SHAPE, np.uint8))
+    assert _look(img, reference)(across)["clear"] is True
+
+
+def test_low_cargo_reads_the_cell_factory_record_and_real_depth(monkeypatch, tmp_path):
+    """2026-11-28 live: the cell's record has flat `stream.*` keys nothing read, so the depth was edge-aligned and a 29 mm
+    top read 20-30 mm low on 7 of 18 frames. Nothing of the depth path is stubbed here."""
+    import json
+
+    import cell_free_source as fs
+    import cell_objects
+
+    record = {"stream.depth": {"fx": 388.67, "fy": 388.67, "ppx": 320.99, "ppy": 244.98},
+              "stream.color": {"fx": 618.53, "fy": 618.67, "ppx": 322.32, "ppy": 236.60},
+              "depth_to_color": {"R": [0.99994296, -0.00552425, -0.00913963, 0.00552983, 0.99998456, 0.00058514,
+                                       0.00913625, -0.00063565, 0.99995804], "t": [0.01452328, -0.0000961, 0.00057678]},
+              "depth_scale": 0.001}
+    (tmp_path / "factory.json").write_text(json.dumps(record), encoding="utf-8")
+    deck = [[60, 300], [260, 300], [260, 440], [60, 440]]
+    hull = [[300, 215], [345, 215], [345, 260], [300, 260]]
+    config = {"sites": {"deck": {"z": 0.0, "surface_z": 0.0, "surface_px": deck, "surface_lab": [240, 128, 128]}},
+              "cameras": {"top": {"height_m": 0.6, "d435_factory": str(tmp_path / "factory.json")}},
+              "catalog_path": str(tmp_path / "catalog.json")}
+    frame = np.full((480, 640), 600, np.uint16)
+    monkeypatch.setattr(fs, "_depth_frames", lambda _config, n: (np.array([frame] * n), {}))
+    monkeypatch.setattr(cell_objects, "load_catalog", lambda _path: [])
+    monkeypatch.setattr(cell_pivot, "map_record", lambda _calibration, _name: {})
+    monkeypatch.setattr(cell_objects, "detect", lambda *_a: [{"matched": True, "hull_px": hull}])
+    img, roi = np.zeros((480, 640, 3), np.uint8), [0, 0, 640, 480]
+
+    def cargo():
+        return own.low_cargo(config, {}, img, roi, img.shape)
+
+    frame[195:295, 270:370] = 536  # two tiers (64 mm) under the outline and well around it
+    assert cargo()[237, 322] == 1
+    frame[195:295, 270:370] = 501  # three tiers
+    assert not cargo().any()
+    frame[195:295, 270:370] = 536
+    frame[195:295, 300:370] = 0  # most of the top gives no return (it could be the tall part): too few returns to judge
+    assert not cargo().any()

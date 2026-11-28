@@ -42,6 +42,9 @@ SHARED = {
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
     "cell-obs-model.js",  # Pure workcell observation & camera normalization shared by Console and Cell.
     "arm-incident-clear.js",  # the one arm-incident and Fleet arm-hold clear step: Console drawer and Cell hold button
+    "cell-cam-roi.js",  # Shared top-camera pixel ROI SVG overlay helpers used by Console and Cell.
+    "cell-cam-objects.js",  # Shared catalog-only camera object overlay helpers used by Console and Cell.
+    "cell-pick-place-staging.js",  # Shared 2-click bound object staging bar used by Console and Cell.
     "omx-inspector.js",  # Shared OMX right-inspector DOM builder used by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
@@ -60,7 +63,7 @@ OWN = {
     "account-page.js": set(),
     "console.js": {
         "trip-geometry.js", "trip-receipts.js",
-        "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
+        "assistant.js", "assistant-voice.js", "assistant-command.js", "assistant-pick-place.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
@@ -91,6 +94,7 @@ OWN = {
         "cockpit-hosts.js",
         "calm-power.js",
         "cell-cockpit-stage.js",
+        "arm-cell-controls.js",
         "cell-context-panel.js",
         "cell-job-panel.js",  # ARM-CELL run/recover of arms A/B through the Fleet cell job proxy
         "manual-control.js",
@@ -107,6 +111,7 @@ OWN = {
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "decision-slot.js",  # shared calm decision-slot builder & filler
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
+        "named-stop-actions.js",  # named-stop custody release and precision correction clearance rows
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
@@ -135,6 +140,7 @@ OWN = {
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
         "zone-blueprint-inspector.js",
         "zone-blueprint-model.js",
+        "zone-blueprint-staging.js",
         "zone-blueprint-geometry.js",
         "zone-blueprint-2d.js",
         "zone-blueprint-3d.js",

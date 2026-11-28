@@ -45,6 +45,14 @@ Because `rosy-site-autoupdate.service` executes `/usr/bin/python3 -I /usr/local/
 
 If a host stayed deferred past more than three signed `site-*` releases so that a retained incremental (`manifest_version: 2`) candidate's `base_commit` was pruned from releases (`verification failed: docker image inspection failed for <service>`), trigger `build-site-candidate.yml` via `workflow_dispatch` on `main` with an empty `base_commit` on a commit without an existing `site-*` tag (`manifest_version: 1` full build), wait for `auto_sign_candidates.py` to sign it after green `main` CI, then run `rosy-site-autoupdate.service`.
 
+## Structural fix (2026-11-27)
+
+The pruned-base rejection repeated from 11-21 because the builder based each push on the newest signed `site-*` release while R, which defers during drives, ran an older commit; only 3 releases are retained, so the reused images were gone. Fixed on both sides:
+
+- Updater: a candidate whose *reused* images are absent locally (`MissingBaseImageError`) is not marked `failed`. It is recorded in `state.skipped_base[tag]` with the running commit (`skipped-missing-base`), skipped until the running commit changes, and the run falls through to the next eligible candidate (for example an older full one that still descends from the running commit). Signature, descent and identity checks are unchanged.
+- Builder (`build-site-candidate.yml`, push only): incremental only when the newest signed release is itself full (`manifest_version` 1) and younger than 6 h; otherwise a full build, so a recent full release is always in the retained set. `workflow_dispatch` is unchanged.
+- Reinstall the 5-file updater unit on the site host for the updater half to take effect.
+
 ## Prevention
 
 - Never assume `row["goal"]` paired with `IDLE`/terminal `navigation` represents finished work unless monotonic state-observation timestamps classify the terminal observation as occurring after goal acceptance (`goal_in_flight: False`, without matching a specific attempt ID).

@@ -29,7 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence
+from cell_auto_fold_stages import CHOICE, SCHEMA, _learn, evidence, fold_context, start_record
+from cell_fold_rehome import rehomed
 PAN_DETOURS = (5.0, -5.0, 10.0, -10.0)
 SETTLE_TOL = 3.0  # chunk_runner.SETTLE_TOL (kept here so the plan is testable without the runner)
 HOLDING_MARGIN = 4.0  # jaws stopped this far above their closing command are on something (cell_transfer.STILL_HOLDING_UNITS)
@@ -78,9 +79,11 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
             held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full",
-            require_empty_gripper: bool = False) -> dict:
-    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
-    gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
+            require_empty_gripper: bool = False, hold_reason: str | None = None, rehome=None,
+            guarded_park_fallback: bool = False) -> dict:
+    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names, context)
+    gives the candidates' try order (learned outcomes); the set of candidates is never changed by it. hold_reason: the
+    fault of the hold that started this fold (None: the live hold's own fault)."""
     if stage not in ("full", "release_and_lift", "park_only"):
         raise ValueError(f"unsupported stage: {stage}")
     from cell_pipeline_io import fold_from_hold, park_succeeded
@@ -120,6 +123,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     known["state"] = state
     if state is None:
         return hold("STATE_UNREADABLE", is_holding=require_empty_gripper)
+    start = start_record(state, status, hold_reason if hold_reason is not None else status.get("fault"))
     if require_empty_gripper and _ok_state({"ok": True, "state": status.get("target")}) is None:
         return hold("PLACEMENT_REQUIRED_BEFORE_HOME", is_holding=True)
     if latched["active"] and not allow_live_unlatch:
@@ -183,6 +187,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
 
     park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
     situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
+    context = fold_context(state, home, start["hold_reason"])  # order(names, context): learned per situation, never the set
     tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
                               clear_z_m=clear_z_m, situation=situation, extended=True)
              if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
@@ -192,7 +197,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         and status.get("torque_hold_commanded") is True and not status.get("holding")
     )
     rank = (
-        {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+        {name: i for i, name in enumerate(order([name for name, _, _ in tries], context))}
         if order is not None else {name: i for i, (name, _, _) in enumerate(tries)}
     )
     tries.sort(key=lambda c: (
@@ -200,15 +205,23 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         rank.get(c[0], len(rank)),
     ))
 
-    def _try_candidate(name, before, frames):
+    look_blocked_direct: list[tuple[str, list, list]] = []
+
+    def _try_candidate(name, before, frames, *, skip_look: bool = False):
         can_fold_direct = prefer_direct and not before
         cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
         cand_name = "fold-from-hold" if can_fold_direct else name
-        verdict = look(cand_frames)
-        note({"step": "check", "candidate": cand_name, "clear": verdict.get("clear"), "low": len(verdict.get("low") or []),
-              "high": len(verdict.get("high") or []), "off_map": verdict.get("off_map"), "off_surface": verdict.get("off_surface")})
-        if not verdict.get("clear"):
-            return None
+        if skip_look:
+            verdict = {"clear": False, "fallback": "2d_no_depth_guarded_park"}
+            note({"step": "corridor_fallback", "candidate": cand_name, "mode": verdict["fallback"]})
+        else:
+            verdict = look(cand_frames)
+            note({"step": "check", "candidate": cand_name, "clear": verdict.get("clear"), "low": len(verdict.get("low") or []),
+                  "high": len(verdict.get("high") or []), "off_map": verdict.get("off_map"), "off_surface": verdict.get("off_surface")})
+            if not verdict.get("clear"):
+                if not before:
+                    look_blocked_direct.append((name, before, frames))
+                return None
         if load_check is not None:
             lc = load_check(cand_frames)
             note({"step": "load_check", "candidate": cand_name, "ok": lc.get("ok"), "verdict": lc.get("verdict")})
@@ -224,37 +237,34 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                 parked = fold_from_hold(cell, status)
             except Exception as exc:  # noqa: BLE001
                 parked = {"ok": False, "error": str(exc)}
-            at = known["state"] = _ok_state(parked)
-            note({"step": "fold_from_hold", "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
-                  "error": parked.get("error"), "contact": parked.get("contact")})
-            if park_succeeded(parked) and at is not None and folded(at, home):
+            step_name, ok_park, unlatched = "fold_from_hold", park_succeeded(parked), True
+        else:
+            ok_u, err_u = ensure_live_unlatch(cell, latched, note)
+            if not ok_u:
                 release()
-                return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps,
-                        "corridor": verdict, "unlatched_live_hold": True}
-            return hold("PARK_NOT_HOME", candidate=cand_name, error=parked.get("error"))
-        ok_u, err_u = ensure_live_unlatch(cell, latched, note)
-        if not ok_u:
-            release()
-            return hold("UNLATCH_REFUSED", candidate=name, error=err_u)
-        known["state"] = None  # from the first command the arm is no longer where it was read
-        mark_moved()
-        ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
-        if not ok_jog:
-            return hold(err_reason or "DETOUR_REFUSED", candidate=name, error=(err_ack or {}).get("error"))
-        parked = cell.act("park-slow" if latched["started"] else "park")
+                return hold("UNLATCH_REFUSED", candidate=name, error=err_u)
+            known["state"] = None  # from the first command the arm is no longer where it was read
+            mark_moved()
+            ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
+            if not ok_jog:
+                return hold(err_reason or "DETOUR_REFUSED", candidate=name, error=(err_ack or {}).get("error"))
+            parked = cell.act("park-slow" if latched["started"] else "park")
+            step_name = "park"
+            ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
+            unlatched = bool(latched["started"])
         at = known["state"] = _ok_state(parked)
-        note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
+        note({"step": step_name, "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
               "error": parked.get("error"), "contact": parked.get("contact")})
-        ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
-        if ok_park and at is not None and folded(at, home):
+        if ok_park and (at := rehomed(cell, rehome, at, home, settle_tol=SETTLE_TOL, rest_tol=REST_TOL, note=note) or at) is not None and folded(at, home):
             release()
-            return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
-                    "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
-        return hold("PARK_NOT_HOME", candidate=name, error=parked.get("error"))
+            return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps, "corridor": verdict,
+                    **({"unlatched_live_hold": True} if unlatched else {}), **({"corridor_fallback": verdict["fallback"]} if "fallback" in verdict else {})}
+        return hold("PARK_NOT_HOME", candidate=cand_name, error=parked.get("error"))
 
     for name, before, frames in tries:
         if (outcome := _try_candidate(name, before, frames)) is not None:
-            return outcome
+            return {**outcome, "context": context, **start}
+    direct_fallback = look_blocked_direct[0] if look_blocked_direct else None
     if advisor is not None:
         try:
             adv = advisor({"state": state, "target": list(target[:6]), "home": list(home), "closed": closed,
@@ -264,7 +274,9 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             adv = {"audit": {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
         note({"step": "advisor", **(adv.get("audit") or {})})
         if (cand := adv.get("candidate") if isinstance(adv, dict) else None) is not None and (outcome := _try_candidate(*cand)) is not None:
-            return outcome
+            return {**outcome, "context": context, **start}
+    if guarded_park_fallback and direct_fallback is not None and (outcome := _try_candidate(*direct_fallback, skip_look=True)) is not None:
+        return {**outcome, "context": context, **start}
     return hold("ALL_PATHS_BLOCKED")
 
 
@@ -283,51 +295,41 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     import omx_incident
     import omx_incident_auto
 
+    def _skip(why: str) -> dict:
+        res = {"result": "skipped", "why": why}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
+
     if stage not in ("full", "release_and_lift", "park_only"):
-        res = {"result": "skipped", "why": f"invalid stage: {stage}"}
-        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-        return res
+        return _skip(f"invalid stage: {stage}")
     fleet_req = (stage != "full") or bool(request_id) or (safety_fence is not None) or (stop_generation is not None)
-    exp_err = _expiry_error(expires_at, required=fleet_req, now_t=now())
-    if exp_err is not None:
-        res = {"result": "skipped", "why": exp_err}
-        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-        return res
+    if (exp_err := _expiry_error(expires_at, required=fleet_req, now_t=now())) is not None:
+        return _skip(exp_err)
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
     link = link or omx_incident.link_for(arm)
     if expected_incident_id is not None:
         if stage != "full" or not request_id or not bound_hold_matches(link, expected_incident_id):
-            res = {"result": "skipped", "why": "HOME_RECOVERY_INCIDENT_MISMATCH"}
-            _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-            return res
+            return _skip("HOME_RECOVERY_INCIDENT_MISMATCH")
         ids = [expected_incident_id]
     else:
         hold = link.hold() if link is not None else None
         if fleet_req and getattr(hold, "held", False):
             from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
             if hold.reason == HOME_RECOVERY_REASON:
-                res = {"result": "skipped", "why": "HOME_RECOVERY_BINDING_REQUIRED"}
-                _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-                return res
+                return _skip("HOME_RECOVERY_BINDING_REQUIRED")
         ids = list(hold.incident_ids) if hold is not None else []
     if not ids or (not allow_multi and len(ids) != 1) or len(ids) > 3:
-        res = {"result": "skipped", "why": f"{len(ids)} open incidents (one is folded at a time)"}
-        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-        return res
+        return _skip(f"{len(ids)} open incidents (one is folded at a time)")
     incident, incident_arg = ids[0], ",".join(ids)
     suffix = "" if stage == "full" else ("-lift" if stage == "release_and_lift" else "-park")
     marker = Path(omx_incident.INCIDENTS) / f"auto-fold-{incident}{suffix}.json"
     if marker.exists():
-        res = {"result": "skipped", "why": "already tried for this incident"}
-        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-        return res
+        return _skip("already tried for this incident")
     marker.parent.mkdir(parents=True, exist_ok=True)
     try:  # one try per incident stage, claimed atomically
         fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
-        res = {"result": "skipped", "why": "already tried for this incident"}
-        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
-        return res
+        return _skip("already tried for this incident")
     with os.fdopen(fd, "w") as stream:
         stream.write(json.dumps({"incident_id": incident, "arm": arm, "stage": stage, "at": now()}))
     out, cwd = marker.with_name(f"auto-fold-{incident}{suffix}.result.json"), Path(conf["cwd"]).expanduser()

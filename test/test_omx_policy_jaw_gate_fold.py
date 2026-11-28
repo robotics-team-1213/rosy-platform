@@ -1333,6 +1333,8 @@ def test_fresh_runner_first_overload_hold_keeps_ticking_without_attribute_error(
     from omx_adapter.chunk_library import NAMES, SCHEMA
 
     monkeypatch.setenv("ROSY_OMX_MONITOR_STATE", str(tmp_path / f"fresh-overload-{mode}.json"))
+    import runner_strain
+    monkeypatch.setattr(runner_strain, "STALL_PWM", 2.0)  # this drives the guard's own overload hold; the runner stall hold that would fire first is test_omx_runner_stall's
     p0 = [38.8, -10.0, 2.0, 55.0, -14.0, 49.0]
     home = [0.0, -60.0, 50.0, 45.0, 10.0, 46.6]
     p_move = [38.8, -10.0, 2.0, 58.5, -14.0, 49.0]

@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from typing import Any
 
 _DIR = str(Path(__file__).resolve().parent)
@@ -15,6 +16,8 @@ if _DIR not in sys.path:
     sys.path.insert(0, _DIR)
 
 import rosy_agent_bridge as br  # noqa: E402
+import rosy_plan as plan_mod  # noqa: E402
+from rosy_cli_motion import add_pick_args, add_push_parser, cmd_push, free_pick_motion  # noqa: E402
 
 _CAS_KEYS = (
     "fallback_from_task_id",
@@ -220,6 +223,38 @@ def cmd_frame(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str,
     return {**res, "view": args.view, "out": str(out_path)}
 
 
+def cmd_observe(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    """One read-only observation pack for an arm; with --out-dir also pack.json and annotated_top.jpg."""
+    args_ = {"arm": args.arm, "repeat": args.repeat, **({"layers_below": args.layers_below} if args.layers_below else {})}
+    res = bridge.call_tool("cell_observe", args_)
+    if not res.get("ok"):
+        return res
+    pack, img = res["data"], res.pop("image_b64", None)
+    if args.out_dir:
+        out = Path(args.out_dir).expanduser()
+        pack_path = _write_json(out / "pack.json", pack)
+        if img:
+            (out / "annotated_top.jpg").write_bytes(base64.b64decode(img))
+        return {"ok": True, "observable": pack["observable"], "observation_id": pack["observation_id"], "pack_path": pack_path,
+                "annotated_top": str(out / "annotated_top.jpg") if img else None, "reason": pack.get("reason")}
+    return {"ok": True, "pack": pack, "annotated_top_b64_omitted": bool(img)}
+
+
+def cmd_plan_check(args: argparse.Namespace) -> dict[str, Any]:
+    """Offline: check one plan file against a saved pack (pack.json from observe). Exit 0 only when valid."""
+    load = lambda p: json.loads(Path(p).expanduser().read_text(encoding="utf-8-sig"))  # noqa: E731
+    history = load(args.history) if args.history else ([] if args.first_step else None)  # None: motion is refused, a failure could be hidden
+    res = plan_mod.validate_plan(load(args.plan), load(args.pack), now=time.time(), history=history)
+    return {**res, "ok": res["ok"]}
+
+
+def cmd_verify(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    """Camera verdict for a step against the saved before pack; the after pack is observed by the bridge. Only VERIFIED exits 0."""
+    load = lambda p: json.loads(Path(p).expanduser().read_text(encoding="utf-8-sig"))  # noqa: E731
+    res = bridge.call_tool("cell_verify_after", {"before": load(args.before), "step": load(args.step), **({"job_exit": args.job_exit} if args.job_exit is not None else {})})
+    return res["data"] if res.get("ok") else res
+
+
 def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
     cas_path = Path(args.from_dir).expanduser() / "cas_context.json"
     if not cas_path.is_file():
@@ -264,6 +299,106 @@ def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[st
     return bridge.call_tool("fleet_propose_cell_task", payload)
 
 
+def cmd_sites(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    res = bridge.call_tool("fleet_cell_sites")
+    if not res.get("ok"):
+        return res
+    d = res.get("data") or {}
+    sites = d.get("sites") or []
+    if args.area:
+        sites = [s for s in sites if isinstance(s, dict) and s.get("area") == args.area]
+    return {
+        "ok": True,
+        "schema": d.get("schema"),
+        "count": len(sites),
+        "zones": d.get("zones") or [],
+        "sites": [
+            {k: s.get(k) for k in ("site_id", "sim_site", "area", "col", "row", "tier", "arms", "status") if k in s}
+            for s in sites if isinstance(s, dict)
+        ],
+    }
+
+
+def _infer_pick_cell(args: argparse.Namespace) -> str:
+    if args.cell:
+        return args.cell
+    preset = str(args.preset or "").strip()
+    if preset.startswith("s5_") or preset == "export_s5_pallet":
+        return "cell_ab"
+    if preset.startswith(("s3_", "full_s3_")) or preset == "export_s3_belt":
+        return "cell_s"
+    if args.arm in ("arm_a", "arm_b"):
+        return "cell_ab"
+    return "cell_s"
+
+
+def _poll_pick_tasks(bridge: br.RosyAgentBridge, task_ids: list[str], timeout_s: float) -> tuple[bool, list[dict[str, Any]]]:
+    deadline = time.monotonic() + max(0.5, float(timeout_s))
+    terminal = {"COMPLETED", "ABORTED", "CANCELLED"}
+    latest: dict[str, dict[str, Any]] = {}
+    while True:
+        res = bridge.call_tool("fleet_cell_tasks")
+        if res.get("ok"):
+            for t in (res.get("data") or {}).get("tasks") or []:
+                if isinstance(t, dict) and t.get("task_id") in task_ids:
+                    latest[t["task_id"]] = t
+            if all(tid in latest and latest[tid].get("status") in terminal for tid in task_ids):
+                return True, [latest[tid] for tid in task_ids]
+        if time.monotonic() >= deadline:
+            return False, [latest.get(tid, {"task_id": tid, "status": "UNKNOWN"}) for tid in task_ids]
+        time.sleep(1.5)
+
+
+def cmd_pick(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[str, Any]:
+    cell_id = "cell_ab" if args.free_anchor and not args.cell else _infer_pick_cell(args)
+    payload: dict[str, Any] = {"cell_id": cell_id}
+    if args.free_anchor:  # free-position pick: pixels from a frame, never metres; the server derives the sites
+        payload["motion"], err = free_pick_motion(args)
+        if err:
+            return err
+        args.dst = None
+    for cli_k, pay_k in (
+        ("arm", "arm_id"), ("src", "src_site"), ("dst", "dst_site"), ("tier", "tier"),
+        ("preset", "preset"), ("mode", "execution_mode"), ("max_chunks", "max_chunks"),
+        ("robot_id", "robot_id"), ("zone_id", "zone_id"), ("request_key", "request_key"),
+    ):
+        if (val := getattr(args, cli_k)) is not None:
+            payload[pay_k] = val
+    if args.tiers is not None:
+        try:
+            payload["tiers"] = [int(x.strip()) for x in args.tiers.split(",") if x.strip()]
+        except ValueError:
+            return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": "tiers must be comma-separated integers"}
+    if args.auto_admit:
+        payload["auto_admit"] = True
+    tool_name = "fleet_propose_cell_task" if args.propose else "fleet_dispatch_cell_task"
+    if args.dry_run:
+        if err := br._validate_args(br.TOOL_MAP[tool_name], payload):
+            return {"ok": False, "status": 400, "error_code": "INVALID_ARGS", "detail": err}
+        return {"ok": True, "dry_run": True, "tool": tool_name, "payload": payload}
+    res = bridge.call_tool(tool_name, payload)
+    if not res.get("ok") or not args.wait:
+        return res
+    data = res.get("data") or {}
+    tasks = data.get("tasks") or ([data["task"]] if isinstance(data.get("task"), dict) else [])
+    task_ids = [str(t["task_id"]) for t in tasks if isinstance(t, dict) and t.get("task_id")]
+    if not task_ids:
+        return res
+    if any(t.get("status") == "PROPOSED" for t in tasks if isinstance(t, dict)):
+        return {**res, "waited": False, "needs_approval": True, "task_ids": task_ids}
+    done, final_tasks = _poll_pick_tasks(bridge, task_ids, args.wait_timeout_s)
+    return {
+        **res,
+        "ok": done and all(t.get("status") == "COMPLETED" for t in final_tasks),
+        "waited": True,
+        "timed_out": not done,
+        "final_tasks": [
+            {k: t.get(k) for k in ("task_id", "status", "arm_id", "src_site", "dst_site", "tier", "approved_by", "last_refusal")}
+            for t in final_tasks
+        ],
+    }
+
+
 def cmd_schema(args: argparse.Namespace) -> tuple[Any, int]:
     if args.tool:
         if args.tool not in br.TOOL_MAP:
@@ -301,6 +436,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_diag.add_argument("--max-frames", type=int, default=4)
     p_diag.add_argument("--out-dir", default=None)
 
+    p_obs = sub.add_parser("observe")
+    p_obs.add_argument("--arm", choices=["arm_a", "arm_b", "arm_s"], required=True)
+    p_obs.add_argument("--repeat", type=int, default=1, help="dry runs per site; blobs that differ between runs become ask_human only")
+    p_obs.add_argument("--layers-below", type=int, default=None)
+    p_obs.add_argument("--out-dir", default=None)
+
+    p_chk = sub.add_parser("plan-check")
+    p_chk.add_argument("--pack", required=True)
+    p_chk.add_argument("--plan", required=True)
+    p_chk.add_argument("--history", default=None)
+    p_chk.add_argument("--first-step", action="store_true", help="no earlier step in this episode (history is [])")
+
+    p_ver = sub.add_parser("verify")
+    p_ver.add_argument("--before", required=True)
+    p_ver.add_argument("--step", required=True)
+    p_ver.add_argument("--job-exit", type=int, default=None)
+
     p_frame = sub.add_parser("frame")
     p_frame.add_argument("view")
     p_frame.add_argument("--out", required=True)
@@ -322,23 +474,60 @@ def build_parser() -> argparse.ArgumentParser:
     p_prop.add_argument("--request-key", default=None)
     p_prop.add_argument("--dry-run", action="store_true")
 
+    p_sites = sub.add_parser("sites")
+    p_sites.add_argument("--area", default=None)
+
+    p_pick = sub.add_parser("pick")
+    p_pick.add_argument("--cell", choices=["cell_s", "cell_ab"], default=None)
+    p_pick.add_argument("--arm", default=None)
+    p_pick.add_argument("--src", default=None)
+    p_pick.add_argument("--dst", default=None)
+    p_pick.add_argument("--tier", type=int, default=None)
+    p_pick.add_argument("--tiers", default=None)
+    p_pick.add_argument("--preset", default=None)
+    p_pick.add_argument("--mode", choices=["guarded_pick", "act_policy"], default=None)
+    p_pick.add_argument("--max-chunks", type=int, default=None)
+    p_pick.add_argument("--robot-id", default=None)
+    p_pick.add_argument("--zone-id", default=None)
+    p_pick.add_argument("--request-key", default=None)
+    add_pick_args(p_pick)
+    p_pick.add_argument("--propose", action="store_true")
+    p_pick.add_argument("--auto-admit", action="store_true")
+    p_pick.add_argument("--dry-run", action="store_true")
+    p_pick.add_argument("--wait", action="store_true")
+    p_pick.add_argument("--wait-timeout-s", type=float, default=120.0)
+
+    add_push_parser(sub)
+
     p_schema = sub.add_parser("schema")
     p_schema.add_argument("tool", nargs="?", default=None)
 
     p_call = sub.add_parser("call")
     p_call.add_argument("tool")
-    p_call.add_argument("--args-json", default="{}")
+    p_call.add_argument("--args-json", default=None)
+    p_call.add_argument("--args-file", type=Path, default=None)
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # a Windows cp1252/cp949 console cannot print site labels
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.cmd == "schema":
         out, rc = cmd_schema(args)
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return rc
+    if args.cmd == "plan-check":  # offline: no bridge, no cell
+        res = cmd_plan_check(args)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res.get("ok") else 1
     bridge = br.RosyAgentBridge(br.build_config(args))
-    if args.cmd == "snapshot":
+    if args.cmd == "observe":
+        res = cmd_observe(bridge, args)
+    elif args.cmd == "verify":
+        res = cmd_verify(bridge, args)
+    elif args.cmd == "snapshot":
         res = cmd_snapshot(bridge, args)
     elif args.cmd == "diagnose":
         res = cmd_diagnose(bridge, args)
@@ -346,8 +535,17 @@ def main(argv: list[str] | None = None) -> int:
         res = cmd_frame(bridge, args)
     elif args.cmd == "propose":
         res = cmd_propose(bridge, args)
+    elif args.cmd == "sites":
+        res = cmd_sites(bridge, args)
+    elif args.cmd == "pick":
+        res = cmd_pick(bridge, args)
+    elif args.cmd == "push":
+        res = cmd_push(bridge, args)
     else:
-        res = bridge.call_tool(args.tool, json.loads(args.args_json))
+        if args.args_file is not None and args.args_json is not None:
+            ap.error("--args-file and --args-json are mutually exclusive")
+        raw_json = Path(args.args_file).expanduser().read_text(encoding="utf-8-sig") if args.args_file is not None else (args.args_json or "{}")
+        res = bridge.call_tool(args.tool, json.loads(raw_json))
     print(json.dumps(res, ensure_ascii=False))
     return 0 if res.get("ok") else 1
 

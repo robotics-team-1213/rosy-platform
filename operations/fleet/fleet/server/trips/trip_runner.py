@@ -27,7 +27,6 @@ from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
-from fleet.server.named_stop_map_pose import approved_slam_site_pose
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery, start_check  # noqa: F401
 from fleet.server.trip_geometry import pose_view  # noqa: F401
 from fleet.server.trip_halts import TripHalts, error_code as _code, halt_unconfirmed, pause_proof_args
@@ -44,6 +43,7 @@ from fleet.server.trip_runner_helpers import (  # noqa: F401
 )
 from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
+from fleet.server.nav2_trip_recovery import recover_instead
 from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
@@ -207,6 +207,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
             self._check_human_hold()
+            purpose = purpose or ("charge_return" if parking else None)  # rear charge-bay handoff: the way to a charger
             if purpose != "charge_return":  # D-1029: the way to a charger, like a charge_session job; CORE keeps 10 %/5 %
                 await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)
@@ -355,7 +356,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 else:
                     halted = await self.halts.halt_robot(
                         robot_id, trip.get("drive_mode") == "lane", trip.get("next_place"),
-                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), **pause_proof_args(trip),
+                        handoff_pending=bool(detail.get("named_stop_handoff_pending")), terminal=True,
+                        **pause_proof_args(trip),
                     )
                 detail.update(halted)
                 if halted.get("stop_sent") and "error" not in halted:
@@ -506,11 +508,6 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         """D-989 allowlist: the trip loop is the consumer that may drive on an auto-locate anchor."""
         return getattr(self._poses, "driving_pose", self._poses.arbitrated_pose)(robot_id)
 
-    async def _traffic_pose(self, robot_id: str):
-        latest = self._poses.latest_state(robot_id) if callable(getattr(self._poses, "latest_state", None)) else None
-        bound = approved_slam_site_pose(self._store, robot_id, latest, self._clock())
-        return bound[0] if bound is not None else await self._call(self._driving_pose(robot_id))
-
     async def tick(self) -> None:
         """One period (D-517 7): every open trip steps at once, each under its own lock and its own
         bounded robot calls. A robot still in its last step is left to finish and skips this
@@ -525,7 +522,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                     live._halt_retry_at = self._clock() + 2.0
                     self._inflight[robot_id] = asyncio.ensure_future(self._retry_unconfirmed_halt(live))
         self.halts.watch_handoff_stops(self._inflight)
-        self.traffic.watch(self._inflight, self.robot_busy, self._traffic_pose)
+        self.traffic.watch(self._inflight, self.robot_busy, self._traffic_pose,
+                           roster=self._roster() if self._roster is not None else ())
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)
@@ -570,6 +568,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         A trip already closed (a cancel that landed mid-tick) keeps its state; the robot is
         still stopped again.
         """
+        if state == "stopped" and await recover_instead(self, live, reason, detail):
+            return  # D-1082: a non-hazard Nav2 road stop keeps the trip and resends from here
         live.at, live.at_stamp = None, None
         if live.open:
             live.view.update(state=state, reason=reason)
@@ -597,4 +597,4 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         return await self.halts.halt_robot(
             live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
             handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")),
-            **pause_proof_args(live.view))
+            terminal=not live.open, **pause_proof_args(live.view))

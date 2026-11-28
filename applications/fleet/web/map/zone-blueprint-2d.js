@@ -1,5 +1,6 @@
 // SVG 2D zone map: the active site map's lanes and places with the zone footprints on them. It reads the same
 // model as the 3D view (zone-blueprint-model.js) and uses CSS tokens only.
+import { buildBlueprintSlotOverlays, SLOT_STATUS_LABEL } from "./zone-blueprint-staging.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ARROW = "M-6 4L6 0L-6 -4Z";
@@ -43,9 +44,27 @@ function bodyPoint(footprint, dx, dy) {
   return [footprint.pose[0] + dx * c - dy * s, footprint.pose[1] + dx * s + dy * c];
 }
 
-export function createZoneBlueprint2d(host, { onSelect } = {}) {
+export function createZoneBlueprint2d(host, { onSelect, onSelectSlot } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "zb-svg-wrap";
+
+  function bindSlotSelect(target, slot) {
+    target.setAttribute("tabindex", "0");
+    target.setAttribute("role", "button");
+    const statusText = SLOT_STATUS_LABEL[slot.status] || "확인 필요";
+    target.setAttribute("aria-label", `셀 슬롯 ${slot.label} 선택 (${statusText})`);
+    const trigger = (event) => {
+      event.stopPropagation?.();
+      onSelectSlot?.(slot);
+    };
+    target.addEventListener("click", trigger);
+    target.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        trigger(event);
+      }
+    });
+  }
 
   function bindSelect(target, zoneId, label) {
     target.setAttribute("tabindex", "0");
@@ -60,7 +79,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
     });
   }
 
-  function renderMap(model, selectedId, filterCategory) {
+  function renderMap(model, selectedId, filterCategory, overlayState = {}) {
     const W = 960;
     const PAD = 56;
     const b = model.bounds;
@@ -196,10 +215,52 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
       svg.append(g);
       bindSelect(g, zoneId, `${footprint.kind === "charge" ? "충전 칸" : "정류장"} ${footprint.placeId} 선택`);
     }
+
+    const overlay = buildBlueprintSlotOverlays(model, overlayState?.guide || null);
+    const staged = overlayState?.staged || {};
+    if (overlay.slots.length) {
+      const slotLayer = svgNode("g", { "data-layer": "arm-slots" });
+      for (const slot of overlay.slots) {
+        const role = staged.src?.id === slot.id ? "src" : (staged.dst?.id === slot.id ? "dst" : "");
+        const poly = svgNode("polygon", {
+          points: pointsOf(slot.polygon),
+          class: `zb-slot zb-status-${slot.status}`,
+          "data-slot-id": slot.id,
+          ...(role ? { "data-stage-role": role } : {}),
+          ...(slot.taskState ? { "data-task-state": slot.taskState } : {}),
+        });
+        poly.append(svgNode("title", {}, `${slot.label} · ${SLOT_STATUS_LABEL[slot.status] || "확인 필요"}`));
+        bindSlotSelect(poly, slot);
+        slotLayer.append(poly);
+        const [sx, sy] = toPx(...slot.center);
+        slotLayer.append(svgNode("text", { x: sx, y: sy + 3, "text-anchor": "middle", class: "zb-slot-label" }, slot.shortLabel));
+      }
+      svg.append(slotLayer);
+    }
+
+    if (overlay.taskFlows.length) {
+      const flowLayer = svgNode("g", { "data-layer": "live-tasks" });
+      for (const flow of overlay.taskFlows) {
+        const [x1, y1] = toPx(...flow.from);
+        const [x2, y2] = toPx(...flow.to);
+        flowLayer.append(svgNode("line", { x1, y1, x2, y2, class: "zb-task-flow", "data-task-state": flow.state }));
+      }
+      svg.append(flowLayer);
+    }
+
+    if (overlay.robots.length) {
+      const robotLayer = svgNode("g", { "data-layer": "live-robots" });
+      for (const robot of overlay.robots) {
+        const [rx, ry] = toPx(robot.x, robot.y);
+        robotLayer.append(svgNode("circle", { cx: rx, cy: ry, r: 5, class: "zb-live-robot", "data-robot-id": robot.robotId }));
+        robotLayer.append(svgNode("text", { x: rx + 8, y: ry + 4, class: "zb-sublabel" }, robot.robotId));
+      }
+      svg.append(robotLayer);
+    }
     return svg;
   }
 
-  function render(model, selectedId, filterCategory = "all") {
+  function render(model, selectedId, filterCategory = "all", overlayState = {}) {
     host.replaceChildren(wrap);
     if (!model?.items?.length) {
       const empty = document.createElement("p");
@@ -225,7 +286,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
       li.append(Object.assign(document.createElement("span"), { className: `zb-swatch zb-swatch-${swatch}` }), document.createTextNode(text));
       legend.append(li);
     }
-    wrap.replaceChildren(renderMap(model, selectedId, filterCategory), legend);
+    wrap.replaceChildren(renderMap(model, selectedId, filterCategory, overlayState), legend);
   }
 
   return {

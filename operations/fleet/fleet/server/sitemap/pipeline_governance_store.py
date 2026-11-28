@@ -12,6 +12,11 @@ from typing import Any
 
 from core_common.protocol.cell_failure_context import FALLBACK_VERBS
 from fastapi import HTTPException
+from fleet.server.pipeline_autonomous_policy import (
+    allow_autonomous_policy_fallback, autonomous_approver,
+    prepare_proposer_and_fallback, resolve_autonomous_status,
+    validate_cas_fields as _validate_cas_fields,
+)
 
 _AMR_BED_SITES = frozenset({"tray", "vehicle_tray"})
 
@@ -64,9 +69,7 @@ def resolve_task_proposer(spec: dict[str, Any], *, principal_id: str | None, pri
         raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
     if spec.get("proposer") is not None:
         raise HTTPException(422, detail={"code": "CLIENT_PROPOSER_FORBIDDEN"})
-    target_status = "PROPOSED" if (principal_role in ("service", "ai_observer") or spec.get("propose") is True) else "QUEUED"
-    pid = principal_id.strip() if isinstance(principal_id, str) and principal_id.strip() else None
-    proposer_val = pid if pid is not None else ("service" if principal_role == "service" else None)
+    target_status, proposer_val, _ = resolve_autonomous_status(spec, principal_id=principal_id, principal_role=principal_role)
     return target_status, proposer_val
 
 
@@ -122,6 +125,8 @@ def check_policy_fallback_guard(
         return False
     if parent.get("status") not in ("COMPLETED", "CANCELLED", "ABORTED"):
         raise HTTPException(409, detail={"code": "POLICY_PARENT_NOT_TERMINAL"})
+    if allow_autonomous_policy_fallback(target_status):
+        return False
     if spec.get("auto_admit") is True:
         raise HTTPException(403, detail={"code": "POLICY_FALLBACK_REQUIRES_NAMED_APPROVAL"})
     if target_status == "QUEUED" and (role in ("service", "ai_observer") or not is_named_operator(principal_id)):
@@ -159,15 +164,22 @@ def build_cell_readiness(
         held = bool(h.get("held"))
         if held:
             refusals.append(f"{aid}:incident_held")
+        stamp = st["folded_updated_at"] if "folded_updated_at" in st else st.get("updated_at")
+        current = bool(st.get("observed")) and stamp is not None and 0 <= time.time() - float(stamp) <= 15.0
         arms[aid] = {
             "held": held,
             "reason": h.get("reason"),
-            "folded": st.get("folded"),
+            "folded": st.get("folded") if current else None,
+            "state_unknown": None if current else {
+                "reason": "stale" if st.get("observed") else "never_observed",
+                "last_observed_at": stamp if st.get("observed") else None},
             "observed": bool(st.get("observed")),
             "fresh": bool(st.get("fresh")),
             "active_task_id": st.get("active_task_id"),
         }
     auth = gov.snapshot()
+    from fleet.server.pipeline.pipeline_cell_objects import latest_cell_state_gen
+
     core = {
         "schema": "rosy.fleet-cell-readiness.v1",
         "observed_at": round(time.time(), 3),
@@ -178,6 +190,7 @@ def build_cell_readiness(
         "authority_epoch": auth["authority_epoch"],
         "dispatch_generation": auth["dispatch_generation"],
         "stop_generation": auth["stop_generation"],
+        "cell_state_gen": latest_cell_state_gen(app, cell_id),
         "arms": arms,
         "blocking_refusals": refusals,
         "counts": {
@@ -197,11 +210,9 @@ def prepare_task_governance(
     vehicle_sites: tuple[str, ...] | frozenset[str] = (),
 ) -> tuple[str, dict[str, Any]]:
     """Run all governance, depth, policy-swap, and read-only CAS checks before task construction."""
-    target_status, proposer_val = resolve_task_proposer(spec, principal_id=principal_id, principal_role=principal_role)
-    depth_val = check_fallback_limits(app.state.omx_cell_tasks, spec)
-    req_named = check_policy_fallback_guard(
-        app.state.omx_cell_tasks, spec, role=principal_role, principal_id=principal_id, target_status=target_status,
-    )
+    target_status, proposer_val, approval_mode, depth_val, req_named = prepare_proposer_and_fallback(
+        app.state.omx_cell_tasks, spec, principal_id=principal_id, principal_role=principal_role,
+        check_limits_fn=check_fallback_limits, check_fallback_fn=check_policy_fallback_guard)
     if any(spec.get(k) is not None for k in (
         "expected_context_sha256", "expected_readiness_digest", "expected_dispatch_generation",
         "expected_authority_epoch", "expected_stop_generation",
@@ -221,43 +232,12 @@ def prepare_task_governance(
         "interlock_scope": derive_interlock_scope(cell_id, src_site, dst_site, vehicle_sites=vehicle_sites),
         "fallback_chain_depth": depth_val,
         "proposer": proposer_val,
-        "approved_by": principal_id.strip() if (target_status == "QUEUED" and is_named_operator(principal_id)) else None,
+        "approved_by": autonomous_approver(principal_id, principal_role, target_status, approval_mode, is_named_operator),
+        **({"approval_mode": approval_mode} if approval_mode else {}),
         **({"requires_named_approval": True} if req_named else {}),
         **{k: spec[k] for k in ("fallback_from_task_id", "fallback_verb", "failure_bundle_id", "failure_context_sha256") if spec.get(k) is not None},
     }
     return target_status, meta
-
-
-def _validate_cas_fields(
-    expected: dict[str, Any], actual: dict[str, Any], *, ep: int, dg: int, sg: int,
-    require_all: bool, require_context_sha: bool,
-) -> list[str]:
-    reasons: list[str] = []
-    if require_all:
-        for req_k in ("expected_dispatch_generation", "expected_stop_generation", "expected_readiness_digest"):
-            if expected.get(req_k) is None:
-                reasons.append(f"missing {req_k}")
-        if require_context_sha and expected.get("expected_context_sha256") is None:
-            reasons.append("missing expected_context_sha256")
-    ecs = expected.get("expected_context_sha256")
-    if ecs is not None and (type(ecs) is not str or not ecs or ecs != actual.get("context_sha256")):
-        reasons.append("context_sha256 mismatch")
-    erd = expected.get("expected_readiness_digest")
-    if erd is not None and (type(erd) is not str or not erd or erd != actual.get("readiness_digest")):
-        reasons.append("readiness_digest mismatch")
-    for key, cur, label in (
-        ("expected_dispatch_generation", dg, "dispatch_generation"),
-        ("expected_authority_epoch", ep, "authority_epoch"),
-        ("expected_stop_generation", sg, "stop_generation"),
-    ):
-        val = expected.get(key)
-        if val is None:
-            continue
-        if type(val) is not int:
-            reasons.append(f"invalid {label} type")
-        elif val != cur:
-            reasons.append(f"{label} drift (expected={val}, actual={cur})")
-    return reasons
 
 
 class PipelineGovernanceStore:
@@ -551,6 +531,11 @@ def admit_cell_task_guarded(
         proposer = str(task.get("proposer") or "").strip()
         if not proposer or proposer == approver:
             raise HTTPException(403, detail={"code": "SELF_APPROVAL_FORBIDDEN"})
+        from fleet.server.pipeline.pipeline_target_object import check_target_object_fresh
+
+        ok_tgt, tgt_code = check_target_object_fresh(app, task)
+        if not ok_tgt:
+            raise HTTPException(409, detail={"code": tgt_code})
         rdy = build_cell_readiness(
             app, task["cell_id"], active_map_fn=active_map_fn, resolve_cells_fn=resolve_cells_fn,
             is_human_detected_fn=is_human_detected_fn, arm_live_catalog_fn=arm_live_catalog_fn, gov=gov,

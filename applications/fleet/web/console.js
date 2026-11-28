@@ -17,6 +17,7 @@ import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
+import { createNamedStopActions } from "/console/assets/named-stop-actions.js";
 import { createStationRecovery } from "./station-recovery.js";
 import { createPersonRequests } from "./person-request.js";
 import { createSignals } from "./signals.js";
@@ -84,6 +85,7 @@ if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 const cockpitHud = createCockpitHud({ el });
 const selection = createSelection(null);
+const objectHighlight = createSelection(null);
 let cellStage = null;
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
@@ -216,8 +218,24 @@ async function call(path, options = {}) {
 }
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
-const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
-const zoneBlueprint = createZoneBlueprintInspector({ scope: pageScope, call, el, log });
+const assistant = createAssistantPanel({
+  scope: pageScope, call, el,
+  readSelection: () => { const id = selection.get() || view.focusRobot; return id && view.robots.some((r) => r.robot_id === id) ? id : null; },
+  readRobots: () => view.robots,
+  readPlaces: () => view.activeSiteMap?.map?.places || [], objectHighlight,
+  onSelectRobot: (id) => selection.set(id || null, { source: "assistant" }),
+  onOpenRobot: (id) => { if (id) rosterWorkspace.open(id); },
+  confirm: (options) => confirmedAction.run(options), log,
+});
+const zoneBlueprint = createZoneBlueprintInspector({
+  scope: pageScope,
+  call,
+  el,
+  log,
+  confirmedAction,
+  isOperator: () => hasOperatorRole(auth.role),
+  namedReason,
+});
 if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
@@ -308,6 +326,7 @@ function render() {
   lineStuck.render();
   deviceWatch.render();
   tripReplan.render();
+  namedStopActions.render();
   stationRecovery.render();
   personRequests.render();
   cellStage?.renderAlertSlots();
@@ -329,6 +348,7 @@ function render() {
         ? "로봇을 선택하고 지도를 찍으면 확인 후 목표를 보냅니다."
         : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
+  assistant.syncContext();
   refreshDiagnostics();
 }
 
@@ -381,7 +401,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, objectHighlight, onCellChanged: () => cellStage?.refresh(), isOperator: () => hasOperatorRole(auth.role), namedReason, openQueueRow: (key) => inbox.jumpToQueueRow(key) });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
@@ -418,21 +438,25 @@ const stationRecovery = createStationRecovery({ scope: pageScope, view, call, lo
 const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => hasOperatorRole(auth.role), namedReason,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
   openCard: (robotId) => { rosterWorkspace.open(robotId); } });
+const namedStopActions = createNamedStopActions({ scope: pageScope, view, call, log,
+  isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {
   const diag = (id, text) => patchText(el(id), text);
-  diag("diag-state", view.stateUnavailable ? "불가"
-    : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
-  diag("diag-scanner", deviceDirectory.scannerLost ? "끊김"
-    : "정상");
+  const armMode = !owns("drive") && owns("arms");
+  const arms = view.workcellObs?.arms || [];
+  const cams = view.workcellObs?.cameras || [];
+  diag("diag-state", armMode ? `팔 ${arms.filter((a) => a.fresh).length}/${arms.length} 실시간`
+    : view.stateUnavailable ? "불가" : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
+  diag("diag-scanner", deviceDirectory.scannerLost ? "끊김" : "정상");
   const robotErrors = view.robots
     .filter((r) => r.error)
     .map((r) => `${r.robot_id}: ${r.error.held ? "Fleet 보류" : r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
   diag("diag-robots", robotErrors.length ? robotErrors.join(" · ") : "오류 없음");
-  diag("diag-vision", el("vision-state")?.textContent ?? "—");
+  diag("diag-vision", armMode ? `${view.cellLiveCamCount ?? 0}/${cams.length} 실시간` : (el("vision-state")?.textContent ?? "—"));
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
@@ -451,13 +475,14 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, objectHighlight, namedReason, readWorkcellObs: () => view.workcellObs, openArmIncident: (key) => inbox.jumpToQueueRow(key) });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };
 let hadObsArms = false;
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
+  objectHighlight, confirmedAction, log,
   contextHost: el("cell-context-panel"),
   isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
   namedReason,

@@ -18,12 +18,13 @@ from pydantic import ValidationError
 
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.protocol.localization import LocalizationStatus, LocState, PoseFrame
+from fleet.traffic.config import HEADING_UNKNOWN_KEEP_OUT_M
 
 TRUSTED = "trusted"
 UNTRUSTED = "untrusted"
 
 #: Contract §3: an untrusted robot keeps this clear around its last trusted pose.
-UNTRUSTED_KEEP_OUT_M = 0.45
+UNTRUSTED_KEEP_OUT_M = HEADING_UNKNOWN_KEEP_OUT_M
 
 #: Missing localization expires the last trusted position after a CORE restart.
 LAPSED_GRACE_S = 30.0

@@ -16,6 +16,7 @@ if ! { [ -p chunk-io-b/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   for _ in $(seq 1 25); do systemctl --user is-active --quiet rosy-omx-observer@arm_b.service || break; sleep 0.2; done
   sleep 0.2
   flock -n ~/rosy-omx/session-arm_b.lock true || { refuse lock_held "REFUSED: the arm session lock is held"; exit 2; }
+  export ROSY_IDLE_OPEN_GRIP=${ROSY_IDLE_OPEN_GRIP:-56.0}  # idle fold opens empty jaws in place, then folds home (2026-11-27 user, chunk_runner_idle_open)
   export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_b-$(date +%Y%m%d-%H%M%S).jsonl  # jitter_replay.py reads it (2026-11-04)
   STATUS=chunk-io-b/chunk-status.jsonl
   if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi

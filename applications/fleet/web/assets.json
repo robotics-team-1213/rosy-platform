@@ -62,6 +62,14 @@
       "path": "assistant/assistant-voice.js",
       "media_type": "application/javascript"
     },
+    "assistant-command.js": {
+      "path": "assistant/assistant-command.js",
+      "media_type": "application/javascript"
+    },
+    "assistant-pick-place.js": {
+      "path": "cell/assistant-pick-place.js",
+      "media_type": "application/javascript"
+    },
     "assistant.css": {
       "path": "assistant/panel.css",
       "media_type": "text/css"
@@ -126,6 +134,10 @@
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "arm-cell-controls.js": {
+      "path": "cell/arm-cell-controls.js",
+      "media_type": "application/javascript"
+    },
     "cell-obs-model.js": {
       "path": "shared/cell-obs-model.js",
       "media_type": "application/javascript"
@@ -149,6 +161,22 @@
     "arm-incident-clear.js": {
       "path": "cell/arm-incident-clear.js",
       "media_type": "application/javascript"
+    },
+    "cell-cam-roi.js": {
+      "path": "cell/cell-cam-roi.js",
+      "media_type": "application/javascript"
+    },
+    "cell-cam-objects.js": {
+      "path": "cell/cell-cam-objects.js",
+      "media_type": "application/javascript"
+    },
+    "cell-pick-place-staging.js": {
+      "path": "cell/cell-pick-place-staging.js",
+      "media_type": "application/javascript"
+    },
+    "cell-cam-roi.css": {
+      "path": "cell/cell-cam-roi.css",
+      "media_type": "text/css"
     },
     "cell-job-panel.js": {
       "path": "cell/cell-job-panel.js",
@@ -399,7 +427,7 @@
       "media_type": "application/javascript"
     },
     "motion-readiness.js": {
-      "path": "motion-readiness.js",
+      "path": "map/motion-readiness.js",
       "media_type": "application/javascript"
     },
     "line-stuck.js": {
@@ -535,7 +563,7 @@
       "media_type": "application/javascript"
     },
     "charge-bays-model.js": {
-      "path": "charge-bays-model.js",
+      "path": "cell/charge-bays-model.js",
       "media_type": "application/javascript"
     },
     "platoon-view.js": {
@@ -806,6 +834,10 @@
       "path": "map/zone-blueprint-geometry.js",
       "media_type": "application/javascript"
     },
+    "zone-blueprint-staging.js": {
+      "path": "map/zone-blueprint-staging.js",
+      "media_type": "application/javascript"
+    },
     "zone-blueprint-model.js": {
       "path": "map/zone-blueprint-model.js",
       "media_type": "application/javascript"
@@ -825,6 +857,10 @@
     "zone-blueprint.css": {
       "path": "map/zone-blueprint.css",
       "media_type": "text/css"
+    },
+    "named-stop-actions.js": {
+      "path": "map/named-stop-actions.js",
+      "media_type": "application/javascript"
     }
   }
 }

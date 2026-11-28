@@ -144,6 +144,28 @@ def unwedge_pull_dips(state: list[float], target: list[float], home: list[float]
     return fk_z(probe, tcp_x_m=tcp_x_m) < z_now - 0.001
 
 
+def _norm_arm(val) -> str | None:
+    if not isinstance(val, str):
+        return None
+    if val in ("arm_a", "arm_b", "arm_s"):
+        return val
+    return val[:-9] if val.endswith("_follower") and val[:-9] in ("arm_a", "arm_b", "arm_s") else None
+
+
+def _session_arm(sess: dict) -> tuple[str | None, bool]:
+    prof = sess.get("operating_profile")
+    chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
+    io_name = Path(chunks_io).name if isinstance(chunks_io, str) and chunks_io else ""
+    io_arm = f"arm_{io_name[9:]}" if io_name.startswith("chunk-io-") and io_name[9:] in ("a", "b", "s") else None
+    raws = (sess.get("arm"), prof.get("device_id") if isinstance(prof, dict) else None,
+            prof.get("instance_id") if isinstance(prof, dict) else None, sess.get("motor_health_owner"))
+    found = {a for v in raws if (a := _norm_arm(v)) is not None} | ({io_arm} if io_arm else set())
+    if any(isinstance(v, str) and v and _norm_arm(v) is None for v in raws[:2]) or len(found) > 1:
+        return "__conflict__", True
+    real_rec = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+    return (next(iter(found)), True) if found else (None, real_rec)
+
+
 def wait_session_json(session: Path, arm: str, started: float, sleep) -> tuple[dict | None, str | None]:
     """Poll `session.json` until a fresh matching-arm recovery session finishes and writes torque_after."""
     for _ in range(36):
@@ -153,16 +175,7 @@ def wait_session_json(session: Path, arm: str, started: float, sleep) -> tuple[d
             except (OSError, ValueError):
                 sess = None
             if isinstance(sess, dict):
-                prof = sess.get("operating_profile")
-                chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
-                io_tag = chunks_io.rstrip("/").rsplit("-", 1)[-1] if isinstance(chunks_io, str) else ""
-                sess_arm = (
-                    (sess.get("arm") if isinstance(sess.get("arm"), str) and sess.get("arm") else None)
-                    or (prof.get("instance_id") if isinstance(prof, dict) and prof.get("instance_id") else None)
-                    or (sess.get("motor_health_owner") if isinstance(sess.get("motor_health_owner"), str) and sess.get("motor_health_owner") else None)
-                    or (f"arm_{io_tag}" if io_tag in ("a", "b", "s") else None)
-                )
-                real_rec = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+                sess_arm, real_rec = _session_arm(sess)
                 if sess_arm == arm or (not real_rec and sess_arm is None and "torque_after" in sess):
                     return sess, None
         sleep(5)
@@ -252,6 +265,9 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
         segs = [moved] if abs(d) <= STEP_MAX else interpolate_pose(cur, moved, max_step=STEP_MAX)
         raw.append((f"pan{d:+g}", chunk_jog_commands("shoulder_pan.pos", d), [list(cur), *segs, *plan(moved)]))
 
+    if abs(d_in := max(-20.0, min(20.0, float(home[2]) - cur[2]))) > 10.0:  # forearm in first: a shorter lever on shoulder_lift (D-1079)
+        e_pose = [cur[0], cur[1], cur[2] + d_in, *cur[3:]]
+        raw.insert(1, ("elbow_in_then_park", chunk_jog_commands("elbow_flex.pos", d_in), [list(cur), *interpolate_pose(cur, e_pose, max_step=STEP_MAX), *plan(e_pose)]))
     if abs(float(home[4]) - cur[4]) > 10.0 or cur[2] >= -35.0:
         elbow_pose = [cur[0], cur[1], cur[2] - 10.0, *cur[3:]]
         cmds = chunk_jog_commands("elbow_flex.pos", -10.0)
@@ -270,7 +286,7 @@ def build_candidates(state: list[float], home: list[float], closed: float, plan,
 def extended_candidate_names() -> list[str]:
     """Return every tier-1 candidate name that `build_candidates(..., extended=True)` may produce."""
     return ["park", "lift_then_park", "lift_pan+10", "lift_pan-10",
-            "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15", "elbow_clear_then_park"]
+            "pan+5", "pan-5", "pan+10", "pan-10", "pan+15", "pan-15", "elbow_clear_then_park", "elbow_in_then_park"]
 
 
 def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settle_polls: int = 15,
@@ -299,7 +315,9 @@ def run_detour_jogs(cell, commands: list[str], *, settle_tol: float = 3.0, settl
 
 
 def make_load_checker(config: dict, library: dict, params: dict | None = None):
-    """Build an optional `load_predict.check_chunk` gate for fold candidates, or None."""
+    """The optional `load_predict.check_chunk` gate, or None; a recovery no person started (D-1079) refuses unknown/unchecked load."""
+    refuse = not __import__("os").environ.get("ROSY_JOB_PRINCIPAL", "").startswith("human:")
+    _UNCHECKED = lambda frames: {"ok": False, "verdict": "unknown", "report": {"why": "no load model: an automatic recovery refuses it"}}  # noqa: E731
     lm_path = config.get("load_model_path")
     port = config.get("port") or (config.get("follower") or {}).get("port") or (config.get("robot") or {}).get("port")
     if not port and config.get("record_config_path"):
@@ -309,17 +327,17 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         except (OSError, ValueError):
             port = None
     if not lm_path or not port:
-        return None
+        return _UNCHECKED if refuse else None
     import cell_params as prm
     import load_predict
 
     model = load_predict.load(Path(str(lm_path)).expanduser())
     arm = model["arms"].get(load_predict.arm_for(model, port))
     if arm is None:
-        return None
+        return _UNCHECKED if refuse else None
     fps = int(library.get("fps", 30))
     caps = config.get("caps")
-    refuse_unknown = bool(prm.get(params, "loadcheck.refuse_unknown"))
+    refuse_unknown = refuse or bool(prm.get(params, "loadcheck.refuse_unknown"))
 
     def check_frames(frames) -> dict:
         rep = load_predict.check_chunk(arm, frames, fps, params, caps)
@@ -327,14 +345,20 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         ok = verdict != "risky" and not (verdict == "unknown" and refuse_unknown)
         return {"ok": ok, "verdict": verdict, "report": rep}
 
+    check_frames.arm = arm  # the fold's start record reads the same model (gravity_pwm_expected)
     return check_frames
 
 
-def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: str, roi, params, to_px, tcp_x_m: float | None):
-    """Build a corridor look(frames) checker combining calibrated site surfaces for multi-site high transit."""
+def build_multi_site_look(
+    cell, config: dict, calibration: dict, primary_site: str, roi, params, to_px, tcp_x_m: float | None,
+    *, allow_ascending_departure: bool = False, own_state=None,
+):
+    """Build a corridor look(frames) checker combining calibrated site surfaces for multi-site high transit.
+    `own_state` (the fold only): a call that returns the arm's measured joints, whose links are then no obstacle."""
     import numpy as np
 
     import cell_corridor
+    import cell_corridor_own
     import cell_objects
     import cell_pivot
 
@@ -346,10 +370,11 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
     def look(frames):
         img = cell.frame("top")
         pts = [cell_pivot.joints_tcp(f, tcp_x_m=tcp_x_m)[:3] for f in frames]
+        seen = lambda out, shape: out if own_state is None else cell_corridor_own.with_outside(out, pts, to_px, shape, roi, params)  # noqa: E731
         if not isinstance(img, np.ndarray) or len(polys) <= 1:
             fb_site = primary if isinstance(primary, dict) else {}
             mask = cell_objects.foreground(img, roi, params=params, surface_px=fb_site.get("surface_px"), surface_lab=fb_site.get("surface_lab"))
-            return cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=fb_site.get("surface_px"))
+            return seen(cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=fb_site.get("surface_px")), (roi[3] - roi[1], roi[2] - roi[0]))
 
         import cv2
 
@@ -363,18 +388,12 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
             seen_low = cell_corridor._fill_surfaces(low_mask.shape, roi, polys) > 0
             gap = (cell_corridor._fill_surfaces(low_mask.shape, roi, high_hull) > 0) & ~seen_low
             if gap.any():
-                x0, y0, x1, y1 = roi
-                gap_lab = config.get("transit_surface_lab")
-                if not gap_lab:
-                    gap_lab = np.median(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)[gap], axis=0).tolist()
-                first_lab = gap_lab[0] if isinstance(gap_lab[0], (list, tuple)) else gap_lab
-                patch = img[y0:y1, x0:x1].copy()
-                patch[~gap] = cv2.cvtColor(np.array([[first_lab]], np.uint8), cv2.COLOR_LAB2BGR)[0, 0]
-                gap_fg = cell_objects.foreground(patch, (0, 0, x1 - x0, y1 - y0), params=params, surface_lab=gap_lab)
-                gap_fg[~gap] = 0
-                if not config.get("transit_surface_lab") and int((gap_fg > 0).sum()) >= 0.20 * int(gap.sum()):
-                    gap_fg[gap] = 255
-                mask = low_mask | gap_fg
-        return cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=polys, high_surface_px=high_hull)
+                bound = calibration if own_state is not None else None  # other callers keep the colour rule
+                mask = low_mask | cell_corridor_own.gap_foreground(config, bound, img, roi, gap, params)
+        fold = {} if own_state is None else cell_corridor_own.fold_view(
+            config, calibration, primary_site, to_px, own_state(), img, low_mask.shape, roi, tcp_x_m, params)
+        return seen(cell_corridor.check(
+            pts, mask, roi, to_px, params=params, surface_px=polys,
+            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, **fold), low_mask.shape)
 
     return look

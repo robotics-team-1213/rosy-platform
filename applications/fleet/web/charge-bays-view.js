@@ -3,6 +3,7 @@ import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
+import { randomUUID } from "/console/assets/uuid.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { renderOmxInspector } from "/console/assets/omx-inspector.js";
@@ -12,6 +13,8 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 
 /** Choices that target a docked vehicle need the server's occupant; cell-wide emergency stops are always enabled. */
 const needsRobot = (choice) => Boolean(choice.cableGuardToggle || choice.zoneId);
+const needsConfirm = (choice) => !choice.humanSafetyCell && !choice.visionCheckCell && !choice.cableGuardToggle
+  && !choice.armIncident && !choice.cancelTaskId;
 
 export const armIncidentRowKey = (target, obs) => armIncidentRowFor(target, obs)?.key || null;
 
@@ -20,7 +23,8 @@ function markNoRobot(button, choice, card) {
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, readWorkcellObs = null, openArmIncident = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, objectHighlight = null, namedReason = () => "", readWorkcellObs = null, openArmIncident = null }) {
+  const opReason = () => (auth.locked ? "세션 잠김" : namedReason());
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -42,7 +46,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   }, true);
   const selectedInspectorCam = {};
   let dualCamMode = false;
-  let lastRows = null;
+  let showRoi = true, sitePointsCameras = null, cellObjects = null, selectedObjectRef = null, selectedObjectDest = null, objectBusy = false, objectStatusText = "", lastRows = null;
   let lastInspectorSig = "";
   let lastListSig = "";
   let unconfirmedStopWarning = "";
@@ -64,6 +68,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     });
     scope.onDispose?.(offSelection);
   }
+  if (objectHighlight?.subscribe) scope.onDispose?.(objectHighlight.subscribe(() => { lastInspectorSig = ""; if (lastRows) renderInspector(lastRows); }));
 
   async function executeChoice(choice, card, button, confirmed = false) {
     if (auth.locked || button.hasAttribute("disabled")) return;
@@ -77,6 +82,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       if (!confirmedAction) return;
       return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
+    }
+    if (needsConfirm(choice) && !confirmed) {
+      if (!confirmedAction || opReason()) return;
+      return confirmedAction.run({
+        message: `${choice.label || choice.preset || choice.zoneId || "셀 작업"}을(를) 실행할까요?`,
+        opener: button,
+        eligible: () => !auth.locked && !opReason(),
+        request: () => executeChoice(choice, card, button, true),
+      });
     }
     const isStop = Boolean(choice.humanSafetyCell || choice.visionCheckCell);
     const myStopGen = isStop ? ++stopGen : 0;
@@ -126,8 +140,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         });
       } else {
         await call("/api/fleet/pipeline/cell-tasks", {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({preset: choice.preset, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
+          method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": randomUUID()},
+          body: JSON.stringify({preset: choice.preset, propose: false, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
         });
       }
       if (isStop && myStopGen === stopGen) {
@@ -158,7 +172,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       }
     } finally {
       button.textContent = origLabel;
-      setOffBy(button, "");
+      setOffBy(button, needsConfirm(choice) ? opReason() : "");
     }
   }
 
@@ -193,21 +207,23 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       active.dualPair || null,
       active.buttons || [],
       active.quickControls || [],
+      showRoi, Boolean(sitePointsCameras), cellObjects?.observed_at ?? null,
+      Boolean(cellObjects?.fetchedAtMs && Date.now() - cellObjects.fetchedAtMs < 5000),
+      selectedObjectRef, selectedObjectDest, objectBusy, objectStatusText,
+      objectHighlight?.get?.() ?? null, opReason(),
     ]);
     if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
     lastInspectorSig = nextSig;
 
     const rendered = renderOmxInspector(inspector, {
-      targets,
-      activeId: active.id,
-      dualCamMode,
-      selectedCamByTarget: selectedInspectorCam,
-      draftChoices,
-      frames,
-      framesActive: framesOn && inspectorOpen,
+      targets, activeId: active.id, dualCamMode, selectedCamByTarget: selectedInspectorCam,
+      draftChoices, frames, framesActive: framesOn && inspectorOpen,
+      cameraRois: sitePointsCameras, showRoi, cellObjects, selectedObjectRef,
+      aiHighlightRef: objectHighlight?.get?.() ?? null, selectedObjectDest, objectBusy, objectStatusText,
       standbyText: "영상 대기 · 클릭하여 연결",
       tagText: active.text || "대기 중",
       tagStatus: active.status || "neutral",
+      quickDispatchReason: opReason(),
       actionsClass: "omx-card-actions",
       actionChoices: [...(active.buttons || []), ...(active.quickControls || [])],
       disclosure: {
@@ -225,46 +241,82 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         lastInspectorSig = "";
         renderInspector(rows);
       },
+      onToggleRoi: () => {
+        showRoi = !showRoi;
+        lastInspectorSig = "";
+        renderInspector(rows);
+      },
       onSelectCam: (targetId, camId) => {
         selectedInspectorCam[targetId] = camId;
         lastInspectorSig = "";
         renderInspector(rows);
       },
       onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId, button }) => {
-        if (auth.locked || button.hasAttribute("disabled")) return;
-        setOffBy(button, "요청 처리 중");
-        const orig = button.textContent;
-        button.textContent = "등록 중…";
-        try {
-          await call("/api/fleet/pipeline/cell-tasks", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-              cell_id: targetCell,
-              arm_id: targetArm,
-              tier,
-              displaced_to: displacedTo,
-              robot_id: robotId,
-            }),
-          });
-          await refresh();
-        } catch (err) {
-          patchText(hint, `맞춤 실행 실패: ${err.message}`);
-          patchHidden(hint, false);
-        } finally {
-          button.textContent = orig;
-          setOffBy(button, "");
-        }
+        const reason = opReason();
+        if (auth.locked || button.hasAttribute("disabled") || reason || !confirmedAction) return;
+        return confirmedAction.run({
+          message: `${targetArm} 맞춤 작업(${targetCell} · ${tier}층${displacedTo ? " · " + displacedTo : ""})을 대기열에 등록할까요?`,
+          opener: button,
+          eligible: () => !auth.locked && !opReason(),
+          request: async () => {
+            setOffBy(button, "요청 처리 중");
+            const orig = button.textContent;
+            button.textContent = "등록 중…";
+            try {
+              await call("/api/fleet/pipeline/cell-tasks", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Idempotency-Key": randomUUID()},
+                body: JSON.stringify({
+                  cell_id: targetCell,
+                  arm_id: targetArm,
+                  tier,
+                  displaced_to: displacedTo,
+                  robot_id: robotId,
+                  propose: false,
+                }),
+              });
+              await refresh();
+            } catch (err) {
+              patchText(hint, `맞춤 실행 실패: ${err.message}`);
+              patchHidden(hint, false);
+            } finally {
+              button.textContent = orig;
+              setOffBy(button, opReason());
+            }
+          },
+        });
       },
       onRenderAction: (button, choice, item) => {
         markNoRobot(button, choice, item);
+        if (!button.hasAttribute("disabled") && needsConfirm(choice) && opReason()) setOffBy(button, opReason());
         button.addEventListener("click", () => executeChoice(choice, item, button));
       },
-      onDisclosureToggle: (open, bindCameras) => {
-        inspectorOpen = open;
-        if (open) framesOn = true;
-        frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
-        if (open && framesOn) bindCameras?.();
+      onDisclosureToggle: (open, bindCameras) => { inspectorOpen = open; if (open) framesOn = true; frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive")); if (open && framesOn) bindCameras?.(); },
+      onSelectObject: (obj) => { selectedObjectRef = obj.object_ref; objectStatusText = ""; objectHighlight?.set?.(obj.object_ref, { source: "camera" }); lastInspectorSig = ""; renderInspector(rows); },
+      onSelectObjectDest: (dst) => { selectedObjectDest = dst; },
+      onClearObject: () => { selectedObjectRef = null; objectStatusText = ""; lastInspectorSig = ""; renderInspector(rows); },
+      onDispatchTargetObject: async ({ object: obj, destSite, button, buildTaskBody }) => {
+        if (auth.locked || opReason() || !confirmedAction) return;
+        return confirmedAction.run({
+          message: `선택 객체(${obj.catalog_id})를 ${destSite}로 1회 집기·놓기 실행할까요?`,
+          opener: button,
+          eligible: () => !auth.locked && !opReason(),
+          request: async () => {
+            objectBusy = true; objectStatusText = "1회 집기·놓기 작업 등록 중…"; lastInspectorSig = ""; renderInspector(rows);
+            try {
+              const res = await call("/api/fleet/pipeline/cell-tasks", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+                body: JSON.stringify(buildTaskBody(active.robot_id)),
+              });
+              objectStatusText = `등록 완료: ${res.task?.task_id || "ok"} (${obj.catalog_id} → ${destSite})`; await refresh();
+            } catch (err) {
+              objectStatusText = `요청 거부: ${err.message}`;
+            } finally {
+              objectBusy = false; lastInspectorSig = ""; if (lastRows) renderInspector(lastRows);
+            }
+          },
+        });
       },
     });
     bindCurrentCameras = rendered?.bindCameras || null;
@@ -305,7 +357,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (inFlight || unavailable || auth.locked || document.hidden || !owns("drive")) return;
     inFlight = true;
     try {
-      const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
+      const [planRes, spRes, objRes] = await Promise.allSettled([
+        call("/api/fleet/charge-bays", { signals: [life.signal] }),
+        sitePointsCameras ? Promise.resolve(null) : call("/api/fleet/site-points?view=full", { signals: [life.signal] }),
+        call("/api/fleet/pipeline/cell-objects", { signals: [life.signal] }),
+      ]);
+      if (spRes.status === "fulfilled" && spRes.value?.cameras) sitePointsCameras = spRes.value.cameras;
+      if (objRes.status === "fulfilled" && objRes.value) cellObjects = { ...objRes.value, fetchedAtMs: Date.now() };
+      if (planRes.status === "rejected") throw planRes.reason;
+      const plan = planRes.value;
       life.check();
       const rows = chargeBayRows(plan);
       patchText(state, `칸 ${rows.bays.length}`);

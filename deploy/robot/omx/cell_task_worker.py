@@ -28,7 +28,9 @@ from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
+import cell_incident_release
 import cell_site_target
+from cell_task_motion import push_evidence_ok
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
     make_default_request_fn, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
@@ -174,7 +176,7 @@ def poll_and_execute_once(
         if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
             continue
         send_bed_observation(request_fn, bed_observe_fn, task)  # D-1057 2-9: cell S only, before the claim
-        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
+        claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id, "capabilities": ["motion", "push"]})
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
@@ -246,17 +248,20 @@ def poll_and_execute_once(
         stopped = hw_tel.get("stop_event") or {}
         if not isinstance(stopped, dict):
             stopped = {}
+        motion = handoff.get("motion") if isinstance(handoff.get("motion"), dict) else {}
+        is_push = motion.get("kind") == "push"
         measured = (claim_bound
                     and stage_result.get("handoff_lease_id") == handoff.get("handoff_lease_id")
                     and stage_result.get("directive_id") == task_id
                     and stage_result.get("arm_id") == handoff.get("arm_id")
                     and stage_result.get("task_verified") is True
-                    and verification.get("verified") is True
-                    and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
-                                                      if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
+                    and (push_evidence_ok(motion, stage_result.get("push")) if is_push else
+                         verification.get("verified") is True
+                         and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                           if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",)))
                     and stopped.get("ok") is True and stopped.get("folded") is True
                     and isinstance(hw_tel.get("measured_at"), (int, float)) and not isinstance(hw_tel.get("measured_at"), bool))
-        if cell_id == "cell_ab":
+        if cell_id == "cell_ab" and not is_push:
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
             measured = measured and isinstance(place, dict) and cell_site_target.cell_ab_place_verified(handoff, place, z_gate, tier, verification)
@@ -310,6 +315,10 @@ def main(argv: list[str] | None = None) -> None:
     prep_dir = Path(args.prep_dir)
     bg_cam_pool = ThreadPoolExecutor(max_workers=1)
     bg_cam_fut: Future | None = None
+    cell_incident_release.use_record_dir(prep_dir)
+    watch_pool = ThreadPoolExecutor(max_workers=1)  # its own thread: a ~6 s re-read must not delay the safety fence
+    watch_fut: Future | None = None
+    last_watch = time.monotonic()  # the first tick one period after start
 
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
@@ -346,6 +355,9 @@ def main(argv: list[str] | None = None) -> None:
             if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
                 _trigger_bg_cam_upload()
                 last_cam_push = now_m
+            if not args.dry_run_hw and (now_m - last_watch) >= cell_incident_release.WATCH_S:
+                if watch_fut is None or watch_fut.done():
+                    watch_fut, last_watch = watch_pool.submit(cell_incident_release.watch), now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
                 runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir,

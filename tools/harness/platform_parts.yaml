@@ -101,6 +101,8 @@ app_subtrees:
   tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
   tools/sim/world_*: site-fleet
+  tools/sim/coupled_sim_sandbox.py: site-fleet
+  tools/sim/coupled_sim_live_loop.py: site-fleet
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
   tools/publish*.py: tooling
@@ -1445,6 +1447,7 @@ safety_review_paths:
   - deploy/robot/omx/chunk_policy_playback.py
   - deploy/robot/omx/chunk_runner_interrupt.py
   - deploy/robot/omx/chunk_runner_settle.py
+  - deploy/robot/omx/chunk_runner_idle_open.py
   - deploy/robot/omx/episode_recorder.py
   - deploy/robot/omx/guarded_device.py
   - deploy/robot/omx/guarded_native.py
@@ -1470,10 +1473,14 @@ safety_review_paths:
   - deploy/robot/omx/cell_zones.py
   - deploy/robot/omx/cell_space.py
   - deploy/robot/omx/cell_corridor.py
+  - deploy/robot/omx/cell_corridor_own.py
   - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_unwedge_rise.py
   - deploy/robot/omx/cell_auto_fold.py
   - deploy/robot/omx/cell_auto_fold_stages.py
+  - deploy/robot/omx/cell_fold_rehome.py
   - deploy/robot/omx/cell_camera_telemetry_sync.py
+  - deploy/robot/omx/cell_objects_sync.py
   - deploy/robot/omx/cell_bound_home_request.py
   - deploy/robot/omx/cell_bound_home_placement.py
   - deploy/robot/omx/cell_recovery_cargo.py
@@ -1489,8 +1496,18 @@ safety_review_paths:
   - deploy/robot/omx/cell_remap_jaws.py
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
+  - deploy/robot/omx/cell_task_motion.py
+  - deploy/robot/omx/cell_job_client.py
+  - deploy/robot/omx/cell_job_worker.py
+  - operations/fleet/fleet/pipeline/cell_motion.py
+  - operations/fleet/fleet/pipeline/cell_site_targets.py
+  - operations/fleet/fleet/server/sitemap/pipeline_repark.py
   - deploy/robot/omx/cell_task_act.py
+  - deploy/robot/omx/cell_task_act_run.py
   - deploy/robot/omx/cell_task_live_executor.py
+  - deploy/robot/omx/cell_presence.py
+  - deploy/robot/omx/cell_auto_setup.py
+  - deploy/robot/omx/cell_stop_proof.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py
   - deploy/robot/omx/cell_incident_release.py
@@ -1505,6 +1522,9 @@ safety_review_paths:
   - deploy/robot/omx/chunk_ctl_socket.py
   - deploy/robot/omx/hardware_owner_goals.py
   - deploy/robot/omx/cell_policy_drive.py
+  - deploy/robot/omx/cell_policy_goals.py
+  - deploy/robot/omx/cell_belt_pose.py
+  - deploy/robot/omx/cell_belt_vision.py
   - deploy/robot/omx/cell_policy_shape.py
   - deploy/robot/omx/cell_policy_timing.py
   - deploy/robot/omx/cell_policy_retreat.py
@@ -1528,19 +1548,25 @@ safety_review_paths:
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
   - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_push_measure.py
   - deploy/robot/omx/cell_pivot.py
   - deploy/robot/omx/cell_step.py
   - deploy/robot/omx/cell_z_shuttle.py
   - deploy/robot/omx/cell_auto_carry.py
   - deploy/robot/omx/cell_auto_pick_plan.py
+  - deploy/robot/omx/cell_auto_reach.py
+  - deploy/robot/omx/cell_slot_prior.py
+  - deploy/robot/omx/cell_free_source.py
   - deploy/robot/omx/cell_executor.py
   - deploy/robot/omx/cell_job_api.py
   - deploy/robot/omx/cell_job_spec.py
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
   - deploy/robot/omx/cell_job_depart.py
+  - deploy/robot/omx/cell_job_cancel.py  # D-1081 cooperative stop marker route (no signal, no kill)
   - deploy/robot/omx/cell_job_peer_health.py
   - deploy/robot/omx/cell_job_readiness.py
+  - deploy/robot/omx/cell_target_binding.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
   - deploy/robot/omx/cell_area_job_spec.py
@@ -1562,6 +1588,9 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_presets.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/pipeline/pipeline_cell_objects.py
+  - operations/fleet/fleet/server/pipeline/pipeline_target_object.py
+  - operations/fleet/fleet/server/pipeline/pipeline_autonomous_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
   - operations/fleet/fleet/server/pipeline/pipeline_home_recovery.py
   - operations/fleet/fleet/server/pipeline/bound_home_receipt.py

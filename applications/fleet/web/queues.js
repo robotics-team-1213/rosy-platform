@@ -15,6 +15,7 @@ import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
 import { personHeadline, requestsFor } from "./person-request.js";
 import { armIncidentAlertRows } from "/console/assets/arm-incident-clear.js";
+import { hasPendingCorrection } from "/console/assets/named-stop-actions.js";
 
 /** A row's text after its robot name. Rows read "<b>rosy_41</b>: …"; a later row of the same robot hides the
  * name, so it drops the leading ": " (field check 2026-10-10: ": Rosy Cam이 …" with no name). */
@@ -161,6 +162,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (ended) items.push({ severity: "warn", text: `: ${ended}` });
     const trip = openTrip(view, robot.robot_id);  // D-763 rev 2 Q7: past its bound a warn row; 개입 is the resolver's hand-off
     if (trip?.wait?.over_bound) items.push({ severity: "warn", text: `: ${tripWaitText(trip)}` });
+    if (hasPendingCorrection(trip)) {
+      items.push({ severity: "crit", decision: "correction", text: ": 정밀 정지 보정 승인 대기" });
+    }
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const localization = localizationAttention(robot.localization, staleS === null ? state.localization : null,
@@ -177,7 +181,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
     const source = motionSource(robot, view);
     if (source.attention) items.push({ severity: "crit", text: `: ${source.text} — ${source.title}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")}${state.safety.releases_when_charged === true ? "" : " — 관리자가 해제해야 움직입니다"}` });
+    if (state.safety?.estop === true) {
+      const auto = state.safety.releases_when_charged === true;
+      items.push({ severity: auto ? "warn" : "crit", text: `: ${estopText(state, "비상 정지 걸림")}${auto ? "" : " — 관리자가 해제해야 움직입니다"}` });
+    }
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패", snapshotWarn: true });
     // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).
@@ -191,7 +198,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
     }
     // D-511 개정 1: Fleet이 본 복귀 상태 한 줄. 같은 판정을 로봇에도 보낸다(lane-cue).
-    const back = lane?.return;
+    // D-1084: 지도 밖 말고는 움직이는 로봇만 알린다. 주차/도킹·위치 불일치(PARKING·POSE_MISMATCH)는 주의가 아니다.
+    const back = lane?.return?.state === "OFF_MAP" || lane?.return?.moving === true ? lane.return : null;
     const backText = { OFF_LANE: "차로 밖 — 차로로 복귀 지시", OFF_MAP: "지도 밖 — 정지·확인 필요",
                        WRONG_WAY: "역주행 — 돌아서기 지시", ON_LINE: "차선 위 — 안쪽으로 보정" }[back?.state];
     if (backText) {
@@ -199,7 +207,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       items.push({ severity: back.state === "ON_LINE" ? "warn" : "crit", text: `: ${backText}${side}` });
     }
     const custody = robot.named_stop_custody;
-    if (custody?.motion_refused_site_wide || custody?.operator_action) {
+    if (custody?.reservation_id) {
+      items.push({ severity: "crit", decision: "custody",
+        text: `: 정밀 정지 점유 보류${custody.missing_proof ? ` (${custody.missing_proof})` : ""}` });
+    } else if (custody?.motion_refused_site_wide || custody?.operator_action) {
       items.push({ severity: "warn", text: `: 정밀 정지 점유 보류${custody.missing_proof ? ` (${custody.missing_proof})` : ""}` });
     }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
@@ -368,7 +379,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }
-    rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
+    rows.crit.sort((a, b) => (Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)))
+      || (Number(Boolean(b.decision)) - Number(Boolean(a.decision))));
     rows.warn = groupRows(rows.warn);
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);

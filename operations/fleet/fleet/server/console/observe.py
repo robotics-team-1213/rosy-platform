@@ -23,6 +23,6 @@ async def observe_states(console) -> None:
 
 async def _read(console, robot_id: str) -> Any:
     if robot_id in console._goals or robot_id in console._claims or robot_id in console._yielding:
-        return await console.read_state(robot_id, 0.2)   # D-760 8: shared
-    state, _source = await console._gather_state(robot_id)
+        return await asyncio.wait_for(console.read_state(robot_id, 0.2), timeout=0.5)   # D-760 8: shared
+    state, _source = await asyncio.wait_for(console._gather_state(robot_id), timeout=0.5)
     return state

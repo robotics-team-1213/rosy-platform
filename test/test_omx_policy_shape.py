@@ -165,3 +165,63 @@ def test_trim_backtrack_non_finite_direct_call_unchanged():
     assert shape.trim_backtrack_prefix(chunk_inf, start).shape == (2, 6)
     assert np.isinf(shape.trim_backtrack_prefix(chunk_inf, start)[0, 0])
     assert shape.trim_backtrack_prefix(chunk_inf[1:], [np.nan] + start[1:]).shape == (1, 6)
+
+
+REAL5_STATE = [-16.3, -4.2, 15.4, 37.2, 32.6, 56.2]  # real5 2026-11-27 arm_a chunk 1: measured pose
+REAL5_LEAD = [-21.4, 10.5, 5.3, 34.2, 28.6, 56.2]  # its first action, shoulder_lift +14.7 ahead
+
+
+def _real5_chunk(rows=16):
+    first, step = np.asarray(REAL5_LEAD), np.array([-0.1, 0.3, -0.2, -0.05, -0.05, 0.0])
+    return [(first + k * step).tolist() for k in range(rows)]
+
+
+def test_ease_starts_policy_chunk_from_rest_at_measured_pose():
+    low, high = [-40.0, -70.0, -10.0, 10.0, 0.0, 40.0], [10.0, 40.0, 60.0, 60.0, 50.0, 65.0]
+    chunk = _real5_chunk()
+    raw = shape.shape_chunk(chunk, REAL5_STATE, low, high, FASTEST)
+    eased = shape.shape_chunk(chunk, REAL5_STATE, low, high, FASTEST, ease=True)
+    def steps(frames):
+        path = np.vstack([REAL5_STATE, frames])
+        return np.abs(np.diff(path, axis=0))[:, :5].max(axis=1)
+
+    assert (steps(raw) > 0.9 * FASTEST).sum() >= 25  # the old shape sprints the whole 14.7-unit lead at full speed
+    assert (steps(eased) > 0.9 * FASTEST).sum() <= 3
+    assert steps(eased).max() <= FASTEST + 1e-9
+    assert eased[-1] == pytest.approx(chunk[-1])
+
+
+def test_ease_short_chunk_is_resampled_not_sprinted():
+    start = [0.0, -55.0, 45.0, 45.0, 0.0, 50.0]
+    one = [[0.0, -45.0, 45.0, 45.0, 0.0, 50.0]]  # one row left after a backtrack trim, 10 units off
+    eased = shape.ease_start(one, start)
+    assert len(eased) == shape.EASE_MIN_ROWS - 1 and eased[-1].tolist() == one[0]
+    lift = [start[1], *eased[:, 1]]
+    steps = np.diff(lift)
+    assert (steps > 0).all() and steps[0] < steps.max() / 2 and steps[-1] < steps.max() / 2  # speeds up, then slows down
+    out = shape.shape_chunk(one, start, LOW, HIGH, FASTEST, ease=True)
+    assert out[-1] == pytest.approx(one[0])
+    assert np.abs(np.diff(np.vstack([start, out]), axis=0)).max() <= FASTEST + 1e-9
+
+
+def test_ease_delays_jaw_close_until_body_arrives_never_opening():
+    start = [0.0, -55.0, 45.0, 45.0, 0.0, 60.0]
+    rows = [[0.0, -40.0 + k, 45.0, 45.0, 0.0, 60.0 if k < 2 else 45.0] for k in range(16)]  # closes at row 2, 15 off
+    eased = shape.ease_start(rows, start)
+    body_off = np.abs(eased[:, :5] - np.asarray(rows)[1:, :5]).max(axis=1)
+    assert (eased[body_off > 3.0, 5] == 60.0).all()  # no close while the body is still far from the policy's pose
+    assert eased[-1].tolist() == rows[-1]  # the close still happens by the chunk's end
+    holding = [[0.0, -40.0, 45.0, 45.0, 0.0, 40.0]] * 16  # squeezing a held box: measured jaw 45 above the policy's 40
+    assert (shape.ease_start(holding, [0.0, -55.0, 45.0, 45.0, 0.0, 45.0])[:, 5] == 40.0).all()  # never opened
+
+
+def test_ease_refuses_eased_frame_outside_envelope():
+    low, high = [-30.0, -60.0, 0.0, 20.0, -35.0, 40.0], [30.0, 20.0, 60.0, 60.0, 50.0, 65.0]
+    start = [0.0, -50.0, 45.0, 45.0, 0.0, 50.0]
+    chunk = [[0.0, -50.0, 62.0, 45.0, 0.0, 50.0], [0.0, -50.0, 62.0, 45.0, 0.0, 50.0], [0.0, -50.0, 40.0, 45.0, 0.0, 50.0]]
+    # the start is never envelope-checked; easing toward a start far below it moves elbow row 1 to 62 - 0.5 * 162 = -19
+    far = [0.0, -50.0, -100.0, 45.0, 0.0, 50.0]
+    assert shape.shape_chunk(chunk, far, low, high, FASTEST)[-1] == pytest.approx(chunk[-1])
+    with pytest.raises(ValueError, match="outside reviewed"):
+        shape.shape_chunk(chunk, far, low, high, FASTEST, ease=True)
+    assert shape.shape_chunk(chunk, start, low, high, FASTEST, ease=True)[-1] == pytest.approx(chunk[-1])

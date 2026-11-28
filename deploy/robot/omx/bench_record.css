@@ -460,3 +460,13 @@ input.ep-note-inp{min-height:26px;padding:2px 7px;font-size:.8rem}
 .side-alignment-views img[hidden]{display:none}
 .side-alignment-point{position:absolute;width:12px;height:12px;border:2px solid #69eaff;border-radius:50%;box-shadow:0 0 0 1px #121820;transform:translate(-50%,-50%);pointer-events:none}
 .side-alignment-point.observed{width:5px;height:5px;border:0;background:#ffd65a}
+.cam-objects-overlay{position:absolute;pointer-events:none;z-index:3}
+.cam-objects-overlay[data-stale="true"]{opacity:.45}
+.cam-obj-node{pointer-events:all;cursor:pointer}
+.cam-obj-node:focus-visible .cam-obj-poly{stroke:#ffd65a;stroke-width:3.5}
+.cam-obj-poly{fill:rgba(88,166,255,.16);stroke:#58a6ff;stroke-width:2.4}
+.cam-obj-node[aria-pressed="true"] .cam-obj-poly{fill:rgba(61,214,140,.24);stroke:#3dd68c;stroke-width:3}
+.cam-obj-veto{pointer-events:all;cursor:not-allowed}
+.cam-obj-poly-veto{fill:rgba(245,166,35,.14);stroke:#f5a623;stroke-width:2;stroke-dasharray:4 3}
+.obj-pick-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--ground-deep);border:1px solid var(--bd);font-size:.82rem}
+.obj-pick-meta,.obj-pick-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}

@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
-- 2026-11-27 · uncommitted · pr1-stop-zone-overlay-and-next-steps
-- 2026-11-26 · 193197c657 · zone blueprint drawn on the active site map from station-zones YAML
-- 2026-11-26 · 7aa1fe40b4 · station-zone areas that overlap a lane or each other are refused on save
-- 2026-11-26 · uncommitted · 측량 도로선을 지도 기록 필드로 서버가 냄
-- 2026-11-22 · uncommitted · feat(fleet): Pinky 작업 Fleet trip 배차 및 start_guard·취소 정합성 (D-1060)
+- 2026-11-28 · uncommitted · D-1087 물러나서 다시 보기
+- 2026-11-28 · uncommitted · feat(fleet): a push cell task is auto-admitted like the free pick and completes on measured displacement (D-1083)
+- 2026-11-28 · uncommitted · D-1086 trip 재발행 폴백
+- 2026-11-28 · uncommitted · D-1082 복구 사다리 1단계
+- 2026-11-28 · uncommitted · Hold point review round 4

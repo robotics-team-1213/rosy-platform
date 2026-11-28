@@ -276,11 +276,14 @@ def test_the_local_clear_command_is_gone(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "x"])
 
-def test_an_arm_that_is_not_folded_is_never_rebooted(tmp_path, monkeypatch):
+def test_an_extended_arm_s_load_latch_is_rebooted_where_it_rests_and_stays_held(tmp_path, monkeypatch):
+    """D-1079 (was: never rebooted unfolded). reboot_latched reads all six torques 0 on the bus before it acts, so the arm already
+    rests where it is and the reboot changes nothing that holds it; the hold stays until the fold brings it home."""
     monkeypatch.chdir(tmp_path)
+    acted = []
     out = oi.handle(session(tmp_path, last=[0.8, -20.0, 10.0, 51.4, 45.0, 54.4]), "arm_b",
-                    act=lambda ids: pytest.fail("rebooted an extended arm"))
-    assert out["decision"]["hold"] and not out["decision"]["actions"] and "not folded" in out["decision"]["reason"]
+                    act=lambda ids: acted.append(ids) or {"rebooted": ids})
+    assert out["decision"]["hold"] and out["decision"]["actions"] == ["reboot_latched"] and acted and out["recovery"] == {"rebooted": acted[0]}
 
 
 def test_a_clean_session_is_no_incident_and_a_reopened_catch_is_a_note_without_hold(tmp_path, monkeypatch):
@@ -716,4 +719,166 @@ def test_rows_reads_tail_chunks_backward_stopping_before_since(tmp_path, monkeyp
     assert reading.rows(tmp_path / "missing.jsonl", since=10.0) == []
 
 
+REST = [0.22, -58.53, 54.68, 49.84, -4.66, 53.6]  # 2026-11-27 arm_s: torque OFF relaxed the elbow from 50.4 to 54.7 on its rest pose
+S_HOME = [0.22, -58.9, 50.4, 49.8, -4.7, 53.6]
 
+
+def _torque_off_session(tmp_path, last, library):
+    s = session(tmp_path, latched=False, windup=False, last=last)
+    (tmp_path / "lib.json").write_text(json.dumps(library))
+    return s
+
+
+def test_a_rested_folded_arm_opens_no_extended_incident_and_folded_is_not_widened(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {"home": [S_HOME]}})
+    assert oi.handle(s, "arm_s") == {"incident": False}
+    f = oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", {"chunks": {"home": [S_HOME]}})
+    assert f["folded"] is False and f["rested_folded"] is True  # D-1047: only the HOME_TOL rule is "folded"
+
+
+@pytest.mark.parametrize("last", [REST, [19.0] + REST[1:]], ids=["rested", "off-rest"])
+def test_a_latched_arm_keeps_its_latch_hold_not_the_extended_one(tmp_path, monkeypatch, last):
+    """Removing the 'not latched' guard of decide()'s guarded branch would give the off-rest arm the "arm extended"
+    reason (a rested one skips that branch on its own), so the off-rest case is what pins the guard."""
+    monkeypatch.chdir(tmp_path)
+    out = oi.handle(session(tmp_path, latched=True, windup=False, last=last), "arm_s", home=S_HOME, link=Link())
+    assert out["decision"]["hold"] and "arm extended" not in out["decision"]["reason"]
+    assert out["decision"]["reason"].startswith("latched ID 13")
+
+
+def test_the_loose_fold_ranges_alone_do_not_rest_an_arm_far_from_its_home(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lib = {"chunks": {"home": [S_HOME]}}
+    far = [19.0] + REST[1:]  # inside FOLD_TOL pan 20, outside REST_TOL
+    s = _torque_off_session(tmp_path, far, lib)
+    f = oi.facts(json.loads(s.read_text()), S_HOME, "arm_s", lib)
+    assert f["folded"] is False and f["rested_folded"] is False
+
+
+def test_nine_units_off_home_still_opens_the_extended_incident_and_seven_does_not(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lib = {"chunks": {"home": [S_HOME]}}
+    nine = list(S_HOME); nine[2] += 9.0
+    nine_dir = tmp_path / "nine"
+    nine_dir.mkdir()
+    out = oi.handle(_torque_off_session(nine_dir, nine, lib), "arm_s", link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+    seven = list(S_HOME); seven[2] += 7.0
+    assert oi.handle(_torque_off_session(tmp_path, seven, lib), "arm_s") == {"incident": False}
+
+
+def test_a_really_extended_arm_with_torque_off_still_opens_the_guarded_fold_incident(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, [0.22, -20.0, 20.0, 49.8, -4.7, 53.6], {"chunks": {"home": [S_HOME]}})
+    out = oi.handle(s, "arm_s", link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def test_without_a_library_pose_the_coarse_rule_never_rests_the_incident_fact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {}})
+    out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def test_a_missing_or_malformed_library_is_tolerated_when_home_is_passed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = _torque_off_session(tmp_path, REST, {"chunks": {}})
+    rec = json.loads(s.read_text())
+    for body in (None, "{not json"):
+        lib = tmp_path / "lib.json"
+        lib.unlink(missing_ok=True)
+        if body:
+            lib.write_text(body)
+        out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+        assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def _run(tmp_path, name, last, library=None, **kw):
+    """One handle() over its own session folder; `safe_end` False rewrites the record."""
+    d = tmp_path / name
+    d.mkdir()
+    s = session(d, latched=False, windup=kw.pop("windup", False), last=last, status=kw.pop("status", ()))
+    if library is not None:
+        (d / "lib.json").write_text(json.dumps(library))
+    if kw.pop("unsafe", False):
+        rec = json.loads(s.read_text())
+        rec["safe_end"] = False
+        s.write_text(json.dumps(rec))
+    return oi.handle(s, "arm_s", home=kw.pop("home", S_HOME), link=Link(), **kw)
+
+
+def _link_loss_facts():
+    """A torque-off pose 4.3 units off home (inside REST_TOL, outside HOME_TOL) with the USB-loss rows is_home_recovery needs."""
+    return {"safe_end": True, "caps_restored": True, "folded": False, "latched": {}, "windup_hits": [], "stops": [],
+            "stop_reading": None, "torque_after": {str(i): 0 for i in range(11, 17)}, "home": S_HOME, "last_state": REST,
+            "last_target": None, "last_command": None, "rested_folded": True, "flagged_total": 1,
+            "flagged": [{"error": "session ended: RuntimeError: torque OFF not confirmed: DeviceNotConnectedError", "caught": False}],
+            "fault_records": ["f.json"], "fault_records_total": 1,
+            "fault_record_kinds": [{"fault": "(5, 'Input/output error')", "stop_reasons": []}]}
+
+
+def test_a_rested_link_loss_keeps_the_guarded_home_recovery_decision_of_main():
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON, guarded_home_decision, is_home_recovery
+    f = _link_loss_facts()
+    assert is_home_recovery(f)
+    d = oi.decide(f)  # what origin/main returns: the rested fact is not read for this case
+    assert d == guarded_home_decision(f) == {"actions": [], "hold": True, "offered": [], "reason": HOME_RECOVERY_REASON,
+                                            "event_kind": "home_recovery"}
+    other = dict(f, flagged=[{"error": "pushing joint", "caught": False}])  # same pose, not a link loss: rested wins
+    assert not is_home_recovery(other)
+    assert oi.decide(other)["hold"] and "arm extended" not in oi.decide(other)["reason"]
+
+
+def test_a_rested_pose_with_a_physical_sign_is_still_held_and_a_guard_stop_is_label_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lib = {"chunks": {"home": [S_HOME]}}
+    wound = _run(tmp_path, "windup", REST, lib, windup=True)
+    assert wound["decision"]["hold"] and "wind-up" in wound["decision"]["reason"]
+    unsafe = _run(tmp_path, "unsafe", REST, lib, unsafe=True)
+    assert unsafe["decision"]["hold"] and "arm extended" not in unsafe["decision"]["reason"]
+    stop = {"command": "run lift", "error": "contact in lift: strain", "state": REST, "t": 102.0}
+    label = _run(tmp_path, "stop", REST, lib, status=[stop])
+    assert label["decision"]["hold"] is False and "arm extended" not in label["decision"]["reason"]
+    assert label["facts"]["stops"] and label["facts"]["rested_folded"] is True
+
+
+def test_a_bad_library_still_raises_for_the_home_lookup_but_only_unrests_when_home_is_passed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for n, (body, error) in enumerate([(None, OSError), ("{not json", ValueError), ("[1]", AttributeError),
+                                       ('"x"', AttributeError)]):  # what origin/main raises for each
+        d = tmp_path / f"bad{n}"
+        d.mkdir()
+        s = session(d, latched=False, windup=False, last=REST)
+        lib = d / "lib.json"
+        lib.unlink()
+        if body:
+            lib.write_text(body)
+        with pytest.raises(error):
+            oi.handle(s, "arm_s", link=Link())
+        out = oi.handle(s, "arm_s", home=S_HOME, link=Link())
+        assert out["facts"]["rested_folded"] is False and "arm extended" in out["decision"]["reason"]
+
+
+def test_rest_tolerance_is_inclusive_at_eight_units(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    home = [0.0, -58.0, 50.0, 50.0, -5.0, 53.6]  # whole numbers: 8.0 off is exactly 8.0 in floats
+    lib = {"chunks": {"home": [home]}}
+    on = list(home); on[2] += 8.0
+    assert _run(tmp_path, "on", on, lib, home=home) == {"incident": False}
+    off = list(home); off[2] += 8.1
+    out = _run(tmp_path, "off", off, lib, home=home)
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]
+
+
+def test_a_multi_frame_home_chunk_uses_its_first_frame_for_the_lookup_and_the_rested_fact(tmp_path, monkeypatch):
+    """handle() takes home = chunks.home[0] (the FIRST frame); rested_folded measures REST_TOL against that same frame
+    (facts["home"]). The readiness rule behind it (cell_job_peer_health) reads the LAST frame, so both must agree."""
+    monkeypatch.chdir(tmp_path)
+    second = list(S_HOME); second[2] += 12.0  # last frame: inside the readiness fold range, outside REST_TOL of frame 0
+    lib = {"chunks": {"home": [S_HOME, second]}}
+    assert _run(tmp_path, "first", REST, lib, home=None) == {"incident": False}  # near frame 0
+    out = _run(tmp_path, "second", second, lib, home=None)  # at the last frame only
+    assert out["facts"]["home"] == S_HOME and out["facts"]["rested_folded"] is False
+    assert out["decision"]["hold"] and "arm extended" in out["decision"]["reason"]

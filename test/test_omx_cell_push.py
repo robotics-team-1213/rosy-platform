@@ -175,6 +175,7 @@ def test_the_lane_is_the_measured_jaw_face_and_a_real_push_leaves_its_decision(t
     for module in (cpu.cd, cpu.cell_attempts):  # a started run must not outlive this test (the next file's checks)
         monkeypatch.setattr(module, "RUN", dict(module.RUN))
     monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_preflight, "ready", lambda *a: [])
     monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {"loo_error_mm": {"max": 11.9}})
     monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
     monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
@@ -212,3 +213,190 @@ def test_a_narrow_push_leads_with_one_finger_pad_and_looks_behind_for_the_traili
     d = np.array([0.0, 1.0])
     assert cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []
     assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10 + back, tail_mm=2 * back)} == {"behind"}
+
+
+def _push_params():
+    return {"arm": "arm_a", "config": "cell-auto-arm-a.json", "site": "plate_a", "roi": [10, 20, 300, 400],
+            "px_x": 228, "px_y": 330.5, "dir_x": 0, "dir_y": -1, "mm": 12}
+
+
+def test_push_jobs_map_every_param_to_the_script_flag_and_bound_the_distance(tmp_path):
+    import cell_job_spec as spec
+
+    (tmp_path / "cell-auto-arm-a.json").write_text("{}")
+    dry = spec.build_argv(spec.JOBS["push_dry_run"], {**_push_params(), "half_mm": 20, "half_width_mm": 12}, tmp_path)
+    tail = dry[dry.index("cell_push.py") + 1:]
+    assert tail == ["--config", "cell-auto-arm-a.json", "--site", "plate_a", "--roi", "10", "20", "300", "400",
+                    "--px=228,330.5", "--dir=0,-1", "--mm", "12", "--dry-run", "--half-mm", "20", "--half-width-mm", "12"]
+    assert not spec.moves_arm(spec.JOBS["push_dry_run"], _push_params())
+    for bad in (25, 4):
+        with pytest.raises(ValueError, match="mm"):
+            spec.build_argv(spec.JOBS["push_dry_run"], {**_push_params(), "mm": bad}, tmp_path)
+    live = spec.build_argv(spec.JOBS["push"], {**_push_params(), "person_at_switch": True}, tmp_path)  # supervised, like area_xyz_pick
+    assert spec.moves_arm(spec.JOBS["push"], _push_params()) and live[-2:] == ["--commissioning", "--person-at-switch"]
+    assert "--dry-run" not in live and "dry_run" not in spec.JOBS["push"].get("optional", {})
+    with pytest.raises(ValueError, match="mm"):
+        spec.build_argv(spec.JOBS["push"], {**_push_params(), "mm": 25, "person_at_switch": True}, tmp_path)
+
+
+def test_a_zero_push_direction_is_refused_before_anything_is_read():
+    with pytest.raises(SystemExit, match="--dir must not be zero"):
+        cpu.main(["--config", "x.json", "--roi", "0", "0", "9", "9", "--px", "1,1", "--dir", "0,0", "--dry-run"])
+
+
+def test_a_negative_first_direction_component_stays_one_token_argparse_accepts(tmp_path):
+    """--dir -1,0 was read as a flag and rejected (2026-11-27 panel): the value rides in the same token."""
+    import cell_job_spec as spec
+
+    (tmp_path / "cell-auto-arm-a.json").write_text("{}")
+    argv = spec.build_argv(spec.JOBS["push_dry_run"], {**_push_params(), "dir_x": -1, "dir_y": 0}, tmp_path)
+    tail = argv[argv.index("cell_push.py") + 1:]
+    assert "--dir=-1,0" in tail and "--dir" not in tail
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir")
+    ap.add_argument("--px")
+    assert ap.parse_known_args([t for t in tail if t.startswith(("--dir", "--px"))])[0].dir == "-1,0"
+
+
+def _tier_config(tmp_path, **sites):
+    (tmp_path / "cal.json").write_text("{}")
+    config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
+              "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
+              "cameras": {"top": {"height_m": 0.6, "center_px": [320, 240]}}, "sites": sites}
+    (tmp_path / "cfg.json").write_text(json.dumps(config))
+    return ["--config", str(tmp_path / "cfg.json"), "--roi", "0", "0", "10", "10", "--px", "1,1", "--dir", "0,1", "--dry-run"]
+
+
+def test_a_push_on_an_unknown_bed_or_over_stacked_site_is_refused_before_the_camera(tmp_path, monkeypatch, capsys):
+    class Cell:
+        def __init__(self, *a):
+            raise AssertionError("refused before any camera step")
+
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    args = _tier_config(tmp_path, floor={"surface_z": -0.01, "layers_below": 2}, pinky_a={"surface_z": 0.02},
+                        tray={"surface_z": 0.02, "on_vehicle": True})
+    for site, why in (("nowhere-l1", "not a site in the config"), ("pinky_a", "vehicle bed"), ("pinky_a-l1", "vehicle bed"),
+                      ("floor", "tier mismatch")):
+        assert cpu.main([*args, "--site", site]) == 1
+        assert why in json.loads(capsys.readouterr().out)["result"]
+    assert cpu.site_refusal(cpu.cell_place_fit.with_tiers({"sites": {"x": {"surface_z": 0.0, "on_vehicle": True}}})[0], "x-l0")
+
+
+def test_a_push_on_a_tier_site_plans_at_that_tiers_top_surface(tmp_path, monkeypatch, capsys):
+    frame = np.zeros((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            pass
+
+        def frame(self, camera):
+            return frame
+
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_preflight, "ready", lambda *a: [])
+    monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {})
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
+    monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: [])
+    args = _tier_config(tmp_path, floor={"surface_z": -0.01, "layers_below": 0})
+    assert cpu.main([*args, "--site", "floor-l1"]) == 0
+    tier_z = cpu.cell_place_fit.with_tiers(json.loads((tmp_path / "cfg.json").read_text()))[0]["sites"]["floor-l1"]["surface_z"]
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "planned" and out["z"] == pytest.approx(tier_z + cpu.prm.get(None, "push.height_m"), abs=1e-4) and tier_z > -0.01
+
+
+def test_a_push_on_a_dark_frame_is_refused_not_reported_clear(tmp_path, monkeypatch, capsys):
+    dark = np.zeros((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            pass
+
+        def frame(self, camera):
+            return dark
+
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: (_ for _ in ()).throw(AssertionError("planned on a dark frame")))
+    args = _tier_config(tmp_path, floor={"surface_z": -0.01})
+    assert cpu.main([*args, "--site", "floor"]) == 1
+    assert "refused: light top" in json.loads(capsys.readouterr().out)["result"]
+
+
+# --- measured completion (owner decision 2026-11-28) ---
+import cell_push_measure as meas  # noqa: E402
+
+
+def _obj(x, y, matched=True):
+    return {"centre_mm": [x, y], "matched": matched}
+
+
+def test_displacement_is_measured_along_and_across_the_push():
+    d = (0.0, 1.0)
+    got = meas.displacement([_obj(0, 100)], [_obj(2, 110)], (0, 105), d, 10, 30)
+    assert got == {"measured": True, "commanded_mm": 10, "moved_mm": 10.2, "along_dir_mm": 10.0, "lateral_mm": 2.0}
+    stayed = meas.displacement([_obj(0, 100)], [_obj(0, 100)], (0, 105), d, 10, 30)  # found where it was: it did not move
+    assert stayed["measured"] is True and stayed["along_dir_mm"] == 0.0 and stayed["moved_mm"] == 0.0
+    back = meas.displacement([_obj(0, 100)], [_obj(0, 95)], (0, 100), d, 10, 30)
+    assert back["along_dir_mm"] == -5.0  # dragged the wrong way is reported as such
+
+
+def test_no_matched_object_before_or_after_is_not_measured_and_never_guessed():
+    d = (1.0, 0.0)
+    assert meas.displacement([], [_obj(10, 0)], (0, 0), d, 10, 30)["measured"] is False
+    assert meas.displacement([_obj(0, 0, matched=False)], [_obj(10, 0)], (0, 0), d, 10, 30)["measured"] is False
+    assert meas.displacement([_obj(200, 0)], [_obj(210, 0)], (0, 0), d, 10, 30)["measured"] is False  # not the object under the pixel
+    gone = meas.displacement([_obj(0, 0)], [], (0, 0), d, 10, 30)
+    assert gone["measured"] is False and "after" in gone["why"]
+    assert meas.displacement([_obj(0, 0)], [_obj(90, 0)], (0, 0), d, 10, 30)["measured"] is False  # a far object is not this one
+
+
+def test_the_park_that_ends_a_push_carries_its_readback_for_the_fold_check():
+    cell = Scripted({"park": {"state": [1, 2, 3, 4, 5, 6], "settled": True, "fault": None}})
+    out = cpu.run_push(cell, Path("lib.json"))
+    park = meas.last_park(out["steps"])
+    assert out["result"] == "pushed" and park["command"] == "park" and park["state"] == [1, 2, 3, 4, 5, 6] and park["settled"] is True
+    assert meas.last_park([]) is None and meas.last_park([{"command": "run slide_push"}]) is None
+
+
+def test_a_real_push_reports_the_measured_displacement_and_the_parked_state(tmp_path, monkeypatch, capsys):
+    before, after = np.zeros((480, 640, 3), np.uint8), np.ones((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            self.frames = [before, after]
+
+        def frame(self, camera):
+            return self.frames.pop(0)
+
+    def detect(frame, *a, **k):  # the same detection before (dark frame) and after (bright frame)
+        return [_obj(130.0, -20.0)] if frame.max() == 0 else [_obj(131.0, -30.5)]
+
+    for module in (cpu.cd, cpu.cell_attempts):
+        monkeypatch.setattr(module, "RUN", dict(module.RUN))
+    park = {"command": "park", "ok": True, "state": [0, -58, 50, 50, -5, 58], "settled": True, "fault": None}
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_preflight, "ready", lambda *a: [])
+    monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {"loo_error_mm": {"max": 1.0}})
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
+    monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(cpu.cell_objects, "load_catalog", lambda p: [])
+    monkeypatch.setattr(cpu.cell_objects, "detect", detect)
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: [])
+    monkeypatch.setattr(cpu, "push_library", lambda *a, **k: {"chunks": {}})
+    monkeypatch.setattr(cpu, "look_first", lambda *a, **k: {"verdict": "pass"})
+    monkeypatch.setattr(cpu, "run_push", lambda cell, lib, friction=False: {"result": "pushed", "steps": [{"command": "run slide_push", "ok": True}, park]})
+    (tmp_path / "cal.json").write_text("{}")
+    config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
+              "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
+              "cameras": {"top": {"height_m": 0.6, "center_px": [320, 240]}}, "sites": {"pallet": {"surface_z": -0.01}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(config))
+    (tmp_path / "catalog.json").write_text("[]")
+    code = cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10", "--px", "312,201",
+                     "--dir", "0,1", "--mm", "10", "--catalog", str(tmp_path / "catalog.json"), "--commissioning", "--person-at-switch"])
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 0 and printed["result"] == "pushed" and printed["park"] == park and "steps" not in printed
+    assert printed["displacement"] == {"measured": True, "commanded_mm": 10.0, "moved_mm": 10.5, "along_dir_mm": 10.5, "lateral_mm": 1.0}

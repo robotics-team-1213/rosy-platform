@@ -75,27 +75,31 @@ def release(arm, device, *, open_bus, lock, session, calibration, baseline, out_
             bus.close()
         if calibration is None:
             raise Refused("CALIBRATION_MISSING", f"no calibration for {arm}: fold cannot be judged")
-        if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration, library):
-            raise Refused("NOT_FOLDED", "arm is not folded: torque is not cut on an extended arm")
-        try:  # the pose may have changed since the first read: judge again right before the write
-            bus = open_bus()
-            try:
-                now = snapshot(bus)
-            finally:
-                bus.close()
-        except Exception as exc:
-            raise Refused("READ_FAILED", f"cannot re-read follower: {exc}", ERROR) from None
-        if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration, library):
-            raise Refused("NOT_FOLDED", "arm left the folded pose before torque OFF")
-        ok, state = session.torque_off_until_confirmed()
-        if not ok:
-            raise Refused("TORQUE_OFF_UNCONFIRMED", f"torque OFF not confirmed: {state}", ERROR)
+        already_off = all(before[m]["torque"] == 0 for m in MOTORS)
+        result["already_torque_off"] = already_off
+        if not already_off:  # the fold rule guards the torque cut; an arm already OFF only gets its caps written (no motion)
+            # wrist_roll has zero gravity drop leverage and cutting torque does not rotate motors
+            if not calibrated_positions_folded([before[m]["position"] for m in MOTORS], calibration, library, include_wrist_roll=False):
+                raise Refused("NOT_FOLDED", "arm is not folded: torque is not cut on an extended arm")
+            try:  # the pose may have changed since the first read: judge again right before the write
+                bus = open_bus()
+                try:
+                    now = snapshot(bus)
+                finally:
+                    bus.close()
+            except Exception as exc:
+                raise Refused("READ_FAILED", f"cannot re-read follower: {exc}", ERROR) from None
+            if not calibrated_positions_folded([now[m]["position"] for m in MOTORS], calibration, library, include_wrist_roll=False):
+                raise Refused("NOT_FOLDED", "arm left the folded pose before torque OFF")
+            ok, state = session.torque_off_until_confirmed()
+            if not ok:
+                raise Refused("TORQUE_OFF_UNCONFIRMED", f"torque OFF not confirmed: {state}", ERROR)
         restored = False
         while True:
             try:
                 result["after"] = session._with_follower(lambda b: (session.check_idle(b), snapshot(b))[1])
                 result["baseline"] = {"restored": restored}
-                result["folded_after"] = calibrated_positions_folded([result["after"][m]["position"] for m in MOTORS], calibration, library)
+                result["folded_after"] = calibrated_positions_folded([result["after"][m]["position"] for m in MOTORS], calibration, library, include_wrist_roll=False)
                 return result
             except BaselineMismatch as exc:  # a SystemExit: caps an earlier session left raised
                 if restored or baseline(device, out_dir) != 0:

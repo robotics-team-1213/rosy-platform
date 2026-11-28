@@ -24,11 +24,14 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from cell_belt_pose import BELT_NAMES
+
 WEIGHTS = "model.safetensors"
 ONNX_MODEL = "model.onnx"
 ONNX_META = "ONNX_EXPORT.json"
 WARP = "cam_warp.json"
 UNITS = "UNITS.json"
+ENV_STATE = "ENV_STATE.json"  # optional: {"names": [...], "belt_reference": {...}} copied from the dataset's meta/info.json
 GOAL = "observation.environment_state"
 # chunk_runner NAMES order (LeRobot omx_follower motors); the checkpoint's 6-wide state/action follow it.
 JOINT_NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
@@ -77,6 +80,18 @@ def read_features(config: dict) -> tuple[dict[str, tuple[int, int]], int, int | 
             raise ValueError(f"{GOAL} must have a one-dimensional positive goal width")
         goal_size = shape[0]
     return views, len(JOINT_NAMES), goal_size
+
+
+def read_env_state(path: Path, width: int | None) -> tuple[list | None, dict | None]:
+    """(environment_state names, belt_reference) from ENV_STATE.json; (None, None) without the file."""
+    if not path.is_file():
+        return None, None
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    names = doc.get("names") if isinstance(doc, dict) else None
+    if (width is None or not isinstance(names, list) or len(names) != width
+            or not all(isinstance(name, str) for name in names)):
+        raise ValueError(f"{ENV_STATE}: names must list the {width} {GOAL} entries")
+    return names, doc.get("belt_reference")
 
 
 def read_sim_rule(path: Path, config: dict | None) -> dict | None:
@@ -191,6 +206,12 @@ class LeRobotShadow:
         self.policy_revision = policy_revision
         policy_config = json.loads((root / "config.json").read_text(encoding="utf-8"))
         self.image_views, _, self.goal_size = read_features(policy_config)
+        self.env_names, self.belt_reference = read_env_state(root / ENV_STATE, self.goal_size)
+        # the belt pose rides at the end only when the checkpoint names it so; any other naming keeps the one-hot goal
+        self.belt_input = (self.env_names is not None and len(self.env_names) > len(BELT_NAMES)
+                           and tuple(self.env_names[-len(BELT_NAMES):]) == BELT_NAMES)
+        if self.belt_input:
+            self.goal_size -= len(BELT_NAMES)
         self.n_action_steps = policy_config.get("n_action_steps")
         self.chunk_size = policy_config.get("chunk_size")
         self.sim_rule = read_sim_rule(root / UNITS, cell_config)
@@ -201,8 +222,9 @@ class LeRobotShadow:
             if loader is _load_lerobot else loader(root, device)
         )
 
-    def inputs(self, state, frames: dict, *, goal=None, mask_goal: bool = False) -> tuple[dict, dict]:
-        """(model observation, row metadata); a missing camera, a wrong size or a non-finite joint raises."""
+    def inputs(self, state, frames: dict, *, goal=None, mask_goal: bool = False, belt=None) -> tuple[dict, dict]:
+        """(model observation, row metadata); a missing camera, a wrong size or a non-finite joint raises.
+        `belt`: the three BELT_NAMES numbers (cell_belt_pose), required by and only by a checkpoint that names them."""
         import cv2
 
         positions = np.asarray([float(v) for v in state], dtype=np.float32)
@@ -236,6 +258,14 @@ class LeRobotShadow:
                 meta["goal_masked"] = True
                 vector.fill(0)
             obs[GOAL] = vector
+        if self.belt_input:
+            pose = np.asarray(belt if belt is not None else (), dtype=np.float32)
+            if pose.shape != (len(BELT_NAMES),) or not np.isfinite(pose).all():
+                raise ValueError(f"checkpoint requires the belt container pose {BELT_NAMES} as 3 finite numbers")
+            obs[GOAL] = np.concatenate([obs[GOAL], pose])
+            meta["belt_pose"] = pose.tolist()
+        elif belt is not None:
+            raise ValueError("checkpoint has no belt pose input")
         for view, (height, width) in self.image_views.items():
             frame = frames.get(view)
             if frame is None:

@@ -37,6 +37,25 @@ def test_site_finger_params_override_global_params_for_finger_room(monkeypatch):
     assert "evidence" not in seen[0]
 
 
+def test_belt_site_without_start_orders_by_reach_instead_of_key_error(monkeypatch):
+    """2026-11-27: auto_pick_dry_run from the live belt site (moves, no start/place) died with KeyError 'start'."""
+    import cell_auto_pick_plan as cap
+
+    seen = []
+    monkeypatch.setattr(cap, "predicted_pixel", lambda *a: (100, 100))
+    monkeypatch.setattr(cap, "past_pan_limit", lambda *a: None)
+    monkeypatch.setattr(cap, "past_park_reach", lambda *a: None)
+    monkeypatch.setattr(cap, "finger_room", lambda _m, _r, _pf, o, *_a, **_kw: seen.append(o["raw_m"]) or {"margin_mm": None, "free_mm": [1.0, 1.0]})
+    monkeypatch.setattr(cap, "reachable_ends", lambda *a: [])
+    cfg = {"params": {"auto.neighbour_clear_mm": 0.0},
+           "sites": {"belt": {"z": -0.0401, "moves": True, "moving_px": [260, 0, 370, 170], "auto_roi": [285, 15, 385, 168]}}}
+    far = {"raw_m": [0.20, 0.10], "matched": True, "object": "c2", "long_axis_deg": 0.0, "centre_mm": [200, 100]}
+    near = {"raw_m": [0.12, 0.05], "matched": True, "object": "c2", "long_axis_deg": 0.0, "centre_mm": [120, 50]}
+    cat = [{"id": "c2", "length_mm": 60, "width_mm": 30}]
+    usable, refused = cap.choose(None, cfg, {}, "belt", "pallet", [0.1, -0.05], [0, 0, 300, 300], [far, near], None, cat, {}, [], None, set(), None)
+    assert not usable and len(refused) == 2
+    assert seen == [[0.12, 0.05], [0.20, 0.10]]  # nearest to the arm axis first
+
 def _beltend_room_fixture(tmp_path):
     import copy
     import json
@@ -291,3 +310,32 @@ def test_run_auto_passes_blend_flag_matching_choose(tmp_path, monkeypatch):
     assert len(choose_calls) == 1  # blend=True matched target["bias_region"], so choose() was not called twice
     assert bias_calls == [(False, True), (False, True)]
     assert orig_bias_at is not None
+
+
+def _tier_cfg(layers_below, layer=0):
+    return {"sites": {"plate": {"surface_z": 0.011, "layers_below": layers_below, "layer": layer, "place": [0.1, 0.1]}}}
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_layers_below_on_a_base_site_is_refused_before_any_step_and_names_the_tier_site(tmp_path, monkeypatch, dry_run):
+    import cell_auto_pick as cap_main
+    import cell_choices
+
+    monkeypatch.setattr(cap_main.cell_bundle_emit, "emit_pick_failure", lambda *a, **kw: None)
+    cell = type("C", (), {"act": lambda self, cmd: pytest.fail("no cell step"), "frame": lambda self, cam: pytest.fail("no frame")})()
+    res = cap_main.run_auto(cell, _tier_cfg(2), {"sites": {}}, tmp_path / "cal.json", [], [0, 0, 100, 100], "plate", "plate",
+                            tmp_path, cell_choices.Choices(tmp_path / "ch.json"), dry_run=dry_run, attempts=1)
+    assert res["result"] == ("stopped: tier mismatch: layers_below=2 on base site plate plans at plate height; "
+                             "use source plate-l2")
+
+
+def test_tier_site_and_stack_top_site_are_not_refused_by_the_tier_check():
+    import cell_place_fit
+
+    cfg, _ = cell_place_fit.with_tiers(_tier_cfg(2))
+    assert cell_place_fit.tier_mismatch(cfg, "plate") is not None
+    assert cell_place_fit.tier_mismatch(cfg, "plate-l2") is None  # a tier site plans as before
+    top, _ = cell_place_fit.with_tiers(_tier_cfg(2, layer=2))  # the site's z is already the stack top
+    assert cell_place_fit.tier_mismatch(top, "plate") is None
+    low, _ = cell_place_fit.with_tiers(_tier_cfg(0))
+    assert cell_place_fit.tier_mismatch(low, "plate") is None

@@ -1,8 +1,8 @@
 """Fleet proxy to an arm cell's job API (:8781) for the ARM-CELL run/recover panel.
 
 Only three POST jobs and three reads pass. The job API keeps every guard (session locks, incident holds, peer fold,
-Fleet safety stop, D-1024 proposer check); Fleet adds the named operator as `operator`, refuses a proposer equal
-to it, and returns the job API's refusal status and body unchanged. Cell URL, token file, per-arm files and the
+Fleet safety stop, D-1024 proposer check); Fleet adds the named operator as `operator` (an Account person's login,
+never the opaque Account ID), refuses a proposer equal to that name, display name or ID, and returns the job API's refusal status and body unchanged. Cell URL, token file, per-arm files and the
 model list come from the JSON file named by ROSY_FLEET_CELL_JOBS on the Fleet host, never from the browser.
 """
 
@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
@@ -102,10 +102,10 @@ class CellJobProxy:
                   for m in conf.get("models") or () if isinstance(m, dict) and m.get("id")]
         return {"cell": cell, "arms": sorted((conf.get("arms") or {})), "models": models}
 
-    def start(self, cell: str, job: str, req: CellJobRequest, operator: str) -> JSONResponse:
+    def start(self, cell: str, job: str, req: CellJobRequest, operator: str, aliases: tuple = ()) -> JSONResponse:
         if job not in POST_JOBS:
             return _refuse(404, "CELL_JOB_NOT_ALLOWED", f"{job} is not a Fleet cell job")
-        if req.proposer.strip().casefold() == operator.strip().casefold():
+        if _fold(req.proposer) in {_fold(name) for name in (operator, *aliases) if name}:
             return _refuse(400, "PROPOSER_IS_OPERATOR", "operator must differ from proposer (D-1024)")
         conf = self.cells.get(cell) if isinstance(self.cells.get(cell), dict) else {}
         arm_files = (conf.get("arms") or {}).get(req.arm)
@@ -127,6 +127,27 @@ class CellJobProxy:
                 params.update({k: model[k] for k in ("policy_root", "policy_revision") if model.get(k)})
                 params.update({k: v for k, v in (model.get("params") or {}).items() if k in MODEL_PARAMS})
         return self._send(cell, "POST", f"/jobs/{job}", params)
+
+
+def _fold(name: str) -> str:
+    return "".join(name.split()).casefold()
+
+
+def operator_identity(request, principal) -> tuple[str, tuple] | None:
+    """(name sent as operator, other names the proposer must not equal); None when an Account person has no readable login.
+
+    A site-users or password-login principal_id is the configured operator name. An Account principal_id is an opaque
+    ID (2026-11-27: proposer "agent-operator" passed D-1024 against it), so the login comes from Account userinfo.
+    """
+    if not principal.account_id:
+        return principal.principal_id, ()
+    client = getattr(request.app.state, "account_client", None)
+    cookie_name = getattr(request.app.state, "account_cookie", None)
+    cookie = request.cookies.get(cookie_name) if cookie_name else None
+    profile = client.profile(cookie) if client is not None and cookie else None
+    if not profile or not profile.get("login"):
+        return None
+    return profile["login"], (profile.get("display_name") or "", principal.principal_id)
 
 
 def install_cell_job_proxy_routes(app, *, require_viewer, require_named_operator, environ=os.environ):
@@ -155,5 +176,9 @@ def install_cell_job_proxy_routes(app, *, require_viewer, require_named_operator
         return proxy()._send(cell, "GET", f"/jobs/{job_id}")
 
     @app.post(base + "/{job}", tags=["fleet"])
-    def cell_job_start(cell: str, job: str, body: CellJobRequest, principal=Depends(require_named_operator)):
-        return proxy().start(cell, job, body, principal.principal_id)
+    def cell_job_start(cell: str, job: str, body: CellJobRequest, request: Request,
+                       principal=Depends(require_named_operator)):
+        identity = operator_identity(request, principal)
+        if identity is None:
+            return _refuse(403, "OPERATOR_NAME_REQUIRED", "an Account operator needs a console login with a readable name")
+        return proxy().start(cell, job, body, *identity)

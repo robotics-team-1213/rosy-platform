@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """Keep the OMX cell's native tools at the newest green main, switching only while the cell is idle.
 
-Single Responsibility:
-  - Atomic Release State Machine & Rollback Controller (`Updater`), configuration validator (`load_config`),
-    and CLI entrypoint (`main`).
-  - Host Git/GitHub/Venv/Systemd/Bus I/O Adapter (`Host`, `DEFAULT_PATHS`, `LOCK`, `SMOKE`, `log`)
-    lives in `omx_autoupdate_host.py` and is re-exported here for backward compatibility.
+State machine, rollback, config, CLI. Host I/O: omx_autoupdate_host.py (re-exported); platform source: omx_autoupdate_platform.py.
 """
 from __future__ import annotations
 
@@ -29,14 +25,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from omx_autoupdate_host import (  # noqa: E402,F401  (re-exported)
-    DEFAULT_PATHS,
-    LOCK,
-    SMOKE,
-    Host,
-    _incomplete_release,
-    _release_paths,
-    log,
-)
+    DEFAULT_PATHS, LOCK, SMOKE, Host, SourceUnavailable, _incomplete_release, _release_paths, log)
 
 # Where the updater keeps its state; tools/remote/omx_hotfix.py writes floor_sha into the same file.
 DEFAULT_CONFIG = "~/.config/rosy/omx-autoupdate.json"
@@ -146,6 +135,13 @@ class Updater:
             raise
 
     def run(self, *, dry_run: bool = False) -> str:
+        try:
+            return self._run(dry_run)
+        except SourceUnavailable as exc:  # the platform pointer or history was not readable: wait for the next run
+            log(step="transient", reason=str(exc))
+            return "transient"
+
+    def _run(self, dry_run: bool) -> str:
         self.releases.mkdir(parents=True, exist_ok=True)
         state = self.state()
         sha = self.host.remote_head()
@@ -354,24 +350,26 @@ def load_config(path: Path) -> dict:
     cfg["paths"] = _release_paths(cfg.get("paths", list(DEFAULT_PATHS)))
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", DEFAULT_ROOT))
+    sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
+    cfg.setdefault("trust_source", "platform" if cfg.get("platform_url") else "github")  # github: the REST API fallback
+    source = [] if cfg["trust_source"] in ("platform", "github") else ['trust_source "platform" or "github"']
+    source += [k for k in ("platform_url", "platform_public_key", "platform_key_id") if cfg["trust_source"] == "platform" and not cfg.get(k)]
     if cfg.get("kind") == "service":
-        missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root") if not cfg.get(k)]
+        missing = source + [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root") if not cfg.get(k)]
         cfg.setdefault("lock", None)
         if cfg.get("idle_gate") == "cell":
             missing += [k for k in ("devices",) if not cfg.get(k)]
             if not cfg.get("observers") and not cfg.get("follower_device"):
                 missing.append("observers or follower_device")
-            sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
             cfg.setdefault("session_lock", os.path.join(os.path.expanduser(sessions), "session.lock"))
         elif cfg.get("idle_gate") is not None:
             raise SystemExit('idle_gate must be "cell" or absent')
-        if missing or not cfg["required_checks"] or cfg["keep"] < 2:
-            raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
-        return cfg
-    missing = [k for k in ("repo_url", "github_repo", "base_python", "devices", "follower_device") if not cfg.get(k)]
+    else:
+        missing = source + [k for k in ("repo_url", "github_repo", "base_python", "devices", "follower_device") if not cfg.get(k)]
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
-    sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
+    if cfg.get("kind") == "service":
+        return cfg
     if os.path.realpath(os.path.expanduser(sessions)) != os.path.realpath(cfg["root"]):
         raise SystemExit(f"root must be {sessions}, where joint_tune and record_session take session.lock")
     return cfg
@@ -387,7 +385,9 @@ def main(argv=None):
     Path(cfg["root"]).mkdir(parents=True, exist_ok=True)
     with (Path(cfg["root"]) / UPDATE_LOCK).open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        updater = Updater(cfg, Host(cfg))
+        platform = cfg["trust_source"] == "platform" and (Path(__file__).resolve().parents[2] / "site/candidate_signing.py").is_file()  # an older updater's release lacks the verifier: github this once
+        host = __import__("omx_autoupdate_platform").PlatformHost(cfg) if platform else Host(cfg)
+        updater = Updater(cfg, host)
         if args.command == "status":
             print(json.dumps(updater.state(), indent=2))
             return

@@ -133,3 +133,45 @@ def test_safe_home_unlinks_stale_out_sets_session_chunks_and_refuses_held_lease(
         csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {},
                           status_fn=lambda _a: (_ for _ in ()).throw(RuntimeError("boom")))
     assert released == ["arm_b"]
+
+
+def test_safe_home_releases_residual_folded_torque_before_wrapper(cell, monkeypatch):
+    import cell_torque_off_folded as tof
+    from contextlib import nullcontext
+    import omx_incident_reassess as oir
+    import register_probe as rp
+
+    tmp_path, ports = cell
+    args = args_for(tmp_path, ports["arm_b"])
+    rows = [{"id": 11 + i, "hardware_error": 0, "torque_enabled": 1} for i in range(6)]
+    released_obs, torqued, wrapped = [], [], []
+    monkeypatch.setattr(oir, "pause_observer_if_sole_holder", lambda _a, _d: True)
+    monkeypatch.setattr(rp, "open_readonly_port", lambda _d: nullcontext())
+    monkeypatch.setattr(rp, "read_motors", lambda *_a, **_k: rows)
+    monkeypatch.setattr(csh, "_release_observer", lambda arm: released_obs.append(arm))
+
+    def ok_torque_off(arm, device, library_path, out_dir):
+        torqued.append((arm, str(device), library_path))
+        return {"ok": True}
+
+    def ok_wrapper(cmd, **_kw):
+        Path(cmd[cmd.index("--out") + 1]).write_text(json.dumps({"result": "folded", "candidate": "already_home", "state": [0] * 6, "home": [0] * 6}))
+        wrapped.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    rc, res = csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {}, status_fn=lambda _a: {"incident_ids": []},
+                                run_fn=ok_wrapper, torque_off_fn=ok_torque_off)
+    assert (rc, res["result"], res["residual_torque_cleared"]) == (0, "folded", True)
+    assert len(torqued) == 1 and len(wrapped) == 1 and released_obs == []
+
+    def refused_extended(*_a, **_k):
+        raise tof.Refused("NOT_FOLDED", "arm is not folded")
+
+    rc2, res2 = csh.run_safe_home(args, live_fn=lambda _c: False, lease_status_fn=lambda _a: {}, status_fn=lambda _a: {"incident_ids": []},
+                                  run_fn=ok_wrapper, torque_off_fn=refused_extended)
+    assert (rc2, res2["result"], res2["reason_code"]) == (2, "refused_residual_torque_extended", "NOT_FOLDED")
+    assert len(wrapped) == 1 and released_obs == ["arm_b"]
+
+    with pytest.raises(tof.Refused) as bad_lib:
+        csh._release_residual_torque("arm_b", ports["arm_b"], args.library, tmp_path)
+    assert bad_lib.value.code == "LIBRARY_UNUSABLE"

@@ -242,6 +242,8 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
     api["/api/fleet/peers"] = {"peers": []}
     api["/api/fleet/dispatch-control"] = {"paused": False}
     api["/api/fleet/work"] = {"rows": []}
+    api["/api/fleet/site-points"] = {"schema_version": "rosy.site-points.v1", "view": "full", "points": [], "zones": {}}
+    api["/api/fleet/pipeline/cell-objects"] = {"schema": "rosy.cell-detected-objects.v1", "cells": {}, "by_arm": {}}
     api["/api/fleet/cells/cell_ab/jobs/options"] = {"cell": "cell_ab", "arms": ["arm_a", "arm_b"], "models": []}
     api["/api/fleet/cells/cell_ab/jobs/readiness"] = {"arms": {}}
     api["/api/fleet/workcell-observations"] = {
@@ -500,4 +502,98 @@ def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
         expect(panel.locator(".telemetry-chart-value")).to_contain_text("62%")
         expect(page.locator('#robot-workspace [data-fact="battery"]')).to_contain_text("62%")
         assert not posts and not errors
+        browser.close()
+
+
+def test_catalog_object_click_stages_and_dispatches_one_shot_cell_task(site):
+    import json
+    import time
+    from playwright.sync_api import expect, sync_playwright
+
+    now_s = time.time()
+    api = copy.deepcopy(API)
+    api["/api/fleet/charge-bays"] = {
+        "schema_version": "rosy.charge-bays.v1",
+        "thresholds": {"go_percent": 15, "leave_percent": 80},
+        "bays": [{"bay": "C1", "state": "free", "robot_id": None}],
+        "actions": [],
+        "omx_cells": {
+            "cell_s": {"station": {"station_place": "S3"}, "gate": {"phase": "IDLE"}},
+            "cell_ab": {"station": {"station_place": "S5"}, "gate": {"phase": "IDLE"}},
+        },
+        "omx_cell_tasks": [],
+    }
+    api["/api/fleet/pipeline/cell-objects"] = {
+        "schema": "rosy.cell-detected-objects.v1",
+        "observed_at": now_s,
+        "cells": {
+            "cell_s": {
+                "cell_id": "cell_s",
+                "cell_state_gen": 7,
+                "arms": {
+                    "arm_s": {
+                        "schema": "rosy.cell-detected-objects.v1",
+                        "cell_id": "cell_s",
+                        "arm_id": "arm_s",
+                        "camera_role": "arm_s_top",
+                        "frame_wh": [640, 480],
+                        "source_seq": 88,
+                        "observed_at": now_s,
+                        "ttl_s": 15.0,
+                        "cell_state_gen": 7,
+                        "stale": False,
+                        "objects": [
+                            {
+                                "object_ref": "det:88:0",
+                                "catalog_id": "container-1",
+                                "site": "pinky",
+                                "centre_mm": [12.0, -4.0],
+                                "centre_px": [320.0, 240.0],
+                                "corners_px": [[290, 210], [350, 210], [350, 270], [290, 270]],
+                                "pickable": True,
+                                "bind_tol_mm": 13.5,
+                            },
+                            {
+                                "object_ref": "det:88:1",
+                                "catalog_id": "container-2",
+                                "site": "belt",
+                                "centre_mm": [90.0, 40.0],
+                                "centre_px": [450.0, 310.0],
+                                "corners_px": [[420, 280], [480, 280], [480, 340], [420, 340]],
+                                "pickable": False,
+                                "veto_reason": "out of reach",
+                                "bind_tol_mm": 13.5,
+                            },
+                        ],
+                    }
+                },
+            }
+        },
+        "by_arm": {},
+    }
+
+    with sync_playwright() as pw:
+        posts = []
+        ans = {"/api/fleet/pipeline/cell-tasks": (200, {"task": {"task_id": "ct-obj-1", "status": "QUEUED"}})}
+        browser, page, errors = _open(pw, site, api, posts, answers=ans, size=(1440, 900))
+        inspector = page.locator("#omx-right-inspector details.omx-pipeline-disclosure")
+        expect(inspector).to_be_visible()
+        inspector.locator("summary").click()
+        inspector.locator('[data-dual-cam-toggle="true"]').click()
+        page.locator('[data-cam-object="det:88:0"]').first.click()
+        staging = page.locator(".cell-obj-staging")
+        expect(staging).to_be_visible()
+        expect(staging).to_contain_text("container-1")
+        staging.locator('[data-obj-dispatch="true"]').click()
+        dialog = page.locator("dialog.ui-confirm")
+        expect(dialog).to_be_visible()
+        dialog.locator('ui-button[kind="irreversible"]').click()
+        expect(staging).to_contain_text("ct-obj-1")
+        task_posts = [body for path, body in posts if path == "/api/fleet/pipeline/cell-tasks"]
+        assert len(task_posts) == 1
+        sent = json.loads(task_posts[0])
+        assert sent["target_object"]["catalog_id"] == "container-1"
+        assert sent["target_object"]["expected_cell_state_gen"] == 7
+        assert sent["propose"] is False
+        assert not errors
         browser.close()

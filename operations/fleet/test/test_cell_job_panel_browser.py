@@ -115,7 +115,7 @@ def test_dry_run_first_then_the_same_real_run(site):
     try:
         panel = _panel(page)
         expect(panel).to_be_visible()
-        expect(panel.locator("[data-arm=arm_b]")).to_contain_text("사람 보류 걸림")
+        expect(panel.locator("[data-arm=arm_b]")).to_contain_text("보류 · 자동 복구 재시도 중")
         expect(panel.locator("[data-arm=arm_b] ui-button", has_text="보류 복구")).to_have_count(1)
         expect(panel.locator("[data-arm=arm_a] ui-button")).to_have_count(0)
         expect(panel.locator("ui-button", has_text="안전 홈 복귀")).to_have_count(0)

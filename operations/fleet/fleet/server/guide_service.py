@@ -31,6 +31,8 @@ class GuideService:
         self._tracking, self._sightings = tracking, sightings
         self._zones, self._body, self.config, self._clock, self._wall = zones, body, config, clock, wall
         self._still_since: dict[str, float] = {}
+        #: D-1084: robot -> the lane watch's latest judgement (LaneComplianceMonitor.view), wired at start-up.
+        self.lane_view: Optional[Callable[[str], Optional[dict]]] = None
 
     def _stopped_s(self, robot_id: str, state: Optional[Mapping], now: float) -> float:
         velocity = (state or {}).get("velocity") or {}
@@ -105,7 +107,8 @@ class GuideService:
                 tracking_row=tracked.get(robot_id), camera_ok=camera_ok, graph=graph, zone_of=zone_of,
                 body_radius_m=self._body.rotation_radius_m, body_half_width_m=self._body.half_width_m,
                 stopped_s=self._stopped_s(robot_id, row.get("state"), now), anonymous_seen=anonymous,
-                active_map_id=active_map_id, config=self.config))
+                active_map_id=active_map_id, config=self.config,
+                lane_watch=self.lane_view(robot_id) if self.lane_view is not None else None))
         add_near(records, self.config)
         for record in records:
             record["worst"] = worst(record)

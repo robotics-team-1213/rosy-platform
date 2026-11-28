@@ -4,8 +4,16 @@ import math
 import sys
 from pathlib import Path
 
-DEFAULT_SITE_KEEP_OUT_M = 0.32
-MIN_SITE_KEEP_OUT_M = 0.28
+#: The one keep-out between two aligned robots, lane or bay (safety-distance verdict and user decision 2026-11-27:
+#: 0.20 left no room on a 0.20 m lane and next to a 0.226 m bay). bays.YIELD_KEEP_OUT_M, the console's site keep-out
+#: and its goal-occupied distance all read this value.
+DEFAULT_SITE_KEEP_OUT_M = 0.18
+MIN_SITE_KEEP_OUT_M = 0.16
+#: Around a robot whose heading is not known (it lost localization: only its last trusted position stands). Its
+#: body may point anywhere, so its circumscribed radius counts, not its half width:
+#: 0.092 (that body, any heading) + 0.07 (the mover's half width) + 2 x 0.02 (localization) = 0.202.
+#: The aligned value above would leave 0.018 m, less than one localization error.
+HEADING_UNKNOWN_KEEP_OUT_M = 0.20
 
 
 def _traffic_zones(args) -> dict:
@@ -75,7 +83,7 @@ def _traffic_signal_advice(args) -> bool:
 
 
 def _traffic_site_keep_out_m(args) -> float:
-    """Site-frame obstacle keep-out radius in metres (``fleet.traffic.site_keep_out_m``, default 0.32, >= 0.28)."""
+    """Site-frame obstacle keep-out radius in metres (``fleet.traffic.site_keep_out_m``, default 0.18, >= 0.16)."""
     import yaml
 
     try:

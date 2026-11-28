@@ -46,7 +46,7 @@ from core_common.protocol.map_grid import occupancy_map_id
 
 from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
 from .loc_window import (WINDOW_EXPIRY_NS, WINDOW_RETRY_NS, confirm_window_candidate,
-                         decode_window, window_candidate)
+                         decode_window, log_by, window_candidate)
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
 from .sensing.localization import MapAgreement, planar_yaw, valid_beams
@@ -487,8 +487,7 @@ class LocAssistNode(Node):
             found, objects = self.confirm_window_candidate(found[0], window, now, generation)
         budget = self.p('search_budget_s')
         message = f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates'
-        # rclpy fixes the severity at each logging call site.
-        (self.get_logger().warning if elapsed > budget else self.get_logger().info)(message)
+        log_by(self.get_logger(), elapsed > budget, message)
         recent = now - self.sighted_at <= self.p('sighting_max_age_s')
         scores = None
         if recent and self.paint is not None and self.paint_map is not None:
@@ -561,7 +560,7 @@ class LocAssistNode(Node):
             except Exception:
                 pass  # the sampled map-frame sensor pose is still in the report
         message = "localization verification " + json.dumps(trace.report(now, mount), sort_keys=True)
-        (self.get_logger().warning if trace.check.result == FAILED else self.get_logger().info)(message)
+        log_by(self.get_logger(), trace.check.result == FAILED, message)
 
     def inject(self, injection):
         msg = PoseWithCovarianceStamped()

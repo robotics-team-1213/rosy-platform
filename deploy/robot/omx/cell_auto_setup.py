@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 import sys
 from pathlib import Path
 
@@ -38,6 +40,7 @@ def parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
     ap.add_argument("--layers-below", type=int, help="tier hint: layers under the source stack top; raises, never lowers, the site value")
     ap.add_argument("--verify-zones", action="store_true", help="record destination zone_verification even without --task-id")
+    ap.add_argument("--neighbour-clear-mm", type=float, help="this run's auto.neighbour_clear_mm, 10..30 (never below the 8 mm finger); recorded")
     return ap
 
 
@@ -51,14 +54,40 @@ def pick_parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
     ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
     ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
+    ap.add_argument("--map-only", action="store_true", help="pick on the measured site map without a pivot bias region near the object (recorded)")
+    ap.add_argument("--at-px", help="with --from free:<site>: U,V pixel of the object's top face in the top view")
+    ap.add_argument("--stop-proof", action="store_true", help="D-1077/D-1078: prove arm stop capability at start without --person-at-switch")
+    ap.add_argument("--one-shot", action="store_true", help="execute at most one attempt for the bound target object")
+    ap.add_argument("--target-object-ref", help="cell-local catalog detection ref bound at click time")
+    ap.add_argument("--target-catalog-id", help="expected matched catalog_id for single-target execution")
+    ap.add_argument("--target-centroid-mm", help="bound centroid 'x,y' in arm mm")
+    ap.add_argument("--target-source-seq", type=int, help="source frame sequence captured at click time")
+    ap.add_argument("--target-observed-at", type=float, help="observation epoch timestamp captured at click time")
+    ap.add_argument("--target-ttl-s", type=float, help="bound observation TTL in seconds")
+    ap.add_argument("--target-tolerance-mm", type=float, help="requested centroid matching tolerance in mm")
     return ap
 
 
 def validate_pick_args(args) -> None:
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if getattr(args, "stop_proof", False) and (args.commissioning or args.person_at_switch):
+        raise SystemExit("--stop-proof cannot be combined with --commissioning/--person-at-switch")
+    if getattr(args, "at_px", None) and not (str(args.source).startswith("free:") and re.fullmatch(r"\d{1,4},\d{1,4}", args.at_px)):
+        raise SystemExit("--at-px U,V (pixels) needs --from free:<site>")
+    if str(args.source).startswith("free:") and getattr(args, "layers_below", None) is not None:
+        raise SystemExit("--layers-below is not supported with a free source (--from free:<site>)")
     if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
         raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
+    t_vals = (getattr(args, "target_catalog_id", None), getattr(args, "target_centroid_mm", None), getattr(args, "target_observed_at", None))
+    any_t = any(v is not None for v in (*t_vals, getattr(args, "target_object_ref", None), getattr(args, "target_source_seq", None), getattr(args, "target_ttl_s", None), getattr(args, "target_tolerance_mm", None)))
+    if any_t and not all(v is not None for v in t_vals):
+        raise SystemExit("--target-catalog-id, --target-centroid-mm, and --target-observed-at are all required together")
+    for name, val in (("--target-observed-at", getattr(args, "target_observed_at", None)),
+                      ("--target-ttl-s", getattr(args, "target_ttl_s", None)),
+                      ("--target-tolerance-mm", getattr(args, "target_tolerance_mm", None))):
+        if val is not None and not math.isfinite(val):
+            raise SystemExit(f"{name} must be finite")
 
 
 def fifo_cell(config: dict, cameras: dict) -> tuple[dict, cp.FifoCell]:
@@ -74,6 +103,18 @@ def fifo_cell(config: dict, cameras: dict) -> tuple[dict, cp.FifoCell]:
     return config, cp.FifoCell(Path(config["io"]).expanduser(), cameras, **kwargs)
 
 
+def refresh_stop_proof(cell, config: dict) -> dict:
+    """Measure a fresh D-1077 stop-capability proof right before motion or gate open."""
+    import cell_stop_proof
+
+    job_id = str(config.get("_stop_proof_job_id") or "auto-pick")
+    proof = cell_stop_proof.session_proof(cell, job_id, str(config.get("arm_id") or "arm"))
+    if not proof.get("ok"):
+        raise SystemExit(f"no stop-capability proof ({proof.get('code')}): {proof.get('reason')}")
+    config["_commissioning"] = {"stop_proof": proof}
+    return config
+
+
 def open_cell(args, commissioning=False):
     """-> (config, cell, calibration path, work dir), with the attempts (and unless dry, decisions) logs started."""
     config = load_config(args.config)
@@ -87,11 +128,34 @@ def open_cell(args, commissioning=False):
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
     config["_verify_zones"] = bool(getattr(args, "verify_zones", False))
+    config["_map_only"] = bool(getattr(args, "map_only", False))
+    config["_free_px"] = [float(v) for v in args.at_px.split(",")] if getattr(args, "at_px", None) else None
+    config["_one_shot"] = bool(getattr(args, "one_shot", False))
+    if getattr(args, "target_catalog_id", None) is not None:
+        from cell_job_validators import _catalog_id, _centroid_mm, _object_ref
+
+        config["_target_binding"] = {
+            "catalog_id": _catalog_id(args.target_catalog_id),
+            "centroid_mm": _centroid_mm(args.target_centroid_mm),
+            "observed_at": float(args.target_observed_at),
+            **({"object_ref": _object_ref(args.target_object_ref)} if getattr(args, "target_object_ref", None) else {}),
+            **({"source_seq": int(args.target_source_seq)} if getattr(args, "target_source_seq", None) is not None else {}),
+            **({"ttl_s": float(args.target_ttl_s)} if getattr(args, "target_ttl_s", None) is not None else {}),
+            **({"tolerance_mm": float(args.target_tolerance_mm)} if getattr(args, "target_tolerance_mm", None) is not None else {}),
+        }
+        config["_one_shot"] = True
+    if (clear := getattr(args, "neighbour_clear_mm", None)) is not None:
+        if not 10.0 <= clear <= 30.0:
+            raise SystemExit("--neighbour-clear-mm must be 10..30")
+        config["params"], config["_neighbour_clear_mm"] = {**config["params"], "auto.neighbour_clear_mm": float(clear)}, float(clear)
     if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
         print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     config, cell = fifo_cell(config, config["cameras"])
+    if getattr(args, "stop_proof", False) and not getattr(args, "dry_run", False):
+        config["_stop_proof_job_id"] = getattr(args, "task_id", None) or "auto-pick"
+        refresh_stop_proof(cell, config)
     work = Path(config["work_dir"]).expanduser()
     cp.KEEP["dir"] = work / "frames"
     cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),

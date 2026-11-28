@@ -216,6 +216,29 @@ def test_the_ship_is_found_where_its_hull_lies():
     assert "error" in r2s.measure_ship(np.full((480, 640, 3), (27, 132, 180), np.uint8), layout)
 
 
+def test_a_ship_far_from_the_layout_centre_is_not_cut_by_the_blue_window():
+    """11-14 frame: the hull stood at y .047 and a fixed |y| < .085 crop cut its far side, so the fit slid 22 mm (.020) and hung the bases there."""
+    layout = sites.Layout()
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    pose = (.1575, .047, 0.)
+    cv2.fillPoly(img, [np.round(r2s.ship_polygon(cam, layout, pose)).astype(np.int32)], (250, 215, 150))
+    got = r2s.measure_ship(img, layout)
+    assert got["centre_y_m"] == pytest.approx(pose[1], abs=.002) and got["stern_x_m"] == pytest.approx(pose[0], abs=.002)
+
+
+def test_20261115_snapshot_arms_sit_on_their_plates_bridge_v7():
+    """Every placement onto tmp-a-1 failed (z +4.7 mm, tilt 5.8 deg): the hull-hung arm_a base was 20 mm short of plate a, its bridge box inside lane 1."""
+    path = "deploy/robot/omx/sim/cell_snapshots/20261115-0415.json"
+    layout = sites.Layout(cell_snapshot=path, temp_lanes="snapshot", ship_pose="snapshot", top_camera="snapshot")
+    assert layout.choices["arm_bases"] == "cad-194"
+    for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
+        base = layout.arms[arm].base
+        assert [math.dist(xy, base[:2]) for xy, _ in layout.plates[tag]["lanes"]] == [pytest.approx(.1977, abs=.006)] * 3
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)  # the 194 dock span kept
+    assert layout.choices["ship_centre_y_m"] == pytest.approx(.042, abs=.003)  # the hull in the stored frame, not the cut fit (.020)
+
+
 def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
     s = snap()
     s["items"]["ship"] = dict(stern_x_m=.1705, centre_y_m=-.011, yaw_deg=0.)
@@ -307,6 +330,19 @@ def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
     name = anchor.remember(path)
     assert name == anchor.digest(path) and anchor.reference(name).read_bytes() == path.read_bytes()
     assert anchor.reference("sha256:" + "0" * 64) is None
+
+
+@pytest.mark.parametrize("task", ["stack", "stack-t3", "rehandle"])
+def test_20261110_snapshot_choices_keep_the_stack_reachable_with_the_default_arm_bases(task):
+    """11-10 passed stack 9/9 and rehandle 12/12 on these choices; the fixed 194 mm bases (x .091) made arm_b 7 mm short at the measured stern."""
+    import omx_two_arm_tasks as tasks
+    snap = dict(cell_snapshot="deploy/robot/omx/sim/cell_snapshots/20261110-1231.json", temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
+    layout = sites.Layout(**snap)
+    assert layout.choices["arm_bases"] == "cad-194"  # the 194 gap kept, x follows the measured hull
+    assert layout.arms["arm_b"].base[0] == pytest.approx(layout.choices["ship_stern_x_m"] - .0704)
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert len(tasks.validate(layout, tasks.get_task(layout, task))) == {"stack": 9, "stack-t3": 3, "rehandle": 12}[task]
+    assert sites.Layout().choices["arm_bases"] == "measured-194"  # an assumed ship keeps the fixed bases
 
 
 def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():

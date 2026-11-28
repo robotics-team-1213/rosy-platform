@@ -32,7 +32,7 @@ def _points(raw, field: str) -> list[tuple[tuple[float, float], tuple[float, flo
         if not all(math.isfinite(v) for p in pair for v in p):
             raise BindingError("BAD_POINTS", f"{field} values must be finite")
         out.append(pair)
-    if len({p for pair in out for p in pair}) < 2 * len(out):
+    if len({r for r, _ in out}) < len(out) or len({s for _, s in out}) < len(out):  # robot == site is a real pair
         raise BindingError("BAD_POINTS", f"{field} repeats a point")
     return out
 
@@ -67,21 +67,22 @@ class MapBindingStore:
                  frame_for_version: Optional[Callable[[int], Optional[str]]] = None) -> None:
         self._db, self._lock, self._clock, self._event = db, lock, clock, event
         self._frame_for_version = frame_for_version
+        self.auto_notes: dict[str, dict] = {}  # robot id -> last auto-rebind attempt (map_binding_auto)
         with self._lock, self._db:
             self._db.execute("""
                 CREATE TABLE IF NOT EXISTS robot_map_bindings (
                     binding_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, robot_map_id TEXT NOT NULL,
                     robot_grid_id TEXT NOT NULL, site_map_id TEXT NOT NULL, site_map_version INTEGER NOT NULL,
                     fit TEXT NOT NULL, approved_by TEXT NOT NULL, approved_at REAL NOT NULL,
-                    revoked_by TEXT, revoked_at REAL, revoke_reason TEXT, site_frame_sha256 TEXT)""")
-            if "site_frame_sha256" not in {row[1] for row in self._db.execute("PRAGMA table_info(robot_map_bindings)")}:
-                self._db.execute("ALTER TABLE robot_map_bindings ADD COLUMN site_frame_sha256 TEXT")
+                    revoked_by TEXT, revoked_at REAL, revoke_reason TEXT, site_frame_sha256 TEXT, grid_sig TEXT)""")
+            for column in {"site_frame_sha256", "grid_sig"} - {r[1] for r in self._db.execute("PRAGMA table_info(robot_map_bindings)")}:
+                self._db.execute(f"ALTER TABLE robot_map_bindings ADD COLUMN {column} TEXT")
 
     def approve(self, robot_id: str, state: Mapping, site: tuple[str, int], pairs, holdout,
-                principal_id: str) -> dict:
+                principal_id: str, grid_sig: Optional[dict] = None) -> dict:  # grid_sig: map_binding.grid_signature
         robot_map_id, grid = _localized(state)
         pairs, holdout = _points(pairs, "pairs"), _points(holdout, "holdout")
-        if {p for pair in pairs for p in pair} & {p for pair in holdout for p in pair}:
+        if ({r for r, _ in pairs} & {r for r, _ in holdout}) or ({s for _, s in pairs} & {s for _, s in holdout}):
             raise BindingError("BAD_POINTS", "a holdout point repeats a fit point; measure it separately")
         fit, errors = judge([p[0] for p in pairs], [p[1] for p in pairs], holdout)
         body = {"yaw": fit.yaw, "tx": fit.tx, "ty": fit.ty, "residual_max_m": fit.max, "residual_rms_m": fit.rms,
@@ -93,10 +94,10 @@ class MapBindingStore:
             self._db.execute("UPDATE robot_map_bindings SET revoked_by = ?, revoked_at = ?, revoke_reason = "
                              "'superseded' WHERE robot_id = ? AND revoked_at IS NULL", (principal_id, now, robot_id))
             self._db.execute("INSERT INTO robot_map_bindings (binding_id, robot_id, robot_map_id, robot_grid_id, "
-                             "site_map_id, site_map_version, fit, approved_by, approved_at, site_frame_sha256) "
-                             "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                             "site_map_id, site_map_version, fit, approved_by, approved_at, site_frame_sha256, grid_sig) "
+                             "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                              (binding_id, robot_id, robot_map_id, grid, site[0], int(site[1]), json.dumps(body),
-                              principal_id, now, frame_sha))
+                              principal_id, now, frame_sha, json.dumps(grid_sig) if grid_sig else None))
             self._event("map_binding_approve", principal_id, {"robot_id": robot_id, "binding_id": binding_id,
                         "robot_grid_id": grid, "site_map_version": int(site[1]), "residual_max_m": fit.max})
         return self.active(robot_id)
@@ -114,13 +115,14 @@ class MapBindingStore:
         with self._lock:
             row = self._db.execute(
                 "SELECT binding_id, robot_map_id, robot_grid_id, site_map_id, site_map_version, fit, approved_by, "
-                "approved_at, site_frame_sha256 FROM robot_map_bindings WHERE robot_id = ? AND revoked_at IS NULL",
+                "approved_at, site_frame_sha256, grid_sig FROM robot_map_bindings WHERE robot_id = ? AND revoked_at IS NULL",
                 (robot_id,)).fetchone()
         if row is None:
             return None
         return {"binding_id": row[0], "robot_id": robot_id, "robot_map_id": row[1], "robot_grid_id": row[2],
                 "site_map_id": row[3], "site_map_version": row[4], "fit": json.loads(row[5]),
-                "approved_by": row[6], "approved_at": row[7], "site_frame_sha256": row[8]}
+                "approved_by": row[6], "approved_at": row[7], "site_frame_sha256": row[8],
+                "grid_sig": json.loads(row[9]) if row[9] else None}
 
     def history(self, robot_id: str, limit: int = 20) -> list[dict]:
         with self._lock:

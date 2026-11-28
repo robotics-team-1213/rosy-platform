@@ -54,8 +54,7 @@ from omx_incident_fleet import (  # noqa: E402
     send,
     upload_evidence,
 )
-
-from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
+from omx_incident_reading import library_of, rests_folded, rows, stop_reading  # noqa: E402  (split for size; names kept here)
 from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold, note_auto_clear  # noqa: E402
 
 HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electrical shock", 32: "overload"}
@@ -138,7 +137,7 @@ def stills_of(arm: str | None, since: float) -> list:
     return [str(p) for p in sorted(kept, key=lambda p: (p.stem.rsplit("-", 1)[-1] not in ("top", "side"), p.name))][:2]
 
 
-def facts(session: dict, home=None, arm: str | None = None) -> dict:
+def facts(session: dict, home=None, arm: str | None = None, library=None) -> dict:
     """Measured facts of one ended session (session.json as record_session writes it)."""
     chunks = session.get("chunks") or {}
     status = rows(Path(chunks["io"]) / "chunk-status.jsonl", session.get("started", 0)) if chunks.get("io") else []
@@ -155,16 +154,15 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
     n_arm = min(len(last) - 1, len(home) - 1) if (last and home and len(last) >= 6 and len(home) >= 6) else 5
     last_row = next((r for r in reversed(status) if r.get("state")), {})
     return {"safe_end": bool(session.get("safe_end")), "latched": latched,
-            # D-1047: what core_common recomputes "rested" from (never a boolean of ours): the runner's last target and
-            # command beside its last state, home, and how many rows the short lists below were cut from
+            # D-1047: what core_common recomputes "rested" from (never a boolean of ours): last target/command, last state, home, list totals
             "home": list(home) if home else None, "last_target": last_row.get("target"),
             "last_command": last_row.get("command"), "flagged_total": len(flagged), "fault_records_total": len(kept),
             "torque_after": session.get("torque_after") or {}, "caps_restored": session.get("caps_restored"),
             "folded": bool(home and last and all(abs(a - b) <= HOME_TOL for a, b in zip(last[:n_arm], home[:n_arm]))),
             "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "person_needed", "t")}
                                            for r in flagged][-5:],
-            "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
-            "stop_reading": stop_reading(status),
+            "windup_hits": [h for arm in replay.values() for h in arm["hits"]], "stop_reading": stop_reading(status),
+            "rested_folded": rests_folded(last, home, library),  # not "folded" (D-1047)
             # every guard stop on contact, held or not: what a person names the cause of (labels for learning)
             "stops": [{k: r.get(k) for k in ("command", "error", "t")} for r in status
                       if str(r.get("error") or "").startswith("contact in ") and not str(r["error"]).startswith("contact in park")][-5:],
@@ -191,8 +189,9 @@ def decide(f: dict) -> dict:
     off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
                                           for v in f["torque_after"].values())
     if off and not f["folded"] and f.get("home") and f.get("last_state") and not f["latched"]:
-        from core_common.protocol.arm_incident.home_recovery import guarded_home_decision
-        return guarded_home_decision(f)
+        from core_common.protocol.arm_incident.home_recovery import guarded_home_decision, is_home_recovery
+        if not f.get("rested_folded") or is_home_recovery(f):  # a rested pose skips the hold unless it is a link-loss recovery
+            return guarded_home_decision(f)
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],
@@ -205,7 +204,8 @@ def decide(f: dict) -> dict:
         return {"actions": [], "hold": False, "offered": [], "reason": "jaws caught and reopened by the runner"}
     rebootable = [m for m, l in f["latched"].items()
                   if isinstance(l.get("hw_error"), int) and l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
-    offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) and off and f["folded"] else []
+    # D-1079: a load or supply latch is rebooted wherever the arm rests; reboot_latched reads all six torques 0 on the bus first,
+    offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) else []  # so nothing that holds the arm changes
     why = []
     if f["latched"]:
         why.append("latched " + ", ".join(f"ID {m} {'/'.join(l['bits']) or l['hw_error']}" for m, l in f["latched"].items()))
@@ -214,8 +214,7 @@ def decide(f: dict) -> dict:
     if f["flagged"]:
         why.append(f"runner: {f['flagged'][-1].get('error') or f['flagged'][-1].get('fault')}")
     if not offered and f["latched"]:
-        why.append("no automatic reboot: " + ("torque not confirmed OFF" if not off else
-                                               "arm not folded at home" if not f["folded"] else "a latch that is not load or supply"))
+        why.append("no automatic reboot: a latch that is not load or supply")
     if not why and not f["safe_end"]:
         if not off:
             why.append("torque not confirmed OFF")
@@ -233,10 +232,11 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     session = json.loads(Path(session_path).read_text())
     if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
         return {"incident": False}
-    if home is None and (session.get("chunks") or {}).get("library"):
+    library = library_of(session)  # tolerant: only rested_folded reads this one (a bad library means "not rested")
+    if home is None and (session.get("chunks") or {}).get("library"):  # the home lookup reads the library loudly, as before
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
-    f = facts(session, home, arm)
+    f = facts(session, home, arm, library)
     if (verify_caps and not f["safe_end"] and f["folded"] and not f["latched"]
             and not f["windup_hits"] and not f["flagged"] and f.get("caps_restored") is not True):
         if verify_caps():

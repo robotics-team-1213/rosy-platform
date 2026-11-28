@@ -291,3 +291,23 @@ def forget_removed_robots(svc, current: set) -> None:
         svc._pose_req.pop(rid, None)
         svc._pose_tries.pop(rid, None)
     svc._known = current
+
+
+def auto_rotate_clear(svc, rid: str, state: Optional[Mapping]) -> bool:
+    """The rotate rung without a press (user 2026-11-28), proven clear by fresh site-frame camera sightings."""
+    site_map = svc._current_active_map_id()
+    if svc._sightings is None or site_map is None:
+        return False
+    seen = {}
+    for row in svc._sightings.snapshot().get("sightings", ()):
+        try:
+            if (row.get("map_id") == site_map and 0.0 <= svc._wall() - float(row["captured_at"])
+                    <= service_logic.AUTO_ROTATE_SIGHTING_S):
+                # Two fresh rows for one robot: which one is it is unknown, so it counts as not seen.
+                xy = (float(row["x"]), float(row["y"]))
+                seen[row["robot_id"]] = None if row["robot_id"] in seen else xy
+        except (KeyError, TypeError, ValueError):
+            continue
+    seen = {k: v for k, v in seen.items() if v is not None}
+    own = seen.pop(rid, None)
+    return service_logic.auto_rotate_ok(state, own, seen, svc._known - {rid})

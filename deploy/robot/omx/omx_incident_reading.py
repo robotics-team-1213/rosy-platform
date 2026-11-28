@@ -5,6 +5,29 @@ import json
 from pathlib import Path
 
 
+def library_of(session):
+    """The session's start library for rested_folded only, or None when absent, unreadable or not an object."""
+    try:
+        library = json.loads(Path(session["chunks"]["library"]).read_text())
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return library if isinstance(library, dict) else None
+
+
+def rests_folded(last, home, library) -> bool:
+    """Torque OFF settles a folded arm a few units off its start home (arm_s elbow 50 -> 55): folded when the readiness
+    rule (cell_job_peer_health, calibrated library basis only, never the coarse fallback) agrees AND every body joint is
+    within core_common's REST_TOL of home, so the loose per-joint fold ranges alone never widen the fact."""
+    try:
+        from cell_job_peer_health import fold_basis, live_folded
+        from core_common.protocol.arm_incident.arm_incidents import REST_TOL
+    except ImportError:
+        return False
+    return bool(last and home and len(last) >= 6 and len(home) >= 6 and fold_basis(library) == "calibrated"
+                and live_folded({"state": last}, library) is True
+                and all(abs(a - b) <= REST_TOL for a, b in zip(last[:5], home[:5])))
+
+
 def rows(path, since=0.0):
     out = []
     p = Path(path) if path else None

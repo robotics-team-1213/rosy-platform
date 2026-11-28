@@ -20,7 +20,36 @@ from cell_job_validators import (
 Z_METRE = _num(-0.15, 0.35)
 YAW_DEG = _num(-180, 180)
 
+PIXEL = _num(0, 1280)
+_PUSH = {  # cell_push.py: one closed-jaw push of a top box or a box on a flat surface, 5..20 mm for now
+    "script": "cell_push.py",
+    "camera": True,
+    "argv": ["--config", "{config}", "--site", "{site}", "--roi", "{roi}", "--px={px_x},{px_y}",
+             "--dir={dir_x},{dir_y}", "--mm", "{mm}"],  # one token each: argparse reads "--dir -1,0" as a flag; no --arm: the config names the arm
+    "params": {
+        "arm": _match(ARM),
+        "config": _match(FILE),
+        "site": _match(NAME),
+        "roi": _roi,
+        "px_x": PIXEL,
+        "px_y": PIXEL,
+        "dir_x": _num(-100, 100),
+        "dir_y": _num(-100, 100),
+        "mm": _num(5, 20),
+    },
+    "optional": {
+        "half_mm": _num(5, 60),
+        "half_width_mm": _num(5, 60),
+        "catalog": _match(FILE),
+        "operator": _actor,
+        "proposer": _actor,
+    },
+}
+
 AREA_JOBS = {
+    # Fleet worker's push (owner decision 2026-11-28): the stop proof is still measured. Not cancellable: cell_push drives a bare FifoCell, so Guarded.act's stop marker is never read.
+    "push": {**_PUSH, "moving": True, "commissioning": True, "machine_ids": ("cell-task-worker",)},
+    "push_dry_run": {**_PUSH, "moving": False, "argv": [*_PUSH["argv"], "--dry-run"]},
     "area_xyz_pick": {
         "script": "cell_area_pick_cli.py",
         "moving": True,

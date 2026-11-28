@@ -4,35 +4,52 @@ from __future__ import annotations
 from bisect import bisect_right
 import math
 
-from core_common.protocol.evidence import STALE_POSE_S
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
+from fleet.server.nav2_recovery_ladder import recovery_slow
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
+from fleet.server.trip_lane_realign import REALIGN_SLOW_MPS
 from fleet.server.trip_ports import TripError
-from fleet.speed_table import speed_table
-from rosy.world.state.projections.map_pose_samples import parse_utc
+from fleet.speed_table import CurveCap, speed_table
 
 GRANT_S = 1.5
+#: D-1080 (user 2026-11-27): tighter than R 0.30 m the robot cannot keep the lane at 0.15 m/s within its turn rate
+#: (the R 0.135 m U-turn); it goes at most 0.08 m/s there, departed or not.
+TIGHT_CURVE_CAPS = (CurveCap(0.30, 0.08),)
+
+
+#: A lease 409 while the state read still shows the goal running: CORE has no active leased goal, so nothing drives
+#: under it (its speed authority closes with the run and expires within 1.5 s). At the end of a route run CORE
+#: finishes the run a moment before it reports ARRIVED, and Fleet's shared state read lags on top (2026-11-27
+#: 13:05Z: two trips failed in that window). The step loop reads the state every tick; only past this long is it
+#: a failure.
+LEASE_ENDED_GRACE_S = 2.0
 
 
 async def _goal_finished(runner, rid) -> bool:
-    """A lease 409 is a normal arrival only when CORE itself reports the goal done: ARRIVED, no goal,
-    no e-stop, zero fresh velocity. Anything else (failed, cancelled, replaced, unknown) stays a stop."""
+    """A lease 409 is a normal end only when CORE itself reports the goal done: ARRIVED (or FAILED, which the step
+    loop retries through _handle_nav2_failure), no goal, no e-stop. The step loop reads the same state next tick and
+    takes the same arrival path a normal CORE ARRIVED takes (plain Nav2: navigation done plus pose proximity; parking
+    and free stops also demand fresh zero velocity), so the lease race adds no new arrival rule here.
+    Anything else (cancelled, replaced, still navigating, unknown) stays a stop."""
     if getattr(runner, "_robot_state", None) is None:
         return False
     try:
         state = await runner._call(runner._robot_state(rid))
     except Exception:
         return False
-    if not isinstance(state, dict) or state.get("navigation") != "ARRIVED" or state.get("goal") is not None:
+    return (isinstance(state, dict) and state.get("navigation") in ("ARRIVED", "FAILED") and state.get("goal") is None
+            and (state.get("safety") or {}).get("estop") is False)
+
+
+async def _goal_reads_running(runner, rid) -> bool:
+    """The state read still shows the goal under way (not cancelled, no e-stop): it may lag the lease's end."""
+    try:
+        state = await runner._call(runner._robot_state(rid))
+    except Exception:
         return False
-    evidence = (state.get("evidence") or {}).get("velocity") or {}
-    stamp = parse_utc(evidence.get("sampled_at"))
-    vel = state.get("velocity") or {}
-    return (evidence.get("evidence") == "fresh" and stamp is not None and 0 <= runner._clock() - stamp < STALE_POSE_S
-            and (state.get("safety") or {}).get("estop") is False
-            and all(type(vel.get(a)) in (int, float) and math.isfinite(vel[a]) for a in ("linear", "angular"))
-            and abs(vel["linear"]) <= 0.01 and abs(vel["angular"]) <= 0.02)
+    return (isinstance(state, dict) and state.get("navigation") in ("NAVIGATING", "PLANNING")
+            and (state.get("safety") or {}).get("estop") is False)
 
 
 class RoadSpeed:
@@ -51,7 +68,7 @@ class RoadSpeed:
         if getattr(live, "road_profile_key", None) != key:
             segs = [(row["edge_id"], row["forward"], row["s_from"], row["s_to"]) for row in live.segments]
             # Nav2 owns the acceleration from rest and the final pose controller.
-            table = speed_table(site, segs, start_mps=math.inf, stop_at_end=False)
+            table = speed_table(site, segs, curve_caps=TIGHT_CURVE_CAPS, start_mps=math.inf, stop_at_end=False)
             live.road_profile = table["rows"]
             live.road_profile_key = key
         rows = live.road_profile
@@ -71,6 +88,10 @@ class RoadSpeed:
             cap = min(cap, speed)
         stamp = pose.odom_stamp
         reason = "route_profile"
+        if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
+            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: while a departure is fresh evidence
+        elif recovery_slow(live.view["detail"], progress) and cap > REALIGN_SLOW_MPS:
+            cap, reason = REALIGN_SLOW_MPS, "recovery_slow"  # D-1082 ladder: attempt 2+ resends slow
         leader = None
         gap_m = None
         geometry = await self.geometry.get(active)
@@ -102,9 +123,10 @@ class RoadSpeed:
                     ahead, away = loop.project(peer.x, peer.y)
                     if away > ON_LOOP_M:
                         continue
-                    stamp = min(stamp, peer.odom_stamp) if stamp is not None else None
                     gap = loop.gap(ahead, pos)
                     minimum = getattr(formation, "min_gap_m", None) or MIN_GAP_M
+                    if gap < max(cap, 0.25) * GRANT_S + minimum + 0.5:
+                        stamp = min(stamp, peer.odom_stamp) if stamp is not None else None
                     # No observed forward velocity is promised by a parked or braking leader.
                     allowed = min(follower_speed(0.0, gap, cap, target=minimum),
                                   max(0.0, (gap - minimum) / GRANT_S))
@@ -131,6 +153,12 @@ class RoadSpeed:
                     and getattr(exc, "code", None) in ("GOAL_LEASE_NOT_ACTIVE", "ROAD_SPEED_OWNER_CHANGED")
                     and live.open and live.active_route is route and await _goal_finished(runner, rid)):
                 detail["state"] = "arrived"  # reached the target before the first renewal; the step loop sees ARRIVED
+                return
+            if (getattr(exc, "status", None) == 409 and getattr(exc, "code", None) == "GOAL_LEASE_NOT_ACTIVE"
+                    and live.open and live.active_route is route and getattr(runner, "_robot_state", None) is not None
+                    and (seen := runner._clock()) - route.setdefault("lease_ended_at", seen) < LEASE_ENDED_GRACE_S
+                    and await _goal_reads_running(runner, rid)):
+                detail.update(state="lease_ended", error="GOAL_LEASE_NOT_ACTIVE")  # the next tick's state read decides
                 return
             detail.update(state="unconfirmed", error=getattr(exc, "code", type(exc).__name__))
             if isinstance(exc, RoadSpeedRefused):

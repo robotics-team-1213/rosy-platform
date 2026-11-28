@@ -96,7 +96,7 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
     try:
         # 1. schema
         assert cli.main(["schema"]) == 0
-        assert len(json.loads(capsys.readouterr().out)) == 18
+        assert len(json.loads(capsys.readouterr().out)) == 23
         assert cli.main(["schema", "cell_frame"]) == 0
         assert json.loads(capsys.readouterr().out)["name"] == "cell_frame"
         assert cli.main(["schema", "no_such_tool"]) == 1
@@ -204,6 +204,6 @@ def test_rosy_cli_is_stdlib_only_no_subprocess_and_d226_clean():
             imports.update(a.name.split(".")[0] for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".")[0])
-    assert (imports - {"rosy_agent_bridge"}) <= set(sys.stdlib_module_names)
+    assert (imports - {"rosy_agent_bridge", "rosy_plan", "rosy_cli_motion"}) <= set(sys.stdlib_module_names)  # the loop's stdlib-only siblings
     assert "subprocess" not in imports
     assert scan_files([cli_path, Path(__file__)], root=ROOT) == []

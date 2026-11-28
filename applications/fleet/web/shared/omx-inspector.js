@@ -1,15 +1,21 @@
 // Shared pure-DOM OMX right inspector used by both Console charge-bays and Cell real2sim.
+import { setOffBy } from "/common/cause-line.js";
 import { node, uiTag } from "/common/control-dom.js";
+import { buildCamRoiSvg } from "/console/assets/cell-cam-roi.js";
+import { buildCamObjectsSvg } from "/console/assets/cell-cam-objects.js";
+import { buildInspectorStagingBar } from "/console/assets/cell-pick-place-staging.js";
 
 const TIER_CHOICES = [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]];
 const DISP_CHOICES = [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]];
 
 /** Build a frame box with a permanent standby layer so paint() updates never re-create layout nodes. */
-export function buildInspectorCamFrame(img, standbyText = "영상 확인 중") {
+export function buildInspectorCamFrame(img, standbyText = "영상 확인 중", roiSvg = null, objSvg = null) {
   const wrap = node("div", "", "omx-inspector-cam-frame");
   const standby = node("span", standbyText, "omx-inspector-cam-standby");
   standby.setAttribute("role", "status");
   wrap.append(img, standby);
+  if (roiSvg) wrap.append(roiSvg);
+  if (objSvg) wrap.append(objSvg);
   return wrap;
 }
 
@@ -46,26 +52,13 @@ function buildTab(text, active, onClick) {
  * attached <img> elements never flash a detached standby state for 2 seconds.
  */
 export function renderOmxInspector(container, {
-  targets = [],
-  activeId = null,
-  dualCamMode = false,
-  selectedCamByTarget = {},
-  draftChoices = new Map(),
-  frames = null,
-  framesActive = true,
-  standbyText = "영상 확인 중",
-  tagText = null,
-  tagStatus = "neutral",
-  disclosure = null,
-  runButtonLabel = null,
-  actionChoices = null,
-  actionsClass = "omx-inspector-actions",
-  onSelectTarget = () => {},
-  onToggleDual = () => {},
-  onSelectCam = () => {},
-  onQuickDispatch = async () => {},
-  onRenderAction = null,
-  onDisclosureToggle = null,
+  targets = [], activeId = null, dualCamMode = false, selectedCamByTarget = {}, draftChoices = new Map(),
+  frames = null, framesActive = true, cameraRois = null, showRoi = true, standbyText = "영상 확인 중",
+  tagText = null, tagStatus = "neutral", disclosure = null, runButtonLabel = null, quickDispatchReason = "",
+  actionChoices = null, actionsClass = "omx-inspector-actions", onSelectTarget = () => {}, onToggleDual = () => {},
+  onToggleRoi = null, onSelectCam = () => {}, onQuickDispatch = async () => {}, onRenderAction = null, onDisclosureToggle = null,
+  cellObjects = null, selectedObjectRef = null, aiHighlightRef = null, selectedObjectDest = null, objectBusy = false, objectStatusText = "",
+  onSelectObject = null, onSelectObjectDest = null, onClearObject = null, onDispatchTargetObject = null,
 }) {
   if (!container || !targets.length) return;
   const active = targets.find((t) => t.id === activeId) || targets[0];
@@ -86,6 +79,11 @@ export function renderOmxInspector(container, {
   dualBtn.dataset.dualCamToggle = "true";
   dualBtn.title = "상단+손목 2채널 동시 보기";
   tabs.append(dualBtn);
+  if (onToggleRoi && cameraRois) {
+    const roiBtn = buildTab(showRoi ? "ROI 표시" : "ROI 숨김", showRoi, () => onToggleRoi());
+    roiBtn.dataset.roiToggle = "true";
+    tabs.append(roiBtn);
+  }
 
   const head = node("div", "", "omx-inspector-head");
   head.append(
@@ -95,11 +93,13 @@ export function renderOmxInspector(container, {
 
   const stage = node("div", "", "omx-inspector-stage");
   const cameraBindings = [];
+  let visibleCams = [activeCam];
   if (dualCamMode && camViews.length >= 2) {
     const dualGrid = node("div", "", "omx-inspector-dual-grid");
     const [idA, idB] = active.dualPair || [camViews[0].id, camViews[1].id];
     const viewA = camViews.find((v) => v.id === idA) || camViews[0];
     const viewB = camViews.find((v) => v.id === idB && v.id !== viewA.id) || camViews.find((v) => v.id !== viewA.id) || camViews[1];
+    visibleCams = [viewA, viewB];
     for (const dv of [viewA, viewB]) {
       const pane = node("div", "", "omx-inspector-dual-pane");
       const dImg = node("img", "", "omx-inspector-main-cam omx-inspector-cam");
@@ -107,7 +107,8 @@ export function renderOmxInspector(container, {
       dImg.loading = "lazy";
       const dCap = node("small", `[${dv.label}]`, "omx-inspector-cam-badge");
       cameraBindings.push([dImg, dv, dCap, `[${dv.label}]`]);
-      pane.append(buildInspectorCamFrame(dImg, standbyText), dCap);
+      const dObjSvg = cellObjects ? buildCamObjectsSvg(dv, cellObjects, { selectedRef: selectedObjectRef, aiHighlightRef, onSelectObject }) : null;
+      pane.append(buildInspectorCamFrame(dImg, standbyText, showRoi ? buildCamRoiSvg(dv, cameraRois) : null, dObjSvg), dCap);
       dualGrid.append(pane);
     }
     stage.append(dualGrid);
@@ -124,8 +125,12 @@ export function renderOmxInspector(container, {
     zoomBtn.setAttribute("data-work-read", "");
     zoomBtn.setAttribute("aria-expanded", "false");
     zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
+    const roiSvg = showRoi ? buildCamRoiSvg(activeCam, cameraRois) : null;
+    const objSvg = cellObjects ? buildCamObjectsSvg(activeCam, cellObjects, { selectedRef: selectedObjectRef, aiHighlightRef, onSelectObject }) : null;
     const applyZoom = (zoomed) => {
       mainImg.classList.toggle("focused", zoomed);
+      roiSvg?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice");
+      objSvg?.setAttribute("preserveAspectRatio", zoomed ? "xMidYMid meet" : "xMidYMid slice");
       zoomBtn.setAttribute("aria-expanded", String(zoomed));
       zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
       zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
@@ -141,7 +146,7 @@ export function renderOmxInspector(container, {
     });
     stageBar.append(mainCap, zoomBtn);
     cameraBindings.push([mainImg, activeCam, mainCap, `[${activeCam.label}]`]);
-    wrap.append(buildInspectorCamFrame(mainImg, standbyText), stageBar);
+    wrap.append(buildInspectorCamFrame(mainImg, standbyText, roiSvg, objSvg), stageBar);
     stage.append(wrap);
   }
 
@@ -183,16 +188,24 @@ export function renderOmxInspector(container, {
   runBtn.setAttribute("kind", "primary");
   runBtn.setAttribute("type", "button");
   runBtn.setAttribute("data-work-read", "");
-  runBtn.addEventListener("click", () => onQuickDispatch({
-    targetCell,
-    targetArm,
-    tier: Number(tier.select.value || 1),
-    displacedTo: disp.select.value || null,
-    robotId: active.robot_id || undefined,
-    button: runBtn,
-  }));
+  if (quickDispatchReason) setOffBy(runBtn, quickDispatchReason);
+  runBtn.addEventListener("click", () => {
+    if (runBtn.hasAttribute("disabled")) return;
+    return onQuickDispatch({
+      targetCell,
+      targetArm,
+      tier: Number(tier.select.value || 1),
+      displacedTo: disp.select.value || null,
+      robotId: active.robot_id || undefined,
+      button: runBtn,
+    });
+  });
   const quickDispatchBar = node("div", "", "omx-inspector-quick-dispatch");
   quickDispatchBar.append(tier.field, disp.field, runBtn);
+  const stagingBar = cellObjects ? buildInspectorStagingBar(visibleCams, cellObjects, {
+    selectedRef: selectedObjectRef, selectedDest: selectedObjectDest, opReason: quickDispatchReason, busy: objectBusy,
+    statusText: objectStatusText, onSelectDest: onSelectObjectDest, onClear: onClearObject, onDispatch: onDispatchTargetObject,
+  }) : null;
 
   const actions = node("div", "", actionsClass);
   const choices = actionChoices || active.buttons || [];
@@ -213,12 +226,12 @@ export function renderOmxInspector(container, {
   if (disclosure) {
     const details = node("details", "", "omx-pipeline-disclosure");
     details.open = Boolean(disclosure.open);
-    details.append(node("summary", disclosure.summaryText), tabs, head, stage, detailNode, quickDispatchBar, actions);
+    details.append(node("summary", disclosure.summaryText), tabs, head, stage, detailNode, ...(stagingBar ? [stagingBar] : []), quickDispatchBar, actions);
     details.addEventListener("toggle", () => onDisclosureToggle?.(details.open, bindCameras));
     container.replaceChildren(details);
     if (framesActive && details.open) bindCameras();
   } else {
-    container.replaceChildren(tabs, head, stage, detailNode, quickDispatchBar, actions);
+    container.replaceChildren(tabs, head, stage, detailNode, ...(stagingBar ? [stagingBar] : []), quickDispatchBar, actions);
     if (framesActive) bindCameras();
   }
   return { bindCameras };

@@ -221,3 +221,19 @@ def test_export_cell_onnx_writes_verified_model_and_metadata(tmp_path, monkeypat
     onnx.checker.check_model(str(dst / 'model.onnx'), full_check=True)
     saved_meta = json.loads((dst / 'ONNX_EXPORT.json').read_text(encoding='utf-8'))
     assert saved_meta == meta
+
+
+def test_env_state_declaration_is_copied_and_leaves_the_policy_pin(tmp_path):
+    """ENV_STATE.json (tools/sim/omx_env_state.py, read by cell_belt_pose on the cell) rides into the bundle unchanged; the
+    pin (model.safetensors sha256) stays, the folder digest changes because the file is part of the checkpoint."""
+    declaration = '{"names": ["a", "belt_dx_cm", "belt_dy_cm", "belt_yaw_x5"], "belt_reference": {}}\n'
+    plain_src, declared_src = tmp_path / 'plain', tmp_path / 'declared'
+    weights_sha = _make_src_ckpt(plain_src)
+    _make_src_ckpt(declared_src)
+    (declared_src / shadow.ENV_STATE).write_text(declaration, encoding='utf-8')
+    plain = package_cell_bundle(plain_src, tmp_path / 'b-plain', arm_id='arm_b', rename_views={'rs': 'top'})
+    declared = package_cell_bundle(declared_src, tmp_path / 'b-declared', arm_id='arm_b', rename_views={'rs': 'top'})
+    assert (tmp_path / 'b-declared' / shadow.ENV_STATE).read_text(encoding='utf-8') == declaration
+    assert declared['files'][shadow.ENV_STATE] == hashlib.sha256(declaration.encode()).hexdigest()
+    assert plain['policy_revision'] == declared['policy_revision'] == weights_sha
+    assert plain['checkpoint_sha256'] != declared['checkpoint_sha256']

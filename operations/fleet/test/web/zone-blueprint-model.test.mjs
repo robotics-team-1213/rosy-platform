@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
 import { register } from "node:module";
+
+globalThis.crypto ??= webcrypto;
 
 // The 3D view imports "/common/ui.js" and "/console/assets/robot-3d-assets.js": map them for node.
 register("./register-console-assets.mjs", import.meta.url);
@@ -11,6 +14,10 @@ import {
   formatZoneDetailRows,
   resolveBlueprintTarget,
 } from "../../../../applications/fleet/web/map/zone-blueprint-model.js";
+import {
+  buildBlueprintSlotOverlays,
+  buildCellStagePayload,
+} from "../../../../applications/fleet/web/map/zone-blueprint-staging.js";
 
 const SITE_MAP = {
   version: 394,
@@ -311,4 +318,72 @@ test("the 2D map draws the lanes at their width and selectable footprints; 3D sh
   } finally {
     globalThis.document = prevDoc;
   }
+});
+
+test("buildBlueprintSlotOverlays projects arm slots, stations, tasks, and guide robots; buildCellStagePayload builds valid POST payloads", () => {
+  const model = siteModel({
+    cellTasks: {
+      tasks: [
+        {
+          task_id: "ct-1",
+          status: "RUNNING",
+          src_site: "belt",
+          dst_site: "ship-h2r0-l0",
+          dst_site_id: "yard:r1-s1-t1",
+          arm_id: "arm_a",
+          cell_id: "cell_ab",
+        },
+        {
+          task_id: "ct-done",
+          status: "COMPLETED",
+          src_site: "belt",
+          dst_site: "ship-h2r0-l0",
+          dst_site_id: "yard:r1-s1-t1",
+          arm_id: "arm_a",
+          cell_id: "cell_ab",
+        },
+      ],
+    },
+  });
+  const guide = {
+    robots: [{ robot_id: "rosy_01", pose: { x: 0.745, y: -0.207, yaw: Math.PI, state: "IDLE" }, lane: { next_place: { place_id: "S3" } } }],
+  };
+  const overlays = buildBlueprintSlotOverlays(model, guide);
+  const slot = overlays.slots.find((s) => s.id === "yard:r1-s1");
+  assert.ok(slot);
+  assert.equal(slot.status, "planned_unverified");
+  assert.equal(slot.taskState, "RUNNING");
+  assert.equal(overlays.robots.length, 1);
+  assert.equal(overlays.robots[0].placeId, "S3");
+  assert.equal(overlays.taskFlows.length, 1);
+  assert.equal(overlays.taskFlows[0].id, "ct-1");
+  assert.equal(overlays.taskFlows[0].armId, "arm_a");
+
+  const belt = overlays.slots.find((s) => s.id === "station:belt");
+  const pinky = overlays.slots.find((s) => s.id === "station:pinky");
+  assert.ok(belt && pinky);
+
+  const ab = buildCellStagePayload({ src: belt, dst: slot, tier: 2 });
+  assert.equal(ab.error, "");
+  assert.deepEqual(ab.payload, {
+    cell_id: "cell_ab",
+    src_site: "belt",
+    dst_site: "yard:r1-s1-t1",
+    tier: 1,
+    propose: false,
+  });
+
+  const cs = buildCellStagePayload({ src: pinky, dst: belt, tier: 3 });
+  assert.equal(cs.error, "");
+  assert.deepEqual(cs.payload, {
+    cell_id: "cell_s",
+    arm_id: "arm_s",
+    src_site: "pinky",
+    dst_site: "belt",
+    tier: 1,
+    propose: false,
+  });
+
+  assert.match(buildCellStagePayload({ src: pinky, dst: slot }).error, /벨트/);
+  assert.match(buildCellStagePayload({ src: slot, dst: slot }).error, /같습니다/);
 });

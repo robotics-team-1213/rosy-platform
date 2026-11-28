@@ -1465,6 +1465,62 @@ arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너
 | 8 | `ship-h1r2-l2` |
 | 9 | `tray` |
 
+### 벨트 컨테이너 자세 입력 (Panel L, 2026-11-27)
+
+영상만 받는 A·B 정책은 벨트 컨테이너의 실제 위치를 따라가지 못하고 학습 데이터의 평균 위치를 집는다.
+Panel L 체크포인트는 `observation.environment_state` 13칸을 받는다. 앞 10칸은 위 표 순서의 목표 one-hot이다.
+뒤 3칸은 `belt_dx_cm`, `belt_dy_cm`, `belt_yaw_x5`다.
+
+- **선언:** 체크포인트 폴더의 `ENV_STATE.json`이 이름과 측정 기준을 선언한다. 학습 쪽에서 `package_cell_bundle` 전에
+  `tools/sim/omx_env_state.py --info <데이터셋>/meta/info.json --top-camera top_refit.json --preset <preset> --out <체크포인트>/ENV_STATE.json`
+  으로 만든다. `package_cell_bundle`은 이 파일을 그대로 복사한다. `policy_revision`(가중치 sha256)은 바뀌지 않고
+  `checkpoint_sha256`과 파일 목록에는 이 파일이 들어간다.
+  파일이 없거나 `names`의 마지막 3개가 위 이름과 다르면 기존 동작(폭 전체를 one-hot 목표로 읽음)을 유지한다.
+  파일이 있는데 `names`가 없거나 길이가 폭과 다르면 체크포인트를 읽지 않는다.
+  선언이 있으면 앞 10개 이름이 위 표의 슬롯 이름과 같아야 한다. 다르면 시작하지 않는다.
+
+  ```json
+  {"names": ["ship-h1r0-l0", "...", "tray", "belt_dx_cm", "belt_dy_cm", "belt_yaw_x5"],
+   "belt_reference": {"preset": "v24-20261126-real-home",
+                      "top_camera": {"eye": [], "focus": [], "up": [], "f_px": 618.5, "width": 640, "height": 480},
+                      "belt_site": {"xy": [0.207, -0.003], "yaw": 0.0}, "belt_top_m": 0.017,
+                      "container": {"length_m": 0.09, "width_m": 0.02998, "height_m": 0.0324},
+                      "footprint_tol_m": {"length": 0.012, "width": 0.011, "partial_min": 0.04}}}
+  ```
+
+- **정의 (학습·시뮬 평가와 같음):** 시뮬 fixture 좌표에서 (컨테이너 중심 − 공칭 벨트 사이트) x, y [m] / 0.01과
+  (컨테이너 장축 yaw − 사이트 yaw, ±90°로 접음) [rad] / 0.2이다. 공칭 사이트는
+  `omx_two_arm_sites.Layout(preset).sites["belt"]`다. 11-14 top 사진의 벨트 끝·중심선(`BELT_PHOTO_1114`)과
+  fixture 집기 위치에서 정해진다. 생성기가 이 값과 벨트 윗면 높이·컨테이너 크기·크기 허용오차를 Layout에서 채운다.
+  셀에는 `tools/sim`이 배포되지 않으므로 런타임은 선언 값만 쓴다(`preset`은 기록용). 필드가 하나라도 없으면 `NOT_AVAILABLE`이다.
+- **측정:** `cell_policy_drive.py`가 동작 전(팔 홈)에 top 프레임 한 장으로 한 번 잰다. 그 값을 에피소드 내내 고정한다.
+  프레임은 출처 시각이 있는 새 프레임(`frame_receipt`, 2초 이내)만 쓴다.
+  컨테이너는 `cell_belt_vision.py`로 찾는다. `omx_real2sim`의 `blobs`·`lane_blobs`를 numpy·cv2만으로 옮긴 사본이며,
+  시험이 실물 프레임 2장과 합성 입력에서 원본과 결과가 같은지 비교한다. 한쪽을 고치면 다른 쪽도 고친다. 위치는 `top_camera`(학습 영상을 렌더한 시뮬 pinhole,
+  예: `top_refit.json`)로 벨트 위 컨테이너 윗면 높이에 역투영해 fixture 좌표로 바로 얻는다.
+  팔 좌표와 셀 보정 지도는 거치지 않는다. 시뮬 팔 받침 위치는 사진 추정값이고 arm_a에서 17 mm 차이가 확인되었다
+  (2026-11-17). 두 팔이 같은 top 카메라와 같은 벨트 사이트를 쓰므로 arm_a와 arm_b가 같은 값을 받는다.
+- **거절 (팔 무이동, 결과 `refused`, `reason_code`):**
+  - `BELT_POSE_UNKNOWN`: `belt_reference` 없음(`NOT_AVAILABLE`), 프레임 크기 불일치, 사이트 60 mm 안에 컨테이너 0개 또는
+    2개 이상, 학습 컨테이너 크기(90×30 mm)와 다른 컨테이너 색 덩어리.
+  - `BELT_POSE_OUT_OF_RANGE`: dx −2~+14 mm, dy ±9 mm, yaw ±13°를 벗어남(학습 범위 dx −1~+13 mm, dy ±8 mm, yaw ±12°에
+    1 mm·1° 여유). 값을 잘라서 넣지 않는다.
+    번들의 `ENV_STATE.json`이 `belt_reference.range` = `{"dx_m": [lo, hi], "dy_m": [lo, hi], "yaw_rad": [lo, hi]}`를 선언하면
+    (학습 범위+여유, 생성기 `--range="dx_lo,dx_hi,dy_abs,yaw_abs_deg"`(m, m, m, 도; `=`로 붙여 쓴다), 예: Panel N `--range=-0.003,0.032,0.027,16`) 그 범위를 쓴다.
+    없으면 위 기본값이다. 선언이 형식에 맞지 않거나 상한(dx −10~+40 mm, |dy| 35 mm, |yaw| 20°)을 넘으면 기본값으로 되돌리지 않고
+    `BELT_POSE_UNKNOWN`(`NOT_AVAILABLE`)으로 거절한다. 거절 문구에는 실제로 쓴 범위가 찍힌다.
+- **기록:** `policy-drive.jsonl`의 `belt_pose` 행과 결과 JSON의 `belt_pose`에 세 숫자(`features`), fixture 중심(`centre_mm`),
+  오프셋(`offset_mm`), `yaw_deg`, 크기(`size_mm`), 크기 점수(`score`), 프레임 sha256을 남긴다. dry run도 같다.
+- **현재 실물 값 (2026-11-27 프레임, `top_refit.json` 기준):** 실물 1~5회차 컨테이너는 dy 약 −34 mm,
+  6회차는 dy −49 mm, yaw +6°에 있었다. 모두 `BELT_POSE_OUT_OF_RANGE`로 거절된다.
+  조정 세션 관찰: 1~6회차 사진에서 컨테이너는 벨트 폭(약 80 mm) 안 한쪽 가장자리에 놓였다(벨트에 가이드가 없다).
+  dy −34 mm는 측정 오류보다 실제 놓인 위치일 가능성이 높다.
+  **미해결:** 학습 범위(dy ±8 mm)가 실물 벨트 폭을 덮지 못한다. 범위 확대는 학습 쪽 과제이며 이 변경의 범위 밖이다.
+- 원격 정책(`--endpoint-url`)과 이를 쓰는 양팔 정책(`cell_two_arm_policy`)은 이 입력을 보내지 않는다. 서버가 이름 선언을
+  알리지 않으므로 13칸 체크포인트는 `--goal-site`·Job API에서 10칸 목표 검사로 거절되지만, CLI `--goal-slot`과 양팔
+  `--goal-a`·`--goal-b`는 기존처럼 13칸 one-hot을 보낸다. 이 체크포인트를 원격·양팔 경로에 쓰지 않는다.
+- 로컬 `cell_act_shadow` 섀도 기록은 이 입력을 보내지 않아 추론 입력 단계에서 거절된다. 팔은 움직이지 않는다.
+
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
 두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.
@@ -1537,14 +1593,8 @@ ROS setup은 필요하지 않다. 해당 Python의 격리 환경에서 OpenCV와
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
-**Arm S live-file 관측.** ROS가 없는 Arm S는 live/calibration/guard-health 파일을 가진 호스트에서
-`rosy-omx-arm-status.service`를 쓴다. `arm-status.env.example`을
-`~/.config/rosy/omx-arm-status.env`에 mode 0600으로 복사하고, Fleet manifest의
-`source_id`·`arm_id`, 실제 live·calibration·canonical health 경로, HTTPS origin·CA와
-해당 팔 전용 토큰을 설정한다. 빈 토큰은 시작을 거부한다. guard의
-`ROSY_OMX_MONITOR_OWNER`는 같은 arm_id여야 한다. 유닛을 user systemd 경로에 복사하고
-`daemon-reload` 뒤 `enable --now rosy-omx-arm-status.service`로 활성화한다.
-같은 source에 기존 ROS observation bridge를 동시에 연결하지 않는다.
+**Arm S 관측과 `rosy-omx-arm-status.service` 은퇴.** `observations.yaml`에 `omx_arm_s`가 등록된 셀에서는 `rosy-omx-observer@arm_s.service` + 세션 래퍼의 `ROSY_CHUNK_JOINT_TOPIC` → `workcell_observation_bridge.py` 단일 송신 경로를 사용한다(`rosy-omx-arm-status.service`는 은퇴·`disabled`/`inactive` 유지). `rosy-omx-arm-status.service`는 브리지 환경이 없는 단독(legacy/standalone) live-file 호스트 전용이며, `--forbid-bridge-env` 가드로 브리지 매니페스트와 같은 `source_id`를 탐지하면 exit 78(`RestartPreventExitStatus=78`)로 즉시 거부해 409 epoch 충돌을 막는다.
+같은 source에 기존 observation bridge와 `arm_status_bridge`를 동시에 연결하지 않는다.
 
 이 producer는 파일만 읽고 `ArmSender`로 보낸다. 보정 범위로 변환한 신선한 관절 위치와
 정본 `rosy.motor-health.v1`만 사용하며, 누락된 PWM·온도·목표를 만들지 않는다.
@@ -1581,6 +1631,7 @@ export PYTHONPATH="$release/middleware/devices/omx/adapter:$release/contracts/fo
   3. SHA가 이름에 박힌 drop-in(`95-motor-health-*.conf`)을 지운다. health 파일은 이제 템플릿과 `ROSY_OBSERVATION_ARM_HEALTH`가 정한다.
   4. 첫 실행은 저장소 사본으로 `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/omx-devices-autoupdate.json run`.
   5. 그 뒤 업데이터 유닛 두 개와 카메라 바인드 유닛 두 개(`rosy-omx-cameras-bind.service`·`.timer`)를 복사하고 `systemctl --user enable --now rosy-omx-devices-autoupdate.timer rosy-omx-cameras-bind.timer`. 바인드 타이머가 없으면 옮겨 꽂은 카메라 추적과 Fleet 설치 화면의 승인 적용(D-963)이 일어나지 않는다. 업데이터는 `unit_files`의 파일을 복사만 하고 타이머를 켜지 않는다.
+- 신뢰 출처(`trust_source`, D-805 7): `platform`이면 GitHub REST API를 부르지 않는다. 서명 PC가 서명한 green-main 포인터(`platform_url`, `.sig`, `platform_public_key`, `platform_key_id`)에서 머리 커밋과 `ci-result` 통과를 읽고, 조상 확인은 `root/history.git`(커밋만 받은 git 미러, 약 11 MB)에서 한다. 포인터를 못 읽거나 서명이 틀리면 `transient`로 남기고 아무것도 바꾸지 않는다. `platform_url`이 있으면 기본값이 `platform`이고, 없으면 `github`(예전 경로)다. 소스 바이트는 지금처럼 `repo_url`에서 git으로 받는다. 생산자는 `deploy/site/green_main_pointer.py`다(deploy/site/README.md).
 - 관측기 health 스냅샷 이상 또는 토크 ON이면 상태에 따라 `observer_missing`·`observer_stale`·`observer_invalid`·`follower_hardware_error`·`follower_torque_not_off`로 보류된다.
 
 실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고
@@ -1674,6 +1725,28 @@ place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진�
 사이트는 그림 아래 문구와 표준 출력의 `place_points_omitted`에 이름이 남는다. 설정 파일은 읽기만 한다.
 
 셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.
+
+### 임시판 칸 사전지식 (`slots`, 2026-11-27)
+
+임시판(`temp_plate_a`·`temp_plate_b`)은 부채꼴 칸 3개(CAD `temp_slot_plate.scad` v12: 칸 30.8 × 96 mm, 층 32.4 mm)로 나뉜다.
+사이트에 `slots`가 있으면 `cell_auto_pick_plan.observe`가 자유 덩어리 검출 뒤에 `cell_slot_prior`를 적용한다. 사전지식은 측정을
+설명할 뿐 대신하지 않는다. `slots`가 없으면 동작은 이전과 같다.
+
+| 키 | 뜻 |
+|---|---|
+| `slots` | `[{"name", "xy" (m, 팔 좌표, 칸 중심), "yaw_deg" (칸 긴 축), "pocket_mm" [폭, 길이]}]`. 판을 놓을 때마다 기준점 F1–F4로 잰다 |
+| `slots_fit` | `{"residual_mm", "residual_deg"}`: 그 측정의 기준점 잔차. 없거나 3 mm·1°를 넘으면 사전지식을 끈다 |
+| `finger_params` | 칸에 맞춰진 물체에만 적용한다. 칸 밖 물체는 셀 기본값(예 `auto.neighbour_clear_mm` 14)을 그대로 쓴다 |
+
+적용 순서는 다음과 같다.
+
+1. 층수는 상단 D435 깊이로 칸마다 정한다(`n = round(높이 / tier_step_m)`, ±7 mm 밖이면 모름). 측면값이 주어지면 깊이와 반 단(16 mm) 이상 다른 칸은 보류한다.
+2. 모든 칸 윤곽(바닥~맨 위 층) 밖의 덩어리는 표적이 아니다(노란 테이블 조각). 판 위인데 어느 칸에도 없는 전경이 있으면 사전지식을 끈다.
+3. 칸 윤곽 안을 맨 위 층 높이로 다시 잰다. 카탈로그 일치가 정확히 하나이고 칸 중심 8 mm·각도 5°·가로 4 mm 안이면 칸 축에 맞춘다(`slot`, `dz_m`로 맨 위 층을 집음). 아니면 그 칸 덩어리는 기존 경로로 판정한다.
+4. 맞춰진 물체도 이웃 칸이 더 높거나 높이를 모르면(3단으로 간주) `finger_params`를 쓰지 않는다. 집게는 칸 축에 수직(±3°)으로만 닫고, 화면 밖 쪽은 계속 막힘으로 본다. 등록 사이트로 아직 측정되지 않은 칸은 `SITE_NOT_MEASURED`로 거절한다.
+
+`slots`·`slots_fit`·`finger_params` 값은 셀 설정에 아직 없다. 판 기준점 측정 도구와 측면 카메라 층수 읽기는 후속 작업이다.
+고정 입력 시험: `test/test_omx_temp_plate_prior.py`(2026-11-27 상단 프레임, `test/fixtures/omx_temp_plate_1127/`).
 
 ### 판정 구역 표 덮어쓰기와 제안 도구 (D-1057)
 

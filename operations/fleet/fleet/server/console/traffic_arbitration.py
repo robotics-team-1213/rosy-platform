@@ -35,6 +35,8 @@ from fleet.server.traffic_arbitration_helpers import (
 from fleet.swarm.session_arming import require_capability
 
 logger = logging.getLogger("fleet.console")
+#: A peer the table counted must still stand this close to the pose that placed it (its pin pads u_max).
+TABLE_POSE_DRIFT_M = 0.10
 
 
 class TrafficArbitration:
@@ -51,6 +53,17 @@ class TrafficArbitration:
         steps = max(1, int(span / traffic.SAMPLE_STEP_M))
         return [(here[0] + (x - here[0]) * i / steps,
                  here[1] + (y - here[1]) * i / steps) for i in range(steps + 1)]
+
+    def _table_governed(self, mover: str, rid: str, table_peers) -> bool:
+        """A standing peer the trip's fresh block-table answer counted on the route (``{peer: [map, x, y]}``): the
+        table holds the mover short of its units, so it does not refuse the whole departure (D-1009 road trips).
+        It must still stand where the table saw it; untrusted, other-frame or offline-marker peers never qualify."""
+        seen, provider = (table_peers or {}).get(rid), getattr(self, "_site_mover_pose", None)
+        now = provider(rid) if seen is not None and provider is not None else None
+        markers = getattr(self, "_site_marker_clearance", None)
+        return (bool(now) and now[0] == seen[0] and math.dist(now[1:3], seen[1:3]) <= TABLE_POSE_DRIFT_M
+                and self._verdict(rid) == trust.TRUSTED and not self._map_mismatch(mover, rid)
+                and not (markers is not None and rid in markers.offline))
 
     def _standing_in_the_way(self, mover: str, route: Sequence, grid,
                              goal: tuple, *, site_route=None) -> list[str]:
@@ -70,7 +83,7 @@ class TrafficArbitration:
                 # 출발점과 같은 보고는 길을 막은 로봇이 아니라 측위가 안 된 겹침이다 (D-116).
                 continue
             if self._map_mismatch(mover, robot_id):
-                if site_frame_clear(self, robot_id, site_route, getattr(self, "_site_keep_out_m", 0.32), trust_mod=trust) is True:
+                if site_frame_clear(self, robot_id, site_route, getattr(self, "_site_keep_out_m", bays.YIELD_KEEP_OUT_M), trust_mod=trust) is True:
                     continue
                 # D-1010: its pose is another frame's numbers, so this route-versus-pose
                 # verdict would be fiction. It stays a blocker for a human, never moved.
@@ -80,11 +93,11 @@ class TrafficArbitration:
             if nearest is None:
                 continue
             min_dist = math.dist(nearest, pose)
-            if min_dist >= self._yield_keep_out_m:
+            goal_dist = math.dist(pose, goal)
+            if min_dist >= self._yield_keep_out_m and goal_dist >= self._goal_blocked_m:
                 continue
             start_dist = math.dist(route[0], pose)
             end_dist = math.dist(route[-1], pose)
-            goal_dist = math.dist(pose, goal)
             if end_dist >= self._yield_keep_out_m:
                 # A parallel bay exit may start inside the keep-out radius, then pull away.
                 if (0.15 <= start_dist < self._yield_keep_out_m and min_dist >= start_dist - 0.02
@@ -215,9 +228,9 @@ class TrafficArbitration:
     def _claim_blocker(self, mover: str, route, *, site_route=None) -> tuple[Optional[str], bool]:
         """``(blocker, is_conflict)`` for a dispatched goal's route (D-1010)."""
         # Rear-bay claims carry sparse [P_n, staging, goal] polylines; check exact segment distance
-        # against 2 * TRAY_TURN_RADIUS_M (0.288 m) + margin (0.30 m) so crossing routes and adjacent
-        # turning bays (0.222 m pitch) stay blocked while non-adjacent bays and far lanes clear.
-        bay_clearance = min(self._clearance_m, getattr(self, "_bay_clearance_m", 0.30))
+        # against tight 0.20 m clearance so overlapping/crossing routes stay blocked while adjacent
+        # bay operations (0.222 m pitch) and far lanes proceed without excessive holds.
+        bay_clearance = min(self._clearance_m, getattr(self, "_bay_clearance_m", 0.18))
         for other, (map_id, claim) in getattr(self, "rear_bay_claims", {}).items():
             if other == mover:
                 continue
@@ -256,7 +269,7 @@ class TrafficArbitration:
         if self._verdict(robot_id) != trust.UNTRUSTED:
             return False
         clear = site_frame_clear(
-            self, robot_id, site_route, getattr(self, "_site_keep_out_m", 0.32), trust_mod=trust)
+            self, robot_id, site_route, getattr(self, "_site_keep_out_m", bays.YIELD_KEEP_OUT_M), trust_mod=trust)
         if clear is not None:
             return not clear
         return trust.blocks(route, self._trusted.get(robot_id))

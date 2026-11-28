@@ -34,6 +34,12 @@ function makeMark(mark) {
   span.dataset.state = mark.state;
   span.setAttribute("aria-hidden", "true");
   span.append(iconSvg(MARK_ICON[mark.state] || "minus"));
+  if (mark.count > 1) {
+    const badge = document.createElement("span");
+    badge.className = "robot-dock-count";
+    badge.textContent = mark.count > 9 ? "9+" : String(mark.count);
+    span.append(badge);
+  }
   return span;
 }
 
@@ -68,7 +74,7 @@ function syncButton(btn, entry, profile, {openId, selectedId, markSigs}) {
   }
   patchText(idSpan, entry.short);
 
-  const marksSig = `${entry.id}|${entry.marks.map((m) => `${m.kind}:${m.state}:${MARK_ICON[m.state] || "minus"}`).join(",")}`;
+  const marksSig = `${entry.id}|${entry.marks.map((m) => `${m.kind}:${m.state}:${m.count || ""}:${MARK_ICON[m.state] || "minus"}`).join(",")}`;
   if (!markSigs || markSigs.get(entry.id) !== marksSig) {
     markSigs?.set(entry.id, marksSig);
     for (const oldMark of btn.querySelectorAll(":scope > .robot-dock-mark")) oldMark.remove();

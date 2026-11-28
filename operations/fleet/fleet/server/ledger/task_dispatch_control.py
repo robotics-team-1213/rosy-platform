@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import closing
 
 from fleet.server.control_stop_store import has_local_uncertainty
+from fleet.server.dispatch_auto_rearm import rearm_reason, startup_close
 from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 
@@ -108,9 +109,8 @@ class TaskDispatchControl:
                 "rearm_available": not bool(row["dispatch_enabled"]) and unresolved == 0 and not stop_uncertainty}
 
     def close_dispatch_for_startup(self) -> dict:
-        return self._advance_dispatch_control(enabled=False, actor_id="system",
-                                              reason="PROCESS_RESTARTED",
-                                              release_pre_dispatch=True,
+        self.auto_rearm_eligible, actor_id, reason = startup_close(self._connect)
+        return self._advance_dispatch_control(enabled=False, actor_id=actor_id, reason=reason, release_pre_dispatch=True,
                                               advance_authority_epoch=True)
 
     def trip_stop_latch(self, *, actor_id: str, reason: str = "SITE_STOP") -> dict:
@@ -119,7 +119,7 @@ class TaskDispatchControl:
         return self._advance_dispatch_control(enabled=False, actor_id=actor_id,
                                               reason=reason, release_pre_dispatch=True)
 
-    def rearm_dispatch(self, *, expected_generation: int, actor_id: str) -> dict:
+    def rearm_dispatch(self, *, expected_generation: int, actor_id: str) -> dict:  # reason: rearm_reason(actor_id)
         if (isinstance(expected_generation, bool) or not isinstance(expected_generation, int)
                 or expected_generation < 0 or not actor_id or len(actor_id) > 96):
             raise ValueError("invalid dispatch rearm request")
@@ -143,9 +143,9 @@ class TaskDispatchControl:
                 raise InvalidTaskTransition("unresolved control stop delivery must be reconciled before rearm")
             connection.execute(
                 """UPDATE fleet_dispatch_control SET generation=generation+1,
-                   dispatch_enabled=1, reason='OPERATOR_REARM', actor_id=?, updated_at=?
+                   dispatch_enabled=1, reason=?, actor_id=?, updated_at=?
                    WHERE control_id=1 AND generation=? AND dispatch_enabled=0""",
-                (actor_id, now, expected_generation),
+                (rearm_reason(actor_id), actor_id, now, expected_generation),
             )
             connection.commit()
         return self.dispatch_control()

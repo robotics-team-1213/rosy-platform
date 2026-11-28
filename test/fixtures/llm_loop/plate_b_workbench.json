@@ -1,0 +1,175 @@
+{
+ "id": "plate_b_workbench",
+ "evidence": "belt-xyz/auto_pick_dry_run-20261127-162710-74b95e.json",
+ "note": "arm_b plate_b dry run planned container-1: the table seen through the arm-base hole; the real pick was empty twice (2026-11-27 16:42). Must NOT be picked.",
+ "raw": {
+  "arm": "arm_b",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_b_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "plate_b",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "plate_b",
+       "to": "pallet",
+       "attempts": [
+        {
+         "observed": 6,
+         "refused": [
+          {
+           "centre_mm": [
+            72.8,
+            -120.8
+           ],
+           "object": null,
+           "colour": "orange",
+           "why": "tangled blob"
+          },
+          {
+           "centre_mm": [
+            -23.8,
+            -108.6
+           ],
+           "object": null,
+           "colour": "orange",
+           "why": "no catalogue match"
+          },
+          {
+           "centre_mm": [
+            30.6,
+            -176.5
+           ],
+           "object": null,
+           "colour": "red",
+           "why": "no catalogue match"
+          },
+          {
+           "centre_mm": [
+            -19.9,
+            -176.1
+           ],
+           "object": null,
+           "colour": "yellow",
+           "why": "no catalogue match"
+          }
+         ],
+         "chosen": {
+          "object": "container-1",
+          "colour": "orange",
+          "closing_axis_offset_deg": null,
+          "bias_mm": [
+           0,
+           0
+          ],
+          "bias_region": null,
+          "approach_m": 0.045
+         },
+         "plan": {
+          "pick": {
+           "x": 0.0124,
+           "y": -0.1127,
+           "z": 0.0206,
+           "yaw_deg": -10
+          },
+          "place": {
+           "x": 0.153,
+           "y": -0.128,
+           "z": 0.005,
+           "yaw_deg": -90
+          }
+         },
+         "pivot_needed": "no clear pivot point within reach of the object",
+         "long_axis_deg": 70.6
+        }
+       ],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 0.8,
+        "inliers": 576
+       },
+       "result": "planned"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": []
+ }
+}

@@ -27,7 +27,19 @@ export function runReason(form, { lockReason = "", passedDryRunKey = "", busy = 
 /** Pure: which recovery jobs the arm's readiness says apply right now. */
 export function armRecoveryActions(arm) {
   if (!arm || arm.active_job_id) return { recoverHold: false, safeHome: false };
-  return { recoverHold: arm.human_hold_latched === true, safeHome: arm.incident_held === true || arm.folded === false };
+  return { recoverHold: arm.human_hold_latched === true, safeHome: arm.incident_held === true || arm.folded === false
+    || (arm.folded == null && !!arm.state_unknown && arm.state_unknown.reason !== "board_missing") };  // stale may be extended; no board: nothing to drive
+}
+
+function minutesAgo(s) {
+  if (s >= 3600) return `${Math.floor(s / 3600)}시간 ${Math.floor(s % 3600 / 60)}분 전`;
+  return s >= 60 ? `${Math.floor(s / 60)}분 전` : evidenceAgeText(s).replace(" · ", "");
+}
+
+function unknownText({ reason, last_observed_at: at }) {
+  const why = reason === "board_missing" ? "보드 없음 · " : "";
+  const seen = typeof at === "number" ? `마지막 관측 ${minutesAgo(Math.max(0, Math.floor(Date.now() / 1000 - at)))}` : "관측 기록 없음";
+  return `알 수 없음 (${why}${seen})`;
 }
 
 /** Pure: one Korean line per readiness fact of an arm. */
@@ -36,8 +48,8 @@ export function armReadinessText(arm) {
   // evidenceAgeText prefixes " · "; these lines are already joined by it.
   const age = typeof arm.live_state_age_s === "number" ? `관측 ${evidenceAgeText(arm.live_state_age_s).replace(" · ", "")}` : "관측 없음";
   return [
-    arm.folded === true ? "접힘" : arm.folded === false ? "펼쳐짐" : "접힘 미확인",
-    arm.human_hold_latched ? "사람 보류 걸림" : "보류 없음",
+    arm.state_unknown ? unknownText(arm.state_unknown) : arm.folded === true ? "접힘" : arm.folded === false ? "펼쳐짐" : "접힘 미확인",
+    arm.human_hold_latched ? "보류 · 자동 복구 재시도 중" : "보류 없음",
     arm.incident_held ? `사건 보류: ${arm.incident_reason || "사유 없음"}` : "사건 없음",
     arm.session_lock_held ? "세션 잠금 있음" : "세션 잠금 없음",
     arm.fault ? `고장: ${arm.fault}` : null,

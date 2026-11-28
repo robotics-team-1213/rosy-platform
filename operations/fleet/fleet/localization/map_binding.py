@@ -24,6 +24,13 @@ MIN_SPREAD_M = 0.05  # rms distance from the best line; below this the points ar
 #: Wall rectangle sides may differ from the site arena by this share (map resolution, wall thickness).
 RECT_TOLERANCE = 0.12
 
+#: Same-frame proof by raster identity (2026-11-28): a redrawn map of one frame keeps origin, resolution and size, and
+#: only a few cells change (rule05a -> rule06 removed 11 phantom cells). Origin and resolution compare within 1e-6.
+GRID_META_TOL = 1e-6
+MIN_CELL_BUDGET = 12  # the field case changed 11
+CELL_BUDGET_SHARE = 0.02  # of the occupied cells of the bound grid; the budget is the larger of the two
+MAX_SIGNATURE_CELLS = 250_000
+
 Point = tuple[float, float]
 
 
@@ -198,3 +205,52 @@ def bound_pose(fit: Fit, pose: Sequence[float]) -> tuple[float, float, float]:
     x, y = fit.apply(pose[:2])
     yaw = math.atan2(math.sin(pose[2] + fit.yaw), math.cos(pose[2] + fit.yaw))
     return (x, y, yaw)
+
+
+def grid_signature(grid) -> Optional[dict]:
+    """Origin, resolution, size and one class per cell (o occupied >= 65, f free 0-19, u unknown) of an occupancy
+    grid, or None when it is not a plain grid or too large to keep."""
+    try:
+        w, h, res = int(grid["width"]), int(grid["height"]), float(grid["resolution"])
+        origin = grid.get("origin") or {}
+        org = [float(origin.get(k, 0.0)) for k in ("x", "y", "yaw")]
+        data = grid["data"]
+        if not (0 < w * h <= MAX_SIGNATURE_CELLS) or len(data) != w * h or not all(map(math.isfinite, org + [res])):
+            return None
+        cells = "".join("o" if v is not None and v >= 65 else "f" if v is not None and 0 <= v <= 19 else "u"
+                        for v in data)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+    return {"origin": org, "resolution": res, "width": w, "height": h, "cells": cells}
+
+
+def cell_budget(sig: dict) -> float:
+    return max(MIN_CELL_BUDGET, CELL_BUDGET_SHARE * sig["cells"].count("o"))
+
+
+def check_not_symmetric(sig: dict) -> None:
+    """A grid within the cell budget of its own 180 degree turn or x/y mirror cannot tell a flipped redraw from the
+    original, so its binding is not eligible for auto-rebind."""
+    w, cells = sig["width"], sig["cells"]
+    rows = [cells[i:i + w] for i in range(0, len(cells), w)]
+    twins = (cells[::-1], "".join(r[::-1] for r in rows), "".join(rows[::-1]))
+    if any(sum(a != b for a, b in zip(cells, t)) <= cell_budget(sig) for t in twins):
+        raise BindingError("GRID_SYMMETRIC", "the bound grid is symmetric: a turned redraw cannot be told apart")
+
+
+def same_raster(old: Optional[dict], new: Optional[dict]) -> int:
+    """Number of cells whose class differs between two signatures of one raster frame; BindingError when the
+    frame differs (origin, resolution, size), a signature is missing, or too many cells changed."""
+    if old is None:
+        raise BindingError("GRID_SIGNATURE_MISSING", "the bound grid has no stored signature")
+    if new is None:
+        raise BindingError("NO_GRID", "the robot's grid cannot be read")
+    if (old["width"], old["height"]) != (new["width"], new["height"]) or any(
+            abs(a - b) > GRID_META_TOL for a, b in zip(old["origin"] + [old["resolution"]],
+                                                       new["origin"] + [new["resolution"]])):
+        raise BindingError("GRID_FRAME_CHANGED", "origin, resolution or size differ from the bound grid")
+    differing = sum(a != b for a, b in zip(old["cells"], new["cells"]))
+    budget = cell_budget(old)
+    if differing > budget:
+        raise BindingError("GRID_CELLS_CHANGED", f"{differing} cells differ, at most {budget:g} allowed")
+    return differing

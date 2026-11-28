@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional
 from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
+from fleet.localization.lane_compliance_helpers import parking_edge
+
 #: tracking statuses that mean Rosy Cam did not find the robot this lease (tracking_match.py)
 NOT_SEEN = frozenset({"NO_POSE"})
 SEVERITY = ("crit", "warn", "info")
@@ -80,11 +82,15 @@ def _finding(code: str, severity: str, text: str, *, target: Optional[dict] = No
 def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mapping],
               camera_ok: Optional[str], graph, zone_of: Mapping[str, str], body_radius_m: float,
               body_half_width_m: float, stopped_s: float = 0.0, anonymous_seen: bool = False,
-              active_map_id: Optional[str] = None, config: GuideConfig = GuideConfig()) -> dict:
+              active_map_id: Optional[str] = None, config: GuideConfig = GuideConfig(),
+              lane_watch: Optional[Mapping] = None) -> dict:
     """One robot's record. ``pose`` is a ``MapPose`` (or None); ``camera_ok`` the id of a Rosy Cam
     source reporting OK, or None; ``stopped_s`` how long it has not moved (the service keeps it);
     ``anonymous_seen`` whether Rosy Cam shows a blob no robot is matched to (D-596: then the LED
-    identify names it, standing or not; without one the robot is likely learned into the background)."""
+    identify names it, standing or not; without one the robot is likely learned into the background).
+    ``lane_watch`` is the D-511 lane watch's view of the robot (D-1084): OFF_LANE and WRONG_WAY are said
+    only for a moving robot on a road edge whose camera and own (SLAM) pose agree; without it, a standing
+    robot (``stopped_s`` > 0) is not judged."""
     placed = pose is not None and pose.state in ("LOCALIZED", "DEGRADED") and pose.x is not None
     record = {"robot_id": robot_id, "online": online, "body_radius_m": body_radius_m,
               "pose": None, "lane": None, "findings": []}
@@ -131,16 +137,29 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         return record
     centre = lane["centre"]
     margin = lane["width_m"] / 2 - (abs(lane["lateral_m"]) + body_half_width_m)
-    if margin < -0.05:
+    watch = lane_watch or {}
+    judged = (stopped_s <= 0.0 if lane_watch is None
+              else watch.get("moving") is True and not watch.get("exempt") and not watch.get("pose_mismatch"))
+    if parking_edge(graph, lane["edge_id"]) or watch.get("exempt") == "parking":
+        judged = False
+        findings.append(_finding("PARKING", "info", f"{robot_id} 주차/도킹 중 · 차로 판정 제외"))
+    if watch.get("pose_mismatch"):
+        findings.append(_finding(
+            "POSE_MISMATCH", "info",
+            f"{robot_id} 위치 불일치 · 카메라와 기체 자세가 {watch['pose_mismatch']['gap_m'] * 100:.0f} cm 다릅니다"))
+    body = watch.get("body_pose") or {}
+    heading_err = (lane["heading_err_deg"] if body.get("yaw") is None    # D-1084: the robot's own yaw first
+                   else round(math.degrees(_wrap(body["yaw"] - centre["yaw"])), 1))
+    if judged and margin < -0.05:
         side = "왼쪽" if lane["lateral_m"] > 0 else "오른쪽"
         findings.append(_finding(
             "OFF_LANE", "warn",
             f"{robot_id}가 {lane['edge_id']} 차로 {side}로 {abs(margin) * 100:.0f} cm 벗어났습니다 · 표시한 차로 중심으로",
             target=centre))
-    if lane["one_way"] and lane["heading_err_deg"] is not None and abs(lane["heading_err_deg"]) > config.wrong_way_deg:
+    if judged and lane["one_way"] and heading_err is not None and abs(heading_err) > config.wrong_way_deg:
         findings.append(_finding(
             "WRONG_WAY", "warn",
-            f"{robot_id}가 일방 차로 {lane['edge_id']}에서 거꾸로 섰습니다({lane['heading_err_deg']:+.0f}°) · 표시한 방향으로 돌리세요",
+            f"{robot_id}가 일방 차로 {lane['edge_id']}에서 거꾸로 섰습니다({heading_err:+.0f}°) · 표시한 방향으로 돌리세요",
             target=centre))
     if lane["zone"] and stopped_s >= config.zone_stop_s:
         findings.append(_finding(

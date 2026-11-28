@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import re
 from urllib.parse import urlsplit
@@ -9,6 +10,8 @@ from urllib.parse import urlsplit
 ARM = re.compile(r"arm_[abs]")
 ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
+SOURCE = re.compile(r"(?:free:)?[a-z0-9_][a-z0-9_.-]{0,62}")  # a site, or free:<site> (a measured position that site gives the map and height for)
+AT_PX = re.compile(r"\d{1,4},\d{1,4}")
 TWO_ARM_SITE = re.compile(r"[a-z0-9_:-]{1,48}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
 MANIFEST_FILE = re.compile(r"(?:upkeep|cell-upkeep)-[a-z0-9_.-]{1,60}\.json")
@@ -22,6 +25,8 @@ HTTP_URL = re.compile(r"^https?://[A-Za-z0-9._:\[\]-]+(?:/[A-Za-z0-9_./-]*)?$")
 VIEW = re.compile(r"top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist")
 REPO_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 IMAGES_SPEC = re.compile(r"[a-z0-9_]+=[a-z0-9_]+(?:,[a-z0-9_]+=[a-z0-9_]+)*")
+CATALOG_ID = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+OBJECT_REF = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 FIELD = re.compile(r"\{(\w+)\}")
 
 
@@ -120,6 +125,33 @@ def _http_url(v):
     return v
 
 
+def _catalog_id(v):
+    if not isinstance(v, str) or not CATALOG_ID.fullmatch(v) or v.lower() == "unmatched":
+        raise ValueError("must be a non-empty matched catalog ID")
+    return v
+
+
+def _object_ref(v):
+    if not isinstance(v, str) or not OBJECT_REF.fullmatch(v):
+        raise ValueError("must be a valid object_ref")
+    return v
+
+
+def _centroid_mm(v):
+    vals = v.split(",") if isinstance(v, str) else v
+    if not isinstance(vals, (list, tuple)) or len(vals) != 2:
+        raise ValueError("centroid_mm requires two finite mm coordinates")
+    out = []
+    for item in vals:
+        if isinstance(item, bool):
+            raise ValueError("centroid_mm coordinates must be numbers")
+        f = float(item)
+        if not math.isfinite(f) or not -1000.0 <= f <= 1000.0:
+            raise ValueError("centroid_mm coordinates must be in [-1000, 1000]")
+        out.append(round(f, 3))
+    return out
+
+
 def _two_arm_task_sites(v: str) -> tuple[str, str]:
     if not isinstance(v, str) or v.count("->") != 1:
         raise ValueError("must be '<src>-><dst>'")
@@ -190,7 +222,7 @@ def _is_amr_bed_site(v: str) -> bool:
     s = v.strip().lower()
     if s.startswith("not_places:"):
         s = s[len("not_places:"):]
-    base = re.sub(r"-l[0-9]+$", "", s.split(":", 1)[0])
+    base = re.sub(r"-l[0-9]+$", "", s.removeprefix("free:").split(":", 1)[0])
     return base.startswith(("pinky", "bed")) or base in ("tray", "vehicle_tray")
 
 

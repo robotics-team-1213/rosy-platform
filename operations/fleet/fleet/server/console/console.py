@@ -76,7 +76,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         fleet_name: str = "rosy-site",
         clearance_m: float = traffic.DEFAULT_CLEARANCE_M,
         yield_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
-        site_keep_out_m: float = 0.32,
+        site_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
         relay_factory=None,
         signal_console=None,
         event_store=None,
@@ -115,16 +115,16 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._clearance_m = clearance_m
         self._yield_keep_out_m = yield_keep_out_m
         if (isinstance(site_keep_out_m, bool) or not isinstance(site_keep_out_m, (int, float))
-                or not math.isfinite(float(site_keep_out_m)) or float(site_keep_out_m) < 0.28):
-            raise ValueError("site_keep_out_m must be finite and >= 0.28")
+                or not math.isfinite(float(site_keep_out_m)) or float(site_keep_out_m) < 0.16):
+            raise ValueError("site_keep_out_m must be finite and >= 0.16")
         self._site_keep_out_m = float(site_keep_out_m)
         #: 비켜서라고 한 뒤 "안 움직인다"고 판단하기까지 참아 주는 스냅샷 수. 목표를 막
         #: 받은 로봇은 아직 NAVIGATING 을 보고하지 않는다 - 한 틱만 보면 시작도 하기 전에
         #: 실패로 읽는다.
         self._yield_grace_ticks = 3
-        #: 상대가 목표 자리를 깔고 앉았다고 보는 거리. 두 대의 풋프린트 반지름(0.12+0.12)에
-        #: 측위 몫을 조금 더한다 - 이보다 가까우면 그 자리에 설 수 없다.
-        self._goal_blocked_m = 0.35
+        #: 상대가 목표 자리를 깔고 앉았다고 보는 거리. 두 대의 실제 차체 반폭 합(약 0.12 m)에
+        #: 최소 측위 여유만 더한 값 — 근접 정차를 허용하되 같은 목표 중복 진입은 막는다.
+        self._goal_blocked_m = self._site_keep_out_m   # the site's keep-out, also when its config sets another
         #: 비켜서 있는 로봇 → 어디로, 누구를 위해. 화면이 "왜 저리로 갔는지"를 말하려면
         #: 필요하고, 비켜서기가 끝났는지 판단하는 데도 쓴다.
         self._yielding: dict[str, dict] = {}

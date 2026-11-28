@@ -1,10 +1,13 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import { setOffBy } from "/common/cause-line.js";
+import { randomUUID } from "/console/assets/uuid.js";
 import { buildCameraZoomHeading } from "./cell-camera-zoom.js";
 import { buildInspectorCamFrame, renderOmxInspector } from "/console/assets/omx-inspector.js";
 import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } from "./cell-real2sim-specs.js";
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
+  const matrixBtns = [];
   const frames = () => ctx.cellFrames;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
   const selectInspectorTarget = (...args) => ctx.selectInspectorTarget(...args);
@@ -27,30 +30,44 @@ export function createCellViews(ctx) {
       draftChoices: state.draftChoicesByTarget,
       frames: frames(),
       framesActive: true,
+      cameraRois: state.sitePointsCameras || null,
+      showRoi: state.showRoi !== false,
+      cellObjects: state.cellObjects || null,
+      selectedObjectRef: state.selectedObjectRef || null,
+      selectedObjectDest: state.selectedObjectDest || null,
+      objectBusy: Boolean(state.objectBusy),
+      objectStatusText: state.objectStatusText || '',
       runButtonLabel: undefined,
+      quickDispatchReason: typeof ctx.namedReason === 'function' ? ctx.namedReason() : '',
       actionsClass: 'omx-inspector-actions',
       onSelectTarget: (id) => selectInspectorTarget(id),
       onToggleDual: () => {
         state.dualInspectorCamMode = !state.dualInspectorCamMode;
         renderRightInspector(body);
       },
+      onToggleRoi: () => {
+        state.showRoi = state.showRoi === false;
+        renderRightInspector(body);
+      },
       onSelectCam: (targetId, camId) => {
         state.selectedInspectorCamByTarget[targetId] = camId;
         renderRightInspector(body);
       },
-      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId }) => {
-        const current = ctx.bump();
+      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId, button }) => {
+        const current = await ctx.confirmAndBump?.(`${targetArm} 맞춤 태스크(${targetCell} · ${tier}층${displacedTo ? ' · ' + displacedTo : ''})를 큐에 등록할까요?`, button);
+        if (!current) return;
         if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `우측 인스펙터 맞춤 태스크(${targetCell}/${targetArm})를 큐에 등록하는 중입니다.`;
         try {
           const res = await request(CELL_TASKS_PATH, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'Idempotency-Key': randomUUID()},
             body: JSON.stringify({
               cell_id: targetCell,
               arm_id: targetArm,
               tier,
               displaced_to: displacedTo,
               robot_id: robotId || undefined,
+              propose: false,
             }),
           });
           if (current !== ctx.gen()) return;
@@ -64,6 +81,40 @@ export function createCellViews(ctx) {
         }
       },
       onRenderAction: (btn, choice, active) => bindActionButton(btn, choice, active.robot_id || undefined),
+      onSelectObject: (obj) => {
+        state.selectedObjectRef = obj.object_ref;
+        state.objectStatusText = '';
+        renderRightInspector(body);
+      },
+      onSelectObjectDest: (dst) => { state.selectedObjectDest = dst; },
+      onClearObject: () => {
+        state.selectedObjectRef = null;
+        state.objectStatusText = '';
+        renderRightInspector(body);
+      },
+      onDispatchTargetObject: async ({ object: obj, destSite, button, buildTaskBody }) => {
+        const current = await ctx.confirmAndBump?.(`선택 객체(${obj.catalog_id})를 ${destSite}로 1회 집기·놓기 실행할까요?`, button);
+        if (!current) return;
+        state.objectBusy = true;
+        state.objectStatusText = '1회 집기·놓기 작업 등록 중입니다.';
+        renderRightInspector(body);
+        try {
+          const res = await request(CELL_TASKS_PATH, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+            body: JSON.stringify(buildTaskBody()),
+          });
+          if (current !== ctx.gen()) return;
+          state.objectStatusText = `등록 완료: ${res.task?.task_id || '—'} (${obj.catalog_id} → ${destSite})`;
+          await refreshCellTasks(current);
+        } catch (error) {
+          if (current !== ctx.gen()) return;
+          state.objectStatusText = `요청 거부: ${error.message}`;
+        } finally {
+          state.objectBusy = false;
+          renderRightInspector(body);
+        }
+      },
     });
   }
 
@@ -213,9 +264,15 @@ export function createCellViews(ctx) {
     for (const args of pendingBinds) frames()?.bind(...args);
   }
 
-  function renderCameraMatrix() {
+  function renderCameraMatrix({ updateOnly = false } = {}) {
     const wall = $('cell-camera-matrix');
-    if (!wall || wall.childElementCount) return;
+    if (!wall) return;
+    const reason = typeof ctx.namedReason === 'function' ? ctx.namedReason() : '';
+    if (wall.childElementCount) {
+      for (const btn of matrixBtns) setOffBy(btn, reason);
+      return;
+    }
+    if (updateOnly) return;
     const pendingBinds = [];
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
@@ -252,11 +309,13 @@ export function createCellViews(ctx) {
         actBtn.setAttribute('kind', 'quiet');
         actBtn.setAttribute('type', 'button');
         actBtn.textContent = qAct.label;
+        setOffBy(actBtn, reason);
+        matrixBtns.push(actBtn);
         actBtn.addEventListener('click', ev => {
           ev.stopPropagation();
-          if (qAct.preset) void runQuickPreset(qAct.preset);
-          else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction);
-          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined);
+          if (qAct.preset) void runQuickPreset(qAct.preset, null, ev.currentTarget);
+          else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction, ev.currentTarget);
+          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined, ev.currentTarget);
         });
         card.append(actBtn);
       }

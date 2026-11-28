@@ -112,14 +112,18 @@ def _clear_ephemeral_mirror(mirror: Path) -> None:
 
 def _release_paths(paths: list[str]) -> list[str]:
     out = list(paths)
-    if "deploy/robot/omx" in out and "contracts/learning/src" not in out:
-        out.append("contracts/learning/src")
+    if "deploy/robot/omx" in out:  # cell_collect_plan's contracts; the platform pointer's verifier
+        out += [p for p in ("contracts/learning/src", "deploy/site/candidate_signing.py") if p not in out]
     return out
 
 
 def _incomplete_release(release: Path, paths: list[str]) -> bool:
     """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
     return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
+
+
+class SourceUnavailable(Exception):
+    """The platform trust source could not be read or verified; the run changes nothing (omx_autoupdate_platform)."""
 
 
 class Host:
@@ -313,10 +317,11 @@ class Host:
         if not isinstance(unit, str) or not unit or unit in self.cfg.get("always_restart", []):
             return False
         props = self._unit_props(unit, "ActiveState", "SubState")
-        if props.get("ActiveState") != "inactive" or props.get("SubState") != "dead":
-            return False
+        state = (props.get("ActiveState"), props.get("SubState"))
         absent = isinstance(dev, str) and bool(dev) and not os.path.lexists(dev) and not os.path.exists(dev)
-        return absent or self._snapshot_stale_torque_off(observer)
+        if state in (("activating", "auto-restart"), ("failed", "failed")):
+            return absent  # crash-looping on a missing board (11-27 arm_b, 3 h): no bus to drive, and restart() skips non-active units
+        return state == ("inactive", "dead") and (absent or self._snapshot_stale_torque_off(observer))
 
     def device_in_use(self) -> bool:
         sp = _sp()

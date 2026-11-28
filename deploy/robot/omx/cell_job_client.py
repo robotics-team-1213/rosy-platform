@@ -67,6 +67,7 @@ class CellJobClient:
         *,
         auth: bool = True,
         extra_headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> tuple[bytes, dict[str, str]]:
         headers = self._auth_header() if auth else {}
         if extra_headers:
@@ -77,7 +78,7 @@ class CellJobClient:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(f"{self.base_url}{path}", data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
                 return resp.read(), {k: str(v) for k, v in resp.headers.items()}
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
@@ -95,8 +96,9 @@ class CellJobClient:
         *,
         auth: bool = True,
         extra_headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> bytes:
-        return self._request_with_headers(method, path, body, auth=auth, extra_headers=extra_headers)[0]
+        return self._request_with_headers(method, path, body, auth=auth, extra_headers=extra_headers, timeout=timeout)[0]
 
     def health(self) -> dict:
         return json.loads(self._request("GET", "/health", auth=False))
@@ -131,6 +133,10 @@ class CellJobClient:
     def start(self, job: str, params: dict, *, idempotency_key: str | None = None) -> dict:
         extra = {"Idempotency-Key": idempotency_key} if idempotency_key else None
         return json.loads(self._request("POST", f"/jobs/{job}", params, extra_headers=extra))
+
+    def cancel(self, job_id: str, *, timeout: float | None = None) -> dict:
+        """Request a cooperative stop (a park at the job's next guarded step, D-1081); not an emergency stop."""
+        return json.loads(self._request("POST", f"/jobs/{job_id}/cancel", {}, timeout=timeout))
 
     def jobs(self) -> dict:
         return json.loads(self._request("GET", "/jobs"))

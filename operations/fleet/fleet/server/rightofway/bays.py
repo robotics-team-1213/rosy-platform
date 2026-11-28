@@ -33,6 +33,8 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Optional, Sequence
 
+from fleet.traffic.config import DEFAULT_SITE_KEEP_OUT_M
+
 Point = tuple[float, float]
 Cell = tuple[int, int]
 
@@ -40,19 +42,14 @@ Cell = tuple[int, int]
 #: 같은 자리를 노린다 - 계획기가 벽으로 보는 칸을 여기서 빈 칸으로 보면 안 된다.
 OCCUPIED_COST = 65
 
-#: pinky 의 외접 반지름. 풋프린트 반폭 0.06 에 바퀴와 범퍼 여유를 더해 잡는다. 이보다
-#: 좁은 칸은 "설 수 있는 자리"가 아니다.
-ROBOT_RADIUS_M = 0.12
+#: pinky 의 외접 반지름(0.12 m 정사각 + 패딩 0.01 의 대각 0.092). 이보다 좁은 칸은 "설 수 있는 자리"가
+#: 아니다. 0.12 는 칸 간격 0.226 m 에서 이웃 칸을 못 쓰게 했다(2026-11-27 안전거리 판정·사용자 결정).
+ROBOT_RADIUS_M = 0.093
 
 
-#: 비켜선 로봇이 상대 경로에서 떨어져 있어야 하는 거리. 지나가는 쪽 반폭 0.12 에
-#: 비켜선 쪽 반폭 0.12, 그리고 측위 오차와 벽 쏠림 몫 0.2 를 더한 값이다.
-#:
-#: `traffic.DEFAULT_CLEARANCE_M` (0.7) 을 그대로 쓰지 않는 이유가 있다. 그쪽은 **경로 대
-#: 경로** 판정이고, 마주 오는 두 계획을 미리 갈라 놓는 값이라 후해도 된다. 여기는 **선
-#: 로봇 대 경로**다 - 0.7 을 요구하면 폭 1 m 통로 옆 벽감은 전부 탈락하고, 비켜설 자리가
-#: 실제로 있는 맵에서도 늘 "자리 없음"이 된다.
-YIELD_KEEP_OUT_M = 0.45
+#: 비켜선 로봇이 상대 경로에서 떨어져 있어야 하는 거리. 지나가는 쪽 반폭에
+#: 비켜선 쪽 차체와 최소 여유를 더한 값이다.
+YIELD_KEEP_OUT_M = DEFAULT_SITE_KEEP_OUT_M
 
 #: 비켜서느라 이보다 멀리 가야 한다면 그것은 양보가 아니라 또 하나의 미션이다.
 MAX_DETOUR_M = 3.0
@@ -62,17 +59,7 @@ MAX_DETOUR_M = 3.0
 BAY_SLACK_M = 0.5
 
 #: 대피 지점은 해제 기준(`keep_out_m`)보다 **이만큼 더** 멀어야 한다.
-#:
-#: 이것이 없으면 교착이 생긴다. 실측 - 2x1 m 방에서 경로로부터 0.48 m 떨어진 자리를
-#: 골랐는데(기준 0.45 통과), 로봇은 목표에 0.13 m 못 미쳐 섰고 AMCL 은 0.18 m 틀렸다.
-#: 보고 위치는 경로에서 0.18 m 였고, 기다리던 미션의 해제 조건은 "0.45 m 밖"이었다.
-#: 둘 다 영원히 서서 화면은 "물러나면 자동 출발합니다"라고 거짓말을 했다.
-#:
-#: 값은 그 실측과 반대쪽 실측 사이에서 고른다. 문제가 된 자리는 0.48 m 였고, 폭 1 m
-#: 통로 옆 0.3 m 벽감의 자리는 0.65 m 다 - 뒤쪽은 살려야 한다. 0.15 는 앞을 버리고 뒤를
-#: 남긴다. 이 값으로도 못 막는 경우는 콘솔의 `_check_yield_worked` 가 받는다 - 여백을
-#: 더 키우면 쓸 만한 벽감이 통째로 탈락하고, 자리가 있는 맵에서도 "자리 없음"이 된다.
-BAY_MARGIN_M = 0.15
+BAY_MARGIN_M = 0.22
 
 #: 자유 폭은 이 위로는 재지 않는다. 넓은 방 한가운데의 정확한 값은 쓸 데가 없고,
 #: 상한이 있어야 거리장을 계산할 창을 유한하게 잡을 수 있다.
@@ -308,6 +295,8 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
     queue: list[tuple[float, int, int]] = [(0.0, start[0], start[1])]
     budget = max_detour_m
     #: (경로에서 떨어진 거리, 비용, 자리). 비용은 같은 거리일 때 가까운 쪽을 고르는 데 쓴다.
+    # clearance() is cell centre to cell centre: the wall cell's near edge is half a cell closer than that.
+    need_clear = robot_radius_m + res / 2
     best: Optional[tuple[float, float, Point]] = None
     while queue:
         cost, cx, cy = heapq.heappop(queue)
@@ -317,7 +306,7 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
         if cost > budget:
             break
         point = grid.point_of((cx, cy))
-        if cost > 0.0 and clearance(cx, cy) >= robot_radius_m:
+        if cost > 0.0 and clearance(cx, cy) >= need_clear:
             nearest = nearest_on_route(route, point)
             off_route = math.inf if nearest is None else math.dist(nearest, point)
             if off_route >= needed:
@@ -335,7 +324,7 @@ def best_bay(grid: Optional[Grid], route: Sequence[Point], robot_xy: Point, *,
                     continue
                 # 지나가는 칸에도 같은 여유를 건다 - 로봇이 통과할 수 없는 틈으로
                 # 이어진 자리는 갈 수 없는 자리다.
-                if clearance(nx, ny) < robot_radius_m:
+                if clearance(nx, ny) < need_clear:
                     continue
                 step = res * (_SQRT2 if dx and dy else 1.0)
                 heapq.heappush(queue, (cost + step, nx, ny))

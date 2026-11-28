@@ -315,6 +315,7 @@ def test_auto_fold_live_hold_attach_plans_before_unlatch_and_keeps_torque_on():
 
 
 def test_multi_vlm_panel_cooperation_timeout_and_live_hold_e2e(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_JOB_PRINCIPAL", "human:operator")  # D-1079: an unmodelled load refuses only for a machine run
     seen = []
     prop_ok = {"strategy": "lift_pan_then_park", "lift_mm": 75.0, "elbow_retract_deg": 0.0,
                "pan_detour_deg": 32.0, "open_jaws": False, "confidence": 0.92, "reason": "lift clear then pan"}
@@ -372,6 +373,7 @@ def test_multi_vlm_panel_cooperation_timeout_and_live_hold_e2e(tmp_path, monkeyp
     monkeypatch.setattr(cc, "check", lambda *a, **k: {"clear": True, "low": [], "high": [], "off_map": 0, "off_surface": 0})
     monkeypatch.setattr(cc, "runs", lambda pts: (pts, []))
     monkeypatch.setattr(cc, "corridor", lambda *a, **k: "lane")
+    monkeypatch.setattr("cell_corridor_own.with_outside", lambda out, *a, **k: out)  # the lane is a stub here
     monkeypatch.setattr(cell_space, "Space", lambda *a: SimpleNamespace(reserve=lambda *a, **k: {"ok": True}, release=lambda *a: None))
     monkeypatch.setattr(cra, "select_recovery_backend", lambda _spec: lambda _p, _i, _s: dict(prop_ok))
     rc = af.main(["--supervised", "--unlatch-hold", "--arm", "arm_b", "--config", str(cfg), "--library", str(lib),

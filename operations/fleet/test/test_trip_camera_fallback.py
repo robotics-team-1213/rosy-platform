@@ -62,7 +62,8 @@ def test_only_the_reviewed_segment_limits_core_authority():
 def test_restart_stops_both_possible_owners_of_an_uncertain_camera_change():
     observed = []
 
-    async def halt(robot_id, lane, place, *, handoff_pending):
+    async def halt(robot_id, lane, place, *, handoff_pending, terminal=False):
+        assert terminal  # a trip open before the restart is closed: its stop may use the measured idle proof
         observed.append((robot_id, lane, place, handoff_pending))
         return {"stop_sent": True}
 

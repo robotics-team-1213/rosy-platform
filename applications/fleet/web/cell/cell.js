@@ -113,7 +113,7 @@ function renderExceptions(items) {
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
   freshJointArmIds: observations.freshJointArmIds,
-  namedReason: () => !isOperator(role) || busy ? OPERATOR_REASON
+  namedReason: () => !isOperator(role) ? OPERATOR_REASON
     : principal?.startsWith('development-') ? NAMED_OPERATOR_REASON : namedOperatorReason(role, principal),
   cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
@@ -199,6 +199,7 @@ function refreshControls() {
     }
     setOff($(id), !allowed, reason);
   }
+  real2sim.syncPermissions();
 }
 async function action(fn) {
   if (busy) return;

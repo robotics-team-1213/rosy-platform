@@ -110,6 +110,7 @@ def scenario(tmp_path, monkeypatch, rauc_tool):
     cache = tmp_path / 'cache'
     cache.mkdir(mode=0o700)
     monkeypatch.setattr(m, 'prepare_tools', lambda: cache, raising=False)
+    monkeypatch.setattr(m, 'MIN_FREE_BYTES', 0)
     monkeypatch.setattr(m, 'ensure_private_directory', lambda path: Path(path).mkdir(parents=True, mode=0o700), raising=False)
     monkeypatch.setattr(m, '_tools_revision', lambda: 'c' * 40, raising=False)
     monkeypatch.setattr(m, '_approved_cms', lambda: dict(certificate=raw_cert,
@@ -233,6 +234,15 @@ def test_operator_command_never_exposes_partial_or_unverified_outputs(scenario, 
         assert state.cms_signs == 0 and state.ed_signs == 0
     if fault == 'metadata_source':
         assert state.ed_signs == 0
+
+
+def test_low_disk_stops_before_a_workspace_or_guest(scenario, monkeypatch):
+    m, state, prepare, output, *_ = scenario
+    monkeypatch.setattr(m, 'MIN_FREE_BYTES', 1 << 62)
+    with pytest.raises(OSError, match='GiB free'):
+        prepare()
+    assert not state.guests and not output.exists()
+    assert not list((output.parent / 'cache').glob('release-prep-*'))
 
 
 def test_operator_command_preserves_existing_output_before_guest(scenario):

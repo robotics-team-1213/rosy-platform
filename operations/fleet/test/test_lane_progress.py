@@ -41,9 +41,9 @@ def test_each_robot_follows_the_one_directly_ahead():
 def test_follower_speed_adds_the_leader_speed_and_respects_cap_and_min_gap():
     assert follower_speed(0.1, TARGET_GAP_M, 0.15) == pytest.approx(0.1)   # at the target: match
     assert follower_speed(0.1, TARGET_GAP_M + 1.0, 0.15) == 0.15            # far behind: lane cap
-    assert follower_speed(0.1, TARGET_GAP_M - 0.3, 0.15) < 0.1              # too close: slower
+    assert follower_speed(0.1, TARGET_GAP_M - 0.04, 0.15) < 0.1             # too close: slower
     assert follower_speed(0.0, MIN_GAP_M - 0.01, 0.15) == 0.0               # inside stop gap
-    assert follower_speed(0.0, 0.3, 0.15) == 0.0                            # never reverses
+    assert follower_speed(0.0, 0.24, 0.15) == 0.0                            # never reverses
 
 
 def test_the_main_loop_is_the_shortest_one_way_cycle_not_the_detour():
@@ -59,7 +59,7 @@ def test_the_main_loop_is_the_shortest_one_way_cycle_not_the_detour():
 
 def test_platoon_rows_say_who_is_ahead_how_far_and_who_is_off_the_loop():
     loop = Loop(square(), ["AB", "BC", "CD", "DA"])
-    rows = {r["robot_id"]: r for r in platoon(loop, {"a": (0.5, 0.0), "b": (0.3, 0.0), "c": (0.5, 0.5)})}
+    rows = {r["robot_id"]: r for r in platoon(loop, {"a": (0.5, 0.0), "b": (0.35, 0.0), "c": (0.5, 0.5)})}
     assert rows["b"]["leader"] == "a" and rows["b"]["state"] == "too_close"
     assert rows["a"]["leader"] == "b" and rows["a"]["state"] == "ok"
     assert rows["c"] == {"robot_id": "c", "s_m": None, "off_m": 0.5, "state": "off_loop"}

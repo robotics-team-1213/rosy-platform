@@ -618,5 +618,6 @@ def test_systemctl_start_nav_stops_io_before_starting_navigation(monkeypatch):
     native_release.NativeReleaseManager._systemctl_start_nav()
     assert calls == [
         ["systemctl", "stop", "rosy-io.service"],
+        ["systemctl", "reset-failed", "rosy-io.service"],
         ["systemctl", "start", "rosy-navigation.service"],
     ]

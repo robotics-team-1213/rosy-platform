@@ -62,6 +62,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 â€” GoalRequest ìž
     fanout_local_omx_stops,
     install_task_dispatch_routes,
 )
+from fleet.server.dispatch_auto_rearm import install_auto_rearm
 from fleet.server.task_service import FleetTaskService
 from fleet.server.vision_preview_routes import VisionLeaseRequest, configure_vision_previews  # noqa: F401
 from .bootstrap.role_builders import (
@@ -211,6 +212,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             notification_config=notification_config, identity=identity, log=_LOG,
             auto_locate=getattr(tracking, "auto_locate", None),
             lane_compliance_period_s=LANE_COMPLIANCE_PERIOD_S)
+        auto_rearm = getattr(app.state, "auto_rearm_after_restart", None)
+        if auto_rearm is not None:
+            async def _auto_rearm_once():
+                try:
+                    await auto_rearm()
+                except Exception:
+                    _LOG.exception("auto rearm after restart failed; dispatch stays closed")
+            background_tasks.append(asyncio.create_task(_auto_rearm_once()))
         try:
             yield
         finally:
@@ -420,6 +429,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         require_operator=require_operator, require_named_operator=require_named_operator,
         read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel,
         convert_site_goal=site_goal_in_robot_frame, native_task_result=native_task_result, authorize=authorize)
+    if task_service is not None:
+        install_auto_rearm(app, store=task_service.store, configured_omx=configured_omx,
+                           stop_targets=stop_targets, stop_transport=stop_transport)
     install_berth_parking_routes(
         app, console=console, task_service=task_service, read_guard=read_guard,
         operator_guard=operator_guard, require_operator=require_operator,

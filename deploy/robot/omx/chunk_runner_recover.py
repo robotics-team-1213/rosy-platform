@@ -268,6 +268,20 @@ def queue_recovery_park(runner, words: list[str], *, checked: bool, empty_margin
     runner.queue, runner.chunk, runner.settle_since, runner.played = frames, verb, None, []
 
 
+def incident_hold_reason(arm: str) -> str | None:
+    """The fault/error text the arm's latest incident flagged (the hold this fold clears), or None."""
+    try:
+        from pathlib import Path
+
+        import omx_incident
+        from cell_hold_retry import latest_incident_facts
+
+        flagged = latest_incident_facts(Path(omx_incident.INCIDENTS), arm).get("flagged") or []
+        return " | ".join(f"{(f or {}).get('fault') or ''} {(f or {}).get('error') or ''}".strip() for f in flagged).strip(" |") or None
+    except Exception:  # noqa: BLE001 - a lost record never stops the fold
+        return None
+
+
 def run_fold_session_cli(args, recover_fn, schema: str) -> int:
     """Execute `cell_auto_fold.py` CLI fold/unlatch inside an arm session with fail-safe hold cleanup."""
     import json
@@ -276,6 +290,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
 
     import cell_choices
     import cell_corridor
+    import cell_corridor_own
     import cell_params as prm
     import cell_pipeline as cp
     import cell_pivot
@@ -310,7 +325,10 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
         choices.save()
         plan = lambda s: park_path(list(s), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))  # noqa: E731
         low = lambda s: crp.fk_z(s, tcp_x_m=tcp_x_m) < clear_z_m  # noqa: E731
-        look = crp.build_multi_site_look(cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m)
+        look = crp.build_multi_site_look(
+            cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m,
+            allow_ascending_departure=True, own_state=lambda: cell_corridor_own.measured_joints(cell),
+        )
         load_check = crp.make_load_checker(config, library, params)
         advisor = None
         if args.vlm_url or args.vlm_config:
@@ -326,14 +344,24 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
                                           args.roi, prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
             return space.reserve(arm, lane, ttl_s=360.0)
 
+        hold_reason = None if args.supervised else incident_hold_reason(arm)
+        has_depth = bool(((config.get("cameras") or {}).get("top") or {}).get("d435_factory"))
         result = recover_fn(
             cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
-            release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n: choices.ranked(choice_key, n),
+            release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n, ctx: choices.ranked_in_context(choice_key, n, ctx),
             release_unmoved=bool(args.supervised and not args.unlatch_hold), moved_out=moved_out, latched_out=latched_out,
             allow_live_unlatch=args.unlatch_hold, advisor=advisor, load_check=load_check,
             bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True,
             held_plan=lambda s: recovery_park_path(library, s, library["fps"]), library_sha256=digest(library),
+            hold_reason=hold_reason, rehome=lambda c: cell_unwedge.rehome_before_work(c, library, config, required=True),
+            guarded_park_fallback=bool(args.supervised and not has_depth),
         )
+        if "state_start" in result:  # records only: nothing decides on the start PWM yet
+            import load_predict
+
+            lm_arm = getattr(load_check, "arm", None)
+            result.update(load_predict.start_load(lm_arm, result["state_start"], result.get("start_pwm")) if lm_arm
+                          else {"gravity_pwm_expected": None})
     except Exception as exc:  # whatever broke, keep torque ON if moved/latched/unlatch-hold; else stop now when supervised
         err = f"ERROR: {type(exc).__name__}: {str(exc)[:160]}"
         if space is not None and not moved_out:

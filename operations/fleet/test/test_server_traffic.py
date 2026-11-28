@@ -357,12 +357,12 @@ def _goal_calls(robot):
 
 
 def test_an_untrusted_robot_is_a_wide_obstacle_at_its_last_trusted_pose():
-    """D-395 §10: a robot that lost LOCALIZED keeps 0.45 m clear around where it was last trusted.
+    """D-395 §10: a robot that lost LOCALIZED keeps UNTRUSTED_KEEP_OUT_M clear around where it was last trusted.
     Its current odom pose (far away here) is not used."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
-    run(console.snapshot())                                       # last trusted pose (0, 0.3)
+    run(console.snapshot())                                       # last trusted pose (0, 0.18)
     other._state = _standing("rosy_02", (5.0, 5.0), _loc("CANDIDATES", "odom"))
 
     result = run(console.goal("rosy_01", 2.0, 0.0))
@@ -375,7 +375,7 @@ def test_an_untrusted_robot_is_a_wide_obstacle_at_its_last_trusted_pose():
 
 def test_the_mission_goes_out_once_the_robot_is_localized_off_the_route():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
     run(console.snapshot())
     other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
@@ -416,7 +416,7 @@ def test_an_untrusted_robot_never_trusted_blocks_the_whole_track():
 def test_a_robot_without_localization_blocks_without_inventing_a_map_pose():
     """Missing localization cannot establish a map pose."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3)))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16)))
     console = _console(mover, other)
     snapshot = run(console.snapshot())
 
@@ -431,11 +431,11 @@ def test_a_robot_without_localization_blocks_without_inventing_a_map_pose():
 def test_a_mission_held_behind_an_untrusted_robot_drops_its_claim():
     """Review fix: like ROUTE_CONFLICT, a cancelled mission must not keep claiming the corridor."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console = _console(mover, other)
     run(console.snapshot())
     console._claims["rosy_01"] = _line(-2.0, 0, 2.0, 0)        # an earlier mission's claim
-    other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc("SUSPECT", "map"))
 
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
@@ -540,7 +540,7 @@ def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 1.5), None))   # odom: off-route
     console = _console(mover, other)
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.3), _loc())                       # on the route
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc())                       # on the route
     run(console.snapshot())
     other._state = _standing("rosy_02", (0.0, 1.5), _loc("CANDIDATES", "odom"))
     run(console.snapshot())
@@ -548,13 +548,13 @@ def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
     assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
-    assert console._trusted["rosy_02"] == (0.0, 0.3)
+    assert console._trusted["rosy_02"] == (0.0, 0.16)
 
 
 def test_null_localization_stays_untrusted_after_cached_position_expires():
     """A CORE restart never restores trust by timeout; the old position expires after 30 s."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console, clock = _clocked(mover, other)
     run(console.snapshot())
     other._state = _standing("rosy_02", (5.0, 5.0), None)                      # CORE restarted
@@ -576,15 +576,15 @@ def test_null_localization_stays_untrusted_after_cached_position_expires():
 
 def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     console, clock = _clocked(mover, other)
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.3), None)
+    other._state = _standing("rosy_02", (0.0, 0.16), None)
     run(console.snapshot())                                   # null since t=0
     clock.now = 20.0
-    other._state = _standing("rosy_02", (0.0, 0.3), _loc("UNKNOWN", "odom"))
+    other._state = _standing("rosy_02", (0.0, 0.16), _loc("UNKNOWN", "odom"))
     run(console.snapshot())
-    other._state = _standing("rosy_02", (0.0, 0.3), None)
+    other._state = _standing("rosy_02", (0.0, 0.16), None)
     clock.now = 25.0
     run(console.snapshot())                                   # null again since t=25
     clock.now = 40.0
@@ -596,7 +596,7 @@ def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
 
 def test_missing_localization_never_becomes_trusted_by_timeout():
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), None))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), None))
     console, clock = _clocked(mover, other)
     for t in (0.0, 10.0, 40.0):
         clock.now = t
@@ -619,12 +619,12 @@ def _driving(console, robot):
 
 
 def test_a_driving_robot_near_the_mover_is_held_until_the_mover_is_localized():
-    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.16), _loc()))
     driver = _mover()                                               # rosy_01 on y = 0
     console = _console(driver, mover)
-    run(console.snapshot())                                         # mover last trusted at (0, 0.3)
+    run(console.snapshot())                                         # mover last trusted at (0, 0.18)
     _driving(console, driver)
-    mover._state = _standing("rosy_02", (0.0, 0.3), _loc("CANDIDATES", "odom"))
+    mover._state = _standing("rosy_02", (0.0, 0.16), _loc("CANDIDATES", "odom"))
     run(console.snapshot())
 
     held = run(console.hold_for_localization("rosy_02"))
@@ -744,7 +744,7 @@ def test_site_frame_clear_allows_mover_past_unlocalized_robot_parked_clear_on_ac
 def test_site_frame_blocks_when_unlocalized_robot_is_within_keepout_on_active_map():
     console, mover, _other = _rotated_site_console(
         _standing("rosy_02", (9.0, 9.0), _loc("UNKNOWN", "odom")),
-        ("world_261026", -0.5, 0.05, -1.57),
+        ("world_261026", -0.5, -0.05, -1.57),
     )
     result = run(console.goal("rosy_01", 2.0, 0.0))
     assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
@@ -770,7 +770,7 @@ def test_site_frame_clear_skips_foreign_map_standing_robot_far_from_route_but_ho
 
     near_console, mover, near_other = _rotated_site_console(
         _standing("rosy_02", (5.0, 5.0), _loc()) | {"map_id": "slam_b"},
-        ("world_261026", -0.5, 0.05, 0.0),
+        ("world_261026", -0.5, -0.05, 0.0),
     )
     held = run(near_console.goal("rosy_01", 2.0, 0.0))
     assert held["queued"] is True and held["reason"] == "NO_YIELD_SPACE"
@@ -778,22 +778,49 @@ def test_site_frame_clear_skips_foreign_map_standing_robot_far_from_route_but_ho
     assert ("navigation_cancel",) in mover.calls
 
 
-def test_site_keep_out_default_032_allows_distant_c3_and_blocks_adjacent_c2():
-    # Mover route lies along y=-0.2; 0.443 m offset clears with default 0.32 m (was blocked at 0.45 m),
-    # while 0.232 m offset stays blocked as an adjacent bay obstacle.
+def test_site_keep_out_default_018_allows_distant_c3_and_blocks_overlapping_c2():
+    # Mover route lies along y=-0.2; 0.25 m offset clears with default 0.18 m,
+    # while 0.15 m offset stays blocked as an overlapping bay obstacle.
     clear_console, mover_clear, _other1 = _rotated_site_console(
         _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
-        ("world_261026", -0.5, 0.243, -1.57),
+        ("world_261026", -0.5, 0.05, -1.57),
     )
     ok = run(clear_console.goal("rosy_01", 2.0, 0.0))
     assert "queued" not in ok and ("navigation_cancel",) not in mover_clear.calls
 
     blocked_console, mover_blocked, _other2 = _rotated_site_console(
         _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
-        ("world_261026", -0.5, 0.032, -1.57),
+        ("world_261026", -0.5, -0.05, -1.57),
     )
     held = run(blocked_console.goal("rosy_01", 2.0, 0.0))
     assert held["reason"] == "LOCALIZATION_UNTRUSTED" and ("navigation_cancel",) in mover_blocked.calls
 
     with pytest.raises(ValueError, match="site_keep_out_m"):
-        FleetConsole([], [], site_keep_out_m=0.25)
+        FleetConsole([], [], site_keep_out_m=0.14)
+
+
+def test_observe_states_bounds_unresponsive_peer_timeout():
+    import asyncio
+    from fleet.server.observe import observe_states
+
+    hung = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 1.0), _loc()))
+    async def hang(*_a, **_kw):
+        await asyncio.sleep(5.0)
+    hung.state = hang
+    mover = _mover()
+    console = _console(mover, hung)
+    console._gather_state = lambda rid: hang() if rid == "rosy_02" else asyncio.sleep(0.0, (mover._state, "rest"))
+    run(asyncio.wait_for(observe_states(console), timeout=1.2))
+    assert "rosy_01" in console._trusted
+    assert "rosy_02" not in console._seen or console._last_ok.get("rosy_02") is None
+
+
+def test_closest_approach_uses_segment_distance_for_staggered_and_crossing_routes():
+    # Staggered parallel 20 cm vertices separated by 0.165 m laterally (< DEFAULT_CLEARANCE_M = 0.19)
+    a = [(0.0, 0.0), (0.2, 0.0), (0.4, 0.0)]
+    b = [(0.1, 0.165), (0.3, 0.165), (0.5, 0.165)]
+    assert traffic.closest_approach(a, b) == pytest.approx(0.165)
+    assert traffic.routes_conflict(a, b) is True
+    # Sparse crossing polylines still report 0.0 distance
+    assert traffic.closest_approach([(0.0, 0.0), (1.0, 0.0)], [(0.5, -0.5), (0.5, 0.5)]) == pytest.approx(0.0)
+    assert traffic.routes_conflict([(0.0, 0.0), (1.0, 0.0)], [(0.5, -0.5), (0.5, 0.5)]) is True

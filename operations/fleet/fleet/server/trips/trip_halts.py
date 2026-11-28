@@ -66,6 +66,15 @@ def idle_cancel_owner(receipt, received_at):
     return None
 
 
+def ended_cancel_state(receipt):
+    """The navigation a cancel receipt reports when CORE had no goal left (ARRIVED, CANCELED, FAILED), else None."""
+    if (isinstance(receipt, dict) and receipt.get("navigation") in ("ARRIVED", "CANCELED", "FAILED")
+            and receipt.get("operation", False) is None and "error" not in receipt
+            and not any(receipt.get(k) is False for k in ("ok", "stop_sent", "cancel_confirmed"))):
+        return receipt["navigation"]
+    return None
+
+
 def pause_proof_args(trip: dict) -> dict:
     hold = trip.get("hold") or {}
     args = {}
@@ -195,9 +204,22 @@ class TripHalts:
             return {**proof, "basis": "pre_dispatch_idle", "idle_owner": owner}
         return None
 
+    async def measured_ended_stop(self, robot, after, navigation, wire):
+        """Closed trip, goal already over: measured standstill after the cancel, navigation unchanged, same wire."""
+        if wire is None or self.idle_wire(robot) != wire:
+            return None
+        proof = await self.measured_stop(robot, after)
+        if proof is None or proof["navigation"] != navigation or self.idle_wire(robot) != wire:
+            return None
+        return {**proof, "basis": "ended_goal_standstill"}
+
     async def halt_robot(self, robot_id: str, lane: bool, place: str | None, *, handoff_pending=False,
-                         pause_after=None, peer_idle=False) -> dict:
-        """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel."""
+                         pause_after=None, peer_idle=False, terminal=False) -> dict:
+        """Best effort, every call bounded: lane -> junction ``stop`` then line-follow OFF; free -> cancel.
+
+        ``terminal``: the trip is already closed. A cancel of an IDLE robot gets no ack even after an earlier leg
+        (a wait-place prefix) was sent, so a closed trip also accepts the measured idle standstill (same owner, same
+        wire, zero velocity after the cancel); without it that robot stayed refused (prior_stop_unconfirmed)."""
         errors = []
 
         async def attempt(call) -> bool:
@@ -215,16 +237,19 @@ class TripHalts:
         else:
             idle_proof = None
             try:
-                wire = self.idle_wire(robot_id) if peer_idle and not handoff_pending else None
+                wire = self.idle_wire(robot_id) if (peer_idle or terminal) and not handoff_pending else None
                 cancel_res = await self._call(self._cancel_goal(robot_id))
                 after_cancel = self._clock() if wire is not None else None
                 canceled = _cancel_ack(cancel_res)
-                if not canceled and wire is not None and (observed := idle_cancel_owner(cancel_res, after_cancel)):
-                    owner, after_cancel = observed
+                ended = ended_cancel_state(cancel_res) if terminal else None  # peer_idle keeps the IDLE-only proof
+                if not canceled and wire is not None and ((observed := idle_cancel_owner(cancel_res, after_cancel)) or ended):
+                    if observed:
+                        owner, after_cancel = observed
                     for delay in (0., .15, .25):
                         if delay:
                             await asyncio.sleep(delay)
-                        idle_proof = await self.measured_idle_stop(robot_id, after_cancel, owner, wire)
+                        idle_proof = (await self.measured_idle_stop(robot_id, after_cancel, owner, wire) if observed
+                                      else await self.measured_ended_stop(robot_id, after_cancel, ended, wire))
                         if idle_proof:
                             canceled = True
                             break
@@ -292,7 +317,8 @@ class TripHalts:
             if self.dock_owned(trip):
                 result = await self.halt_dock(trip)
             else:
-                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, **pause_proof_args(trip))
+                result = await self.halt_robot(rid, lane, place, handoff_pending=hp, terminal=True,
+                                               **pause_proof_args(trip))
         except Exception:
             _LOG.exception("could not stop robot %s of a trip open before the restart", rid)
             return False

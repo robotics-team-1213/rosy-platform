@@ -369,6 +369,7 @@ class Layout:
         self.deck_z = ship_plate.top_z(f)
         self.arms, self.sim_arms, self.plates = {}, {}, {}
         self.roll_floor = float(kin.norm_to_rad(c["roll_floor_norm"]))
+        if c["arm_bases"] == "measured-194" and c["ship_pose"] != "assumed": c["arm_bases"] = "cad-194"  # same 194 gap, x follows the measured hull (fixed .091 fits only the assumed stern)
         if c["arm_bases"] in DOCKS:  # the bases hang on the ship: a measured ship pose is needed before the arms are placed (set again below, the same values)
             if c["ship_pose"] == "photo-20261110":
                 c["ship_stern_x_m"], c["ship_centre_y_m"] = SHIP_PHOTO_1110["stern_x_m"], SHIP_PHOTO_1110["centre_y_m"]
@@ -381,16 +382,16 @@ class Layout:
             xy, yaw_rad = f["arm_bases_m"][k][:2], f["arm_base_yaws_rad"][k]
             if c["arm_bases"] in ("plate-centre", "measured-194", "photo-20261114"):
                 tables = {"plate-centre": ARM_BASES_PLATE_CENTRE, "measured-194": ARM_BASES_MEASURED_194, "photo-20261114": ARM_BASES_PHOTO_1114}
-                xy, yaw_deg = tables[c["arm_bases"]][name]
-                yaw_rad = math.radians(yaw_deg)
+                xy, yaw_rad = tables[c["arm_bases"]][name][0], math.radians(tables[c["arm_bases"]][name][1])
             elif c["arm_bases"] in DOCKS:
                 d = DOCKS[c["arm_bases"]]
                 sign = -1. if name == "arm_a" else 1.
                 xy, yaw_rad = (c["ship_stern_x_m"] - d["axis_behind_stern_m"], c["ship_centre_y_m"] + sign * d["axis_from_centreline_m"]), -sign * math.pi / 2
+                if c["temp_lanes"] == "snapshot" and (axis := (load_snapshot(c["cell_snapshot"])["items"]["temp_plates"].get("fan_axis") or {}).get(name[-1])):  # bridge v7 seats the measured plate on its arm: x follows the plate fan, y stays on the 194 dock span (the docks do not fix x to under 20 mm)
+                    xy = (axis[0], xy[1])
             elif str(c["arm_bases"]).startswith("span-"):
                 span_mm = float(str(c["arm_bases"]).split("-", 1)[1])
-                sgn = -1.0 if name == "arm_a" else 1.0
-                xy = (.091, sgn * (span_mm / 2.0 + BERTH_V16_SPEC["base_inner_from_axis_mm"]) / 1000.0)
+                xy = (.091, (-1.0 if name == "arm_a" else 1.0) * (span_mm / 2.0 + BERTH_V16_SPEC["base_inner_from_axis_mm"]) / 1000.0)
                 yaw_rad = math.radians(90.0 if name == "arm_a" else -90.0)
             elif c["arm_bases"] == "snapshot":
                 ab = (load_snapshot(c["cell_snapshot"])["items"].get("arm_bases") or {}).get("plate_centre", {}).get(name)

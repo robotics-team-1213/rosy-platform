@@ -123,6 +123,24 @@ def evaluate_bay_dock(x: float, y: float, yaw: Optional[float],
     }
 
 
+#: Place kinds that make an edge a parking or bay approach (D-1084): the charge bays and the
+#: parking guide bar between them (world_261026: bay_* to C*, bar_*/park_* through P*).
+PARKING_PLACE_KINDS = frozenset({"charge", "park"})
+
+
+def parking_edge(graph, edge_id: Optional[str]) -> bool:
+    """D-1084: the edge leads into a charge bay or runs along the parking guide (an end place of
+    kind charge or park, or a ``bay_`` edge like D-972), so it is not a road lane to keep."""
+    if graph is None or not edge_id:
+        return False
+    if edge_id.startswith("bay_"):
+        return True
+    places = getattr(graph, "places", None) or {}
+    return any(arc.edge_id == edge_id and any(getattr(places.get(p), "kind", None) in PARKING_PLACE_KINDS
+                                              for p in (arc.start_place, arc.end_place))
+               for arc in graph.arcs.values())
+
+
 def map_bounds(graph, pad_m: float) -> Optional[tuple]:
     """The lanes' bounding box grown by ``pad_m``: (x0, y0, x1, y1), or None without lanes."""
     points = [p for arc in graph.arcs.values() for p in arc.polyline] if graph is not None else []

@@ -1,5 +1,6 @@
 // Real-to-Sim <-> Sim-to-Real closed-loop pipeline view for the Cell workspace (D-947, D-1012).
 import { setOff, setOffBy } from "/common/cause-line.js";
+import {confirmIrreversible} from '/common/ui.js';
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {
   REAL2SIM_PATH,
@@ -31,7 +32,7 @@ export * from './cell-real2sim-specs.js';
 
 // namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
 export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null,
-  freshJointArmIds = () => []}) {
+  freshJointArmIds = () => [], confirm = confirmIrreversible}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -56,6 +57,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     state,
     cellFrames,
     namedReason,
+    confirm,
     bump: () => ++generation,
     gen: () => generation,
     selectInspectorTarget: (...args) => selectInspectorTarget(...args),
@@ -120,10 +122,11 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
         setOff(btn, !allowed, reason);
       }
     }
+    const taskReason = typeof namedReason === 'function' ? namedReason() : (allowed ? '' : OPERATOR_REASON);
     for (const id of ['cell-task-preset-run', 'cell-task-create']) {
       const btn = $(id);
       if (btn) {
-        setOffBy(btn, '');
+        setOffBy(btn, taskReason);
       }
     }
   }
@@ -232,6 +235,8 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     if ($('real2sim-handoff')) $('real2sim-handoff').textContent = '';
     if (status) status.textContent = '접속하면 실물↔시뮬 파이프라인 상태를 확인할 수 있습니다.';
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.';
+    syncOperatorButtons();
+    renderCameraMatrix({ updateOnly: true });
   }
 
   function currentPayload() {
@@ -343,6 +348,14 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
         statusBody = null;
       }
       if (expectedGen !== generation) return;
+      if (!state.sitePointsCameras) {
+        try {
+          const sp = await request('/api/fleet/site-points?view=full');
+          if (expectedGen === generation && sp?.cameras) state.sitePointsCameras = sp.cameras;
+        } catch {
+          // Optional: /api/fleet/site-points may be absent before an active site map is published.
+        }
+      }
       lastStatusBody = statusBody;
       const ids = discoverPinkyIds(body, statusBody);
       if (!state.selectedRobotId || !ids.includes(state.selectedRobotId)) {
@@ -364,6 +377,13 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
       }
       if (expectedGen !== generation) return;
       lastPlansBody = plansBody;
+      try {
+        const objsBody = await request('/api/fleet/pipeline/cell-objects');
+        if (expectedGen === generation && objsBody) state.cellObjects = { ...objsBody, fetchedAtMs: Date.now() };
+      } catch {
+        // Optional telemetry: absent until a cell observer publishes catalog objects.
+      }
+      if (expectedGen !== generation) return;
       renderCellTasks({
         ...body,
         live_joint_arms: freshJointArmIds(),
@@ -455,5 +475,10 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   $('cell-live-stream-toggle')?.addEventListener('click', () => { toggleLiveStream(); });
   $('station-zones-load')?.addEventListener('click', () => { void loadStationZonesYaml(); });
   $('station-zones-save')?.addEventListener('click', () => { void saveStationZonesYaml(); });
-  return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear};
+  function syncPermissions() {
+    syncOperatorButtons();
+    renderCameraMatrix({ updateOnly: true });
+  }
+
+  return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear, syncPermissions};
 }

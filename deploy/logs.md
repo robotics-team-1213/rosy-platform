@@ -5136,3 +5136,85 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음(관측 신선도 한계 0.6 s, 가드, person_at_switch, D-1024, lease 그대로)
 - 결정: 없음
 - 교훈: 없음(실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 팔 사고 해제 자동 실행, 셀 기본 기준 99
+
+- 변경: cell_task_worker가 30 s마다 cell_incident_release.watch를 부름(hold가 열린 팔만, 사고 id·자세·토크·하드웨어 오류가 바뀌고 두 번 연속 같을 때 1회). pipeline·auto_clear·CLI 기본 min_score 95→99(공용 하한 95와 Fleet 판정은 그대로). worker·job API가 사고 기록과 24 h 해제 횟수를 작업 디렉터리의 incidents/에서 읽음(이전에는 cwd 기준이라 facts unreadable)
+- 증거: 원격 pytest test_omx_incident_release.py, test_omx_incident_auto_clear.py와 관련 OMX 시험(로그는 PR 보고)
+- gate 변화: 없음(hard veto, 점수 감점, 24 h 반복 한도 그대로)
+- 결정: 사용자 2026-11-27 완전 자동, 기준 99
+- 교훈: 없음(실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 임시판 칸 사전지식(cell_slot_prior)
+
+- 변경: 사이트 선택 키 slots·slots_fit을 읽어 칸 밖 덩어리 제외, 깊이 층수로 칸 안 재측정·칸 축 맞춤(8 mm/5°/가로 4 mm), 맞춰진 물체에만 사이트 finger_params 적용. 집게 닫기 칸 축 수직 ±3°, 이웃 높이 모르면 3단, SITE_NOT_MEASURED·깊이/측면 반 단 보류. slots 없으면 이전과 같음. 도달 보조 함수는 cell_auto_reach.py로 그대로 옮김
+- 증거: 원격 pytest affected 선택 7회(test_omx_temp_plate_prior.py 포함, 2026-11-27 상단 프레임 고정 입력)
+- gate 변화: 없음(auto.neighbour_clear_mm·min_jaw_margin_mm·finger_mm 기본값, outside_blocks 그대로)
+- 결정: 2026-11-27 임시판 인식 패널 안전 조건
+- 교훈: 없음(셀 설정 값·판 기준점 측정·실물 수용 전)
+
+## 2026-11-27 · uncommitted · OMX 정책 실행기 벨트 컨테이너 자세 입력(Panel L 13칸 environment_state)
+
+- 변경: 체크포인트의 `ENV_STATE.json`이 `belt_dx_cm`·`belt_dy_cm`·`belt_yaw_x5`를 끝 3칸으로 선언할 때만 `cell_lerobot_shadow`가 13칸(목표 one-hot 10 + 자세 3)을 만든다. 선언이 없거나 다르면 기존 동작이다. `cell_belt_pose.py`가 동작 전 top 프레임 한 장에서 컨테이너를 찾아(`omx_real2sim` `blobs`·`lane_blobs`), 번들의 top 카메라 모델로 fixture 좌표에 역투영하고 `Layout(preset).sites["belt"]`와의 차이를 낸다. 인식 실패·0개·2개 이상·크기 불일치·기준 없음은 `BELT_POSE_UNKNOWN`, 학습 범위+여유 밖은 `BELT_POSE_OUT_OF_RANGE`로 팔을 움직이지 않고 거절한다. 값을 자르지 않는다. `cell_policy_drive`가 세 숫자와 근거(중심·오프셋 mm, yaw, 크기 점수, 프레임 sha256)를 `policy-drive.jsonl`과 결과에 남긴다. 목표 인자 검사를 `cell_policy_goals.cli_goal`로 옮겨 drive를 400줄 아래로 유지했다(동작 동일).
+- 증거: `test/test_omx_policy_belt_pose.py`(합성 프레임 오프셋·yaw 접기, 범위 밖·인식 실패 거절, 10칸 불변, dry run 기록, 실물 run 4·6 top 프레임), 원격 `test/test_omx_lerobot_shadow.py`·`test/test_omx_policy_drive.py` 외
+- gate 변화: 없음. 가드 한계·기존 게이트 그대로, 새 거절만 더함
+- 결정: 팔 좌표·셀 보정 지도 대신 시뮬 top 카메라 모델로 fixture 좌표를 직접 얻는다(시뮬 팔 받침은 사진 추정값, arm_a 17 mm 차이 기록)
+- 후속(조정 세션 검토): 셀에는 tools/sim이 배포되지 않으므로 런타임을 자립시켰다. `ENV_STATE.json` belt_reference가 belt_site·belt_top_m·container·footprint_tol_m을 반드시 선언하고 런타임은 그 값만 쓴다. 검출은 `cell_belt_vision.py`(omx_real2sim 사본, 원본 대조 시험)로 한다. 선언 생성기 `tools/sim/omx_env_state.py`를 더했고, `package_cell_bundle`이 파일을 복사하며 policy_revision은 그대로임을 시험했다.
+- 교훈: 없음. 미해결(조정 세션 관찰 포함: 벨트에 가이드가 없어 컨테이너가 폭 80 mm 안 한쪽 가장자리에 놓임, 학습 범위 dy ±8 mm가 벨트 폭을 덮지 못함): 11-27 실물 프레임의 벨트 컨테이너는 시뮬 벨트 사이트에서 dy 약 −34 mm(1~5회차)·−49 mm(6회차)라 Panel L 범위(±8 mm) 밖이다
+
+## 2026-11-27 · uncommitted · OMX 자동 갱신의 신뢰 출처를 서명된 green-main 포인터로(GitHub REST API 대신)
+
+- 변경: omx_autoupdate.py에 trust_source(platform|github)를 더했다. platform이면 omx_autoupdate_platform.PlatformHost가 서명 PC의 green-main 포인터(ed25519, candidate_signing 봉투)에서 머리 커밋, ci-result, 커밋 서명 여부를 읽는다. 조상 확인은 커밋만 받은 로컬 git 미러로 한다. 포인터가 1시간보다 오래되면 거절한다. 포인터나 미러를 못 읽으면 transient로 끝나고 아무것도 바꾸지 않는다. 생산자는 deploy/site/green_main_pointer.py다. 검증기가 없는 옛 릴리스에서는 그 회차만 github로 받는다. platform_url이 없는 설정은 그대로 github다.
+- 증거: 원격 pytest test_omx_autoupdate*.py, test_site_green_main_pointer.py, test_model_pc_autoupdate.py, test_update_gate.py 325 passed(e5574a6df9). 서명 검증을 지운 변이에서 새 시험 2개 빨간불. 실제 저장소에 대한 생산자 --dry-run
+- gate 변화: 없음(ci-result 통과, 후손, hotfix floor, smoke, 셀 유휴 관문 그대로, 확인 주체만 서명 PC로 옮김)
+- 결정: D-805 7 '서명 키가 준비되면 같은 서명으로 맞춘다'의 실행. 셀 설정과 서명 PC 타이머는 병합 뒤 적용
+- 교훈: 없음(셀 수용 전)
+
+## 2026-11-27 · uncommitted · OMX cell-task-worker principal and motion worker (D-1081)
+
+- 변경: ADR D-1081 records the cell-task-worker principal, strict key allowlist and rollout order (cell API and worker first, switch after).
+- 증거: docs only; no host contacted
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · OMX 홈 복귀가 집게가 열리는 시간을 기다린다
+
+- 변경: cell_unwedge._home_jogs가 grip 명령 뒤 고정 2초 한 번 대신, 집게가 홈에 닿거나 멈출 때까지(최대 6번 상태 확인) 기다린다. 집게가 홈 전에 멈추면 그대로 stopped다. 허용 오차·속도·가드는 그대로.
+- 증거: arm_s 집게는 약 2.8 단위/초로 열려 park 뒤 홈(58.1)까지 약 3.2초가 걸려 11-27 홈 3번 모두 stopped였다. 원격 pytest 결과는 커밋 메시지·보고에 적는다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · OMX 사건 보고: 토크 끈 쉬는 접힌 팔을 "펴진 팔"로 오판하지 않게(좁힌 규칙)
+
+- 변경: omx_incident.facts의 folded는 원래 HOME_TOL(3) 식 그대로다. 별도 사실 rested_folded(시작 라이브러리 접힘 자세로 cell_job_peer_health.live_folded가 calibrated 기준만 접힘이라 하고 몸 관절이 모두 core_common REST_TOL(8) 안)를 decide()의 "토크 꺼짐 + folded 아님" 가지에서만 읽는다. rested_folded가 참이면 guarded_home_decision을 부르지 않고 그 아래 기존 검사로 이어진다. rested_folded 계산용 라이브러리 읽기만 OSError/ValueError/객체 아님이면 None이고, home 조회는 예전처럼 읽기·파싱 오류를 그대로 낸다. is_home_recovery가 참이면 쉬는 자세여도 guarded_home_decision을 예전과 똑같이 부른다.
+- 지키는 ADR 줄: D-1047(쉬는 팔이 folded를 대신하는 것은 링크 끊김 종류만, 공원 변형 정지는 3 이내 folded 필요)과 D-1048(home 3 이내)은 건드리지 않는다. Fleet이 믿는 folded(machine_clearable, software_stop, 위험 점수의 drift 감점)는 넓어지지 않는다. rested_folded는 BoundedJson facts의 여분 키이며 core_common은 읽지 않는다.
+- 증거: 2026-11-27 arm_s 세션 끝 자세 [0.22, -58.53, 54.68, 49.84, -4.66]가 세 번 사건을 열었고 같은 자세를 준비 상태 규칙은 접힘으로 읽음. 시험 test_omx_incident.py(쉬는 자세 무사건·folded False 고정, latched 유지, 몸 9 단위 사건 유지·7 단위 무사건, 라이브러리 없음/깨짐)
+- gate 변화: 없음(펴진 팔 탐지는 약해지지 않음)
+- 결정: D-1048 보완 기록(쉬는 자세 REST_TOL 8은 사건 열기 결정에서만 펴짐 아님; 통신 끊김 복구는 예전 그대로 보류, 라이브러리 읽기 실패는 home 조회에서 예전처럼 오류)
+- 교훈: 없음(셀 수용 전)
+
+## 2026-11-28 · uncommitted · OMX 벨트 자세 범위를 번들이 선언(Panel N)
+
+- 변경: cell_belt_pose가 ENV_STATE.json belt_reference.range(dx_m·dy_m·yaw_rad)를 쓴다. 없으면 기존 RANGE. 형식 오류나 상한(dx -10~+40 mm, |dy| 35 mm, |yaw| 20도) 초과는 기본값으로 되돌리지 않고 BELT_POSE_UNKNOWN(NOT_AVAILABLE)으로 거절한다. OUT_OF_RANGE 문구에 쓴 범위를 찍는다. omx_env_state.py --range가 선언을 쓴다.
+- 증거: test/test_omx_policy_belt_pose.py 새 시험, 원격 48 passed 2 skipped, 0 new
+- gate 변화: 값을 자르지 않는 거절 유지, 번들별 범위는 고정 상한 안에서만 넓어짐, 팔 동작 코드 불변
+- 결정: 없음
+- 교훈: 없음(셀 수용 전)
+
+## 2026-11-28 · uncommitted · 셀 readiness는 오래된 팔 상태를 알 수 없음으로 낸다
+
+- 변경: readiness folded는 15초 안의 live.json 또는 신선한 motor-health 접힘 증명만 사용, 보드 by-id 없음/오래됨은 state_unknown과 <arm>:state_unknown 거절, 실패 번들은 오래된 folded true를 버리고, Fleet cell-readiness와 콘솔 문구도 동일
+- 증거: 원격 pytest test/test_omx_readiness_stale.py 외 readiness 관련, node web tests
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · feat(omx): the Fleet worker runs a push through the cell job API and completes it on measured displacement (D-1083)
+
+- 변경: `cell_area_job_spec.py` push에 `machine_ids`(`cell-task-worker`, 정지 증명은 그대로 측정, `cancellable` 아님), `cell_job_worker.py`의 push 엄격 허용 목록(정확히 10개 키, mm 5..20), `cell_push.py`/`cell_push_measure.py`(밀기 뒤 같은 블롭 검출로 `displacement`와 접힘 판독용 `park`), `cell_task_motion.run_push`·`push_evidence_ok`와 `cell_task_exec`·`cell_task_worker`(`capabilities: ["motion","push"]`, 증거 없이 종료 코드만으로 완료하지 않음), `rosy push`는 `rosy pick`과 같은 도구. `CELL_MOTION_NOT_EXECUTABLE`은 알 수 없는 종류·A/B 밖에만.
+- 증거: remote_pytest `test_omx_cell_push.py`·`test_omx_cell_job_worker.py`·`test_omx_cell_task_motion.py`·`test_omx_cell_task_worker_refusal.py`·`test_rosy_cli_motion.py` — 실행 기록은 구현 보고서. 실물 수용 없음
+- gate 변화: 없음(정지 증명·경로 비어 있음·어두운 프레임·사이트 거절 등 셀 가드는 그대로, 밀기 완료 측정이 새로 생김). 밀기는 협조적 취소가 없다
+- 결정: D-1083
+- 교훈: 없음(셀 수용 전)
