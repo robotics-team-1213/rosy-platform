@@ -5195,6 +5195,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 결정: D-1048 보완 기록(쉬는 자세 REST_TOL 8은 사건 열기 결정에서만 펴짐 아님; 통신 끊김 복구는 예전 그대로 보류, 라이브러리 읽기 실패는 home 조회에서 예전처럼 오류)
 - 교훈: 없음(셀 수용 전)
 
+## 2026-11-27 · uncommitted · OMX 임시판 층수 기준(판 윗면)·칸 측정 도구(cell_temp_plate)
+
+- 변경: cell_slot_prior 층수 높이 기준을 팔 받침 고리(plate_top)에서 임시판 팔 쪽 평평한 윗면(CAD v12 13.6 mm, 칸 바닥 8 mm)으로, 깊이 3회 촬영 화소별 중앙값(화소 과반). 띠 표본 2/3 미만이 ±4 mm 안이면 층수 모름(사전지식 미적용). 읽기 전용 CLI cell_temp_plate.py: CAD 판 외곽을 상단 영상에 맞춰 slots·slots_fit 출력, 탐색 한계·양쪽 긴 변/팔 쪽 가장자리 부족·카메라 모델 크기 ±3 % 초과·잔차 3 mm/1° 초과는 거절
+- 증거: 원격 pytest test_omx_temp_plate_measure.py·test_omx_temp_plate_prior.py(2026-11-27 프레임: 두 팔 모두 긴 변 한쪽 가려 거절). 실물 깊이 띠 측정은 A/B 허브 정지로 미실행
+- gate 변화: 없음(±7 mm 층 판정, 모르면 3단, 3 mm/1° 판 맞춤 한계 그대로)
+- 결정: 2026-11-27 18:10 셀 측정 후속
+- 교훈: 없음(실물 수용 전)
+
 ## 2026-11-28 · uncommitted · OMX 벨트 자세 범위를 번들이 선언(Panel N)
 
 - 변경: cell_belt_pose가 ENV_STATE.json belt_reference.range(dx_m·dy_m·yaw_rad)를 쓴다. 없으면 기존 RANGE. 형식 오류나 상한(dx -10~+40 mm, |dy| 35 mm, |yaw| 20도) 초과는 기본값으로 되돌리지 않고 BELT_POSE_UNKNOWN(NOT_AVAILABLE)으로 거절한다. OUT_OF_RANGE 문구에 쓴 범위를 찍는다. omx_env_state.py --range가 선언을 쓴다.
