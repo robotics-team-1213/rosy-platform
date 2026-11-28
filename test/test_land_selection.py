@@ -26,6 +26,31 @@ def load_selection():
     return module
 
 
+def test_browser_tier_preserves_target_pack_chunk_order(tmp_path):
+    selection = load_selection()
+    calls = []
+    def lines(*args):
+        calls.append(args)
+        return ["web/app.js"]
+    def targets(paths):
+        assert paths == ["web/app.js"]
+        return ["a/test.py", "b/test.py"]
+    def pack(wt, paths):
+        assert wt == tmp_path and paths == ["a/test.py", "b/test.py"]
+        return [["a/test.py"], ["b/test.py"]]
+    def chunks(wt, group):
+        assert wt == tmp_path
+        return [["ROSY_RUN_BROWSER_TESTS=1", *group], ["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", *group]]
+    land = SimpleNamespace(lines=lines, pack=pack, browser_scope=SimpleNamespace(targets=targets),
+                           land_browser=SimpleNamespace(chunks=chunks))
+    assert selection.browser_tier(land, tmp_path, "base") == [
+        ["ROSY_RUN_BROWSER_TESTS=1", "a/test.py"],
+        ["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", "a/test.py"],
+        ["ROSY_RUN_BROWSER_TESTS=1", "b/test.py"],
+        ["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", "b/test.py"]]
+    assert calls == [(tmp_path, "diff", "--name-only", "base...HEAD")]
+
+
 def test_safety_trigger_is_the_selectors_text():
     selection = load_selection()
     text = (ROOT / "tools/harness/affected_tests.py").read_text(encoding="utf-8")
