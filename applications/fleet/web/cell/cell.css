@@ -83,6 +83,15 @@ pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: a
 .cell-visual-badge { font: var(--text-micro) var(--mono); color: var(--nominal-quiet); }
 .cell-visual-meta { margin: 0; font: var(--text-micro) var(--mono); color: var(--nominal-quiet); overflow-wrap: anywhere; }
 .cell-visual-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cell-visual-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-2); margin: 0; font: var(--text-micro) var(--mono); }
+.cell-visual-facts dt { color: var(--text-secondary); }
+.cell-visual-facts dd { margin: 0; color: var(--nominal-quiet); overflow-wrap: anywhere; }
+.cell-visual-group { display: grid; gap: var(--space-1); padding-block-start: var(--space-2); border-block-start: 1px solid var(--line-10); }
+.cell-visual-group-label { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--body); color: var(--text-secondary); }
+.cell-visual-group[data-group="task"] .cell-visual-group-label { color: var(--status-warn); }
+.cell-visual-group[data-group="safety"] .cell-visual-group-label,
+.cell-visual-group[data-group="safety"] ui-button { color: var(--status-crit); }
+.cell-visual-group[data-group="safety"] ui-button { border-color: color-mix(in oklab, var(--status-crit) 55%, transparent); }
 .cell-visual-card.selected-inspector { border-color: var(--selection); border-inline-start: var(--selection-edge) solid var(--selection); background: var(--surface-raised); }
 .cell-split-workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 1fr); gap: var(--space-3); align-items: start; margin-block: var(--space-2); }
 .cell-split-main { display: grid; gap: var(--space-3); min-width: 0; }
