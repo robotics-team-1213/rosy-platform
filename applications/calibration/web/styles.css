@@ -4,6 +4,8 @@ body {
 
 .request-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .request-list a { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-chrome); color: var(--text-primary); text-decoration: none; }
+.request-list a:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.request-list a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .request-list a[aria-current="page"] { background: var(--surface-raised); border-color: var(--selection); }
 .request-list small { color: var(--text-secondary); }
 .request-picture { max-width: 100%; height: auto; border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
@@ -83,6 +85,12 @@ body {
   cursor: pointer;
   color: var(--text-secondary);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+}
+
+.cal-hygiene summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset-outer);
+  border-radius: var(--radius-control);
 }
 
 .cal-hygiene-list {
@@ -230,20 +238,20 @@ body {
   width: var(--space-3);
   height: var(--space-2);
   border-radius: var(--radius-control);
-  background: var(--ink-quiet);
+  background: var(--text-secondary);
 }
 
 .cal-sw-grid { background: var(--series-primary); }
 .cal-sw-inlier { background: var(--status-good); }
 .cal-sw-drop { background: var(--status-crit); }
 .cal-sw-warn { background: var(--status-warn); }
-.cal-sw-plan { background: transparent; border: 1px dashed var(--ink-quiet); border-radius: 50%; }
+.cal-sw-plan { background: transparent; border: 1px dashed var(--text-secondary); border-radius: 50%; }
 .cal-sw-bias { background: var(--series-secondary); }
-.cal-sw-delayed { background: transparent; border: 1px dashed var(--ink-quiet); }
-.cal-sw-site { background: var(--ink); }
+.cal-sw-delayed { background: transparent; border: 1px dashed var(--text-secondary); }
+.cal-sw-site { background: var(--text-primary); }
 .cal-sw-reach { background: var(--series-secondary); }
-.cal-sw-roi { background: var(--ink-quiet); }
-.cal-sw-tcp { background: var(--ink); }
+.cal-sw-roi { background: var(--text-secondary); }
+.cal-sw-tcp { background: var(--text-primary); }
 
 .cal-lower {
   display: grid;
@@ -310,16 +318,25 @@ body {
   cursor: pointer;
 }
 
-.cal-table tbody tr:hover {
+.cal-table:not([data-readonly]) tbody tr:hover {
   background: var(--surface-raised);
+}
+
+.cal-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .cal-table[data-readonly] tbody tr {
   cursor: default;
 }
 
-.cal-table tbody tr[data-selected="true"] {
-  background: var(--surface-raised);
+.cal-table tbody tr[data-selected="true"],
+.cal-table:not([data-readonly]) tbody tr[data-selected="true"]:hover {
+  background: var(--surface-flat);
+}
+
+.cal-table tbody tr[data-selected="true"] > td:first-child {
+  box-shadow: inset var(--selection-edge) 0 0 var(--selection);
 }
 
 .cal-table td[data-level="warn"] {

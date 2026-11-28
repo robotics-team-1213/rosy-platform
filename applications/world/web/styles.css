@@ -35,7 +35,7 @@
   background: var(--surface-chrome);
 }
 .world-viewbar-note { font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--body); color: var(--text-secondary); }
-.world-health { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--surface-line); }
+.world-health { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-subtle); }
 
 .world-stage {
   flex: 1 1 auto;
@@ -54,12 +54,12 @@
 .world-stage > figure img { max-block-size: 30rem; object-fit: contain; }
 .world-stage > #map-birdview-figure img { max-block-size: min(68vh, 48rem); }
 .world-stage > canvas:focus-visible { outline-offset: calc(0px - var(--focus-ring-width)); }
-.world-map-datum { display: block; font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--body); fill: var(--ink-quiet); }
+.world-map-datum { display: block; font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--body); fill: var(--text-secondary); }
 .world-stage > .world-map-datum { position: absolute; top: var(--space-2); left: var(--space-2); pointer-events: none; }
 canvas[hidden] + .world-map-datum { display: none; }
 .world-map-datum-ring { fill: none; stroke: var(--border-default); }
 .world-map-datum-north { fill: var(--series-primary); }
-.world-map-datum-bar { fill: none; stroke: var(--ink-quiet); stroke-width: 1.2; }
+.world-map-datum-bar { fill: none; stroke: var(--text-secondary); stroke-width: 1.2; }
 
 .world-figure { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .world-figure img { width: 100%; height: auto; display: block; border: 1px solid var(--border-default); border-radius: var(--radius-control); }
@@ -134,7 +134,7 @@ canvas[hidden] + .world-map-datum { display: none; }
   flex-wrap: nowrap;
   gap: var(--space-2);
   overflow-x: auto;
-  padding: var(--space-1) 0;
+  padding: var(--space-1);
 }
 .world-card {
   flex: 0 0 auto;
@@ -151,6 +151,10 @@ canvas[hidden] + .world-map-datum { display: none; }
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--body);
   text-align: start;
   cursor: pointer;
+}
+.world-card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .world-card[aria-pressed="true"] {
   border-color: var(--selection);
@@ -184,9 +188,6 @@ canvas[hidden] + .world-map-datum { display: none; }
 
 @media (width < 30rem) {
   .world-factory-stage { min-height: clamp(16rem, 48vh, 26rem); }
-}
-
-@media (width < 30rem) {
   .world-photo-pair { grid-template-columns: minmax(0, 1fr); }
   .world-page { padding: var(--space-3); }
 }
