@@ -2,7 +2,7 @@
   color-scheme: dark;
   /* Roles over tokens.css (change colours there). Surfaces split the page: observe/sense flat, act raised. */
   --bg: var(--ground-deep); --observe: var(--ground); --act: var(--ground-card); --act-2: var(--ground-card-2);
-  --border: var(--line-10); --rule: var(--line-06); --ink-2: var(--ink-quiet);
+  --border: var(--border-default); --rule: var(--border-subtle); --ink-2: var(--ink-quiet);
   --route: var(--series-primary); --goal: var(--series-goal); --hist: var(--ink-quiet); /* hist: de-emphasis, not a series */
   --good: var(--status-good); --warn: var(--status-warn); --serious: var(--status-warn); --crit: var(--status-crit);
   --gauge: var(--gauge-fill); --track: var(--gauge-track);
@@ -49,7 +49,7 @@ main { flex:1; min-height:0; display:grid; gap: 0;
 .observe{ grid-area:observe; background:var(--bg); }
 .act    { grid-area:act; background:var(--act);
           border-left:1px solid var(--border); overflow-y:auto;
-          box-shadow:inset 1px 0 0 var(--line-06); }
+          box-shadow:inset 1px 0 0 var(--border-subtle); }
 /* region caption: a heading plus a rule that runs to the edge — the rule is
    the divider, so no boxes are needed to tell the regions apart. */
 .rhead { flex:none; display:flex; align-items:center; gap: var(--space-2);
@@ -250,7 +250,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
 .hint { line-height:1.6; }
 .estop .btnrow { display:inline-flex; width:calc(50% - 3px); margin-top: 0; vertical-align:top; }
 
-#mappingcard .btnrow { display:grid; grid-template-columns:1fr 1fr; }
+#mappingcard .btnrow { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); }
 #mapsave { grid-column:1/-1; }
 .switchrow { display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); padding: var(--space-2) 0; border-top:1px solid var(--rule); }
 .switchrow span { display:block; font-size: var(--text-micro); color:var(--ink); }
@@ -268,7 +268,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
  header { padding: var(--space-3); flex-wrap:wrap; gap: var(--space-2); }
  .chips { margin-left: 0; gap: var(--space-1); }
  .chip { font-size: var(--text-micro); padding: 0 var(--space-2); }
- .statusline { grid-template-columns:1fr 1fr; }
+ .statusline { grid-template-columns:repeat(2, minmax(0, 1fr)); }
  .statusitem { padding: var(--space-2) var(--space-3); border-bottom:1px solid var(--rule); }
  .statusitem strong { font-size: var(--text-body); }
  main { grid-template-columns:minmax(0,1fr); grid-template-areas:'observe' 'act' 'sense'; }

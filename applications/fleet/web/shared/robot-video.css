@@ -1,9 +1,9 @@
 /* D-801 관제 콘솔 로봇 실시간 영상 타일. 4:3 원본 비율, 잘림 없음. */
 .robot-video [data-robot-video-picker] { display: flex; flex-wrap: wrap; gap: var(--space-2); border: 0; padding: 0; }
 .robot-video-stage { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.robot-video-stage[data-tiles="1"] { grid-template-columns: 1fr; }
-.robot-video-stage figure { margin: 0; position: relative; aspect-ratio: 4 / 3; background: var(--surface-recessed); }
+.robot-video-stage[data-tiles="1"] { grid-template-columns: minmax(0, 1fr); }
+.robot-video-stage figure { margin: 0; position: relative; aspect-ratio: 4 / 3; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
 .robot-video-stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
-.robot-video-stage figcaption { position: absolute; left: 0; bottom: 0; padding: var(--space-1); color: var(--text-primary); background: var(--surface-raised); }
+.robot-video-stage figcaption { position: absolute; left: 0; bottom: 0; padding: var(--space-1) var(--space-2); border-top-right-radius: var(--radius-control); font-family: var(--mono); font-size: var(--text-micro); color: var(--text-primary); background: var(--surface-raised); }
 .robot-video-stage figure:is([data-state="stale"], [data-state="hidden"], [data-state="lost"]) figcaption { color: var(--flag-danger-ink); background: var(--flag-danger-bg); }
 .robot-video-stage figure[data-state="hidden"] video { opacity: var(--disabled-opacity); filter: grayscale(0.45); }

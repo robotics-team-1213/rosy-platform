@@ -137,6 +137,30 @@ export function createCockpitHud({ el }) {
   return { update };
 }
 
+export function bindDisclosureMemory(elements, storage, prefix = "rosy.fleet.disclosure.") {
+  const cleanups = [];
+  const readStorage = () => (storage === undefined ? globalThis.sessionStorage : storage);
+  for (const el of elements ?? []) {
+    if (!el?.id || typeof el.addEventListener !== "function") continue;
+    const key = `${prefix}${el.id}`;
+    try {
+      const saved = readStorage()?.getItem?.(key);
+      if (saved === "1") el.open = true;
+      else if (saved === "0") el.open = false;
+    } catch {}
+    const onToggle = () => {
+      try {
+        readStorage()?.setItem?.(key, el.open ? "1" : "0");
+      } catch {}
+    };
+    el.addEventListener("toggle", onToggle);
+    cleanups.push(() => el.removeEventListener?.("toggle", onToggle));
+  }
+  return () => {
+    for (const off of cleanups) off();
+  };
+}
+
 export function createTelemetryTrace() {
   const PLOT_HEIGHT = 44;
   const root = document.createElement("div");
