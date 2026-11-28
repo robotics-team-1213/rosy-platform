@@ -155,6 +155,8 @@ def test_state_route_cached_gather_defers_immediately_after_redispatch(tmp_path)
                 return {"queued_tasks": 0, "unresolved_actions": 0}
             if url.endswith("/api/fleet/formation"):
                 return {"active": False, "state": "IDLE"}
+            if url.endswith("/api/fleet/pipeline/cell-plans"):
+                return {"ok": True, "plans": []}
             raise AssertionError(f"unexpected endpoint: {url}")
 
     assert site_busy_reasons({"health_url": "https://fleet.local:8443/healthz"}, _SiteHttp(), root=tmp_path) == [

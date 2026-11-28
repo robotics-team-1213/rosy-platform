@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import time
 from urllib.parse import urlsplit
 
 if __package__:
@@ -110,6 +111,32 @@ def _robot_busy_reasons(row: object) -> list[str]:
     return reasons
 
 
+# Admitted cell work always blocks; a fresh proposal blocks while an operator reviews it.
+# 2026-11-28: an update restarted Fleet while Harbor was cancelling a PROPOSED plan (connection refused).
+_CELL_PLAN_ADMITTED = frozenset({'QUEUED', 'PARTIALLY_ADMITTED', 'RUNNING', 'PAUSED_HUMAN'})
+_CELL_PLAN_REVIEW_SECONDS = 30 * 60
+
+
+def _cell_plan_busy_reasons(payload: object, now: float) -> list[str]:
+    plans = payload.get('plans') if isinstance(payload, dict) else None
+    if not isinstance(plans, list):
+        raise ValueError('invalid cell-plans payload')
+    reasons = []
+    for plan in plans:
+        if not isinstance(plan, dict):
+            raise ValueError('invalid cell plan row')
+        status, created = plan.get('status'), plan.get('created_at')
+        if status in _CELL_PLAN_ADMITTED:
+            reasons.append(f"{plan.get('plan_id')}: cell plan {status}")
+        elif status == 'PROPOSED':
+            if (not isinstance(created, (int, float)) or isinstance(created, bool)
+                    or not math.isfinite(created)):
+                raise ValueError('invalid cell plan created_at')
+            if now - created < _CELL_PLAN_REVIEW_SECONDS:
+                reasons.append(f"{plan.get('plan_id')}: cell plan awaiting review")
+    return reasons
+
+
 def _site_token_file(config: dict, root: Path) -> str | Path | None:
     checks = [c for c in config.get('functional_checks', []) if isinstance(c, dict) and c.get('token_file')]
     for check in checks:
@@ -126,7 +153,7 @@ def _site_token_file(config: dict, root: Path) -> str | Path | None:
     return None
 
 
-def site_busy_reasons(config: dict, http, *, root: Path = Path('/')) -> list[str]:
+def site_busy_reasons(config: dict, http, *, root: Path = Path('/'), now: float | None = None) -> list[str]:
     """Fail-closed site idleness check across Fleet endpoints and local arm session locks."""
     reasons = _arm_session_busy(root)
     try:
@@ -164,6 +191,8 @@ def site_busy_reasons(config: dict, http, *, root: Path = Path('/')) -> list[str
             raise ValueError('invalid formation payload')
         if formation.get('active') not in (None, False) or formation.get('state') not in (None, 'IDLE', 'STOPPED', 'OFF'):
             reasons.append(f"formation active ({formation.get('state')})")
+        plans = http.functional(f'{base}/api/fleet/pipeline/cell-plans', ca, token_file)
+        reasons.extend(_cell_plan_busy_reasons(plans, time.time() if now is None else now))
     except (Transient, OSError, ValueError, KeyError, TypeError):
         return [*reasons, 'cannot verify site idle state']
     return reasons

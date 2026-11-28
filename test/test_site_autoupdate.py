@@ -123,7 +123,8 @@ class FakeHttp:
             return {'queued_tasks': 0, 'unresolved_actions': 0}
         if url.endswith('/api/fleet/formation'):
             return {'active': False, 'state': 'IDLE'}
-        return {'sources': ['camera-test']}
+        plans = url.endswith('/api/fleet/pipeline/cell-plans')
+        return {'ok': True, 'plans': []} if plans else {'sources': ['camera-test']}
 
 
 class FakeHost:
