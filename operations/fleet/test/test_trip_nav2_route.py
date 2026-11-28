@@ -955,3 +955,29 @@ def test_held_short_of_a_table_cut_on_the_last_segment_is_no_arrival(monkeypatch
     run(runner.tick())
     waiting = ("traffic_hold", "fenced_hold", "resolved_then_fenced")
     assert runner.view("p-held")["state"] == ("running" if held in waiting else "arrived")
+
+
+def test_sample_nav2_route_preserves_sharp_bay_exit_corner_and_tick1_binding_diag():
+    from fleet.server.trip_geometry import convert_route_points
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+
+    site, graph, _ = build_world_261026_site_map()
+    p1 = graph.place_xy("P1")
+    segs = [
+        {"edge_id": "bay_1", "forward": False, "s_from": 0.28, "s_to": graph.arcs["bay_1:rev"].length_m},
+        {"edge_id": "park_out", "forward": True, "s_from": 0.0, "s_to": graph.arcs["park_out:fwd"].length_m},
+    ]
+    arc0 = graph.arcs["bay_1:rev"]
+    sx, sy, _ = arc0.point_at(arc0.length_m - 0.14)  # 14 cm before P1, shifted 5 cm laterally
+    pts = sample_nav2_route(graph, segs, 0, arc0.length_m - 0.14, 1, here=(sx - 0.05, sy), recentre=True)
+    assert any(math.dist(p[:2], p1) < 1e-4 and p[3] == "pass" for p in pts), pts
+
+    live = SimpleNamespace(view={"robot_id": "rosy_42", "detail": {"nav2_binding_id": None}})
+    runner = SimpleNamespace(config=SimpleNamespace(map_binding_required=False),
+                             _robot_state=lambda _r: None, _poses_in_robot_frame=False,
+                             _store=SimpleNamespace(map_bindings=SimpleNamespace(
+                                 matching_fit=lambda *_: (None, "ROBOT_NOT_LOCALIZED"),
+                                 active=lambda _r: {"binding_id": "b1"})))
+    _, err = convert_route_points(runner, live, (1, site), pts,
+                                  MapPose(sx, sy, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, site.map_id), {})
+    assert err and err.get("binding") == "ROBOT_NOT_LOCALIZED"

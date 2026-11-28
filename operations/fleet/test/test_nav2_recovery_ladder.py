@@ -162,3 +162,22 @@ def test_a_wait_that_runs_out_counts_no_new_stop():
     assert record["state"] == "exhausted" and "same_spot" not in record
     ladder.exhaust(live, record, 2.0, "stall")
     assert record["same_spot"]["count"] == 3
+
+
+def test_bay_departure_is_in_recovery_scope_unless_docking():
+    from types import SimpleNamespace as NS
+    from fleet.routing.graph import build_graph
+    site = _walled(extra_edge=True)
+    graph = build_graph(site)
+    arc = graph.arcs["bay2:fwd"]
+    runner = NS(_store=NS(active=lambda: (1, site)), _strict_named_stop=lambda _lv, _i: None,
+                _cancel_goal=lambda _r: None)
+    live = NS(open=True, nav2=True, arc=lambda _i: arc,
+              view={"state": "running", "segment_index": 0, "map_version": 1, "hold": None, "detail": {}},
+              active_route={})
+    nav_state = {"safety": {"estop": False}, "mode": "NAVIGATION"}
+    assert rec._in_scope(runner, live, "navigation", {}, nav_state) is True
+    live.view["detail"]["parking_handoff"] = {"phase": "docking"}
+    assert rec._in_scope(runner, live, "navigation", {}, nav_state) is False
+    live.view["detail"].pop("parking_handoff")
+    assert rec._in_scope(runner, live, "navigation", {}, {**nav_state, "mode": "DOCKING"}) is False

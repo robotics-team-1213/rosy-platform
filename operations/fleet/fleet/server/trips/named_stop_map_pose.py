@@ -97,3 +97,24 @@ def precision_line_fence(runner, live, pose):
             raise RuntimeError("APPROVED_SLAM_POSE_REQUIRED")
 
     return check
+
+
+def traffic_watch_pose(runner, robot_id: str) -> Optional[MapPose]:
+    """Cached approved-SLAM site pose for idle block-table pinning (avoids camera bay distortion), else None."""
+    poses = getattr(runner, "_poses", None)
+    sampler = getattr(poses, "cached_motion_sample", None)
+    active = runner._store.active() if getattr(runner, "_store", None) is not None else None
+    bindings = getattr(runner._store, "map_bindings", None) if active is not None else None
+    if sampler is not None and bindings is not None:
+        cached = sampler(robot_id)
+        if cached is not None:
+            state = cached[0]
+            if (isinstance(state, dict) and (state.get("localization") or {}).get("state") == LOCALIZED
+                    and (sample := fresh_native_slam(state, runner._clock())) is not None):
+                fit, _reason = bindings.matching_fit(robot_id, state, (active[1].map_id, active[0]))
+                if fit is not None:
+                    native_pose, age_s, odom_stamp = sample
+                    x, y, yaw = bound_pose(fit, native_pose)
+                    return MapPose(x, y, yaw, LOCALIZED, "approved_slam", 0., age_s,
+                                   anchor_age_s=age_s, map_id=active[1].map_id, odom_stamp=odom_stamp)
+    return None

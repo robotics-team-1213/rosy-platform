@@ -410,7 +410,10 @@ def convert_route_points(runner, live, active, site_pts, pose, state):
     if fit is not None:
         binding = (fit, reason)
     elif binding_required or reason == "MAP_BINDING_GRID_CHANGED" or (
-        reason == "ROBOT_NOT_LOCALIZED" and (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None
+        reason == "ROBOT_NOT_LOCALIZED" and (
+            (live.view["detail"].get("goal_frame") or {}).get("binding_id") is not None
+            or (bindings is not None and bindings.active(robot_id) is not None)
+        )
     ):
         binding = (None, reason)
     else:

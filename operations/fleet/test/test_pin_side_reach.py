@@ -91,3 +91,36 @@ def test_through_the_table_only_a_standing_robot_gets_the_body_reach():
                                     "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
         _ticks(runner, fleet, n=1)
         assert runner.traffic.pinned() == ["a"]
+
+
+def test_stale_pose_keeps_narrow_bay_pin_and_watch_prefers_cached_slam():
+    from datetime import datetime, timezone
+    from core_common.protocol.evidence import STALE_POSE_S
+    from fleet.localization.map_binding import Fit
+    from fleet.server.named_stop_map_pose import traffic_watch_pose
+
+    runner, _store, fleet, east = _restarted(lambda east: _idle(east, 0.0))
+    _ticks(runner, fleet, n=2)  # initializes traffic _version and settles _last_pose
+    pinned_units = set(runner.traffic._state.pinned["a"])
+    other_unit = next(u for u in runner.traffic._layout.units if u not in pinned_units)
+    runner.traffic._state.pinned["a"] = {other_unit: True}
+    stale = _idle(east, 0.0, age=STALE_POSE_S + 1.0)
+    runner.traffic.step([], poses={"a": stale})
+    assert runner.traffic._state.pinned["a"] == {other_unit: True}  # stale update keeps existing pin instead of recomputing with u_max
+
+    fit = Fit(0.0, 0.25, 0.0, (0.001,))
+    now = 1_700_000_010.0
+    stamp = datetime.fromtimestamp(now - 0.1, timezone.utc).isoformat()
+    state = {"pose_frame": "map", "map_id": "m", "map_grid_id": "g", "localization": {"state": "LOCALIZED"},
+             "pose": {"x": 0.0, "y": 0.25, "yaw": math.pi / 2}, "odom_pose": {"x": 0.0, "y": 0.25, "yaw": 0.0, "stamp": now - 0.1},
+             "evidence": {"pose": {"evidence": "fresh", "received_at": stamp}}}
+    bindings = NS(matching_fit=lambda *_a: (fit, None))
+    fake_runner = NS(
+        _clock=lambda: now,
+        _store=NS(active=lambda: (1, NS(map_id="site")), map_bindings=bindings),
+        _poses=NS(cached_motion_sample=lambda _r: (state, now - 0.1, now)),
+    )
+    watched = traffic_watch_pose(fake_runner, "rosy_42")
+    assert watched.source == "approved_slam" and watched.x == pytest.approx(0.25)
+    fake_runner._poses = NS()  # no cached sample -> None so trip_runner falls back to _driving_pose
+    assert traffic_watch_pose(fake_runner, "rosy_42") is None
