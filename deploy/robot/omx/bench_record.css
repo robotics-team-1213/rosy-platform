@@ -1,7 +1,7 @@
 :root{
   --ground:#111113;--ground-deep:#0c0d0f;--ground-raise:#18191b;--ground-soft:#212225;--ground-card:#272a2d;
   --ink:#eeeeef;--ink-q:#b0b4ba;--bd:rgba(238,238,239,.14);--bd-sub:rgba(238,238,239,.10);
-  --crit:#b54548;--warn:#ffc53d;--good:#3dd68c;--pri:#58a6ff;--rose:#e796f3;
+  --crit:#b54548;--crit-ink:#ff9497;--warn:#ffc53d;--good:#3dd68c;--pri:#58a6ff;--rose:#e796f3;
   --rose-wash:color-mix(in oklab,#e796f3 12.7%,#0c0d0f);
   --r:10px;--rb:8px;
 }
@@ -98,8 +98,10 @@ select option:disabled{color:#767b82}
 .identity h1{font-size:.96rem;margin:0;white-space:nowrap;flex:0 0 auto}
 .header-tools{flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end}
 .ctx-cluster,.tool-cluster,.ops-cluster{display:inline-flex;align-items:center;gap:4px;padding:2px 5px;border-radius:9px;background:var(--ground-deep);border:1px solid var(--bd-sub);min-width:0;max-width:100%;overflow:hidden}
+.ctx-cluster :focus-visible,.tool-cluster :focus-visible,.ops-cluster :focus-visible{outline-offset:-2px}
 .tool-cluster[data-group="nav"]{background:transparent;border-color:transparent;padding:0;overflow:visible}
 .ops-cluster:not(:has(> :not([hidden]))){display:none}
+.start-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .post-actions-grouped{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
 .post-action-group{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:var(--ground-deep);border:1px solid var(--bd-sub)}
 .post-action-group:not(:has(> :not([hidden]))){display:none}
@@ -109,7 +111,7 @@ select option:disabled{color:#767b82}
 .topbar-ops{display:grid;grid-template-columns:minmax(0,1fr) auto auto;border-top:1px solid var(--bd-sub)}
 #phase-tabs{min-width:0;--phase-color:var(--pri)}
 #phase-tabs[data-tone="warn"]{--phase-color:var(--warn)}
-#phase-tabs[data-tone="crit"]{--phase-color:var(--crit)}
+#phase-tabs[data-tone="crit"]{--phase-color:var(--crit-ink)}
 #phase-tabs[data-tone="good"]{--phase-color:var(--good)}
 .phase-steps{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.5fr) minmax(0,2.2fr) minmax(0,1fr);gap:4px;list-style:none;margin:0;padding:0}
 .phase-step{min-height:38px;min-width:0;padding:4px 8px;display:flex;flex-direction:column;justify-content:center;gap:3px;overflow:hidden;
@@ -326,7 +328,7 @@ select option:disabled{color:#767b82}
 .activity-log-text[data-tone="live"]{color:var(--pri)}
 .activity-log-text[data-tone="good"]{color:var(--good)}
 .activity-log-text[data-tone="warn"]{color:var(--warn)}
-.activity-log-text[data-tone="crit"]{color:var(--crit)}
+.activity-log-text[data-tone="crit"]{color:var(--crit-ink)}
 .status-values{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0;max-width:100%;margin:0}
 .status-values>div{display:flex;align-items:baseline;gap:5px;min-width:0;white-space:nowrap}
 .status-values dt,.status-label{color:var(--ink-q);flex:none}
@@ -334,7 +336,7 @@ select option:disabled{color:#767b82}
 .status-values [data-tone="live"]{color:var(--pri)}
 .status-values [data-tone="good"]{color:var(--good)}
 .status-values [data-tone="warn"]{color:var(--warn)}
-.status-values [data-tone="crit"]{color:var(--crit)}
+.status-values [data-tone="crit"]{color:var(--crit-ink)}
 .reason-strip{display:flex;align-items:center;gap:6px;flex:1 1 20rem;min-width:0;padding-inline-start:8px;border-inline-start:1px solid var(--warn)}
 .reason-strip .btn-xs{flex:none;white-space:nowrap;min-height:28px;padding-inline:6px;font-size:.8rem}
 .reason-strip.expanded{flex-basis:100%}
@@ -357,7 +359,7 @@ select option:disabled{color:#767b82}
 .reason-strip.muted{border-inline-start-color:var(--bd-sub)}
 .reason-strip.muted .reason-text{color:var(--ink-q)}
 .reason-strip.crit{border-inline-start-color:var(--crit)}
-.reason-strip.crit .reason-text{color:var(--crit)}
+.reason-strip.crit .reason-text{color:var(--crit-ink)}
 .reason-strip.good{border-inline-start-color:var(--good)}
 .reason-strip.good .reason-text{color:var(--good)}
 .reason-strip.expanded .reason-text{white-space:normal;overflow:visible}
@@ -383,7 +385,7 @@ select option:disabled{color:#767b82}
 .arm-dot[data-conn="off"]{color:var(--ink-q)}
 .arm-dot[data-conn="unk"]{color:var(--warn)}
 .arm-dot[data-conn="warn"]{color:var(--warn)}
-.arm-dot[data-conn="err"]{color:var(--crit)}
+.arm-dot[data-conn="err"]{color:var(--crit-ink)}
 .arm-offline-toggle{align-self:flex-start}
 
 /* Map Toolbar & Enlarge Modal */

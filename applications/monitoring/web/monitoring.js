@@ -21,10 +21,16 @@ function evidence(item) {
   if (state.stale || Math.min(item.report_remaining_s, state.packet.remaining_s) - seconds() <= 0) return 'disconnected';
   return item.remaining_s - seconds() > 0 ? 'fresh' : 'delayed';
 }
+let liveEvidence = [];
+let trackedBuckets = [];
+function evidenceText(item, value = evidence(item)) {
+  return EVIDENCE_LABEL[value] + evidenceAgeText(finite(item.age_s) ? item.age_s + seconds() : null);
+}
 function evidenceNode(item) {
   const value = evidence(item);
-  const node = el('small', EVIDENCE_LABEL[value] + evidenceAgeText(finite(item.age_s) ? item.age_s + seconds() : null));
+  const node = el('small', evidenceText(item, value));
   node.dataset.evidence = value;
+  liveEvidence.push({item, node, bucket: value});
   return node;
 }
 function abortReads() {
@@ -32,6 +38,7 @@ function abortReads() {
   state.requests.clear(); state.job = null; state.historyJob = null;
 }
 function clearRows() {
+  liveEvidence = []; trackedBuckets = [];
   for (const id of ['observation-rows', 'link-rows', 'history-rows', 'graph']) $(id).replaceChildren();
   $('summary').textContent = ''; $('received').textContent = '';
   state.history = []; state.cursor = 0;
@@ -116,9 +123,12 @@ function healthNode(item) {
 }
 function render() {
   if (!state.packet) return;
+  liveEvidence = []; trackedBuckets = [];
   const packet = state.packet, term = $('search').value.trim().toLocaleLowerCase();
   const own = (node) => node.kind === 'collector' && node.origin_collector === packet.collector_id && node.origin_source === 'collector';
   const all = packet.nodes.filter((node) => !own(node));
+  for (const item of all) trackedBuckets.push([item, evidence(item)]);
+  for (const item of packet.links) trackedBuckets.push([item, evidence(item)]);
   const nodes = all.filter((node) => !term || [node.label, node.id, node.origin_source, node.origin_collector].join(' ').toLocaleLowerCase().includes(term));
   const priority = (node) => evidence(node) === 'fresh' ? ({ERROR: 0, WARNING: 1, UNKNOWN: 4, OK: 5}[node.reported_health] ?? 4) : 2;
   nodes.sort((a, b) => priority(a) - priority(b) || a.id.localeCompare(b.id));
@@ -214,4 +224,9 @@ const resume = () => { if (reading()) { state.stale = true; render(); refresh();
 document.addEventListener('visibilitychange', () => { if (document.hidden) { state.stale = true; render(); } else resume(); });
 window.addEventListener('pageshow', resume); window.addEventListener('focus', resume);
 session.restore();
-setInterval(refresh, 5000); setInterval(() => { if (state.packet) render(); }, 1000);
+function tickAges() {
+  if (!state.packet) return;
+  if (trackedBuckets.some(([item, bucket]) => evidence(item) !== bucket)) { render(); return; }
+  for (const entry of liveEvidence) entry.node.textContent = evidenceText(entry.item, entry.bucket);
+}
+setInterval(refresh, 5000); setInterval(() => { if (state.packet) tickAges(); }, 1000);

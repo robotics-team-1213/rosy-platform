@@ -102,7 +102,10 @@ body {
 }
 
 .cal-hygiene-item[data-level="error"] {
-  color: var(--status-crit);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--flag-danger-bg);
+  color: var(--flag-danger-ink);
 }
 
 .cal-hygiene-item[data-level="warning"] {
@@ -138,6 +141,11 @@ body {
   border-radius: var(--radius-control);
   overflow: hidden;
   background: var(--surface-canvas);
+}
+
+.cal-tabs ui-button:focus-visible,
+.cal-seg-group ui-button:focus-visible {
+  outline-offset: calc(0px - var(--focus-ring-width));
 }
 
 .cal-layer-toggles {
@@ -345,7 +353,8 @@ body {
 }
 
 .cal-table td[data-level="error"] {
-  color: var(--status-crit);
+  background: var(--flag-danger-bg);
+  color: var(--flag-danger-ink);
   font-weight: var(--weight-label);
 }
 
