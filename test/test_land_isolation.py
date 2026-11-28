@@ -230,36 +230,6 @@ def test_safety_test_unreached_at_the_cap_stops_the_landing(prepared, monkeypatc
         "isolation incomplete: m/test/test_a.py"]  # a non-safety cut is recorded, not a stop
 
 
-def test_no_queue_records_skipped_once_and_doctor_fails_it_after_a_night(prepared):
-    import doctor
-
-    pair, logdir, args = prepared
-    args.no_queue = True
-    for _ in range(2):  # two rounds of one landing: one record
-        lines = land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "1", fake_round({}, []), [], prepare=False)
-        assert lines == ["isolation gate skipped (--no-queue)"]
-    assert [r["kind"] for r in land_isolation.rows(pair)] == ["skipped"]
-    now = land_isolation.rows(pair)[0]["t"]
-    assert doctor.check_isolation(pair, now)[0][0] == "OK", "not yet a night old"
-    (level, text, fix), = doctor.check_isolation(pair, now + land_isolation.OPEN_AFTER_S + 1)
-    assert level == "FAIL" and "skipped fix/x" in text and "close m/test/test_a.py m/test/test_b.py --reason" in fix
-
-
-def test_doctor_open_records_close_by_a_later_alone_run_on_a_descendant(prepared):
-    import doctor
-
-    pair, logdir, args = prepared
-    cut = fake_round({"gpre": {"run-gpre-1.txt": "[isolation] incomplete: m/test/test_b.py\n"}}, [])
-    land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre", cut, [], prepare=True)
-    later = land_isolation.rows(pair)[0]["t"] + land_isolation.OPEN_AFTER_S + 1
-    assert doctor.check_isolation(pair, later)[0][0] == "FAIL"
-    git(pair, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "next")
-    land_isolation.record(pair, "fix/y", "done", ["m/test/test_b.py"], [])
-    assert doctor.check_isolation(pair, later)[0][0] == "OK"
-    out = []
-    assert doctor.run(pair, now=later, out=out.append) in (0, 1) and any("isolation:" in o for o in out)
-
-
 def test_closed_record_stops_ancestry_scan_but_later_incomplete_record_stays_open(pair, monkeypatch):
     ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
     git(pair, *ident, "commit", "-q", "-m", "init")

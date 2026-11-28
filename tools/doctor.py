@@ -30,6 +30,7 @@ sys.path[:0] = [str(TOOLS), str(TOOLS / "remote")]
 
 import host_probe  # noqa: E402
 import lab_hosts  # noqa: E402
+import land_mainred  # noqa: E402  (rolling_regression still writes main-red records)
 import remote_pytest  # noqa: E402
 import update_status  # noqa: E402
 import worktrees  # noqa: E402
@@ -190,10 +191,20 @@ def check_capacity(hosts: list[str] | None = None, probe=None) -> list[tuple]:
     return found
 
 
+def check_mainred(repo: Path, now: float) -> list[tuple]:
+    """Open main-red records (land_mainred): a red main, or carried landings no pass has covered yet."""
+    found = []
+    for nodeid, s in sorted(land_mainred.state(repo).items()):
+        since = f"red {int((now - s['since']) // 60)} min" if s["since"] else "main healed"
+        found.append(("WARN", f"main-red {nodeid}: {since}, owner {s['owner'] or 'none'}, {len(s['carries'])} carried"
+                      " landing(s) not covered yet", "fix main; python tools/land_mainred.py status"))
+    return found or [("OK", "main-red: no open record", None)]
+
+
 def run(repo: Path, hosts: bool = False, now: float | None = None, out=print) -> int:
     now = time.time() if now is None else now
     checks = [lambda: check_hook(repo), lambda: check_publish_only(repo), lambda: check_worktrees(repo),
-              lambda: check_main(repo, now)]
+              lambda: check_main(repo, now), lambda: check_mainred(repo, now)]
     if hosts:
         checks += [lambda: check_hosts(now), check_capacity]
     failed = False
