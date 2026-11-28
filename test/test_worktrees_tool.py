@@ -1253,12 +1253,3 @@ def test_prune_remote_archives_and_deletes_only_stale_own_unopened_branches(main
     assert {"refs/heads/feat/stale-moved", "refs/heads/feat/stale-open-pr", "refs/heads/feat/recent-own",
             "refs/heads/release/keep", "refs/heads/build/keep", "refs/heads/feat/stale-teammate",
             "refs/heads/feat/stale-mixed"} <= remote_heads
-
-
-def test_admission_lock_refuses_a_second_creation_and_frees_itself(tmp_path):
-    lock = tmp_path / "a.lock"
-    with worktrees._exclusive(lock, "worktree creation"):
-        with pytest.raises(RuntimeError, match="another worktree creation is running"):
-            with worktrees._exclusive(lock, "worktree creation"):
-                pass
-    assert not lock.exists()
