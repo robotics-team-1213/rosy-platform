@@ -61,15 +61,15 @@ def test_guarded_restore_and_restart_hold(recovery, monkeypatch, fault):
         del cal[r.FOLLOWER_JOINTS[0]]["id"]
     elif fault == "increase":
         rows[1]["pwm_limit_raw"] = 10
-    if fault == "success":
+    if fault in ("success", "pose"):  # an unfolded pose is no refusal: torque is OFF and caps never move the arm
         receipt = r.restore("arm_a", {})
         assert Path(receipt).is_file()
     else:
         with pytest.raises((SystemExit, ValueError)) as error:
             r.restore("arm_a", {})
-        if fault in ("pose", "offset", "missing_id"):
+        if fault in ("offset", "missing_id"):
             assert error.value.code == 78
-    assert bool(writes) == (fault in ("success", "uncertain", "readback"))
+    assert bool(writes) == (fault in ("success", "pose", "uncertain", "readback"))
     if fault in ("uncertain", "readback"):
         with pytest.raises(SystemExit, match="interrupted"):
             r.check_pending("arm_a")

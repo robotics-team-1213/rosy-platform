@@ -2,9 +2,12 @@
 .policy-main #policy-content { display: grid; gap: var(--gap-section); }
 .policy-main section { margin-top: var(--space-1); }
 .policy-list { display: grid; gap: var(--space-2); padding-inline-start: 0; list-style: none; }
-.policy-list > li { overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-chrome); font-variant-numeric: tabular-nums; }
+.policy-list > li { display: grid; gap: var(--space-1); overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--line-10); border-inline-start: var(--selection-edge) solid var(--line-14); border-radius: var(--radius-button); background: var(--surface-chrome); font-variant-numeric: tabular-nums; }
+.policy-list > li:hover { border-color: var(--border-strong); background: var(--surface-flat); }
 .history-fold, .write-fold { margin-top: var(--space-2); }
-.policy-evidence { max-height: var(--block-policy-evidence-max); overflow: auto; white-space: pre-wrap; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-control); background: var(--surface-recessed); font-family: var(--mono); font-size: var(--text-micro); }
+.history-fold > summary, .write-fold > summary { cursor: pointer; }
+.history-fold > summary:focus-visible, .write-fold > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.policy-evidence { max-height: var(--block-policy-evidence-max); overflow: auto; white-space: pre-wrap; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-recessed); font-family: var(--mono); font-size: var(--text-micro); font-variant-numeric: tabular-nums; }
 .policy-main .ui-form { display: grid; gap: var(--gap-form); width: min(100%, var(--content-policy-form-max)); margin-top: var(--space-3); }
 .policy-main .ui-form .ui-field { width: 100%; box-sizing: border-box; min-width: 0; }
 /* 지도 1·2단계: 머리 수치 띠 + 넓은 화면 두 열. 읽는 순서(사고 잠금 먼저)는 문서 순서 그대로다. */

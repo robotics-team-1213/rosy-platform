@@ -155,3 +155,80 @@ def test_over_http_the_worker_token_reaches_only_its_scope(tmp_path, monkeypatch
         assert "id" in w.start("auto_pick", PICK, idempotency_key="fleet-t-1-lease")
     finally:
         srv.shutdown()
+
+
+# --- push (owner decision 2026-11-28): exactly the keys the worker sends, mm 5..20, the stop proof still measured, not cancellable ---
+PUSH = {"arm": "arm_s", "config": "cell-s.json", "site": "floor", "roi": [0, 0, 10, 10], "catalog": "catalog-live.json",
+        "px_x": 300, "px_y": 200, "dir_x": 1, "dir_y": 0, "mm": 10}
+
+
+def _push_error(params, principal=WORKER):
+    return guards.authorize_principal("push", api.JOBS["push"], params, principal, moves_arm_fn=api.moves_arm)[1]
+
+
+def test_the_worker_may_start_a_push_with_exactly_the_keys_it_sends():
+    import cell_task_motion as ctm
+
+    _, params = ctm.push_request({"site": "floor", "px": [300, 200], "dir": [1, 0], "mm": 10}, arm_id="arm_s", config="cell-s.json",
+                                 catalog="catalog-live.json", roi=(0, 0, 10, 10))
+    assert set(params) == worker.PUSH_KEYS and _push_error(params) is None
+    eff, err = guards.authorize_principal("push", api.JOBS["push"], params, WORKER, moves_arm_fn=api.moves_arm)
+    assert err is None and "operator" not in eff and "proposer" not in eff and "reviewed_auto" not in eff
+
+
+@pytest.mark.parametrize("extra", [{"operator": "alice"}, {"proposer": "alice"}, {"reviewed_auto": True}, {"reviewed_auto": False},
+                                   {"half_mm": 15}, {"half_width_mm": 15}, {"dry_run": True}, {"person_at_switch": True},
+                                   {"purpose": "x"}, {"mystery": 1}])
+def test_a_push_with_any_other_key_is_refused_for_the_worker(extra):
+    err = _push_error({**PUSH, **extra})
+    assert err and err["code"] == 403 and err["error_code"] == "WORKER_SCOPE_FORBIDDEN"
+
+
+@pytest.mark.parametrize("drop", sorted(worker.PUSH_KEYS))
+def test_a_push_missing_any_of_its_keys_is_refused_for_the_worker(drop):
+    err = _push_error({k: v for k, v in PUSH.items() if k != drop})
+    assert err and err["error_code"] == "WORKER_SCOPE_FORBIDDEN"
+
+
+@pytest.mark.parametrize("mm", [4.99, 20.01, 0, -10, True, "10", None, float("nan"), float("inf")])
+def test_a_push_distance_outside_5_to_20_mm_is_refused_by_the_scope_itself(mm):
+    err = _push_error({**PUSH, "mm": mm})
+    assert err and err["error_code"] == "WORKER_SCOPE_FORBIDDEN"
+    assert _push_error({**PUSH, "mm": 5}) is None and _push_error({**PUSH, "mm": 20.0}) is None
+
+
+def test_the_push_scope_does_not_open_the_plain_machine_principal_or_other_jobs():
+    err = _push_error(PUSH, MACHINE)
+    assert err["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
+    _, err = guards.authorize_principal("push_dry_run", api.JOBS["push_dry_run"], PUSH, WORKER, moves_arm_fn=api.moves_arm)
+    assert err["error_code"] == "WORKER_SCOPE_FORBIDDEN"  # a dry run is a human tool; the worker has no use for it
+    _, err = guards.authorize_principal("auto_pick", api.JOBS["auto_pick"], PUSH, WORKER, moves_arm_fn=api.moves_arm)
+    assert err["error_code"] == "WORKER_SCOPE_FORBIDDEN"
+
+
+def test_the_push_proof_is_required_and_the_tail_is_added_only_after_it(tmp_path, monkeypatch):
+    import cell_job_proof
+
+    assert cell_job_proof.needs_proof(api.JOBS["push"], PUSH, True)
+    runner, popen = _runner(tmp_path, monkeypatch, live={**FOLDED, "folded": False})
+    res = runner.start("push", PUSH, principal=WORKER)
+    assert res["code"] == 409 and res["error_code"] == "STOP_PROOF_NOT_FOLDED"
+    popen.assert_not_called()
+    (tmp_path / "ok").mkdir()
+    runner, popen = _runner(tmp_path / "ok", monkeypatch)
+    res = runner.start("push", PUSH, principal=WORKER)
+    assert res["code"] == 202 and runner.runs[res["id"]]["stop_proof"]["ok"] is True
+    argv = popen.call_args.args[0]
+    assert argv[-2:] == ["--commissioning", "--person-at-switch"] and "--px=300,200" in argv and "--dir=1,0" in argv
+    assert argv[argv.index("--mm") + 1] == "10" and argv[argv.index("--catalog") + 1] == "catalog-live.json"
+    assert runner.runs[res["id"]]["principal_id"] == worker.WORKER_ID
+
+
+def test_a_push_is_not_cancellable_because_cell_push_never_reads_the_stop_marker(tmp_path, monkeypatch):
+    """cell_push drives a bare FifoCell, not cell_auto_safety.Guarded, so a marker would be written and never read."""
+    assert not api.JOBS["push"].get("cancellable")
+    assert "Guarded" not in (Path(__file__).resolve().parents[1] / "deploy/robot/omx/cell_push.py").read_text(encoding="utf-8")
+    runner, _ = _runner(tmp_path, monkeypatch)
+    runner.runs.clear()
+    res = runner.start("push", PUSH, principal=WORKER)
+    assert runner.runs[res["id"]].get("stop_file") is None

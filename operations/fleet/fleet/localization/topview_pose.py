@@ -147,7 +147,11 @@ def marker_check(data: TopviewData, gray, expected):
     dictionary = getattr(cv2.aruco, data.marker_dictionary, None)
     if dictionary is None or expected is None:
         return None
-    _, ids, _ = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(dictionary)).detectMarkers(gray)
+    marker_dict = cv2.aruco.getPredefinedDictionary(dictionary)
+    if hasattr(cv2.aruco, "ArucoDetector"):  # OpenCV >= 4.7; CI's Ubuntu python3-opencv is 4.6
+        _, ids, _ = cv2.aruco.ArucoDetector(marker_dict).detectMarkers(gray)
+    else:
+        _, ids, _ = cv2.aruco.detectMarkers(gray, marker_dict, parameters=cv2.aruco.DetectorParameters_create())
     seen = {int(i) for i in ids.ravel()} & set(data.marker_ids.values()) if ids is not None else set()  # known Pinkies only
     want = data.marker_ids.get(expected)
     if seen and want not in seen:

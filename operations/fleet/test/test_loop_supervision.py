@@ -31,7 +31,7 @@ EXPECTED_LOOPS = {
     "notifications", "arm-transfer-dispatcher", "signals", "stuck-resolver",
     "localization", "calibration-drift", "trip-runner", "charge-runtime",
     "goal-lease-renew", "identity", "lane-compliance", "tether-watch", "paths",
-    "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
+    "job-trips", "trip-reissue", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
     "event-loop-lag", "auto-locate",
@@ -304,7 +304,7 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
         supervisor = LoopSupervisor()
         app = SimpleNamespace(state=SimpleNamespace(
             arm_transfer_dispatcher=Service(), stuck_resolver=Service(),
-            trip_runner=Service(), charge_runtime=Service(), job_trips=Service(),
+            trip_runner=Service(), charge_runtime=Service(), job_trips=Service(), trip_reissue=Service(),
             tether_watch=Tether(), paths=Service(), lane_compliance=object(), charge_bays_tick=hang))
         console = SimpleNamespace(
             _signals=Service(), goal_leases=SimpleNamespace(ttl_s=4.0),

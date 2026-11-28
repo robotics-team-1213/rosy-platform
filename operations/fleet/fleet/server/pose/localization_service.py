@@ -27,7 +27,7 @@ from fleet.localization.wall_tiebreak import Tiebreak
 from .localization_search_window import SearchWindowAdvisor
 from fleet.server.localization_pose_helpers import (
     MapFrame, check_reached_unconfirmed, default_lane_rules, forget_removed_robots, fresh_overhead_sighting,
-    handle_pose_request, known_obstacle_points, load_lane_rules, map_frame, observe_pose_from_anchors, sighting_in_robot_frame, loaded_wall_proven,
+    auto_rotate_clear, handle_pose_request, known_obstacle_points, load_lane_rules, map_frame, observe_pose_from_anchors, sighting_in_robot_frame, loaded_wall_proven,
     track_anchor_provenance,
 )
 from fleet.swarm import read_spread, transport
@@ -349,7 +349,7 @@ class LocalizationService:
                 rung = retry[0]
             if rung is not None:
                 self._busy_rung.pop(rid, None)
-                await self._climb(rid, clients[rid], rung, status, now)
+                await self._climb(rid, clients[rid], rung, status, now, state=state)
 
     # --- steps ----------------------------------------------------------------------
 
@@ -539,7 +539,8 @@ class LocalizationService:
         except Exception as exc:
             logger.warning("localization: suspect to %s failed: %s", rid, exc)
 
-    async def _climb(self, rid: str, client: transport.RobotClient, rung: str, status, now: float) -> None:
+    async def _climb(self, rid: str, client: transport.RobotClient, rung: str, status, now: float,
+                     state: Optional[Mapping] = None) -> None:
         """One ladder rung: ask CORE for the rung's mission, or raise needs_human."""
         if rung == "needs_human":
             logger.warning("localization: %s still unlocalized after %.0f s: needs_human (위치 확인 필요)",
@@ -547,7 +548,8 @@ class LocalizationService:
             return
         if status is None or status.state is LocState.LOCALIZED:
             return          # legacy (null) or LOCALIZED robots never get a mission
-        if rung in service_logic.MOTION_RUNGS and not self._motion_gate.allowed(rid, now):
+        if (rung in service_logic.MOTION_RUNGS and not self._motion_gate.allowed(rid, now)
+                and not (rung == "rotate" and auto_rotate_clear(self, rid, state))):
             logger.info("localization: %s ladder %s held: wheel motion needs an operator relocalize "
                         "request (robots can sit on chargers or cables)", rid, rung)
             self._last_mission[rid] = {"kind": None, "rung": rung, "held": [],

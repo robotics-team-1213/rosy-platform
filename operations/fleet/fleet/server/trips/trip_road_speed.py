@@ -5,6 +5,7 @@ from bisect import bisect_right
 import math
 
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
+from fleet.server.nav2_recovery_ladder import recovery_slow
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_lane_realign import REALIGN_SLOW_MPS
@@ -89,6 +90,8 @@ class RoadSpeed:
         reason = "route_profile"
         if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
             cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: while a departure is fresh evidence
+        elif recovery_slow(live.view["detail"], progress) and cap > REALIGN_SLOW_MPS:
+            cap, reason = REALIGN_SLOW_MPS, "recovery_slow"  # D-1082 ladder: attempt 2+ resends slow
         leader = None
         gap_m = None
         geometry = await self.geometry.get(active)

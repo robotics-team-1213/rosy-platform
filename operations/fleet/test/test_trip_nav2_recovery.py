@@ -759,3 +759,44 @@ def test_cancel_of_a_closed_trip_accepts_measured_standstill_after_an_ended_goal
         assert not halt_unconfirmed(canceled["detail"])
     else:  # moving, a changed wire or a different navigation state is never taken as stopped
         assert canceled["detail"]["stop_sent"] is False and halt_unconfirmed(canceled["detail"])
+
+
+def test_own_untrusted_localization_waits_for_recovery_then_fails_after_the_bound():
+    """2026-11-28 user: a robot refused for its own LOCALIZATION_UNTRUSTED (nothing sent) waits for the localization
+    ladder and resends; only past LOC_LADDER_WAIT_S does it fail as before (2026-11-27 rosy_42 15:17Z)."""
+    from fleet.server.transient_loc_hold import LOC_LADDER_WAIT_S
+    robot = RouteFakeRobot("rosy_42")
+    clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    runner.autonomous_robots = frozenset()
+    pose["v"] = MapPose(0.5, -0.23, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(
+        map_version=ver, start_pose=(0.5, -0.23, math.pi), goal="J_in", stop_offset=False,
+    ), store.routing_config))
+    store.record_plan(plan_id="p-own", robot_id="rosy_42", principal_id="bob", map_version=ver,
+                      request={"to": "J_in", "drive_mode": "nav2"}, result={"plan": plan})
+    orig_route = runner._route
+    own = {"accepted": False, "queued": False, "reason": "LOCALIZATION_UNTRUSTED", "blocked_by": "rosy_42",
+           "waiting_on": ["rosy_42"], "dispatch_attempted": False}
+    runner._route = lambda _rid, _pts: asyncio.sleep(0, result=own)
+    run(runner.start("p-own", "bob"))
+    run(runner.tick())
+    view = runner.view("p-own")
+    assert view["state"] == "running" and view["detail"]["localization_wait"]["loc_reason"] == "goal_admission"
+    # Recovered before the bound: the next send goes out and the trip keeps running.
+    clock.advance(NAV2_TRANSIENT_RETRY_S + 0.5)
+    runner._route = orig_route
+    run(runner.tick())
+    assert runner.view("p-own")["state"] == "running" and runner._live["rosy_42"].active_route is not None
+    # Lost again and never recovered: past the bound it fails as before.
+    runner._live["rosy_42"].active_route = None
+    runner._live["rosy_42"].view["detail"].pop("localization_wait", None)
+    runner._route = lambda _rid, _pts: asyncio.sleep(0, result=own)
+    for _ in range(int(LOC_LADDER_WAIT_S / NAV2_TRANSIENT_RETRY_S) + 3):
+        clock.advance(NAV2_TRANSIENT_RETRY_S + 0.1)
+        runner._live["rosy_42"].progress_at = clock()
+        run(runner.tick())
+        if not runner._live.get("rosy_42") or not runner._live["rosy_42"].open:
+            break
+    fail_view = runner.view("p-own")
+    assert fail_view["state"] == "failed" and fail_view["reason"] == "TRIP_GOAL_REFUSED"

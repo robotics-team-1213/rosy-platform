@@ -15,6 +15,7 @@ from fleet.server.held_lidar_observation import inspect_held_route
 from fleet.server.named_stop_confirm import record_stop_dispatch, record_stop_operation
 from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.server.nav2_route_sampling import NAV2_SPLIT_WALL_CLEAR_M, _wrap_angle, sample_nav2_route
+from fleet.server.nav2_recovery_ladder import recovery_resend
 from fleet.server.peer_wait_prefix import downstream_refusal, prefix_guard, reserved_wait, road_centerline
 from fleet.server.peer_wait_prefix import blockers as _blockers, fence, fenced, footprint_end, held_receipt, hold_guard
 from fleet.server.peer_wait_prefix import hold_or_wait, hold_receipt, supervise_wait_prefix, traffic_hold
@@ -26,8 +27,8 @@ from fleet.server.trip_halts import _cancel_ack
 from fleet.server.trip_lane_realign import observe as observe_lane_departure
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_live import LiveTrip
-from fleet.server.transient_loc_hold import (hold_transient_localization, loc_diag_from_state,
-                                              recheck_binding)
+from fleet.server.transient_loc_hold import (hold_own_untrusted_goal, hold_transient_localization,
+                                              loc_diag_from_state, recheck_binding)
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_start_checks import crosswalks_on, signals_on, start_check
 from fleet.swarm.dispatch_guard import dispatch_guard
@@ -422,7 +423,7 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
     if prefix is not None:
         end_index = prefix
     site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()),
-                                 here=(pose.x, pose.y), end_s=hold_s)
+                                 here=(pose.x, pose.y), end_s=hold_s, recentre=recovery_resend(live))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
         if (frame_err or {}).get("binding") == "ROBOT_NOT_LOCALIZED":
@@ -519,6 +520,10 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             runner._fence(robot_id)
             if peer_wait and reply.get("stage") == "pre_dispatch_peer_check" and reply.get("dispatch_attempted") is False:
                 await inspect_held_route(runner, live, state, payload)
+            return
+        if hold_own_untrusted_goal(runner, live, robot_id, reply, state):  # 2026-11-28: lost -> recover, resend
+            live.nav2_retry_at = runner._clock() + NAV2_TRANSIENT_RETRY_S
+            live.view["detail"]["goal_wait"] = reason
             return
         raise _GoalRefused(reason, reply)
     if wait := detail.pop("peer_wait", None):

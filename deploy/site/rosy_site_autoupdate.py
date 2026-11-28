@@ -31,7 +31,7 @@ if __package__:
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from .site_update_runtime import SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
+    from .site_update_runtime import MissingBase, SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
@@ -43,7 +43,7 @@ else:  # pragma: no cover - installed host CLI
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from site_update_runtime import SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
+    from site_update_runtime import MissingBase, SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
 
 _PRUNE_IMAGE_REF = re.compile(rf"^rosy-site-(?:{'|'.join(ALL_IMAGE_SERVICES)}):([0-9a-f]{{40}})$")
 
@@ -490,6 +490,11 @@ class SiteUpdater(SiteRuntimeIO):
             log("error", tag=tag, reason=str(error))
             state["last_run"]["result"] = "error"
             return EXIT_FAILED
+        except MissingBase as error:
+            state.setdefault("skipped_base", {})[tag] = {"time": _now(), "current": current, "reason": str(error)[:200]}
+            log("skipped-missing-base", tag=tag, reason=str(error))
+            state["last_run"]["result"] = "skipped-missing-base"
+            return self._update(state)  # next eligible candidate; each skip adds a tag, so this ends
         except Rejected as error:
             state["failed"][tag] = {"time": _now(), "reason": str(error)}
             log("rejected", tag=tag, reason=str(error))

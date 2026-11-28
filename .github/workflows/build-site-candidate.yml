@@ -131,16 +131,31 @@ jobs:
           # base_commit is a full build (its input says so): it rebuilds every image, which
           # recovers a host missing a reused image whose release was already pruned (11-20 R).
           if [[ "$EVENT_NAME" == "push" && -z "$base_commit" && -n "${SITE_KEY_ID:-}" && -n "${SITE_PUBLIC_KEY_PEM:-}" ]]; then
-            base_tag="$(gh api "repos/${GH_REPO}/releases?per_page=25" --jq '
-              [.[] | select((.tag_name | test("^site-[0-9a-f]{12}$"))
+            signed="$(gh api "repos/${GH_REPO}/releases?per_page=25" --jq '
+              .[] | select((.tag_name | test("^site-[0-9a-f]{12}$"))
                 and ([.assets[].name] | index("release.json") != null)
-                and ([.assets[].name] | index("release.json.sig") != null))][0].tag_name // empty' || true)"
-            if [[ "$base_tag" =~ ^site-[0-9a-f]{12}$ ]]; then
+                and ([.assets[].name] | index("release.json.sig") != null))
+              | "\(.tag_name) \(.created_at)"' || true)"
+            # Hosts that defer while robots drive fall behind the newest release and then lack its reused
+            # images (11-21..11-27). So an incremental build is based only on a newest signed release that is
+            # itself FULL (manifest_version 1) and younger than FULL_MAX_AGE_S; otherwise build full. This keeps
+            # a recent full release in the retained set for hosts that skip an incremental candidate.
+            FULL_MAX_AGE_S=21600
+            cand=""
+            read -r t created <<<"$signed"
+            if [[ "$t" =~ ^site-[0-9a-f]{12}$ ]]; then
               mkdir -p "$RUNNER_TEMP/base-meta"
-              if gh release download "$base_tag" --repo "$GH_REPO" --pattern release.json --dir "$RUNNER_TEMP/base-meta" --clobber 2>/dev/null; then
-                cand="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_commit"])' "$RUNNER_TEMP/base-meta/release.json" 2>/dev/null || true)"
-                [[ "$cand" =~ ^[0-9a-f]{40}$ ]] && base_commit="$cand"
+              if gh release download "$t" --repo "$GH_REPO" --pattern release.json --dir "$RUNNER_TEMP/base-meta" --clobber 2>/dev/null; then
+                meta="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["manifest_version"], d["source_commit"])' "$RUNNER_TEMP/base-meta/release.json" 2>/dev/null || true)"
+                read -r ver src <<<"$meta"
+                age=$(( $(date +%s) - $(date -d "$created" +%s) ))
+                if [[ "$ver" == 1 && "$src" =~ ^[0-9a-f]{40}$ ]] && (( age <= FULL_MAX_AGE_S )); then cand="$src"; fi
               fi
+            fi
+            if [[ -n "$cand" ]]; then
+              base_commit="$cand"
+            else
+              echo "::notice::no recent full site release to base on; building a full candidate"
             fi
           fi
           echo "base_commit=$base_commit" >>"$GITHUB_OUTPUT"

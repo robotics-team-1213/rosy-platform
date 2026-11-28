@@ -88,7 +88,8 @@ def test_marker_of_another_robot_is_refused_and_the_own_one_is_reported(data):
 
     def with_marker(marker_id):
         out = frame.copy()
-        marker = cv2.aruco.generateImageMarker(dictionary, marker_id, 120)
+        make = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker  # OpenCV 4.6 on CI
+        marker = make(dictionary, marker_id, 120)
         out[300:420, 20:140] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)  # left of the registration mask
         return cv2.imencode(".jpg", out)[1].tobytes()
 
