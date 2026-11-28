@@ -111,7 +111,7 @@ controller_server:
       use_rotate_to_heading: true            # 경로 방향과 로봇 헤딩이 다를 때 제자리 회전 먼저 하기
       # 0.80 rad(46도): R 0.11 에서 L 0.13~0.15 의 chord 각도가 이 값 아래라 U턴 호 안에서 제자리 회전으로 빠지지 않는다.
       rotate_to_heading_min_angle: 0.80      # [rad] 약 46도 이상 차이나면 제자리 회전 모드 진입
-      rotate_to_heading_angular_vel: 0.8     # [rad/s] 제자리 회전할 때의 회전 속도
+      rotate_to_heading_angular_vel: 0.5     # [rad/s] 제자리 회전할 때의 회전 속도 (11-28: 0.8→0.5, 도착 각도 0.08 rad 안에서 멈추게)
 
       # 커브길 감속 (Regulated)
       use_regulated_linear_velocity_scaling: true   # 급커브에서 속도 줄이기 (R_min = v/w_max < 0.112 m 유지)
@@ -174,7 +174,10 @@ controller_server:
       # 직진하지 않고 목표 각으로만 돈다. 그 회전에 옆 신호등과 벽이 정지로 읽힌다.
       # 11-27 사용자: rosy_45가 정지선보다 약 7 cm 덜 감(0.08 공 안에서 도착 인정). 0.03 으로 좁힘(주시 0.09 보다 작아 제자리 회전만 하지 않음).
       xy_goal_tolerance: 0.03                    # [m] 목표 지점 반경 0.03 m 안에 들어오면 도착 인정
-      yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
+      # 11-28 사용자: S3에서 정지 각도를 0도로(Nav2 도착이 169~175도로 끝남). RPP 는 공 안에 들면 목표 각도로 제자리 회전하므로
+      # 허용을 0.08 rad(약 4.6도)로 좁힌다. RPP 회전은 일정 속도(bang-bang)라 rotate_to_heading_angular_vel 0.5 와 짝:
+      # 멈출 때 미끄러짐 0.5^2/(2*3.2)=0.04 rad 와 Pi 최악 5 Hz 한 주기 0.1 rad 가 허용 폭(±0.08) 안이라 넘어서 흔들리지 않는다.
+      yaw_goal_tolerance: 0.08                   # [rad] 목표 각도 오차 약 4.6도 이내면 도착 인정
 
     # ==========================================================
     # 4. 주행 진척도 검사 (Progress Checker)
