@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
 
 # core
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn FastAPI on port 8080 (D-1). Owns identity, capabilities, state snapshots, command arbitration, safety, navigation facade, waypoints, events, power/battery policy, docking SM, diagnostics, and the dashboard. All ROS I/O is confined to `core.bridge.ros_bridge`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | ament_python; slam_toolbox is optional at import time |
-| `setup.py` | Console script `core=core.main:main`; installs `web/*` |
-| `setup.cfg` | ament script install paths |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -70,5 +56,3 @@ python3 -m pytest middleware/core/gateway/test/ -v
 
 - rclpy, FastAPI, uvicorn, pydantic, PyYAML, nav2_msgs, geometry_msgs, sensor_msgs, tf2_ros
 - Optional: slam_toolbox
-
-<!-- MANUAL: -->

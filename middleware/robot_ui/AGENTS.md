@@ -1,7 +1,6 @@
 # robot_ui
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -41,5 +40,3 @@ Static HTML, CSS, and JS. No React app in the current dashboard.
 ### External
 
 - A browser. No Node production server.
-
-## Manual Notes

@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # command
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 CORE-002 / §8.1 command arbitration. ROS-free. CommandManager is the only logical `cmd_vel` source; bridge publishes whatever `select_output()` returns.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `arbitration.py` | `Priority` enum, `SourceRegistry`, `Mode` / `ModeMachine` |
-| `manager.py` | Mux: EMERGENCY zero, MANUAL+watchdog, NAVIGATION clipped, DOCKING |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -43,9 +28,3 @@ Local `Twist` dataclass — not `geometry_msgs`.
 ### Internal
 
 - `safety.manager.SafetyManager`, `TeleopWatchdog`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

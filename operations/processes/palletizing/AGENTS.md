@@ -1,9 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
 
 # Palletizing Process
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 

@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # formation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Pure FOR-001/002 functions: named formations → slot offsets, and a swappable slot assigner. No transport, no asyncio, no ROS. Output is numbers a follower can pass to `follow_goal`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `geometry.py` | `Formation`, `SlotOffset`, `slots()`, `MIN_SPACING` (0.4 m, derived from Nav2 inflation + footprints), `DEFAULT_SPACING` (0.6 m) |
-| `assignment.py` | `SlotAssigner` protocol and `GreedyDistanceAssigner` (FOR-002) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -46,9 +31,3 @@ Dataclasses + enums. Input numbers, output numbers. Follower pose is leader head
 
 - Spacing rationale cites `middleware/drive/planning/nav2/params/nav2_params.yaml`
 - Slot offsets feed `core.navigation.swarm.follow_goal` (contract, not an import)
-
-### External
-
-None.
-
-<!-- MANUAL: -->

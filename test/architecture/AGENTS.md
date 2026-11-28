@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # architecture
 
@@ -38,6 +37,3 @@ python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}
 ```
 
 `test_module_structure.py` is also in the D-346 pre-push fast gate.
-
-
-

@@ -1,5 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-11-26 -->
 
 # Perception curation
 
@@ -30,8 +28,6 @@ Each script is a CLI whose docstring is its usage text. Also holds review transp
 ### Testing Requirements
 
 `python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception -q -p no:cacheprovider` (needs `mcap`, `numpy`, `cv2`; tests skip when missing).
-
-<!-- MANUAL: -->
 
 ### 검수 UI 역할
 

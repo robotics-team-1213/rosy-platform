@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # sim
 
@@ -33,7 +32,5 @@ python -m pytest middleware/perception/test/test_line_follow_simulation.py middl
 ```
 
 Host-only; benches need WSL Ubuntu with ROS 2 Jazzy. Bench scripts run through `remote_sim.py` or by hand in WSL.
-
-<!-- MANUAL: -->
 
 `gazebo/` holds the absorbed Perception host rigs (D-751); their package/map source root stays `middleware/perception`. Device measurement tools stay under `middleware/perception/tools/device`.

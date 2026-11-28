@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # adr
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -52,7 +49,3 @@ Lint merges `docs/adr/*.md` bodies with the log and reports duplicate bodies, mi
 ### Internal
 
 - `docs/reference/ROSY ADR Log.md` (index), `tools/harness/rosy_harness.py` and `harness.yaml`, `docs/spec/`
-
-### External
-
-None.

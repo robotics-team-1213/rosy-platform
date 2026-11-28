@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
 
 # navigation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,16 +11,8 @@ NAV-001–004/006 facade. ROS-free. Nav2 action client lives behind `NavExecutor
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
-| `manager.py` | `NavigationManager`, `NavGoalSpec`, `NavExecutor` protocol, `NavigationError` |
 | `route.py` | NAV-008 route drive (D-1009): pass/stop points, one Nav2 action per stop, skip rules, `route_status`. Bound onto `NavigationManager`; test `test_navigation_route.py` |
 | `lease.py` | D-550 10 goal lease renew/expire, split out of `manager.py` (size rule) |
-| `readiness.py` | ROS-free hardware lifecycle/motor readiness gate used by navigation and command output |
-| `initial_pose.py` | AMCL covariance for `/initialpose` (zero covariance is ignored) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -55,5 +44,3 @@ Goals in `map` frame with x, y, yaw.
 ### External
 
 None (in this package).
-
-<!-- MANUAL: -->

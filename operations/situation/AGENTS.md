@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # situation
 
@@ -13,18 +12,10 @@
 
 | File | Description |
 |------|-------------|
-| `rosy_situation/service.py` | The service loop, Fleet client, queue/backpressure, JSONL input/fact logs |
 | `rosy_situation/assessment.py`, `snapshot_assessment.py` | D-652 immutable necessity criteria and current CORE snapshot adapter; Fleet installs only these pure modules plus `__init__.py`, consumers remain shadow |
-| `rosy_situation/analyzers/stuck_scene.py` | `Analyzer`: stuck and traffic facts plus shadow `trip_route_check` from trip/map pose and planned segments; existing `rosy_situation.analyzers` exports remain |
-| `rosy_situation/analyzers/traffic_watch.py` | `TrafficWatch` (`analyzer:traffic_watch@1`, phase (d)): wait cycles cross-checked with Fleet's `wait_cycle`, stale-input false cycles, waiting-but-moving, livelock, stalled trips, long UNKNOWN units; existing `deadlock` module aliases this implementation |
 | `rosy_situation/arm_incidents.py` | D-971 `ArmIncidentExplainer`: polls Fleet for open OMX arm incidents without an explanation (`ai_observer`), asks the local vision model what the frames show and the likely cause, posts the explanation. Off unless `ROSY_ARM_INCIDENTS=1`; explanation only |
-| `rosy_situation/incidents/context.py` | Source-aware incident context drafts; existing `incident_context` module identity remains |
-| `rosy_situation/incidents/vision.py` | Existing bounded local vision assessments; `vlm` aliases this module, preserving monkeypatch state |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
-| `test/test_situation_service.py` | Fake-Fleet unit tests and one in-process real Fleet test |
-| `test/test_analyzers.py` | Analyzer facts on synthetic snapshots |
-| `test/test_deadlock.py` | Traffic facts on synthetic snapshots, incl. a stale-pose false cycle and a quiet hour |
 
 ## For AI Agents
 

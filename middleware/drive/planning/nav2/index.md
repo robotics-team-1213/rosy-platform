@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-11-28 · uncommitted · fix(nav2): 정지 각도 허용 0.25→0.06 rad (S3 0도 정지)
 - 2026-11-28 · uncommitted · fix(nav2): RPP 주시 하한 0.13·시간 1.8 s, 제자리 회전 임계 0.80 (직선 좌우 흔들림)
 - 2026-11-04 · uncommitted · fix(nav2): 이름공간 노드에 닿는 파라미터 섹션 키와 standalone 실행
 - 2026-11-04 · uncommitted · fix(nav2): launch 프로파일 기본값이 payload 모드 오버레이로 내려간다
 - 2026-11-04 · uncommitted · docs(validation): 후진 허용 실물 수용 기록
-- 2026-11-04 · uncommitted · fix(nav2): RPP 후진 허용

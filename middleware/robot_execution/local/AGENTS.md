@@ -1,7 +1,6 @@
 # local
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -12,8 +11,6 @@ Wheel `rosy-execution-local`. Verifies an installed policy artifact against a ca
 | File | Description |
 |------|-------------|
 | `README.md` | Binding rules, the OMX session, and what this wheel does not authorize |
-| `pyproject.toml` | Wheel metadata and the contract pins |
-| `test/` | Install, journal, parent-fence, and OMX session tests |
 
 ## Subdirectories
 

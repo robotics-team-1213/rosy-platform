@@ -130,15 +130,21 @@ PARKING_PLACE_KINDS = frozenset({"charge", "park"})
 
 def parking_edge(graph, edge_id: Optional[str]) -> bool:
     """D-1084: the edge leads into a charge bay or runs along the parking guide (an end place of
-    kind charge or park, or a ``bay_`` edge like D-972), so it is not a road lane to keep."""
+    kind charge or park, a ``bay_`` edge, or a guide edge touching a ``bay_`` non-stop place)."""
     if graph is None or not edge_id:
         return False
     if edge_id.startswith("bay_"):
         return True
     places = getattr(graph, "places", None) or {}
-    return any(arc.edge_id == edge_id and any(getattr(places.get(p), "kind", None) in PARKING_PLACE_KINDS
-                                              for p in (arc.start_place, arc.end_place))
-               for arc in graph.arcs.values())
+    bay_places = {
+        p for arc in graph.arcs.values()
+        if arc.edge_id.startswith("bay_")
+        for p in (arc.start_place, arc.end_place)
+        if getattr(places.get(p), "kind", None) != "stop"
+    }
+    return any(arc.edge_id == edge_id and any(
+        getattr(places.get(p), "kind", None) in PARKING_PLACE_KINDS or p in bay_places
+        for p in (arc.start_place, arc.end_place)) for arc in graph.arcs.values())
 
 
 def map_bounds(graph, pad_m: float) -> Optional[tuple]:

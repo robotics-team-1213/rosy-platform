@@ -19,7 +19,6 @@ import logging
 
 from fleet.server.nav2_recovery_ladder import attempt_entry, exhaust
 from fleet.server.trip_halts import _cancel_ack
-from fleet.server.trip_lane_realign import _excluded
 from fleet.server.trip_nav2_route import NAV2_TRANSIENT_RETRY_S
 
 RECOVERABLE = ("stall", "navigation")
@@ -35,6 +34,13 @@ _RUNNING = ("NAVIGATING", "PLANNING")
 _LOG = logging.getLogger("fleet.server.trip_runner")
 
 
+def _excluded(runner, live, index: int, state) -> bool:
+    if live.view["detail"].get("parking_handoff") is not None or state.get("mode") == "DOCKING":
+        return True
+    topview = getattr(runner, "cell_topview", None)
+    return topview is not None and topview.covers(live.arc(index).end_place)
+
+
 def _in_scope(runner, live, reason, stop_detail, state) -> bool:
     index = live.view["segment_index"]
     stop_detail = stop_detail or {}
@@ -47,7 +53,7 @@ def _in_scope(runner, live, reason, stop_detail, state) -> bool:
             and runner._strict_named_stop(live, index) is None
             and runner._cancel_goal is not None and isinstance(state, dict)
             and (state.get("safety") or {}).get("estop") is False and state.get("mode") not in ("MANUAL", "ESTOP")
-            and not _excluded(runner, live, index, state)                                   # charge bay, parking, DOCKING
+            and not _excluded(runner, live, index, state)
             and active is not None and active[0] == live.view["map_version"])
 
 

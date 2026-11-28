@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
 
 # gz_sim
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,11 +11,7 @@ Gazebo simulation: worlds, models, ros_gz bridge params, lamp plugin, and `gz_mu
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_cmake; ros_gz, gz_ros2_control |
 | `CMakeLists.txt` | Installs launch, worlds, models, params, plugins. **`return()` on aarch64** — do not "fix" that skip |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -68,5 +61,3 @@ Host launch-graph and source/install contracts live in `integrations/simulation/
 ### External
 
 - Gazebo / ros_gz, gz_ros2_control
-
-<!-- MANUAL: -->

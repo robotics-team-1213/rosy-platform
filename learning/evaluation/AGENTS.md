@@ -1,7 +1,6 @@
 # evaluation
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-12 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -40,5 +39,3 @@ Offline checkers with explicit HOLD when evidence is missing. No robot runtime i
 ### External
 
 - The perception job environment named by the child. It is not the robot image.
-
-## Manual Notes

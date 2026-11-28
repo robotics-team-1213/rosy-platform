@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Decoder and package-contract checks stay ROS-free on the host. Injected-bus fault tests need a Linux ARM64 ROS executable and are separate from live BNO055 acceptance. Node startup is not calibration proof.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `test_package_contract.py` | Package layout / default reset policy / launch presence |
-| `test_driver_faults.py` | Injected I2C backend; hardware-free failure stages |
-| `test_sample.cpp` | ROS-free IMU sample decoder (always built) |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -51,5 +36,3 @@ Inject a fake bus; assert stage/register/errno on failure. Do not talk to a real
 ### External
 
 - pytest; gtest/CMake for `test_sample.cpp`
-
-<!-- MANUAL: -->

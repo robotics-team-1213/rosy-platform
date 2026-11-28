@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # nodes/ (ROS composition)
 
@@ -27,5 +26,3 @@ The five directories in `../control/` (`control`, `sensing`, `planning`, `safety
 ### Testing Requirements
 - ROS-free adapter characterization, executor/QoS scans and pure composition modules are covered by `../test/`; ROS transport behavior needs separate Jazzy evidence.
 - `../test/test_responsibility_layout.py` checks source holders, isolated sdist/wheel installation, provider identity, unique module copies and map bytes. Run pytest through the committed-HEAD remote runner from the repository root (D-584).
-
-<!-- MANUAL: -->

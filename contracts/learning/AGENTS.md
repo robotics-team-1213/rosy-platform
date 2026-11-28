@@ -1,7 +1,6 @@
 # learning
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -12,8 +11,6 @@ Wheel `rosy-contracts-learning` (D-449). ROS-free, torch-free, LeRobot-free chec
 | File | Description |
 |------|-------------|
 | `README.md` | Wire rules, camera fingerprint notes, and what 0.1.x does not prove |
-| `pyproject.toml` | Package `rosy-contracts-learning` |
-| `src/` | Import root `rosy.contracts.learning` |
 | `src/rosy/contracts/learning/action_space.py` | D-854 OMX action space declaration and versioned `lerobot_norm_v1` <-> `dynamixel_rad_v1` converters; clips are counted, never silent. Test `test/test_learning_action_space.py` |
 | `src/rosy/contracts/learning/prediction.py` | D-782 PredictionRequest/Result, the M1 artifact schema and its single `forward` rule; a result may only support REJECT or HOLD |
 
@@ -47,5 +44,3 @@ File names inside a manifest are normalized POSIX relative paths and must stay i
 ### External
 
 - Python 3.12. No ROS, torch, or LeRobot.
-
-## Manual Notes

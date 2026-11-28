@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # omx
 
@@ -39,5 +38,3 @@ Workstation development and simulation preparation for the OMX-AI workcell: a RO
 ```bash
 python3 -m pytest test/test_omx_workstation.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_omx_vendor_stack_lock.py -q
 ```
-
-<!-- MANUAL: -->

@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
 
 # core_common
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,15 +13,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: none (leaf) |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `core_common/protocol/` | `schemas.py` — wire schema source of truth; change with `docs/reference/ROSY API & Protocol Reference.md` (D-18) |
-| `core_common/domain/` | Domain model types |
-| `core_common/config.py` | Default config loader. Reads this package's `config/` share |
-| `config/` | Shipped defaults and development authentication overlay |
-| `core_common/identity.py`, `profile.py`, `capability.py`, `rmw.py` | Identity, hardware profile, capability manifest, RMW settings |
 
 ## Subdirectories
 
@@ -51,5 +40,3 @@ python -m pytest contracts/foundation/test -q
 ### Internal
 
 none (leaf)
-
-<!-- MANUAL: -->

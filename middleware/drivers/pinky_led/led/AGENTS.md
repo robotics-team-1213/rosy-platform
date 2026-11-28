@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # led (Python package)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 LED service implementation.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package marker |
-| `led_server.py` | `LedServiceServer`: `set_led`, `set_brightness` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -44,5 +30,3 @@ rclpy service callbacks returning `success` + `message`.
 ### External
 
 - rosylib.LED, rclpy
-
-<!-- MANUAL: -->

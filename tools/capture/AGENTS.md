@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # capture
 
@@ -23,4 +22,3 @@ Robot side of the edge-capture loop (D-379, D-465): short supervised drives over
 ```bash
 python -m pytest tools/capture/test -q -p no:cacheprovider
 ```
-

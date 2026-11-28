@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-21 | Updated: 2026-09-22 -->
 
 # signal
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,14 +11,6 @@ site 장비. The controller's first duty is not control — it is **visible
 untrustworthiness**: on boot, supervisor silence, or reboot, every lamp shows
 FLASH RED until a fresh authenticated command arrives. Site 장비라 ROS import 가
 없고, Fleet 서버와는 LAN 위 HTTP 계약으로만 만난다(D-59: 디바이스는 계약 버스만).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | ROSY-SIGNAL-001: `/status`·`/command` 스키마, 인증, 페일세이프, 전기/규정 규칙 |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
 
 ## Subdirectories
 
@@ -64,5 +53,3 @@ Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; cl
 ### External
 
 - ESP32 Arduino core (WiFi, WebServer, Preferences/NVS), ArduinoJson 6.x
-
-<!-- MANUAL: -->

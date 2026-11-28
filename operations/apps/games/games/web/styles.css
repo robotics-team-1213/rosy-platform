@@ -61,6 +61,7 @@ h1 {
 }
 
 .score div {
+  min-width: 0;
   background: var(--score-well);
   padding: var(--space-3) var(--space-4);
 }
@@ -194,6 +195,7 @@ h1 {
 .chips li {
   background: var(--chip);
   padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
   font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
@@ -314,6 +316,7 @@ ui-shell[grammar="focal"] ui-topbar {
   .field-details:has(#lost:not([hidden])) h2 { order: -2; }
   .field-details #lost:not([hidden]) { order: -1; }
 }
-.field-details details { margin-block: var(--space-3); }
+.field-details details { margin-block: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--score-gap); border-radius: var(--radius-control); }
 .field-details summary { cursor: pointer; color: var(--pitch-ink); }
+.field-details summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 #stair1 { overflow-wrap: anywhere; }

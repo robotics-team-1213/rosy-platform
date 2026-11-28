@@ -1,7 +1,6 @@
 # execution
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -38,5 +37,3 @@ Local execution evidence on the middleware side. This is the `rosy-execution-loc
 ### External
 
 - Python >= 3.12. Pydantic comes in with the adapter path, not as a reason to import ROS.
-
-## Manual Notes

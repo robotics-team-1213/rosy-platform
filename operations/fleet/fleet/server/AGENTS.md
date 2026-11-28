@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 # server
 
 **Parent context:** `../AGENTS.md`

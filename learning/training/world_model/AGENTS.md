@@ -11,9 +11,7 @@ D-782 M1 training. `m1_job.py` fits a bootstrap ridge ensemble that maps the cur
 
 | File | Description |
 |------|-------------|
-| `README.md` | CLI and what a run proves |
 | `m1_job.py` | Train split only, train-only normalization, deterministic seed, new output directory |
-| `test/` | Synthetic-dynamics checks |
 
 ## For AI Agents
 

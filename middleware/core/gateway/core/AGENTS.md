@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # core (Python package)
 
@@ -34,5 +33,3 @@ Full reasoning: `docs/plans/2026-09-06-module-split-criteria.md`. Operative rule
 ### Testing Requirements
 
 See sibling `../test/AGENTS.md`.
-
-<!-- MANUAL: -->

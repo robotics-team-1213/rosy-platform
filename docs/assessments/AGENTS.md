@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # assessments
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,9 +11,6 @@ Dated, point-in-time evaluations of the whole tree: module coupling and communic
 
 | File | Description |
 |------|-------------|
-| `module-coupling-report.md` | 2026-09-19 coupling analysis: declared dependencies, imports, topics, launch references |
-| `module-coupling-scorecard.md` | 2026-09-23 five-axis re-score (independent work, role clarity, concurrent maintenance, shared ownership, coupling fit); follow-up to the report |
-| `communication-protocol-report.md` | 2026-09-22 transport and protocol review from bus to ROS graph, robot API, site/fleet, and deployment network |
 | `rosy-main-e2b0098-test-evidence.png` | Test-run screenshot for a pinned main commit |
 
 ## For AI Agents
@@ -44,7 +38,3 @@ python3 -m pytest test/architecture/test_folder_layout.py test/architecture/test
 ### Internal
 
 - `docs/adr/D-178-module-maintainability-scorecard.md`, `docs/reference/` contracts, `src/` module tree
-
-### External
-
-None.

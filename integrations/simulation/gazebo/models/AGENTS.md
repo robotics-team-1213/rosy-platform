@@ -1,20 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # models
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Gazebo model assets (robot mesh, shelf SDF, images). Binary/mesh children have no AGENTS.md.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `PLACE_GZ_MODELS` | Marker/notes for placing models on the Gazebo path |
 
 ## Subdirectories
 
@@ -33,10 +24,6 @@ Gazebo model assets (robot mesh, shelf SDF, images). Binary/mesh children have n
 
 Do not rename SDF model names without updating worlds. `original_modl.sdf` looks like an upstream typo — leave unless you migrate references.
 
-### Testing Requirements
-
-None.
-
 ### Common Patterns
 
 Gazebo model.config + model.sdf.
@@ -50,5 +37,3 @@ Gazebo model.config + model.sdf.
 ### External
 
 - Gazebo
-
-<!-- MANUAL: -->

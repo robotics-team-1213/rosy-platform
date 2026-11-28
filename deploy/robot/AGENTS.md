@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Updated: 2026-09-28 -->
 
 # Robot product deployments
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -26,5 +23,3 @@ robot behavior, ROS interfaces, or final device commands; those remain in
   after their producers, consumers, and deployment closure are demonstrated.
 - A source path move does not change ROS package identity, installed paths,
   image contents, or hardware acceptance.
-
-<!-- MANUAL: -->

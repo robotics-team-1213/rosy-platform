@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-29 -->
 
 # navigation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Nav2 and SLAM Toolbox launch/config/maps for real robot and Gazebo. ament_cmake. The leftover Flask UI (`scripts/`) was deleted — it had been superseded by `core` FastAPI since D-3 and was never launched or installed.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | Depends on navigation2, nav2_bringup, and slam_toolbox |
-| `CMakeLists.txt` | Installs the Python policy package, launch, params, maps, rviz. |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -62,5 +49,3 @@ XML launches included from `gz_sim` with per-robot namespace.
 ### External
 
 - Nav2, slam_toolbox, rviz2
-
-<!-- MANUAL: -->

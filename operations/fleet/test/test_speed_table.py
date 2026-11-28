@@ -86,3 +86,16 @@ def test_route_profile_caps_every_crossing_on_a_return_trip():
     for stripe in table["stripes"]:
         assert at(table, stripe["s_m"]) <= STRIPE_MPS
     assert table["rows"][0][1] == table["rows"][-1][1] == .15
+
+
+def test_pass_through_stop_keeps_no_stripe_but_the_terminal_stop_does():
+    site_map = site().model_dump(by_alias=True)
+    site_map["places"] += [{"id": "S4", "name": "S4", "x": 0.4, "y": -R, "kind": "stop"},
+                           {"id": "S3", "name": "S3", "x": 0.8, "y": -R, "kind": "stop"}]
+    table = speed_table(SiteMap.model_validate(site_map), [("lower", True, 0.0, 1.0)], start_mps=math.inf,
+                        stop_at_end=False, stop_place_ids={"S3"})
+    assert table["stripes"] == [{"place": "S3", "s_m": 0.8}]
+    assert at(table, 0.4) == 0.15 and at(table, 0.8) <= STRIPE_MPS
+    default = speed_table(SiteMap.model_validate(site_map), [("lower", True, 0.0, 1.0)], start_mps=math.inf,
+                          stop_at_end=False)
+    assert {"S4", "S3"} <= {r["place"] for r in default["stripes"]}

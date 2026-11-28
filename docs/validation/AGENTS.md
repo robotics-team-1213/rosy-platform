@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # validation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -61,7 +58,3 @@ python3 -m pytest test/architecture/test_document_placement.py test/architecture
 ### Internal
 
 - `docs/adr/` (decisions the evidence supports), `docs/plans/`, `tools/` replay and probe scripts
-
-### External
-
-None.

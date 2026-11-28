@@ -291,7 +291,7 @@ class TrafficService(SignalService):
             if units := self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id),
                                     fresh=robot_id in still):
                 state.pinned[robot_id] = units
-        for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
+        for robot_id in [r for r in state.pinned if r not in trips and r in fresh and (r in moving or r in recent)]:
             units = self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id),
                                 fresh=robot_id in still and robot_id not in moving)
             if robot_id in moving:  # still driving: its pose may lag a period, so pins only grow

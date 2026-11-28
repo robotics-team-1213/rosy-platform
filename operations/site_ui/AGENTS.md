@@ -1,7 +1,6 @@
 # site_ui
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-11
 
 ## Purpose
 
@@ -39,5 +38,3 @@ Android/Kotlin tree under `cam/app/`. The Java package `AGENTS.md` is the deepes
 ### External
 
 - Android SDK and CameraX, as the app module already uses.
-
-## Manual Notes

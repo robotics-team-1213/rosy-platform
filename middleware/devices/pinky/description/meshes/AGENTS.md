@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # meshes
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -27,10 +24,6 @@ None at this level.
 
 Do not retarget mesh filenames without updating xacro. Treat as vendor assets.
 
-### Testing Requirements
-
-None.
-
 ### Common Patterns
 
 One visual + one collision per link where both exist.
@@ -40,9 +33,3 @@ One visual + one collision per link where both exist.
 ### Internal
 
 - Referenced from `urdf/`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

@@ -1,7 +1,6 @@
 # core
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -42,5 +41,3 @@ Config merge: `contracts/foundation/config/rosy_default.yaml`, then `~/.rosy/ros
 ### External
 
 - rclpy, FastAPI, uvicorn, pydantic, Nav2. slam_toolbox optional.
-
-## Manual Notes

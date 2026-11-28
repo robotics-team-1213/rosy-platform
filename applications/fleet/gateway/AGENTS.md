@@ -1,7 +1,6 @@
 # fleet
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,8 +10,6 @@ Wheel `rosy-app-gateway` (version in `pyproject.toml`). Site gateway application
 
 | File | Description |
 |------|-------------|
-| `pyproject.toml` | Script entry and wheel pins |
-| `src/rosy_gateway/compose.py` | Process composition and `main` |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories
@@ -38,12 +35,6 @@ Composition roots stay in `compose.py`. Cell compilation is not here; it stays i
 
 ## Dependencies
 
-### Internal
-
-- None.
-
 ### External
 
 - PyYAML >= 6.
-
-## Manual Notes

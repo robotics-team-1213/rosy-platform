@@ -27,6 +27,7 @@ import math
 from types import SimpleNamespace
 
 from fleet.localization.lane_compliance import BODY_HALF_WIDTH_M, lane_offset
+from fleet.localization.lane_compliance_helpers import parking_edge
 from fleet.localization.map_binding import bound_pose
 from fleet.server.named_stop_map_pose import fresh_native_slam
 from fleet.server.trip_geometry import _wall_clearance
@@ -42,9 +43,9 @@ CAMERA_BRIDGE_MAX_M = 0.15
 #: tick was camera_unavailable because the source was read instead). The anchor's age bounds the odom part.
 CAMERA_SOURCES = ("sighting", "track")
 NEAR_EDGE_M = 0.02
-PERSIST_TICKS = 2
-REALIGN_SLOW_MPS = 0.05
-COOLDOWN_S = 3.0            # one recentring resend per departure window; the resend itself must not be repeated
+PERSIST_TICKS = 4
+REALIGN_SLOW_MPS = 0.08   # = the tight-curve cap: no new speed step
+COOLDOWN_S = 8.0            # one recentring resend per departure window; the resend itself must not be repeated
 REALIGNED_LAT_M = 0.02
 REALIGNED_DEG = 10.0
 #: The slow cap lives on fresh camera evidence of a departure: this long without one (camera lost, a location
@@ -59,10 +60,8 @@ _LOG = logging.getLogger("fleet.server.trip_runner")
 
 def _excluded(runner, live, index: int, state) -> bool:
     arc = live.arc(index)
-    places = getattr(live.graph, "places", None) or {}
-    charge = any(getattr(places.get(p), "kind", None) == "charge" for p in (arc.start_place, arc.end_place))
     topview = getattr(runner, "cell_topview", None)  # the top-view stop sits off the lane centre by design
-    return (charge or arc.edge_id.startswith("bay_") or live.view["detail"].get("parking_handoff") is not None
+    return (parking_edge(live.graph, arc.edge_id) or live.view["detail"].get("parking_handoff") is not None
             or (topview is not None and topview.covers(arc.end_place))  # the approach into it, not the way out
             or (isinstance(state, dict) and state.get("mode") == "DOCKING"))
 

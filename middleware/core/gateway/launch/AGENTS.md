@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # launch
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Launch file for the `core` node.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `core.launch.py` | Declares `config` and `mode` (`nav`/`slam`); runs executable `core` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -47,5 +34,3 @@ CI boot smoke uses `ros2 run`, not this launch.
 ### External
 
 - launch, launch_ros
-
-<!-- MANUAL: -->

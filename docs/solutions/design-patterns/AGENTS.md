@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # design-patterns
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,10 +12,6 @@ Compound lessons whose invariant is a design pattern (safety state machines, liv
 | File | Description |
 |------|-------------|
 | `a-safety-orchestrator-rechecks-after-every-await-and-lets-every-liveness-signal-decay.md` | Swarm formation slice: re-check safety after every await; rates/ages must decay; do not collapse refuse vs close |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -40,9 +33,3 @@ YAML frontmatter `problem_type: design_pattern`, `applies_when` lists.
 ### Internal
 
 - `operations/fleet/fleet/swarm/`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

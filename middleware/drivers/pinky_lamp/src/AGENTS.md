@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # src
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 WS2811 lamp node implementation.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `main_node.cpp` | `RosyLampControl`: ws2811 init, SetLamp service, ColorRGBA sub |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -43,5 +30,3 @@ Single C++ translation unit.
 ### External
 
 - rclcpp, rpi_ws281x
-
-<!-- MANUAL: -->

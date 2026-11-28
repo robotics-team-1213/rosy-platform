@@ -35,8 +35,8 @@ FRAME_KEYS = {
 
 #: Sensor topics that live under the robot. `/map` is deliberately absent — it is
 #: shared, like the `map` frame.
-PREFIXABLE_TOPICS = {"scan", "/scan"}
-TOPIC_KEYS = {"topic", "scan_topic"}
+PREFIXABLE_TOPICS = {"scan", "/scan", "costmap_filter_info", "/costmap_filter_info", "keepout_filter_mask", "/keepout_filter_mask"}
+TOPIC_KEYS = {"topic", "scan_topic", "filter_info_topic", "mask_topic", "topic_name"}
 
 
 def apply_nav2_frame_prefix(params: dict, prefix: str) -> dict:

@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # pilot
 
@@ -24,8 +23,6 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 ### Testing Requirements
 
 `python -m pytest middleware/robot_ui/pilot/test middleware/core/api/test/test_pilot_route.py -q` (`ROSY_RUN_BROWSER_TESTS=1`이면 Playwright, `dev_server.py` 가짜 CORE).
-
-<!-- MANUAL: -->
 
 ### UI 역할과 토큰 소비
 

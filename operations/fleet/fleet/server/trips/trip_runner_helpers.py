@@ -12,7 +12,6 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP
 from fleet.routing.execute import lane_action
-from fleet.server.named_stop_map_pose import approved_slam_site_pose
 from fleet.stop_front import body_front_m
 from fleet.server.trip_geometry import pose_view
 from fleet.server.trip_halts import error_code as _code
@@ -88,11 +87,6 @@ def _build_started_view(*, plan_id: str, robot_id: str, principal_id: str, notes
 
 class TripRunnerHelpers:
     """Read queries and robot/pose/persistence helpers mixed into ``TripRunner``."""
-
-    async def _traffic_pose(self, robot_id: str):
-        latest = self._poses.latest_state(robot_id) if callable(getattr(self._poses, "latest_state", None)) else None
-        bound = approved_slam_site_pose(self._store, robot_id, latest, self._clock())
-        return bound[0] if bound is not None else await self._call(self._driving_pose(robot_id))
 
     def execution_view(self, view):
         # An id-only acceptance receipt has no robot or lifecycle evidence yet.

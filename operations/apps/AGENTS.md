@@ -1,7 +1,6 @@
 # apps
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -37,5 +36,3 @@ Games tests live in `operations/apps/games/test`; use the root remote-testing pr
 ### External
 
 - PyYAML for the gateway wheel. Games names ROS deps in its `package.xml`.
-
-## Manual Notes

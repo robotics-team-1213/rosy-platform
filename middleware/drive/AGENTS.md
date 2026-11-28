@@ -1,7 +1,6 @@
 # drive
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-12
 
 Device Drive responsibilities (D-743), distinct from ROS package `control` in `middleware/perception`. Arm ownership remains in `middleware/devices/omx/adapter`; do not add placeholder Arm packages or another process.
 
@@ -24,5 +23,3 @@ Every backend submits a candidate to CORE. No operational final publisher, new m
 | `test/` | Pure-logic tests of the drive modules above (moved from `middleware/perception/test`, split round 3); run with `middleware/perception/test` |
 | `tools/` | Pinky Pi measurement tool `device/hotpath_measure.py` (moved from perception/tools; `test/test_hotpath_measure.py`) |
 | `tracking/` | Route following plus the `control.wander` adapter (see `tracking/AGENTS.md`) |
-
-## Manual Notes

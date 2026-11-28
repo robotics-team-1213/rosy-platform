@@ -19,7 +19,7 @@ from fastapi import Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.localization.map_binding import BindingError, bound_pose, fit_rigid, propose_from_walls
-from fleet.localization.wall_grid import build as build_wall_grid
+from fleet.localization.wall_grid import grid_route_response
 from fleet.server.http_errors import http_error
 from fleet.server.map_binding_auto import read_signature
 from fleet.server.site_auth import SitePrincipal
@@ -159,14 +159,12 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
     @app.get("/api/fleet/site-map/wall-grid", dependencies=read_guard, tags=["map-binding"])
     def site_map_wall_grid() -> dict:
         """The active site map's walls as a Nav2 map in the site frame: a fallback a robot can localize on (read-only)."""
-        active = site_maps.active()
-        if active is None:
-            raise site_map_error(404, "SITE_MAP_NOT_ACTIVE", "activate a site map first")
-        if not active[1].walls:
-            raise site_map_error(404, "SITE_MAP_NO_WALLS", "the active site map has no walls")
-        built = build_wall_grid(active[1].map_id, active[0], [w.face for w in active[1].walls])
-        pgm = built.pop("pgm")
-        return {**built, "pgm_base64": base64.b64encode(pgm).decode("ascii")}
+        return grid_route_response(site_maps.active(), "wall", site_map_error)
+
+    @app.get("/api/fleet/site-map/lane-mask", dependencies=read_guard, tags=["map-binding"])
+    def site_map_lane_mask() -> dict:
+        """Graded non-lethal Nav2 KeepoutFilter mask for global_costmap in the site frame (read-only)."""
+        return grid_route_response(site_maps.active(), "lane", site_map_error)
 
     @app.post("/api/fleet/robots/{robot_id}/map-binding", tags=["map-binding"])
     async def map_binding_approve(robot_id: str, body: ApproveRequest,

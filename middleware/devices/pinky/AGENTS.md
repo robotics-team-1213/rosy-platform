@@ -1,7 +1,6 @@
 # pinky
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -40,5 +39,3 @@ Each child ROS package has its own `AGENTS.md`.
 ### External
 
 - ROS 2 Jazzy and the Pinky board libraries named by the drivers.
-
-## Manual Notes

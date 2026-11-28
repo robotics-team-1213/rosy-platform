@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
 
 # imu_bno055
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,11 +11,7 @@ C++ BNO055 IMU driver node `imu_bno055`. Publishes `sensor_msgs/Imu` on `imu_raw
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_cmake; rclcpp, sensor_msgs, std_msgs, realtime_tools |
 | `CMakeLists.txt` | Builds the driver **only on aarch64** (wiringPi); always builds the ROS-free decoder test |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -60,5 +53,3 @@ None beyond workspace overlay.
 ### External
 
 - rclcpp, sensor_msgs, std_msgs, realtime_tools, wiringPiI2C
-
-<!-- MANUAL: -->

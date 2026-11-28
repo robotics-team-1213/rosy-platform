@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # test
 
@@ -28,5 +27,3 @@ pytest for core policy, API, dashboard, and protocol. Most tests import Python m
 ```bash
 python3 -m pytest middleware/core/gateway/test/ -v
 ```
-
-<!-- MANUAL: -->

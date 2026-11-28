@@ -103,14 +103,15 @@ def _walled(extra_edge=False):
 # upper_west runs west: "left" is south, so a negative left offset is toward the north wall.
 def test_wall_side_offset_slows_without_a_resend_then_releases():
     rig = Rig(site=_walled())
-    first = rig.tick(-0.03)
+    first = [rig.tick(-0.03) for _ in range(realign.PERSIST_TICKS - 1)]
     replace, record = rig.tick(-0.03)
-    assert not first[1]["slow"] and record["slow"] and not replace and record["kind"] == "near_edge"
+    assert not any(f[1]["slow"] for f in first) and record["slow"] and not replace and record["kind"] == "near_edge"
     assert record["wall_clear_m"] == pytest.approx(0.10) and record["centre_wall_clear_m"] == pytest.approx(0.13)
     assert record["replaced"] == 0 and record["wall_side_at"] is not None
     _, record = rig.tick(0.0)                                   # back on the centre, aligned
     assert not record["slow"]
-    rig.tick(-0.03), rig.tick(-0.03)
+    for _ in range(realign.PERSIST_TICKS):
+        rig.tick(-0.03)
     slow = [rig.tick(-0.03, age=2.0)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
     assert slow[0] and slow[-1] is False                        # 10 s without fresh evidence lifts it
 
@@ -162,3 +163,22 @@ def test_a_wait_that_runs_out_counts_no_new_stop():
     assert record["state"] == "exhausted" and "same_spot" not in record
     ladder.exhaust(live, record, 2.0, "stall")
     assert record["same_spot"]["count"] == 3
+
+
+def test_bay_departure_is_in_recovery_scope_unless_docking():
+    from types import SimpleNamespace as NS
+    from fleet.routing.graph import build_graph
+    site = _walled(extra_edge=True)
+    graph = build_graph(site)
+    arc = graph.arcs["bay2:fwd"]
+    runner = NS(_store=NS(active=lambda: (1, site)), _strict_named_stop=lambda _lv, _i: None,
+                _cancel_goal=lambda _r: None)
+    live = NS(open=True, nav2=True, arc=lambda _i: arc,
+              view={"state": "running", "segment_index": 0, "map_version": 1, "hold": None, "detail": {}},
+              active_route={})
+    nav_state = {"safety": {"estop": False}, "mode": "NAVIGATION"}
+    assert rec._in_scope(runner, live, "navigation", {}, nav_state) is True
+    live.view["detail"]["parking_handoff"] = {"phase": "docking"}
+    assert rec._in_scope(runner, live, "navigation", {}, nav_state) is False
+    live.view["detail"].pop("parking_handoff")
+    assert rec._in_scope(runner, live, "navigation", {}, {**nav_state, "mode": "DOCKING"}) is False

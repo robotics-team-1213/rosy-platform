@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # device_test
 
@@ -35,5 +34,3 @@ D-512: an agent session runs a supervised device test on a real Pinky by itself.
 ```bash
 python -m pytest tools/device_test/test tools/capture/test -q -p no:cacheprovider
 ```
-
-<!-- MANUAL: -->

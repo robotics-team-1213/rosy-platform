@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
 
 # omx
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,9 +13,6 @@ OMX arm composition (D-232). Config only: the disabled profile the adapter valid
 |------|-------------|
 | `config/omx.disabled.yaml` | OMX-AI target selected; arm stays disabled until hardware and safety acceptance |
 | `package.xml` / `CMakeLists.txt` | ament_cmake; installs `config/` only |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -53,5 +47,3 @@ The CLI on this file must print `{}` even though `model` is `omx_ai`.
 ### External
 
 - ament_cmake
-
-<!-- MANUAL: -->

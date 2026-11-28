@@ -1,7 +1,6 @@
 # registry
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -40,5 +39,3 @@ CLI is `python learning/registry/policy/registry.py --root <registry-on-X> ...`.
 ### External
 
 - Policy uses the Python standard library and learning contracts. Perception export/intake tools require the optional model dependencies listed in `perception/AGENTS.md`; its `store.py` remains standard-library-only.
-
-## Manual Notes

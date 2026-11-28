@@ -62,10 +62,12 @@ def test_publishing_never_outpaces_updating(name):
     assert costmap["publish_frequency"] <= costmap["update_frequency"]
 
 
-def test_the_voxel_map_stays_off():
-    """구독자가 저장소에 하나도 없다 — RViz 를 켤 때만 로컬에서 되살린다."""
+def test_local_costmap_uses_2d_obstacle_layer_without_voxel_layer():
+    """Pi 5 20 Hz 루프 보호: local_costmap 은 3D voxel 대신 2D ObstacleLayer 만 쓴다."""
     local = _costmap(_params(), "local_costmap")
-    assert local["voxel_layer"]["publish_voxel_map"] is False
+    assert "voxel_layer" not in local["plugins"] and "voxel_layer" not in local
+    assert "obstacle_layer" in local["plugins"]
+    assert local["obstacle_layer"]["plugin"] == "nav2_costmap_2d::ObstacleLayer"
 
 
 @pytest.mark.parametrize("name", COSTMAPS)
@@ -96,9 +98,8 @@ def test_the_rewritten_file_launch_actually_uses_keeps_the_rates(tmp_path):
         costmap = _costmap(rewritten, name)
         assert costmap["publish_frequency"] <= CONSUMER_POLL_HZ
         assert costmap["always_send_full_costmap"] is True
-    assert (
-        _costmap(rewritten, "local_costmap")["voxel_layer"]["publish_voxel_map"] is False
-    )
+    local = _costmap(rewritten, "local_costmap")
+    assert "voxel_layer" not in local and local["obstacle_layer"]["plugin"] == "nav2_costmap_2d::ObstacleLayer"
 
 
 BOND_LIFECYCLE_NODES = (

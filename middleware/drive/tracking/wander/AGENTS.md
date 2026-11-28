@@ -1,22 +1,10 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-06 -->
 
 # wander/ (the autonomy FSM)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 The wander autonomy: a 20 ms FSM (`wait forward pause look calc recon wall backup turn escape stop`) over subject mixins. Publishes semantic velocity (positive x = nose-forward) to `/cmd_vel_raw`, never `/cmd_vel`.
-
-## Key Files
-| File | Description |
-|------|-------------|
-| `node.py` | `WanderNode(Node, Senses, Judge, Contact, Motion)`: FSM tick dispatcher; `_announce` pairs `/wander/state` + `/robot/mode` (fused label, see rules); shared FSM entries `_hold`/`_start_backup`/`_start_escape`/`_start_turn`/`_resume_forward`; `stop_motors()` publishes the fused label |
-| `senses.py` | Topic callbacks + geometry helpers: `_on_wall` (delegates to `modes.nose_on_wall`), `_pick_turn_sign` (via `recover.side_sign`/`ratio_sign`), `_ir_ready` floor-band check |
-| `judge.py` | LOOK/CALC/RECON/PAUSE: look sampling → `_calc_plan` (kind/sign/why), `_commit_plan` enters the plan; hazard answers come from `recover.hazard_action` |
-| `contact.py` | WALL/BACK: `_can_reverse`, `_back_cmd`, `_tick_wall` (policy via `wall_first_move`), `_tick_backup` (raw hazard persistence → disable) |
-| `motion.py` | FWD/ESCAPE/TURN + stuck detection: speeds/blends, `_recover_stuck` (`recover.stuck_kind`/`stuck_flip`, failed-exit bench), escape steers to the latched full-circle exit (`recover.ExitSteer`; `exit_steering=false` = legacy fixed-sign spin), escape auto-sensitivity |
 
 ## For AI Agents
 
@@ -40,5 +28,3 @@ The wander autonomy: a 20 ms FSM (`wait forward pause look calc recon wall backu
 
 ### External
 - `rclpy.qos` (latched `/estop/state` subscription — label only; safety owns the e-stop decision).
-
-<!-- MANUAL: -->

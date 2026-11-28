@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-24 | Updated: 2026-09-24 -->
 
 # verify
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,17 +11,9 @@ Checks after install. They read identity, health, motors, and power. They do not
 
 | File | Description |
 |------|-------------|
-| `verify-pi.sh` | Wi-Fi, dashboard, and runtime checks on the Pi |
 | `verify-motors.sh` | UART probe. Refuses to run while the motor runtime cannot be shown down |
-| `verify-power.sh` | Power samples |
-| `device-readback.sh` | Runs `device_readback.py` beside this file |
 | `device_readback.py` | Secret-free JSON evidence |
 | `verify-from-windows.ps1` | Read-only peer check from Windows |
-| `validate-pinky-from-windows.ps1` | Windows wrapper around the Pi readback |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -52,5 +41,3 @@ Readback JSON does not include tokens or the environment file body.
 ### External
 
 - The installed robot tree under `/opt/rosy`
-
-<!-- MANUAL: -->

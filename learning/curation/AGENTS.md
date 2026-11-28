@@ -1,7 +1,6 @@
 # curation
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -42,5 +41,3 @@ Profile, owner, units, and camera identity stay as declared. Null stays null.
 ### External
 
 - Pinky raw verify uses the versions pinned in `pinky/requirements-raw.txt`.
-
-## Manual Notes

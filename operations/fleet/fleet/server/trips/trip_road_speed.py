@@ -68,7 +68,12 @@ class RoadSpeed:
         if getattr(live, "road_profile_key", None) != key:
             segs = [(row["edge_id"], row["forward"], row["s_from"], row["s_to"]) for row in live.segments]
             # Nav2 owns the acceleration from rest and the final pose controller.
-            table = speed_table(site, segs, curve_caps=TIGHT_CURVE_CAPS, start_mps=math.inf, stop_at_end=False)
+            # Live trip: a stop line crossed on the way is no stop; only the terminal one keeps its cap. A repeat
+            # trip has no terminal of its own (every lap crosses its places), so it keeps every stripe.
+            to = live.request.get("to")
+            terminal = None if live.repeat else ({to} if isinstance(to, str) else set())
+            table = speed_table(site, segs, curve_caps=TIGHT_CURVE_CAPS, start_mps=math.inf, stop_at_end=False,
+                                stop_place_ids=terminal)
             live.road_profile = table["rows"]
             live.road_profile_key = key
         rows = live.road_profile

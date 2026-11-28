@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # fleet
 
@@ -40,4 +39,3 @@ No ROS needed (`conftest.py` sets `sys.path`). Browser tests (`*_browser.py`) ar
 
 - `robots.yaml` maps `robot_id` to `RobotEndpoint(base_url, token)`; tokens are device-local (D-30).
 - `SlotAssigner` is a `Protocol` (greedy v1, swappable, FOR-002). `FormationSession` states: IDLE / ARMING / RUNNING / HOLDING / STOPPED; `pending_triggers` accrue while holding and block `resume()` until cleared.
-

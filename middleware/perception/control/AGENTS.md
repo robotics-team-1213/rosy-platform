@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # control import compatibility
 
