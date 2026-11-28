@@ -24,9 +24,9 @@ function shortId(id, kind) {
   const raw = String(id ?? "");
   if (kind === "mobile") return raw.match(/(\d+)$/)?.[1] || raw;
   if (kind === "arm") {
-    const idx = raw.lastIndexOf("_");
-    const seg = idx >= 0 ? raw.slice(idx + 1) : "";
-    return seg ? seg.toUpperCase() : raw;
+    const clean = raw.replace(/_follower$/i, "").replace(/_+$/g, "");
+    const idx = clean.lastIndexOf("_");
+    return idx >= 0 ? clean.slice(idx + 1).toUpperCase() : raw;
   }
   return raw;
 }

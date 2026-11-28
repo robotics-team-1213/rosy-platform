@@ -14,6 +14,7 @@ Shrink-only lists use `test/ratchet_lists.py` (new entry fails, stale warns).
 
 - Fix the layout, not the test. Exception tables are `key -> reason`; the reason is mandatory.
 - New package: `AGENTS.md`, a `harness.yaml` entry, `test/`, cross-package use declared in `package.xml`, and a `FOLDER_TO_PACKAGE` row if folder and package names differ.
+- File count (D-1090): `test_file_count_budget.py` caps tracked files per area; past a cap, delete or merge in the same area, or raise the cap with `Budget-Raise: <area> +N (why)` in the PR body.
 - Size (D-766 rev 2): a file over 600 lines (`.html`/`.css` 800, a test file 1,500) or a unit over 10,000 is split in the same commit as the growth or earlier; no verdict, no allowance. Each commit passes `python tools/harness/size_range.py main HEAD`; `tools/land.py` does not run it.
 - Ratchet rows (`size_ratchet.txt`, `size_units.txt`) only go down: set a shrunk file's row to the new count in the same change; delete it under the limit (`python test/architecture/test_module_structure.py` rewrites measured rows).
 - A raised or new row against the base is refused; without git history the test fails, never skips. A pure move renames the row with a count not above the old one.
