@@ -146,7 +146,7 @@ canvas[hidden] + .world-map-datum { display: none; }
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  background: var(--surface-canvas);
   color: var(--text-primary);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--body);
   text-align: start;
@@ -179,7 +179,12 @@ canvas[hidden] + .world-map-datum { display: none; }
 .world-card-meta { color: var(--text-secondary); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .world-card-state { font-family: var(--body); color: var(--text-secondary); }
 .world-card[data-status="live"] .world-card-state { color: var(--status-good); }
-.world-card[data-status="stalled"] .world-card-state { color: var(--status-crit); }
+.world-card[data-status="stalled"] .world-card-state {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--flag-danger-bg);
+  color: var(--flag-danger-ink);
+}
 .world-card[data-status="waiting"] .world-card-state { color: var(--status-warn); }
 .world-factory-stages { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .world-factory-timeline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }

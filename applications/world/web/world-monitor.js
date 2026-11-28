@@ -40,6 +40,7 @@ export function createWorldMonitor({
   let pollTimer;
   let inflight;
   let active = false;
+  const cardCache = new Map();
 
   function syncAdapterButtons() {
     for (const btn of adapterBtns) {
@@ -93,15 +94,44 @@ export function createWorldMonitor({
       ? allWorlds
       : allWorlds.filter((w) => w.adapter === selectedAdapter);
     if (!visibleWorlds.length) {
+      cardCache.clear();
       worldsStripEl.hidden = selectedAdapter === "all";
-      worldsStripEl.replaceChildren(...(worldsStripEl.hidden ? [] : [makeNode("span", "", "연결된 월드가 없습니다")]));
+      const cur = worldsStripEl.children ?? [];
+      if (worldsStripEl.hidden) {
+        if (cur.length) worldsStripEl.replaceChildren();
+      } else if (cur.length !== 1 || cur[0]?.tagName !== "SPAN") {
+        worldsStripEl.replaceChildren(makeNode("span", "", "연결된 월드가 없습니다"));
+      }
       updateParityStatus(null);
       return;
     }
     worldsStripEl.hidden = allWorlds.length <= 1 && selectedAdapter === "all";
+    const visibleIds = new Set(visibleWorlds.map((w) => w.world_id));
+    for (const cachedId of cardCache.keys()) {
+      if (!visibleIds.has(cachedId)) cardCache.delete(cachedId);
+    }
     const cards = visibleWorlds.map((w) => {
-      const btn = makeNode("button", "world-card");
-      btn.type = "button";
+      let entry = cardCache.get(w.world_id);
+      if (!entry) {
+        const btn = makeNode("button", "world-card");
+        btn.type = "button";
+        const head = makeNode("span", "world-card-head");
+        const title = makeNode("strong", "", "");
+        const st = makeNode("span", "world-card-state", "");
+        const meta = makeNode("span", "world-card-meta", "");
+        head.append(title, st);
+        btn.append(head, meta);
+        entry = { btn, title, st, meta, world: w };
+        btn.addEventListener("click", () => {
+          activeWorldId = entry.world.world_id;
+          renderStrip();
+          updateParityStatus(entry.world);
+          onSelectWorld?.({ worldId: entry.world.world_id, adapter: entry.world.adapter, world: entry.world });
+        });
+        cardCache.set(w.world_id, entry);
+      }
+      entry.world = w;
+      const { btn, title, st, meta } = entry;
       btn.dataset.worldId = w.world_id;
       btn.dataset.adapter = w.adapter;
       btn.dataset.status = w.status;
@@ -112,15 +142,8 @@ export function createWorldMonitor({
         ? w.world_id === activeWorldId
         : (selectedAdapter === "all" && w.world_id === "verified-replay");
       btn.setAttribute("aria-pressed", String(isSelected));
-
-      const head = makeNode("span", "world-card-head");
-      const title = makeNode("strong", "", w.world_id);
-      const st = makeNode(
-        "span",
-        "world-card-state",
-        `${ADAPTER_TITLE[w.adapter] ?? w.adapter} · ${STATUS_LABEL[w.status] ?? w.status}`,
-      );
-      head.append(title, st);
+      title.textContent = w.world_id;
+      st.textContent = `${ADAPTER_TITLE[w.adapter] ?? w.adapter} · ${STATUS_LABEL[w.status] ?? w.status}`;
 
       let line = "";
       if (w.safety?.estop === true) {
@@ -146,17 +169,20 @@ export function createWorldMonitor({
       if (!w.safety?.estop && w.fleet_summary && Number.isFinite(w.fleet_summary.online)) {
         line = `${line} · 온라인 ${w.fleet_summary.online}/${w.fleet_summary.total}대`;
       }
-      const meta = makeNode("span", "world-card-meta", line);
-      btn.append(head, meta);
-      btn.addEventListener("click", () => {
-        activeWorldId = w.world_id;
-        renderStrip();
-        updateParityStatus(w);
-        onSelectWorld?.({ worldId: w.world_id, adapter: w.adapter, world: w });
-      });
+      meta.textContent = line;
       return btn;
     });
-    worldsStripEl.replaceChildren(...cards);
+    const cur = worldsStripEl.children ?? [];
+    const orderChanged = cards.length !== cur.length || cards.some((el, idx) => cur[idx] !== el);
+    if (orderChanged) {
+      const activeEl = globalThis.document?.activeElement;
+      const focusedCard = activeEl?.closest?.(".world-card");
+      const focusedId = focusedCard && worldsStripEl.contains?.(focusedCard) ? focusedCard.dataset?.worldId : null;
+      worldsStripEl.replaceChildren(...cards);
+      if (focusedId && cardCache.has(focusedId)) {
+        cardCache.get(focusedId).btn.focus?.({ preventScroll: true });
+      }
+    }
     const activeObj = visibleWorlds.find((w) => w.world_id === activeWorldId)
       ?? allWorlds.find((w) => w.world_id === activeWorldId)
       ?? visibleWorlds[0];
