@@ -68,7 +68,7 @@ ui-button[kind="irreversible"]:not([disabled]):hover { border-color: var(--ink);
 ui-button:is([kind="primary"], [kind="irreversible"], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):not([disabled]):active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground); }
 ui-button[reason]:not([reason=""]) { display: inline-grid; grid-template-columns: auto auto; justify-content: center; align-items: center; row-gap: 0; }
 ui-button[reason]:not([reason=""]) > small[data-reason] { grid-column: 1 / -1; text-align: center; }
-ui-button[disabled][reason]:not([reason=""]) { color: var(--text-secondary); background: transparent; border-color: var(--surface-line); border-style: dashed; }
+ui-button[disabled][reason]:not([reason=""]) { color: var(--text-secondary); background: transparent; border-width: 1px; border-color: var(--surface-line); border-style: dashed; }
 ui-button > small[data-reason],
 ui-button[kind] > small[data-reason] { display: block; max-width: 100%; color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body); white-space: normal; }
 /* opt-in: 사유를 바깥 상태 줄이 대신 말하는 표면([data-reason-display="external"])은 버튼 안 사유 small을

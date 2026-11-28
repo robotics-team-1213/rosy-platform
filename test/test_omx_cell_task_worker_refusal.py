@@ -851,3 +851,51 @@ def test_stand_handoff_routing_normalization_zone_roi_and_non_dict_lease(tmp_pat
     lease_root.mkdir()
     (lease_root / "arm_b.json").write_text("[]", encoding="utf-8")
     assert ctt._can_reuse_worker_arm_session("arm_b", prep_dir=tmp_path, lease_dir=lease_root, expected_owner="w:1") is False
+
+
+# --- push (owner decision 2026-11-28): the worker releases it only on the measured displacement, and claims with "push" ---
+PUSH_EV = {"result": "pushed", "site": "belt", "measured": True, "commanded_mm": 10, "moved_mm": 9.5, "along_dir_mm": 9.0, "lateral_mm": 3.0}
+PUSH_MOTION = {"kind": "push", "site": "belt", "px": [300, 200], "dir": [1, 0], "mm": 10, "frame_seq": 1, "frame_sha256": "ab" * 32}
+
+
+def _run_push(tmp_path: Path, push, folded=True, task_verified=True):
+    import time
+
+    claims, posted = [], []
+    bound = {"handoff_lease_id": "lease-1", "task_id": "t-1", "tier": 1, "arm_id": "arm_b", "cell_id": "cell_ab",
+             "interlock_scope": "cell_internal", "src_site": "belt", "dst_site": "belt", "motion": PUSH_MOTION}
+
+    def _req(method: str, path: str, body):
+        if method == "GET":
+            return {"tasks": [{"task_id": "t-1", "cell_id": "cell_ab", "tier": 1}], "human_safety": {"active_estop": False, "human_detected": {}},
+                    "cells": {"cell_ab": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-1"}}}
+        if path.endswith("/claim"):
+            claims.append(body)
+            return {"claimed": True, "gate": {}, "handoff": bound}
+        posted.append(body)
+        return {"gate": {}, "task": {"status": body.get("phase", "RELEASED")}}
+
+    def _hw(h):
+        return {"arm": "arm_b", "events_count": 1, "measured_at": time.time(),
+                "stage_result": {"handoff_lease_id": "lease-1", "directive_id": "t-1", "arm_id": "arm_b", "task_verified": task_verified,
+                                 **({} if push is None else {"push": push})},
+                "stop_event": {"command": "stop", "ok": folded, "folded": folded}}
+
+    ctw.poll_and_execute_once(cfp.FleetModelPipeline(tmp_path / "pipe"), request_fn=_req, live_act_fn=_hw, prep_dir=tmp_path)
+    return claims, posted
+
+
+def test_the_worker_claims_with_the_push_capability_and_releases_a_measured_push(tmp_path: Path) -> None:
+    claims, posted = _run_push(tmp_path, PUSH_EV)
+    assert claims[0]["capabilities"] == ["motion", "push"]
+    assert posted[-1]["phase"] == "RELEASED" and posted[-1]["receipt"]["physical_completion"] is True
+
+
+@pytest.mark.parametrize("push,folded,task_verified", [
+    (None, True, True),  # exit 0 with no measured evidence
+    ({**PUSH_EV, "along_dir_mm": 0.0, "moved_mm": 3.0}, True, True), ({**PUSH_EV, "lateral_mm": 12.0, "moved_mm": 15.0}, True, True),
+    ({**PUSH_EV, "measured": False}, True, True), (PUSH_EV, False, True), (PUSH_EV, True, False),
+])
+def test_the_worker_aborts_a_push_without_measured_displacement_a_fold_or_its_own_verdict(tmp_path: Path, push, folded, task_verified) -> None:
+    _, posted = _run_push(tmp_path, push, folded, task_verified)
+    assert posted[-1]["phase"] == "ABORTED" and posted[-1]["receipt"]["physical_completion"] is False

@@ -221,3 +221,260 @@ def test_read_only_dock_prerequisites_report_target_and_cancel_while_peer_held()
                                 "scoped_cancel": "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED", "owner": None}
     assert result["reasons"] == ["CHARGE_BAY_TARGET_NOT_TAUGHT", "CHARGE_BAY_SCOPED_CANCEL_UNSUPPORTED"]
     assert result["robot_id"] == "rosy_42" and result["bay_id"] == "C1" and result["checked_at"] > 0
+
+
+def test_rear_bay_clearance_accepts_corridor_staging_arrival_and_rejects_inverted_dock_yaw():
+    import asyncio
+    import math
+    import pytest
+    from fleet.localization.map_binding import Fit
+    from fleet.server.goal_lease import GoalLeases
+    from fleet.server.trip_ports import TripError
+    from fleet.server.rear_bay_return import RearBayPort, rear_bay
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+
+    _, graph, _ = build_world_261026_site_map()
+    p2, c2 = graph.place_xy("P2"), graph.place_xy("C2")
+    # Robot stopped 0.11 m east of P2 along bar_32 (> bay_2 half-width 0.09 m, <= arrive_free_m 0.15 m).
+    staged = (p2[0] + 0.11, p2[1])
+
+    async def state():
+        return dict(pose=dict(zip(("x", "y"), staged)), velocity={"linear": 0., "angular": 0.},
+                    mode="IDLE", navigation="ARRIVED", line_follow={"mode": "OFF"},
+                    evidence={key: {"evidence": "fresh"} for key in ("pose", "velocity")})
+
+    clients = {"42": SimpleNamespace(state=state), "45": SimpleNamespace(state=lambda: state_far())}
+
+    async def state_far():
+        return dict(pose={"x": 9., "y": 9.}, velocity={"linear": 0., "angular": 0.},
+                    mode="IDLE", navigation="ARRIVED", line_follow={"mode": "OFF"},
+                    evidence={key: {"evidence": "fresh"} for key in ("pose", "velocity")})
+
+    fit = Fit(0., 0., 0., (.001,))
+    store = SimpleNamespace(map_bindings=SimpleNamespace(matching_fit=lambda *_: (fit, None),
+                            active=lambda _: {"binding_id": "binding"}),
+                            active=lambda: (graph.version, SimpleNamespace(map_id="site"), graph))
+    console = SimpleNamespace(robot_ids=("42", "45"), clients=lambda: clients, goal_leases=GoalLeases(0., clients),
+                             _named_stop_site_maps=store, _goal_busy=set(), _clearance_m=.15,
+                             _claim_blocker=lambda *args, **kw: (None, None))
+    runner = SimpleNamespace(_clock=lambda: 10., _store=store, bay_cable_inhibited=lambda _: False,
+                             config=SimpleNamespace(arrive_free_m=.15))
+    live = SimpleNamespace(graph=graph, view=dict(robot_id="42", map_version=graph.version,
+                                         detail={"nav2_binding_id": "binding"}))
+    port = RearBayPort(console)
+    asyncio.run(port.clearance(runner, live, clients["42"], rear_bay(graph, "C2"),
+                               {"x": c2[0], "y": c2[1], "yaw": math.pi / 2}, 0.32))
+    with pytest.raises(TripError, match="CHARGE_BAY_TAUGHT_POSE_MISMATCH"):
+        asyncio.run(port.clearance(runner, live, clients["42"], rear_bay(graph, "C2"),
+                                   {"x": c2[0], "y": c2[1], "yaw": -math.pi / 2}, 0.32))
+
+
+def test_rear_bay_waits_for_transient_staging_settle_before_docking(monkeypatch):
+    import asyncio
+    from uuid import uuid4
+    from fleet.server.rear_bay_return import RearBayPort, rear_bay
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+
+    _, graph, _ = build_world_261026_site_map()
+    sx, sy = graph.place_xy("P2")
+    boot, run = str(uuid4()), str(uuid4())
+    clock = [10.]
+    nav_state = ["NAVIGATING"]
+    vel = [{"linear": 0.004, "angular": 0.0}]
+    calls = []
+    owner = {"boot_id": boot, "owner_generation": 8, "owner_run_id": None}
+    op = {"kind": "dock", "boot_id": boot, "run_id": run, "phase": "RUNNING", "correlation_id": "plan-id"}
+
+    class Core:
+        async def _get(self, path):
+            if path.endswith("/types"):
+                return {"types": [{"name": "pink", "approach": "line", "staging_offset_m": .32}]}
+            return {"docks": [{"id": "bay_c2", "type": "pink", "map_id": "map42", "x": 1., "y": 2., "yaw": 0.}]}
+
+        async def state(self):
+            return {"map_id": "map42", "map_grid_id": "grid42", "velocity": vel[0],
+                    "navigation": nav_state[0], "line_follow": {"mode": "OFF"}}
+
+        async def _post(self, path, body):
+            calls.append((path, body))
+            return {"operation": op}
+
+        async def docking_status(self, run_id=None):
+            return {"owner": owner, "operation_cancel_supported": True}
+
+    async def pose(*args):
+        return SimpleNamespace(x=sx, y=sy, state="LOCALIZED", map_id="site")
+
+    async def no_cam(_):
+        return None
+
+    runner = SimpleNamespace(_progress_pose=pose, map_pose=no_cam,
+                             config=SimpleNamespace(arrive_free_m=.15),
+                             _check_human_hold=lambda: None, _graph_for=lambda _: graph, _save=lambda _: None,
+                             _clock=lambda: clock[0], bay_cable_inhibited=lambda _: False)
+    park = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
+    live = SimpleNamespace(open=True, graph=graph, view={"robot_id": "rosy_42", "state": "running", "trip_id": "plan-id",
+                                                         "map_version": 394, "detail": {"parking_handoff": park}})
+    core = Core()
+    port = RearBayPort(SimpleNamespace(clients=lambda: {"rosy_42": core}, goal_leases=SimpleNamespace(stop_token=lambda _: 1)))
+
+    async def clear(*args):
+        return await core.state(), ("map42", [(sx, sy), graph.place_xy("C2")]), lambda: None
+
+    async def approved(*args):
+        return await pose(), "binding"
+
+    monkeypatch.setattr("fleet.server.rear_bay_return.read_precision_pose", approved)
+    port.clearance = clear
+
+    asyncio.run(port.step(runner, live))
+    assert (park["phase"], park["reason"]) == ("waiting_for_clearance", "CHARGE_BAY_STAGING_STOP_UNVERIFIED")
+    assert calls == []
+
+    clock[0] += 2.0
+    nav_state[0] = "ARRIVED"
+    vel[0] = {"linear": 0.003, "angular": -0.005}
+    asyncio.run(port.step(runner, live))
+    assert park["phase"] == "docking" and len(calls) == 1
+
+    # Exceeding the 10 s settle wait stops the trip via TripSteps._step (not swallowed as waiting_for_clearance).
+    from fleet.server.trips.trip_steps import TripSteps
+
+    park2 = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
+    stopped = []
+    saved = []
+
+    class StepRig(TripSteps):
+        rear_bay_port = port
+        config = SimpleNamespace(arrive_free_m=.15)
+
+        def _clock(self):
+            return clock[0]
+
+        async def _call(self, coro):
+            return await coro
+
+        def _save(self, lv):
+            saved.append(lv.view["detail"]["parking_handoff"]["phase"])
+
+        async def _stop(self, lv, state, reason, detail=None, *, halt_free=True):
+            lv.open = False
+            lv.view.update(state=state, reason=reason)
+            stopped.append((state, reason))
+
+    live2 = SimpleNamespace(open=True, graph=graph, view={"robot_id": "rosy_42", "state": "running", "trip_id": "plan-id",
+                                                          "map_version": 394, "detail": {"parking_handoff": park2}})
+    rig = StepRig()
+    nav_state[0] = "NAVIGATING"
+    vel[0] = {"linear": 0.004, "angular": 0.0}
+    asyncio.run(rig._step(live2))
+    assert park2["phase"] == "waiting_for_clearance" and stopped == []
+    clock[0] += 11.0
+    asyncio.run(rig._step(live2))
+    assert stopped == [("stopped", "CHARGE_BAY_STAGING_STOP_UNVERIFIED")]
+    assert not live2.open and park2["phase"] != "waiting_for_clearance"
+
+
+def _reframe_world(site, *, fit_yaw=0., tx=0., ty=0., stale=True):
+    import asyncio
+    from fleet.localization.map_binding import Fit
+    from fleet.server.rear_bay_return import RearBayPort
+    posts = []
+    class Core:
+        async def _post(self, path, body):
+            posts.append((path, body))
+            return {}
+    fit = Fit(fit_yaw, tx, ty, (.001,))
+    maps = SimpleNamespace(matching_fit=lambda *_: (fit, ""), active=lambda _: {"binding_id": "b2"})
+    runner = SimpleNamespace(_store=SimpleNamespace(map_bindings=maps, active=lambda: (1, SimpleNamespace(map_id="site"))))
+    live = SimpleNamespace(view={"robot_id": "rosy_42", "map_version": 1})
+    snapshot = {"robot_id": "rosy_42", "map_id": "map", "map_grid_id": "grid_new", "map_generation": 4}
+    meta = {"map_epoch": "grid_old", "binding_id": "b1", "commissioned_grid_id": "g_old", **({"site_pose": site} if site else {})}
+    target = {"id": "bay_c2", "x": -.19, "y": .47, "yaw": -1.5708, "map_id": "grid_old", "metadata": meta}
+    done = asyncio.run(RearBayPort(SimpleNamespace()).reframe(runner, live, Core(), snapshot, target))
+    return done, posts
+
+
+def test_same_frame_map_swap_retags_the_bay_dock_without_moving_it():
+    done, posts = _reframe_world({"x": -.19, "y": .47, "yaw": -1.5708})
+    assert done and posts == [("/api/v1/docking/docks/bay_c2/reframe", {
+        "robot_id": "rosy_42", "map_id": "map", "map_grid_id": "grid_new", "map_generation": 4,
+        "expected_map_id": "grid_old", "expected_grid_id": "g_old", "binding_id": "b1", "new_binding_id": "b2"})]
+
+
+@pytest.mark.parametrize("site, kw", [
+    ({"x": -.19, "y": .47, "yaw": -1.5708}, {"tx": .05}),                   # shifted binding: another frame
+    ({"x": -.19, "y": .47, "yaw": -1.5708}, {"fit_yaw": .3}),               # rotated binding
+    ({"x": -.19, "y": .55, "yaw": -1.5708}, {}),                            # dock not where the site says
+    ({"x": -.19, "y": .47, "yaw": 0.}, {}),                                 # heading differs
+    (None, {}),                                                             # no site pose recorded
+])
+def test_a_dock_in_another_frame_is_never_retagged(site, kw):
+    done, posts = _reframe_world(site, **kw)
+    assert not done and posts == []
+
+
+@pytest.mark.parametrize("route_missing", [False, True])
+def test_step_retags_a_stale_bay_dock_then_docks_or_stays_unverified(monkeypatch, route_missing):
+    import asyncio
+    from uuid import uuid4
+    from fleet.localization.map_binding import Fit
+    from fleet.swarm.transport import RobotApiError
+    from fleet.server.rear_bay_return import RearBayPort, rear_bay
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    _, graph, _ = build_world_261026_site_map()
+    sx, sy = graph.place_xy("P2")
+    boot = str(uuid4())
+    owner = {"boot_id": boot, "owner_generation": 8, "owner_run_id": None}
+    dock = {"id": "bay_c2", "type": "pink", "map_id": "grid_old", "x": -.19, "y": .47, "yaw": -1.5708,
+            "metadata": {"map_epoch": "grid_old", "binding_id": "b1", "site_pose": {"x": -.19, "y": .47, "yaw": -1.5708}}}
+    posts = []
+    op = {"kind": "dock", "boot_id": boot, "run_id": str(uuid4()), "phase": "RUNNING", "correlation_id": "plan-id"}
+    class Core:
+        async def _get(self, path):
+            if path.endswith("/types"):
+                return {"types": [{"name": "pink", "approach": "line", "staging_offset_m": .2}]}
+            return {"docks": [dock]}
+        async def state(self):
+            return {"map_id": "map", "map_grid_id": "grid_new", "map_generation": 4, "robot_id": "rosy_42",
+                    "velocity": {"linear": 0., "angular": 0.}, "navigation": "ARRIVED", "line_follow": {"mode": "OFF"}}
+        async def docking_status(self, run_id=None):
+            return {"owner": owner, "operation_cancel_supported": True}
+        async def _post(self, path, body):
+            posts.append(path)
+            if path.endswith("/reframe"):
+                if route_missing:
+                    raise RobotApiError("rosy_42", 404, "HTTP_404", "not found")
+                dock.update(map_id="map", metadata={**dock["metadata"], "map_epoch": "map", "binding_id": body["new_binding_id"]})
+                return {}
+            return {"operation": op}
+    maps = SimpleNamespace(matching_fit=lambda *_: (Fit(0., 0., 0., (.001,)), ""), active=lambda _: {"binding_id": "b2"})
+    clock = [10.]
+    async def pose(*args):
+        return SimpleNamespace(x=sx, y=sy, state="LOCALIZED", map_id="site")
+    async def map_pose(_):
+        return None
+    runner = SimpleNamespace(_progress_pose=pose, map_pose=map_pose, config=SimpleNamespace(arrive_free_m=.15),
+                             _check_human_hold=lambda: None, _graph_for=lambda _: graph, _save=lambda _: None,
+                             _clock=lambda: clock[0], bay_cable_inhibited=lambda _: False,
+                             _store=SimpleNamespace(map_bindings=maps, active=lambda: (1, SimpleNamespace(map_id="site"))))
+    park = dict(rear_bay(graph, "C2"), phase="staging_confirmed")
+    live = SimpleNamespace(open=True, graph=graph, view={"robot_id": "rosy_42", "state": "running", "trip_id": "plan-id",
+                           "map_version": 1, "detail": {"parking_handoff": park}})
+    client = Core()
+    port = RearBayPort(SimpleNamespace(clients=lambda: {"rosy_42": client}, goal_leases=SimpleNamespace(stop_token=lambda _: 1)))
+    async def clear(*args):
+        return await client.state(), ("map", [(sx, sy), graph.place_xy("C2")]), lambda: None
+    async def approved(*args):
+        return await pose(), "b2"
+    monkeypatch.setattr("fleet.server.rear_bay_return.read_precision_pose", approved)
+    port.clearance = clear
+    asyncio.run(port.step(runner, live))
+    if route_missing:   # the robot has no reframe route: refused as before, no exception
+        assert (park["phase"], park["reason"]) == ("waiting_for_commission", "CHARGE_BAY_TARGET_FRAME_UNVERIFIED")
+        assert posts == ["/api/v1/docking/docks/bay_c2/reframe"]
+        return
+    assert (park["phase"], park["reason"]) == ("waiting_for_commission", "CHARGE_BAY_DOCK_REFRAMED")
+    clock[0] += 2
+    asyncio.run(port.step(runner, live))
+    assert posts == ["/api/v1/docking/docks/bay_c2/reframe", "/api/v1/docking/dock"] and park["phase"] == "docking"

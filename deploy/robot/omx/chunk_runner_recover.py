@@ -345,6 +345,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
             return space.reserve(arm, lane, ttl_s=360.0)
 
         hold_reason = None if args.supervised else incident_hold_reason(arm)
+        has_depth = bool(((config.get("cameras") or {}).get("top") or {}).get("d435_factory"))
         result = recover_fn(
             cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
             release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n, ctx: choices.ranked_in_context(choice_key, n, ctx),
@@ -353,6 +354,7 @@ def run_fold_session_cli(args, recover_fn, schema: str) -> int:
             bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True,
             held_plan=lambda s: recovery_park_path(library, s, library["fps"]), library_sha256=digest(library),
             hold_reason=hold_reason, rehome=lambda c: cell_unwedge.rehome_before_work(c, library, config, required=True),
+            guarded_park_fallback=bool(args.supervised and not has_depth),
         )
         if "state_start" in result:  # records only: nothing decides on the start PWM yet
             import load_predict

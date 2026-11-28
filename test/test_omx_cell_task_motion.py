@@ -152,6 +152,8 @@ def _exec(tmp_path, monkeypatch, handoff, client_result=None, **fake):
     client = FakeClient(client_result, **fake)
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: pytest.fail("a free pick must not start its own cell_auto_pick"))
     monkeypatch.setattr(cte, "run_job", lambda h, job, params: ctm.run_job(h, job, params, client=client))
+    monkeypatch.setattr(cte, "run_push", lambda *a, **k: ctm.run_push(*a, **k, client=client))  # a push goes through the same client
+    monkeypatch.setattr(ctm, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
     return cte.execute_guarded_cell_task(handoff, prep_dir=tmp_path), client
 
 
@@ -177,10 +179,88 @@ def test_a_failed_pick_is_not_a_verified_task(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("handoff", [
-    {**HANDOFF, "motion": PUSH}, {**HANDOFF, "motion": {"kind": "area_xyz"}}, {**HANDOFF, "motion": "free_pick"},
-    {**HANDOFF, "cell_id": "cell_s"},
+    {**HANDOFF, "motion": {"kind": "area_xyz"}}, {**HANDOFF, "motion": "free_pick"}, {**HANDOFF, "motion": {**PUSH, "kind": "Push"}},
+    {**HANDOFF, "cell_id": "cell_s"}, {**HANDOFF, "cell_id": "cell_s", "motion": PUSH},
 ])
-def test_a_push_or_unknown_motion_never_reaches_the_cell(tmp_path, monkeypatch, handoff):
+def test_an_unknown_motion_or_a_motion_outside_the_ab_cell_never_reaches_the_cell(tmp_path, monkeypatch, handoff):
     out, client = _exec(tmp_path, monkeypatch, handoff)
     assert out["error"] == "CELL_MOTION_NOT_EXECUTABLE" and client.calls == []
     assert out["stop_event"] == {"command": "stop", "ok": False, "folded": False}
+
+
+# --- push (owner decision 2026-11-28): runs through the cell job API; completes only on the job's own measured displacement ---
+PUSH_HANDOFF = {**HANDOFF, "motion": PUSH}
+DISP = {"measured": True, "commanded_mm": 10, "moved_mm": 9.5, "along_dir_mm": 9.0, "lateral_mm": 3.0}
+PUSHED = {"result": "pushed", "site": "belt", "park": PARK, "displacement": DISP}
+EVIDENCE = {"result": "pushed", "site": "belt", "measured": True, "commanded_mm": 10, "moved_mm": 9.5, "along_dir_mm": 9.0, "lateral_mm": 3.0}
+
+
+def test_the_worker_runs_a_push_through_the_job_api_with_exactly_the_allowed_params_and_reports_the_measured_displacement(tmp_path, monkeypatch):
+    import cell_job_worker
+
+    out, client = _exec(tmp_path, monkeypatch, PUSH_HANDOFF, client_result=PUSHED)
+    (job, params, key), = client.calls
+    assert job == "push" and set(params) == cell_job_worker.PUSH_KEYS and key == ctm.idempotency_key(PUSH_HANDOFF)
+    assert params == {"arm": "arm_s", "config": "cell-auto-arm-s-live.json", "site": "belt", "roi": params["roi"], "catalog": params["catalog"],
+                      "px_x": 300, "px_y": 200, "dir_x": 1, "dir_y": 0, "mm": 10}
+    assert out["stage_result"]["task_verified"] is True and out["stage_result"]["push"] == EVIDENCE
+    assert out["stop_event"]["ok"] is True and out["stop_event"]["folded"] is True and "error" not in out
+    assert out["commissioning"] is False and "place" not in out["stage_result"]
+
+
+@pytest.mark.parametrize("result,exit_code", [
+    ({"result": "pushed", "site": "belt", "park": PARK}, 0),  # exit 0, no measured displacement at all
+    ({**PUSHED, "displacement": {**DISP, "measured": False, "along_dir_mm": None}}, 0),
+    ({**PUSHED, "displacement": {**DISP, "moved_mm": 0.3, "along_dir_mm": 0.2, "lateral_mm": 0.2}}, 0),  # the box did not move
+    ({**PUSHED, "displacement": {**DISP, "moved_mm": 11.7, "along_dir_mm": 6.0, "lateral_mm": 10.0}}, 0),  # large lateral error
+    (PUSHED, 1),  # good evidence but the job failed
+    ({**PUSHED, "result": "contact"}, 1), ({**PUSHED, "result": "refused: path not clear"}, 1),
+])
+def test_a_push_without_measured_displacement_is_failed_never_released(tmp_path, monkeypatch, result, exit_code):
+    out, _ = _exec(tmp_path, monkeypatch, PUSH_HANDOFF, client_result=result, exit_code=exit_code)
+    assert out["stage_result"]["task_verified"] is False and out["error"].startswith("PUSH_NOT_VERIFIED:")
+    assert out["stop_event"]["ok"] is False and out["stop_event"]["folded"] is False
+
+
+def test_a_verified_push_that_did_not_end_folded_is_not_released(tmp_path, monkeypatch):
+    out, _ = _exec(tmp_path, monkeypatch, PUSH_HANDOFF, client_result={**PUSHED, "park": {**PARK, "settled": False}})
+    assert out["error"] == "FOLD_READBACK_MISSING" and out["stop_event"]["folded"] is False
+    monkeypatch.setattr(ctm, "measured_fold", lambda arm, prep, now=None: {"folded": False, "state": None, "fresh": False})
+    proc = SimpleNamespace(stdout=json.dumps(PUSHED), returncode=0)
+    monkeypatch.setattr(ctm, "run_job", lambda *a, **k: (proc, None))
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": HOME}), encoding="utf-8")
+    res = ctm.run_push(PUSH_HANDOFF, PUSH, arm_id="arm_s", cfg=tmp_path / "c.json", cfg_data={"plan_path": str(tmp_path / "grasp-plan.json")},
+                       cat=tmp_path / "k.json", roi=(0, 0, 1, 1), site="belt", prep_dir=tmp_path)
+    assert res["error"] == "FOLD_READBACK_MISSING" and res["stop_event"]["ok"] is False
+
+
+def test_a_cell_refusal_of_a_push_aborts_with_its_code(tmp_path, monkeypatch):
+    out, client = _exec(tmp_path, monkeypatch, PUSH_HANDOFF, start_error=CellJobError(403, "WORKER_SCOPE_FORBIDDEN"))
+    assert out["error"].startswith("CELL_JOB_REFUSED:403:") and out["stage_result"]["task_verified"] is False and len(client.calls) == 1
+    assert out["stop_event"] == {"command": "stop", "ok": False, "folded": False}
+
+
+def test_a_push_never_starts_its_own_subprocess_or_reads_a_pick_zone(tmp_path, monkeypatch):
+    out, _ = _exec(tmp_path, monkeypatch, PUSH_HANDOFF, client_result=PUSHED)  # _exec fails the test if subprocess.run is called
+    assert "verification" not in out["stage_result"] and "source_clearance" not in out["stage_result"]
+
+
+@pytest.mark.parametrize("change,ok", [
+    ({}, True), ({"along_dir_mm": 5.0, "moved_mm": 5.83, "lateral_mm": 3.0}, True),  # exactly half the commanded distance
+    ({"along_dir_mm": 4.9, "moved_mm": 5.7, "lateral_mm": 3.0}, False), ({"along_dir_mm": 18.0, "moved_mm": 18.25, "lateral_mm": 3.0}, True),
+    ({"along_dir_mm": 18.1, "moved_mm": 18.35, "lateral_mm": 3.0}, False), ({"lateral_mm": 6.0, "moved_mm": 10.82}, True),
+    ({"lateral_mm": 6.1, "moved_mm": 10.88}, False), ({"lateral_mm": -3.0}, False), ({"along_dir_mm": -9.0, "moved_mm": 9.5}, False),
+    ({"moved_mm": 30.0}, False), ({"commanded_mm": 12}, False), ({"measured": 1}, False), ({"measured": "true"}, False),
+    ({"result": "contact"}, False), ({"site": ""}, False), ({"site": None}, False), ({"along_dir_mm": True}, False),
+    ({"along_dir_mm": float("nan")}, False), ({"lateral_mm": float("inf")}, False), ({"extra": 1}, False),
+])
+def test_push_evidence_is_accepted_only_in_exact_shape_and_within_the_thresholds(change, ok):
+    assert ctm.push_evidence_ok(PUSH, {**EVIDENCE, **change}) is ok
+    assert ctm.push_evidence_ok(PUSH, {k: v for k, v in EVIDENCE.items() if k != "lateral_mm"}) is False
+    assert ctm.push_evidence_ok(PUSH, None) is False and ctm.push_evidence_ok(PUSH, "pushed") is False
+
+
+def test_the_push_thresholds_are_pinned_to_the_numbers_fleet_pins_too():
+    """Fleet (operations/fleet/test/test_cell_motion_tasks.py) pins the same literals; the two packages cannot import each other."""
+    assert (ctm.PUSH_ALONG_MIN_FRAC, ctm.PUSH_ALONG_MAX_EXTRA_MM, ctm.PUSH_LATERAL_MAX_MM) == (0.5, 3.0, 6.0)
+    assert ctm.PUSH_EVIDENCE_KEYS == {"result", "site", "measured", "commanded_mm", "moved_mm", "along_dir_mm", "lateral_mm"}

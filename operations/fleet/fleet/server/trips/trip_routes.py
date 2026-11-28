@@ -354,6 +354,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
     runner.rear_bay_port = RearBayPort(console, (*runner.halts.restarted, *runner.halts.gave_up))
     runner.halts.dock_stop = runner.rear_bay_port.halt
     app.state.trip_plan = plan
+    from fleet.server.trip_reissue import TripReissue
+    app.state.trip_reissue = TripReissue(runner, plan)   # D-1086: a non-hazard end is planned and started again
 
     @app.get("/api/fleet/robots/{robot_id}/bays/{bay_id}/dock-prerequisites", dependencies=read_guard, tags=["fleet"])
     async def dock_prerequisites(robot_id: str, bay_id: str) -> dict:

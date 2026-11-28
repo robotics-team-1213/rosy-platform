@@ -90,7 +90,7 @@ def _release_observer(arm: str) -> None:
         pass
 
 
-def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=None) -> tuple[bool, list[dict], str | None]:
+def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=None, rows_out=None) -> tuple[bool, list[dict], str | None]:
     if read_fn is None and (not device or not Path(device).exists()):
         return False, [{"error": "follower device unresolved or missing"}], "refused_hw_probe_unavailable"
     import register_probe
@@ -123,7 +123,28 @@ def _check_hw_clean(arm: str, device: str | None, *, read_fn=None, stopped_out=N
             if stopped_out is not None:
                 stopped_out.clear()
         return False, bad, "refused_hw_error"
+    if rows_out is not None:
+        rows_out.extend(rows)
     return True, [], None
+
+
+def _release_residual_torque(arm: str, device: str | None, library_path: Path, out_dir: Path) -> dict:
+    """Release residual folded torque and restore baseline caps before opening the session wrapper."""
+    import cell_torque_off_folded as tof
+    import joint_tune
+    import record_session
+
+    lib_path = Path(library_path).expanduser()
+    lib = tof._read_json(lib_path)
+    if tof.fold_basis(lib) == "coarse":  # match cell_torque_off_folded.main: never silently fall back to coarse before cutting torque
+        raise tof.Refused("LIBRARY_UNUSABLE", f"{lib_path}: no usable park/home/standby pose")
+    open_bus = lambda: joint_tune.SerialBus(device, 0)  # noqa: E731
+    session = record_session.Session(open_bus=lambda _which: open_bus(), systemctl=lambda *a: "", run=None, log=lambda **k: None)
+    return tof.release(
+        arm, device, open_bus=open_bus, lock=joint_tune.session_lock, session=session,
+        calibration=tof._read_json(tof.CAL_DIR / f"{arm}_follower.json"), baseline=tof.run_baseline,
+        out_dir=out_dir, library=lib,
+    )
 
 
 def _write_out(path: Path, payload: dict) -> None:
@@ -134,11 +155,13 @@ def _write_out(path: Path, payload: dict) -> None:
 
 
 def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=None, token_fn=None,
-                  live_fn=None, wait_sess_fn=None, lease_status_fn=None, now=time.time, sleep=time.sleep) -> tuple[int, dict]:
+                  live_fn=None, wait_sess_fn=None, lease_status_fn=None, torque_off_fn=None,
+                  now=time.time, sleep=time.sleep) -> tuple[int, dict]:
     import cell_arm_lease
     import cell_auto_fold as af
     from cell_job_spec import SESSION
     from cell_recovery_plan import wait_session_json
+    import cell_torque_off_folded as tof
     import omx_incident
     import omx_incident_auto
 
@@ -183,7 +206,8 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
             return 2, res
 
     stopped_obs: list[bool] = []
-    hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn, stopped_out=stopped_obs)
+    hw_rows: list[dict] = []
+    hw_ok, bad, refuse_reason = _check_hw_clean(args.arm, device, read_fn=read_fn, stopped_out=stopped_obs, rows_out=hw_rows)
     if not hw_ok:
         res = {"result": refuse_reason or "refused_hw_error", "arm": args.arm, "device": device, "bad_motors": bad}
         _write_out(out_path, res)
@@ -194,7 +218,19 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
             _release_observer(args.arm)
             stopped_obs.clear()
 
+    residual_cleared = False
     try:
+        if any(bool(r.get("torque_enabled") or r.get("torque")) for r in hw_rows):
+            try:
+                (torque_off_fn or _release_residual_torque)(args.arm, device, args.library, out_path.parent / f"baseline-{args.arm}-{int(now())}")
+                residual_cleared = True
+            except tof.Refused as exc:
+                _release_if_paused()
+                reason = "refused_residual_torque_extended" if exc.code == "NOT_FOLDED" else f"refused_residual_torque_{exc.code.lower()}"
+                res = {"result": reason, "arm": args.arm, "device": device, "reason_code": exc.code, "error": str(exc)}
+                _write_out(out_path, res)
+                return exc.exit_code, res
+
         st = (status_fn or omx_incident.status)(args.arm)
         ids = list(st.get("incident_ids") or [])
         if len(ids) > args.max_incidents:
@@ -216,6 +252,8 @@ def run_safe_home(args, *, read_fn=None, status_fn=None, clear_fn=None, run_fn=N
         started = now()
         proc = (run_fn or subprocess.run)([wrapper, *fold_cmd], env=env, timeout=3600)
         out = _read_out(proc, "session_start_failed")
+        if residual_cleared:
+            out["residual_torque_cleared"] = True
         if proc.returncode != 0 or out.get("result") != "folded":
             _release_if_paused()
             return (proc.returncode or 3), out

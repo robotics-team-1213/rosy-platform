@@ -160,9 +160,9 @@ def test_led_track_feeds_the_monitor_when_the_map_pose_is_not_localized():
     monitor = LaneComplianceMonitor(lambda: ["led", "map"], poses=poses, identity=identity,
                                     site_maps=Maps((1, None, GRAPH, None)), config=LaneComplianceConfig(persist_n=1))
     asyncio.run(monitor.tick())
-    view = monitor.view("led")                 # still: nearest arc, no heading gate
-    assert (view["pose_source"], view["heading_source"], view["level"]) == ("led_track", "none", ACT)
-    assert view["pose_state"] == "UNKNOWN" and view["margin_m"] < 0
+    view = monitor.view("led")                 # still: nearest arc, no heading gate, not judged (D-1084)
+    assert (view["pose_source"], view["heading_source"], view["level"]) == ("led_track", "none", OK)
+    assert view["pose_state"] == "UNKNOWN" and view["margin_m"] < 0 and view["exempt"] == "still"
     assert monitor.view("map")["pose_source"] == "map_pose"
     poses.moving.add("led")
     identity.tracks["led"] = track(1.03, 0.15)    # blob jitter inside track_heading_min_m: no heading
@@ -200,7 +200,7 @@ def test_a_skipped_camera_frame_keeps_the_motion_heading_and_odom_must_say_movin
 def test_switching_pose_source_restarts_the_persistence_counts():
     unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
     identity = Identity({"r": track(1.0, 0.15)})
-    poses = TrackPoses({"r": at(0.15)})                      # over the edge on the map pose
+    poses = TrackPoses({"r": at(0.15)}, moving={"r"})        # over the edge on the map pose, driving
     monitor = LaneComplianceMonitor(lambda: ["r"], poses=poses, identity=identity,
                                     site_maps=Maps((1, None, GRAPH, None)), config=LaneComplianceConfig(persist_n=3))
     for _ in range(2):

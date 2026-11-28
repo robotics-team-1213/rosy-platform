@@ -22,7 +22,7 @@ import cell_site_target
 from cell_route_check import pick_site
 from cell_task_act import plan_act_policy_task
 from cell_task_act_run import execute_act_policy_task
-from cell_task_motion import free_pick_request, run_job
+from cell_task_motion import free_pick_request, run_job, run_push
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 _DEFAULT_URLOPEN = urlopen
@@ -215,8 +215,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         return {"arm": arm_id, "error": f"ARM_INCIDENT_HELD:{hold.get('reason')}",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
     motion = handoff.get("motion")
-    if motion is not None and not (isinstance(motion, dict) and motion.get("kind") == "free_pick" and handoff.get("cell_id") == "cell_ab"):
-        return {"arm": arm_id, "error": "CELL_MOTION_NOT_EXECUTABLE",  # a push is propose-only: its completion check and approval rule are not decided
+    if motion is not None and not (isinstance(motion, dict) and motion.get("kind") in ("free_pick", "push") and handoff.get("cell_id") == "cell_ab"):
+        return {"arm": arm_id, "error": "CELL_MOTION_NOT_EXECUTABLE",  # an unknown motion kind, or a motion outside the A/B cell
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
     wrapper, cfg, cat, default_roi, default_src = _arm_run_spec(arm_id, prep_dir)
     if handoff.get("execution_mode") == "act_policy":
@@ -265,6 +265,9 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         return {"arm": arm_id, "error": "ROUTE_DEPTH_INPUTS_MISSING", "stop_event": {"command": "stop", "ok": False, "folded": False}}
     src_roi = roi
     omx_dir = Path(__file__).resolve().parent
+    if motion is not None and motion.get("kind") == "push":  # owner decision 2026-11-28: the cell job API pushes, the job's measured displacement completes it
+        return run_push(handoff, motion, arm_id=arm_id, cfg=cfg, cfg_data=cfg_data, site=src, roi=roi, prep_dir=prep_dir,
+                        cat=cat if cat.is_file() else omx_dir / "object-catalog.example.json")
     target = (cfg_data.get("sites") or {}).get(src_site, {}).get("dock_target_arm_xy_m")
     if target is not None:  # camera only, before any arm command: off the dock target -> the vehicle re-parks
         seen = source_clearance(cfg, cat if cat.is_file() else omx_dir / "object-catalog.example.json", roi, src_site)

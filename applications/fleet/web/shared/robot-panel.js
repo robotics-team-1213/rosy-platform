@@ -137,7 +137,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
   let activeStop = null;
   let closing = false;
   const sectionMap = new Map();
-  let jumpsNav = null;
+  let jumpsNav = null, activeJump = null;
   let footerMode = null;
   let footerNoteEl = null;
   locateBtn.addEventListener("click", () => activeLocate?.());
@@ -197,6 +197,11 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
     return {wrapper: section, headingEl};
   }
 
+  function markActiveJump(key) {
+    activeJump = key;
+    if (!jumpsNav) return;
+    for (const b of jumpsNav.children) patchAttr(b, "aria-current", b.dataset.jumpSection === key ? "true" : null);
+  }
   function syncJumps(presentSections) {
     const jumpTargets = JUMP_SPECS.filter(([key]) => presentSections.has(key));
     const sig = jumpTargets.map(([key]) => key).join(",");
@@ -204,24 +209,22 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
     jumpsNav?.remove();
     jumpsNav = null;
     if (!jumpTargets.length) return;
-    jumpsNav = document.createElement("nav");
-    jumpsNav.className = "robot-panel-jumps";
+    jumpsNav = Object.assign(document.createElement("nav"), { className: "robot-panel-jumps" });
     jumpsNav.dataset.jumpSig = sig;
     jumpsNav.setAttribute("aria-label", "패널 섹션 바로가기");
     for (const [key, label] of jumpTargets) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "robot-panel-jump";
+      const btn = Object.assign(document.createElement("button"), { type: "button", className: "robot-panel-jump", textContent: label });
       btn.dataset.jumpSection = key;
-      btn.textContent = label;
       btn.addEventListener("click", () => {
         const target = body.querySelector(`[data-section="${key}"]`);
         if (!target) return;
         if (target.tagName === "DETAILS") target.open = true;
+        markActiveJump(key);
         target.scrollIntoView?.({block: "nearest"});
       });
       jumpsNav.append(btn);
     }
+    markActiveJump(presentSections.has(activeJump) ? activeJump : jumpTargets[0][0]);
     root.insertBefore(jumpsNav, body);  // fixed slot between head and body: the body scrolls under it, not behind it
   }
 
@@ -242,7 +245,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
       body.replaceChildren();
       sectionMap.clear();
       jumpsNav?.remove();
-      jumpsNav = null;
+      jumpsNav = activeJump = null;
       foot.replaceChildren();
       foot.hidden = true;
       footerMode = null;
@@ -310,7 +313,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, onCamera
       body.replaceChildren();
       sectionMap.clear();
       jumpsNav?.remove();
-      jumpsNav = null;
+      jumpsNav = activeJump = null;
       body.scrollTop = 0;
     }
 

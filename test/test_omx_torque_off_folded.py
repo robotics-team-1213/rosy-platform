@@ -211,3 +211,22 @@ def test_main_keeps_the_torque_off_result_when_the_release_raises(tmp_path, caps
                   calibration=CAL, release=boom)
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert rc == 0 and out["ok"] is True and out["incident_release"]["cleared"] is False and "fleet down" in out["incident_release"]["why"]
+
+
+def test_rotated_wrist_roll_on_folded_arm_releases_torque_while_extended_body_refuses():
+    lib = {"chunks": {"home": [[0.0, -58.0, 50.0, 50.0, -5.0, 58.1]]}}
+    folded_rolled = [2048, 828, 3000, 3000, 3116, 2000]  # pan~2.4, lift~-58.6, elbow~50, flex~50, roll~+55.8
+    state = motors(folded_rolled, torque=1, pwm=20)
+    bus = Bus(state)
+    session = record_session.Session(open_bus=lambda _w: bus, systemctl=lambda *a: "", run=None, log=lambda **k: None)
+    res = job.release("arm_s", "/dev/serial/by-id/x", open_bus=lambda: bus, lock=lambda _a: Guard(),
+                      session=session, calibration=CAL, baseline=lambda _d, _o: 0, out_dir=Path("o"), library=lib)
+    assert res["folded_after"] is True and all(v["torque"] == 0 for v in res["after"].values())
+
+    extended_flex = [2048, 828, 3000, 1800, 2000, 2000]  # wrist_flex ~ -10 (outside library 50 +/- 12)
+    ebus = Bus(motors(extended_flex, torque=1, pwm=20))
+    esession = record_session.Session(open_bus=lambda _w: ebus, systemctl=lambda *a: "", run=None, log=lambda **k: None)
+    with pytest.raises(job.Refused) as err:
+        job.release("arm_s", "/dev/serial/by-id/x", open_bus=lambda: ebus, lock=lambda _a: Guard(),
+                    session=esession, calibration=CAL, baseline=lambda _d, _o: 0, out_dir=Path("o"), library=lib)
+    assert err.value.code == "NOT_FOLDED" and ebus.writes == []

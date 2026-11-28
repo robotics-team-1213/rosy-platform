@@ -113,7 +113,8 @@ flowchart TB
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
   시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
   `tools/remote/hosts.example.json`을 복사한다.
-  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내는 해당 모듈의
+  날짜 증거는 `$ROSY_SCRATCH`와 PR 본문에 둔다. README·STATUS가 링크할 기록만
+  `docs/validation/`에 두고 기존 기록을 먼저 갱신한다(D-1090). 모듈 안내는 해당 모듈의
   `docs/` 하나에 둔다.
 
 ## 로봇 실행

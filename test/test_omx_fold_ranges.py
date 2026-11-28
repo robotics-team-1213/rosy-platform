@@ -24,6 +24,8 @@ def test_wrist_only_extension_is_refused_with_library_but_slips_through_coarse()
     assert ph.live_folded({"state": WRIST_OUT}) is True  # coarse fallback: the known gap
     assert ph.live_folded({"state": WRIST_OUT}, LIB) is False
     assert ph.live_folded({"state": ROLL_OUT}, LIB) is False
+    assert ph.live_folded({"state": ROLL_OUT}, LIB, include_wrist_roll=False) is True
+    assert ph.live_folded({"state": WRIST_OUT}, LIB, include_wrist_roll=False) is False
     assert ph.live_folded({"state": [0, -30.0, 50.0, 50.0, -5.0, 0]}, LIB) is False  # coarse still applies first
 
 

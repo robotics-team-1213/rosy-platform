@@ -195,9 +195,9 @@ def test_nav2_localization_refusal_records_blocker_and_dispatch_stage(blocker, d
         wait = stored["detail"]["peer_wait"]
         assert wait["command_robot_id"] == "rosy_42" and wait["waiting_on"] == [blocker]
         assert wait["stage"] == "pre_dispatch_peer_check" and not wait["dispatch_attempted"]
-    else:
-        assert view["state"] == "failed" and view["reason"] == "TRIP_GOAL_REFUSED"
-        assert view["detail"]["goal_reason"] == "LOCALIZATION_UNTRUSTED"
+    else:  # 2026-11-28: its own untrusted localization, nothing sent: it waits for recovery, it does not fail
+        assert view["state"] == "running" and view["detail"]["goal_wait"] == "LOCALIZATION_UNTRUSTED"
+        assert view["detail"]["localization_wait"]["loc_reason"] == "goal_admission"
         assert stored["detail"]["goal_admission"] == {
             "blocked_by": blocker, "waiting_on": [blocker],
             "dispatch_attempted": False, "cancel_confirmed": False,

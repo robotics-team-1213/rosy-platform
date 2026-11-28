@@ -2,7 +2,8 @@
 
 .omx-right-inspector { position: sticky; top: var(--space-3); display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
 .omx-right-inspector:empty { display: none; }
-.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); }
+.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); background: var(--surface-recessed); }
+.omx-inspector-tabs > * { flex: 1 1 auto; min-width: 0; }
 .omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-body); color: var(--series-primary); overflow-wrap: anywhere; }
 .omx-inspector-stage { display: grid; gap: var(--space-2); min-width: 0; }
@@ -34,13 +35,8 @@
 .omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
 .omx-inspector-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 
-@media (width < 30rem) {
-  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
-  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
-}
-@media (width < 64rem) {
-  .omx-right-inspector { position: static; }
-}
+@media (width < 30rem) { .omx-inspector-dual-grid, .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); } }
+@media (width < 64rem) { .omx-right-inspector { position: static; } }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
   .omx-inspector-tabs ui-button { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-2); }
 }

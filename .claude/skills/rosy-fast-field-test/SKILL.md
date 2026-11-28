@@ -95,7 +95,7 @@ linear ≤ 0.03 m/s, |angular| ≤ 0.4 rad/s, `--max-s` ≤ 120.
    the run with mode `IDLE`. After any crash, check `GET /api/v1/robot/state` shows `IDLE`.
 7. **Clean up.** `POST /api/v1/auth/logout` with the token (204), then
    `rssh 'rm -f ~/<topic>/token'`. Copy `~/<topic>/runs/<run>/` (`cycles.jsonl`, `frames/`,
-   `summary.json`) to `$ROSY_SCRATCH/<topic>/` and write the record under `docs/validation/`.
+   `summary.json`) to `$ROSY_SCRATCH/<topic>/` and put the summary in the PR body; update an existing `docs/validation/` record only when a README or STATUS links it (D-1090).
 
 A new loop of your own follows the same contract: frame or scan in,
 `POST /api/v1/mode {"mode": "MANUAL"}`, then `POST /api/v1/teleop {"linear", "angular"}`
