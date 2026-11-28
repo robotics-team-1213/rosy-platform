@@ -20,6 +20,7 @@ from core_api_web.api.deps import AuthContext, CoreServicesLike, MissionRefused,
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import operator, owns_trip_lease, require_calibration_owner, viewer
 from core_common.domain.tasks import TaskKind
+from core_common.stop_pose import REPARK_MAX_TURN_DEG
 
 motion_router = APIRouter(prefix="/api/v1/motion", tags=["motion"])
 KIND = "rotate_to"
@@ -119,6 +120,7 @@ def repark(body: ReparkRequest, auth: AuthContext = Depends(operator),
 
 
 class ScopedReparkRequest(ReparkRequest):
+    turn_deg: float = Field(default=0.0, ge=-REPARK_MAX_TURN_DEG, le=REPARK_MAX_TURN_DEG, allow_inf_nan=False)  # trim, left +
     correlation_id: str = Field(min_length=1, max_length=128, strict=True)
     expected_boot_id: UUID
     expected_owner_generation: int = Field(ge=0, strict=True)
@@ -156,7 +158,7 @@ def scoped_repark(body: ScopedReparkRequest, auth: AuthContext = Depends(operato
     previous = {"boot_id": body.expected_boot_id, "run_id": body.expected_nav_run_id,
                 "owner_generation": body.expected_nav_generation, "correlation_id": body.expected_nav_correlation_id}
     try:
-        started = runner.start_scoped(body.forward_m, body.left_m, correlation_id=body.correlation_id,
+        started = runner.start_scoped(body.forward_m, body.left_m, body.turn_deg, correlation_id=body.correlation_id,
                                       expected_boot_id=body.expected_boot_id,
                                       expected_owner_generation=body.expected_owner_generation,
                                       expected_idle_epoch=body.expected_idle_epoch,

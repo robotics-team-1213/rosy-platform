@@ -19,7 +19,8 @@ from typing import Optional
 from uuid import UUID
 
 from core_common.protocol.native.receipts import NativeReceipts
-from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M, offset_in_frame
+from core_common.stop_pose import (REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M, REPARK_MAX_TURN_DEG, REPARK_MIN_TURN_DEG,
+                                   offset_in_frame)
 
 from core_features.localization.mission import NUDGE, NUDGE_BACK, ROTATE_TO, MissionRefused
 
@@ -33,10 +34,23 @@ NEGLIGIBLE_M = 0.005
 SHORTFALL_M = 0.015          # the measured move may differ from the request by this much per axis
 
 
-def plan_repark(forward_m: float, left_m: float) -> list[tuple[str, float]]:
-    """Segments for a robot-frame shift (forward +, left +): ("turn", rad) / ("restore", 0) / ("drive", signed m).
+def plan_repark(forward_m: float, left_m: float, turn_deg: float = 0.0) -> list[tuple[str, float]]:
+    """Segments for a robot-frame shift (forward +, left +): ("turn", rad) / ("restore", rad) / ("drive", signed m).
 
+    `turn_deg` (left +, at most REPARK_MAX_TURN_DEG) ends the plan with an in-place turn to start heading + turn_deg
+    ("restore", rad); it alone is a plan when the shift is below the resolution.
     ValueError when a value is not finite or beyond the caps, or when the fore-aft rest exceeds the cap."""
+    if not math.isfinite(turn_deg) or abs(turn_deg) > REPARK_MAX_TURN_DEG:
+        raise ValueError(f"the heading trim is limited to {REPARK_MAX_TURN_DEG} degrees")
+    if turn_deg and abs(turn_deg) < REPARK_MIN_TURN_DEG:
+        raise ValueError(f"a heading trim is at least {REPARK_MIN_TURN_DEG} degree (rotate_to cannot close less)")
+    trim = [("restore", math.radians(turn_deg))] if turn_deg else []
+    if trim and max(abs(forward_m), abs(left_m)) < NEGLIGIBLE_M:
+        return trim
+    return _shift_plan(forward_m, left_m) + trim
+
+
+def _shift_plan(forward_m: float, left_m: float) -> list[tuple[str, float]]:
     if not (math.isfinite(forward_m) and math.isfinite(left_m)):
         raise ValueError("repark values must be finite")
     if abs(forward_m) > MAX_FORWARD_M or abs(left_m) > MAX_LEFT_M:
@@ -110,7 +124,7 @@ class ReparkRunner:
                                                "observed_at": observed_at}
             return view
 
-    def start_scoped(self, forward_m: float, left_m: float, *, correlation_id: str,
+    def start_scoped(self, forward_m: float, left_m: float, turn_deg: float = 0.0, *, correlation_id: str,
                      expected_boot_id: UUID, expected_owner_generation: int,
                      expected_idle_epoch: int, expected_navigation: dict, admission, authority=None) -> dict:
         with self._lock:
@@ -120,16 +134,16 @@ class ReparkRunner:
                 raise MissionRefused(str(exc), "repark owner changed before admission") from exc
             if self._by_correlation(correlation_id) is not None:
                 raise MissionRefused("REPARK_REQUEST_ALREADY_ADMITTED", "read the original repark receipt")
-            self.start(forward_m, left_m, correlation_id=correlation_id,
+            self.start(forward_m, left_m, turn_deg, correlation_id=correlation_id,
                        expected_idle_epoch=expected_idle_epoch, expected_navigation=expected_navigation,
                        admission=admission, authority=authority)
             return self.scoped_status()
 
-    def start(self, forward_m: float, left_m: float, *, correlation_id: str | None = None,
+    def start(self, forward_m: float, left_m: float, turn_deg: float = 0.0, *, correlation_id: str | None = None,
               expected_idle_epoch: int | None = None, expected_navigation: dict | None = None,
               admission=nullcontext, authority=None) -> dict:
         """Start, or raise ValueError (400) / MissionRefused (409). Nothing moves on a refusal."""
-        plan = plan_repark(float(forward_m), float(left_m))
+        plan = plan_repark(float(forward_m), float(left_m), float(turn_deg))
         with self._lock:
             if self._last["state"] == "running":
                 raise MissionRefused("MOTION_BUSY", "a repark is running")
@@ -143,7 +157,7 @@ class ReparkRunner:
             self._authority = authority
             self._plan, self._i, self._start, self._kind = plan, 0, start, None
             self._asked = (float(forward_m), float(left_m))
-            self._deadline = self._m._clock() + 45.0
+            self._deadline = self._m._clock() + 45.0 + (15.0 if abs(turn_deg) >= REPARK_MIN_TURN_DEG else 0.0)  # + the trim leg
             self._last = {"state": "running", "reason": None}
             try:
                 self._begin(plan[0])
@@ -224,9 +238,10 @@ class ReparkRunner:
         if kind in ("turn", "restore"):
             rate_dps = math.degrees(MAX_RATE_RPS) - 0.2   # just under the cap, the goal check is inclusive
             now_yaw = self._seg_start[2]
-            turn = value if kind == "turn" else math.atan2(math.sin(self._start[2] - now_yaw), math.cos(self._start[2] - now_yaw))
+            target = self._start[2] + value  # restore: the start heading, plus the heading trim of the last segment
+            turn = value if kind == "turn" else math.atan2(math.sin(target - now_yaw), math.cos(target - now_yaw))
             timeout = min(15.0, 2.0 * math.degrees(abs(turn)) / rate_dps + 3.0)
-            request = {"delta_deg": math.degrees(value)} if kind == "turn" else {"yaw_odom": self._start[2]}
+            request = {"delta_deg": math.degrees(value)} if kind == "turn" else {"yaw_odom": target}
             m.start_rotate_to(tol_deg=1.0, max_rate_dps=rate_dps, timeout_s=timeout, **scope, **request)
             self._kind = ROTATE_TO
         else:

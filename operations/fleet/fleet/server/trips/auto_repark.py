@@ -78,7 +78,8 @@ async def auto_repark(runner, live, evidence, decision, state, fit, limits):
                               else runner.config.named_stop_auto_corrections):
         return _hold(decision, "auto_correction_limit")
     left = decision.get("left_m", 0.0)
-    if not repark_within_limits(decision["forward_m"], left):
+    turn = decision.get("turn_deg", 0.0)
+    if not repark_within_limits(decision["forward_m"], left, turn):
         return _hold(decision, "outside_repark_limits")
     reason = _refusal(live, state) or (None if topview else await _camera_refusal(runner, robot, fit, state, limits))
     if reason is not None:
@@ -86,7 +87,7 @@ async def auto_repark(runner, live, evidence, decision, state, fit, limits):
     record["attempts"] += 1  # counted before the POST: a lost reply still armed custody
     try:
         clearance = CorrectionClearance(nav_run_id=live.view["detail"]["named_stop_operation"]["run_id"],
-                                        map_sha256=evidence["map_sha256"], forward_m=decision["forward_m"], left_m=left,
+                                        map_sha256=evidence["map_sha256"], forward_m=decision["forward_m"], left_m=left, turn_deg=turn,
                                         site_end=tuple(decision["site_end"]), cable_and_path_clear=True)
         await auto.send(live.view["trip_id"], clearance)
     except HTTPException as exc:
@@ -119,13 +120,30 @@ async def _topview_verdict(runner, live, evidence, place, site_place, fit, state
     return await check_repark_decision(runner, live, evidence, place, decision), None
 
 
+def _with_steps(live, result):
+    """The top-view stop's trip detail lists every correction step with the error that asked for it."""
+    if result.get("source") != TOPVIEW_SOURCE:
+        return result
+    steps = live.view["detail"].setdefault("named_stop_topview_steps", [])
+    if result.get("auto_repark") == "dispatched":
+        error = result["error"]
+        if result.get("turn_deg"):
+            steps.append({"step": "rotate", "turn_deg": result["turn_deg"],
+                          "measured_heading_deg": round(math.degrees(error["heading_rad"]), 2)})
+        if result["forward_m"] or result.get("left_m"):
+            steps.append({"step": "translate", "forward_m": result["forward_m"], "left_m": result.get("left_m", 0.0),
+                          "measured_longitudinal_m": round(error["longitudinal_m"], 4),
+                          "measured_lateral_m": round(error["lateral_m"], 4)})
+    return {**result, "steps": list(steps)}
+
+
 async def evaluate_named_stop(runner, live, evidence, place, fit, state):
     site_place = SitePlace.model_validate(place)
     topview, unavailable = getattr(runner, "cell_topview", None), None
     if topview is not None and topview.covers(site_place.id):
         verdict, unavailable = await _topview_verdict(runner, live, evidence, place, site_place, fit, state, topview)
         if verdict is not None:
-            return await auto_repark(runner, live, evidence, verdict, state, fit, site_place.precision_stop)
+            return _with_steps(live, await auto_repark(runner, live, evidence, verdict, state, fit, site_place.precision_stop))
     decision = await check_repark_decision(runner, live, evidence, place, named_stop_decision(site_place, fit, state))
     result = await auto_repark(runner, live, evidence, decision, state, fit, site_place.precision_stop)
     return {**result, "topview_unavailable": unavailable} if unavailable else result

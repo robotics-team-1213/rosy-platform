@@ -28,6 +28,30 @@ def test_plan_refuses_beyond_the_caps(fwd, left):
         plan_repark(fwd, left)
 
 
+def test_the_heading_trim_ends_the_plan_and_is_bounded():
+    assert plan_repark(0.0, 0.0, 10.0) == [("restore", pytest.approx(math.radians(10.0)))]
+    assert plan_repark(0.05, 0.0, -5.0) == [("drive", 0.05), ("restore", pytest.approx(math.radians(-5.0)))]
+    shifted = plan_repark(0.0, 0.038, 5.0)
+    assert shifted[2] == ("restore", 0.0) and shifted[-1] == ("restore", pytest.approx(math.radians(5.0)))  # trim is last
+    for bad in (25.1, -26.0, float("nan"), 0.5):  # past the cap, not a number, or below the 1 degree floor
+        with pytest.raises(ValueError):
+            plan_repark(0.0, 0.0, bad)
+    with pytest.raises(ValueError):
+        plan_repark(0.0, 0.0)  # nothing to move at all
+
+
+def test_a_trim_only_repark_turns_in_place_to_start_heading_plus_trim(core):
+    _client, services = core
+    services.localization.on_state(_state("LOCALIZED"))
+    services.loc_mission.observe_odom(0.0, 0.0, 0.0)
+    services.loc_mission.repark.start(0.0, 0.0, 12.0)
+    _run(services)
+    status = services.loc_mission.repark.status()
+    assert status["state"] == "done", status
+    assert abs(services.loc_mission.odom_pose()[2] - math.radians(12.0)) < math.radians(1.5)
+    assert abs(status["moved_robot_dxdy_m"]["forward_m"]) < 0.005 and abs(status["moved_robot_dxdy_m"]["left_m"]) < 0.005
+
+
 def _run(services, limit_s=60.0):
     """Tick the bridge loop, integrating the arbiter's output into odometry; return the peak speeds."""
     x = y = yaw = 0.0

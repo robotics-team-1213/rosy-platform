@@ -317,7 +317,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `account_receiver_provisioning` (D-992, v1.373 additive): PUT /account/receiver exists (TLS listener only).
     data["account_receiver_provisioning"] = True
     # `motion.rotate_to` (D-603, v1.194 additive): POST /motion/rotate_to turns in place to a heading.
-    data["motion"] = {"rotate_to": getattr(svc, "loc_mission", None) is not None}
+    # `repark_turn` (2026-11-27 additive): POST /motion/repark/run takes `turn_deg`, a heading trim that ends the re-park.
+    data["motion"] = {"rotate_to": getattr(svc, "loc_mission", None) is not None,
+                      "repark_turn": getattr(svc, "loc_mission", None) is not None}
     return data
 
 

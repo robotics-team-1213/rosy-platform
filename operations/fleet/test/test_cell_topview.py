@@ -9,7 +9,9 @@ from types import SimpleNamespace as NS
 import pytest
 from pydantic import ValidationError
 
-from core_common.stop_pose import REPARK_MAX_LEFT_M
+from fastapi import HTTPException
+
+from core_common.stop_pose import REPARK_MAX_LEFT_M, REPARK_MAX_TURN_DEG
 from fleet.hub.hub import HubError
 from fleet.localization import topview_pose as tp
 from fleet.server import named_stop_topview as nt
@@ -147,8 +149,26 @@ def test_a_sideways_offset_is_corrected_in_the_robots_own_axes():
     assert both["forward_m"] == pytest.approx(-0.03, abs=1e-3)
 
 
-def test_a_turned_robot_and_a_long_move_are_holds_not_corrections():
-    assert nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(6)))["reason"] == "heading_outside_limits"
+def test_a_turned_robot_is_turned_in_place_and_a_wild_heading_is_a_hold():
+    turned = nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(6)))  # the robot stands 6 deg left of the heading
+    assert turned["decision"] == "REPARK" and turned["turn_deg"] == pytest.approx(-6.0, abs=0.01)
+    assert turned["forward_m"] == 0.0 and turned["left_m"] == 0.0  # the position is already inside the box
+    assert nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(-5.1)))["turn_deg"] == pytest.approx(5.1, abs=0.01)
+    both = nt.topview_decision(PLACE, obs(0.0, 0.04, math.radians(6)))  # turn and shift in one correction
+    assert both["decision"] == "REPARK" and both["turn_deg"] == pytest.approx(-6.0, abs=0.01) and both["left_m"] != 0.0
+    assert nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(26)))["reason"] == "heading_outside_limits"
+
+
+def test_a_heading_within_three_degrees_is_not_turned():
+    inside = nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(2.9), sigma=0.008))
+    assert inside["decision"] == "IN_TOLERANCE" and "turn_deg" not in inside
+    shifted = nt.topview_decision(PLACE, obs(0.0, 0.04, math.radians(-2.9)))
+    assert shifted["decision"] == "REPARK" and "turn_deg" not in shifted
+    noisy = nt.topview_decision(PLACE, obs(0.0, 0.0, math.radians(2.9)) | {"sigma_rad": 0.06})  # 3.4 deg of doubt on top
+    assert (noisy["decision"], noisy["reason"]) == ("HOLD", "heading_outside_limits")
+
+
+def test_a_long_move_is_a_hold_not_a_correction():
     assert nt.topview_decision(PLACE, obs(0.0, 0.07, 0.0))["reason"] == "outside_repark_limits"
     assert nt.topview_decision(PLACE, obs(0.0, 0.0, 0.0, sigma=0.04))["reason"] == "correction_below_resolution"
 
@@ -348,6 +368,66 @@ def test_the_confirmation_needs_the_verdict_young_and_the_robot_still():
     assert _aligned(live, PLACE_DATA, FIT, state(), lambda: 52.0) is False
     live.view["detail"][nt.KEY] = {"place": "S4", "decision": {"decision": "REPARK"}, "read_at": 50.0, "pose": pose}
     assert _aligned(live, PLACE_DATA, FIT, state(), lambda: 52.0) is True  # an S4 record is ignored: SLAM says on target
+
+
+def test_a_turned_stop_is_rotated_with_the_shift_then_confirmed_and_every_step_is_recorded():
+    core = Core()
+    runner, live = rig(FakeTopview(obs(0.0, 0.04, math.radians(-5.1)), obs(0.002, 0.001, math.radians(1.0))), core)
+    first = evaluate(runner, live)
+    assert first["auto_repark"] == "dispatched"
+    (clearance,) = core.posts
+    assert clearance.turn_deg == pytest.approx(5.1, abs=0.01) and clearance.left_m == pytest.approx(0.04, abs=1e-3)
+    assert [s["step"] for s in first["steps"]] == ["rotate", "translate"]
+    assert first["steps"][0]["measured_heading_deg"] == pytest.approx(-5.1, abs=0.01)
+    assert first["steps"][1]["measured_lateral_m"] == pytest.approx(0.04, abs=1e-3)
+    core.armed_now = False
+    done = evaluate(runner, live)  # re-measured after the turn: inside 3 deg, nothing more to do
+    assert done["decision"] == "IN_TOLERANCE" and len(core.posts) == 1 and len(done["steps"]) == 2
+
+
+def test_a_refused_or_unsupported_turn_is_a_hold_with_its_reason():
+    class Refusing(Core):
+        async def send(self, trip_id, clearance):
+            self.posts.append(clearance)
+            raise HTTPException(409, detail={"code": "NAMED_STOP_CORRECTION_TURN_UNSUPPORTED"})
+
+    core = Refusing()
+    runner, live = rig(FakeTopview(obs(0.0, 0.0, math.radians(-5.1))), core)
+    held = evaluate(runner, live)
+    assert (held["decision"], held["reason"]) == ("HOLD", "NAMED_STOP_CORRECTION_TURN_UNSUPPORTED") and len(core.posts) == 1
+    assert not core.armed_now and held["steps"] == []  # refused: no step was made
+
+
+def test_a_turn_without_the_robot_saying_it_takes_one_is_refused_before_any_motion():
+    from fleet.server.precision_correction_routes import dispatch_correction
+
+    class Client:
+        async def capabilities(self):
+            return {"motion": {"rotate_to": True}}  # an older CORE: no repark_turn
+
+    live = NS(open=True, view={"hold": None, "robot_id": "pinky", "detail": {
+        "named_stop_operation": {"run_id": RUN}, "named_stop_dispatch": {"map_sha256": "a" * 64, "place": "S3"}}})
+    maps = NS(active_view=lambda: {"sha256": "a" * 64, "map": {"places": [PLACE_DATA]}})
+    console = NS(clients=lambda: {"pinky": Client()}, _named_stop_site_maps=maps)
+    clearance = CorrectionClearance(nav_run_id=RUN, map_sha256="a" * 64, forward_m=0.0, turn_deg=5.0,
+                                    site_end=(1.0, 0.5), cable_and_path_clear=True)
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(dispatch_correction(console, NS(_find=lambda trip: live), "trip", clearance,
+                                        cable_inhibited=lambda robot: False, actor="x"))
+    assert refused.value.detail == {"code": "NAMED_STOP_CORRECTION_TURN_UNSUPPORTED"}
+
+
+def test_the_turn_is_part_of_the_clearance_and_alone_is_a_valid_correction():
+    state_ = {"pose": {"x": 1.0, "y": 0.0, "yaw": 0.0}}
+    assert correction_endpoint(state_, 0.0, 0.0, 5.0) == pytest.approx((1.0, 0.0))
+    with pytest.raises(HubError):  # a turn below CORE's 1 degree floor or past 25 degrees moves nothing
+        correction_endpoint(state_, 0.0, 0.0, 0.5)
+    with pytest.raises(HubError):
+        correction_endpoint(state_, 0.0, 0.0, REPARK_MAX_TURN_DEG + 1)
+    base = dict(nav_run_id=RUN, map_sha256="a" * 64, forward_m=0.0, site_end=(1.0, 0.5), cable_and_path_clear=True)
+    assert CorrectionClearance(**base).turn_deg == 0.0
+    with pytest.raises(ValidationError):
+        CorrectionClearance(**base, turn_deg=REPARK_MAX_TURN_DEG + 1)
 
 
 def test_the_sideways_move_is_part_of_the_clearance_and_the_corridor_endpoint():

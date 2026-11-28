@@ -11,10 +11,14 @@ import math
 #: CORE fine re-park caps (D-1051): the one place CORE (drive/behaviors/localization/repark.py) and Fleet read them from.
 REPARK_MAX_FORWARD_M = 0.10
 REPARK_MAX_LEFT_M = 0.06
+#: In-place heading trim a re-park may end with (2026-11-27): the last segment turns the robot this far from its start heading.
+REPARK_MAX_TURN_DEG = 25.0
+REPARK_MIN_TURN_DEG = 1.0  # rotate_to's tolerance floor: a smaller turn cannot be closed
 
 
-def repark_within_limits(forward_m: float, left_m: float = 0.0) -> bool:
-    return abs(forward_m) <= REPARK_MAX_FORWARD_M and abs(left_m) <= REPARK_MAX_LEFT_M
+def repark_within_limits(forward_m: float, left_m: float = 0.0, turn_deg: float = 0.0) -> bool:
+    return (abs(forward_m) <= REPARK_MAX_FORWARD_M and abs(left_m) <= REPARK_MAX_LEFT_M
+            and abs(turn_deg) <= REPARK_MAX_TURN_DEG)
 
 
 def offset_in_frame(origin, point) -> tuple[float, float]:
