@@ -23,7 +23,8 @@ def _at(arc, s, left, yaw_off=0.0):
 
 
 def _camera(xy, age=0.1, source="sighting"):
-    return MapPose(*xy, "LOCALIZED", source, 0.0, 0.1, anchor_age_s=age, map_id="site-loop")
+    # A moving robot's pose reads source "bridged": the anchor (what the camera set) carried on by odom.
+    return MapPose(*xy, "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=age, map_id="site-loop", anchor_source=source)
 
 
 def _slam(xy):
@@ -70,7 +71,7 @@ def test_classification_and_only_a_trusted_departure_acts(cam, slam, state, kind
         assert record["lat_m"] == pytest.approx(0.06) and record["margin_m"] < 0 and record["gap_m"] == pytest.approx(0.03)
 
 
-@pytest.mark.parametrize("age, source, kind", [(0.6, "sighting", "camera_stale"), (None, "sighting", "camera_stale"),
+@pytest.mark.parametrize("age, source, kind", [(1.1, "sighting", "camera_stale"), (None, "sighting", "camera_stale"),
                                                 (0.1, "auto_locate", "camera_unavailable")])
 def test_stale_or_untrusted_camera_is_recorded_never_acted_on(age, source, kind):
     rig = Rig()
@@ -97,7 +98,7 @@ def test_two_fresh_ticks_then_one_resend_per_cooldown_then_release():
 def test_a_stale_tick_breaks_the_two_tick_count():
     rig = Rig()
     rig.tick(0.06, 0.04)
-    rig.tick(0.06, 0.04, age=0.7)
+    rig.tick(0.06, 0.04, age=1.2)
     assert rig.tick(0.06, 0.04)[0] is False and rig.live.view["detail"]["lane_departure"]["ticks"] == 1
 
 
@@ -222,3 +223,98 @@ def test_road_speed_slows_a_departed_robot_and_caps_tight_curves():
     assert _grant(site, straight, {"lane_departure": {"slow": True}}) == (realign.REALIGN_SLOW_MPS, "lane_realign")
     limit, _ = _grant(site, [dict(edge_id="loop_right", forward=True, s_from=0., s_to=.4)])
     assert limit == pytest.approx(.08)
+
+
+@pytest.mark.parametrize("after", ["camera_stale", "location", "near_edge"])
+def test_the_slow_cap_is_lifted_when_no_fresh_departure_has_been_seen_for_a_while(after):
+    rig = Rig()
+    assert [rig.tick(0.06)[1]["slow"] for _ in range(2)][-1] is True
+
+    def tick():   # no fresh evidence of a departure any more
+        if after == "camera_stale":
+            return rig.tick(0.06, age=2.0)
+        if after == "location":
+            return rig.tick(0.06, state={"localization": {"state": "SUSPECT"}})
+        return rig.tick(0.03, yaw_off=math.radians(20))   # inside the lane, not aligned yet
+
+    slow = [tick()[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
+    assert all(slow[:int(realign.SLOW_EVIDENCE_S / 0.5) - 1]) and slow[-1] is False   # kept until 9.5 s, lifted at 10 s
+    assert rig.tick(0.06)[1]["slow"] is False and rig.tick(0.06)[1]["slow"] is True   # a new departure slows again
+
+
+def test_a_departure_that_lasts_keeps_the_slow_cap():
+    rig = Rig()
+    slow = [rig.tick(0.06)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 6)]
+    assert slow[0] is False and all(slow[1:])
+
+
+def test_a_record_from_before_the_expiry_field_does_not_keep_the_cap():
+    rig = Rig()
+    rig.live.view["detail"]["lane_departure"] = {"kind": "departed", "slow": True, "ticks": 2}   # no departed_at
+    assert rig.tick(0.06, age=2.0)[1]["slow"] is False
+
+
+def test_a_camera_anchor_counts_whether_or_not_odom_carried_it_on():
+    """2026-11-27 live run on R: the moving robot's pose source is "bridged", and every tick read camera_unavailable."""
+    rig = Rig()
+    for source, anchor, kind in (("bridged", "sighting", "departed"), ("sighting", "sighting", "departed"),
+                                 ("bridged", "track", "departed"), ("bridged", "operator_pin", "camera_unavailable"),
+                                 ("bridged", None, "camera_unavailable")):
+        rig.cam = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", source, 0.02, 0.1, anchor_age_s=0.1,
+                          map_id="site-loop", anchor_source=anchor)
+        run(realign.observe(rig.runner, rig.live, 0, _slam(_at(rig.arc, 0.4, 0.06)), LOCALIZED, "NAVIGATING"))
+        assert rig.live.view["detail"]["lane_departure"]["kind"] == kind, (source, anchor)
+
+
+def test_the_site_camera_age_acts_and_a_long_odom_bridge_does_not():
+    rig = Rig()
+    assert [rig.tick(0.06, age=0.6)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # 0.4-0.6 s on site
+    assert rig.live.view["detail"]["lane_departure"]["slow"] is True
+    rig.cam = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", "bridged", 0.2, 0.1, anchor_age_s=0.6,
+                      map_id="site-loop", anchor_source="sighting")   # 0.2 m carried by odom since the camera saw it
+    run(realign.observe(rig.runner, rig.live, 0, _slam(_at(rig.arc, 0.4, 0.06)), LOCALIZED, "NAVIGATING"))
+    record = rig.live.view["detail"]["lane_departure"]
+    assert record["kind"] == "camera_stale" and record["bridged_m"] == 0.2
+
+
+def test_a_trip_on_the_camera_pose_reads_the_robots_bound_slam_instead(monkeypatch):
+    """2026-11-27 live run on R: a console trip drives on the camera pose, and every tick read SLAM_POSE_UNBOUND."""
+    rig = Rig()
+    native = {"v": _at(rig.arc, 0.4, 0.06)}
+    asked = []
+    rig.runner._store = NS(active=rig.store.active, map_bindings=NS(
+        matching_fit=lambda rid, state, site: asked.append((rid, state, site)) or ("fit", None)))
+    monkeypatch.setattr(realign, "fresh_native_slam", lambda state, now: (native["v"], 0.1, now))
+    monkeypatch.setattr(realign, "bound_pose", lambda fit, pose: pose)
+
+    def tick(cam_left):
+        rig.cam = _camera(_at(rig.arc, 0.4, cam_left))
+        trip_pose = MapPose(*_at(rig.arc, 0.4, cam_left), "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=0.1,
+                            map_id="site-loop", anchor_source="sighting")   # the trip's pose is the camera's
+        replace = run(realign.observe(rig.runner, rig.live, 0, trip_pose, LOCALIZED, "NAVIGATING"))
+        rig.clock.advance(0.5)
+        return replace, rig.live.view["detail"]["lane_departure"]
+
+    assert [tick(0.06)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # both poses past the line
+    version, site = rig.store.active()[:2]
+    assert asked[-1] == ("r1", LOCALIZED, (site.map_id, version))                   # this robot, its state, this map
+    native["v"] = _at(rig.arc, 0.4, 0.0)                                             # the robot's own pose is on the lane
+    record = tick(0.06)[1]
+    assert (record["kind"], record["reason"]) == ("location", "SLAM_CAMERA_GAP")
+
+
+@pytest.mark.parametrize("fit, sample, why", [((None, "GRID_MISMATCH"), "ok", "GRID_MISMATCH"),
+                                              ((None, None), "ok", "MAP_BINDING_REQUIRED"),
+                                              (("fit", None), None, "SLAM_POSE_STALE")])
+def test_without_a_bound_slam_pose_it_stays_a_location_record(monkeypatch, fit, sample, why):
+    rig = Rig()
+    rig.runner._store = NS(active=rig.store.active, map_bindings=NS(matching_fit=lambda *a: fit))
+    monkeypatch.setattr(realign, "fresh_native_slam",
+                        lambda state, now: None if sample is None else (_at(rig.arc, 0.4, 0.06), 0.1, now))
+    monkeypatch.setattr(realign, "bound_pose", lambda f, pose: pose)
+    rig.cam = _camera(_at(rig.arc, 0.4, 0.06))
+    camera_trip_pose = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", "bridged", 0.02, 0.1, anchor_age_s=0.1,
+                               map_id="site-loop", anchor_source="sighting")
+    assert run(realign.observe(rig.runner, rig.live, 0, camera_trip_pose, LOCALIZED, "NAVIGATING")) is False
+    record = rig.live.view["detail"]["lane_departure"]
+    assert (record["kind"], record["reason"], record["slam_reason"]) == ("location", "SLAM_POSE_UNBOUND", why)

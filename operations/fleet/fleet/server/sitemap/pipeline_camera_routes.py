@@ -13,18 +13,15 @@ from fleet.server.pipeline.bound_home_receipt import sync_home_receipts, verifie
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
+from fleet.pipeline.cell_motion import claim_refusal, release_verified
 from fleet.site_rules import SiteRules
 
-from fleet.server.pipeline_port_events import (
-    build_completion_events,
-    flush_pending_port_events_async,
-    strip_task_for_claim,
-)
+from fleet.server.pipeline_port_events import build_completion_events, flush_pending_port_events_async, strip_task_for_claim
+from fleet.server.pipeline.pipeline_target_object import check_target_object_fresh
 from fleet.server.pipeline_autonomous_policy import skip_claim_presence_check
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
-
 
 from fleet.server.pipeline_recovery_policy import effective_stop_fence
 from fleet.server.pipeline_recovery_tools import (
@@ -40,7 +37,7 @@ RECORDED_REFUSALS = frozenset({
     "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "OMX_OWNER_EVIDENCE_UNAVAILABLE", "OMX_OWNER_EVIDENCE_MISMATCH",
     "UNVERIFIED_CELL_COMPLETION", "OWNER_PRINCIPAL_NOT_REGISTERED", "HUMAN_HOLD_ACTIVE",
     "CELL_BUSY_OR_HELD", "PREVIOUS_TIER_NOT_VERIFIED", "CELL_AB_EVIDENCE_NOT_ENABLED", "BED_CONFIRMATION_INVALID",
-    "PRESENCE_CONFIRMATION_REQUIRED",
+    "PRESENCE_CONFIRMATION_REQUIRED", "TARGET_OBJECT_EXPIRED", "STALE_CELL_STATE",
 })
 
 
@@ -281,6 +278,8 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        if (why := claim_refusal(task, body)):  # before any state changes: the task stays QUEUED
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": why}
         # D-1057: the claiming principal must be a registered owner of this cell, or a result could never be accepted and the
         # task would stay RUNNING. Refused before the ledger changes. Bare apps without authentication (no principal) skip it.
         from fleet.server.sitemap.pipeline_evidence import cell_owner_principals, owner_principal_refusal
@@ -335,6 +334,9 @@ def install_cameras_routes(app, ctx) -> None:
         claim_now, tid, _missing = time.time(), task["task_id"], object()
         if (task.get("execution_mode") == "act_policy" or task.get("requires_presence_confirm")) and not skip_claim_presence_check(task) and not has_valid_presence(app, task, now=claim_now):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
+        ok_tgt, tgt_code = check_target_object_fresh(app, task, now=claim_now)
+        if not ok_tgt:
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": tgt_code}
         pres_map = getattr(app.state, "cell_presence", None) or {}
         bed_map = getattr(app.state, "cell_bed_confirmations", None) or {}
         prev_cell = copy.deepcopy(app.state.omx_cell_states[cell_id]) if cell_id in app.state.omx_cell_states else _missing
@@ -370,7 +372,7 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"), "src_site": task["src_site"], "dst_site": task["dst_site"],
             "interlock_scope": task.get("interlock_scope"), "displaced_to": task.get("displaced_to"),
             "tier_hint": task.get("tier_hint"), "presence": task["presence"],
-            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks", "approval_mode", "approved_by") if task.get(k) is not None},
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "motion", "execution_mode", "max_chunks", "approval_mode", "approved_by", "target_object") if task.get(k) is not None},
         }
         return {"claimed": True, "task": strip_task_for_claim(task), "handoff": handoff, "gate": res["gate"]}
 
@@ -440,12 +442,9 @@ def install_cameras_routes(app, ctx) -> None:
                         and stage_result.get("directive_id") == task_id
                         and stage_result.get("arm_id") == task.get("arm_id")
                         and stage_result.get("task_verified") is True
-                        and verification.get("verified") is True
-                        # D-1057 (user decision 2026-11-20): cell S has no side camera, so its top-camera zone check counts
-                        and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
-                                                          if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
+                        and release_verified(task, stage_result, cell_id)  # a push: measured displacement; else the zone verification (D-1057)
                         and stop_event.get("ok") is True and stop_event.get("folded") is True)
-            if cell_id == "cell_ab":
+            if cell_id == "cell_ab" and (task.get("motion") or {}).get("kind") != "push":
                 place = stage_result.get("place") or {}
                 z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
                 verified = verified and isinstance(place, dict) and cell_ab_completion_verified(task, place, z_gate, verification)

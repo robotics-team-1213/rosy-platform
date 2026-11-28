@@ -29,7 +29,7 @@ export function buildCameraZoomHeading(card, label, onExpand) {
     }
   });
   card.addEventListener('click', (event) => {
-    if (!event.target.closest('button, ui-button, a')) zoom.click();
+    if (!event.target.closest('button, ui-button, a, [data-cam-object]')) zoom.click();
   });
   heading.append(title, zoom);
   return heading;

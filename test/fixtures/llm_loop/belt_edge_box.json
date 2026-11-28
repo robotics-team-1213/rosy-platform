@@ -1,0 +1,127 @@
+{
+ "id": "belt_edge_box",
+ "evidence": "belt-xyz/auto_pick_dry_run-20261127-163624-a83fbc.json",
+ "note": "arm_b belt: one red box about 39 % over the belt edge reads \"no catalogue match\". Push or ask a human; never pick.",
+ "raw": {
+  "arm": "arm_b",
+  "fetched_at": 1795752823.9,
+  "frames": {
+   "top": {
+    "ok": true,
+    "frame_seq": 1976,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "side": {
+    "ok": true,
+    "frame_seq": 1977,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   },
+   "arm_b_wrist": {
+    "ok": true,
+    "frame_seq": 1978,
+    "source_stamp": 1795752823.5,
+    "luma": 88,
+    "size": [
+     640,
+     480
+    ],
+    "fetched_at": 1795752823.9
+   }
+  },
+  "dry_runs": [
+   {
+    "site": "belt",
+    "results": [
+     {
+      "ok": true,
+      "structured_result": {
+       "from": "belt",
+       "to": "pallet",
+       "attempts": [
+        {
+         "observed": 1,
+         "refused": [
+          {
+           "centre_mm": [
+            191,
+            180
+           ],
+           "object": null,
+           "colour": "red",
+           "why": "no catalogue match"
+          }
+         ],
+         "error": "no usable object"
+        }
+       ],
+       "map_pose_check": {
+        "ok": true,
+        "max_px": 1.2,
+        "inliers": 598
+       },
+       "result": "stopped: no usable object"
+      },
+      "error": null
+     }
+    ]
+   }
+  ],
+  "readiness": {
+   "arms": {
+    "arm_a": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    },
+    "arm_b": {
+     "folded": true,
+     "incident_held": false,
+     "human_hold_latched": false,
+     "fault": false,
+     "dirty": false,
+     "active_job_id": null
+    }
+   },
+   "allowed_tiers_now": [
+    1,
+    2,
+    3
+   ],
+   "blocking_refusals": []
+  },
+  "probe": {
+   "at_px": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   },
+   "push": {
+    "status": 400,
+    "text": "\"config: no such file in the workdir\""
+   }
+  }
+ },
+ "label": {
+  "kind": "refuse",
+  "allowed": [
+   {
+    "verb": "push",
+    "target": "c1"
+   }
+  ]
+ }
+}

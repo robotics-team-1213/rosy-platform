@@ -6,39 +6,12 @@ import re
 from urllib.parse import urlsplit
 
 from cell_job_validators import (  # noqa: E402,F401  (re-exported)
-    ACTOR,
-    ARM,
-    FIELD,
-    FILE,
-    FILTER_COL,
-    FILTER_OBJ,
-    IMAGES_SPEC,
-    MANIFEST_FILE,
-    METRE,
+    ACTOR, ARM, FIELD, FILE, FILTER_COL, FILTER_OBJ, IMAGES_SPEC, MANIFEST_FILE, METRE,
     NAME, SOURCE, AT_PX,
-    REPO_ID,
-    SAFE_PATH,
-    SHA256,
-    TASK_FILE,
-    VIEW,
-    _actor,
-    _bool,
-    _http_url,
-    _int_range,
-    _is_amr_bed_site,
-    _match,
-    _num,
-    _repo_id,
-    _roi,
-    _route,
-    _safe_path,
-    _surface_amr_bed_sites,
-    _targets,
-    _task_site_names,
-    _two_arm_task,
-    _two_arm_task_sites,
-    validate_dual_routes,
-    _workdir_rel_path,
+    REPO_ID, SAFE_PATH, SHA256, TASK_FILE, VIEW,
+    _actor, _bool, _http_url, _int_range, _is_amr_bed_site, _match, _num, _repo_id,
+    _roi, _route, _safe_path, _surface_amr_bed_sites, _targets, _task_site_names,
+    _two_arm_task, _two_arm_task_sites, validate_dual_routes, _workdir_rel_path,
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
@@ -47,6 +20,7 @@ from cell_site_job_spec import SITE_JOBS, check_site_files  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 from cell_job_peer_health import arm_library_path
 from cell_policy_run_spec import POLICY_SCRIPTS, policy_run_job
+from cell_target_binding import TARGET_OPTIONAL_PARAMS, append_cli_args as append_target_args
 
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
 AB_ARMS = {"arm_a", "arm_b"}
@@ -110,7 +84,7 @@ JOBS = {
     },
     "auto_pick": {
         "script": "cell_auto_pick.py",
-        "moving": True,
+        "moving": True, "cancellable": True, "machine_ids": ("cell-task-worker",),  # Fleet worker's free pick: stop proof still measured (cell_job_worker.py)
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(SOURCE), "dest": _match(NAME)},
@@ -256,6 +230,8 @@ JOBS = {
     **MEDIA_JOBS, **AREA_JOBS, **SITE_JOBS,
 }
 JOBS["cell_policy_run"] = policy_run_job(JOBS["cell_policy_drive"])
+for _j in ("auto_pick_dry_run", "auto_pick"):
+    JOBS[_j]["optional"].update(TARGET_OPTIONAL_PARAMS)
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
     if job.get("arms"):
@@ -374,6 +350,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    append_target_args(args, opt_checked)
     if job["script"] == "cell_torque_off_folded.py" and (lib := arm_library_path(workdir, checked["arm"])):
         args += ["--library", lib.name]  # the arm's own fold poses; none in the workdir: the coarse rule, as before
     if job["script"] == "cell_media_jobs.py":

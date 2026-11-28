@@ -43,6 +43,7 @@ from fleet.server.trip_runner_helpers import (  # noqa: F401
 )
 from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
+from fleet.server.nav2_trip_recovery import recover_instead
 from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
@@ -206,6 +207,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
             self._check_human_hold()
+            purpose = purpose or ("charge_return" if parking else None)  # rear charge-bay handoff: the way to a charger
             if purpose != "charge_return":  # D-1029: the way to a charger, like a charge_session job; CORE keeps 10 %/5 %
                 await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)
@@ -566,6 +568,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         A trip already closed (a cancel that landed mid-tick) keeps its state; the robot is
         still stopped again.
         """
+        if state == "stopped" and await recover_instead(self, live, reason, detail):
+            return  # D-1082: a non-hazard Nav2 road stop keeps the trip and resends from here
         live.at, live.at_stamp = None, None
         if live.open:
             live.view.update(state=state, reason=reason)

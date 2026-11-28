@@ -106,8 +106,8 @@
 
 ## 최근 기록
 
-- 2026-11-27 · uncommitted · pr3-custody-correction-step-resume: Fleet R custody release, precision correction clearance, robot step nudge, and explicit trip resume controls
-- 2026-11-27 · uncommitted · pr2-faults-panel-and-command-parity
-- 2026-11-27 · uncommitted · pr0-confirm-idempotency-gates
-- 2026-11-27 · uncommitted · pr1-stop-zone-overlay-and-next-steps
-- 2026-11-26 · 193197c657 · zone blueprint drawn on the active site map from station-zones YAML
+- 2026-11-28 · uncommitted · D-1087 물러나서 다시 보기
+- 2026-11-28 · uncommitted · feat(fleet): a push cell task is auto-admitted like the free pick and completes on measured displacement (D-1083)
+- 2026-11-28 · uncommitted · D-1086 trip 재발행 폴백
+- 2026-11-28 · uncommitted · D-1082 복구 사다리 1단계
+- 2026-11-28 · uncommitted · Hold point review round 4

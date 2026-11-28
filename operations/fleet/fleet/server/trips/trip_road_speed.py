@@ -5,6 +5,7 @@ from bisect import bisect_right
 import math
 
 from fleet.lane_progress import MIN_GAP_M, ON_LOOP_M, follower_speed
+from fleet.server.nav2_recovery_ladder import recovery_slow
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.server.road_route_lease import RoadSpeedRefused
 from fleet.server.trip_lane_realign import REALIGN_SLOW_MPS
@@ -15,6 +16,14 @@ GRANT_S = 1.5
 #: D-1080 (user 2026-11-27): tighter than R 0.30 m the robot cannot keep the lane at 0.15 m/s within its turn rate
 #: (the R 0.135 m U-turn); it goes at most 0.08 m/s there, departed or not.
 TIGHT_CURVE_CAPS = (CurveCap(0.30, 0.08),)
+
+
+#: A lease 409 while the state read still shows the goal running: CORE has no active leased goal, so nothing drives
+#: under it (its speed authority closes with the run and expires within 1.5 s). At the end of a route run CORE
+#: finishes the run a moment before it reports ARRIVED, and Fleet's shared state read lags on top (2026-11-27
+#: 13:05Z: two trips failed in that window). The step loop reads the state every tick; only past this long is it
+#: a failure.
+LEASE_ENDED_GRACE_S = 2.0
 
 
 async def _goal_finished(runner, rid) -> bool:
@@ -30,6 +39,16 @@ async def _goal_finished(runner, rid) -> bool:
     except Exception:
         return False
     return (isinstance(state, dict) and state.get("navigation") in ("ARRIVED", "FAILED") and state.get("goal") is None
+            and (state.get("safety") or {}).get("estop") is False)
+
+
+async def _goal_reads_running(runner, rid) -> bool:
+    """The state read still shows the goal under way (not cancelled, no e-stop): it may lag the lease's end."""
+    try:
+        state = await runner._call(runner._robot_state(rid))
+    except Exception:
+        return False
+    return (isinstance(state, dict) and state.get("navigation") in ("NAVIGATING", "PLANNING")
             and (state.get("safety") or {}).get("estop") is False)
 
 
@@ -70,7 +89,9 @@ class RoadSpeed:
         stamp = pose.odom_stamp
         reason = "route_profile"
         if (live.view["detail"].get("lane_departure") or {}).get("slow") and cap > REALIGN_SLOW_MPS:
-            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: until the camera sees it back on the lane
+            cap, reason = REALIGN_SLOW_MPS, "lane_realign"   # D-1080: while a departure is fresh evidence
+        elif recovery_slow(live.view["detail"], progress) and cap > REALIGN_SLOW_MPS:
+            cap, reason = REALIGN_SLOW_MPS, "recovery_slow"  # D-1082 ladder: attempt 2+ resends slow
         leader = None
         gap_m = None
         geometry = await self.geometry.get(active)
@@ -132,6 +153,12 @@ class RoadSpeed:
                     and getattr(exc, "code", None) in ("GOAL_LEASE_NOT_ACTIVE", "ROAD_SPEED_OWNER_CHANGED")
                     and live.open and live.active_route is route and await _goal_finished(runner, rid)):
                 detail["state"] = "arrived"  # reached the target before the first renewal; the step loop sees ARRIVED
+                return
+            if (getattr(exc, "status", None) == 409 and getattr(exc, "code", None) == "GOAL_LEASE_NOT_ACTIVE"
+                    and live.open and live.active_route is route and getattr(runner, "_robot_state", None) is not None
+                    and (seen := runner._clock()) - route.setdefault("lease_ended_at", seen) < LEASE_ENDED_GRACE_S
+                    and await _goal_reads_running(runner, rid)):
+                detail.update(state="lease_ended", error="GOAL_LEASE_NOT_ACTIVE")  # the next tick's state read decides
                 return
             detail.update(state="unconfirmed", error=getattr(exc, "code", type(exc).__name__))
             if isinstance(exc, RoadSpeedRefused):

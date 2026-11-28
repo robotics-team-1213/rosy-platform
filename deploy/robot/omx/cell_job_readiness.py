@@ -14,6 +14,12 @@ import urllib.request
 
 from cell_failure_context import canonical_sha256, list_bundles, load_bundle, resolve_asset
 from cell_job_guards import _live_folded, read_json_dict
+from cell_job_peer_health import current_fold
+
+try:
+    import fcntl
+except ImportError:  # Windows unit tests
+    fcntl = None
 
 ARMS = ("arm_s", "arm_a", "arm_b")
 CELL_ARMS = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
@@ -62,6 +68,12 @@ def held_job_response(arm: str, reason: str) -> dict:
     return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{arm} held: {reason}"}
 
 
+def _live_max_age_s() -> float:
+    from cell_job_api import LIVE_MAX_AGE_S
+
+    return LIVE_MAX_AGE_S
+
+
 def _stale_latch(arm: str, runner, live, session_held: bool) -> bool:
     import cell_arm_lease
     from cell_job_peer_health import stale_latch_superseded
@@ -71,9 +83,7 @@ def _stale_latch(arm: str, runner, live, session_held: bool) -> bool:
     lease = read_json_dict(lease_path) if lease_path else None
     leased = (lease is None and lease_path is not None and lease_path.is_file()) or bool(lease and cell_arm_lease.live(lease))
     health = getattr(runner, "motor_health_dir", None) or (Path.home() / ".local" / "state" / "rosy" / "motor-health")
-    from cell_job_api import LIVE_MAX_AGE_S
-
-    return stale_latch_superseded(arm, live, locked=session_held, leased=leased, max_age_s=LIVE_MAX_AGE_S, health_dir=health,
+    return stale_latch_superseded(arm, live, locked=session_held, leased=leased, max_age_s=_live_max_age_s(), health_dir=health,
                                   read_json_fn=read_json_dict, calibration_dir=getattr(runner, "calibration_dir", None))
 
 
@@ -92,6 +102,7 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
     superseded = {"fault": str(fault)[:160] if fault else None, "latched_t": live.get("t")} if stale_latch else None
     if stale_latch:  # the runner that latched is gone and the arm reads torque-off, folded, jaws shut: report what is there now
         fault, hold_latched, folded = None, False, True
+    folded, unknown = current_fold(arm, runner, live, now, folded, stale_latch, max_age_s=_live_max_age_s(), read_json_fn=read_json_dict)
     cid = "cell_s" if arm == "arm_s" else "cell_ab"
     info = {
         "session_lock_held": session_held,
@@ -99,6 +110,7 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
         "incident_reason": str(inc_reason)[:160] if inc_reason else None,
         "folded": folded if isinstance(folded, bool) else None,
         "fold_basis": "coarse",
+        "state_unknown": unknown,  # {"reason", "last_observed_at"}: the arm's state is not a current reading
         "human_hold_latched": hold_latched,
         "stale_latch_superseded": superseded,  # the left-behind latch, kept visible: its fault text and time
         "fault": str(fault)[:160] if fault else None,
@@ -124,6 +136,8 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
         blocks.append(f"{arm}:human_hold_latched")
     if session_held:
         blocks.append(f"session_lock:{arm}")
+    if unknown:
+        blocks.append(f"{arm}:state_unknown")
     return info, blocks
 
 
@@ -274,8 +288,30 @@ def proxy_frame(viewer_url: str, view: str, *, urlopen_fn=urllib.request.urlopen
         return 502, {"error": f"viewer unreachable: {exc}"}, "application/json", {}
 
 
-def handle_get_route(raw_target: str, runner, *, whole_cell_lock_fn, session_lock_fn, depth_lock_fn) -> tuple[int, Any, str, dict[str, str]] | None:
-    """Serve `/readiness`, `/failures`, `/failures/latest`, `/failures/{id}`, and `/failures/{id}/assets/{file}`."""
+def _flock_held(lock_path: Path, mode: int) -> bool:
+    if fcntl is None or not lock_path.exists():
+        return False
+    with open(lock_path, "a+") as fh:
+        try:
+            fcntl.flock(fh.fileno(), mode | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    return False
+
+
+def session_lock_held(arm: str, lock_dir: Path | None = None) -> bool:
+    """True when another process holds ~/rosy-omx/session-<arm>.lock."""
+    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / f"session-{arm}.lock", fcntl.LOCK_EX)
+
+
+def whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
+    """True when an exclusive whole-cell ~/rosy-omx/session.lock is held by another process."""
+    return False if fcntl is None else _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
+
+
+def handle_get_route(raw_target: str, runner, *, whole_cell_lock_fn, session_lock_fn, depth_lock_fn, viewer_url: str = "http://127.0.0.1:8767") -> tuple[int, Any, str, dict[str, str]] | None:
+    """Serve `/readiness`, `/objects`, `/failures`, `/failures/latest`, `/failures/{id}`, and `/failures/{id}/assets/{file}`."""
     if raw_target.startswith("/failures") and (".." in raw_target or "%2e" in raw_target.lower() or "\\" in raw_target):
         return 400, {"error": "invalid failure path"}, "application/json", {}
     parsed = urllib.parse.urlsplit(raw_target)
@@ -293,6 +329,23 @@ def handle_get_route(raw_target: str, runner, *, whole_cell_lock_fn, session_loc
         holds_by_arm = {arm: runner._check_incident(arm) for arm in rel_arms}
         body = build_readiness(runner, whole_cell_lock_fn=whole_cell_lock_fn, session_lock_fn=session_lock_fn, depth_lock_fn=depth_lock_fn, holds_by_arm=holds_by_arm, cell=cell_param)
         return 200, body, "application/json", base_hdrs
+    if path == "/objects":
+        import cell_object_view
+
+        arm = (qs.get("arm") or ["arm_s"])[0]
+        if arm not in ARMS:
+            return 400, {"error": f"invalid arm {arm!r}"}, "application/json", {**base_hdrs, "Cache-Control": "no-store"}
+        try:
+            body = cell_object_view.detect_objects(
+                runner.workdir, arm, site=(qs.get("site") or [None])[0],
+                config_name=(qs.get("config") or [None])[0], catalog_name=(qs.get("catalog") or [None])[0],
+                viewer_url=viewer_url, cell_state_gen=gen, urlopen_fn=urllib.request.urlopen,
+            )
+            return 200, body, "application/json", {**base_hdrs, "Cache-Control": "no-store"}
+        except ValueError as exc:
+            return 400, {"error": str(exc)}, "application/json", {**base_hdrs, "Cache-Control": "no-store"}
+        except (urllib.error.URLError, OSError) as exc:
+            return 502, {"error": f"viewer unavailable: {exc}"}, "application/json", {**base_hdrs, "Cache-Control": "no-store"}
     if path == "/failures":
         arm = (qs.get("arm") or [None])[0]
         kind = (qs.get("kind") or [None])[0]

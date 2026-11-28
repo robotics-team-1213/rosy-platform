@@ -18,12 +18,18 @@ export function guideAttention(guide, robotId) {
 
 const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
 
+/** D-1084: the lane watch's "not a departure" state rides in the chip; it is never a queue row. */
+function laneNote(row) {
+  const codes = new Set((row.findings || []).map((f) => f.code));
+  return codes.has("PARKING") ? " · 주차/도킹" : codes.has("POSE_MISMATCH") ? " · 위치 불일치" : "";
+}
+
 function compactPoseLabel(row) {
   if (!row.pose) return `${row.robot_id} · 위치 모름`;
   if (row.online === false) return `${row.robot_id} · 연결 끊김`;
   if (row.pose.state === "DEGRADED") return `${row.robot_id} · 추정`;
   if (row.pose.anchor_source === "operator_pin") return `${row.robot_id} · 핀`;
-  return row.robot_id;
+  return `${row.robot_id}${laneNote(row)}`;
 }
 
 /** "rosy_26 · LOCALIZED · ±0.12 m" for the chip next to the body circle. */
@@ -33,10 +39,10 @@ export function poseLabel(row) {
   const pin = row.pose.anchor_source === "operator_pin"
     ? ` · 운영자 핀${typeof row.pose.anchor_age_s === "number" ? ` ${Math.round(row.pose.anchor_age_s)} s` : ""}` : "";
   if (typeof row.pose.u_m === "number") {
-    return `${row.robot_id} · ±${row.pose.u_m.toFixed(2)} m${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}${gone}`;
+    return `${row.robot_id} · ±${row.pose.u_m.toFixed(2)} m${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}${laneNote(row)}${gone}`;
   }
   const deg = typeof row.pose.yaw === "number" ? ` · ${Math.round((row.pose.yaw * 180) / Math.PI)}°` : "";
-  return `${row.robot_id}${deg}${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}${gone}`;
+  return `${row.robot_id}${deg}${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}${laneNote(row)}${gone}`;
 }
 
 /** D-540 4: screen geometry of each placed robot at exact physical scale (~5.2 cm radius for Pinky Pro). */

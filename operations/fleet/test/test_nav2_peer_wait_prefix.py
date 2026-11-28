@@ -1,5 +1,6 @@
 """A downstream refusal may dispatch only a positively checked intermediate waiting place."""
 import asyncio
+import math
 from datetime import datetime, timezone
 from types import SimpleNamespace as NS
 
@@ -207,7 +208,8 @@ def test_active_prefix_obeys_progress_watchdog_and_goal_ownership(monkeypatch, l
     live.active_route.update(wait_prefix=True, end_index=2, road_speed_owner="prefix-owner")
     live.view["detail"]["wait_prefix"] = {"state": "dispatched", "place": live.place(2)}
     bot._state["navigation"] = "NAVIGATING"
-    monkeypatch.setattr(nav2, "reservation_covers", lambda *_: loss != "reservation")
+    from fleet.server import peer_wait_prefix
+    monkeypatch.setattr(peer_wait_prefix, "reservation_covers", lambda *_: loss != "reservation")  # supervised there
     renewals = []
     async def renew(_, trip, *args):
         renewals.append(trip.active_route["road_speed_owner"])
@@ -232,3 +234,463 @@ def test_active_prefix_obeys_progress_watchdog_and_goal_ownership(monkeypatch, l
     assert live.view["reason"] == {"stalled": "stall", "reservation": "WAIT_PREFIX_RESERVATION_LOST",
                                    "owner": "ROAD_SPEED_OWNER_CHANGED", "trip_lease": "lease_lost", "binding": "map_frame"}[loss]
     assert len(bot.routes) == 1
+
+
+
+# ---- table-cut hold point: depart, stop short of the peer, wait, continue (2026-11-27 rosy_45 live run) ----------
+
+from core_common.robot_body import PINKY_PRO  # noqa: E402
+from fleet.server.peer_wait_prefix import hold_point  # noqa: E402
+from fleet.server.trip_live import trip_execution  # noqa: E402
+from fleet.traffic.blocks import ZONE_STOP_CLEARANCE_M  # noqa: E402
+
+CLEAR = PINKY_PRO.rotation_clear_m()
+S_FROM, S_TO = 0.0228, 0.9867  # upper_west in the live capture: the trip starts mid-edge
+CUT = S_TO  # route metres where rosy_46's pinned loop_left#0 begins (occupied_ahead_m 0.964 plan metres)
+
+
+def hold_snapshot(lengths=((S_FROM, S_TO), (0., .5)), authority=.867):
+    clock = FakeClock()
+    segs = [{"s_from": a, "s_to": b, "edge_id": f"e{i}", "forward": True} for i, (a, b) in enumerate(lengths)]
+    spans = [b - a for a, b in lengths]
+
+    def progress(i, s):
+        return sum(spans[:i]) + s - segs[i]["s_from"]
+
+    curve = {}  # arc metre -> yaw after it (a corner), per test
+    def point_at(i, s):
+        x = S_FROM + progress(i, s)  # a straight lane in route metres along x
+        return x, 0., next((yaw for at, yaw in curve.items() if i == 0 and s >= at), 0.)
+
+    places = {"J_out": NS(id="J_out", kind="junction", x=S_TO, y=0.), "P3": NS(id="P3", kind="stop", x=S_TO + .5, y=0.)}
+    graph = NS(places=places)
+    active = (3, NS(map_id="site", crosswalks=[]), graph)
+    store = NS(active=lambda: active, rules=NS(active_rules=lambda: None))
+    owned = {"end": authority}
+    table = NS(_store=store, _layout_for=lambda _active: None,
+               holds=lambda lv, k: (lv.traffic or {}).get("refused_at_m") is not None
+               and lv.traffic["refused_at_m"] < lv.progress(k, lv.segments[k]["s_to"]) + .05,
+               owns_span=lambda lv, a, b: a <= b <= owned["end"] + 1e-9)
+    sent, stops, cancels, renewals, guards = [], [], [], [], []
+    state = {"navigation": "IDLE"}
+
+    async def route(rid, payload, **options):
+        guard = prefix_guard.get()
+        guards.append(guard is not None and guard[3]())  # the console asks the closure at the wire
+        sent.append((payload, options))
+        return {"accepted": True, "road_speed_owner": "lease"}
+
+    async def stop(live, status, reason, detail=None):
+        stops.append(reason)
+        live.view["state"] = status
+
+    async def cancel(rid):
+        cancels.append(rid)
+        return {"ok": True, "cancel_confirmed": True}
+
+    async def renew(*_args):
+        renewals.append(1)
+
+    runner = NS(_clock=clock, config=NS(arrive_free_m=.15, advance_free_m=.15, map_binding_required=False,
+                                        stall_m=.05, stall_s=20.), _store=store, traffic=table,
+                road_speed=NS(renew=renew), _route=route, _stop=stop, _cancel_goal=cancel,
+                _robot_state=lambda _rid: asyncio.sleep(0, result=state), _call=lambda awaitable: awaitable,
+                _after_send=lambda _live: asyncio.sleep(0), _fence=lambda _rid: None, autonomous_robots=set(),
+                _strict_named_stop=lambda *_: None)
+    live = NS(open=True, nav2_binding_scope=None, graph=graph, segments=segs, progress=progress,
+              view={"robot_id": "rosy_45", "trip_id": "t", "map_version": 3, "caps": {"kind": "pinky_pro"},
+                    "hold": None, "state": "running", "pose": {"state": "LOCALIZED", "x": S_FROM, "y": 0.},
+                    "detail": {}},
+              place=lambda i: ("J_out", "P3")[i], request={"to": "P3"}, repeat=False, convoy=None,
+              arc=lambda i: NS(point_at=lambda s: point_at(i, s), knots=(), polyline=()),
+              at=(0, S_FROM), route_rev=1, trim_m=0., active_route=None, nav2_retry_at=-math.inf,
+              best_progress=-math.inf, progress_at=None, junction={}, authority=None, command_ack_mono=None,
+              last_goal=None, sent=None)
+    live.traffic = None
+
+    def table_row(**change):
+        live.traffic = {"waiting_for": [], "authority_end_m": owned["end"], "refused_at_m": None, "front_d_m": .065,
+                        "pose_stamp": clock(), "route_rev": 1, "peers": {"rosy_46": ["site", -.83, -.36]},
+                        "occupied_ahead_m": CUT - S_FROM, "occupied_ahead_by": ["rosy_46"], **change}
+    table_row()
+    return NS(runner=runner, live=live, active=active, state=state, sent=sent, stops=stops, cancels=cancels,
+              renewals=renewals, guards=guards, owned=owned, table_row=table_row, curve=curve, clock=clock)
+
+
+def _drive(monkeypatch, h, s, nav="IDLE", stopped=False, seg=0):
+    """One trip period at arc metre ``s`` of segment ``seg`` (the robot projected on the lane centre)."""
+    monkeypatch.setattr(nav2, "ready_free_goal", lambda *_: asyncio.sleep(0, result=True))
+    monkeypatch.setattr(nav2, "observe_lane_departure", lambda *_: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(nav2, "_convert_points", lambda runner, live, active, pts, pose, state: (pts, None))
+    monkeypatch.setattr(nav2, "sample_nav2_route", lambda graph, segs, index, s0, end, **kw: [(
+        S_FROM + h.live.progress(end, segs[end]["s_to"] if kw.get("end_s") is None else kw["end_s"]), 0., 0., "stop")])
+    h.state.clear()
+    h.state["navigation"] = nav
+    if stopped:
+        h.state.update(velocity={"linear": 0., "angular": 0.},
+                       evidence={"pose": {"evidence": "fresh"}, "velocity": {"evidence": "fresh"}})
+    x = S_FROM + h.live.progress(seg, s)
+    h.live.at = (seg, s)
+    h.live.view["pose"] = {"state": "LOCALIZED", "x": x, "y": 0.}
+    run(nav2.step_nav2_route(h.runner, h.live, seg, s, NS(x=x, y=0., yaw=0., odom_stamp=h.clock())))
+
+
+def _stalled(h, s):
+    from fleet.server.trip_progress import TripProgress
+    return TripProgress._stalled(h.runner, h.live, 0, s)
+
+
+def test_first_span_pin_dispatches_hold_point_and_resumes(monkeypatch):
+    h = hold_snapshot()
+    assert nav2._traffic_end_index(h.runner, h.live, 0) is None  # the live cause: the pin cuts segment 0
+    _drive(monkeypatch, h, S_FROM)
+    assert len(h.sent) == 1 and h.guards == [True] and h.stops == []
+    end = h.sent[0][0][-1]
+    hold = h.live.view["detail"]["wait_prefix"]
+    assert end["kind"] == "stop" and end["x"] + CLEAR <= .867 + 1e-6 and end["x"] + CLEAR <= CUT
+    assert end["x"] > S_FROM + .5  # it departs: most of the granted lane is used
+    assert hold["kind"] == "hold_point" and hold["segment"] == 0 and hold["waiting_on"] == ["rosy_46"]
+    assert hold["target_xy"] == [end["x"], 0.] and h.live.active_route["hold_point"]["segment"] == 0
+    assert "attempt_id" not in h.sent[0][1] and h.sent[0][1]["road_speed_controlled"]
+    for s in (.2, .4, .6):  # driving under the cut: never cancelled, the watchdog stays on
+        h.clock.advance(1.)
+        h.table_row()
+        _drive(monkeypatch, h, s, nav="NAVIGATING")
+        assert h.live.active_route and h.cancels == [] and not _stalled(h, s)
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    _drive(monkeypatch, h, hold_s, stopped=True)
+    assert h.live.active_route is None and hold["state"] == "at_hold_point" and len(h.sent) == 1
+    for _ in range(60):  # 30 s standing, past stall_s: no resend, no stall, the blocker named
+        h.clock.advance(.5)
+        h.table_row()
+        _drive(monkeypatch, h, hold_s, stopped=True)
+        assert not _stalled(h, hold_s)
+    assert len(h.sent) == 1 and h.stops == [] and h.live.view["detail"]["traffic_hold"]["waiting_for"] == ["rosy_46"]
+    execution = trip_execution(h.live.view, h.live)
+    assert (execution["phase"], execution["reason"], execution["waiting_on"]) == ("goal_wait", "traffic_hold", ["rosy_46"])
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])  # rosy_46 left
+    _drive(monkeypatch, h, hold_s, stopped=True)
+    assert len(h.sent) == 2 and h.sent[1][0][-1]["x"] == pytest.approx(S_FROM + h.live.progress(1, .5))
+    assert "traffic_hold" not in h.live.view["detail"] and not h.live.active_route.get("hold_point")
+
+
+def test_hold_point_route_survives_refusal_beyond_it(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.table_row(refused_at_m=CUT - S_FROM, waiting_for=["rosy_46"])  # loop_left#0 asked for and refused mid-drive
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    assert h.stops == [] and h.cancels == [] and h.live.active_route["hold_point"] and h.renewals
+    assert h.live.view["detail"]["wait_prefix"]["state"] == "dispatched"
+
+
+@pytest.mark.parametrize("acked", [True, False])
+def test_hold_point_coverage_lost_cancels_and_waits(monkeypatch, acked):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    if not acked:
+        h.runner._cancel_goal = lambda _rid: asyncio.sleep(0, result={"ok": False})
+    h.clock.advance(1.)
+    h.owned["end"] = .45
+    h.table_row()  # the authority shrank below the stop's turn footprint
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    if not acked:  # an unconfirmed cancel keeps the existing safety stop
+        assert h.stops == ["WAIT_PREFIX_RESERVATION_LOST"]
+        return
+    assert h.stops == [] and h.live.active_route is None and h.cancels == ["rosy_45"]
+    assert h.live.view["detail"]["wait_prefix"]["state"] == "reservation_lost" and len(h.sent) == 1
+    h.owned["end"] = .867
+    h.table_row()
+    _drive(monkeypatch, h, .32, nav="CANCELED")  # not yet shown stopped: no replacement
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .32, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2 and h.live.view["detail"]["wait_prefix"]["state"] == "dispatched"
+
+
+@pytest.mark.parametrize("feature", ["two_way_zone", "crosswalk", "tight_curve"])
+def test_hold_point_backs_off_two_way_zone_crosswalk_and_tight_curve(feature):
+    h = hold_snapshot()
+    free, _ = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    # a corner under the free stop's turn footprint, a crosswalk just ahead of it, a two-way lane farther back
+    edge = {"tight_curve": .75, "crosswalk": .8}.get(feature, .5)
+    if feature == "two_way_zone":  # an auto two-way lane unit (zone=True) the configured zones do not list
+        layout = NS(units={"lane:bay": NS(zone=True), "upper_west#0": NS(zone=False)})
+        h.runner.traffic._layout_for = lambda _active: layout
+        h.runner.traffic._under = lambda _layout, _graph, pose: {"lane:bay" if pose[0] > edge else "upper_west#0": True}
+    elif feature == "crosswalk":
+        h.active[1].crosswalks.append(NS(polygon=[(edge, -.1), (edge + .1, -.1), (edge + .1, .1), (edge, .1)], approach=()))
+    else:
+        h.curve[edge] = 1.5
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    x = stop  # the fake lane: x equals arc metres on segment 0
+    assert why == "hold_point" and stop < free
+    tol = .03  # Nav2 may stop anywhere this close to the goal (NAV2_XY_GOAL_TOLERANCE_M)
+    if feature == "two_way_zone":
+        assert edge - ZONE_STOP_CLEARANCE_M - tol - .02 - 1e-9 <= x <= edge - ZONE_STOP_CLEARANCE_M - tol + 1e-9
+    else:
+        assert edge - CLEAR - tol - .02 - 1e-9 <= x < edge - CLEAR - tol if feature == "crosswalk" else x + CLEAR + tol < edge
+
+
+def test_final_segment_hold_point_is_not_arrival(monkeypatch):
+    h = hold_snapshot(lengths=((S_FROM, S_TO),))
+    h.live.place = lambda i: "P3"
+    named = []
+    h.runner._strict_named_stop = lambda *_: named.append(1) or NS(id="P3")
+    h.live.nav2_binding_scope = (3, "binding")
+    monkeypatch.setattr(nav2, "recheck_binding", lambda *_: asyncio.sleep(0))
+    h.live.view["detail"]["goal_frame"] = {"map_id": "site", "map_version": 3, "map_grid_id": "g", "binding_id": "b"}
+    recorded = []
+    monkeypatch.setattr(nav2, "record_stop_dispatch", lambda *args: recorded.append(args))
+    h.table_row(occupied_ahead_m=S_TO - S_FROM - .01)  # the peer stands on the destination bay's approach
+    _drive(monkeypatch, h, S_FROM)
+    assert len(h.sent) == 1 and "attempt_id" not in h.sent[0][1] and not named and not recorded
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    _drive(monkeypatch, h, hold_s, stopped=True)
+    # trip_steps never reports arrival while this cut stands (``traffic_hold`` is its guard)
+    assert h.live.view["detail"]["traffic_hold"] and h.live.view["detail"]["wait_prefix"]["state"] == "at_hold_point"
+
+
+def test_short_advance_sends_nothing_and_names_blocker(monkeypatch):
+    h = hold_snapshot()
+    free, _ = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    _drive(monkeypatch, h, free - .1)
+    assert h.sent == [] and h.stops == []
+    hold = h.live.view["detail"]["wait_prefix"]
+    assert (hold["state"], hold["reason"], hold["waiting_on"]) == ("held", "no_room_to_advance", ["rosy_46"])
+    assert h.live.view["detail"]["traffic_hold"]["waiting_for"] == ["rosy_46"]
+    h.live.progress_at = h.clock()
+    h.clock.advance(25.)
+    assert not _stalled(h, free - .1)
+
+
+@pytest.mark.parametrize("refusal", ["LOCALIZATION_UNTRUSTED", "MAP_FRAME_MISMATCH", "convoy"])
+def test_hold_point_keeps_hard_refusals(monkeypatch, refusal):
+    h = hold_snapshot()
+    if refusal == "convoy":
+        h.live.convoy = "lead"
+        h.table_row(refused_at_m=CUT - S_FROM, waiting_for=["rosy_46"])  # no table answer for a convoy member
+    else:
+        async def refuse(rid, payload, **options):
+            h.sent.append((payload, options))
+            return {"accepted": False, "queued": False, "reason": refusal, "blocked_by": "rosy_46",
+                    "dispatch_attempted": False, "waiting_on": ["rosy_46"], "command_robot_id": rid}
+        h.runner._route = refuse
+        monkeypatch.setattr(nav2, "inspect_held_route", lambda *_: asyncio.sleep(0))
+    _drive(monkeypatch, h, S_FROM)
+    assert h.live.active_route is None and h.stops == []
+    if refusal == "convoy":
+        assert h.sent == [] and h.live.view["detail"]["wait_prefix"]["reason"] == "no_table_answer"
+    else:
+        assert len(h.sent) == 1 and h.live.view["detail"]["peer_wait"]["reason"] == refusal
+        assert h.live.view["detail"]["wait_prefix"]["state"] == "held"
+
+
+@pytest.mark.parametrize("waiting, asked", [({"signal:roundabout", "pose_jump"}, True), ({"gone"}, False)])
+def test_check_wait_prefix_ignores_pseudo_waiting_ids(waiting, asked):
+    console = NS(_pose_of=lambda rid: None, _order=["m"])
+    calls = []
+    token = prefix_guard.set(("m", "site", waiting, lambda: calls.append(1) or False, [], []))
+    try:  # a pseudo id never fails the roster check; a robot that left the roster still does
+        assert check_wait_prefix(console, "m", [], lambda pts: None) is False
+        assert bool(calls) is asked
+    finally:
+        prefix_guard.reset(token)
+
+
+
+# ---- review round (PR #1140): footprint at the cut, replacement fence, goal tolerance, peers, bends, Nav2 abort --------
+
+def test_segment_end_whose_footprint_reaches_the_cut_gets_a_hold_point(monkeypatch):
+    h = hold_snapshot()
+    h.table_row(occupied_ahead_m=S_TO - S_FROM + .06)  # a unit 6 cm past the segment end: PAST_PLACE_M admits the end
+    assert nav2._traffic_end_index(h.runner, h.live, 0) == 0  # unchanged for its other callers
+    _drive(monkeypatch, h, S_FROM)
+    end = h.sent[0][0][-1]
+    assert len(h.sent) == 1 and end["x"] + max(CLEAR, .2) <= S_TO + .06 + 1e-6 and end["x"] < S_TO - .1
+    assert h.live.active_route["hold_point"]["segment"] == 0
+
+
+def test_superseded_hold_route_is_replaced_only_after_standstill(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])  # the cut cleared mid-drive
+    _drive(monkeypatch, h, .4, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"] and len(h.sent) == 1  # no replacement in the cancel's own period
+    _drive(monkeypatch, h, .42, nav="CANCELED")  # no velocity evidence: no standstill
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .42, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2 and not h.live.active_route.get("hold_point")
+
+
+def test_replacement_fence_survives_a_period_without_room(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.owned["end"] = .45
+    h.table_row()
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"]
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # no room to advance this period
+    assert h.live.view["detail"]["wait_prefix"]["fence"] is True
+    h.owned["end"] = .867
+    h.table_row()
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # room again, still no standstill evidence
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .3, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2
+
+
+def test_nav2_goal_tolerance_is_the_device_value():
+    from pathlib import Path
+    import yaml
+    from fleet.server.peer_wait_prefix import NAV2_XY_GOAL_TOLERANCE_M
+    params = Path(__file__).resolve().parents[3] / "middleware/drive/planning/nav2/params/nav2_params.yaml"
+    data = yaml.safe_load(params.read_text(encoding="utf-8"))
+    checker = data["controller_server"]["ros__parameters"]["general_goal_checker"]
+    assert checker["xy_goal_tolerance"] == NAV2_XY_GOAL_TOLERANCE_M
+
+
+def test_crosswalk_back_off_includes_the_goal_tolerance():
+    h = hold_snapshot()
+    free, _ = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    edge = free + CLEAR + .02  # clear of the nominal footprint, not of a stop 3 cm long
+    h.active[1].crosswalks.append(NS(polygon=[(edge, -.1), (edge + .1, -.1), (edge + .1, .1), (edge, .1)], approach=()))
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    assert why == "hold_point" and edge - stop > CLEAR + .03
+
+
+def test_a_stop_inside_a_crosswalk_footprint_is_reported_not_held(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    edge = hold_s + CLEAR - .01  # the approach as the robot actually stopped (inside its tolerance)
+    h.active[1].crosswalks.append(NS(polygon=[(edge, -.1), (edge + .1, -.1), (edge + .1, .1), (edge, .1)], approach=()))
+    _drive(monkeypatch, h, hold_s, stopped=True)
+    receipt = h.live.view["detail"]["wait_prefix"]
+    assert receipt["state"] == "stopped_in_footprint" and h.live.active_route is None
+    for _ in range(3):  # it keeps waiting where it is: never sent backwards
+        h.clock.advance(.5)
+        h.table_row()
+        _drive(monkeypatch, h, hold_s, stopped=True)
+    assert len(h.sent) == 1 and receipt["state"] == "stopped_in_footprint" and h.stops == []
+
+
+@pytest.mark.parametrize("gap", [None, .35])
+def test_hold_point_backs_off_standing_peer_clearance_and_formation_gap(gap):
+    h = hold_snapshot(authority=.88)
+    if gap is not None:
+        h.runner._store.rules = NS(active_rules=lambda: NS(formation=NS(min_gap_m=gap)))
+    h.table_row(occupied_ahead_m=1.0 - S_FROM, peers={"rosy_46": ["site", .90, 0.]})
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    keep = .18  # the console's clearance: the one site keep-out (#1128)
+    assert why == "hold_point" and .90 - stop > max(keep, (gap or .2) + .03)
+    assert .90 - stop < max(keep, (gap or .2) + .03) + .02 + 1e-9  # the farthest such stop
+
+
+def test_road_speed_holding_a_hold_route_behind_a_peer_is_no_stall(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    h.live.view["detail"]["road_speed"] = {"reason": "leader_gap", "limit_mps": 0.0, "leader": "rosy_46"}
+    assert not _stalled(h, .4)
+    h.clock.advance(25.)
+    assert not _stalled(h, .4)
+
+
+def test_tight_curve_counts_opposite_bends():
+    h = hold_snapshot()
+    h.curve[.82] = 0.  # a right bend 8 cm after a left one: equal headings at the footprint's ends
+    h.curve[.74] = 1.57
+    stop, why = hold_point(h.runner, h.live, h.active, 0, S_FROM)
+    assert why == "hold_point" and stop + CLEAR + .03 < .74
+
+
+def test_nav2_failure_on_a_hold_route_waits_and_retries(monkeypatch):
+    h = hold_snapshot()
+    h.runner.autonomous_robots = {"rosy_45"}  # as the ordinary route: only an autonomous robot retries FAILED
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav="FAILED")
+    receipt = h.live.view["detail"]["wait_prefix"]
+    assert h.stops == [] and h.live.active_route is None and receipt["state"] == "aborted" and receipt["fence"]
+    _drive(monkeypatch, h, .6, nav="FAILED")  # retry delay and no standstill evidence yet
+    assert len(h.sent) == 1
+    h.clock.advance(nav2.NAV2_TRANSIENT_RETRY_S)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav="FAILED", stopped=True)
+    assert len(h.sent) == 2 and h.live.active_route["hold_point"] and h.stops == []
+
+
+
+# ---- review round 3 (PR #1140) ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("nav, autonomous", [("CANCELED", True), ("FAILED", False)])
+def test_external_cancel_or_supervised_failure_on_a_hold_route_ends_the_trip(monkeypatch, nav, autonomous):
+    h = hold_snapshot()
+    h.runner.autonomous_robots = {"rosy_45"} if autonomous else set()
+    _drive(monkeypatch, h, S_FROM)
+    h.clock.advance(1.)
+    h.table_row()
+    _drive(monkeypatch, h, .6, nav=nav)
+    assert h.stops == ["navigation"] and len(h.sent) == 1
+
+
+def test_cancel_of_an_ordinary_route_shortened_by_the_footprint_cut_fences_the_hold_point(monkeypatch):
+    h = hold_snapshot()
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, S_FROM)  # an ordinary route over both segments
+    assert len(h.sent) == 1 and h.live.active_route["end_index"] == 1 and not h.live.active_route.get("hold_point")
+    h.clock.advance(1.)
+    h.table_row(occupied_ahead_m=h.live.progress(1, .5) + .06)  # the cut moves to 6 cm past segment 2's end
+    _drive(monkeypatch, h, .3, nav="NAVIGATING")
+    assert h.cancels == ["rosy_45"] and len(h.sent) == 1  # cancelled, no replacement in the same period
+    assert h.live.view["detail"]["wait_prefix"]["fence"] is True
+    _drive(monkeypatch, h, .3, nav="CANCELED")  # no velocity evidence: no standstill
+    assert len(h.sent) == 1
+    _drive(monkeypatch, h, .3, nav="CANCELED", stopped=True)
+    assert len(h.sent) == 2 and h.live.active_route["hold_point"]["segment"] == 1
+
+
+def test_arrived_off_the_hold_point_keeps_waiting_under_the_cut(monkeypatch):
+    h = hold_snapshot()
+    _drive(monkeypatch, h, S_FROM)
+    hold_s = h.live.active_route["hold_point"]["end_s"]
+    _drive(monkeypatch, h, hold_s - .3, nav="ARRIVED", stopped=True)  # Nav2 says ARRIVED 0.3 m short
+    assert h.live.view["detail"]["wait_prefix"]["state"] == "waiting_stop_confirmation"
+    assert not _stalled(h, hold_s - .3)
+    h.clock.advance(25.)
+    assert not _stalled(h, hold_s - .3) and h.live.view["detail"]["traffic_hold"]["waiting_for"] == ["rosy_46"]
+
+
+
+# ---- review round 4 (PR #1140) ---------------------------------------------------------------------------------
+
+def test_a_second_cut_fence_blocks_arrival_until_standstill_and_the_final_goal(monkeypatch):
+    """Codex round 4: the first cut clears (receipt resolved), a second cut cancels the ordinary route 14 cm short
+    of the destination and fences it; the cut clears before fresh velocity evidence: still no arrival."""
+    from fleet.server.peer_wait_prefix import hold_pending
+    h = hold_snapshot()
+    detail = h.live.view["detail"]
+    _drive(monkeypatch, h, S_FROM)  # first cut: a hold point
+    h.clock.advance(1.)
+    h.owned["end"] = 2.
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, .4, nav="NAVIGATING")  # cleared mid-drive: cancel, fence
+    _drive(monkeypatch, h, .4, nav="CANCELED", stopped=True)  # standstill: the real route to P3
+    assert len(h.sent) == 2 and detail["wait_prefix"]["resolved"] and not hold_pending(detail)
+    h.clock.advance(1.)
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])
+    _drive(monkeypatch, h, .36, nav="NAVIGATING", seg=1)  # 14 cm short of P3
+    h.table_row(occupied_ahead_m=h.live.progress(1, .5) + .06)  # second cut: 6 cm past the destination
+    _drive(monkeypatch, h, .36, nav="NAVIGATING", seg=1)
+    assert h.cancels == ["rosy_45", "rosy_45"] and detail["wait_prefix"]["fence"] and hold_pending(detail)
+    h.table_row(occupied_ahead_m=None, occupied_ahead_by=[])  # the cut clears before fresh velocity evidence
+    _drive(monkeypatch, h, .36, nav="CANCELED", seg=1)
+    assert len(h.sent) == 2 and "traffic_hold" not in detail and hold_pending(detail)  # never an arrival here
+    _drive(monkeypatch, h, .36, nav="CANCELED", stopped=True, seg=1)  # standstill: the final goal goes out
+    assert len(h.sent) == 3 and h.sent[-1][0][-1]["x"] == pytest.approx(S_FROM + h.live.progress(1, .5))
+    assert not hold_pending(detail)

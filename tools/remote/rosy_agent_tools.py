@@ -18,6 +18,7 @@ _CELL_TASK_PROPS: dict[str, Any] = {
     "tier": {"type": "integer"}, "tiers": {"type": "array", "items": {"type": "integer"}},
     "execution_mode": {"type": "string", "enum": ["guarded_pick", "act_policy"]},
     "max_chunks": {"type": "integer"}, "displaced_to": {"type": "string"}, "zone_id": {"type": "string"},
+    "motion": {"type": "object", "description": "free_pick {kind, anchor_site, at_px [u,v], dst_site, frame_seq, frame_sha256, object?, colour?} or push {kind, site, px [u,v], dir [dx,dy], mm 5..20, frame_seq, frame_sha256}; pixels only, never metres; frame_seq/frame_sha256 are an audit record of the frame you chose, not a binding: the cell re-measures at run time and refuses when no measured blob lies at the pixel"},
     "task_id": {"type": "string"}, "request_key": {"type": "string"}, "auto_admit": {"type": "boolean"},
     "fallback_from_task_id": {"type": "string"}, "fallback_verb": {"type": "string"},
     "failure_bundle_id": {"type": "string"}, "failure_context_sha256": {"type": "string"},
@@ -48,6 +49,12 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
          "source": {"type": "string"}, "dest": {"type": "string"},
          "object": {"type": "string"}, "colour": {"type": "string"}, "layers_below": {"type": "integer"}, "neighbour_clear_mm": {"type": "number"},
          "at_px": {"type": "string", "description": "U,V pixel of the object top face; with source free:<site>"},
+         "one_shot": {"type": "boolean"}, "target_object_ref": {"type": "string"},
+         "target_catalog_id": {"type": "string"},
+         "target_centroid_mm": {"type": "array", "items": {"type": "number"}},
+         "target_source_seq": {"type": "integer"}, "target_observed_at": {"type": "number"},
+         "target_ttl_s": {"type": "number"}, "target_tolerance_mm": {"type": "number"},
+         "expected_cell_state_gen": {"type": "integer"},
      }, ["config", "catalog", "roi", "source", "dest"])},
     {"name": "fleet_state", "description": "Read Fleet-R /api/fleet/state (registered robots, online status, scope).",
      "inputSchema": _obj_schema({})},
@@ -104,6 +111,14 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
          "stay_in_hover": {"type": "boolean"}, "no_vision_refine": {"type": "boolean"},
          "catalog": {"type": "string"}, "object": {"type": "string"},
      }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
+)
+TOOL_SPECS += (
+    {"name": "cell_observe", "description": "Non-moving observation pack for one arm (runs camera-only dry-run jobs on the cell and takes its one camera slot; repeat is at most 5): fresh frames, annotated top frame, measured candidates with refusal CODE and suggestions, readiness, live verbs. observable=false (reason only) when a camera is dark, stale or missing.",
+     "inputSchema": _obj_schema({"arm": {"type": "string", "enum": ["arm_a", "arm_b", "arm_s"]}, "repeat": {"type": "integer", "maximum": 5},
+                                 "layers_below": {"type": "integer"}}, ["arm"])},
+    {"name": "cell_verify_after", "description": "Camera verdict for one step: compare the observation pack before with a fresh one this tool takes itself (source cleared, arrived at dest, nothing else moved, arm folded, no incident). A job exit code is never success.",
+     "inputSchema": _obj_schema({"before": {"type": "object"}, "step": {"type": "object"}, "job_exit": {"type": "integer"}},
+                                ["before", "step"])},
 )
 TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
 OPERATIONS_MCP_TOOLS = frozenset({

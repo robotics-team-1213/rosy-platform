@@ -1,0 +1,74 @@
+{
+ "schema": "rosy.cell-topview.v1",
+ "place": "S3",
+ "cell": "arm_s",
+ "view": "arm_s_top",
+ "reference_image": "s3_reference.png",
+ "mask_left_px": 260,
+ "tray": {
+  "roi": [
+   0,
+   0,
+   340,
+   480
+  ],
+  "hsv_lo": [
+   3,
+   120,
+   120
+  ],
+  "hsv_hi": [
+   18,
+   255,
+   255
+  ],
+  "min_area_px": 1500
+ },
+ "target_px": [
+  128.7,
+  187.3
+ ],
+ "target_axis_deg": -3.6,
+ "px_to_site": [
+  [
+   0,
+   0.0008620689655172414
+  ],
+  [
+   0.0008620689655172414,
+   0
+  ]
+ ],
+ "position_sigma_m": 0.008,
+ "heading_sigma_rad": 0.02,
+ "min_inliers": 25,
+ "max_rms_px": 2,
+ "marker": {
+  "dictionary": "DICT_4X4_50",
+  "ids": {
+   "rosy_45": 45,
+   "rosy_46": 46
+  }
+ },
+ "max_frame_age_s": 2,
+ "max_corrections": 3,
+ "notes": {
+  "target": "model S pinky_v1 training top frames (100 episodes): median tray centroid px, tray long axis; reference_image is the median training frame",
+  "px_to_site": "NOMINAL x=down*s, y=right*s with s=1/1160 m/px (about 1.16 px/mm at tray height); re-solve on the real robot with: python -m fleet.localization.topview_pose calibrate"
+ },
+ "site_target": {
+  "x": 0.751,
+  "y": -0.252,
+  "yaw": -3.1082,
+  "derivation": "rosy_45 SLAM pose (0.7204,-0.2185,3.0860) at the live0 frame minus its top-view offset (dx -0.0310, dy +0.0336, dyaw -0.0890 rad); the user estimated (0.745,-0.255,pi+0.04) independently. SLAM-to-site assumed identity at S3: re-check with a ceiling sighting before publishing. yaw is pi+0.0334 written inside (-pi, pi]."
+ },
+ "precision_stop": {
+  "evidence_ref": "model-s-topview-2026-11-27",
+  "longitudinal_m": 0.03,
+  "lateral_m": 0.03,
+  "heading_rad": 0.0873,
+  "position_uncertainty_m": 0.008,
+  "heading_uncertainty_rad": 0.02,
+  "max_correction_m": 0.05
+ }
+}

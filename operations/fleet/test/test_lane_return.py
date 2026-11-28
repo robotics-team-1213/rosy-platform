@@ -66,11 +66,11 @@ def test_tracker_debounces_and_wrong_way_needs_travel():
 
 
 class Poses:
-    def __init__(self, pose):
-        self.pose = pose
+    def __init__(self, pose, moving=False):
+        self.pose, self.moving = pose, moving
 
     def moved(self, *_):
-        return False
+        return self.moving
 
     async def refresh(self, *_a, **_k):
         return None
@@ -96,7 +96,7 @@ class Client:
 def test_monitor_sends_cue_off_lane_and_clears_once():
     clock = [100.0]
     client = Client()
-    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0), True)
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
                                     config=LaneComplianceConfig(off_map_pad_m=0.5),
                                     wall=lambda: clock[0], clients=lambda: {"r1": client})
@@ -108,6 +108,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
     assert client.sent[-1]["pose_stamp"] == 5.0
     assert client.sent[-1]["ttl_s"] <= 1.0 and "guide" in client.sent[-1] and "crosswalk_ahead" not in client.sent[-1]
     poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=6.0)
+    poses.moving = False                                     # back on the lane and stopped: one clear
     for _ in range(6):
         asyncio.run(monitor.tick())
         clock[0] += 0.5
@@ -154,7 +155,7 @@ def test_a_refused_cue_is_not_counted_as_sent():
             return {"accepted": False, "reason": "pose_stale"}
 
     client = Refusing()
-    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0), True)
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
                                     config=LaneComplianceConfig(off_map_pad_m=0.5),
                                     wall=lambda: clock[0], clients=lambda: {"r1": client})
@@ -167,7 +168,7 @@ def test_a_refused_cue_is_not_counted_as_sent():
 def test_no_cue_while_the_robot_has_an_open_stuck_except_off_map():
     clock = [100.0]
     client = Client()
-    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0), True)
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
                                     config=LaneComplianceConfig(off_map_pad_m=0.5), wall=lambda: clock[0],
                                     clients=lambda: {"r1": client}, stuck_open=lambda rid: True)

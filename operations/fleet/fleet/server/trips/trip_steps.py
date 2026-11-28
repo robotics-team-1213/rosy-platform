@@ -21,9 +21,10 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, step_nav2_route
-from fleet.server.transient_loc_hold import (consume_transient_wait, handle_unlocalized_pose,
-                                              recheck_binding)
+from fleet.server.trip_nav2_route import camera_body_inside, finish_camera_line, hold_pending, step_nav2_route
+from fleet.server.nav2_trip_recovery import resume_ready
+from fleet.server.transient_loc_hold import (auto_rebind_before_dispatch, consume_transient_wait, handle_unlocalized_pose,
+                                              hold_unreachable_pre_dispatch, recheck_binding)
 from fleet.server.trip_ports import TripError, pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.server.named_stop_confirm import (GoalRefused, confirm_free_stop, confirm_lane_stop,
@@ -103,6 +104,7 @@ class TripSteps:
                 return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
             await handle_unlocalized_pose(self, live, robot_id, pose)
             return
+        await auto_rebind_before_dispatch(self, live, robot_id)
         prev_loc_wait_at = (live.view["detail"].get("localization_wait") or {}).get("updated_at")
         try:
             if live.segment_is_lane(live.view["segment_index"]):
@@ -218,6 +220,8 @@ class TripSteps:
                         and not self.traffic.holds(live, index + 1)):
                     await self._step_free(live, index + 1, pose, staging=index)
             elif live.nav2:
+                if not await resume_ready(self, live, index, s):
+                    return  # D-1082: waiting for the cause of a recovered stop to clear
                 await step_nav2_route(self, live, index, s, pose)
                 if consume_transient_wait(self, live, prev_loc_wait_at):
                     return
@@ -232,6 +236,7 @@ class TripSteps:
                     return
             live.view["detail"].pop("localization_wait", None)
             if (last and live.open and live.view["hold"] is None and not (live.active_route or {}).get("wait_prefix")
+                    and not hold_pending(live.view["detail"])  # held short of a table cut is no arrival
                     and off is None and self._arrived(live, index, remaining, lane, pose)):
                 if camera:
                     await finish_camera_line(self, live)
@@ -268,7 +273,8 @@ class TripSteps:
             return
         except (HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
             # D-760 4: a leased trip waits only on no answer (Safety-Review HIGH-1); any other error ends it
-            if not (isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc))):
+            if not ((isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc)))
+                    or await hold_unreachable_pre_dispatch(self, live, exc)):  # no lease, no goal sent yet: bounded wait
                 await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
             return
         if not live.open:

@@ -48,7 +48,8 @@ def execute_act_policy_task(
     ]
     try:
         proc = run_fn(cmd, capture_output=True, text=True, timeout=300,
-                      env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner})
+                      env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner,
+                           **({"ROSY_SESSION_CHUNKS": str(plan["library"]), "ROSY_SESSION_CHUNKS_STRICT": "1"} if arm_id == "arm_s" else {})})
     except timeout_exc:  # the drive is gone, so are its renewals: the runner's own watchdog holds within the ttl
         return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop={"lease_watchdog": True})
     parsed = last_json_fn(proc.stdout)

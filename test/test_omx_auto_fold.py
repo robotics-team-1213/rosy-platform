@@ -339,6 +339,7 @@ def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_i
     monkeypatch.setattr(cell_corridor, "check", lambda *a, **k: {"clear": True, "low": [], "high": [], "off_map": 0, "off_surface": 0})
     monkeypatch.setattr(cell_corridor, "runs", lambda pts: (pts, []))
     monkeypatch.setattr(cell_corridor, "corridor", lambda *a, **k: "lane")
+    monkeypatch.setattr("cell_corridor_own.with_outside", lambda out, *a, **k: out)  # the lane is a stub here
     monkeypatch.setattr(cell_space, "Space", lambda *a: SimpleNamespace(
         reserve=lambda *a, **k: {"ok": True}, release=lambda *a: None))
     rc = af.main(["--supervised", "--arm", "arm_s", "--config", str(cfg), "--library", str(lib),
@@ -564,3 +565,70 @@ def test_recover_treats_partial_target_closing_load_as_holding_high():
         low=lambda _s: False, allow_live_unlatch=True,
     )
     assert res["result"] == "held" and res["reason"] == "HOLDING_HIGH"
+
+
+def test_guarded_park_fallback_for_2d_cell_keeps_load_reserve_and_holding_high_guards():
+    cell = Cell(REACH)
+    result = af.recover(
+        cell, HOME, CLOSED, plan=lambda s: [s, HOME], look=lambda _f: {"clear": False, "low": [], "high": [{"area_px": 100}], "off_map": 0, "off_surface": 10},
+        reserve=lambda _f: {"ok": True}, release=lambda: None, release_and_rise=lambda _c: {"result": "risen"},
+        low=lambda _s: True, load_check=lambda _f: {"ok": True, "verdict": "ok"}, guarded_park_fallback=True,
+    )
+    assert result["result"] == "folded" and result["candidate"] == "park"
+    assert result["corridor_fallback"] == "2d_no_depth_guarded_park" and result["corridor"]["clear"] is False
+
+    # load_check or peer-arm reserve refusal after look() passes must NEVER trigger the look fallback
+    for load_ok, res_ok in ((False, True), (True, False)):
+        c = Cell(REACH)
+        r = af.recover(
+            c, HOME, CLOSED, plan=lambda s: [s, HOME], look=lambda _f: {"clear": True, "low": [], "high": [], "off_map": 0, "off_surface": 0},
+            reserve=lambda _f: {"ok": res_ok, "reason": "peer"}, release=lambda: None, release_and_rise=lambda _c: {"result": "risen"},
+            low=lambda _s: True, load_check=lambda _f: {"ok": load_ok, "verdict": "risky"}, guarded_park_fallback=True,
+        )
+        assert r["result"] == "held" and r["reason"] == "ALL_PATHS_BLOCKED" and "park" not in c.commands
+
+    # HOLDING_HIGH stays strictly refused even when guarded_park_fallback=True
+    high = Cell([*REACH[:5], CLOSED + 10], target=[*REACH[:5], CLOSED])
+    rh = af.recover(
+        high, HOME, CLOSED, plan=lambda s: [s, HOME], look=lambda _f: {"clear": False},
+        reserve=lambda _f: {"ok": True}, release=lambda: None, release_and_rise=lambda _c: {"result": "risen"},
+        low=lambda _s: False, guarded_park_fallback=True,
+    )
+    assert rh["result"] == "held" and rh["reason"] == "HOLDING_HIGH" and high.commands == ["state", "human-hold"]
+
+
+@pytest.mark.parametrize(("supervised", "factory", "expected"), [
+    (True, None, True), (True, "/tmp/d435.json", False), (False, None, False),
+])
+def test_fold_session_cli_enables_guarded_park_fallback_only_for_supervised_2d_cell(tmp_path, monkeypatch, supervised, factory, expected):
+    import cell_corridor_own
+    import cell_pipeline as cp
+    import cell_recovery_plan as crp
+    import cell_space
+    import cell_unwedge
+    import chunk_runner_recover as crr
+
+    cal = tmp_path / "cal.json"
+    cal.write_text("{}")
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({"fps": 30, "gripper_closed": CLOSED, "tcp_x_m": 0.074, "chunks": {"home": [HOME]}}))
+    top = {"url": "http://127.0.0.1:8767/x", **({"d435_factory": factory} if factory else {})}
+    cfg = tmp_path / "cfg.json"
+    cfg.write_text(json.dumps({"io": str(tmp_path / "io"), "calibration_path": str(cal), "work_dir": str(tmp_path), "cameras": {"top": top}, "sites": {"belt": {"z": 0.04}}}))
+    monkeypatch.setenv("ROSY_RECOVERY_INCIDENT", "inc-1")
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **k: SimpleNamespace(act=lambda _c: {"ok": True}))
+    monkeypatch.setattr(cell_space, "Space", lambda *a, **k: SimpleNamespace(release=lambda _a: None))
+    monkeypatch.setattr(crp, "joint_bounds", lambda _c: None)
+    monkeypatch.setattr(crp, "build_multi_site_look", lambda *a, **k: (lambda _f: {"clear": True}))
+    monkeypatch.setattr(crp, "make_load_checker", lambda *a, **k: None)
+    monkeypatch.setattr(cell_corridor_own, "measured_joints", lambda _c: HOME)
+    monkeypatch.setattr(cell_unwedge, "release_and_rise", lambda _c: {"result": "risen"})
+    seen = []
+
+    def fake_recover(*_a, **kw):
+        seen.append(kw["guarded_park_fallback"])
+        return {"schema": af.SCHEMA, "result": "folded", "candidate": "park", "state": HOME, "steps": []}
+
+    args = SimpleNamespace(arm="arm_s", config=cfg, library=lib, site="belt", roi=[0, 0, 10, 10],
+                           out=tmp_path / "out.json", supervised=supervised, unlatch_hold=False, vlm_url=None, vlm_config=None)
+    assert crr.run_fold_session_cli(args, fake_recover, af.SCHEMA) == 0 and seen == [expected]

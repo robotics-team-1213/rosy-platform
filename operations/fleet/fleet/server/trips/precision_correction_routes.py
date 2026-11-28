@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.evidence import STALE_POSE_S
-from core_common.stop_pose import REPARK_MAX_FORWARD_M
+from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M
 from fleet.hub.hub import HubError
 from fleet.server.channel.execution.outcomes.evidence import safe_proof
 from fleet.server.goal_lease import NavigationStopped
@@ -18,6 +18,7 @@ class CorrectionClearance(BaseModel):
     nav_run_id: str = Field(min_length=36, max_length=36)
     map_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     forward_m: float = Field(strict=True, ge=-REPARK_MAX_FORWARD_M, le=REPARK_MAX_FORWARD_M, allow_inf_nan=False)
+    left_m: float = Field(default=0.0, strict=True, ge=-REPARK_MAX_LEFT_M, le=REPARK_MAX_LEFT_M, allow_inf_nan=False)
     site_end: tuple[float, float]
     cable_and_path_clear: bool = Field(strict=True)
 
@@ -58,7 +59,8 @@ async def dispatch_correction(console, runner, trip_id, clearance, *, cable_inhi
 
     try:
         first = await runner.check_named_correction(live, evidence, place)
-        if (first["forward_m"] != clearance.forward_m or tuple(first["site_end"]) != clearance.site_end
+        if (first["forward_m"] != clearance.forward_m or first.get("left_m", 0.0) != clearance.left_m
+                or tuple(first["site_end"]) != clearance.site_end
                 or not ready()):
             _refuse("NAMED_STOP_CORRECTION_SCOPE_CHANGED")
         view = await client._get(f"/api/v1/navigation/state?run_id={clearance.nav_run_id}")
@@ -76,13 +78,14 @@ async def dispatch_correction(console, runner, trip_id, clearance, *, cable_inhi
         repark_owner = (await client._get("/api/v1/motion/repark/run")).get("owner") or {}
         if repark_owner.get("boot_id") != nav["boot_id"] or type(repark_owner.get("owner_generation")) is not int:
             _refuse("NAMED_STOP_CORRECTION_OWNER_UNVERIFIED")
-        body = dict(forward_m=preview["forward_m"], left_m=0., expected_boot_id=nav["boot_id"],
+        body = dict(forward_m=preview["forward_m"], left_m=preview.get("left_m", 0.0), expected_boot_id=nav["boot_id"],
                     expected_owner_generation=repark_owner["owner_generation"],
                     expected_idle_epoch=handover["idle_mode_epoch"], expected_map_grid_id=evidence["map_grid_id"],
                     expected_nav_run_id=nav["run_id"], expected_nav_generation=owner,
                     expected_nav_correlation_id=nav["correlation_id"], operator_name=actor)
         maps.record_event("named_stop.correction_clearance", actor, {"trip_id": trip_id, "robot_id": robot,
-                          "nav_run_id": nav["run_id"], "map_sha256": clearance.map_sha256, "forward_m": clearance.forward_m})
+                          "nav_run_id": nav["run_id"], "map_sha256": clearance.map_sha256, "forward_m": clearance.forward_m,
+                          "left_m": clearance.left_m})
         return await console.goal_leases.send_named_repark(robot, client, body, ready=ready)
     except (HubError, NavigationStopped, RobotApiError, ValueError) as exc:
         _refuse(getattr(exc, "code", "NAMED_STOP_CORRECTION_REFUSED"))

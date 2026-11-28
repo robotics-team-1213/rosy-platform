@@ -80,6 +80,18 @@ test("attentionItems: D-511 a still robot raises no lane item", () => {
   }
 });
 
+test("attentionItems: D-1084 the return row is for moving robots; parking and pose mismatch are no rows", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const back = (state, moving, side = null) => full({ line_stuck: null,
+    lane_compliance: { level: "OK", margin_m: 0.01, moving, return: { state, side, moving } } });
+  assert.deepEqual(attentionItems(back("ON_LINE", false, "left")), []);   // rosy_45 2026-11-27: parked in C3
+  assert.deepEqual(texts(attentionItems(back("ON_LINE", true, "left"))), ["warn: 차선 위 — 안쪽으로 보정 (왼쪽)"]);
+  assert.deepEqual(attentionItems(back("OFF_LANE", false, "right")), []);
+  assert.deepEqual(attentionItems(back("PARKING", true)), []);
+  assert.deepEqual(attentionItems(back("POSE_MISMATCH", true)), []);
+  assert.deepEqual(texts(attentionItems(back("OFF_MAP", false))), ["crit: 지도 밖 — 정지·확인 필요"]);
+});
+
 test("a running trip shows its live AI route deviation without a wait cycle", () => {
   view.receivedAtMs = Date.now();
   view.trafficTrips = [{ robot_id: "a", trip_id: "lap-a", map_version: 5 }];

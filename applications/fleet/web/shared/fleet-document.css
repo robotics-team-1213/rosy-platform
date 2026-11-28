@@ -8,6 +8,18 @@ body { margin: 0; }
 .fleet-document #account-list ui-button { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
 /* 계정 표는 칸을 쪼개지 않고, 좁으면 표 영역이 가로로 스크롤한다. */
 #account-list td { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.fleet-document table td, .fleet-document table th { padding: var(--space-2) var(--space-3); }
+.fleet-document table td, .fleet-document table th { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line-06); font-variant-numeric: tabular-nums; }
 /* nowrap 표가 넓어져도 sr-only 머리글 같은 절대 위치 자식이 문서 폭을 늘리지 않게 한다. */
 .ui-table-scroll { position: relative; }
+#account-content:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); min-width: 0; }
+#account-setup:not([hidden]), #account-content > section, #account-form, #account-actions:not([hidden]) { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
+#client-form:not([hidden]), #request-decision:not([hidden]), #account-grants fieldset { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin: 0; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); background: var(--surface-recessed); min-width: 0; }
+#account-grants { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); min-width: 0; }
+#account-grants legend { padding-inline: var(--space-1); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--text-primary); }
+#account-grants fieldset > div { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+#account-clients { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
+#account-clients li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-recessed); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.fleet-document .ui-table-scroll { min-width: 0; max-width: 100%; border: 1px solid var(--border-subtle); border-radius: var(--radius-button); background: var(--surface-recessed); }
+.fleet-document .ui-data-table thead th { background: var(--surface-chrome); color: var(--text-secondary); }
+.fleet-document .ui-data-table tbody tr:last-child td { border-bottom: 0; }
+#request-list td { font-variant-numeric: tabular-nums; }

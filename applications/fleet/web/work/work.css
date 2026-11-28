@@ -1,6 +1,7 @@
 .work-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 /* D-865 P3 — 승인 대기 행의 자동 승인 범위 배지와 범위 readback 패널. 색·간격은 토큰만 쓴다. */
-#work-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-inline-start: var(--space-2); border-inline-start: var(--selection-edge) solid var(--line-14); }
+#work-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-06); border-inline-start: var(--selection-edge) solid var(--line-14); border-radius: var(--radius-control); background: var(--surface-canvas); }
+#work-list > li:hover { border-color: var(--border-strong); background: var(--surface-flat); }
 #work-list > li[data-visible-state="approval_pending"] { border-inline-start-color: var(--status-warn); }
 #work-list > li[data-visible-state="in_progress"] { border-inline-start-color: var(--series-primary); }
 #work-list > li[data-visible-state="waiting"] { border-inline-start-color: var(--status-warn-a45); }
@@ -25,7 +26,8 @@
 
 .work-channel-zone { display: grid; gap: var(--space-3); margin-block-start: var(--space-5); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-10); min-width: 0; }
 .work-channel-zone > h3, .work-channel-zone > p { margin: 0; }
-#channel-requests > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-button); background: var(--surface-recessed); min-width: 0; }
+#channel-requests > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); background: var(--surface-recessed); min-width: 0; }
+#channel-requests > li:hover { border-color: var(--border-strong); background: var(--surface-flat); }
 #channel-requests > li > p { margin: 0; }
 #channel-requests p { white-space: pre-wrap; overflow-wrap: anywhere; }
 #channel-review { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-10); border-radius: var(--radius-panel); background: var(--surface-chrome); min-width: 0; }
@@ -61,7 +63,7 @@
 }
 .work-list :is(ui-button, a) { display: flex; align-items: center; width: 100%; padding-block: 0; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; text-decoration: none; }
 #work-admit { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.work-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
+.work-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-control); background: var(--surface-recessed); }
 .work-detail dt { color: var(--text-secondary); font-size: var(--text-label); }
 .work-detail dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 #control-unit-work { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-06); }

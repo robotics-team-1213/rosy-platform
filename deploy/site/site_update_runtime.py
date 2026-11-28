@@ -22,7 +22,7 @@ if __package__:
         active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
-    from .verify_candidate import CandidateVerificationError, verified_services
+    from .verify_candidate import CandidateVerificationError, MissingBaseImageError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
@@ -30,7 +30,7 @@ else:  # pragma: no cover - installed host CLI
         active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
-    from verify_candidate import CandidateVerificationError, verified_services
+    from verify_candidate import CandidateVerificationError, MissingBaseImageError, verified_services
 
 
 _NAV_TERMINAL_STATES = frozenset({'ARRIVED', 'CANCELED', 'FAILED'})
@@ -253,6 +253,10 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
     return ''
 
 
+class MissingBase(Rejected):
+    """Reused base images are absent here: skip this tag, do not mark it failed."""
+
+
 class SiteRuntimeIO:
     def _compare(self, current: str, candidate: str) -> tuple[str, str]:
         # Later pages omit changed files but retain ancestry metadata.
@@ -285,6 +289,8 @@ class SiteRuntimeIO:
             tag = row["tag_name"]
             if tag == f"site-{current[:12]}" or tag in state["failed"]:
                 continue
+            if (state.get("skipped_base") or {}).get(tag, {}).get("current") == current:
+                continue  # its reused images are not on this host; retried once the running commit changes
             names = {asset.get("name") for asset in row.get("assets") or [] if isinstance(asset, dict)}
             if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
                 continue
@@ -374,6 +380,8 @@ class SiteRuntimeIO:
                 self._accepted_images[commit] = accepted
                 self._runtime_proofs[commit] = services
             return manifest
+        except MissingBaseImageError as error:
+            raise MissingBase(f"verification failed: {error}") from None
         except CandidateVerificationError as error:  # fixed strings of our verifier
             raise Rejected(f"verification failed: {error}") from None
         except OSError as error:  # its text names host paths

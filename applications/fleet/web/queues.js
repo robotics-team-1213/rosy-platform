@@ -198,7 +198,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
     }
     // D-511 개정 1: Fleet이 본 복귀 상태 한 줄. 같은 판정을 로봇에도 보낸다(lane-cue).
-    const back = lane?.return;
+    // D-1084: 지도 밖 말고는 움직이는 로봇만 알린다. 주차/도킹·위치 불일치(PARKING·POSE_MISMATCH)는 주의가 아니다.
+    const back = lane?.return?.state === "OFF_MAP" || lane?.return?.moving === true ? lane.return : null;
     const backText = { OFF_LANE: "차로 밖 — 차로로 복귀 지시", OFF_MAP: "지도 밖 — 정지·확인 필요",
                        WRONG_WAY: "역주행 — 돌아서기 지시", ON_LINE: "차선 위 — 안쪽으로 보정" }[back?.state];
     if (backText) {

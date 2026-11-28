@@ -92,20 +92,25 @@ controller_server:
       max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
 
       # 경로 추종 (Lookahead, 시선 두기)
-      # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 주시 0.12~0.18 로 10-12 cm 안쪽으로 질러 갔다.
-      # 호를 자르는 양은 L^2/(8R): 0.09 m 면 0.8 cm. 최소 주시는 목표 공 0.08 보다 커야 RPP 가 제자리 회전만 하지 않는다.
-      lookahead_dist: 0.09                   # [m] 기본 전방 주시 거리
+      # 11-27 rosy_45 (release 680): 우회전 U턴 호 반경 ~0.135 m 를 10-12 cm 안쪽으로 질러 갔다. 원인은 주시 거리가 아니라
+      # BT RemovePassedGoals 반경 0.09 가 U턴 꼭짓점을 먼저 지워 버린 것이다(반경은 behavior_trees XML 에서 0.05 로 줄임).
+      # 주시 현은 호를 L^2/(8R) 만큼만 자른다: L 0.13, R 0.11~0.135 에서 약 1.6~2 cm.
+      # 최소 주시는 목표 공 xy_goal_tolerance 0.03 보다 커야 RPP 가 제자리 회전만 하지 않는다.
+      # 11-27 벽 옆 지그재그: 고정 0.09 는 횡오차 2 cm 에 조향이 포화했다. 속도 비례 주시로 바꾸되 바닥을 0.13 으로 둔다.
+      # 주시 = clamp(1.8*v, 0.13, 0.18): v 0.05 → 0.13, U턴 상한 0.08 → 0.144, 직선 0.10 이상 → 0.18.
+      # 1.8 s 는 U턴(R 0.116) 0.08 m/s 에서 chord 각 asin(L/2R) 0.67 rad 가 제자리 회전 0.80 아래이고, 0.08~0.10 에서 옛 값(2.0 s, 최대 0.16)보다 짧아지지 않게 고른 값.
+      lookahead_dist: 0.14                   # [m] 기본 전방 주시 거리 (속도 비례가 켜져 있는 동안은 쓰이지 않음)
       use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
-      lookahead_time: 0.6                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
-      min_lookahead_dist: 0.09               # [m] 최소 주시 거리 (xy_goal_tolerance 0.08 < 0.09)
-      max_lookahead_dist: 0.10               # [m] 최대 주시 거리
+      lookahead_time: 1.8                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
+      min_lookahead_dist: 0.13               # [m] 최소 주시 거리 (xy_goal_tolerance 0.03 < 0.13)
+      max_lookahead_dist: 0.18               # [m] 최대 주시 거리
       curvature_lookahead_dist: 0.09         # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
       use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
 
       # 제자리 회전 (고개 먼저 돌리기)
       use_rotate_to_heading: true            # 경로 방향과 로봇 헤딩이 다를 때 제자리 회전 먼저 하기
-      # D-1009: 0-loop U-turn(R=0.112m, lookahead=0.12m) chord 각도 ~32.4deg(0.57rad) 위에서 0.70rad(40deg)로 타이트하게 정렬한다.
-      rotate_to_heading_min_angle: 0.70      # [rad] 약 40도 이상 차이나면 제자리 회전 모드 진입
+      # 0.80 rad(46도): R 0.11 에서 L 0.13~0.15 의 chord 각도가 이 값 아래라 U턴 호 안에서 제자리 회전으로 빠지지 않는다.
+      rotate_to_heading_min_angle: 0.80      # [rad] 약 46도 이상 차이나면 제자리 회전 모드 진입
       rotate_to_heading_angular_vel: 0.8     # [rad/s] 제자리 회전할 때의 회전 속도
 
       # 커브길 감속 (Regulated)
@@ -167,7 +172,8 @@ controller_server:
       stateful: true
       # 차선 다음 점은 0.12 m 다. 당근이 이 공 안이면 RPP 는
       # 직진하지 않고 목표 각으로만 돈다. 그 회전에 옆 신호등과 벽이 정지로 읽힌다.
-      xy_goal_tolerance: 0.08                    # [m] 목표 지점 반경 0.08 m 안에 들어오면 도착 인정 (RemovePassedGoals 0.05 보다 큼: 마지막 목표만 이 공으로 도착 판정)
+      # 11-27 사용자: rosy_45가 정지선보다 약 7 cm 덜 감(0.08 공 안에서 도착 인정). 0.03 으로 좁힘(주시 0.09 보다 작아 제자리 회전만 하지 않음).
+      xy_goal_tolerance: 0.03                    # [m] 목표 지점 반경 0.03 m 안에 들어오면 도착 인정
       yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
 
     # ==========================================================
@@ -207,7 +213,10 @@ local_costmap:
       # 줘도 REJECTED 로 끝나고 로봇은 한 발도 못 뗀다. 실제로 2x1 m 데모룸에서 그랬다.
       initial_transform_timeout: 30.0
       #robot_radius: 0.22
-      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+      # 11-27: 실제 몸체 0.113 m(반폭 0.0566) + 패딩 0.005. 0.12+기본 패딩 0.01(반폭 0.07)은 벽에서 7.5 cm 떨어져
+      # 있어도 inflation 칸을 몸체 안으로 읽어 RPP 가 "collision ahead"로 멈췄다(사용자 승인 완화).
+      footprint: '[[0.057, 0.057], [0.057, -0.057], [-0.057, -0.057], [-0.057, 0.057]]'
+      footprint_padding: 0.005
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -265,8 +274,8 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       #robot_radius: 0.22
-      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
-      resolution: 0.05
+      footprint: '[[0.057, 0.057], [0.057, -0.057], [-0.057, -0.057], [-0.057, 0.057]]'
+      resolution: 0.025                     # 11-27: 0.05 격자 계획 경로에 5 cm 계단이 생겨 직선에서 조향을 흔들었다
       # 기동 경쟁 방어. nav2 는 활성화하며 map->base TF 를 기다리는데, 그 TF 는 AMCL 이
       # 첫 스캔을 처리한 뒤에야 나온다. 느린 기계(RTF 0.3)에서는 그것이 기본 대기시간을
       # 넘겨 global_costmap 이 활성화에 실패하고, planner_server 가 함께 죽는다 - 목표를

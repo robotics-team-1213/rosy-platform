@@ -345,6 +345,7 @@ def make_load_checker(config: dict, library: dict, params: dict | None = None):
         ok = verdict != "risky" and not (verdict == "unknown" and refuse_unknown)
         return {"ok": ok, "verdict": verdict, "report": rep}
 
+    check_frames.arm = arm  # the fold's start record reads the same model (gravity_pwm_expected)
     return check_frames
 
 
@@ -369,10 +370,11 @@ def build_multi_site_look(
     def look(frames):
         img = cell.frame("top")
         pts = [cell_pivot.joints_tcp(f, tcp_x_m=tcp_x_m)[:3] for f in frames]
+        seen = lambda out, shape: out if own_state is None else cell_corridor_own.with_outside(out, pts, to_px, shape, roi, params)  # noqa: E731
         if not isinstance(img, np.ndarray) or len(polys) <= 1:
             fb_site = primary if isinstance(primary, dict) else {}
             mask = cell_objects.foreground(img, roi, params=params, surface_px=fb_site.get("surface_px"), surface_lab=fb_site.get("surface_lab"))
-            return cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=fb_site.get("surface_px"))
+            return seen(cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=fb_site.get("surface_px")), (roi[3] - roi[1], roi[2] - roi[0]))
 
         import cv2
 
@@ -388,11 +390,10 @@ def build_multi_site_look(
             if gap.any():
                 bound = calibration if own_state is not None else None  # other callers keep the colour rule
                 mask = low_mask | cell_corridor_own.gap_foreground(config, bound, img, roi, gap, params)
-        own = (cell_corridor_own.own_mask(config, primary_site, to_px, (own_state(),), low_mask.shape, roi, tcp_x_m)
-               if own_state is not None else None)
-        return cell_corridor.check(
+        fold = {} if own_state is None else cell_corridor_own.fold_view(
+            config, calibration, primary_site, to_px, own_state(), img, low_mask.shape, roi, tcp_x_m, params)
+        return seen(cell_corridor.check(
             pts, mask, roi, to_px, params=params, surface_px=polys,
-            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, own=own,
-        )
+            high_surface_px=high_hull, allow_ascending_departure=allow_ascending_departure, **fold), low_mask.shape)
 
     return look

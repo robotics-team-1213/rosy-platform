@@ -287,3 +287,35 @@ def test_commission_requires_stationary_native_owners_and_exact_grid(core_client
     response = client.post(path, json=body, headers=ADMIN)
     assert response.status_code == 200, response.text
     assert response.json()["metadata"]["commissioned_map_generation"] == 5
+
+
+def test_reframe_retags_a_dock_for_an_operator_only_in_the_exact_standing_grid(core_client, monkeypatch):
+    from types import SimpleNamespace as NS
+    from test_docking_mode_ownership import OPERATOR
+    from core_features.docking.database import DockInstance, DockType
+    client, svc = core_client(config_overrides=sim_overrides())
+    observed = NS(robot_id="rosy_42", map_id="map42", map_grid_id="grid42", map_generation=5,
+                  pose_frame="map", localization=NS(state="LOCALIZED"), mode="IDLE", navigation="IDLE",
+                  line_follow=NS(mode="OFF"), evidence={k:NS(evidence="fresh") for k in ("pose", "velocity")},
+                  velocity=NS(linear=0., angular=0.))
+    monkeypatch.setattr(svc.state, "snapshot", lambda: observed)
+    monkeypatch.setattr(svc.docking.database, "frame_key", lambda:"map42")
+    svc.docking.database.add_type(DockType(name="station_line", detector="camera_line", approach="line"))
+    svc.docking.database.add(DockInstance(id="bay_c2", type="station_line", x=.1, y=.2, yaw=.3, map_id="old"))
+    body = {"robot_id":"rosy_42","map_id":"map42","map_grid_id":"grid42","map_generation":5,
+            "expected_map_id":"old","expected_grid_id":None,"binding_id":None,"new_binding_id":"b2"}
+    path = "/api/v1/docking/docks/bay_c2/reframe"
+    assert client.post(path, json=body).status_code in (401, 403)
+    for key, value in (("map_generation", 6), ("mode","MANUAL"), ("velocity", NS(linear=.01, angular=0.))):
+        with monkeypatch.context() as m:
+            m.setattr(observed,key,value)
+            assert client.post(path, json=body, headers=OPERATOR).status_code == 409
+    assert svc.docking.database.get("bay_c2").map_id == "old"
+    assert client.post("/api/v1/docking/docks/nope/reframe", json=body, headers=OPERATOR).status_code == 404
+    assert client.post(path, json={**body, "expected_map_id": "other"}, headers=OPERATOR).status_code == 409
+    with monkeypatch.context() as m:
+        m.setattr(svc.docking.database, "frame_key", lambda: "map43")
+        assert client.post(path, json=body, headers=OPERATOR).status_code == 409
+    response = client.post(path, json=body, headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert (response.json()["map_id"], response.json()["x"], response.json()["y"]) == ("map42", .1, .2)

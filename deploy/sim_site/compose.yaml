@@ -1,0 +1,209 @@
+# Isolated coupled simulation site stack (D-1088 Slice 3).
+# Runs parallel to deploy/site without sharing project name, network, volumes, or host ports.
+name: rosy-sim-site
+
+x-sim-logging: &sim-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  sim-fleet:
+    image: rosy-site-fleet:${ROSY_SIM_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/site/Dockerfile.fleet
+    command:
+      - --
+      - python3
+      - -m
+      - fleet.cli
+      - console
+      - --robots
+      - "${ROSY_SIM_ROBOTS_FILE:-/run/rosy-sim-config/robots.yaml}"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --web-common
+      - /opt/rosy/web-common
+      - --token-env
+      - ROSY_SIM_REGISTRY_TOKEN
+      - --tasks-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --events-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --site-lane-graph
+      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+      - --site-lane-paint
+      - /opt/rosy/maps/map_v2_fleet/road_lines.stl
+      - --site-map-import
+      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+    ports:
+      - "127.0.0.1:${ROSY_SIM_FLEET_PORT:-18090}:8080"
+    environment:
+      ROSY_SIM_REGISTRY_TOKEN: "${ROSY_SIM_REGISTRY_TOKEN:-}"
+      ROSY_FLEET_PINKY_TASK_DISPATCH: "1"
+      ROSY_FLEET_AUTONOMOUS_CELL_DISPATCH: "1"
+      ROSY_SITUATION_PROFILE: "sim"
+      ROSY_SITUATION_AI_URL: "${ROSY_SIM_AI_URL:-http://host.docker.internal:11434}"
+      ROSY_SIM_CONVERSATION_MODEL: "${ROSY_SIM_CONVERSATION_MODEL:-qwen3-vl:8b-instruct}"
+      ROSY_WORLD_HEALTH_URL: "http://world:18140/healthz"
+      ROSY_WORLD_SAME_ORIGIN: "${ROSY_WORLD_SAME_ORIGIN:-0}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - sim_fleet_data:/var/lib/rosy
+      - "${ROSY_SIM_CONFIG_DIR:-./config}:/run/rosy-sim-config:ro"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [sim_backend]
+    logging: *sim-logging
+
+  sim-world:
+    image: rosy-site-world:${ROSY_SIM_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/site/Dockerfile.world
+    user: "10001:10001"
+    entrypoint: ["python3", "-B", "/opt/rosy/world/serve.py"]
+    command:
+      - --bundle
+      - /opt/rosy/world/web
+      - --data-dir
+      - /opt/rosy/world-data/data
+      - --worlds-dir
+      - /var/lib/rosy-sim-world/worlds
+      - --trusted-map-proxy
+      - --host
+      - 0.0.0.0
+      - --port
+      - "18140"
+    ports:
+      - "127.0.0.1:${ROSY_SIM_WORLD_PORT:-18140}:18140"
+    environment:
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_SIM_WORLD_INGEST_TOKEN:-}"
+    volumes:
+      - type: bind
+        source: "${ROSY_SIM_WORLD_BUNDLE_DIR:?set ROSY_SIM_WORLD_BUNDLE_DIR}"
+        target: /opt/rosy/world-data
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+      - /var/lib/rosy-sim-world/worlds:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18140/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      sim_backend:
+        aliases: [world]
+    logging: *sim-logging
+
+  sim-controller:
+    image: rosy-site-world:${ROSY_SIM_IMAGE_TAG:-local}
+    user: "10001:10001"
+    entrypoint: ["python3", "-B", "/opt/rosy/sim/coupled_sim_controller.py"]
+    command:
+      - --serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "18190"
+      - --allow-non-loopback
+      - --world-id
+      - coupled-sim
+      - --adapter
+      - gazebo
+      - --site-map-sha256
+      - "${ROSY_SIM_SITE_MAP_SHA256:-0000000000000000000000000000000000000000000000000000000000000000}"
+      - --world-url
+      - http://world:18140
+    ports:
+      - "127.0.0.1:${ROSY_SIM_CONTROLLER_PORT:-18190}:18190"
+    environment:
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_SIM_WORLD_INGEST_TOKEN:-}"
+    volumes:
+      - ../../tools/sim:/opt/rosy/sim:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18190/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      sim-world:
+        condition: service_healthy
+    networks: [sim_backend]
+    logging: *sim-logging
+
+  sim-light-core:
+    profiles: ["light-core"]
+    image: rosy-site-world:${ROSY_SIM_IMAGE_TAG:-local}
+    user: "10001:10001"
+    entrypoint: ["python3", "-B", "/opt/rosy/sim/virtual_core_fleet.py"]
+    command:
+      - --host
+      - 0.0.0.0
+      - --advertise-host
+      - sim-light-core
+      - --base-port
+      - "18095"
+      - --token-env
+      - ROSY_SIM_CORE_TOKEN
+    ports:
+      - "127.0.0.1:${ROSY_SIM_LIGHT_CORE_PORT:-18095}:18095"
+    environment:
+      ROSY_SIM_CORE_TOKEN: "${ROSY_SIM_CORE_TOKEN:-}"
+    volumes:
+      - ../../tools/sim:/opt/rosy/sim:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18095/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks: [sim_backend]
+    logging: *sim-logging
+
+networks:
+  sim_backend: {}
+
+volumes:
+  sim_fleet_data: {}

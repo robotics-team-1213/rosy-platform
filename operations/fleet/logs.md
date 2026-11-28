@@ -5754,3 +5754,83 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-27 · uncommitted · D-1082 Nav2 도로 trip 정지 복구
+
+- 변경: trips/nav2_trip_recovery.py 추가, trip_runner._stop이 Nav2 도로 trip의 stall·navigation 정지를 복구로 바꾸고 trip_steps가 정지 확인 뒤 기존 step_nav2_route로 차선 복귀 경로를 다시 보낸다
+- 증거: test_nav2_trip_recovery.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1082
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Fleet cell-task motion (free_pick) and D-1081
+
+- 변경: ADR D-1081 and API fragment document the cell-task motion object, claim capabilities marker and cell-task-worker scope.
+- 증거: docs only; code and tests landed in earlier commits of this branch
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Hold point review fixes
+
+- 변경: 검토(PR #1140) 반영: 구간 끝 정지 발자국이 자르는 점에 닿으면 정지점으로, 취소한 주기에는 대체 경로 금지(정지 증거까지 fence), Nav2 목표 허용오차 0.03을 구역·횡단보도 검사에 포함하고 도착 때 발자국 재검사, 서 있는 기체 여유(keep-out+0.03)·주행 간격으로 물러섬, 급커브는 누적 방향 변화, 정지점 경로의 Nav2 FAILED·CANCELED는 대기 후 재시도
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Hold point review round 3
+
+- 변경: 검토 3차(PR #1140): 해제 안 된 정지점 receipt(fence 포함) 동안 도착 판정 금지, 정지점이 대체할 경로는 어떤 취소든 fence 후 그 주기 반환, 정지점 경로 재시도는 자율 기체의 FAILED만(외부 CANCELED는 종료), ARRIVED 후 위치 밖 확인 대기는 차단 기체가 있으면 stall 아님, 콘솔 신뢰·좌표계 시험은 경로에서 떨어진 기체와 통과 대조군
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-27 · uncommitted · Nav2 road trip table-cut hold point
+
+- 변경: 블록 표가 현재 구간에서 경로를 자르면 같은 구간의 가장 먼 안전 정지점까지 보내고 막은 기체를 이름으로 보이며 기다린다(통행권·점유 칸 앞 여유·구역 칸·횡단보도·급커브 물러섬, 덮임 상실 시 취소 후 재설정, 가드 값 불변)
+- 증거: 원격 pytest operations/fleet/test 9783 passed 0 new (D:/DevTemp/route-overlap-wait-1127/rt6)
+- gate 변화: 없음
+- 결정: D-1009 범위(표가 자른 경우만, 콘솔 wire 검사 유지)
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · Hold point review round 4
+
+- 변경: 검토 4차(PR #1140): 정지 fence가 걸려 있으면 앞서 resolved였어도 도착 판정 금지, fence는 resolved를 지워 정지 확인 뒤 실제 목적지 경로가 나가야 도착 인정
+- 증거: 원격 pytest (PR 본문)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · D-1082 복구 사다리 1단계
+
+- 변경: trips/nav2_recovery_ladder.py 추가. 복구 재전송은 문턱 없이 재중심(sample_nav2_route recentre=True), 2회차부터 road_speed 상한 0.05(에피소드 종료 RESET_M까지), exhausted에 마지막 정지·시도별 조건·같은 지점 반복(same_spot) 기록. trip_lane_realign은 차선 안이라도 벽 쪽 치우침이 2틱 이어지면 감속만 켠다(경로 교체 없음)
+- 증거: test_nav2_recovery_ladder.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1082 범위 안(사용자 2026-11-28 재시도 개선 지시)
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · D-1086 trip 재발행 폴백
+
+- 변경: trips/trip_reissue.py 추가. 비안전 사유(pose·위치 재확정 만료·연결 불가·goal lease 끝·D-1082 exhausted)로 끝난 Nav2 도로 trip을 원 principal·같은 요청으로 다시 계획·시작한다. 정지 증명·estop·LOCALIZED·지도·결속을 두 번 읽고, 10/20/40 s, 3회, 10분 한도, 다른 trip이 열리면 대기를 버린다
+- 증거: test_trip_reissue.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1086
+- 교훈: 없음
+
+## 2026-11-28 · uncommitted · feat(fleet): a push cell task is auto-admitted like the free pick and completes on measured displacement (D-1083)
+
+- 변경: `cell_motion.restrict_motion_admission`가 밀기와 자유 위치 집기를 같은 조건(스위치 켜짐 + service + propose 없음)으로 `QUEUED`로 둔다. `PUSH_NOT_EXECUTABLE`(생성·`/admit`)을 없앴다. `claim_refusal`은 밀기에 `capabilities`의 `"push"`를 요구한다(`WORKER_LACKS_PUSH_CAPABILITY`, 작업은 `QUEUED`). `/complete`는 밀기에서 `push_completion_verified`(정확한 증거 키, 명령 거리와 같음, 방향 변위 0.5~1.5×mm+3, 옆 6 mm 이하, 합 일치)로 증거를 직접 검사한다. 밀기에는 화물 신원 필드를 못 싣는다.
+- 증거: remote_pytest `operations/fleet/test`·`test_cell_motion_tasks.py`(허용·거절 매트릭스, 표지 게이트, 실제 `/complete` 경로) — 실행 기록은 구현 보고서
+- gate 변화: 없음(밀기 완료 가드가 새로 생김, 다른 가드는 그대로)
+- 결정: D-1083
+- 교훈: 없음(셀 수용 전)
+
+## 2026-11-28 · uncommitted · D-1087 물러나서 다시 보기
+
+- 변경: trips/trip_back_off.py 추가, trip_reissue가 same_spot 종료를 후진 0.08 m(CORE nudge_backward, nudge_routes.request_step 재사용)→다시 보기(LOCALIZED·카메라·SLAM gap)→첫 1.0 m 저속·재중심 재발행으로 처리. 후진 최대 2회·0.16 m, 거절·중단·미확인이면 재발행 없음
+- 증거: test_trip_back_off.py와 영향 묶음 원격 시험(PR 증거)
+- gate 변화: 없음
+- 결정: D-1087
+- 교훈: 없음

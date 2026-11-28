@@ -241,6 +241,10 @@ def test_session_wrappers_allow_chunk_override_and_have_lf_endings():
             'ROSY_SESSION_CHUNKS:-chunks-topdown-guard-armb-v21.json',
             "rosy-omx-observer@arm_b.service",
         ),
+        "with-session-arm-s-live.sh": (
+            'ROSY_SESSION_CHUNKS:-chunks-arm-s-inplace-live.json',
+            "rosy-omx-observer@arm_s.service",
+        ),
     }
     for name, (chunk_expr, observer_unit) in expectations.items():
         raw = (wrappers / name).read_bytes()

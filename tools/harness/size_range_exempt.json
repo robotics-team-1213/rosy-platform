@@ -150,5 +150,9 @@
   {
     "commit": "3612f5eb95c471edbf76b2adc764e36601871356",
     "reason": "presence-proof PR4: test_omx_policy_drive.py was 1502 lines at this commit only; the next commits delete the obsolete person_at_switch test (tip is under 1500)"
+  },
+  {
+    "commit": "011affb7166705577f3b0f8ffc1709fb019366a2",
+    "reason": "fix/charge-trip-critical: the merge of main (trip_runner.py 599 lines) plus the 2-line charge_return start was 601 at this merge only; the next commit folds it to one line (600)"
   }
 ]
