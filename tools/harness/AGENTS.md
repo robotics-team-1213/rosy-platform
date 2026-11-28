@@ -14,7 +14,7 @@ Also the D-436 `affected` selector (`affected_*.py`) and the D-766 size gate. De
 - `logs.md` is append-only: a committed entry is never edited (checked against git history). After editing a `progress.md` or `logs.md`: `generate`, `lint`, commit the regenerated `index.md`/`STATUS.md`.
 - `progress.md/logs.md/index.md` may exist only at paths registered in `harness.yaml`; register every new ROS package there rather than adding `affected` special cases.
 - D-430 §5: a commit that touches a safety-tagged path (`concern: safety` roots, `safety_modules`) or removes a safety root, module or `safety_anchors` entry needs a `Safety-Review:` trailer. A `git mv` touches both paths (D-427 wave 3/4).
-- `safety_review.py` (Safety-Review check) runs in CI, `land.py` and pre-push; exemptions only in `safety_review_exempt.json`.
+- `safety_review.py` (Safety-Review check) runs in CI, `pr_land.py` and pre-push; exemptions only in `safety_review_exempt.json`.
 - D-430 §4: a robot config with `safety.fleet_loss_policy` other than STOP/HOLD carries `safety.fleet_loss_policy_approval {robot, approver, evidence}`. `test_safety_separation.py` checks tracked YAML only, not runtime PUT or device overlays.
 - `platform_parts.yaml` `concern`/`safety_modules`/`safety_anchors` follow D-429/D-430 §1; edit with care, a Safety-Review trailer applies (D-430).
 - `safety_review_paths` in `platform_parts.yaml` need the trailer only; no FULL escalation applies.

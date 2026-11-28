@@ -179,7 +179,6 @@ def buildable(repo: Repo, sel: Selection) -> bool:
 _HEAVY_ROOT_TESTS = (
     "test/test_harness_contracts.py",
     "test/test_affected_tests.py",
-    "test/test_land.py",
     "test/test_robot_cd.py",
     "test/test_readme_agent_start.py",
     "test/test_ci_dependencies.py",

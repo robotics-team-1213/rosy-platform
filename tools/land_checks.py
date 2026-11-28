@@ -326,27 +326,6 @@ def carry(wt: Path, log: Path, head: str, python: str, inv: list[str]) -> tuple[
                               safety=lambda ids: _safety(wt, python, ids), select=select, inv=inv)
 
 
-OWN_COPY = "ROSY_LAND_OWN_COPY"  # set by the re-run below: the landed copy runs, never re-runs itself
-
-
-def landed_copy(main_co: Path, argv: list[str]) -> int | None:
-    """Run main's tools/land.py when this checkout's tools/land*.py differ from main's; its exit code, or None.
-
-    land.py ran from the landing branch's own copy, so a branch made before a land.py fix landed with the old
-    rules: a log merge main already accepted stopped "a side changed existing lines" (2026-10-26). The working
-    directory stays the branch's worktree; only the landing code is main's.
-    """
-    here, there = Path(__file__).resolve().parent, (main_co / "tools").resolve()
-    if os.environ.get(OWN_COPY) or there == here or not (there / "land.py").is_file():
-        return None
-    names = sorted({p.name for d in (here, there) for p in d.glob("land*.py")})
-    if all((here / n).is_file() and (there / n).is_file() and (here / n).read_bytes() == (there / n).read_bytes()
-           for n in names):
-        return None
-    print(f"[land] this branch's tools/land*.py differ from main's: landing with {there / 'land.py'}", flush=True)
-    return subprocess.run([sys.executable, str(there / "land.py"), *argv], env={**os.environ, OWN_COPY: "1"}).returncode
-
-
 def stash_main_collisions(main_co: Path, main_sha: str, candidate: str) -> list[str]:
     """Stash main_co's dirty/untracked files the landing also changes (disjoint dirty files stay), for --ff-only."""
     status = _git(main_co, "-c", "core.quotepath=off", "status", "--porcelain")

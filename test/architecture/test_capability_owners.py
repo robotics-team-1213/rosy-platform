@@ -185,7 +185,7 @@ def test_app_of_reads_glob_subtrees_and_neutral_first():
     # D-1036 addendum 2: gate code and shipped shared code stay core; never-deployed paths are repo.
     # 2026-11-19 (release-split-1118): the landing/publish gate is tooling, omx sim tools and root omx tests are
     # omx-cell, folder notes and ADRs are neutral (the panel's 48 h sample of misattributed landing paths).
-    ("tools/land.py", "tooling"), ("tools/publish_main.py", "tooling"), ("tools/urgent_lane.py", "tooling"),
+    ("tools/publish_main.py", "tooling"), ("tools/urgent_lane.py", "tooling"),
     ("tools/harness/platform_parts.yaml", "tooling"), ("tools/hooks/land_record.py", "tooling"),
     ("test/test_land_events.py", "tooling"), ("tools/sim/omx_two_arm_world.py", "omx-cell"),
     ("test/test_omx_two_arm_world.py", "omx-cell"), ("tools/sim/export_site_map.py", "core"),

@@ -1,4 +1,4 @@
-"""One read-only look at the landing/publishing pipeline before ``tools/land.py`` or a publish.
+"""One read-only look at the landing/publishing pipeline before a publish.
 
     python tools/doctor.py [--hosts]
 
@@ -7,9 +7,7 @@ that fixes it. Exit 1 on any FAIL. Nothing is changed: the installed pre-push ho
 ``tools/hooks/pre-push`` at HEAD (CR ignored), ``rosy.publishOnly``, worktree slots (main included,
 15 by docs/reference/shared-checkout.md) and how many ``tools/worktrees.py prune --apply`` would
 remove, local ``main`` against ``origin/main`` and the age of the last fetch (``update_status.ref_state``),
-and the ``tools/land.py`` queue (tickets, holder, dead or stale tickets; ``land_queue`` removes those
-on its next read, this tool does not; a live run that re-prepared ``REPREPARED`` times or showed no activity in its
-ticket, events or logs for ``QUIET_MIN`` minutes is a WARN), and ``land_isolation`` records still open after a night (FAIL). ``--hosts`` also reads each lab PC's
+and ``--hosts`` also reads each lab PC's
 ``~/rosy-test/maintenance/last-report.json`` and ``~/rosy-jobs/disk-low`` over ssh, and places each host as a landing
 would: a refusal its raw memory, load and disk do not explain is a WARN (bookkeeping, not a full host); a report older
 than ``REPORT_STALE_S`` or a ``tool_sha256`` other than rosy-ops origin/main's (sibling checkout) is a WARN. Standard
@@ -32,18 +30,12 @@ sys.path[:0] = [str(TOOLS), str(TOOLS / "remote")]
 
 import host_probe  # noqa: E402
 import lab_hosts  # noqa: E402
-import land_checks  # noqa: E402  (tmp_root)
-import land_events  # noqa: E402
-import land_isolation  # noqa: E402
-import land_mainred  # noqa: E402
-import land_queue  # noqa: E402
+import land_mainred  # noqa: E402  (rolling_regression still writes main-red records)
 import remote_pytest  # noqa: E402
 import update_status  # noqa: E402
 import worktrees  # noqa: E402
 
 SLOTS = 15  # docs/reference/shared-checkout.md: worktrees, main included (worktrees.CAP is the hard stop)
-# 2026-10-27: runs 4-5 h old could not be told apart, waiting from hung; one had prepared FULL four times (248 min).
-REPREPARED, QUIET_MIN = 3, 30
 # rosy-test-storage runs at 05:30 and 00/06/12/18:20; an older report means the timer stopped or keeps failing.
 REPORT_STALE_S = 7 * 3600
 HOST_SCRIPT = ("cat ~/rosy-test/maintenance/last-report.json 2>/dev/null; echo;"
@@ -100,46 +92,6 @@ def check_main(repo: Path, now: float) -> list[tuple]:
     if behind != "0":
         return found + [("WARN", text, None if head else "in the main checkout: git merge --ff-only origin/main")]
     return found + [("OK", text, None)]
-
-
-def check_queue(repo: Path, now: float) -> list[tuple]:
-    qdir = land_queue.queue_dir(repo)
-    live, dead = [], []
-    for path in sorted(qdir.glob("[0-9]*.json")):
-        try:
-            age = now - path.stat().st_mtime
-            info = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            continue
-        except (OSError, ValueError):
-            info = None
-        branch = (info or {}).get("branch", "?")
-        why = land_queue._stale(info, age)  # the reader's own rule; it only judges, removal is in ahead()
-        if why:
-            dead.append(f"{path.name} ({branch}: {why})")
-        else:
-            live.append((branch, info or {}, age))
-    text = (f"land queue: {len(live) + len(dead)} ticket(s), holder {live[0][0] if live else 'none'}"
-            f", {len(dead)} dead or stale")
-    found = [("WARN", f"{text}: {'; '.join(dead)}", "the next tools/land.py run removes them")] if dead else [
-        ("OK", text, None)]
-    events = land_events.read(qdir.parent / land_events.EVENTS)
-    for branch, info, age in live:
-        pid = info.get("pid")
-        mine = [r for r in events if r.get("pid") == pid and r["t"] >= (info.get("start") or 0)]
-        # land_checks.tmp_dir, without its mkdir: remote_pytest streams each invocation's log there
-        logs = land_checks.tmp_root() / branch.replace("/", "-")
-        newest = max((p.stat().st_mtime for p in logs.glob("*.txt")), default=0.0) if logs.is_dir() else 0.0
-        quiet = (now - max(now - age, newest, *(r["t"] for r in mine))) / 60
-        prepares = sum(r["event"] == "prepared" for r in mine)
-        who = f"{branch} (pid {pid}, {info.get('status', 'waiting')})"
-        if prepares >= REPREPARED:
-            found.append(("WARN", f"land queue: {who} prepared {prepares} times in this run: main kept moving under it",
-                          "python tools/land_stats.py; each FULL landing on main makes a waiting run prepare again"))
-        if quiet >= QUIET_MIN:
-            found.append(("WARN", f"land queue: {who} shows no activity for {quiet:.0f} min (ticket, events, logs)",
-                          f'tasklist /FI "PID eq {pid}"; a hung run: stop it, the next tools/land.py read drops its ticket'))
-    return found
 
 
 def ops_tool_digest() -> str | None:
@@ -239,16 +191,6 @@ def check_capacity(hosts: list[str] | None = None, probe=None) -> list[tuple]:
     return found
 
 
-def check_isolation(repo: Path, now: float) -> list[tuple]:
-    """Landed alone runs cut by the budget or skipped (--no-queue) whose files nothing ran alone since."""
-    found = land_isolation.open_entries(repo, now)
-    if not found:
-        return [("OK", "isolation: no landed test files left unrun alone past a night", None)]
-    return [("FAIL", f"isolation: {rec['kind']} {rec.get('branch', '?')} {rec['candidate'][:10]} ({rec.get('at', '?')}):"
-             f" {len(left)} file(s) never run alone: {', '.join(left[:5])}{' ...' if len(left) > 5 else ''}",
-             f"python tools/land_isolation.py close {' '.join(left)} --reason \"<why>\"") for rec, left in found]
-
-
 def check_mainred(repo: Path, now: float) -> list[tuple]:
     """Open main-red records (land_mainred): a red main, or carried landings no pass has covered yet."""
     found = []
@@ -262,8 +204,7 @@ def check_mainred(repo: Path, now: float) -> list[tuple]:
 def run(repo: Path, hosts: bool = False, now: float | None = None, out=print) -> int:
     now = time.time() if now is None else now
     checks = [lambda: check_hook(repo), lambda: check_publish_only(repo), lambda: check_worktrees(repo),
-              lambda: check_main(repo, now), lambda: check_queue(repo, now), lambda: check_isolation(repo, now),
-              lambda: check_mainred(repo, now)]
+              lambda: check_main(repo, now), lambda: check_mainred(repo, now)]
     if hosts:
         checks += [lambda: check_hosts(now), check_capacity]
     failed = False

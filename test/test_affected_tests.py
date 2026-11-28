@@ -378,7 +378,6 @@ def test_pack_separates_transitively_imported_test_helpers(tmp_path):
         ['b/test_job.py', 'b/test_bridge.py']]
 
 
-
 def test_source_path_tests_are_not_pulled_by_the_other_root(tmp_path):
     """2026-11-20 split: drive tests moved from perception/test to drive/test (a source_paths root of module
     control, same `control` import prefix). A perception-only change must not pull them in as blanket prefix
@@ -1100,30 +1099,11 @@ def test_contract_checked_markdown_keeps_its_selection(path, expected):
 # The narrowed case is CASES' tools/ssh row (a leaf tool its test names); the unknown one tools/mystery.
 
 
-GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "tools/worktrees.py",
+GATE_TOOLS = ["tools/land_queue.py", "tools/land_cache.py", "tools/worktrees.py",
               "tools/worktree_rules.py", "tools/hooks/pre-push", "tools/hooks/land_record.py",
               "tools/remote/remote_pytest.py", "tools/remote/remote_job.py", "tools/remote/host_probe.py",
               "tools/remote/xdist_plan.py", "test/known_failures.py", "tools/harness/affected_tests.py",
               "test/browser_scope.py", "tools/remote/serial_suites.txt"]
-
-
-@pytest.mark.parametrize("changed", [["tools/land_goal.py"], ["tools/land_stats.py"],
-    ["tools/land_goal.py", "tools/land_stats.py"],
-    ["tools/land_goal.py", "test/test_land_goal.py", "docs/logs.md"]])
-def test_landing_reports_select_their_readers_without_the_full_runtime_tier(changed):
-    sel = affected.select(_real_repo(), changed)
-    assert sel.mode == "affected", sel.escalations
-    assert GUARDS | {"test/test_land_goal.py", "test/test_land_events.py"} <= set(sel.reasons)
-    assert "test" not in sel.reasons
-
-
-@pytest.mark.parametrize("other", ["tools/land.py", "tools/land_events.py", "tools/land_queue.py",
-    "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
-    "unregistered/" + "future" + "_owner.py"])
-def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
-    sel = affected.select(_real_repo(), ["tools/land_goal.py", "tools/land_stats.py", other])
-    assert sel.mode == "full"
-    assert any(reason.startswith(other + ":") for reason in sel.escalations), sel.escalations
 
 
 @pytest.mark.parametrize("path", GATE_TOOLS)

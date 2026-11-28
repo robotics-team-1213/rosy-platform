@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
@@ -56,7 +55,6 @@ def test_clean_repo_is_all_ok(repo):
     assert "rosy.publishOnly: unset" in text
     assert "worktrees: 1 of 15 slots" in text
     assert "main: 0 ahead, 0 behind origin/main" in text
-    assert "land queue: 0 ticket(s), holder none" in text
 
 
 def test_hook_drift_or_absence_fails_with_the_install_command(repo):
@@ -93,49 +91,6 @@ def test_over_slot_rule_warns_with_the_prune_command(repo, monkeypatch):
     git(repo, "worktree", "add", "-q", "-b", "feat/x", str(repo / ".worktrees/x"))
     code, text = lines(repo)
     assert code == 0 and "WARN worktrees: 2 of 1 slots (main included)" in text
-
-
-def test_land_queue_counts_holder_and_dead_tickets_without_removing_them(repo):
-    qdir = repo / ".git/rosy-land-queue"
-    qdir.mkdir()
-    gone = subprocess.Popen([sys.executable, "-c", "pass"])
-    gone.wait()
-    me = socket.gethostname()
-    (qdir / "00000000000000000001-1.json").write_text(json.dumps(
-        {"pid": os.getpid(), "host": me, "branch": "fix/alive"}), encoding="utf-8")
-    dead = qdir / "00000000000000000002-2.json"
-    dead.write_text(json.dumps({"pid": gone.pid, "host": me, "branch": "fix/dead"}), encoding="utf-8")
-    code, text = lines(repo)
-    assert code == 0
-    assert "land queue: 2 ticket(s), holder fix/alive, 1 dead or stale" in text
-    assert "fix/dead: pid" in text
-    assert dead.exists(), "doctor is read-only"
-
-
-def test_land_queue_warns_on_a_run_that_keeps_preparing_or_went_quiet(repo, tmp_path, monkeypatch):
-    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "land-tmp"))
-    qdir = repo / ".git/rosy-land-queue"
-    qdir.mkdir()
-    me, start = socket.gethostname(), time.time() - 3600
-    ticket = qdir / "00000000000000000001-1.json"
-    ticket.write_text(json.dumps({"pid": os.getpid(), "host": me, "branch": "fix/loop", "start": start,
-                                  "status": "pending"}), encoding="utf-8")
-    events = [{"t": start - 60, "event": "prepared", "pid": os.getpid()}]  # an earlier run with the same pid
-    events += [{"t": start + 60 * n, "event": "prepared", "pid": os.getpid()} for n in (1, 2, 3)]
-    (repo / ".git/rosy-land-events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
-    code, text = lines(repo)
-    assert code == 0
-    assert f"WARN land queue: fix/loop (pid {os.getpid()}, pending) prepared 3 times in this run" in text
-    assert "no activity" not in text
-
-    os.utime(ticket, (time.time() - 40 * 60,) * 2)
-    (repo / ".git/rosy-land-events.jsonl").write_text("", encoding="utf-8")
-    code, text = lines(repo)
-    assert "shows no activity for 40 min" in text and "prepared" not in text
-    logs = tmp_path / "land-tmp/fix-loop"
-    logs.mkdir(parents=True)
-    (logs / "run-pre-1.txt").write_text("streaming\n", encoding="utf-8")  # a remote log still growing
-    assert "no activity" not in lines(repo)[1]
 
 
 def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):

@@ -2,7 +2,6 @@
 
     python tools/urgent_lane.py start <short-name> <type>/<topic>   # worktree on origin/main (worktrees.py --from origin/main)
     python tools/urgent_lane.py evidence                           # after committing: remote affected + mapped browsers
-    python tools/urgent_lane.py land --reason "<user's words>"     # tools/land.py --urgent onto local main
     python tools/urgent_lane.py publish --topic <topic> [--apply]  # push urgent/<topic>-<date> + merge-commit PR
 
 ``evidence`` runs the D-436 affected tier of origin/main..HEAD plus every browser file test/browser_scope.py maps to
@@ -195,8 +194,6 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     start.add_argument("branch")
     ev = sub.add_parser("evidence")
     ev.add_argument("--log-dir", type=Path, required=True)
-    land = sub.add_parser("land")
-    land.add_argument("--reason", required=True, help="the user's words for the urgent landing")
     pub = sub.add_parser("publish")
     pub.add_argument("--topic", required=True)
     pub.add_argument("--sha", help="default: HEAD")
@@ -212,12 +209,6 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
             args.log_dir.mkdir(parents=True, exist_ok=True)
             print(f"[urgent] evidence {collect(repo, args.log_dir)}")
             return 0
-        if args.command == "land":
-            head = git(repo, "rev-parse", "HEAD").stdout.strip()
-            if not verified(repo, head):
-                raise Stop(1, "land only a tip that has clean urgent evidence; run `urgent_lane.py evidence`")
-            print(f"[urgent] land {head}; then publish --sha {head} (the landed merge of main is not pushed)")
-            return subprocess.run([sys.executable, str(TOOLS / "land.py"), "--urgent", args.reason], cwd=repo).returncode
         sha = git(repo, "rev-parse", args.sha or "HEAD").stdout.strip()
         print(f"[urgent] {publish(repo, sha, args.topic, args.apply, now, args.reason)}")
         return 0

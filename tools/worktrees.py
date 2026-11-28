@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 import worktree_rules as rules
-from land_async import Busy, locked
+from os_lock import Busy, locked
 
 CAP = 14  # everything under .worktrees/, orphan directories included; with main, the 15-slot budget (D-886)
 IDLE_HOURS = 72.0

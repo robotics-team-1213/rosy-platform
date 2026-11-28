@@ -15,13 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
-import land_batch  # noqa: E402
 import land_freeze  # noqa: E402
-import land_rollup  # noqa: E402
 
-_SPEC = importlib.util.spec_from_file_location("land_async", ROOT / "tools" / "land_async.py")
-land_async = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(land_async)
 NOW = datetime(2026, 11, 20, 1, 0, 0, tzinfo=timezone.utc)
 
 
@@ -156,76 +151,6 @@ def test_open_refuses_new_on_publish_only_clone_but_running_ones_drain(repo):
     hidden = main / ".git" / "rosy-land-wt" / "t"
     hidden.mkdir(parents=True)
     assert land_freeze.refusal(hidden, "feat/x") is None  # a landing already in a hidden tree
-
-
-def test_land_async_start_refused_in_drain_makes_no_snapshot(repo):
-    main, dev = repo
-    freeze(main, "drain")
-    with pytest.raises(SystemExit, match="rosy-cutover.json"):
-        land_async.start(dev, ["--tests", "auto"], NOW, lambda *a: pytest.fail("launched"))
-    assert _git(main, "for-each-ref", "refs/heads/land/") == ""
-    freeze(main, "drain", ("feat/x", _git(dev, "rev-parse", "HEAD")))
-    launched = []
-    snap, _ = land_async.start(dev, ["--tests", "auto"], NOW, lambda argv, log: launched.append(argv))
-    assert launched and snap.startswith("land/feat/x-")
-
-
-def test_land_async_start_refused_when_open_on_publish_only(repo):
-    main, dev = repo
-    _git(main, "config", "rosy.publishOnly", "true")
-    freeze(main, "open")
-    with pytest.raises(SystemExit, match="pr_land"):
-        land_async.start(dev, [], NOW, lambda *a: pytest.fail("launched"))
-
-
-def test_land_async_resume_refused_in_drain_then_allowed(repo):
-    main, dev = repo
-    snap, _ = land_async.start(dev, [], NOW, lambda *a: None)  # normal: a stopped snapshot exists
-    name = snap.replace("/", "-")
-    freeze(main, "drain")
-    with pytest.raises(SystemExit, match="rosy-cutover.json"):
-        land_async.resume(dev, name, [], lambda *a: pytest.fail("launched"), wait=0)
-    freeze(main, "drain", ("feat/x", _git(dev, "rev-parse", "HEAD")))
-    launched = []
-    land_async.resume(dev, name, [], lambda argv, log: launched.append(argv) or None, wait=0, sleep=lambda s: None)
-    assert launched
-
-
-def test_batch_eligibility_refuses_unallowed_member(repo, monkeypatch):
-    main, dev = repo
-    monkeypatch.setattr(land_batch, "in_main", lambda *a: False)
-    monkeypatch.setattr(land_batch, "batchable", lambda *a: "affected")
-    row = {"batch_auto": True, "status": "waiting", "host": __import__("socket").gethostname(),
-           "worktree": str(dev), "branch": "feat/x"}
-    land = type("L", (), {"git": staticmethod(lambda cwd, *a, **k: subprocess.run(
-        ["git", "-C", str(cwd), *a], capture_output=True, text=True))})
-    freeze(main, "drain")
-    assert land_batch.eligible(land, main, row) is False
-    freeze(main, "drain", ("feat/x", _git(dev, "rev-parse", "HEAD")))
-    assert land_batch.eligible(land, main, row) is True  # same row: only the freeze decided
-
-
-def test_roll_drops_unallowed_candidates_and_keeps_allowed(repo, monkeypatch):
-    main, dev = repo
-    seen = []
-    monkeypatch.setattr(land_rollup, "candidates", lambda rows, repo: [{"branch": "feat/x"}])
-    monkeypatch.setattr(land_rollup, "plan", lambda repo, rows, **k: seen.append(rows) or [])
-    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda *a, **k: [])
-    monkeypatch.setattr(land_rollup, "in_flight", lambda *a: [])
-    monkeypatch.setattr(land_rollup.land_rollup_failed, "drop", lambda repo, d, rows, now: rows)
-    freeze(main, "drain")
-    land_rollup.roll(main, land_rollup.land_queue.queue_dir(main), NOW, ["apply", "--auto"])
-    assert seen and all(r == [] for r in seen)
-    seen.clear()
-    freeze(main, "drain", ("feat/x", _git(dev, "rev-parse", "HEAD")))
-    land_rollup.roll(main, land_rollup.land_queue.queue_dir(main), NOW, ["apply", "--auto"])
-    assert seen and seen[0] == [{"branch": "feat/x"}]
-
-
-def test_land_py_checks_the_freeze_before_main_moves():
-    text = (ROOT / "tools" / "land.py").read_text(encoding="utf-8")
-    assert text.index("land_freeze.refusal(wt, candidate, new=False)") < text.index("on_main(main_co); land_checks.stash")
-    assert "land_freeze.refusal(Path.cwd(), None)" in text
 
 
 def test_set_syncs_github_variables_and_warns_only_on_gh_failure(repo, monkeypatch, capsys):
