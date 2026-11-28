@@ -62,7 +62,7 @@ class Rig:
 ])
 def test_classification_and_only_a_trusted_departure_acts(cam, slam, state, kind, reason):
     rig = Rig()
-    results = [rig.tick(cam, slam, state=state) for _ in range(3)]
+    results = [rig.tick(cam, slam, state=state) for _ in range(realign.PERSIST_TICKS + 1)]
     record = results[-1][1]
     assert (record["kind"], record["reason"]) == (kind, reason)
     assert any(replace for replace, _ in results) == (kind == "departed")
@@ -80,9 +80,10 @@ def test_stale_or_untrusted_camera_is_recorded_never_acted_on(age, source, kind)
         assert not replace and record["kind"] == kind and not record["slow"] and record["ticks"] == 0
 
 
-def test_two_fresh_ticks_then_one_resend_per_cooldown_then_release():
+def test_persistent_fresh_ticks_then_one_resend_per_cooldown_then_release():
     rig = Rig()
-    assert rig.tick(0.06, 0.04)[0] is False and not rig.live.view["detail"]["lane_departure"]["slow"]
+    for _ in range(realign.PERSIST_TICKS - 1):
+        assert rig.tick(0.06, 0.04)[0] is False and not rig.live.view["detail"]["lane_departure"]["slow"]
     replace, record = rig.tick(0.06, 0.04)
     assert replace and record["slow"] and record["replaced"] == 1
     assert rig.tick(0.07, 0.05)[0] is False                      # same departure, inside COOLDOWN_S
@@ -95,7 +96,7 @@ def test_two_fresh_ticks_then_one_resend_per_cooldown_then_release():
     assert not record["slow"] and record["realigned_at"] is not None
 
 
-def test_a_stale_tick_breaks_the_two_tick_count():
+def test_a_stale_tick_breaks_the_tick_count():
     rig = Rig()
     rig.tick(0.06, 0.04)
     rig.tick(0.06, 0.04, age=1.2)
@@ -107,11 +108,11 @@ def test_not_navigating_hold_or_wait_prefix_slow_but_never_resend():
     assert not any(rig.tick(0.06, 0.04, nav="IDLE")[0] for _ in range(3))
     rig = Rig()
     rig.live.view["hold"] = {"reason": "replan"}
-    results = [rig.tick(0.06, 0.04) for _ in range(3)]
+    results = [rig.tick(0.06, 0.04) for _ in range(realign.PERSIST_TICKS + 1)]
     assert not any(r for r, _ in results) and results[-1][1]["slow"]
     rig = Rig()
     rig.live.active_route["wait_prefix"] = True
-    assert not any(rig.tick(0.06, 0.04)[0] for _ in range(3))
+    assert not any(rig.tick(0.06, 0.04)[0] for _ in range(realign.PERSIST_TICKS + 1))
 
 
 def test_charge_bay_leg_and_parking_handoff_are_out_of_scope():
@@ -126,7 +127,8 @@ def test_charge_bay_leg_and_parking_handoff_are_out_of_scope():
         replace, record = rig.tick(0.08, 0.06)
         assert not replace and record["kind"] == "excluded" and not record["slow"]
     rig = Rig()
-    rig.tick(0.06, 0.04)
+    for _ in range(realign.PERSIST_TICKS - 1):
+        rig.tick(0.06, 0.04)
     assert rig.tick(0.06, 0.04)[1]["slow"]
     rig.live.view["detail"]["parking_handoff"] = {"phase": "approaching"}
     replace, record = rig.tick(0.06, 0.04)
@@ -162,7 +164,8 @@ def test_departure_resends_the_recentring_route_and_the_trip_keeps_running():
         run(runner.tick())
         clock.advance(0.5)
 
-    drift(0.06, 0.04)
+    for _ in range(realign.PERSIST_TICKS - 1):
+        drift(0.06, 0.04)
     assert len(robot.routes) == 1 and not canceled
     drift(0.06, 0.04)
     view = runner.view("p-re")
@@ -209,7 +212,7 @@ def _grant(site, segments, detail=None):
     rules = NS(formation=NS(min_gap_m=.4, max_speed_mps=.15))
     runner = NS(_clock=lambda: 10., _roster=lambda: ["first"], _live={}, _call=lambda coro: coro,
                 _store=NS(active=lambda: (1, site), rules=NS(active_rules=lambda: rules)))
-    live = NS(open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": detail or {}},
+    live = NS(request={}, repeat=False, open=True, active_route={"road_speed_owner": "run"}, view={"robot_id": "first", "detail": detail or {}},
               route_rev=0, trim_m=0., segments=segments, progress=lambda idx, s: s)
     pose = NS(x=.5, y=-.25, map_id="site-loop", state="LOCALIZED", odom_stamp=9.8)
     asyncio.run(RoadSpeed(NS(arbitrated_pose=lambda rid: None), update).renew(runner, live, (1, site), 0, .1, pose))
@@ -228,7 +231,7 @@ def test_road_speed_slows_a_departed_robot_and_caps_tight_curves():
 @pytest.mark.parametrize("after", ["camera_stale", "location", "near_edge"])
 def test_the_slow_cap_is_lifted_when_no_fresh_departure_has_been_seen_for_a_while(after):
     rig = Rig()
-    assert [rig.tick(0.06)[1]["slow"] for _ in range(2)][-1] is True
+    assert [rig.tick(0.06)[1]["slow"] for _ in range(realign.PERSIST_TICKS)][-1] is True
 
     def tick():   # no fresh evidence of a departure any more
         if after == "camera_stale":
@@ -239,13 +242,13 @@ def test_the_slow_cap_is_lifted_when_no_fresh_departure_has_been_seen_for_a_whil
 
     slow = [tick()[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
     assert all(slow[:int(realign.SLOW_EVIDENCE_S / 0.5) - 1]) and slow[-1] is False   # kept until 9.5 s, lifted at 10 s
-    assert rig.tick(0.06)[1]["slow"] is False and rig.tick(0.06)[1]["slow"] is True   # a new departure slows again
+    assert [rig.tick(0.06)[1]["slow"] for _ in range(realign.PERSIST_TICKS)] == [False] * (realign.PERSIST_TICKS - 1) + [True]   # a new departure slows again
 
 
 def test_a_departure_that_lasts_keeps_the_slow_cap():
     rig = Rig()
     slow = [rig.tick(0.06)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 6)]
-    assert slow[0] is False and all(slow[1:])
+    assert not any(slow[:realign.PERSIST_TICKS - 1]) and all(slow[realign.PERSIST_TICKS - 1:])
 
 
 def test_a_record_from_before_the_expiry_field_does_not_keep_the_cap():
@@ -268,7 +271,7 @@ def test_a_camera_anchor_counts_whether_or_not_odom_carried_it_on():
 
 def test_the_site_camera_age_acts_and_a_long_odom_bridge_does_not():
     rig = Rig()
-    assert [rig.tick(0.06, age=0.6)[1]["kind"] for _ in range(2)] == ["departed", "departed"]   # 0.4-0.6 s on site
+    assert {rig.tick(0.06, age=0.6)[1]["kind"] for _ in range(realign.PERSIST_TICKS)} == {"departed"}   # 0.4-0.6 s on site
     assert rig.live.view["detail"]["lane_departure"]["slow"] is True
     rig.cam = MapPose(*_at(rig.arc, 0.4, 0.06), "LOCALIZED", "bridged", 0.2, 0.1, anchor_age_s=0.6,
                       map_id="site-loop", anchor_source="sighting")   # 0.2 m carried by odom since the camera saw it

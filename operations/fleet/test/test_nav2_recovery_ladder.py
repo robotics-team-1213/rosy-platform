@@ -103,14 +103,15 @@ def _walled(extra_edge=False):
 # upper_west runs west: "left" is south, so a negative left offset is toward the north wall.
 def test_wall_side_offset_slows_without_a_resend_then_releases():
     rig = Rig(site=_walled())
-    first = rig.tick(-0.03)
+    first = [rig.tick(-0.03) for _ in range(realign.PERSIST_TICKS - 1)]
     replace, record = rig.tick(-0.03)
-    assert not first[1]["slow"] and record["slow"] and not replace and record["kind"] == "near_edge"
+    assert not any(f[1]["slow"] for f in first) and record["slow"] and not replace and record["kind"] == "near_edge"
     assert record["wall_clear_m"] == pytest.approx(0.10) and record["centre_wall_clear_m"] == pytest.approx(0.13)
     assert record["replaced"] == 0 and record["wall_side_at"] is not None
     _, record = rig.tick(0.0)                                   # back on the centre, aligned
     assert not record["slow"]
-    rig.tick(-0.03), rig.tick(-0.03)
+    for _ in range(realign.PERSIST_TICKS):
+        rig.tick(-0.03)
     slow = [rig.tick(-0.03, age=2.0)[1]["slow"] for _ in range(int(realign.SLOW_EVIDENCE_S / 0.5) + 1)]
     assert slow[0] and slow[-1] is False                        # 10 s without fresh evidence lifts it
 

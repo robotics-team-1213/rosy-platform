@@ -30,10 +30,12 @@ class CurveCap:
 
 def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
                 curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0, closed: bool = False,
-                stop_at_end: bool = True) -> dict:
-    """``closed``: the segments form a loop, so nothing stops at the end and braking wraps around."""
+                stop_at_end: bool = True, stop_place_ids=None) -> dict:
+    """``closed``: the segments form a loop, so nothing stops at the end and braking wraps around.
+    ``stop_place_ids``: when given, only these ``stop`` places get the stripe cap (a pass-through stop line would
+    dip 0.15 -> 0.05 -> 0.15 and collapse the Nav2 lookahead); ``slow`` places always do. None: every stop place."""
     edges = {e.id: e for e in site_map.edges}
-    stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind in ("stop", "slow")]   # slow: stripe, no stop
+    stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind == "slow" or (p.kind == "stop" and (stop_place_ids is None or p.id in stop_place_ids))]   # slow: stripe, no stop
     caps = sorted(curve_caps, key=lambda c: c.radius_m)
     points: list[tuple[float, float, float, Optional[float]]] = []   # x, y, lane cap, turn radius
     for edge_id, forward, s_from, s_to in segments:

@@ -43,9 +43,9 @@ CAMERA_BRIDGE_MAX_M = 0.15
 #: tick was camera_unavailable because the source was read instead). The anchor's age bounds the odom part.
 CAMERA_SOURCES = ("sighting", "track")
 NEAR_EDGE_M = 0.02
-PERSIST_TICKS = 2
-REALIGN_SLOW_MPS = 0.05
-COOLDOWN_S = 3.0            # one recentring resend per departure window; the resend itself must not be repeated
+PERSIST_TICKS = 4
+REALIGN_SLOW_MPS = 0.08   # = the tight-curve cap: no new speed step
+COOLDOWN_S = 8.0            # one recentring resend per departure window; the resend itself must not be repeated
 REALIGNED_LAT_M = 0.02
 REALIGNED_DEG = 10.0
 #: The slow cap lives on fresh camera evidence of a departure: this long without one (camera lost, a location
