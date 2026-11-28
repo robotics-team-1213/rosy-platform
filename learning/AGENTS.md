@@ -1,7 +1,6 @@
 # learning
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -45,5 +44,3 @@ Korean README titles, English module names. Jobs take explicit train and eval se
 ### External
 
 - Separate Python environments and CPU/GPU dependencies named by each job README; perception can use a model PC or Colab. Keep them separate from the robot venv.
-
-## Manual Notes

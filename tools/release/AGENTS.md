@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # release
 
@@ -26,4 +25,3 @@ python -m pytest test/test_download_artifact.py test/test_prepare_payload_releas
 ```
 
 Tests live in repo-level `test/` and do not hit the network.
-

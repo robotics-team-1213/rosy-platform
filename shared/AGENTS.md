@@ -1,7 +1,6 @@
 # shared
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -39,5 +38,3 @@ One web package. Its `AGENTS.md` has the file-level rules.
 ### External
 
 - None beyond what `web/AGENTS.md` names.
-
-## Manual Notes

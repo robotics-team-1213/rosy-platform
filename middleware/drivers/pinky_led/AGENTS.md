@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # led
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Python LED service server (`led_service_server`) wrapping `rosylib.LED`. Services `set_led` and `set_brightness` (`interfaces`).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | ament_python (description + Apache-2.0 license filled in 2026-09-23, guarded by `test/test_package_metadata.py`) |
-| `setup.py` / `setup.cfg` | Package install |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -56,5 +43,3 @@ Commands `set_pixel` and `fill` with RGB tuples.
 ### External
 
 - rclpy, rosylib
-
-<!-- MANUAL: -->

@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_api_web
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -16,10 +13,6 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: `core_common`, `core_features`, `web_common`, `dashboard` |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `middleware/robot_ui/robot`; tokens are `shared/web` |
 
 ## Subdirectories
@@ -47,5 +40,3 @@ python -m pytest middleware/core/api/test -q
 ### Internal
 
 `core_common`, `core_features`, `web_common`, `dashboard`
-
-<!-- MANUAL: -->

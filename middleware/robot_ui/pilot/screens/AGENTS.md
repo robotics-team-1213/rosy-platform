@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # screens
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,11 +12,6 @@ Pilot screens (D-323): connect, drive, input settings, and the OMX sim arm pract
 | File | Description |
 |------|-------------|
 | `connect.js` | `mountConnect`: login code pairing or token, whoami, capabilities, driver gate; calls `onReady`/`onEnter` |
-| `drive.js` | `mountDrive`: drive session, hold-to-drive loop with `slewCommand`, camera preview, calibration view, mode labels |
-| `drive-view.js` | DOM building for drive: `el`, `mountDriveView`, `buildStage`, `buildControls` |
-| `drive-auto.js` | `mountAutoMode`: autonomy intent controls over `../autonomy.js` |
-| `inputs.js` | `mountInputs`: stick/gamepad settings (deadzone, curve, preset, invert) via `../input-state.js` |
-| `arm.js` | `mountArm`: OMX-AI Gazebo practice; each press sends one bounded trajectory goal through the `omx_sim` driver |
 
 ## For AI Agents
 
@@ -53,5 +45,3 @@ Each screen exports a `mount*` function taking a root element (and callbacks) an
 ### External
 
 None (browser APIs only).
-
-<!-- MANUAL: -->

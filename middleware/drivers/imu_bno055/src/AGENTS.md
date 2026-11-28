@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # src
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 BNO055 node implementation.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `main_node.cpp` | ROS scheduling, realtime `imu_raw`, `sensors/imu/status` |
-| `bno055_device.hpp` / `.cpp` | I2C ownership, bounded initialization, register diagnostics |
-| `imu_sample.hpp` | ROS-free signed unit decoding and quaternion validation |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -48,5 +33,3 @@ rclcpp node in a single translation unit.
 ### External
 
 - rclcpp, wiringPiI2C, realtime_tools, sensor_msgs, std_msgs
-
-<!-- MANUAL: -->

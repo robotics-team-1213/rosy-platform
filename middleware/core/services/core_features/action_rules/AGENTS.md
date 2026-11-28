@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
 
 # decision
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,13 +11,7 @@ Shared judgment library (D-228). A product supplies an allowed action set and a 
 
 | File | Description |
 |------|-------------|
-| `contract.py` | `DecisionRequest`, `DecisionResult`, `DecisionStatus` |
-| `router.py` | Hard constraints, then one local rule |
 | `lane.py` | `lane_recovery`: `FOLLOW` or `STOP`, no velocity |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -41,9 +32,3 @@ None.
 ### Internal
 
 `core_features.decision` only.
-
-### External
-
-None.
-
-<!-- MANUAL: -->

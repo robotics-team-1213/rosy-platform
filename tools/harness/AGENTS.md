@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # harness
 
@@ -33,6 +32,3 @@ Also the D-436 `affected` selector (`affected_*.py`) and the D-766 size gate. De
 python tools/harness/rosy_harness.py lint
 python -m pytest test/test_harness_contracts.py test/test_affected_tests.py -q
 ```
-
-
-

@@ -1,7 +1,6 @@
 # contracts
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -48,5 +47,3 @@ Each child names its own pytest. Host pytest for the wheels does not need rclpy.
 ### External
 
 - Python 3.12 for the wheels. ROS IDL uses the Jazzy interface generator.
-
-## Manual Notes

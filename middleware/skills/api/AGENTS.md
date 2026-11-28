@@ -1,7 +1,6 @@
 # api
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,8 +10,6 @@ Wheel `rosy-skill-api` 0.1.0. ROS-free versioned ROSY Skill contracts and invoca
 
 | File | Description |
 |------|-------------|
-| `pyproject.toml` | Wheel name and the skill-contract pin |
-| `src/` | Namespace package `rosy.skills.api` |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories

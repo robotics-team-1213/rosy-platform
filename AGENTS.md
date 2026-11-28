@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # ROSY
 
@@ -57,7 +56,7 @@ Top-level folder roles: [folder responsibility guide](docs/reference/platform-fo
 
 ### Working In This Directory
 
-- **모듈 하네스(D-61):** 모듈 폴더에서 작업하기 전 그 모듈의 `progress.md`·`index.md`를 읽는다. 바꾼 뒤 `logs.md`에 덧붙이고, 게이트가 바뀌었으면 `progress.md`를 덮어쓴 다음 저장소 루트에서 `python tools/harness/rosy_harness.py generate`를 돌린다.
+- **모듈 하네스(D-61):** 모듈 폴더에서 작업하기 전 그 모듈의 `progress.md`·`index.md`를 읽는다. 바꾼 뒤 기록 조각을 만들고(`python tools/new_record.py log <module> "<요약>" --change … --evidence …`; `logs.md`는 직접 고치지 않으며 records 봇이 합친다, D-1052·D-1061), 게이트가 바뀌었으면 `progress.md`를 덮어쓴 다음 저장소 루트에서 `python tools/harness/rosy_harness.py generate`를 돌린다.
 - 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다.
 - Contracts: `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, `docs/reference/ROSY ADR Log.md`. Do not invent REST paths, modes or protocol fields missing from the API ref or `core_common.protocol.schemas`.
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
@@ -85,5 +84,3 @@ python tools/harness/rosy_harness.py lint
   `ROS_DOMAIN_ID` = 40 + N and `ROSY_NAMESPACE` = `rosy_%02d` are derived from
   `ROSY_ROBOT_NUMBER` at install, and a missing identity stops the runtime (D-33).
   A default here is what once shipped every unit as 42/`rosy_01`.
-
-<!-- MANUAL: -->

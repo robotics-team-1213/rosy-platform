@@ -1,7 +1,6 @@
 # pinky
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,12 +10,7 @@ Turns a closed `rosy.recording.session/1` folder, plus `bag_to_video.py` metadat
 
 | File | Description |
 |------|-------------|
-| `README.md` | Inputs, output layout, and the stamp rules |
-| `pinky_episode.py` | Build a new Episode directory from a raw session and a video json |
-| `prepare_behavior.py` | Behavior-prep helper for the same recordings |
-| `raw_messages.py` | Raw message reads used by the verifier |
 | `verify_raw.py` | Compare ROS 2 CDR/MCAP camera, cmd_vel, odom, JSON, and scan against sidecars |
-| `requirements-raw.txt` | Separate environment pins for the raw verifier |
 
 ## Subdirectories
 
@@ -50,5 +44,3 @@ Output layout is `source/raw/`, `source/video/`, `source/binding.json`, `episode
 ### External
 
 - ROS 2 CDR/MCAP libraries only in the verifier environment named by `requirements-raw.txt`.
-
-## Manual Notes

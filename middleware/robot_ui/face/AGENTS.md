@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # emotion
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 LCD emotion GIFs (`set_emotion` service) and PWR-003 info-card renderer (`info_screen.py`). Info-screen is ROS-free PIL so tests do not need an LCD.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | ament_python; python3-pil, interfaces |
-| `setup.py` / `setup.cfg` | Package install |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -56,8 +43,6 @@ Share-dir lookup: `get_package_share_directory('emotion')/emotion`.
 ### External
 
 - PIL, rclpy, hardware LCD via `rosy_lcd.py`
-
-<!-- MANUAL: -->
 
 ### LCD 표시 역할
 

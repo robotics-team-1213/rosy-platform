@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # src
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 ADC node implementation.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `main_node.cpp` | `RosySensorADC`: IR/US/battery channels, `power/mode` rate switching |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -43,5 +30,3 @@ Realtime publishers; parameter rates per PowerMode.
 ### External
 
 - rclcpp, wiringPiI2C, realtime_tools, sensor_msgs
-
-<!-- MANUAL: -->

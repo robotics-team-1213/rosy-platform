@@ -1,7 +1,6 @@
 # manipulation
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,8 +10,6 @@ Wheel `rosy-skill-manipulation` 0.1.0. ROS-free manipulation Skill contracts and
 
 | File | Description |
 |------|-------------|
-| `pyproject.toml` | Wheel name and the API pin |
-| `src/` | Namespace package `rosy.skills.manipulation` |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories

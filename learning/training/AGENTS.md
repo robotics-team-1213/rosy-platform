@@ -1,7 +1,6 @@
 # training
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -44,5 +43,3 @@ Each child has its own README command and declared environment. Perception sourc
 ### External
 
 - torch, numpy, and OpenCV only in the environment the child README names.
-
-## Manual Notes

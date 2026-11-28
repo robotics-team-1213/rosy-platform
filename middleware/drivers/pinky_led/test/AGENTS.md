@@ -1,26 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 ament linters only (no hardware LED tests).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `test_copyright.py` | ament_copyright |
-| `test_flake8.py` | ament_flake8 |
-| `test_pep257.py` | ament_pep257 |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -43,5 +28,3 @@ Stock ament Python linter tests.
 ### External
 
 - ament_copyright, ament_flake8, ament_pep257
-
-<!-- MANUAL: -->

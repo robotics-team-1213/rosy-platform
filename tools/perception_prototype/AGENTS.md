@@ -1,20 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # prototype
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Unreviewed D-205 prototypes from the 2026-09-24 session: estimating the real camera from video (`camcal/`) and replaying the current perception on real teleop video (`realrun/`). Only paths were changed from the original scripts; logic was not. There are no tests and the output is not acceptance evidence. The reviewed D-205 P2 `perception_replay` tool replaces `realrun/`, and this folder is then deleted. Not part of the learned loop (D-356).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | Korean run guide: environment, run order, what each script reads and writes. Read it before running anything |
 
 ## Subdirectories
 
@@ -51,5 +42,3 @@ None. `test/learning/perception` does not cover this folder.
 ### External
 
 - `opencv-python`, `numpy`
-
-<!-- MANUAL: -->

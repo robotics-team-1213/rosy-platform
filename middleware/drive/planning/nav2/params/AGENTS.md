@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # params
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Nav2 and slam_toolbox YAML. Velocity smoother output must be remappable to `nav_cmd_vel` (D-2).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `nav2_params.yaml` | Nav2 stack parameters |
-| `mapper_params.yaml` | slam_toolbox; watch `scan_topic` absolute vs namespaced |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -44,5 +30,3 @@ ROS 2 params YAML.
 ### External
 
 - Nav2, slam_toolbox
-
-<!-- MANUAL: -->

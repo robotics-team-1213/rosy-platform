@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-24 | Updated: 2026-09-24 -->
 
 # rosylib
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,7 +12,6 @@ Rosy-owned stand-in for the vendor's closed `pinkylib` (D-192). Installed by the
 | File | Description |
 |------|-------------|
 | `__init__.py` | Exports `Battery`; `from rosylib import LED` raises a clear ImportError (LED is bench-only, D-169) |
-| `battery.py` | `Battery.get_voltage()` / `battery_percentage()` over the I2C-1 ADC MCU (0x08, channel 4 `0xF8`), CORE's 2S curve copied |
 
 ## For AI Agents
 

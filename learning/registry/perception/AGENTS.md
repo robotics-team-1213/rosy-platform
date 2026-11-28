@@ -1,5 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-11-26 -->
 
 # Perception registry
 
@@ -32,5 +30,3 @@ The artifact and provenance store (`store.py`) plus the model half of the D-356 
 ### Testing Requirements
 
 `python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception/test_model_intake.py test/learning/perception/test_model_intake_eval.py test/learning/perception/test_model_deliver.py test/learning/perception/test_model_watch.py test/learning/perception/test_model_watch_host.py test/learning/perception/test_model_watch_inbox.py -q -p no:cacheprovider` (needs `onnxruntime`, `torch`, `mcap`; skips when missing).
-
-<!-- MANUAL: -->

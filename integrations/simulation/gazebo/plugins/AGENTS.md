@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # plugins
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Gazebo plugin that mirrors `lamp_control` for sim.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `gz_lamp_control_plugin.hpp` | Plugin API |
-| `gz_lamp_control_plugin.cpp` | Lamp control in Gazebo |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -45,5 +31,3 @@ C++ Gazebo plugin.
 ### External
 
 - Gazebo / gz-sim headers
-
-<!-- MANUAL: -->

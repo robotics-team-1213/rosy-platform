@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # docs
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,8 +11,6 @@ Operator-facing notes for camera ground calibration, localization, and narrow-pa
 
 | File | Description |
 |------|-------------|
-| `camera-ground-calibration.md` | Automatic stationary camera/LiDAR fitting and two-image checkerboard pose candidates replace manual height/pitch entry; thickness/intrinsics provenance stays explicit and candidates stay unapplied |
-| `localization.md` | Localization notes for the desk-maze robot |
 | `narrow-passage-navigation.md` | Narrow-passage behavior and limits |
 
 ## Subdirectories
@@ -44,9 +39,3 @@ Korean how-to; English identifiers (`ground_plane()`, `distance_m`).
 
 - `control` camera / localization / planning subjects
 - `../test/fixtures/` for machine-readable traces
-
-### External
-
-None.
-
-<!-- MANUAL: -->

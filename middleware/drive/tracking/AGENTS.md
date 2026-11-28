@@ -1,7 +1,6 @@
 # tracking
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-12 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -12,10 +11,7 @@ Route and session tracking installed as `control.control.*`, plus the legacy wan
 | File | Description |
 |------|-------------|
 | `burst_gate.py` | Video burst trigger. Corroboration or an operator, never vision alone (D-137) |
-| `detection_evidence.py` | Advisory vision detection snapshot. LiDAR and IR decide; the camera reports |
-| `navigation_session.py` | Bounded navigation sessions measured in real elapsed seconds |
 | `path_follow.py` | Fail-closed map-route following for the slow desk robot |
-| `pursuit.py` | Position-anchored route pursuit geometry |
 | `route.py` | Straight-line route that avoids walls. Not a circular path |
 
 ## Subdirectories
@@ -50,5 +46,3 @@ Pure functions with an explicit fail-closed result. No ROS imports in the flat m
 ### External
 
 - Python standard library and numpy.
-
-## Manual Notes

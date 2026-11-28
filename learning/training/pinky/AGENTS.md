@@ -1,20 +1,10 @@
 # pinky
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
 Compares speed models on Pinky recordings. `comparison_job.py` verifies the source MCAP, trains on two sessions, and evaluates on a third. The target is the recorded CORE final output, not an expert label. Random frame splits are not used.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | CLI, the CPU pins, and the MAE reporting rules |
-| `comparison_job.py` | Train two sessions, eval a third, write a new directory |
-| `artifact_export.py` | Export the comparison artifact |
-| `test/` | Host tests |
 
 ## Subdirectories
 
@@ -49,5 +39,3 @@ Constant-mean and zero baselines sit beside the ridge and small CNN so a learned
 ### External
 
 - The CPU pins in the README. Not robot CI.
-
-## Manual Notes

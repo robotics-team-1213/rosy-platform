@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # Pinky Pro deployment
 
@@ -33,5 +32,3 @@ Pinky Pro deployment inputs for Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy (
 ```bash
 python3 -m pytest test/test_native_systemd_contract.py test/test_robot_runtime.py test/test_release_boundary_guards.py -v
 ```
-
-<!-- MANUAL: -->

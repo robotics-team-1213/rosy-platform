@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-19 | Updated: 2026-10-19 -->
 
 # pilot_sim
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-19
 
 ## Purpose
 
@@ -14,13 +11,8 @@ SIM-only OMX Pilot owner, moved out of the flat `omx_adapter` package as its own
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker |
 | `runtime.py` | SIM-only Pilot facade over the single owner: jog/gripper goals, readback snapshot, `rosy.controls/1`, admission = cell profile within URDF (D-390, D-411) |
 | `gripper.py` | D-411 C pure gripper state (`open`/`closed`/`holding`/`moving`/`unknown`); position evidence only, not grip force |
-| `api.py` | `create_pilot_sim_app`: FastAPI Pilot routes, pairing sessions, `PILOT_ASSETS` |
-| `capture.py` | `PilotSimCapture`: demonstration recording on disk |
-| `camera.py` | `PilotSimCamera`: ROS camera stream for the Pilot |
-| `server.py` | ROS node + uvicorn entrypoint (port 8088, `shared/web/surfaces.yaml`) |
 
 ## For AI Agents
 
@@ -35,5 +27,3 @@ SIM-only OMX Pilot owner, moved out of the flat `omx_adapter` package as its own
 ```bash
 python3 -m pytest middleware/devices/omx/adapter/test -k pilot -q
 ```
-
-<!-- MANUAL: -->

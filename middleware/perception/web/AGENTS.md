@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 # web/ (web_node dashboard UI)
 
 **Parent context:** `../AGENTS.md`
@@ -26,5 +25,3 @@ Files: `diagnostic.html` plus `diagnostic.css` and `diagnostic-{core,map,input}.
 ### Testing Requirements
 
 Dashboard IIFE tests (when present) in `tools/test_dashboard_*.cjs`. Host browser contract: `Rosy OS/test/test_dashboard_browser.py`. Do not require a live robot for HTML structure checks.
-
-<!-- MANUAL: -->

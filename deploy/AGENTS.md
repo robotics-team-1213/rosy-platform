@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # deploy
 
@@ -32,5 +31,3 @@ python3 -m pytest test/ -v
 Pins: `test_dds_identity_contracts` (`.env.example` / `install-pi.sh` / `compose.yaml` identity), `test_release_boundary_guards`.
 
 Contract: `docs/reference/rosy-host-agent-contract.md`.
-
-<!-- MANUAL: -->

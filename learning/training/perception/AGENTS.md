@@ -1,5 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-11-26 -->
 
 # Perception training
 
@@ -31,5 +29,3 @@ The store folder, not Hugging Face, is the source of truth. Contract details: [R
 ### Testing Requirements
 
 `python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception/test_training_contract.py test/learning/perception/test_training_handover.py test/learning/perception/test_training_model.py test/learning/perception/test_training_notebook.py test/learning/perception/test_training_run_log.py test/learning/perception/test_drivable_head.py test/learning/perception/test_drivable_cli_admission.py -q -p no:cacheprovider` (needs `torch`, `onnxruntime`; skips when missing).
-
-<!-- MANUAL: -->

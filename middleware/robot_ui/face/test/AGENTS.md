@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,13 +12,6 @@ Info-screen unit tests plus ament linters.
 | File | Description |
 |------|-------------|
 | `test_info_screen.py` | PIL card rendering without LCD |
-| `test_copyright.py` | ament_copyright |
-| `test_flake8.py` | ament_flake8 |
-| `test_pep257.py` | ament_pep257 |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -48,5 +38,3 @@ Standard ament Python tests.
 ### External
 
 - pytest, PIL
-
-<!-- MANUAL: -->

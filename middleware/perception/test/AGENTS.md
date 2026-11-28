@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-21 -->
 
 # test/ (pure-logic suite)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 ROS-free unittest suite covering every pure-logic decision module. No ROS on the dev machine — numpy/opencv only.
@@ -13,11 +10,7 @@ ROS-free unittest suite covering every pure-logic decision module. No ROS on the
 | File | Covers |
 |------|--------|
 | `test_modes.py` | `control/modes`: label precedence, ESTOP reachable, WARN band edges, `nose_on_wall`, US no-echo/0.80 cap |
-| `test_recover.py` | `control/recover`: `hazard_action` matrix, `wall_first_move`, turn-sign rules, stuck/backup policy |
-| `test_planning.py` | `planning` (GoalBrain): unreachable waypoint skip, degenerate goals, explore→coverage |
-| `test_body.py` / `test_filt.py` | `sensing/body`, `sensing/filt` |
 | `test_scale.py` | `safety/scale` corridor auto-scale |
-| `test_watch.py` | `watch.py` graph inspect |
 
 ## Subdirectories
 
@@ -37,5 +30,3 @@ ROS-free unittest suite covering every pure-logic decision module. No ROS on the
 
 ### Common Patterns
 - Tests encode *hardware rationale*: think-speed crawls can't cover 8 mm in 1.2 s (not stuck); 4095 IR = saturation, never a cliff.
-
-<!-- MANUAL: -->

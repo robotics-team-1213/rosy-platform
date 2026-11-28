@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # control (ROS distribution in ROSY Platform)
 
@@ -30,5 +29,3 @@ Source holders and installed identities: `control/_source_layout.py` (`CONTROL_R
 
 ### Testing Requirements
 - `python3 -m pytest test/ -q` from `middleware/perception`; needs numpy/OpenCV. ROS graph tests need a separate isolated ROS Jazzy run. Add tests for new pure-logic decisions.
-
-<!-- MANUAL: -->

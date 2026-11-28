@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # omx_adapter
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,12 +11,7 @@ ROS-native OMX-AI profile boundary. Validates the selected model and emits the s
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_python; `exec_depend` on PyYAML |
-| `setup.py` / `setup.cfg` | Package install; console script `omx_adapter` |
 | `README.md` | Disabled-by-default contract; empty JSON from the disabled profile is expected |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -61,5 +53,3 @@ The CLI on the disabled profile must print `{}`.
 ### External
 
 - PyYAML (CLI). `dynamixel_sdk` and `pyserial` are optional: only `omx_adapter/real/dynamixel_bus.py` `SdkBus` imports them, at construction. It is not composed anywhere yet (D-858 S1, owner stays `enabled=False`).
-
-<!-- MANUAL: -->

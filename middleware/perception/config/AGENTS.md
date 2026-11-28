@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-06 -->
 
 # config/ (ROS parameters)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 All ROS parameters. `robot.yaml` is the **single shared source** loaded first by every launch with the `/**` wildcard so all nodes get the same numbers; per-node yamls load after and override.
@@ -12,7 +9,6 @@ All ROS parameters. `robot.yaml` is the **single shared source** loaded first by
 ## Key Files
 | File | Description |
 |------|-------------|
-| `robot.yaml` | Shared source: stop distances, yaw offsets, cliff thresholds, drive sign, robot radius, speeds |
 | `safety.yaml` / `wander.yaml` / `control.yaml` / `camera.yaml` / `goal.yaml` / `mapper.yaml` | Per-node overrides (load after `robot.yaml`) |
 | `cliff_calib.yaml` | Measured IR cliff thresholds; 4095 = ADC saturation when lifted — never a cliff |
 | `auto_calib.yaml` | Machine-written by `calib_node` — do not hand-edit |
@@ -30,5 +26,3 @@ All ROS parameters. `robot.yaml` is the **single shared source** loaded first by
 
 ### Common Patterns
 - Launch order: `robot.yaml` first (`/**`), then per-node yaml.
-
-<!-- MANUAL: -->

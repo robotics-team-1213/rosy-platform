@@ -1,7 +1,6 @@
 # skills
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -38,5 +37,3 @@ Namespace packages under `src/rosy/skills/`.
 ### External
 
 - Python >= 3.12.
-
-## Manual Notes

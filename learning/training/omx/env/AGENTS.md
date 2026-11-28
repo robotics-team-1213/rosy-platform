@@ -1,7 +1,6 @@
 # env
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-11-19 · **Updated:** 2026-11-19
 
 ## Purpose
 

@@ -1,7 +1,6 @@
 # sensors
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-12 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -39,5 +38,3 @@ ROS-free modules. One subject per file.
 ### External
 
 - `math`, `numpy`. ROS types stay in the node layer under `middleware/perception/control`.
-
-## Manual Notes

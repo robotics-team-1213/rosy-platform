@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # release
 
@@ -31,5 +30,3 @@ python3 -m pytest test/test_host_agent.py test/test_release_manifest.py test/tes
 ```
 
 JSON request/response lines, schema version 1, bounded request size.
-
-<!-- MANUAL: -->

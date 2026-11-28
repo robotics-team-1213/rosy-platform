@@ -1,7 +1,6 @@
 # recovery
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-12 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -11,21 +10,10 @@ Bounded recovery proposals for Drive: escape, retreat along a measured trail, an
 
 | File | Description |
 |------|-------------|
-| `escape_budget.py` | Bounds separate recovery regions using continuous measured odometry |
-| `escape_space.py` | Predicts useful straight repositioning from observed geometry |
-| `execution_escape.py` | Executes one live, measured escape proposal inside the existing mission |
 | `recover.py` | Stuck, escape, backup, and hazard response. Pure, no ROS |
 | `recovery_budget.py` | Bounds contact retries by displacement, not repeated forward attempts |
-| `rotation_relocation.py` | One measured straight relocation per navigation region |
-| `rotation_trial.py` | Bounded left and right trials with independent repeated response checks |
 | `route_recovery.py` | Repeated paths are not successful recovery |
-| `safe_trail.py` | Measured odometry breadcrumbs back to a stable turn-safe refuge |
 | `straight_escape.py` | Fixed-budget, fixed-heading escape. No ROS and no motor authority |
-| `trail_retreat.py` | Bounded reverse tracking of an already verified odometry trail |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -53,5 +41,3 @@ Pure modules. Budgets use measured displacement. No ROS imports.
 ### External
 
 - Python standard library and numpy.
-
-## Manual Notes

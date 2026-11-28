@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # learned
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-11
 
 ## Purpose
 

@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # Fleet application
 

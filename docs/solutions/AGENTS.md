@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # solutions
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -42,9 +39,3 @@ One problem per file. Title is the invariant, not the ticket. Korean or English 
 ### Internal
 
 - Code these notes constrain: `operations/fleet`, deploy/test gates, and whatever `module:` names
-
-### External
-
-None.
-
-<!-- MANUAL: -->

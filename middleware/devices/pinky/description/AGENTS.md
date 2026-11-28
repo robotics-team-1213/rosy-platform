@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # description
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Robot URDF/xacro, visual/collision meshes, and RViz model view. First hardware is Pinky Pro. Supports `namespace` / `frame_prefix` (D-4).
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `package.xml` | ament_cmake; xacro, robot_state_publisher |
-| `CMakeLists.txt` | Installs urdf, meshes, launch, rviz |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -55,5 +42,3 @@ xacro args for namespace and use_sim_time.
 ### External
 
 - xacro, robot_state_publisher, joint_state_publisher_gui
-
-<!-- MANUAL: -->

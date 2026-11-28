@@ -1,7 +1,6 @@
 # omx
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -11,13 +10,7 @@ Offline ACT research on existing LeRobot 0.4.4 OMX demonstrations. `act_job.py` 
 
 | File | Description |
 |------|-------------|
-| `README.md` | CLI, the CPU environment, and the current ACT hyperparameters |
-| `act_job.py` | Train, save, reload, and offline eval |
-| `act_inference.py` | Offline inference helper |
-| `act_inference_replay.py` | Replay path for a saved run |
-| `act_owner_capture.py` | Capture helper for owner-side observations |
 | `register_policy.py` | D-793: proposes a finished `native_cycle.py` run as an L0 policy on Fleet (receipt hash, rig/calibration revision); grants no execution |
-| `test/` | Host tests for the job |
 
 ## Subdirectories
 

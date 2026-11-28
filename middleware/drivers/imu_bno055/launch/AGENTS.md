@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # launch
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,10 +12,6 @@ Optional launch for the BNO055 driver only. Not part of default Rosy OS bringup 
 | File | Description |
 |------|-------------|
 | `bno055.launch.py` | Starts `imu_bno055`; hardware parameters via launch arguments; reset remains explicit opt-in |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -45,5 +38,3 @@ One node, parameter overlay from `../config/bno055.yaml`.
 ### External
 
 - ROS 2 launch / launch_ros
-
-<!-- MANUAL: -->

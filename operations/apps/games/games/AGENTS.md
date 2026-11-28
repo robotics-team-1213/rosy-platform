@@ -1,22 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
 # games (Python package)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Laptop game host (D-90): match loop that observes, referees, applies a policy, clamps the result and sends teleop to CORE. CORE never imports this package and final `cmd_vel` stays in CORE. Soccer is the first game; the heuristic chase is the first policy.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `__init__.py` | Package docstring |
-| `catalog.py` | Named plugins: `soccer` game, `heuristic` policy |
-| `cli.py` | `games match --config ... [--dry-run] [--ticks N] [--preview] [--stair N] [--observer overhead]` |
 
 ## Subdirectories
 

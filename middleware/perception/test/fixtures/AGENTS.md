@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # fixtures
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Recorded lidar scans, maps, and localization snapshots used by the ROS-free Control pytest suite. Do not regenerate as a side effect of running tests.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `b9_real_label_frames_main.json` | main 6945440e5 keep-keeper decision per real label frame (434, corner turning on); `test_lane_keep_bend.py` checks the gate-off keeper against it when `data/perception/labels` is present |
-| `gazebo_localization_corner.npz` | Corner localization snapshot |
-| `v13c_corner_reacquire_20261010.npz` | 17 Gazebo frames (run L, 63.0-65.0 s) of v13c learned paint masks (bit-packed) and the camera ground; `test_lane_keep_corner_seed.py` replays the corner re-approach |
-| `registration_endpoint_v14_20260909.json.gz` | Registration endpoint v14 |
-| `registration_stationary_endpoints_20260909.json.gz` | Stationary registration endpoints |
-| `rotation_scan_missing_returns_20260909.json.gz` | Rotation scan with missing returns |
 
 ## Subdirectories
 
@@ -50,5 +36,3 @@ Dated filenames (`YYYYMMDD`). Binary-ish JSON.gz and npz.
 ### External
 
 - numpy (npz)
-
-<!-- MANUAL: -->

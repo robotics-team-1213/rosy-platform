@@ -1,24 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # test
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Phase 1 (P1) test report. Not the pytest tree — executable tests live in `middleware/core/gateway/test` and repo-root `test/`.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `ROSY P1 Test Report.md` | Written P1 results against CORE SRS / API ref |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -40,9 +27,3 @@ Narrative evidence, not pytest output dumps.
 ### Internal
 
 - `middleware/core/gateway/test/`
-
-### External
-
-None.
-
-<!-- MANUAL: -->

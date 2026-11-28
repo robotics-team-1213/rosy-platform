@@ -1,25 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # public-keys
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 Committed Ed25519 **public** trust anchors for signed releases. No production key is selected yet.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `README.md` | Pilot trust-anchor status and offline private-key boundary |
-| `rosy-release-2026-01.pem` | Ed25519 public key embedded in Pinky Pro pilot images |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -47,5 +33,3 @@ One public PEM per key id. Empty directory plus README until a key is chosen.
 ### External
 
 - OpenSSL 3 Ed25519
-
-<!-- MANUAL: -->

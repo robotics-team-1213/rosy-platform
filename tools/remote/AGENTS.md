@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # remote
 
@@ -36,5 +35,3 @@ Run pytest for one committed sha (D-584) on the model, AI or site PC with headro
 ```bash
 python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/remote-runner-check" -- test/test_remote_pytest.py test/test_remote_sim.py -q
 ```
-
-<!-- MANUAL: -->

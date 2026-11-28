@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # site
 
@@ -32,5 +31,3 @@ python3 -m pytest test/architecture/test_document_placement.py -q   # secret pat
 ```
 
 Refs: `src/site/`, `docs/reference/site-lan-discovery-profile.md`, `docs/adr/D-301-site-candidate-signatures.md`.
-
-<!-- MANUAL: -->

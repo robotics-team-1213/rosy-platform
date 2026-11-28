@@ -1,7 +1,6 @@
 # envs
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -37,5 +36,3 @@ One ROS package per environment folder, with its own `AGENTS.md`.
 ### External
 
 - Isaac Sim 6.1 for the integration described in `isaac/README.md`.
-
-## Manual Notes

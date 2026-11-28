@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 
 # calibration
 
@@ -34,5 +33,3 @@ python tools/calibration/urdf_nominal.py --check
 ```
 
 Needs numpy, PyYAML and `mcap`; tests inject fakes for CORE and SSH.
-
-<!-- MANUAL: -->

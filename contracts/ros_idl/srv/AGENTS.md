@@ -1,27 +1,11 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # srv
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
 rosidl service definitions for on-robot UI/hardware.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `Emotion.srv` | `string emotion` → `string response` |
-| `SetLed.srv` | LED command + RGB + pixel list |
-| `SetBrightness.srv` | Brightness set |
-| `SetLamp.srv` | Lamp set |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -46,5 +30,3 @@ Plain rosidl `.srv` files.
 ### External
 
 - rosidl, std_msgs
-
-<!-- MANUAL: -->

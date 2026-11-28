@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-24 | Updated: 2026-10-01 -->
 
 # dev
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -19,17 +16,10 @@ Bench-only tools, never the product install:
 
 | File | Description |
 |------|-------------|
-| `core_dev_overlay.py` | Allowlist, bind targets, hash check, marker |
 | `sync-core-dev.ps1` | Windows upload of that allowlist |
 | `apply-core-dev.sh` | On-robot apply |
 | `clear-core-dev.sh` | Remove the marker, drop-in, and dev compose file |
 | `install-learned-perception.sh` | D-373 bench install: `../image/learned-perception-requirements.txt` (hash from `inputs.lock.yaml` `learned_perception_runtime`) with `pip --target /opt/rosy/learned-perception/site-packages`, the `tmpfiles-rosy-state.conf` models rule, a line in `/var/log/rosy/bench-installs.log` |
-| `jpeg_relay.py` | Standalone rclpy node: `<ns>/camera/front` (Image) to `<ns>/camera/front/compressed` (JPEG, same header), optional `--max-fps` |
-| `rec_compact.sh` | `start <reason>` / `stop` / `status` bench recorder; `rosy.recording.session/1` layout like `~/rosy_rec.sh`, runs the relay beside `ros2 bag record` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -62,5 +52,3 @@ The apply script finds `core_dev_overlay.py` next to itself.
 
 - Docker on a development bench, or systemd on a native bench
 - Recorder: ROS 2 Jazzy, `simplejpeg` or `cv2` on the robot; `/etc/rosy/runtime.env` readable via `sudo -n`
-
-<!-- MANUAL: -->

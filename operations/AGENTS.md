@@ -28,5 +28,3 @@ python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/operation
 ```
 
 Harness modules keep `progress.md`, `logs.md`, `index.md` beside `AGENTS.md`; wheels do not unless a harness entry says so.
-
-## Manual Notes

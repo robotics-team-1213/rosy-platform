@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-29 -->
 
 # launch
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -15,18 +12,8 @@ XML launches for Nav2, SLAM, localization, and Gazebo variants.
 | File | Description |
 |------|-------------|
 | `hardware.launch.py` | Composes robot bringup with localization or SLAM from `navigation_backend`; validates Device limits and optionally injects measured footprints |
-| `bringup_launch.xml` | Real-robot Nav2 bringup (composition FQN, lifecycle list) |
 | `mapping_bringup_launch.xml` | Real-robot Nav2 navigation stack without AMCL/map_server, paired with SLAM Toolbox |
 | `navigation_launch.xml` | Navigation stack; smoother output remaps to `nav_cmd_vel` (D-2) |
-| `localization_launch.xml` | AMCL localization |
-| `map_building.launch.xml` / `map_view.launch.xml` | SLAM mapping |
-| `nav2_view.launch.xml` | RViz nav view |
-| `gz_bringup_launch.xml` | Includes `bringup_launch.xml` with `use_sim_time:=true` |
-| `gz_map_building.launch.xml` / `gz_map_view.launch.xml` / `gz_nav2_view.launch.xml` | Gazebo counterparts |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -56,5 +43,3 @@ XML `include` of nav2_bringup with param files from `../params`.
 ### External
 
 - Nav2, slam_toolbox
-
-<!-- MANUAL: -->

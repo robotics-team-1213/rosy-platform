@@ -1,10 +1,7 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
 # launch
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -14,13 +11,8 @@ Gazebo multi-robot and single-sim launches.
 
 | File | Description |
 |------|-------------|
-| `gz_multi.launch.py` | N robots `rosy_01..NN`; args `robots`, `mode` (nav/slam), `headless` |
 | `launch_sim.launch.xml` | Older single-sim XML |
 | `map_v2_fleet_multi_real.launch.py` | Two camera robots on map_v2_fleet for a runner-owned `run_spec` (D-676): gz_multi COREs, bridge, line/road observers, IR floor rays (`sim_ir_floor.py`, `gz_multi_parts.SIM_IR_CALIBRATION`). Empty `learned_lane_pointer` = denoise paint. Driven by `tools/sim/fleet_trips.py` |
-
-## Subdirectories
-
-None.
 
 ## For AI Agents
 
@@ -45,5 +37,3 @@ Manual launch. flake8 in CI.
 ### External
 
 - ros_gz, Gazebo
-
-<!-- MANUAL: -->

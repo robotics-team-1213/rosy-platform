@@ -1,7 +1,6 @@
 # processes
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
@@ -39,5 +38,3 @@ Each child `AGENTS.md` names the suite.
 ### External
 
 - Named by each child.
-
-## Manual Notes
