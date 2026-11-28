@@ -143,7 +143,7 @@ def _observe(cell, shadow, infer, age, previous, previous_end, clock, sleep, dry
         state = {"ok": True, "state": list(seed_state), "holding": False}
     if state.get("fault") or state.get("ok") is False or not state.get("state"):
         raise ValueError("policy encoder state unavailable")
-    if "t" in state:
+    if "t" in state and not (dry_run and seed_state is not None):  # a seeded dry run infers from the entry pose, not this sample
         observed -= max(0, time.time() - state["t"])
     images = {}
     for name in shadow.image_views:
